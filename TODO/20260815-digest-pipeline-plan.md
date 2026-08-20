@@ -11,7 +11,7 @@ Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktre
 
 | Field | Value |
 | --- | --- |
-| Why this plan exists | Ship a daily job that summarizes public articles with a small LM inside GitHub Actions, scores every summary for faithfulness, and commits a markdown digest - with no runtime backend. |
+| Why this plan exists | Ship a daily job that summarizes public articles with a small LM inside GitHub Actions, scores every summary for faithfulness, and commits a dated JSON digest payload a static site renders - with no runtime backend. |
 | Hard scope - in | Config-driven multi-vertical source discovery (a curated RSS/Atom feed list per vertical, cross-source repetition ranking, cross-cutting lenses, an entity watchlist); `trafilatura` extraction; Qwen3-8B summarization under constrained decoding; four-way visual routing; Vega-Lite + Mermaid deterministic renderers; CPU diffusion for narrative items; HHEM dual-score eval + CSV; GitHub Pages eval dashboard; per-URL atomic worker jobs. |
 | Hard scope - out | Runtime backend or hosted inference; accounts; push notifications; paywalled sources; republishing article bodies; LLM-as-judge evaluation; fine-tuning; GPU runners; larger-than-9GB models. |
 | ESCALATE triggers | (1) Row 7 model-validation gate fails its decision rule -> model pick is re-derived, PAUSE. (2) Any move to hosted inference (GitHub Models) - reverses the static-first premise. (3) Row 9 canaries fail against the chosen image model. (4) 3x cost overrun on any row. |
@@ -67,25 +67,57 @@ Derived article ceilings, using the section 2.1 blended figure:
 | 1 | Source supply | 17/day configured | Set by the per-vertical daily caps in row 3.1, not by any one site. Supersedes the HN-front-page ceiling as of 2026-08-20. |
 | 2 | Reader attention | ~10-20/day | **Binding.** Nobody reads 100 summaries. If nobody reads it, open question 2 applies. |
 | 3 | **Published Pages site** | **1 GB, hard** | **Corrected 2026-08-20.** At ~20 items/day with an image each this is crossed in roughly 3-4 months - the earliest hard failure in the table, and the reason a retention policy is a row-9 design input rather than a month-12 chore. Exceeding it also risks the 10-minute deploy timeout. |
-| 4 | Artifact storage | ~1,000 images | 500 MB Free quota at ~500 KB/image. Binding only if every article gets a diffusion image. |
-| 5 | Repo growth | ~3.6 GB/yr | 20 articles/day with images, committed forever. Slower to bite than the Pages cap above, but permanent - history cannot be trimmed without a rewrite. |
-| 6 | Concurrency | 20 jobs | Only reachable at 2,000+ articles/day. |
+| 4 | Repo growth | see 0.3 | Committed forever, and permanent: deleting from the working tree does not shrink history, and a rewrite is forbidden by section 8. The only lever on repo size is not committing the bytes in the first place. |
+| 5 | Concurrency | 20 jobs | Only reachable at 2,000+ articles/day. |
 | - | ~~Actions minutes~~ | **not a ceiling** | Free and unmetered on a public repository. Struck 2026-08-20. |
+| - | ~~Artifact storage~~ | **not a ceiling** | **Struck 2026-08-20.** The 500 MB figure is the *private*-repository quota; Actions storage is free on a public repo, and `actions/upload-pages-artifact` defaults to `retention-days: 1`. This is the identical correction already applied to Actions minutes, which the first pass missed. |
 
 **Topic verticals** (the second reading, resolved 2026-08-20): segmenting is a *source-diversity* problem, not a compute one, and the resolution is row 3.1. Five verticals at 25+ feeds each is roughly 125 feeds to curate; that curation, not CPU, is the work. Prior art agrees on the floor - Kagi News will not surface a category below 25 feeds.
 
 **Ruling: cap N at 20/day and do not raise it on compute headroom alone.** Raising N is a supply and readership decision. The ratified taxonomy spends 17 of the 20, leaving headroom for one more vertical without re-opening this ruling.
+
+### 0.3 Published-size arithmetic (2026-08-20)
+
+Text is not the problem. Images are 99.6% of the bytes, and the encoding choice moves the
+wall further than any retention policy can.
+
+| Quantity | Value | Label |
+| --- | --- | --- |
+| Items/day | 17 | ratified, row 3.1 |
+| Item JSON payload | ~2.2 KB raw | derived estimate; measure 17 real payloads after row 1 |
+| Prose gzip ratio | **2.92x** | **measured** i7-1265U, 2026-08-20, 32 files / 276,887 B -> 94,690 B |
+| Day payload, 17 items | 37 KB raw / **12.8 KB gz** | derived from the measured ratio |
+| Image, 768px PNG | ~500 KB | **estimate** - `bench_image.py` has never been run |
+| Image, 768px WebP q80 | ~90 KB | **estimate** - settle both with row 9 |
+
+Days until the 1 GB Pages cap, by scenario:
+
+| Scenario | KB/day | days to 1 GB | repo @ 5 yr |
+| --- | --- | --- | --- |
+| A: PNG, image on all 17 | 8,537 | **123 (4 months)** | 15.2 GB |
+| B: WebP, image on all 17 | 1,567 | 669 (22 months) | ~3 GB |
+| C: WebP, image on 1 in 3 | 547 | **1,917 (5.25 years)** | 1.03 GB |
+| D: no images | 37 | 28,340 (77 years) | ~24 MB |
+
+**The levers are ordered, and retention is third.** Encoding WebP instead of PNG buys 5.6x.
+Honouring the visual rule already in `docs/concepts/digest.md` - "nothing" is the common
+answer, so roughly one item in three carries an image - buys another 2.9x. Combined that is
+15.6x, which moves the wall from month 4 to year 5. Retention is what remains after both,
+and after both it may never need to be switched on. That is the intended outcome.
+
+**Retention buys the Pages cap, not the repo.** Deleting a committed file leaves the blob in
+history forever. Anything that must not grow the repo must not be committed at all.
 
 ### 0.1 Runtime topology (distinct from plan execution)
 
 ```
 plan job                 worker jobs (matrix of SHARDS, fail-fast:false)  assemble job
  poll vertical feeds  ->  1 VM per shard of ~5 URLs, 4 vCPU each      ->   collect artifacts
- dedupe canonical URL     load model once per shard, then per URL:         render digest.md
+ dedupe canonical URL     load model once per shard, then per URL:         render digest.json
  rank + tag lens/entity   fetch -> extract -> summarize -> route           append evals CSV
  take top N per vertical  -> render -> eval                                commit once
  shard urls[]             write backend/var/run/<date>/<sha256(url)[:12]>.json
- (no model)
+ (no model)                                                               publish frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json
 ```
 
 Shard rather than one-VM-per-URL: section 2.1 measured model load at roughly half of
@@ -112,6 +144,8 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | PENDING | - | - | - |
 | 11 | Pages eval dashboard | 4 | F | PENDING | - | - | - |
 | 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | F | PENDING | - | - | - |
+| 13 | Published layout, date routing and the frontend shell | 1, 10 | F | PENDING | - | - | - |
+| 14 | Retention job + site-budget alarm | 13 | G | PENDING | - | - | - |
 
 ---
 
@@ -119,8 +153,8 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 
 - **Scope:** Land the typed schemas for every persisted payload plus the config file, before any logic reads or writes them.
 - **Files touched:**
-  - `backend/idhazh/contracts/{article,summary,route,eval_row,run_manifest,sources,taxonomy,watchlist,app_config}.py` (Pydantic; the source of truth)
-  - `schemas/{article,summary,route,eval-row,run-manifest,sources,taxonomy,watchlist,app-config}.schema.json` (GENERATED from the models, never hand-written)
+  - `backend/idhazh/contracts/{article,summary,route,eval_row,run_manifest,digest_day,sources,taxonomy,watchlist,app_config}.py` (Pydantic; the source of truth)
+  - `schemas/{article,summary,route,eval-row,run-manifest,digest-day,sources,taxonomy,watchlist,app-config}.schema.json` (GENERATED from the models, never hand-written)
   - `config/idhazh.json`, `config/sources.json`, `config/taxonomy.json`, `config/watchlist.json`
   - `pyproject.toml`, `README.md`, `.gitignore`
 - **Acceptance gates:** every schema validates against a committed fixture; `ruff` + `mypy --strict` clean; no hardcoded tunables outside `config/`.
@@ -457,7 +491,7 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 ## Row #11 - Pages eval dashboard
 
 - **Scope:** Render the eval CSV as stacked high/medium/low bars per model per day on GitHub Pages.
-- **Files touched:** `frontend/` (the dashboard surface), `frontend/public/evals/` (the committed CSV the page reads), `.github/workflows/pages.yml`
+- **Files touched:** `frontend/` (the dashboard surface), `.github/workflows/pages.yml`. The ledger stays at `evals/scores.csv` per CLAUDE.md section 3; the Vite build copies it into `dist/` at build time. It is never committed twice - retention treats the ledger and its published copy oppositely, so there must be exactly one ledger path.
 - **Acceptance gates:** static bundle only; no runtime fetch beyond the same-origin CSV; renders with the CSV absent; zero console errors.
 - **Oracle:** parity - the rendered band counts equal a direct `group by band` over the CSV.
 
@@ -495,6 +529,102 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 
 ---
 
+## Row #13 - Published layout, date routing and the frontend shell
+
+- **Scope:** Fix the committed layout the pipeline writes and the routes a reader walks, as two separate contracts, and stand up the static shell that renders them.
+- **Files touched:** `backend/idhazh/publish.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/digest-day.schema.json`, `frontend/` (Svelte shell, routes, prerender), `frontend/public/digest/**`, `backend/tests/test_publish.py`
+- **Acceptance gates:** one `digest.json` per published day; a page renders in at most 2 requests regardless of archive age; `/` is a committed file, not a redirect; every dated route resolves or lands in the designed missing state; positions frozen across a re-run; browser smoke per section 12.
+- **Oracle:** monotonicity - publish a day, record the rendered order, run the pipeline again with two extra items, and re-render. Every item present in the first render occupies the same position in the second, and the new items appear after them. A single reordered item fails the row.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **Route paths and data paths are two separate contracts.** Data is segmented `frontend/public/digest/<YYYY>/<MM>/<DD>/`; the reader's route is a single `<YYYY-MM-DD>` segment. Coupling them means a URL-aesthetics change rewrites committed payloads. | Fowler |
+| 2 | Data is segmented by year/month/day because a flat directory of 31,025 items is a 1.40 MB tree object rewritten on every commit; segmented, a daily commit rewrites ~3 KB of trees. **466x less tree churn**, and `digest/2026/07/**` becomes a single prune glob. | Carmack |
+| 3 | `/` is a **real committed file rendering the newest day inline**. Not a redirect, not a client-side lookup. A redirect costs a round trip on the site's most-visited URL and blanks the first paint. | Jony |
+| 4 | `latest` and `archive` are **derived at build time** from the directory listing and never committed. A committed pointer can disagree with disk after a prune or a raced deploy; a derived one cannot. | Fowler |
+| 5 | **One `digest.json` per day carrying all items.** The vertical route is a filter over that same payload, never a second file. The day gzips to 12.8 KB (measured 2.92x ratio). | Carmack |
+| 6 | **Requests to render any page is a constant, at most 2, independent of archive age.** Any scheme whose request count or index size grows with history is vetoed at any granularity. | Carmack |
+| 7 | **A day is monotonic and positions are frozen.** An item's position is assigned once, at first publication, and never recomputed. A later run appends; it never reorders, never removes, never renumbers. Ranking decides which items enter and in what initial order - it does not get a second vote. | Reader |
+| 8 | **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item carries an `updated_at` and says so. Silently swapping better wording under a reader who already read it makes them doubt their own memory, and the summaries are the entire product. | Reader |
+| 9 | When a day has more than one run, the page carries one plain line - "5 stories added since this morning" - and the new items are findable without re-skimming the old ones. | Reader |
+| 10 | **No run identifier in any data path or any reader URL.** A run id in the path means one item at two paths and content-addressing is dead. The run id lives in the footer and in `run.json`. | Fowler |
+| 11 | A topic is **a filter on the day**, with a shareable dated URL - not a destination a reader must choose before being given anything. The default interaction is an in-page anchor; the section heading is the permalink. | Reader |
+| 12 | No title-derived slug in any URL. Titles come from fetched text, and fetched text never becomes a URL (Holy Law #11). | Jony |
+| 13 | **Stack: Svelte 5 + Vite + TypeScript + Tailwind + vitest + Playwright + `json-schema-to-typescript` + `ajv`.** Matches both sibling repos' spine and yen-tamizh's lean profile. `ajv` over `zod` because it consumes the committed JSON Schema the drift gate already generates, where `zod` would need a second generator. | Fowler, Jony, Carmack |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A `/latest/` route | Two moving pointers. A reader bookmarks one and shares the other, and they disagree about which is canonical. `/` already is latest. | Jony |
+| 2 | A redirect or meta-refresh at `/` | A blank first paint and a wasted round trip on the connection the reader actually has. | Jony |
+| 3 | A committed `latest.json` or `days.json` | Derived data committed as fact. It is exactly the file that goes stale after a prune, and deleting it is what makes retention a one-step operation. | Fowler |
+| 4 | One file per item | 17 requests per day-page and 6,205 files/yr instead of 365. gzip over a 2.2 KB body never warms its dictionary; over the 37 KB day file it gets the measured 2.92x. It also buys nothing - an item view needs bytes the day payload already carries. | Carmack |
+| 5 | One file per vertical per day | 1,825 files/yr and two sources for one fact, to avoid a client-side filter on a 12.8 KB object. Revisit only if a day file crosses ~250 KB gz, a 20x item increase. | Carmack |
+| 6 | A global index of every item ever | 1.49 MB gzipped at year 5, fetched on every page load, growing without bound. | Carmack |
+| 7 | Re-ranking a day on a later run | The single most disorienting thing the system could do. A reader who read at 07:00 and returns at 18:00 must never find their memory contradicted. Correct by every internal rule and still feels like the page is gaslighting them. | Reader |
+| 8 | A dated page as the canonical page with `/` as a pointer to it | The predicted failure: `/` lags a day, or a bookmark to `/` turns out to have been dated all along. The reader sees healthy-looking stale news, concludes the site is dead, and never reports it. | Reader |
+| 9 | DuckDB-WASM, d3, topojson | A multi-megabyte WASM runtime to query a 12.8 KB object; a chart library that outweighs the data it draws; a map projection with no map. No named beneficiary. | Carmack |
+| 10 | `transformers.js` | Runtime inference. Holy Law #1 and section 0a forbid it outright. | Carmack |
+| 11 | `vite-plugin-pwa` in v1 | A service worker can serve a reader a stale day, which attacks the one rule the whole scheme rests on. Revisit when a real reader asks for offline reading. | Jony |
+
+### 13.1 The layout, literally
+
+Data - committed, immutable, and the deletion atom is one day directory:
+
+```
+frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, all items
+frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.webp  optional visual, adjacent to what names it
+evals/scores.csv                                        the ledger - never published, copied into dist at build
+```
+
+Routes, under the Pages project base:
+
+```
+/                          the newest published day, rendered inline    (moving)
+/<YYYY-MM-DD>/             that day, all verticals                      (canonical, immutable)
+/<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        (canonical, immutable)
+/<YYYY-MM-DD>/#<item_id>   an item anchor within the day
+/archive/                  every surviving day, newest first            (moving)
+/evals/                    the dashboard                                (moving)
+404.html                   the designed missing-day state
+```
+
+Nothing outside a day directory points into its interior except the append-only ledger. That
+is what makes row 14 a single `rm -r` with no second edit.
+
+---
+
+## Row #14 - Retention job + site-budget alarm
+
+- **Scope:** Bound the published site against the 1 GB Pages cap without ever deleting a measurement, and measure the ceiling long before the policy is needed.
+- **Files touched:** `.github/workflows/retention.yml`, `backend/utilities/prune_assets.py`, `backend/utilities/site_budget.py`, `config/idhazh.json`, `backend/tests/test_retention.py`
+- **Acceptance gates:** the job is a separate monthly workflow, never inside `daily.yml`; dry-run by default; refuses to act above `max_deletes_per_run`; ships disabled; `site_bytes` and `site_files` recorded on every daily run from day one.
+- **Oracle:** the fuse - point the job at a fixture tree with a deliberately malformed date and assert it deletes nothing, reports the refusal, and exits non-zero. A retention job that cannot refuse is a retention job that will one day delete the archive.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **Retention is a Pages-cap instrument, not a repo-size instrument.** Deleting a committed file reduces repo size by exactly zero; the blob stays in history and a rewrite is forbidden by section 8. | Carmack |
+| 2 | **The levers are ordered and retention is third**: encode WebP not PNG (5.6x), honour the visual rule so roughly one item in three carries an image (2.9x), then retention. After the first two the wall moves from month 4 to year 5 and the knob may never be switched on. | Carmack |
+| 3 | **Images only.** The job never touches a JSON payload, never deletes a date directory, never touches `evals/`, never changes a URL, and never runs inside the daily pipeline. | Carmack |
+| 4 | Ships **disabled**: `image_months: -1`, `dry_run: true`. A default is a promise, not a placeholder. | Reader |
+| 5 | **Age-based only, never size-threshold.** A size trigger makes the site a function of when the job happened to run. | Carmack |
+| 6 | A **fuse**: refuse to act if the delete count exceeds `max_deletes_per_run`. An off-by-one in a date parse must not be able to delete the archive. | Carmack |
+| 7 | The dry-run path **runs monthly even while disabled**, so the code is not first executed on the worst day of the year. | Carmack |
+| 8 | **A pruned visual is a distinct state from a failed render**, with its own enum member, `version` date-stamp, changelog entry and read-side migration in the same commit. "We could not make this" and "we made it and threw it away" are different facts; one field must not mean both. | Fowler |
+| 9 | `site_bytes` and `site_files` are recorded into the run manifest **on every daily run from day one**, and an issue opens above `site_budget_mb`. Measure the ceiling long before the policy exists (Holy Law #10 applied to storage). | Carmack |
+| 10 | The retention window is **stated to the reader before anything is deleted** - on the archive page and on `404.html`. Deleting without ever having said you would is what turns mild annoyance into betrayal. | Reader |
+| 11 | A pruned day 404s into the designed missing state, never a silent redirect to today. A reader who cannot tell a dead link from a live one has lost the ability to trust any link. | Reader |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | One knob governing both text and images | Text is 0.43% of the bytes. A policy that deletes 17 summaries to save 37 KB while leaving the images is aimed at the wrong axis. | Carmack |
+| 2 | Reusing the render-failure state for a prune | A second meaning bolted onto an existing field, which is the band-aid Holy Law #5 forbids. Costs one enum member to do properly. | Fowler |
+| 3 | Pruning the eval ledger, the golden fixtures, or the canaries | The ledger is the only record an item existed and the entire time series; a retired golden fixture is what makes a year-over-year claim interpretable; a retired canary is an attack no longer tested for. Under 1 MB/yr of text against gigabytes of images - the arithmetic does not even ask. | Andre |
+| 4 | `git filter-repo` to reclaim history | Forbidden by section 8, and it invalidates every existing clone. | Carmack |
+| 5 | Deleting a day and leaving its eval rows dangling with no context | Acceptable only if the eval row is self-describing. `source_url`, `date` and `title` must be columns before retention is ever enabled, not after. | Fowler |
+
+---
+
 ## 2. Open questions (blocking, not deferred work)
 
 | # | Question | Blocks | Resolution path |
@@ -504,6 +634,7 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | `word_count` and `extractiveness` need alert thresholds, not just CSV columns. Fold into row 4 acceptance gates. Feed-level rot - a source that stops publishing rather than one that changes shape - is handled separately by row 3 decision 6. |
 | 4 | Do extremely low-bit (1-2 bit) quantisations change the model fit? Published for several open-weights families; unevaluated here. | Row 7 | Research + measure. Andre on whether quality survives, Carmack on whether it fits - both measured, not assumed. See `docs/how-to/set-up-local-inference.md`. |
 | 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | Curate `ai` first - most tier-1 primary sources, fewest editorial judgement calls - and prove the loop end to end on one vertical. Then add one vertical per week under `status: draft` until each clears the floor. |
+| 6 | **`temperature=0, seed=0` is not determinism.** It is determinism *given identical logits*, and logits move with batch shape, thread count, KV-prefix reuse, `llama.cpp` build and CPU dispatch path. `seed` is dead code under greedy decoding - it consumes no RNG. Eleven of sixteen enumerated drift sources are silent today because no published item stamps the model, quantisation, prompt, output schema or truncation cap that produced it. | Rows 4, 6, 10, 12 | Andre's ruling: replace skip-if-exists with **skip-if-fingerprint-matches** over a `pipeline_fingerprint`; scope row 6's determinism oracle to one runner class at fixed threads and batch shape; treat a fingerprint match with unequal output as a recorded `determinism_violation` rather than a build failure. Needs its own row before row 6 ships. |
 
 ### RESOLVED
 

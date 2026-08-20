@@ -56,6 +56,7 @@ The page must also render when its data file is absent or empty. That is a norma
 
 ## See also
 
+- [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - where these items are written, the dated routes a reader walks, and retention.
 - [ui-shell.md](ui-shell.md) - the layout and chrome around these items.
 - [design-system.md](design-system.md) - the visual language.
 - [evaluation.md](evaluation.md) - where the confidence signal comes from.
