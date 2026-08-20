@@ -32,7 +32,7 @@ In order, with what each one owns:
 
 | Stage | Owns | Emits |
 | --- | --- | --- |
-| **Collect** | Which sources are consulted and which candidate links survive the filters. Honours `robots.txt`; never touches a paywalled or login-walled source. | The day's candidate list. |
+| **Collect** | Which sources are consulted and which candidate links survive the filters. Honours `robots.txt`; never touches a paywalled or login-walled source. See [../architecture/sources/discovery.md](../architecture/sources/discovery.md). | The day's candidate list. |
 | **Extract** | Turning a page into readable text, and **the trust boundary**. This is where a stranger's bytes are sanitized, exactly once. Also where an over-long body is truncated and *flagged* as truncated - never silently dropped. | One article payload per item, including the failure cases. |
 | **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. | One summary payload per item. |
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
@@ -61,6 +61,7 @@ Three invariants hold regardless of how the batches are sized:
 
 ## See also
 
+- [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - what Collect consults, and how the source set changes over time.
 - [evaluation.md](evaluation.md) - what the Evaluate stage measures and what it cannot see.
 - [digest.md](digest.md) - what Assemble publishes and what a reader gets.
 - [config.md](config.md) - the knobs that tune the stages.
