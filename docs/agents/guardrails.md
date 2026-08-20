@@ -27,7 +27,7 @@ Adding a sixth persona requires a distinct altitude not already covered; two per
 ## Holy Laws (cite by number when relevant)
 
 1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no runtime fetches beyond same-origin published files, no runtime inference, no runtime compute, no telemetry SDK, no accounts, no push notifications.
-2. **The runner is the architecture.** Every pipeline decision is measured against a stock `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage. A model that does not fit is a design error, not a budget request.
+2. **The runner is the architecture.** Every pipeline decision is measured against a stock `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage, and a **1 GB hard cap on the published Pages site**. Minutes are free (public repo), so wall-clock is the constraint. A model that does not fit is a design error, not a budget request.
 3. **Contracts before logic.** Every persisted shape is a Pydantic model in `backend/idhazh/contracts/` before logic reads or writes it; `schemas/` is generated from it.
 4. **docs/ = agent memory; a decision lives on the page it impacts.** No ADR file, no `docs/architecture/decisions/` directory.
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. Escalate the correction level instead.

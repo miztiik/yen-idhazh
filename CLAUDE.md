@@ -26,7 +26,7 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 ## 1. Holy Laws (Read First, Every Session)
 
 1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no runtime fetches beyond same-origin published files, no runtime inference, no runtime compute. The pipeline runs in CI and commits its output; the site only renders what is already committed. No runtime telemetry, analytics, error-tracking SDKs, ads, accounts, or push notifications.
-2. **The runner is the architecture.** Every pipeline decision is measured against a stock GitHub-hosted `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage. A model that does not fit, a step that does not finish, or a cache that does not hold is a design error, not a budget request.
+2. **The runner is the architecture.** Every pipeline decision is measured against a stock GitHub-hosted `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage, and a **1 GB hard cap on the published Pages site**. Actions minutes are free and unmetered because this repository is public - wall-clock is the constraint, not a monthly budget. A model that does not fit, a step that does not finish, a cache that does not hold, or a site that outgrows 1 GB is a design error, not a budget request.
 3. **Contracts before logic.** Every persisted shape - article, summary, route, eval row, run manifest, config, digest payload - is a Pydantic model in `backend/idhazh/contracts/` before any logic reads or writes it. The exported JSON Schema in `schemas/` is generated from it, never hand-written.
 4. **docs/ = agent memory; a decision lives on the page it impacts.** Pipeline rules, published shapes, tuning knobs, and current subsystem contracts live in `docs/concepts/`, `docs/how-to/`, or the relevant `docs/architecture/<area>/` living doc. A choice that clears the bar (a real rejected alternative, cross-system consequences, non-trivial reversal cost) is recorded IN the living doc it impacts, as a `## Design rationale` / `## Rejected alternatives` section on that page - never as a standalone record. There is no ADR file and no `docs/architecture/decisions/` directory.
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. Escalate the correction level instead.
@@ -167,7 +167,7 @@ Commit messages describe the change. **No AI co-author / attribution tags.**
 - [ ] No new mocks unless explicitly requested.
 - [ ] Lockfiles in sync with manifests.
 - [ ] Any new performance or quality number carries hardware, date and spread (Holy Law #10).
-- [ ] Runner budget respected: no step pushes a job past its timeout, the cache past 10 GB, or artifacts past 500 MB (Holy Law #2).
+- [ ] Runner budget respected: no step pushes a job past its timeout, the cache past 10 GB, artifacts past 500 MB, or the published site past 1 GB (Holy Law #2).
 
 ## 10. Anti-Patterns (Do NOT)
 

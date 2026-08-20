@@ -19,7 +19,7 @@ Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktre
 | Execution | autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 3. |
 | Roster note (2026-08-20) | This plan was authored against a five-persona roster that included Palm (casual-game design) and Player. Both are gone; the roster is now Reader, Jony, Andre, Fowler, Carmack (`CLAUDE.md` section 14). Decisions already ruled stand as written and are NOT reopened. But **Andre (AI / LLM) now owns model quality, prompt strategy, constrained decoding, eval design and metric choice** - so rows 4, 6, 7 and 9 must consult him even where the existing attribution says Fowler or Carmack. The standing split: Andre owns whether a model is good enough, Carmack owns whether it fits. |
 
-### 0.2 Capacity ceilings (platform verified 2026-08-15)
+### 0.2 Capacity ceilings (platform verified 2026-08-15; corrected and extended 2026-08-20)
 
 | Limit | Free | Pro | Team | Source |
 | --- | --- | --- | --- | --- |
@@ -29,6 +29,22 @@ Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktre
 | Artifact storage | 500 MB | 1 GB | 2 GB | same |
 | Cache storage / repo | 10 GB | 10 GB | 10 GB | same |
 | Larger runners (8+ vCPU) | **not available** | **not available** | available | same |
+
+#### Corrections and additions (verified 2026-08-20 against GitHub's Actions-limits, Actions-billing, dependency-caching and Pages-limits references)
+
+| Limit | Value | Why it matters here |
+| --- | --- | --- |
+| **Actions minutes** | **Free and unmetered** on standard GitHub-hosted runners **because this repository is public.** The 2,000 min/month figure applies to private repositories only. | The monthly-minute ceiling this plan half-assumed does not exist. Wall-clock still matters - a 6 h job cap is a 6 h job cap - but there is no monthly budget to ration. |
+| **Published Pages site** | **1 GB, hard.** | **This is the binding ceiling, and it arrives far sooner than section 0.2 originally implied.** At ~20 items/day with an image each, this plan's own growth figure (~3.6 GB/yr) crosses 1 GB in roughly **three to four months**, not twelve. A retention or off-site policy for rendered images is therefore a row-9 / row-11 design input, not a month-12 chore. |
+| **Pages deployment timeout** | 10 min | A deploy that grows past this fails the publish even though the pipeline succeeded. Site size is a deploy-reliability concern, not only a storage one. |
+| **Pages bandwidth** | 100 GB/month (soft) | Not binding at digest-scale readership. Recorded so nobody re-derives it. |
+| **Pages builds/hour** | 10 (soft) - **does not apply** when publishing from a custom Actions workflow | We publish from a workflow, so this does not constrain us. |
+| **`GITHUB_TOKEN` API** | **1,000 requests/hour per repository** | Shared by every job in every workflow run that hour. Fine at N=4 workers, but re-runs plus a matrix plus the commit step consume it, and exhausting it fails steps in ways that look unrelated to the cause. |
+| **Cache rate limits** | 1,500 downloads/min, 200 uploads/min, 400 deletes/min per repo | Not binding at this scale. |
+| **Workflow re-runs** | 50 per run | Relevant only to a pathological debugging session. |
+| **Outbound network bandwidth from a runner** | **No documented cap** | GitHub does not publish an egress/ingress limit for Actions runners. So the ~7.2 GB weight download is not metered by GitHub - but it is still wall-clock, and it is still subject to the *upstream* host's own rate limits. |
+
+**The one that changes a design:** the 1 GB published-site cap converts "images accumulate forever" from a slow-burn concern into a hard failure inside the first year. Row 9 (image renderer) and row 11 (dashboard) must both be designed against a published-site budget, and the retention policy is part of the row rather than a follow-up.
 
 **Cache eviction is the ceiling nobody plans for** (verified against GitHub's dependency-caching reference, 2026-08-20): a cache entry **not accessed in over 7 days is deleted**, and once the repo passes 10 GB entries are evicted oldest-access-first. Two consequences for this design:
 
@@ -49,10 +65,12 @@ Derived article ceilings, using the section 2.1 blended figure:
 | # | Ceiling | Value | Why it bites first |
 | --- | --- | --- | --- |
 | 1 | Source supply | 17/day configured | Set by the per-vertical daily caps in row 3.1, not by any one site. Supersedes the HN-front-page ceiling as of 2026-08-20. |
-| 2 | Reader attention | ~10-20/day | **Binding.** Nobody reads 100 summaries. If nobody reads it, open question 3 applies. |
-| 3 | Artifact storage | ~1,000 images | 500 MB Free quota at ~500 KB/image. Binding only if every article gets a diffusion image. |
-| 4 | Repo growth | ~3.6 GB/yr | 20 articles/day with images, committed forever. Needs a retention policy before month 12. |
-| 5 | Concurrency | 20 jobs | Only reachable at 2,000+ articles/day. |
+| 2 | Reader attention | ~10-20/day | **Binding.** Nobody reads 100 summaries. If nobody reads it, open question 2 applies. |
+| 3 | **Published Pages site** | **1 GB, hard** | **Corrected 2026-08-20.** At ~20 items/day with an image each this is crossed in roughly 3-4 months - the earliest hard failure in the table, and the reason a retention policy is a row-9 design input rather than a month-12 chore. Exceeding it also risks the 10-minute deploy timeout. |
+| 4 | Artifact storage | ~1,000 images | 500 MB Free quota at ~500 KB/image. Binding only if every article gets a diffusion image. |
+| 5 | Repo growth | ~3.6 GB/yr | 20 articles/day with images, committed forever. Slower to bite than the Pages cap above, but permanent - history cannot be trimmed without a rewrite. |
+| 6 | Concurrency | 20 jobs | Only reachable at 2,000+ articles/day. |
+| - | ~~Actions minutes~~ | **not a ceiling** | Free and unmetered on a public repository. Struck 2026-08-20. |
 
 **Topic verticals** (the second reading, resolved 2026-08-20): segmenting is a *source-diversity* problem, not a compute one, and the resolution is row 3.1. Five verticals at 25+ feeds each is roughly 125 feeds to curate; that curation, not CPU, is the work. Prior art agrees on the floor - Kagi News will not surface a category below 25 feeds.
 
