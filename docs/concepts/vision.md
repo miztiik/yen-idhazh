@@ -8,7 +8,7 @@ What yen-idhazh is, what it is not, and the one-sentence product idea every othe
 
 yen-idhazh is a daily **article digest that scores its own work**: a build-time pipeline reads public web articles, summarizes each one with a small open-weights model, measures how faithful the summary is to the source, and publishes both the digest and the scores as static pages.
 
-*idhazh* (இதழ்) is Tamil for a journal or magazine. The name is "my journal".
+*idhazh* is Tamil for a journal or magazine. The name is "my journal".
 
 ## The shape
 

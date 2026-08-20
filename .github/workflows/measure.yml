@@ -1,0 +1,106 @@
+name: measure
+
+# Measures real prefill/decode throughput on a stock GitHub-hosted runner so the
+# pipeline design rests on numbers rather than estimates (CLAUDE.md Holy Law #10).
+# Every figure it emits carries the hardware it ran on and the date.
+
+on:
+  workflow_dispatch:
+    inputs:
+      models:
+        description: 'Comma-separated HF GGUF refs (repo:file)'
+        default: 'Qwen/Qwen3-4B-GGUF:Qwen3-4B-Q4_K_M.gguf,Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf'
+      threads:
+        description: 'Threads for llama-bench (runner has 4 vCPU)'
+        default: '4'
+
+permissions:
+  contents: read
+
+jobs:
+  llm:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Record runner hardware
+        run: |
+          echo "nproc=$(nproc)"
+          free -g | sed -n '1,2p'
+          lscpu | grep -E 'Model name|MHz|Flags' | head -3
+          df -h / /mnt 2>/dev/null | sed -n '1,4p'
+
+      - name: Install llama.cpp
+        run: |
+          set -euo pipefail
+          TAG=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | jq -r .tag_name)
+          echo "llama.cpp $TAG"
+          curl -sSL -o llama.zip \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.zip"
+          unzip -q llama.zip -d llama
+          find llama -name 'llama-bench' -exec chmod +x {} \; -exec cp {} /usr/local/bin/ \;
+          llama-bench --help >/dev/null && echo "llama-bench ok"
+
+      - name: Cache GGUF weights
+        id: gguf
+        uses: actions/cache@v4
+        with:
+          path: backend/models
+          key: gguf-${{ hashFiles('.github/workflows/measure.yml') }}
+
+      - name: Download weights (timed)
+        if: steps.gguf.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p backend/models
+          IFS=',' read -ra REFS <<< "${{ inputs.models }}"
+          for ref in "${REFS[@]}"; do
+            repo="${ref%%:*}"; file="${ref##*:}"
+            start=$(date +%s)
+            curl -sSL --retry 3 -o "backend/models/${file}" \
+              "https://huggingface.co/${repo}/resolve/main/${file}"
+            echo "download ${file} $(( $(date +%s) - start ))s $(du -h "backend/models/${file}" | cut -f1)"
+          done
+
+      - name: Benchmark at real article lengths
+        run: |
+          set -euo pipefail
+          mkdir -p backend/var
+          # 730 / 1800 / 4850 input tokens = short / medium / long article buckets
+          for m in backend/models/*.gguf; do
+            echo "=== $m"
+            llama-bench -m "$m" -p 730,1800,4850 -n 250 \
+              -t ${{ inputs.threads }} -r 3 -o json >> backend/var/llm.json
+          done
+
+      - name: Summarise
+        run: python3 backend/utilities/summarise_bench.py backend/var/llm.json
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-llm
+          path: backend/var/
+
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install CPU-only torch + diffusers
+        run: |
+          set -euo pipefail
+          pip install --index-url https://download.pytorch.org/whl/cpu torch
+          pip install "git+https://github.com/huggingface/diffusers" transformers accelerate
+
+      - name: Time Z-Image-Turbo on CPU
+        run: python3 backend/utilities/bench_image.py --model Tongyi-MAI/Z-Image-Turbo --steps 9 --sizes 512,768
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-image
+          path: backend/var/
