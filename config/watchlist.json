@@ -1,0 +1,11 @@
+{
+  "edgar": {
+    "company_tickers_url": "https://www.sec.gov/files/company_tickers.json",
+    "contact_email": null,
+    "enabled": false,
+    "requests_per_second": 10,
+    "submissions_url_template": "https://data.sec.gov/submissions/CIK{cik}.json"
+  },
+  "entities": [],
+  "version": "2026-08-21"
+}

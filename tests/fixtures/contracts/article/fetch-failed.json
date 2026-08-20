@@ -1,0 +1,29 @@
+{
+  "canonical_url": "https://www.example-wire.com/2026/08/tariff-ruling",
+  "carried_by": 1,
+  "entities": [],
+  "events": [
+    "regulation"
+  ],
+  "extractor_version": "trafilatura-1.12.2",
+  "failure_detail": "HTTP 404 after 3 attempts",
+  "fetched_at": "2026-08-21T06:06:44Z",
+  "item_id": "world-01",
+  "lenses": [],
+  "published_at": null,
+  "rank_score": 1.6,
+  "sanitizer_version": "sanitizer-1",
+  "source_id": "example-wire-world",
+  "source_url": "https://www.example-wire.com/2026/08/tariff-ruling",
+  "status": "fetch_failed",
+  "text": null,
+  "tier": 2,
+  "title": null,
+  "token_count": 0,
+  "truncated": false,
+  "truncated_at_tokens": null,
+  "url_key": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04",
+  "version": "2026-08-21",
+  "vertical": "world",
+  "word_count": 0
+}

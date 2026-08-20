@@ -1,0 +1,15 @@
+{
+  "alt_text": "Cost per million tokens, previous release against the new one.",
+  "asset_path": "frontend/public/digest/2026/08/21/ai-01.svg",
+  "failure_detail": null,
+  "item_id": "ai-01",
+  "kind": "chart",
+  "model_id": "qwen3-4b-q4-k-m",
+  "rationale": "The article states two comparable cost figures.",
+  "routed_at": "2026-08-21T06:14:07Z",
+  "spec": "{\"data\":{\"values\":[{\"release\":\"previous\",\"usd_per_million_tokens\":0.62},{\"release\":\"new\",\"usd_per_million_tokens\":0.41}]},\"mark\":\"bar\"}",
+  "spec_format": "vega-lite",
+  "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+  "version": "2026-08-21",
+  "visual_state": "rendered"
+}

@@ -1,0 +1,123 @@
+{
+  "date": "2026-08-21",
+  "generated_at": "2026-08-21T18:22:05Z",
+  "items": [
+    {
+      "band": "high",
+      "entities": [
+        "example-lab"
+      ],
+      "events": [
+        "release"
+      ],
+      "introduced_by_run": 1,
+      "item_id": "ai-01",
+      "key_points": [
+        "Cost per million tokens falls 34 percent against the model it replaces.",
+        "Throughput on commodity CPUs is 2.1x the previous release.",
+        "Weights are published under a permissive licence."
+      ],
+      "lenses": [
+        "ai-roi"
+      ],
+      "published_at": "2026-08-21T05:30:00Z",
+      "source_id": "example-lab-blog",
+      "source_name": "Example Lab blog",
+      "source_url": "https://blog.example-lab.org/2026/08/model-release",
+      "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
+      "title": "Example Lab releases a smaller model",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": {
+        "alt": "Cost per million tokens, previous release against the new one.",
+        "kind": "chart",
+        "path": "digest/2026/08/21/ai-01.svg",
+        "state": "rendered"
+      }
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [
+        "capex",
+        "deal"
+      ],
+      "introduced_by_run": 1,
+      "item_id": "energy-01",
+      "key_points": [
+        "Four small modular reactors, 1.2 gigawatts in total.",
+        "The order is worth 3.2 billion dollars.",
+        "First unit is due in 2031."
+      ],
+      "lenses": [
+        "markets"
+      ],
+      "published_at": "2026-08-20T22:10:00Z",
+      "source_id": "example-grid-newsroom",
+      "source_name": "Example Grid newsroom",
+      "source_url": "https://newsroom.example-grid.com/2026/08/reactor-order",
+      "summary": "Example Grid has ordered four small modular reactors totalling 1.2 gigawatts for a datacentre campus. The order is worth 3.2 billion dollars and the first unit is due in 2031.",
+      "title": "Example Grid orders four small modular reactors",
+      "truncated": true,
+      "updated_at": null,
+      "vertical": "energy",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [
+        "example-lab"
+      ],
+      "events": [
+        "research"
+      ],
+      "introduced_by_run": 2,
+      "item_id": "ai-02",
+      "key_points": [
+        "The paper reports a 12 point gain on a summarization benchmark.",
+        "Training used 4,000 GPU hours."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T16:40:00Z",
+      "source_id": "example-lab-research",
+      "source_name": "Example Lab research",
+      "source_url": "https://research.example-lab.org/2026/08/paper",
+      "summary": "A paper from Example Lab reports a 12 point gain on a summarization benchmark, trained in 4,000 GPU hours.",
+      "title": "Example Lab publishes a summarization paper",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    }
+  ],
+  "items_failed": 1,
+  "items_planned": 4,
+  "partial": true,
+  "retention_window_months": -1,
+  "runs": [
+    {
+      "at": "2026-08-21T06:44:12Z",
+      "items_added": 2,
+      "n": 1
+    },
+    {
+      "at": "2026-08-21T18:22:05Z",
+      "items_added": 1,
+      "n": 2
+    }
+  ],
+  "version": "2026-08-21",
+  "verticals": [
+    {
+      "count": 2,
+      "display_name": "AI",
+      "id": "ai"
+    },
+    {
+      "count": 1,
+      "display_name": "Energy",
+      "id": "energy"
+    }
+  ]
+}

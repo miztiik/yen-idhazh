@@ -1,0 +1,170 @@
+{
+  "$defs": {
+    "SpecFormat": {
+      "enum": [
+        "vega-lite",
+        "mermaid",
+        "image-prompt"
+      ],
+      "title": "SpecFormat",
+      "type": "string"
+    },
+    "VisualKind": {
+      "enum": [
+        "chart",
+        "diagram",
+        "image",
+        "none"
+      ],
+      "title": "VisualKind",
+      "type": "string"
+    },
+    "VisualState": {
+      "description": "What became of the visual. \"Could not make it\" and \"made it then threw it\naway\" are different facts, so they never share a member.",
+      "enum": [
+        "absent",
+        "rendered",
+        "render_failed"
+      ],
+      "title": "VisualState",
+      "type": "string"
+    }
+  },
+  "$id": "route.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the four-way routing enum, the spec, and the render outcome.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - Route and Render are written against a fixed payload."
+    }
+  ],
+  "description": "The Route stage's decision plus the Render stage's outcome, one per item.",
+  "properties": {
+    "alt_text": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Alt Text"
+    },
+    "asset_path": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Relative POSIX path under frontend/public/, once rendered.",
+      "title": "Asset Path"
+    },
+    "failure_detail": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Detail"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/VisualKind"
+    },
+    "model_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "rationale": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rationale"
+    },
+    "routed_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Routed At",
+      "type": "string"
+    },
+    "spec": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Vega-Lite JSON, Mermaid source, or the image prompt.",
+      "title": "Spec"
+    },
+    "spec_format": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpecFormat"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "visual_state": {
+      "$ref": "#/$defs/VisualState",
+      "default": "absent"
+    }
+  },
+  "required": [
+    "item_id",
+    "url_key",
+    "kind",
+    "model_id",
+    "routed_at"
+  ],
+  "title": "Route",
+  "type": "object",
+  "version": "2026-08-21"
+}

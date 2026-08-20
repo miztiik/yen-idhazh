@@ -1,0 +1,33 @@
+{
+  "canonical_url": "https://blog.example-lab.org/2026/08/model-release",
+  "carried_by": 3,
+  "entities": [
+    "example-lab"
+  ],
+  "events": [
+    "release"
+  ],
+  "extractor_version": "trafilatura-1.12.2",
+  "failure_detail": null,
+  "fetched_at": "2026-08-21T06:04:11Z",
+  "item_id": "ai-01",
+  "lenses": [
+    "ai-roi"
+  ],
+  "published_at": "2026-08-21T05:30:00Z",
+  "rank_score": 4.4,
+  "sanitizer_version": "sanitizer-1",
+  "source_id": "example-lab-blog",
+  "source_url": "https://blog.example-lab.org/2026/08/model-release",
+  "status": "ok",
+  "text": "Example Lab published a smaller model today and said inference cost fell by about a third against the model it replaces. The post gives two numbers: 34 percent lower cost per million tokens, and a 2.1x throughput gain on commodity CPUs.",
+  "tier": 1,
+  "title": "Example Lab releases a smaller model",
+  "token_count": 1796,
+  "truncated": false,
+  "truncated_at_tokens": null,
+  "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+  "version": "2026-08-21",
+  "vertical": "ai",
+  "word_count": 1320
+}

@@ -1,0 +1,109 @@
+{
+  "events": [
+    {
+      "display_name": "Release",
+      "id": "release"
+    },
+    {
+      "display_name": "Deal",
+      "id": "deal"
+    },
+    {
+      "display_name": "Acquisition",
+      "id": "acquisition"
+    },
+    {
+      "display_name": "Funding",
+      "id": "funding"
+    },
+    {
+      "display_name": "Capital spending",
+      "id": "capex"
+    },
+    {
+      "display_name": "Earnings",
+      "id": "earnings"
+    },
+    {
+      "display_name": "Regulation",
+      "id": "regulation"
+    },
+    {
+      "display_name": "Research",
+      "id": "research"
+    },
+    {
+      "display_name": "Incident",
+      "id": "incident"
+    }
+  ],
+  "lenses": [
+    {
+      "display_name": "China",
+      "id": "china",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "display_name": "Return on AI investment",
+      "id": "ai-roi",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "display_name": "Markets",
+      "id": "markets",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "display_name": "Cyber",
+      "id": "cyber",
+      "retired_on": null,
+      "status": "active"
+    }
+  ],
+  "version": "2026-08-21",
+  "verticals": [
+    {
+      "daily_cap": 5,
+      "display_name": "AI",
+      "id": "ai",
+      "min_feeds": 25,
+      "retired_on": null,
+      "status": "draft"
+    },
+    {
+      "daily_cap": 3,
+      "display_name": "Energy",
+      "id": "energy",
+      "min_feeds": 25,
+      "retired_on": null,
+      "status": "draft"
+    },
+    {
+      "daily_cap": 3,
+      "display_name": "Business and Economy",
+      "id": "business-economy",
+      "min_feeds": 25,
+      "retired_on": null,
+      "status": "draft"
+    },
+    {
+      "daily_cap": 3,
+      "display_name": "World",
+      "id": "world",
+      "min_feeds": 25,
+      "retired_on": null,
+      "status": "draft"
+    },
+    {
+      "daily_cap": 3,
+      "display_name": "India",
+      "id": "india",
+      "min_feeds": 25,
+      "retired_on": null,
+      "status": "draft"
+    }
+  ]
+}

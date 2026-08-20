@@ -1,0 +1,120 @@
+{
+  "date": "2026-08-21",
+  "runs": [
+    {
+      "commit_sha": "9caa16fbc3f9ead557b3019aa486f444bb63e978",
+      "completed_at": "2026-08-21T06:44:12Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"
+        }
+      ],
+      "items_failed": 1,
+      "items_planned": 3,
+      "items_skipped": 0,
+      "items_succeeded": 2,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "sha256": null
+          },
+          "role": "summarize"
+        },
+        {
+          "model_ref": {
+            "file": "Qwen3-4B-Q4_K_M.gguf",
+            "id": "qwen3-4b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-4B-GGUF",
+            "sha256": null
+          },
+          "role": "route"
+        }
+      ],
+      "n": 1,
+      "note": null,
+      "run_id": "2026-08-21-1",
+      "runner": "github-hosted ubuntu-latest, 4 vCPU, 16 GB",
+      "site_bytes": 1048576,
+      "site_files": 12,
+      "source_list_stale": false,
+      "started_at": "2026-08-21T06:00:00Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 1,
+          "published": 1
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 1,
+          "published": 1
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 1,
+          "published": 0
+        }
+      ]
+    },
+    {
+      "commit_sha": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933",
+      "completed_at": "2026-08-21T18:22:05Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"
+        }
+      ],
+      "items_failed": 0,
+      "items_planned": 3,
+      "items_skipped": 2,
+      "items_succeeded": 1,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "sha256": null
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 2,
+      "note": "Evening run. Two items were already present and did no work.",
+      "run_id": "2026-08-21-2",
+      "runner": "github-hosted ubuntu-latest, 4 vCPU, 16 GB",
+      "site_bytes": 1052672,
+      "site_files": 13,
+      "source_list_stale": false,
+      "started_at": "2026-08-21T18:00:00Z",
+      "status": "completed",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 2,
+          "published": 2
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 1,
+          "published": 1
+        }
+      ]
+    }
+  ],
+  "version": "2026-08-21"
+}

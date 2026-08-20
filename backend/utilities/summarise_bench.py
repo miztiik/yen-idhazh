@@ -6,10 +6,10 @@ from __future__ import annotations
 
 import argparse
 import json
-import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 # English BPE runs ~1.33 tokens/word. Buckets are (words, +/- words, share of feed).
 BUCKETS = {
@@ -30,10 +30,10 @@ class Throughput:
     decode: tuple[float, float] | None       # (tok/s, stddev)
 
 
-def load_runs(path: Path) -> list[dict]:
+def load_runs(path: Path) -> list[dict[str, Any]]:
     """llama-bench emits one JSON array per invocation; a file may hold several."""
     raw = path.read_text(encoding="utf-8").strip()
-    runs: list[dict] = []
+    runs: list[dict[str, Any]] = []
     decoder = json.JSONDecoder()
     idx = 0
     while idx < len(raw):
@@ -47,7 +47,7 @@ def load_runs(path: Path) -> list[dict]:
     return runs
 
 
-def collect(runs: list[dict]) -> list[Throughput]:
+def collect(runs: list[dict[str, Any]]) -> list[Throughput]:
     by_model: dict[str, Throughput] = {}
     for r in runs:
         name = Path(r.get("model_filename", r.get("model", "?"))).name
@@ -95,7 +95,10 @@ def report(tps: list[Throughput], n_urls: int, parallel: int) -> None:
         print(f"  prefill tok/s : {pf}")
         if tp.decode:
             print(f"  decode  tok/s : {tp.decode[0]:.2f} +/- {tp.decode[1]:.2f}")
-        print(f"  {'bucket':<8} {'in_tok':>7} {'out_tok':>8} {'best':>8} {'typical':>9} {'worst':>8}")
+        print(
+            f"  {'bucket':<8} {'in_tok':>7} {'out_tok':>8} "
+            f"{'best':>8} {'typical':>9} {'worst':>8}"
+        )
 
         blended = 0.0
         for bucket, (words, spread, share) in BUCKETS.items():
@@ -113,8 +116,14 @@ def report(tps: list[Throughput], n_urls: int, parallel: int) -> None:
         waves = -(-n_urls // parallel)
         fanout = blended * waves
         print(f"  blended/article : {blended:.0f}s")
-        print(f"  {n_urls} URLs serial   : {serial/60:.0f} min  ({serial/3600:.2f}h of the 6h job cap)")
-        print(f"  {n_urls} URLs x{parallel} matrix: {fanout/60:.0f} min wall-clock ({waves} wave(s))")
+        print(
+            f"  {n_urls} URLs serial   : {serial / 60:.0f} min  "
+            f"({serial / 3600:.2f}h of the 6h job cap)"
+        )
+        print(
+            f"  {n_urls} URLs x{parallel} matrix: {fanout / 60:.0f} min wall-clock "
+            f"({waves} wave(s))"
+        )
 
 
 def main() -> int:

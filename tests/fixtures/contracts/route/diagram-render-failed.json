@@ -1,0 +1,15 @@
+{
+  "alt_text": null,
+  "asset_path": null,
+  "failure_detail": "mermaid-cli exited 1: unsupported node shape",
+  "item_id": "energy-01",
+  "kind": "diagram",
+  "model_id": "qwen3-4b-q4-k-m",
+  "rationale": "The article describes a four-stage procurement sequence.",
+  "routed_at": "2026-08-21T06:16:40Z",
+  "spec": "flowchart LR\n  order --> licence --> build --> grid",
+  "spec_format": "mermaid",
+  "url_key": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933010852380f9b5b6f78b8dd90",
+  "version": "2026-08-21",
+  "visual_state": "render_failed"
+}

@@ -1,0 +1,76 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "idhazh"
+version = "0.1.0"
+description = "Build-time producer for yen-idhazh: a static-first, self-evaluating article digest."
+readme = "README.md"
+requires-python = ">=3.12"
+license = "MIT"
+dependencies = [
+    # The single source of truth for every persisted shape (Holy Law #3). Also
+    # the JSON Schema emitter that schemas/ is generated from.
+    "pydantic>=2.12",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.14",
+    "pytest>=8.3",
+    "ruff>=0.9",
+]
+# Only for backend/utilities/bench_image.py, which times CPU diffusion models on
+# a runner. Multi-hundred-megabyte wheels, so they are never in the default set.
+bench-image = [
+    "diffusers>=0.31",
+    "torch>=2.5",
+]
+
+[project.scripts]
+idhazh-export-schemas = "idhazh.contracts.export:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/idhazh"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["backend"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "PTH", # flake8-use-pathlib
+    "RUF", # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test names read better long, and a fixture literal is not a magic value.
+"backend/tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "backend"
+files = ["backend"]
+strict = true
+warn_unreachable = true
+enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
+
+# The image-benchmark dependencies are an extra, absent from a default install.
+[[tool.mypy.overrides]]
+module = ["diffusers.*", "torch.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+addopts = "-q"

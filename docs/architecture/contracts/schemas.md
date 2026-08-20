@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Holy Law #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -26,11 +26,26 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 
 | Path | Holds |
 | --- | --- |
-| `backend/idhazh/contracts/base.py` | The base model every persisted shape inherits: the `version` date-stamp, the `changelog` array, the invariant that `version` equals the newest changelog entry, the name-to-schema-stem mapping, and the JSON Schema emitter. |
+| `backend/idhazh/contracts/base.py` | The shared string types, the canonical serializer, and the two base models: `Model` for a nested shape and `Contract` for a top-level persisted document. `Contract` owns the `version` date-stamp, the `changelog` tuple, the invariant that `version` equals the newest changelog entry, the `<stem>.schema.json` name, and the JSON Schema emitter. |
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
-| `backend/idhazh/contracts/export.py` | Walks the models and writes `schemas/`. |
+| `backend/idhazh/contracts/export.py` | Walks the models and writes `schemas/`. Also the list of what a schema directory is allowed to contain. |
 | `schemas/<name>.schema.json` | Generated. One flat file per model. |
 | `frontend/src/contracts/` | Generated TypeScript types and runtime validators. |
+
+The ten shapes, and where each one lives once written:
+
+| Model | Schema | Persisted as |
+| --- | --- | --- |
+| `AppConfig` | `app-config` | `config/idhazh.json` |
+| `Sources` | `sources` | `config/sources.json` |
+| `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
+| `Watchlist` | `watchlist` | `config/watchlist.json` |
+| `Article` | `article` | one file per item under the run directory |
+| `Summary` | `summary` | one file per item under the run directory |
+| `Route` | `route` | one file per item under the run directory |
+| `EvalRow` | `eval-row` | one appended row of `evals/scores.csv` |
+| `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
+| `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 
@@ -44,6 +59,39 @@ Inherited from the base model, per `CLAUDE.md` section 11:
 
 Additive change: append the entry, stamp today, done - older payloads still validate. Breaking change: append, stamp today, **and write the read-side migration in the same commit.** A payload written by yesterday's run that today's build cannot read is a release blocker.
 
+A document that arrives without a `version` is stamped with the current one on read, so the generated schema marks the field optional-with-a-default rather than required. Everything this project writes emits it explicitly; the tolerance exists for a hand-edited config file, not as a licence to omit it.
+
+## One serialization, so a round-trip is byte-identical
+
+Every persisted payload is written by one function: **sorted keys, two-space indent, ASCII-escaped, one trailing newline, LF.** Three things fall out of that, and all three are load-bearing:
+
+- A payload that is read and re-written is byte-identical, so a re-run that changed nothing produces an empty diff.
+- A diff shows a **changed value** rather than a reshuffled dict, which is what makes reviewing a committed payload possible at all.
+- The drift gate can compare bytes rather than parsed structures.
+
+Timestamps are pinned as text - UTC, second precision, `Z` - rather than as a date type, for the same reason: one spelling, no offset ambiguity, and no serializer whose formatting can drift underneath a committed file.
+
+## A derived value is rebuilt on read, never trusted
+
+Where a field is a function of other fields on the same payload, the model recomputes it during validation and rejects a payload whose stored value disagrees:
+
+- `url_key` is the sha256 of `canonical_url`. It is item identity for dedupe and skip, it is a **field and never a path segment**, and a payload that carries someone else's key does not load.
+- `hhem_delta` is `hhem - hhem_full`. The truncation signal cannot be silently wrong.
+
+The alternative - trusting the stored value - makes a stale derived field indistinguishable from a correct one, and the mismatch surfaces months later as a dedupe that quietly stopped working.
+
+## Cross-field invariants are why these are models and not schemas
+
+The shapes carry rules a JSON Schema cannot express, and each one is a defect class that would otherwise be found in production:
+
+- An `ok` article carries title and text; a failed one records why. One field cannot mean both.
+- `truncated` and `truncated_at_tokens` are set together.
+- A visual routed to `none` carries no spec, and only a rendered visual carries an asset path.
+- A retired vertical, lens, feed or entity carries its retirement date - the tombstone that keeps old payloads valid.
+- The lens and event vocabularies must be labelled exactly once each, so adding an enum member without a display name fails at load.
+- A run manifest's runs are numbered from one without gaps, and its counts reconcile.
+- **In a day payload, `introduced_by_run` may never decrease down the item list.** A later run appends; it never reorders what a reader already read. That is the published-layout rule made mechanical rather than trusted to the assemble stage.
+
 ## `$id` is relative, on purpose
 
 Each generated schema's `$id` is its own filename, not a URL. An editor's JSON Schema plugin then resolves it offline, with no network call and nothing to 404 - which matters because a schema that only validates when the internet is up is a schema nobody runs.
@@ -56,6 +104,8 @@ Two conditions have to hold for the gate to be trustworthy:
 
 - **The generators are deterministic** - stable key ordering, stable formatting. A generator whose output shuffles produces a gate that fails at random and is switched off within a week.
 - **The stored bytes match the emitted bytes.** Generated files are pinned to LF in `.gitattributes`, so the gate does not fail purely because a contributor's checkout settings differ.
+
+The backend half is a contract-tier test: it regenerates every schema into a temporary directory and compares bytes against what is committed. It additionally asserts that `schemas/` holds **exactly** the generated set, so retiring a contract cannot leave a stale schema behind for something to keep validating against. The frontend half lands with the frontend.
 
 ## The persisted surfaces
 

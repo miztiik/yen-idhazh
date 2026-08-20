@@ -1,0 +1,14 @@
+{
+  "feeds": [],
+  "salience": [
+    {
+      "id": "hn-frontpage",
+      "retired_on": null,
+      "status": "active",
+      "title": "Hacker News front page",
+      "url": "https://hnrss.org/frontpage",
+      "weight": 0.4
+    }
+  ],
+  "version": "2026-08-21"
+}

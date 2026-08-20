@@ -1,0 +1,129 @@
+{
+  "$defs": {
+    "SummaryStatus": {
+      "enum": [
+        "ok",
+        "failed",
+        "skipped"
+      ],
+      "title": "SummaryStatus",
+      "type": "string"
+    }
+  },
+  "$id": "summary.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: summary text, key points, the model, and the cost.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - Summarize is written against a fixed payload."
+    }
+  ],
+  "description": "The Summarize stage's output payload, one per item.",
+  "properties": {
+    "attempt": {
+      "default": 1,
+      "description": "A low-band summary is retried on the smaller model.",
+      "minimum": 1,
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "duration_ms": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "failure_detail": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Detail"
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "input_tokens": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Input Tokens",
+      "type": "integer"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "key_points": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Key Points",
+      "type": "array"
+    },
+    "model_id": {
+      "description": "The ModelRef id from config. The full ref lives in the manifest.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "output_tokens": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Output Tokens",
+      "type": "integer"
+    },
+    "source_truncated": {
+      "default": false,
+      "title": "Source Truncated",
+      "type": "boolean"
+    },
+    "status": {
+      "$ref": "#/$defs/SummaryStatus"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "item_id",
+    "url_key",
+    "model_id",
+    "generated_at",
+    "status"
+  ],
+  "title": "Summary",
+  "type": "object",
+  "version": "2026-08-21"
+}

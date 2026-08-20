@@ -3,7 +3,7 @@
 **Last Updated**: 2026-08-21
 **Level**: 4 (structural, new subsystem) with named Level-5 ESCALATE triggers.
 
-Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 3; honor the ESCALATE triggers in section 0. A trigger that fires mid-execution is handled per `docs/how-to/handle-scope-change.md`.
+Execute per `docs/how-to/execute-a-plan.md`, with one owner override in force (2026-08-21, `CLAUDE.md` section 0): **one agent works this repo and commits direct to `main`** - no worktree isolation, no worker-per-row fan-out and no PRs, because there is no second agent to isolate from and nobody to review a PR. Everything else stands: personas are consulted on ambiguity, rows respect the Depends-on column, gates must be green before a row is marked DONE, parallel N = 3, and the ESCALATE triggers in section 0 are honoured. A trigger that fires mid-execution is handled per `docs/how-to/handle-scope-change.md`.
 
 ---
 
@@ -16,7 +16,7 @@ Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktre
 | Hard scope - out | Runtime backend; hosted inference anywhere; accounts; push notifications; paywalled sources; republishing article bodies; LLM-as-judge evaluation; fine-tuning; GPU runners; larger-than-9GB pipeline models; any browser model whose largest single file exceeds GitHub's 100 MB per-file hard limit; any on-device feature on the digest's critical path. |
 | ESCALATE triggers | (1) Row 7 model-validation gate fails its decision rule -> model pick is re-derived, PAUSE. (2) Any move to hosted inference - reverses the static-first premise. (3) Row 9 measurement shows images cannot fit the published budget -> the renderer is descoped, PAUSE. (4) 3x cost overrun on any row. (5) A browser model considered for row 23 has a single file over 100 MB - it cannot be committed, PAUSE. (6) Row 21 browser canaries fail against the chosen browser model. |
 | Chosen strategy | Runtime pipeline is orchestrator + disposable sharded workers, mirroring the plan-execution model: a `plan` job emits and shards the URL list, a `matrix` of workers each handles a shard on its own VM and writes one JSON per item, an `assemble` job renders the digest. Ruled by Fowler (contracts before logic) and Carmack (fresh-VM-per-job is the parallelism primitive; shard size is set by measured model-load amortization). |
-| Execution | autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 3. |
+| Execution | Single agent, direct to `main` (owner override, 2026-08-21). Personas still consulted on ambiguity; row order still governed by Depends-on. Parallel N = 3 applies to how many rows may be in flight, not to worktrees. |
 | Roster note (2026-08-20) | This plan was authored against a five-persona roster that included Palm (casual-game design) and Player. Both are gone; the roster is now Reader, Jony, Andre, Fowler, Carmack (`CLAUDE.md` section 14). Decisions already ruled stand as written and are NOT reopened. But **Andre (AI / LLM) now owns model quality, prompt strategy, constrained decoding, eval design and metric choice** - so rows 4, 6, 7 and 9 must consult him even where the existing attribution says Fowler or Carmack. The standing split: Andre owns whether a model is good enough, Carmack owns whether it fits. |
 
 ### 0.2 Capacity ceilings (platform verified 2026-08-15; corrected and extended 2026-08-20)
@@ -132,7 +132,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Contracts, schemas and repo scaffold | - | A | PENDING | - | - | - |
+| 1 | Contracts, schemas and repo scaffold | - | A | DONE | main | direct | - |
 | 2 | Measurement harness: throughput + corpus shape | - | A | PART-MEASURED (local 4B + 8B done, see 2.1/2.2; runner + corpus + image outstanding) | - | - | - |
 | 3 | Source discovery, fetch + extract | 1 | B | PENDING | - | - | - |
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | PENDING | - | - | - |

@@ -1,0 +1,172 @@
+{
+  "$defs": {
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    }
+  },
+  "$id": "eval-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: dual faithfulness scores, the counterweights, and the band.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - the columns are fixed before the first row lands."
+    }
+  ],
+  "description": "The Evaluate stage's output, appended once per item.",
+  "properties": {
+    "attempt": {
+      "minimum": 1,
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "band": {
+      "$ref": "#/$defs/ConfidenceBand"
+    },
+    "compression": {
+      "description": "Summary length as a fraction of source length.",
+      "minimum": 0.0,
+      "title": "Compression",
+      "type": "number"
+    },
+    "coverage": {
+      "description": "Named-entity and numeric survival. The instrument for selective omission.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Coverage",
+      "type": "number"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "extractiveness": {
+      "description": "Verbatim overlap. High here plus high hhem means copying.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Extractiveness",
+      "type": "number"
+    },
+    "hhem": {
+      "description": "Faithfulness against the text the model saw.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Hhem",
+      "type": "number"
+    },
+    "hhem_delta": {
+      "description": "hhem - hhem_full. The cost of truncation, invisible unless both are scored.",
+      "title": "Hhem Delta",
+      "type": "number"
+    },
+    "hhem_full": {
+      "description": "Faithfulness against the full article.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Hhem Full",
+      "type": "number"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "model_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "scored_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Scored At",
+      "type": "string"
+    },
+    "scorer_version": {
+      "minLength": 1,
+      "title": "Scorer Version",
+      "type": "string"
+    },
+    "source_url": {
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "source_word_count": {
+      "minimum": 0,
+      "title": "Source Word Count",
+      "type": "integer"
+    },
+    "summary_word_count": {
+      "minimum": 0,
+      "title": "Summary Word Count",
+      "type": "integer"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "truncation_flagged": {
+      "title": "Truncation Flagged",
+      "type": "boolean"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Vertical",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "item_id",
+    "url_key",
+    "source_url",
+    "title",
+    "vertical",
+    "model_id",
+    "attempt",
+    "hhem",
+    "hhem_full",
+    "hhem_delta",
+    "truncation_flagged",
+    "coverage",
+    "compression",
+    "extractiveness",
+    "band",
+    "source_word_count",
+    "summary_word_count",
+    "scorer_version",
+    "scored_at"
+  ],
+  "title": "EvalRow",
+  "type": "object",
+  "version": "2026-08-21"
+}

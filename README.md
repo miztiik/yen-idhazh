@@ -1,6 +1,6 @@
 # yen-idhazh
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 
 *idhazh* is Tamil for a journal or magazine. **yen-idhazh** is "my journal": a daily, self-evaluating article digest that reads the open web, summarizes it with a small language model, scores every summary for faithfulness, and publishes the result as static pages.
 
@@ -44,6 +44,17 @@ The evaluation loop is not a reporting afterthought. A summarizer whose faithful
 Model weights and llama.cpp binaries are downloaded, not committed - see [docs/how-to/set-up-local-inference.md](docs/how-to/set-up-local-inference.md).
 
 ## Getting started
+
+```
+python -m venv .venv
+.venv/bin/pip install -e ".[dev]"       # .venv/Scripts/pip on Windows
+.venv/bin/python -m pytest              # tests
+.venv/bin/python -m ruff check .        # lint
+.venv/bin/python -m mypy                # strict type check
+.venv/bin/python -m idhazh.contracts.export   # regenerate schemas/ from the models
+```
+
+`schemas/` is generated from the Pydantic models in `backend/idhazh/contracts/` and is never hand-edited; a test regenerates it and fails on any diff. Change the model, run the export, commit both.
 
 The build plan is [TODO/20260815-digest-pipeline-plan.md](TODO/20260815-digest-pipeline-plan.md). Read [CLAUDE.md](CLAUDE.md) before changing anything.
 
