@@ -133,7 +133,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Contracts, schemas and repo scaffold | - | A | DONE | main | direct | - |
-| 2 | Measurement harness: throughput + corpus shape | - | A | PART-MEASURED (local 4B + 8B done, see 2.1/2.2; runner + corpus + image outstanding) | - | - | - |
+| 2 | Measurement harness: throughput + corpus shape | - | A | HARNESS-LANDED (ledger at `docs/reference/measurements.md`; runner run, corpus and image still unmeasured) | main | direct | - |
 | 3 | Source discovery, fetch + extract | 1 | B | PENDING | - | - | - |
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | PENDING | - | - | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | PENDING | - | - | - |
@@ -192,6 +192,8 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 - **Files touched:** `.github/workflows/measure.yml`, `backend/utilities/summarise_bench.py`, `backend/utilities/bench_image.py`, `backend/utilities/measure_corpus.py`, `docs/reference/measurements.md`
 - **Acceptance gates:** workflow completes on a real runner; emits `bench-llm` and `bench-image` artifacts; `docs/reference/measurements.md` carries hardware, date and stddev for every figure.
 - **Oracle:** coverage - every row currently marked "estimate" in `docs/reference/measurements.md` has a measured replacement with a stddev, or an explicit "still unmeasured" line.
+
+**The canonical ledger is now [`docs/reference/measurements.md`](../docs/reference/measurements.md).** Sections 2.1 and 2.2 below are the working record that produced it and are deleted when this row closes. The harness landed 2026-08-21 - `measure_corpus.py`, a `corpus` job, and a `cache-state.txt` that distinguishes a cache-hit run from a cache-miss one. What remains is executing the workflow on a real runner, which needs the owner to dispatch it (or to authorise the agent to push and dispatch).
 
 | # | Decision | Authority |
 | --- | --- | --- |
