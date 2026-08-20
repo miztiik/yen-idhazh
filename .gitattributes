@@ -1,0 +1,32 @@
+# Generated contract artifacts and their source schemas are always LF so the
+# contract drift gate (regenerate + `git diff --exit-code`) is byte-stable
+# across operating systems and every contributor's core.autocrlf setting. The
+# Pydantic exporter and the frontend type generator both emit LF; these
+# attributes make the stored blob and every checkout match.
+schemas/*.schema.json text eol=lf
+frontend/src/contracts/*.schema.json text eol=lf
+frontend/src/contracts/*.d.ts text eol=lf
+
+# Human-edited tunables. A config file whose bytes shift with the checkout would
+# change the hash the run manifest records for it.
+config/*.json text eol=lf
+
+# The eval ledger. Rows are appended by CI on Linux and read by a developer on
+# Windows; a CRLF rewrite would show every historical row as changed.
+evals/*.csv text eol=lf
+
+# Test fixtures are byte-exact inputs. A golden summary, a canary payload, or a
+# captured page is compared against a fresh pipeline run, so any end-of-line
+# conversion would fail the comparison on whichever machine has the other
+# core.autocrlf setting.
+tests/fixtures/** text eol=lf
+
+# Published digest payloads. Their sha256 is recorded in the run manifest and
+# re-verified, so the stored bytes and the checked-out bytes must agree.
+frontend/public/**/*.json text eol=lf
+frontend/public/**/*.md text eol=lf
+
+# Downloaded, not authored: never diff or eol-convert these.
+*.gguf binary
+*.png binary
+*.webp binary
