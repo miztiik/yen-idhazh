@@ -18,7 +18,7 @@ Coupling them means a change of mind about URL aesthetics rewrites every committ
 ```
 frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, every item
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
-frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.webp  optional visual
+frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.webp  optional visual
 evals/scores.csv                                        the ledger - one path, never published twice
 ```
 
@@ -26,12 +26,14 @@ evals/scores.csv                                        the ledger - one path, n
 /                          the newest published day, rendered inline    moving
 /<YYYY-MM-DD>/             that day, every vertical                     canonical
 /<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        canonical
-/<YYYY-MM-DD>/#<item_id>   an item anchor
+/<YYYY-MM-DD>/#<vertical>-<NN>   an item anchor
 /archive/                  every surviving day                          moving
 /evals/                    the dashboard                                moving
 ```
 
 **One day directory is the deletion atom.** Nothing outside it points into its interior except the append-only ledger, which is what makes pruning a single operation with no second edit.
+
+**No hash appears in any path, filename or URL.** An item is addressed by its vertical and its ordinal within the day - `ai-03` - which is predictable, derivable without a lookup, free of fetched text, and speakable. Identity for dedupe is a field on the payload, not a segment of a path: paths are for humans and for globs, identity is for the contract.
 
 **`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
 
@@ -100,7 +102,8 @@ Retention was demoted to third lever after the byte arithmetic showed that encod
 | One file per vertical per day | Several sources for one fact, to avoid a trivial client-side filter. |
 | A global index of every item ever published | Unbounded growth on the hot path of every page load. |
 | Re-ranking a day on a later run | Contradicts the memory of a reader who already read it. |
-| A run identifier in the path | One item at two addresses, and content-addressing stops working. |
+| A run identifier in the path | One item at two addresses, so the same item is reachable two ways and neither is canonical. |
+| A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. |
 | A title-derived slug in a URL | Titles originate in fetched text, and fetched text never becomes a URL (Holy Law #11). |
 | Deleting text alongside images under one retention knob | Text is a fraction of a percent of the bytes. |
 | Reusing the render-failure state to mark a prune | One field carrying two different facts, which is the band-aid Holy Law #5 forbids. |

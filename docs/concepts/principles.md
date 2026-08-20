@@ -30,7 +30,7 @@ A summarizer nobody measures produces confident, plausible, wrong text indefinit
 
 ## 7. Degrade, do not fail
 
-One unreachable source, one failed extraction, one visual that would not render - each degrades its own item, records why, and lets the run finish. Work items are independent by construction: one item is one content-addressed file written temp-then-rename, so a failure never damages a sibling and a re-run costs only what did not finish. The digest ships even at zero successes, because a failure count that nobody sees is a failure nobody fixes.
+One unreachable source, one failed extraction, one visual that would not render - each degrades its own item, records why, and lets the run finish. Work items are independent by construction: one item is one file written temp-then-rename under a predictable path, so a failure never damages a sibling and a re-run costs only what did not finish. The digest ships even at zero successes, because a failure count that nobody sees is a failure nobody fixes.
 
 ## 8. Config-driven, with sane defaults
 

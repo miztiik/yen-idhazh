@@ -11,7 +11,7 @@ The concrete stage list, the module names and the field-level payload shapes are
 An **item** is one source URL and everything derived from it. It is the atom of the whole system:
 
 - It is fetched, extracted, summarized, scored and routed independently of every other item.
-- It lands as one **content-addressed file** - the name is derived from the URL, so the same URL always writes the same path and a re-run can skip what already exists.
+- It lands as one file per item under a predictable path - the day, the vertical, and the item's ordinal within that vertical. Identity for dedupe is a field on the payload, never a path segment, so a re-run skips work by comparing the payload's fingerprint rather than by probing the filesystem.
 - It is written **temp-then-rename**, so a file either exists complete or does not exist. There is no half-written item.
 - Its failure is its own. A dead link, a paywall, a failed extraction, a visual that would not render - each degrades that item and records why, and the run continues.
 
@@ -49,7 +49,7 @@ The orchestration mirrors the same rule one level up: a planning step decides th
 Three invariants hold regardless of how the batches are sized:
 
 - **A worker failure is contained to its batch**, and does not cancel its siblings.
-- **The batch size is a measured decision, not a preference.** It is set by how long loading the model takes relative to how long an item takes - if loading dominates, the batch is too small. Per-item atomicity survives inside a batch through the content-addressed write plus skip-if-exists.
+- **The batch size is a measured decision, not a preference.** It is set by how long loading the model takes relative to how long an item takes - if loading dominates, the batch is too small. Per-item atomicity survives inside a batch through the temp-then-rename write plus a fingerprint comparison against the run index.
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
 
 ## What never happens in the loop
