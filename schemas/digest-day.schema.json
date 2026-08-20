@@ -1,0 +1,387 @@
+{
+  "$defs": {
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    },
+    "DigestItem": {
+      "additionalProperties": false,
+      "description": "One item as a reader consumes it. The link is a first-class element, not a footnote.",
+      "properties": {
+        "band": {
+          "$ref": "#/$defs/ConfidenceBand"
+        },
+        "entities": {
+          "items": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/EventType"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "introduced_by_run": {
+          "description": "A global fact, true for every reader, asserted without any storage.",
+          "minimum": 1,
+          "title": "Introduced By Run",
+          "type": "integer"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "key_points": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Key Points",
+          "type": "array"
+        },
+        "lenses": {
+          "items": {
+            "$ref": "#/$defs/LensId"
+          },
+          "title": "Lenses",
+          "type": "array"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "source_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_name": {
+          "minLength": 1,
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_url": {
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Source Url",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "truncated": {
+          "default": false,
+          "description": "The reader is told before they find out by clicking through.",
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A later run changed this text; a revision is visible or it does not happen.",
+          "title": "Updated At"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        },
+        "visual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DigestVisual"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "item_id",
+        "vertical",
+        "title",
+        "source_url",
+        "source_id",
+        "source_name",
+        "summary",
+        "key_points",
+        "band",
+        "introduced_by_run"
+      ],
+      "title": "DigestItem",
+      "type": "object"
+    },
+    "DigestRunRef": {
+      "additionalProperties": false,
+      "description": "A run of this date, as the page footer and the new-arrivals block need it.",
+      "properties": {
+        "at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "At",
+          "type": "string"
+        },
+        "items_added": {
+          "minimum": 0,
+          "title": "Items Added",
+          "type": "integer"
+        },
+        "n": {
+          "minimum": 1,
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "at",
+        "items_added"
+      ],
+      "title": "DigestRunRef",
+      "type": "object"
+    },
+    "DigestVerticalRef": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display_name",
+        "count"
+      ],
+      "title": "DigestVerticalRef",
+      "type": "object"
+    },
+    "DigestVisual": {
+      "additionalProperties": false,
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
+        "kind": {
+          "$ref": "#/$defs/VisualKind"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "state": {
+          "$ref": "#/$defs/VisualState"
+        }
+      },
+      "required": [
+        "kind",
+        "state"
+      ],
+      "title": "DigestVisual",
+      "type": "object"
+    },
+    "EventType": {
+      "description": "What happened to an item. One or more per item.",
+      "enum": [
+        "release",
+        "deal",
+        "acquisition",
+        "funding",
+        "capex",
+        "earnings",
+        "regulation",
+        "research",
+        "incident"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "LensId": {
+      "description": "A question asked of items already collected. Costs no extra request.",
+      "enum": [
+        "china",
+        "ai-roi",
+        "markets",
+        "cyber"
+      ],
+      "title": "LensId",
+      "type": "string"
+    },
+    "VisualKind": {
+      "enum": [
+        "chart",
+        "diagram",
+        "image",
+        "none"
+      ],
+      "title": "VisualKind",
+      "type": "string"
+    },
+    "VisualState": {
+      "description": "What became of the visual. \"Could not make it\" and \"made it then threw it\naway\" are different facts, so they never share a member.",
+      "enum": [
+        "absent",
+        "rendered",
+        "render_failed"
+      ],
+      "title": "VisualState",
+      "type": "string"
+    }
+  },
+  "$id": "digest-day.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the day's items in published order, its runs, and its counts.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - the published surface is fixed before it renders."
+    }
+  ],
+  "description": "`frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json`.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/DigestItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "items_failed": {
+      "minimum": 0,
+      "title": "Items Failed",
+      "type": "integer"
+    },
+    "items_planned": {
+      "minimum": 0,
+      "title": "Items Planned",
+      "type": "integer"
+    },
+    "partial": {
+      "description": "A run with failures publishes, and says it was partial.",
+      "title": "Partial",
+      "type": "boolean"
+    },
+    "retention_window_months": {
+      "default": -1,
+      "description": "Stated to the reader before anything is deleted. -1 means nothing is deleted.",
+      "minimum": -1,
+      "title": "Retention Window Months",
+      "type": "integer"
+    },
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/DigestRunRef"
+      },
+      "minItems": 1,
+      "title": "Runs",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "verticals": {
+      "items": {
+        "$ref": "#/$defs/DigestVerticalRef"
+      },
+      "title": "Verticals",
+      "type": "array"
+    }
+  },
+  "required": [
+    "date",
+    "generated_at",
+    "partial",
+    "items_planned",
+    "items_failed",
+    "runs",
+    "verticals",
+    "items"
+  ],
+  "title": "DigestDay",
+  "type": "object",
+  "version": "2026-08-21"
+}

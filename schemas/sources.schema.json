@@ -1,0 +1,181 @@
+{
+  "$defs": {
+    "FeedDef": {
+      "additionalProperties": false,
+      "description": "One RSS/Atom feed, attached to exactly one vertical.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired On"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
+        },
+        "tier": {
+          "$ref": "#/$defs/SourceTier"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Url",
+          "type": "string"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        },
+        "weight": {
+          "default": 1.0,
+          "description": "Soft retirement: drop the weight, observe, then retire.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "vertical",
+        "title",
+        "url",
+        "tier"
+      ],
+      "title": "FeedDef",
+      "type": "object"
+    },
+    "LifecycleStatus": {
+      "description": "Retire, never delete: a tombstone keeps old payloads valid.",
+      "enum": [
+        "draft",
+        "active",
+        "retired"
+      ],
+      "title": "LifecycleStatus",
+      "type": "string"
+    },
+    "SalienceFeedDef": {
+      "additionalProperties": false,
+      "description": "A ranking signal. It adds weight to a URL already in the pool; it never discovers.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired On"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Url",
+          "type": "string"
+        },
+        "weight": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Weight",
+          "type": "number"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "url"
+      ],
+      "title": "SalienceFeedDef",
+      "type": "object"
+    },
+    "SourceTier": {
+      "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "SourceTier",
+      "type": "integer"
+    }
+  },
+  "$id": "sources.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: per-vertical feeds plus a separate salience list.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - Collect is written against a fixed source shape."
+    }
+  ],
+  "description": "`config/sources.json` - what the Collect stage consults.",
+  "properties": {
+    "feeds": {
+      "items": {
+        "$ref": "#/$defs/FeedDef"
+      },
+      "title": "Feeds",
+      "type": "array"
+    },
+    "salience": {
+      "items": {
+        "$ref": "#/$defs/SalienceFeedDef"
+      },
+      "title": "Salience",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "feeds",
+    "salience"
+  ],
+  "title": "Sources",
+  "type": "object",
+  "version": "2026-08-21"
+}

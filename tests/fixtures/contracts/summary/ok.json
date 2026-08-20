@@ -1,0 +1,20 @@
+{
+  "attempt": 1,
+  "duration_ms": 323400,
+  "failure_detail": null,
+  "generated_at": "2026-08-21T06:12:53Z",
+  "input_tokens": 1796,
+  "item_id": "ai-01",
+  "key_points": [
+    "Cost per million tokens falls 34 percent against the model it replaces.",
+    "Throughput on commodity CPUs is 2.1x the previous release.",
+    "Weights are published under a permissive licence."
+  ],
+  "model_id": "qwen3-8b-q4-k-m",
+  "output_tokens": 214,
+  "source_truncated": false,
+  "status": "ok",
+  "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
+  "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+  "version": "2026-08-21"
+}

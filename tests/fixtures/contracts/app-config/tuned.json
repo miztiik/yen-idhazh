@@ -1,0 +1,82 @@
+{
+  "collect": {
+    "front_page_bonus": 0.25,
+    "min_feeds_floor": 30,
+    "quarantine_after_failures": 3,
+    "repetition_weight": 1.5,
+    "tier_weights": {
+      "community": 0.2,
+      "institution": 1.0,
+      "trade_press": 0.5
+    },
+    "watchlist_bonus": 0.75,
+    "watchlist_max_entities": 24
+  },
+  "drift": {
+    "month_over_month_pct": 8.0,
+    "quarterly_refresh_fraction": 0.25,
+    "year_over_year_pct": 4.0
+  },
+  "evaluation": {
+    "band_high_min": 0.85,
+    "band_medium_min": 0.55,
+    "compression_max": 0.18,
+    "compression_min": 0.04,
+    "golden_set_size": 40,
+    "spot_checks_per_week": 15,
+    "truncation_gap_max": 0.08
+  },
+  "extract": {
+    "backoff_initial_seconds": 2.0,
+    "backoff_multiplier": 3.0,
+    "max_body_bytes": 1000000,
+    "max_retries": 2,
+    "request_timeout_seconds": 15.0,
+    "truncation_cap_tokens": 4000,
+    "user_agent": "yen-idhazh-test/1.0 (+https://example.org/contact)"
+  },
+  "logging": {
+    "level": "DEBUG"
+  },
+  "models": {
+    "inference": {
+      "max_output_tokens": 320,
+      "n_batch": 256,
+      "n_ctx": 4096,
+      "n_threads": 2,
+      "n_ubatch": 256,
+      "seed": 0,
+      "temperature": 0.0,
+      "thinking": false,
+      "top_p": 1.0
+    },
+    "route": {
+      "file": "Qwen3-4B-Q4_K_M.gguf",
+      "id": "qwen3-4b-q4-k-m",
+      "quantisation": "Q4_K_M",
+      "repo": "Qwen/Qwen3-4B-GGUF",
+      "sha256": "8ad0bb17d5132ae71f91fb1a8a922bad0a7c36ec09ce97498f494e82d4e935bb"
+    },
+    "summarize": {
+      "file": "Qwen3-8B-Q4_K_M.gguf",
+      "id": "qwen3-8b-q4-k-m",
+      "quantisation": "Q4_K_M",
+      "repo": "Qwen/Qwen3-8B-GGUF",
+      "sha256": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da"
+    }
+  },
+  "retention": {
+    "dry_run": true,
+    "image_months": 12,
+    "max_deletes_per_run": 50,
+    "site_budget_mb": 600
+  },
+  "run": {
+    "item_cap_per_day": 12,
+    "max_parallel": 2,
+    "shard_size": 3,
+    "shard_timeout_minutes": 90,
+    "success_floor_pct": 80
+  },
+  "version": "2026-08-21"
+}

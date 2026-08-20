@@ -1,0 +1,262 @@
+{
+  "$defs": {
+    "ArticleStatus": {
+      "enum": [
+        "ok",
+        "fetch_failed",
+        "extract_failed",
+        "robots_denied"
+      ],
+      "title": "ArticleStatus",
+      "type": "string"
+    },
+    "EventType": {
+      "description": "What happened to an item. One or more per item.",
+      "enum": [
+        "release",
+        "deal",
+        "acquisition",
+        "funding",
+        "capex",
+        "earnings",
+        "regulation",
+        "research",
+        "incident"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "LensId": {
+      "description": "A question asked of items already collected. Costs no extra request.",
+      "enum": [
+        "china",
+        "ai-roi",
+        "markets",
+        "cyber"
+      ],
+      "title": "LensId",
+      "type": "string"
+    },
+    "SourceTier": {
+      "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "SourceTier",
+      "type": "integer"
+    }
+  },
+  "$id": "article.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: identity, provenance, text, truncation and failure states.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - Extract is written against a fixed payload."
+    }
+  ],
+  "description": "The Extract stage's output payload, one per item.",
+  "properties": {
+    "canonical_url": {
+      "description": "The address after canonicalisation. url_key derives from it.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "carried_by": {
+      "default": 1,
+      "description": "Independent sources that carried this story today.",
+      "minimum": 1,
+      "title": "Carried By",
+      "type": "integer"
+    },
+    "entities": {
+      "items": {
+        "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+        "type": "string"
+      },
+      "title": "Entities",
+      "type": "array"
+    },
+    "events": {
+      "items": {
+        "$ref": "#/$defs/EventType"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "extractor_version": {
+      "minLength": 1,
+      "title": "Extractor Version",
+      "type": "string"
+    },
+    "failure_detail": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Detail"
+    },
+    "fetched_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Fetched At",
+      "type": "string"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "lenses": {
+      "items": {
+        "$ref": "#/$defs/LensId"
+      },
+      "title": "Lenses",
+      "type": "array"
+    },
+    "published_at": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Published At"
+    },
+    "rank_score": {
+      "minimum": 0.0,
+      "title": "Rank Score",
+      "type": "number"
+    },
+    "sanitizer_version": {
+      "minLength": 1,
+      "title": "Sanitizer Version",
+      "type": "string"
+    },
+    "source_id": {
+      "description": "The feed that carried it.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_url": {
+      "description": "The address as discovered.",
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/ArticleStatus"
+    },
+    "text": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Sanitized text. Never republished.",
+      "title": "Text"
+    },
+    "tier": {
+      "$ref": "#/$defs/SourceTier"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "token_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Token Count",
+      "type": "integer"
+    },
+    "truncated": {
+      "default": false,
+      "title": "Truncated",
+      "type": "boolean"
+    },
+    "truncated_at_tokens": {
+      "anyOf": [
+        {
+          "minimum": 1,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Truncated At Tokens"
+    },
+    "url_key": {
+      "description": "sha256 of canonical_url. Identity for dedupe and skip - a field, never a path.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Vertical",
+      "type": "string"
+    },
+    "word_count": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Word Count",
+      "type": "integer"
+    }
+  },
+  "required": [
+    "item_id",
+    "url_key",
+    "source_url",
+    "canonical_url",
+    "source_id",
+    "tier",
+    "vertical",
+    "rank_score",
+    "fetched_at",
+    "status",
+    "extractor_version",
+    "sanitizer_version"
+  ],
+  "title": "Article",
+  "type": "object",
+  "version": "2026-08-21"
+}

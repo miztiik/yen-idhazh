@@ -1,0 +1,59 @@
+{
+  "edgar": {
+    "company_tickers_url": "https://www.sec.gov/files/company_tickers.json",
+    "contact_email": "digest@example.org",
+    "enabled": true,
+    "requests_per_second": 8,
+    "submissions_url_template": "https://data.sec.gov/submissions/CIK{cik}.json"
+  },
+  "entities": [
+    {
+      "aliases": [
+        "Example Lab, Inc."
+      ],
+      "cik": "0001045810",
+      "display_name": "Example Lab",
+      "feeds": [
+        {
+          "id": "example-lab-newsroom",
+          "retired_on": null,
+          "status": "active",
+          "tier": 1,
+          "title": "Example Lab newsroom",
+          "url": "https://blog.example-lab.org/newsroom.xml"
+        }
+      ],
+      "id": "example-lab",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [],
+      "cik": null,
+      "display_name": "Example Fab",
+      "feeds": [
+        {
+          "id": "example-fab-press",
+          "retired_on": null,
+          "status": "active",
+          "tier": 1,
+          "title": "Example Fab press releases",
+          "url": "https://pr.example-fab.tw/rss"
+        }
+      ],
+      "id": "example-fab",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [],
+      "cik": null,
+      "display_name": "Example Merged Corp",
+      "feeds": [],
+      "id": "example-merged",
+      "retired_on": "2026-05-30",
+      "status": "retired"
+    }
+  ],
+  "version": "2026-08-21"
+}

@@ -1,0 +1,197 @@
+{
+  "$defs": {
+    "EventDef": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/EventType"
+        }
+      },
+      "required": [
+        "id",
+        "display_name"
+      ],
+      "title": "EventDef",
+      "type": "object"
+    },
+    "EventType": {
+      "description": "What happened to an item. One or more per item.",
+      "enum": [
+        "release",
+        "deal",
+        "acquisition",
+        "funding",
+        "capex",
+        "earnings",
+        "regulation",
+        "research",
+        "incident"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "LensDef": {
+      "additionalProperties": false,
+      "properties": {
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "id": {
+          "$ref": "#/$defs/LensId"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired On"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
+        }
+      },
+      "required": [
+        "id",
+        "display_name"
+      ],
+      "title": "LensDef",
+      "type": "object"
+    },
+    "LensId": {
+      "description": "A question asked of items already collected. Costs no extra request.",
+      "enum": [
+        "china",
+        "ai-roi",
+        "markets",
+        "cyber"
+      ],
+      "title": "LensId",
+      "type": "string"
+    },
+    "LifecycleStatus": {
+      "description": "Retire, never delete: a tombstone keeps old payloads valid.",
+      "enum": [
+        "draft",
+        "active",
+        "retired"
+      ],
+      "title": "LifecycleStatus",
+      "type": "string"
+    },
+    "VerticalDef": {
+      "additionalProperties": false,
+      "description": "A subject with its own reporters and its own feeds.",
+      "properties": {
+        "daily_cap": {
+          "description": "Most items this vertical contributes to one day.",
+          "minimum": 1,
+          "title": "Daily Cap",
+          "type": "integer"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "min_feeds": {
+          "description": "Feed floor below which the vertical does not render at all.",
+          "minimum": 1,
+          "title": "Min Feeds",
+          "type": "integer"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired On"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
+        }
+      },
+      "required": [
+        "id",
+        "display_name",
+        "daily_cap",
+        "min_feeds"
+      ],
+      "title": "VerticalDef",
+      "type": "object"
+    }
+  },
+  "$id": "taxonomy.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: verticals, lenses and events.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - the vocabulary is fixed before any stage reads it."
+    }
+  ],
+  "description": "`config/taxonomy.json` - the vocabulary every payload indexes against.",
+  "properties": {
+    "events": {
+      "items": {
+        "$ref": "#/$defs/EventDef"
+      },
+      "title": "Events",
+      "type": "array"
+    },
+    "lenses": {
+      "items": {
+        "$ref": "#/$defs/LensDef"
+      },
+      "title": "Lenses",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "verticals": {
+      "items": {
+        "$ref": "#/$defs/VerticalDef"
+      },
+      "title": "Verticals",
+      "type": "array"
+    }
+  },
+  "required": [
+    "verticals",
+    "lenses",
+    "events"
+  ],
+  "title": "Taxonomy",
+  "type": "object",
+  "version": "2026-08-21"
+}

@@ -1,0 +1,32 @@
+{
+  "canonical_url": "https://newsroom.example-grid.com/2026/08/reactor-order",
+  "carried_by": 2,
+  "entities": [],
+  "events": [
+    "capex",
+    "deal"
+  ],
+  "extractor_version": "trafilatura-1.12.2",
+  "failure_detail": null,
+  "fetched_at": "2026-08-21T06:05:02Z",
+  "item_id": "energy-01",
+  "lenses": [
+    "markets"
+  ],
+  "published_at": "2026-08-20T22:10:00Z",
+  "rank_score": 2.6,
+  "sanitizer_version": "sanitizer-1",
+  "source_id": "example-grid-newsroom",
+  "source_url": "https://newsroom.example-grid.com/2026/08/reactor-order?utm_source=rss",
+  "status": "ok",
+  "text": "Example Grid has ordered four small modular reactors for a datacentre campus, with the first unit due in 2031. The order is worth 3.2 billion dollars and covers 1.2 gigawatts of capacity.",
+  "tier": 1,
+  "title": "Example Grid orders four small modular reactors",
+  "token_count": 2500,
+  "truncated": true,
+  "truncated_at_tokens": 2500,
+  "url_key": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933010852380f9b5b6f78b8dd90",
+  "version": "2026-08-21",
+  "vertical": "energy",
+  "word_count": 4310
+}

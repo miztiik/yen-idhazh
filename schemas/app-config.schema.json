@@ -1,0 +1,487 @@
+{
+  "$defs": {
+    "CollectConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "front_page_bonus": {
+          "default": 0.4,
+          "minimum": 0.0,
+          "title": "Front Page Bonus",
+          "type": "number"
+        },
+        "min_feeds_floor": {
+          "default": 25,
+          "description": "Default feed floor. A vertical may raise it; below it, nothing renders.",
+          "minimum": 1,
+          "title": "Min Feeds Floor",
+          "type": "integer"
+        },
+        "quarantine_after_failures": {
+          "default": 5,
+          "minimum": 1,
+          "title": "Quarantine After Failures",
+          "type": "integer"
+        },
+        "repetition_weight": {
+          "default": 1.0,
+          "minimum": 0.0,
+          "title": "Repetition Weight",
+          "type": "number"
+        },
+        "tier_weights": {
+          "$ref": "#/$defs/TierWeights"
+        },
+        "watchlist_bonus": {
+          "default": 0.5,
+          "minimum": 0.0,
+          "title": "Watchlist Bonus",
+          "type": "number"
+        },
+        "watchlist_max_entities": {
+          "default": 30,
+          "minimum": 1,
+          "title": "Watchlist Max Entities",
+          "type": "integer"
+        }
+      },
+      "title": "CollectConfig",
+      "type": "object"
+    },
+    "DriftConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "month_over_month_pct": {
+          "default": 10.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Month Over Month Pct",
+          "type": "number"
+        },
+        "quarterly_refresh_fraction": {
+          "default": 0.5,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Quarterly Refresh Fraction",
+          "type": "number"
+        },
+        "year_over_year_pct": {
+          "default": 5.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Year Over Year Pct",
+          "type": "number"
+        }
+      },
+      "title": "DriftConfig",
+      "type": "object"
+    },
+    "EvaluationConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "band_high_min": {
+          "default": 0.8,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Band High Min",
+          "type": "number"
+        },
+        "band_medium_min": {
+          "default": 0.5,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Band Medium Min",
+          "type": "number"
+        },
+        "compression_max": {
+          "default": 0.2,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Compression Max",
+          "type": "number"
+        },
+        "compression_min": {
+          "default": 0.03,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Compression Min",
+          "type": "number"
+        },
+        "golden_set_size": {
+          "default": 20,
+          "minimum": 1,
+          "title": "Golden Set Size",
+          "type": "integer"
+        },
+        "spot_checks_per_week": {
+          "default": 10,
+          "minimum": 0,
+          "title": "Spot Checks Per Week",
+          "type": "integer"
+        },
+        "truncation_gap_max": {
+          "default": 0.1,
+          "description": "Score gap that flags a truncation artifact rather than a hallucination.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Truncation Gap Max",
+          "type": "number"
+        }
+      },
+      "title": "EvaluationConfig",
+      "type": "object"
+    },
+    "ExtractConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "backoff_initial_seconds": {
+          "default": 1.0,
+          "minimum": 0.0,
+          "title": "Backoff Initial Seconds",
+          "type": "number"
+        },
+        "backoff_multiplier": {
+          "default": 2.0,
+          "minimum": 1.0,
+          "title": "Backoff Multiplier",
+          "type": "number"
+        },
+        "max_body_bytes": {
+          "default": 2000000,
+          "minimum": 1024,
+          "title": "Max Body Bytes",
+          "type": "integer"
+        },
+        "max_retries": {
+          "default": 3,
+          "minimum": 0,
+          "title": "Max Retries",
+          "type": "integer"
+        },
+        "request_timeout_seconds": {
+          "default": 20.0,
+          "exclusiveMinimum": 0.0,
+          "title": "Request Timeout Seconds",
+          "type": "number"
+        },
+        "truncation_cap_tokens": {
+          "default": 2500,
+          "description": "A performance lever, not only a safety cap: prefill degrades with length.",
+          "minimum": 256,
+          "title": "Truncation Cap Tokens",
+          "type": "integer"
+        },
+        "user_agent": {
+          "default": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)",
+          "title": "User Agent",
+          "type": "string"
+        }
+      },
+      "title": "ExtractConfig",
+      "type": "object"
+    },
+    "InferenceConfig": {
+      "additionalProperties": false,
+      "description": "Decoding is pinned here so a change of output is a reviewable diff.",
+      "properties": {
+        "max_output_tokens": {
+          "default": 250,
+          "minimum": 1,
+          "title": "Max Output Tokens",
+          "type": "integer"
+        },
+        "n_batch": {
+          "default": 512,
+          "minimum": 1,
+          "title": "N Batch",
+          "type": "integer"
+        },
+        "n_ctx": {
+          "default": 8192,
+          "minimum": 512,
+          "title": "N Ctx",
+          "type": "integer"
+        },
+        "n_threads": {
+          "default": 4,
+          "minimum": 1,
+          "title": "N Threads",
+          "type": "integer"
+        },
+        "n_ubatch": {
+          "default": 512,
+          "minimum": 1,
+          "title": "N Ubatch",
+          "type": "integer"
+        },
+        "seed": {
+          "default": 0,
+          "description": "Dead code under greedy decoding. Never cited as the determinism control.",
+          "title": "Seed",
+          "type": "integer"
+        },
+        "temperature": {
+          "default": 0.0,
+          "minimum": 0.0,
+          "title": "Temperature",
+          "type": "number"
+        },
+        "thinking": {
+          "default": false,
+          "description": "Off. Reasoning measurably increases hallucination when summarizing.",
+          "title": "Thinking",
+          "type": "boolean"
+        },
+        "top_p": {
+          "default": 1.0,
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Top P",
+          "type": "number"
+        }
+      },
+      "title": "InferenceConfig",
+      "type": "object"
+    },
+    "LogLevel": {
+      "enum": [
+        "DEBUG",
+        "INFO",
+        "WARNING",
+        "ERROR"
+      ],
+      "title": "LogLevel",
+      "type": "string"
+    },
+    "LoggingConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "$ref": "#/$defs/LogLevel",
+          "default": "INFO"
+        }
+      },
+      "title": "LoggingConfig",
+      "type": "object"
+    },
+    "ModelRef": {
+      "additionalProperties": false,
+      "description": "Which weights, from where. Per-item payloads carry only the `id`.",
+      "properties": {
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Hugging Face repository the GGUF is pulled from.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Recorded once measured. A weight that changes silently changes every output.",
+          "title": "Sha256"
+        }
+      },
+      "required": [
+        "id",
+        "repo",
+        "file",
+        "quantisation"
+      ],
+      "title": "ModelRef",
+      "type": "object"
+    },
+    "ModelsConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "inference": {
+          "$ref": "#/$defs/InferenceConfig"
+        },
+        "route": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "summarize": {
+          "$ref": "#/$defs/ModelRef"
+        }
+      },
+      "required": [
+        "summarize",
+        "route"
+      ],
+      "title": "ModelsConfig",
+      "type": "object"
+    },
+    "RetentionConfig": {
+      "additionalProperties": false,
+      "description": "Ships disabled. A default is a promise, not a placeholder.",
+      "properties": {
+        "dry_run": {
+          "default": true,
+          "title": "Dry Run",
+          "type": "boolean"
+        },
+        "image_months": {
+          "default": -1,
+          "description": "-1 disables pruning entirely. Age-based only, never size.",
+          "minimum": -1,
+          "title": "Image Months",
+          "type": "integer"
+        },
+        "max_deletes_per_run": {
+          "default": 200,
+          "description": "The fuse. An off-by-one in a date parse must not eat the archive.",
+          "minimum": 0,
+          "title": "Max Deletes Per Run",
+          "type": "integer"
+        },
+        "site_budget_mb": {
+          "default": 800,
+          "description": "Opens an issue above this. The platform's hard ceiling is 1 GB.",
+          "minimum": 1,
+          "title": "Site Budget Mb",
+          "type": "integer"
+        }
+      },
+      "title": "RetentionConfig",
+      "type": "object"
+    },
+    "RunConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "item_cap_per_day": {
+          "default": 20,
+          "minimum": 1,
+          "title": "Item Cap Per Day",
+          "type": "integer"
+        },
+        "max_parallel": {
+          "default": 4,
+          "minimum": 1,
+          "title": "Max Parallel",
+          "type": "integer"
+        },
+        "shard_size": {
+          "default": 5,
+          "description": "URLs per worker VM. Set by measured model-load amortization, not by taste.",
+          "minimum": 1,
+          "title": "Shard Size",
+          "type": "integer"
+        },
+        "shard_timeout_minutes": {
+          "default": 150,
+          "description": "Derived from the WORST-case article, not the blended figure.",
+          "minimum": 1,
+          "title": "Shard Timeout Minutes",
+          "type": "integer"
+        },
+        "success_floor_pct": {
+          "default": 70,
+          "description": "Below this, the run additionally opens an issue.",
+          "maximum": 100,
+          "minimum": 0,
+          "title": "Success Floor Pct",
+          "type": "integer"
+        }
+      },
+      "title": "RunConfig",
+      "type": "object"
+    },
+    "TierWeights": {
+      "additionalProperties": false,
+      "description": "The ranking weight of a source tier. Tier 1 is the institution that IS the fact.",
+      "properties": {
+        "community": {
+          "default": 0.3,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Community",
+          "type": "number"
+        },
+        "institution": {
+          "default": 1.0,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Institution",
+          "type": "number"
+        },
+        "trade_press": {
+          "default": 0.6,
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Trade Press",
+          "type": "number"
+        }
+      },
+      "title": "TierWeights",
+      "type": "object"
+    }
+  },
+  "$id": "app-config.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: run, collect, extract, models, evaluation, drift, retention.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - no stage may reach for a tunable that has no home."
+    }
+  ],
+  "description": "`config/idhazh.json` - every tunable, schema-validated.",
+  "properties": {
+    "collect": {
+      "$ref": "#/$defs/CollectConfig"
+    },
+    "drift": {
+      "$ref": "#/$defs/DriftConfig"
+    },
+    "evaluation": {
+      "$ref": "#/$defs/EvaluationConfig"
+    },
+    "extract": {
+      "$ref": "#/$defs/ExtractConfig"
+    },
+    "logging": {
+      "$ref": "#/$defs/LoggingConfig"
+    },
+    "models": {
+      "$ref": "#/$defs/ModelsConfig"
+    },
+    "retention": {
+      "$ref": "#/$defs/RetentionConfig"
+    },
+    "run": {
+      "$ref": "#/$defs/RunConfig"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "models"
+  ],
+  "title": "AppConfig",
+  "type": "object",
+  "version": "2026-08-21"
+}

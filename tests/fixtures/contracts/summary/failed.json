@@ -1,0 +1,16 @@
+{
+  "attempt": 2,
+  "duration_ms": 900000,
+  "failure_detail": "llama-server did not return a schema-valid object within the retry budget",
+  "generated_at": "2026-08-21T06:31:02Z",
+  "input_tokens": 2500,
+  "item_id": "energy-01",
+  "key_points": [],
+  "model_id": "qwen3-4b-q4-k-m",
+  "output_tokens": 0,
+  "source_truncated": true,
+  "status": "failed",
+  "summary": null,
+  "url_key": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933010852380f9b5b6f78b8dd90",
+  "version": "2026-08-21"
+}

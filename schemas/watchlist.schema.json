@@ -1,0 +1,222 @@
+{
+  "$defs": {
+    "EdgarPolicy": {
+      "additionalProperties": false,
+      "description": "How the SEC submissions endpoint is consulted, when it is.",
+      "properties": {
+        "company_tickers_url": {
+          "default": "https://www.sec.gov/files/company_tickers.json",
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Company Tickers Url",
+          "type": "string"
+        },
+        "contact_email": {
+          "anyOf": [
+            {
+              "pattern": "^[^@\\s]+@[^@\\s]+\\.[^@\\s]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Declared in the User-Agent. SEC refuses the request without one.",
+          "title": "Contact Email"
+        },
+        "enabled": {
+          "default": false,
+          "title": "Enabled",
+          "type": "boolean"
+        },
+        "requests_per_second": {
+          "default": 10,
+          "maximum": 10,
+          "minimum": 1,
+          "title": "Requests Per Second",
+          "type": "integer"
+        },
+        "submissions_url_template": {
+          "default": "https://data.sec.gov/submissions/CIK{cik}.json",
+          "title": "Submissions Url Template",
+          "type": "string"
+        }
+      },
+      "title": "EdgarPolicy",
+      "type": "object"
+    },
+    "EntityDef": {
+      "additionalProperties": false,
+      "description": "One named organisation.",
+      "properties": {
+        "aliases": {
+          "items": {
+            "type": "string"
+          },
+          "title": "Aliases",
+          "type": "array"
+        },
+        "cik": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9]{10}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Ten-digit, zero-padded SEC filer id. Null for a non-US entity.",
+          "title": "Cik"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "feeds": {
+          "items": {
+            "$ref": "#/$defs/EntityFeed"
+          },
+          "title": "Feeds",
+          "type": "array"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired On"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
+        }
+      },
+      "required": [
+        "id",
+        "display_name"
+      ],
+      "title": "EntityDef",
+      "type": "object"
+    },
+    "EntityFeed": {
+      "additionalProperties": false,
+      "description": "A newsroom or blog feed belonging to one entity.",
+      "properties": {
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "retired_on": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Retired On"
+        },
+        "status": {
+          "$ref": "#/$defs/LifecycleStatus",
+          "default": "active"
+        },
+        "tier": {
+          "$ref": "#/$defs/SourceTier",
+          "default": 1
+        },
+        "title": {
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "url": {
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Url",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "title",
+        "url"
+      ],
+      "title": "EntityFeed",
+      "type": "object"
+    },
+    "LifecycleStatus": {
+      "description": "Retire, never delete: a tombstone keeps old payloads valid.",
+      "enum": [
+        "draft",
+        "active",
+        "retired"
+      ],
+      "title": "LifecycleStatus",
+      "type": "string"
+    },
+    "SourceTier": {
+      "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "SourceTier",
+      "type": "integer"
+    }
+  },
+  "$id": "watchlist.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: entities with their own feeds, plus the EDGAR policy.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - the entity bonus is computed against a fixed shape."
+    }
+  ],
+  "description": "`config/watchlist.json` - the entities whose news gets a ranking bonus.",
+  "properties": {
+    "edgar": {
+      "$ref": "#/$defs/EdgarPolicy"
+    },
+    "entities": {
+      "items": {
+        "$ref": "#/$defs/EntityDef"
+      },
+      "title": "Entities",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "entities"
+  ],
+  "title": "Watchlist",
+  "type": "object",
+  "version": "2026-08-21"
+}

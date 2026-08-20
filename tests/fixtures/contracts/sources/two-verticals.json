@@ -1,0 +1,55 @@
+{
+  "feeds": [
+    {
+      "id": "example-lab-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Example Lab blog",
+      "url": "https://blog.example-lab.org/feed.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "example-wire-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Example Wire, AI section",
+      "url": "https://www.example-wire.com/ai/rss",
+      "vertical": "ai",
+      "weight": 0.6
+    },
+    {
+      "id": "example-grid-newsroom",
+      "retired_on": null,
+      "status": "draft",
+      "tier": 1,
+      "title": "Example Grid newsroom",
+      "url": "https://newsroom.example-grid.com/rss",
+      "vertical": "energy",
+      "weight": 1.0
+    },
+    {
+      "id": "example-defunct-daily",
+      "retired_on": "2026-07-04",
+      "status": "retired",
+      "tier": 3,
+      "title": "Example Defunct Daily",
+      "url": "https://defunct.example.com/rss",
+      "vertical": "energy",
+      "weight": 0.0
+    }
+  ],
+  "salience": [
+    {
+      "id": "hn-frontpage",
+      "retired_on": null,
+      "status": "active",
+      "title": "Hacker News front page",
+      "url": "https://hnrss.org/frontpage",
+      "weight": 0.4
+    }
+  ],
+  "version": "2026-08-21"
+}

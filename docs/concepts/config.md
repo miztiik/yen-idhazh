@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Holy Law #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -24,7 +24,11 @@ Knobs, by the surface they tune:
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
 - **Logging** - the level, and which events emit ([telemetry.md](telemetry.md)).
 
-These are the *surfaces*, not a field list. The concrete schema and its defaults land with the config contract; every knob ships a sane default.
+These are the *surfaces*, not a field list. The field-level truth is `schemas/app-config.schema.json`, generated from the model - read it there rather than restating it here, because a list copied into prose is a list that goes stale.
+
+The knobs are spread across four files rather than one, along the line of who edits them and how often: `config/idhazh.json` for behaviour, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+
+Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing.
 
 ## What is NOT a knob
 
