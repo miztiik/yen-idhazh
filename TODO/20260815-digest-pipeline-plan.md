@@ -12,10 +12,10 @@ Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktre
 | Field | Value |
 | --- | --- |
 | Why this plan exists | Ship a daily job that summarizes public articles with a small LM inside GitHub Actions, scores every summary for faithfulness, and commits a dated JSON digest payload a static site renders - with no runtime backend. |
-| Hard scope - in | Config-driven multi-vertical source discovery (a curated RSS/Atom feed list per vertical, cross-source repetition ranking, cross-cutting lenses, an entity watchlist); `trafilatura` extraction; Qwen3-8B summarization under constrained decoding; four-way visual routing; Vega-Lite + Mermaid deterministic renderers; CPU diffusion for narrative items; HHEM dual-score eval + CSV; GitHub Pages eval dashboard; per-URL atomic worker jobs. |
-| Hard scope - out | Runtime backend or hosted inference; accounts; push notifications; paywalled sources; republishing article bodies; LLM-as-judge evaluation; fine-tuning; GPU runners; larger-than-9GB models. |
-| ESCALATE triggers | (1) Row 7 model-validation gate fails its decision rule -> model pick is re-derived, PAUSE. (2) Any move to hosted inference (GitHub Models) - reverses the static-first premise. (3) Row 9 canaries fail against the chosen image model. (4) 3x cost overrun on any row. |
-| Chosen strategy | Runtime pipeline is orchestrator + disposable sharded workers, mirroring the plan-execution model: a `plan` job emits and shards the URL list, a `matrix` of workers each handles ~5 URLs on its own VM and writes one content-addressed JSON per URL, an `assemble` job renders the digest. Ruled by Fowler (contracts before logic) and Carmack (fresh-VM-per-job is the parallelism primitive; shard size is set by measured model-load amortization). |
+| Hard scope - in | Config-driven multi-vertical source discovery (a curated RSS/Atom feed list per vertical, cross-source repetition ranking, cross-cutting lenses, an entity watchlist); `trafilatura` extraction; Qwen3-8B summarization under constrained decoding; four-way visual routing; Vega-Lite + Mermaid deterministic renderers; HHEM dual-score eval + CSV; GitHub Pages eval dashboard; per-URL atomic worker jobs; dated published layout with topic routes, read-state and pagination; a **secondary, reader-initiated on-device assist** (build-time embeddings, browser semantic search, read-aloud) that the digest never depends on. |
+| Hard scope - out | Runtime backend; hosted inference anywhere; accounts; push notifications; paywalled sources; republishing article bodies; LLM-as-judge evaluation; fine-tuning; GPU runners; larger-than-9GB pipeline models; any browser model whose largest single file exceeds GitHub's 100 MB per-file hard limit; any on-device feature on the digest's critical path. |
+| ESCALATE triggers | (1) Row 7 model-validation gate fails its decision rule -> model pick is re-derived, PAUSE. (2) Any move to hosted inference - reverses the static-first premise. (3) Row 9 measurement shows images cannot fit the published budget -> the renderer is descoped, PAUSE. (4) 3x cost overrun on any row. (5) A browser model considered for row 23 has a single file over 100 MB - it cannot be committed, PAUSE. (6) Row 21 browser canaries fail against the chosen browser model. |
+| Chosen strategy | Runtime pipeline is orchestrator + disposable sharded workers, mirroring the plan-execution model: a `plan` job emits and shards the URL list, a `matrix` of workers each handles a shard on its own VM and writes one JSON per item, an `assemble` job renders the digest. Ruled by Fowler (contracts before logic) and Carmack (fresh-VM-per-job is the parallelism primitive; shard size is set by measured model-load amortization). |
 | Execution | autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 3. |
 | Roster note (2026-08-20) | This plan was authored against a five-persona roster that included Palm (casual-game design) and Player. Both are gone; the roster is now Reader, Jony, Andre, Fowler, Carmack (`CLAUDE.md` section 14). Decisions already ruled stand as written and are NOT reopened. But **Andre (AI / LLM) now owns model quality, prompt strategy, constrained decoding, eval design and metric choice** - so rows 4, 6, 7 and 9 must consult him even where the existing attribution says Fowler or Carmack. The standing split: Andre owns whether a model is good enough, Carmack owns whether it fits. |
 
@@ -116,13 +116,13 @@ plan job                 worker jobs (matrix of SHARDS, fail-fast:false)  assemb
  dedupe canonical URL     load model once per shard, then per URL:         render digest.json
  rank + tag lens/entity   fetch -> extract -> summarize -> route           append evals CSV
  take top N per vertical  -> render -> eval                                commit once
- shard urls[]             write backend/var/run/<date>/<sha256(url)[:12]>.json
+ shard urls[]             write backend/var/run/<date>/<vertical>-<NN>.json
  (no model)                                                               publish frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json
 ```
 
 Shard rather than one-VM-per-URL: section 2.1 measured model load at roughly half of
-per-URL wall-clock. Per-URL atomicity survives inside the shard via content-addressed
-writes plus skip-if-exists.
+per-URL wall-clock. Per-item atomicity survives inside the shard via a temp-then-rename
+write plus skip-if-fingerprint-matches against the run index.
 
 Both levels use the same rule: the orchestrator never does the work, and a worker failure is contained to one unit.
 
@@ -145,7 +145,16 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 11 | Pages eval dashboard | 4 | F | PENDING | - | - | - |
 | 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | F | PENDING | - | - | - |
 | 13 | Published layout, date routing and the frontend shell | 1, 10 | F | PENDING | - | - | - |
-| 14 | Retention job + site-budget alarm | 13 | G | PENDING | - | - | - |
+| 14 | Retention job + site-budget alarm | 13 | H | PENDING | - | - | - |
+| 15 | Pipeline fingerprint contract | 1 | A | PENDING | - | - | - |
+| 16 | Read-state, new-arrivals block and pagination | 13 | G | PENDING | - | - | - |
+| 17 | Icon sprite + registry allowlist | 13 | G | PENDING | - | - | - |
+| 18 | On-device assist enabler (no feature) | 13 | G | PENDING | - | - | - |
+| 19 | Build-time embeddings in the day payload | 1, 15 | G | PENDING | - | - | - |
+| 20 | Browser semantic search | 18, 19 | H | PENDING | - | - | - |
+| 21 | Browser-runtime injection canaries | 18 | H | PENDING | - | - | - |
+| 22 | Read-aloud via Web Speech API | 13 | G | PENDING | - | - | - |
+| 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | I | PENDING | - | - | - |
 
 ---
 
@@ -163,7 +172,8 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | `version` is a `YYYY-MM-DD` date-stamp with an in-schema `changelog` array. | Fowler |
-| 2 | Per-item output is content-addressed at `backend/var/run/<date>/<sha256(url)[:12]>.json` (reproducible, gitignored); the COMMITTED record is the published digest under `frontend/public/` plus the eval rows. The digest is a rendering, never a source of truth. | Fowler |
+| 2 | **No hash appears in any path, filename or URL - published or internal.** Per-item output is `backend/var/run/<date>/<vertical>-<NN>.json` (reproducible, gitignored); the COMMITTED record is the published digest under `frontend/public/` plus the eval rows. The digest is a rendering, never a source of truth. | Fowler |
+| 2a | Item identity for dedupe and skip lives in a **payload field**, `url_key`, never in a path. Paths are for humans and for globs; identity is for the contract. Skip logic reads the run index, not the filesystem. | Fowler |
 | 3 | Tunables (N, truncation cap, score bands, retry budget) live in `config/idhazh.json`. | Fowler |
 | 4 | Every persisted shape is a Pydantic model in `backend/idhazh/contracts/` FIRST; `schemas/` and the frontend types are generated from it and gated on drift (CLAUDE.md section 1a). | Fowler |
 | 4 | Lens and event vocabularies are closed enums in `schemas/taxonomy.schema.json`, not free-text strings. A new lens or event type is a schema change carrying a `changelog` entry. | Fowler |
@@ -477,7 +487,7 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | 3 | `fail-fast: false` - the default cancels every sibling on first failure, which is exactly wrong for independent work items. | Carmack |
 | 4 | `max-parallel` starts at 4 and rises only on row 2 evidence. The risk is cache-restore stampede and HF rate limits, not CPU. | Carmack |
 | 5 | Below 70% success additionally opens an issue. | Fowler |
-| 6 | **Shard, do not fan out per URL.** Section 2.1 measured ~90 s of model cache-restore per job against ~173 s of work, so one-VM-per-URL spent ~50% of wall-clock loading weights. Each worker job takes a shard of ~5 URLs and loads the model once. Per-URL atomicity is preserved *inside* the shard by the content-addressed write plus skip-if-exists, so a re-run redoes only the unfinished URLs of a failed shard. This is the row-2 measurement changing the architecture, which is what row 2 is for. | Carmack |
+| 6 | **Shard, do not fan out per URL.** Section 2.1 measured ~90 s of model cache-restore per job against ~173 s of work, so one-VM-per-URL spent ~50% of wall-clock loading weights. Each worker job takes a shard and loads the model once. Per-item atomicity is preserved *inside* the shard by a temp-then-rename write plus skip-if-fingerprint-matches, so a re-run redoes only the unfinished items of a failed shard. This is the row-2 measurement changing the architecture, which is what row 2 is for. | Carmack |
 | 7 | `timeout-minutes` on the shard job is set from the WORST case, not the blended figure. Section 2.2 measures a long article at 1223 s worst on the 8B, so a 5-URL shard that draws five long articles is ~102 min. Set 150 min. A timeout set from the 399 s blended figure would kill healthy shards that happened to draw long articles. | Carmack |
 
 | # | Option | Why rejected | Authority |
@@ -544,13 +554,17 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | 4 | `latest` and `archive` are **derived at build time** from the directory listing and never committed. A committed pointer can disagree with disk after a prune or a raced deploy; a derived one cannot. | Fowler |
 | 5 | **One `digest.json` per day carrying all items.** The vertical route is a filter over that same payload, never a second file. The day gzips to 12.8 KB (measured 2.92x ratio). | Carmack |
 | 6 | **Requests to render any page is a constant, at most 2, independent of archive age.** Any scheme whose request count or index size grows with history is vetoed at any granularity. | Carmack |
-| 7 | **A day is monotonic and positions are frozen.** An item's position is assigned once, at first publication, and never recomputed. A later run appends; it never reorders, never removes, never renumbers. Ranking decides which items enter and in what initial order - it does not get a second vote. | Reader |
+| 7 | **Read items never move relative to each other.** Superseded the earlier frozen-position rule on 2026-08-20 after the owner asked for multiple runs per day. Unread items may be re-ranked and demoted between runs; anything the reader has already opened keeps its relative order forever. New arrivals land in one labelled block, never sprinkled through what was already read. Ranking gets a second vote only over items the reader has not seen. | Reader |
 | 8 | **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item carries an `updated_at` and says so. Silently swapping better wording under a reader who already read it makes them doubt their own memory, and the summaries are the entire product. | Reader |
 | 9 | When a day has more than one run, the page carries one plain line - "5 stories added since this morning" - and the new items are findable without re-skimming the old ones. | Reader |
-| 10 | **No run identifier in any data path or any reader URL.** A run id in the path means one item at two paths and content-addressing is dead. The run id lives in the footer and in `run.json`. | Fowler |
+| 10 | **No run identifier and no hash in any data path or any reader URL.** An item is addressed by its vertical and its ordinal within the day - `ai-03` - which is predictable, derivable, free of fetched text, and readable aloud. The run id lives in the footer and in `run.json`. | Fowler, Jony |
 | 11 | A topic is **a filter on the day**, with a shareable dated URL - not a destination a reader must choose before being given anything. The default interaction is an in-page anchor; the section heading is the permalink. | Reader |
 | 12 | No title-derived slug in any URL. Titles come from fetched text, and fetched text never becomes a URL (Holy Law #11). | Jony |
-| 13 | **Stack: Svelte 5 + Vite + TypeScript + Tailwind + vitest + Playwright + `json-schema-to-typescript` + `ajv`.** Matches both sibling repos' spine and yen-tamizh's lean profile. `ajv` over `zod` because it consumes the committed JSON Schema the drift gate already generates, where `zod` would need a second generator. | Fowler, Jony, Carmack |
+| 13 | **Stack: Svelte 5 + Vite + TypeScript + Tailwind + vitest + Playwright + `json-schema-to-typescript`.** Matches both sibling repos' spine and yen-tamizh's lean profile. | Fowler, Jony, Carmack |
+| 14 | **`ajv` is a CI dependency, not a shipped one.** It validates config and published payloads against the generated JSON Schema in the drift gate, where a failure is loud and early. Shipping it would cost every reader ~30 KB of JavaScript to re-check payloads Pydantic already validated on the way out. `zod` is rejected outright: it would need a second generator feeding the same gate. | Fowler |
+| 15 | **Published filenames are predictable and derivable from the date.** `digest.json` is the day's current state; each run additionally writes `run-<N>.json` where N is the run sequence for that date. No content hash in the name, no unguessable suffix - a public repo with a public index makes secrecy theatre, and predictability is what makes a path reachable without a lookup. | Fowler, Carmack |
+| 16 | **A vertical gets an undated entry route that renders inline and canonicalises to the dated one.** `/world/` shows the newest day's world projection with the date in the heading and `rel=canonical` pointing at `/<YYYY-MM-DD>/world/`; every share affordance on it emits the dated address. A door, not a bookmark. | Jony |
+| 17 | Item counts per vertical are **config-driven throughout**. The 17/day figure is today's default, not a constant; no code, route, layout or budget may assume a fixed number of items or runs. | Fowler |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
@@ -571,19 +585,21 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 Data - committed, immutable, and the deletion atom is one day directory:
 
 ```
-frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, all items
+frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the day's current state, all items
+frontend/public/digest/<YYYY>/<MM>/<DD>/run-<N>.json    that run's snapshot, N = run sequence
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
-frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.webp  optional visual, adjacent to what names it
+frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.webp  optional visual, adjacent to what names it
 evals/scores.csv                                        the ledger - never published, copied into dist at build
 ```
 
 Routes, under the Pages project base:
 
 ```
-/                          the newest published day, rendered inline    (moving)
-/<YYYY-MM-DD>/             that day, all verticals                      (canonical, immutable)
-/<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        (canonical, immutable)
-/<YYYY-MM-DD>/#<item_id>   an item anchor within the day
+/                          the newest published day, rendered inline    moving
+/<vertical>/               the newest day, one vertical, rendered inline - canonicalises to the dated route
+/<YYYY-MM-DD>/             that day, all verticals                      canonical, immutable
+/<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        canonical, immutable
+/<YYYY-MM-DD>/#<vertical>-<NN>   an item anchor, force-revealed by the shell
 /archive/                  every surviving day, newest first            (moving)
 /evals/                    the dashboard                                (moving)
 404.html                   the designed missing-day state
@@ -622,6 +638,209 @@ is what makes row 14 a single `rm -r` with no second edit.
 | 3 | Pruning the eval ledger, the golden fixtures, or the canaries | The ledger is the only record an item existed and the entire time series; a retired golden fixture is what makes a year-over-year claim interpretable; a retired canary is an attack no longer tested for. Under 1 MB/yr of text against gigabytes of images - the arithmetic does not even ask. | Andre |
 | 4 | `git filter-repo` to reclaim history | Forbidden by section 8, and it invalidates every existing clone. | Carmack |
 | 5 | Deleting a day and leaving its eval rows dangling with no context | Acceptable only if the eval row is self-describing. `source_url`, `date` and `title` must be columns before retention is ever enabled, not after. | Fowler |
+
+---
+
+## Row #15 - Pipeline fingerprint contract
+
+- **Scope:** Stamp every summary, eval row and run manifest with the exact inputs that produced it, so a re-run can prove it changed nothing.
+- **Files touched:** `backend/idhazh/contracts/{summary,eval_row,run_manifest}.py`, `backend/idhazh/fingerprint.py`, `schemas/*`, `evals/fingerprints.csv`, `backend/tests/test_fingerprint.py`
+- **Acceptance gates:** the fingerprint is a sha256 over a sorted, fully-enumerated input set; `evals/fingerprints.csv` expands each distinct fingerprint into its components; a fingerprint match with unequal output records `determinism_violation` rather than failing the build.
+- **Oracle:** the silent-drift trap - change only the truncation cap on a fixture, re-run, and assert the fingerprint changes and a second observation is recorded. If the fingerprint is stable across a changed cap, the stamp is blind and the row fails.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | `temperature=0, seed=0` is not determinism; it is determinism given identical logits. `seed` is dead code under greedy decoding and may not be cited as a control. | Andre |
+| 2 | Fingerprint inputs: `model_sha256`, `quantisation`, `runtime_build`, `chat_template_sha256`, `prompt_sha256`, `output_schema_sha256`, `truncation_cap_tokens`, `sampling`, `n_ctx`, `n_batch`, `n_ubatch`, `n_threads`, `runner_class`, `extractor_version`, `sanitizer_version`. | Andre |
+| 3 | `evals/fingerprints.csv` is append-only and never pruned. Without it a fingerprint is meaningless hex three years from now. | Andre |
+| 4 | Skip-if-exists becomes **skip-if-fingerprint-matches**. Identical inputs do no work and write no eval row - a re-run that changed nothing measured nothing. | Andre |
+| 5 | `host_cpu` is recorded as a diagnostic and excluded from the fingerprint - it is the only field that explains a violation, and including it would make every runner a different fingerprint. | Andre |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Trusting `temperature=0` and skipping the stamp | Eleven of sixteen enumerated drift sources are silent without it, including a publisher silently rewriting an article at the same URL. | Andre |
+| 2 | Failing the build on a determinism violation | It will fire across runner CPU classes for reasons unrelated to a regression, and a flaky gate gets switched off within a month. Record it, count it, do not smooth it. | Andre |
+
+---
+
+## Row #16 - Read-state, new-arrivals block and pagination
+
+- **Scope:** Give a returning reader their place back without an account, and make a re-ranked day legible rather than disorienting.
+- **Files touched:** `frontend/src/lib/readstate.ts`, `frontend/src/lib/components/{Item,NewBlock,LoadMore}.svelte`, `frontend/tests/*`
+- **Acceptance gates:** read-state in `localStorage` only, never a cookie; the page renders fully when storage is unavailable or cleared; read-state never feeds ranking; an anchor link force-reveals its item regardless of pagination; back-button returns to a truthful state.
+- **Oracle:** the returning-reader trap - render a day, mark items read, publish a later run that re-ranks unread items, re-render. Every read item holds its position relative to every other read item, and every new item appears inside the labelled block. A single read item that moved relative to another fails the row.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | New arrivals go in **one labelled block** - "12 new since this morning" - never sprinkled through what was already read. This is the thing the reader actually asked for and the thing most likely to be skipped. | Reader |
+| 2 | Read is marked on the **title link only**: one step down the text ramp, accent removed, one weight step lighter, plus the gutter marker going filled to hollow. Summary body and source link stay at full strength. | Jony |
+| 3 | **Not dimming.** A dimmed item reads as disabled - "you cannot have this" - rather than read - "you already had this". Never colour alone. | Jony |
+| 4 | Read is set on **source-link activation only**, never on scroll dwell. A wrong guess silently hides something unread and the reader cannot tell it happened. | Jony |
+| 5 | Exactly two controls: a "hide read" toggle, off by default and persisted, and a "forget what I've read" escape in the footer. With no account, `localStorage` is the reader's only record and they need a way out of it. | Jony |
+| 6 | Pagination is a **"load more" button** over the already-fetched day payload - zero extra requests. The label carries the remainder so the reader knows the end exists. | Jony |
+| 7 | A reader who presses nothing gets the first page and that is the complete experience, not a truncated one. | Reader |
+| 8 | Read-state may never influence ranking. The moment it does, this is personalization with no ground truth and no way to evaluate it. | Fowler |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Infinite scroll | Unbounded DOM and a footer the reader can never reach - and the footer carries the run notice and the retention-window promise, both non-negotiable. | Jony |
+| 2 | Numbered pages with `?page=` | A second address for a day that already has exactly one canonical address. | Jony |
+| 3 | Mark-all-read | An inbox gesture. A digest is not an inbox, and it destroys the only signal the reader has. | Jony |
+| 4 | A cookie for read-state | Sent on every request, which puts reading history into the host's access logs. `localStorage` never leaves the device. | Fowler |
+| 5 | "3 new since your last visit" wording | It stakes a claim on a memory that evaporates when storage is cleared. Never make a claim about the reader's history that storage cannot back. | Reader |
+
+---
+
+## Row #17 - Icon sprite + registry allowlist
+
+- **Scope:** One build-time SVG sprite, referenced by id, with a drift gate that stops the icon set growing quietly.
+- **Files touched:** `frontend/scripts/build-sprite.ts`, `frontend/src/lib/icons/allowlist.ts`, `frontend/public/icons/*.svg`, `frontend/tests/icons.test.ts`
+- **Acceptance gates:** zero extra HTTP requests - the sprite is inlined once per document; a strict element and attribute allowlist rejects `<script>`, `<foreignObject>`, `href` and every event attribute; a pinned name list equals the manifest ids equals the symbols in the sprite.
+- **Oracle:** the injection fixture - an SVG carrying a script element and an event attribute is rejected by the build with a named error. If it builds, the allowlist is decorative.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Glyph means **an inlined SVG `<symbol>` sprite referenced by `<use href="#icon-name">`**, emitted once at build. | Jony |
+| 2 | The yen-gov allowlist discipline transfers, because the input is the same: a hand-authored or downloaded SVG can carry script, foreign objects and event handlers. Roughly thirty lines is the difference between an asset and an injection vector. | Jony |
+| 3 | A pinned name list in a contract test is the cap on the icon set. Adding an icon is a deliberate two-file edit. | Jony |
+| 4 | Budget fuse: the sprite may not exceed a configured fraction of the gzipped day payload. When the chrome outweighs the news, something is inverted. | Carmack |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | An icon font | A fetched face whose failure mode is tofu or a random letter in the middle of a reading page. | Jony |
+| 2 | One SVG file per icon | One request per icon, which breaks the constant-request-count rule in row 13. | Jony |
+| 3 | A typographic character | The shape varies per platform. You cannot ship a glyph you do not control. | Jony |
+| 4 | A variant, size and optimisation pipeline | Overkill for a set this small. The pinned list is the cap. | Jony |
+
+---
+
+## Row #18 - On-device assist enabler (ships no feature)
+
+- **Scope:** Make same-origin, reader-initiated, on-device inference possible and provably optional, without shipping a single reader-facing feature.
+- **Files touched:** `frontend/vite.config.ts` (separate entry + budget gate), `frontend/src/lib/assist/loader.ts`, `frontend/public/assist/models/.gitkeep`, `.github/workflows/pages.yml` (CSP), `frontend/tests/assist-absent.spec.ts`
+- **Acceptance gates:** no `@huggingface/transformers` symbol may appear in the first-load bundle - CI fails the build if one does; `env.allowRemoteModels = false` and `env.localModelPath` are set as contract, not config; a `connect-src 'self'` CSP is in place; nothing downloads before an explicit reader gesture.
+- **Oracle:** the model-absent gate - delete the entire model directory, build, and run the full end-to-end browser suite. Every digest assertion passes and no console error appears. If the digest degrades at all, the feature is on the critical path and the row fails.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Holy Law #1 is amended in the same commit as this row, per CLAUDE.md section 0. The amendment bans egress and third parties, not compute: on-device work over bytes we committed and serve ourselves is permitted, and never sits on the digest's render path. | Fowler |
+| 2 | Weights, tokenizer and WASM are committed under `frontend/public/` and served same-origin. `transformers.js` defaults to fetching a third-party hub; disabling that is a contract, not a preference. | Fowler |
+| 3 | Nothing downloads or executes before an explicit click. No prefetch, no idle warm-up, no speculative load. | Carmack |
+| 4 | A CI budget gate on the first-load bundle. Without it this decays in a single PR. | Carmack |
+| 5 | WASM only. WebGPU is not the baseline: it is not universally available and its build costs an extra double-digit megabyte binary. | Carmack |
+| 6 | Nothing computed on the device is ever transmitted, and nothing returns to `backend/`, a committed payload, or the ledger. | Fowler |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Loading weights from a third-party CDN | A runtime fetch to another origin, which is the half of Holy Law #1 that did not change. | Fowler |
+| 2 | A service worker to enable cross-origin isolation | Row 13 already rejected service workers: one can serve a reader a stale day, which attacks the rule the whole layout rests on. | Jony |
+| 3 | Shipping the enabler together with a feature | It would hide the one thing worth proving - that the digest is complete without any of it. | Fowler |
+
+---
+
+## Row #19 - Build-time embeddings in the day payload
+
+- **Scope:** Embed the day's items on the runner and commit the vectors, so the browser only ever embeds a reader's query.
+- **Files touched:** `backend/idhazh/embed.py`, `backend/idhazh/contracts/digest_day.py`, `schemas/digest-day.schema.json`, `backend/tests/test_embed.py`
+- **Acceptance gates:** vectors are 256-dimension int8, base64-encoded **inside** the day payload rather than a sidecar file, so the request count stays constant; the payload validates against the versioned schema; a day renders identically with the vector block stripped.
+- **Oracle:** round-trip - encode, commit, decode in the browser test, and assert cosine similarity against the runner's own computation is within tolerance. A silent dtype or endianness mistake fails here rather than as bad search results.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Embed at build time. The corpus is fixed at publish; embedding it in every reader's browser is repeated work for an identical answer. | Andre |
+| 2 | 256 dimensions, int8. Full-width float vectors cost roughly an order of magnitude more for a quality difference nobody has measured here. | Andre |
+| 3 | Vectors live in the day payload, not a sidecar, because row 13 fixes the per-page request count. | Carmack |
+| 4 | Vectors are a **rendering**, regenerable from committed text, and are therefore exempt from the retention promises that protect the ledger. | Andre |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Embedding every item in the browser on page load | Repeated work for a fixed corpus, and it forces the encoder onto readers who never search. | Andre |
+| 2 | Full-width float vectors | An order of magnitude more bytes against an unmeasured quality gain. | Andre |
+
+---
+
+## Row #20 - Browser semantic search
+
+- **Scope:** Search the archive on the reader's own device, using the committed vectors and a query encoder, with no generative model anywhere.
+- **Files touched:** `frontend/src/lib/assist/search.ts`, `frontend/src/lib/components/AssistFooter.svelte`, `frontend/public/assist/models/**`, `frontend/tests/search.spec.ts`
+- **Acceptance gates:** the encoder is the smallest quantised sentence encoder that clears a measured retrieval bar; every byte is same-origin; the control states the download size before anything is fetched; a load failure degrades to the feature being absent, never to a broken page.
+- **Oracle:** relevance - a fixture query set with hand-labelled expected items must retrieve them within the top few results. Without a labelled set this row cannot claim to work, only to run.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Search ships **first** among the assist features. It needs no generative model, it cannot hallucinate, and its worst failure is a bad ranking rather than a confident falsehood. | Andre |
+| 2 | The browser embeds the query only. Item vectors are already committed by row 19. | Andre |
+| 3 | The surface is one tertiary line in the footer - "search this archive on your device" - not a header search field. A search field promises instant results; this one promises a download. | Jony |
+| 4 | The download size is stated in the same breath as the offer, and cached by the browser so a second visit is free. | Jony |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A header search field | It promises instant results and hides a multi-megabyte download behind a familiar affordance. | Jony |
+| 2 | Keyword search instead | It would be free, but it cannot answer the question the reader actually has, which is topical rather than lexical. Recorded because it remains the correct fallback if the retrieval bar is not met. | Andre |
+
+---
+
+## Row #21 - Browser-runtime injection canaries
+
+- **Scope:** Extend the canary suite across the trust boundary that now exists inside the reader's tab.
+- **Files touched:** `tests/fixtures/canaries/browser/*.json`, `frontend/tests/canaries.spec.ts`, `.github/workflows/ci.yml`
+- **Acceptance gates:** the five build-time attacks are carried end-to-end into a published fixture day and driven through the real assist UI in a real browser; three new attacks specific to this boundary are covered - instructing the browser model to render a link, markdown or HTML injection into the transcript, and exfiltration via an image source.
+- **Oracle:** all eight canaries fail to inject through the browser surface. A single success fails the build and blocks row 23.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Holy Law #11 applies inside the tab. Our summary is derived from a stranger's page, so feeding it to a second model is the same boundary a second time - with no CI standing behind it. | Andre |
+| 2 | Assist output is inserted as text content into a plain-text node. No `innerHTML`, no markdown rendering, no autolinking, no image rendering, ever. That is the mechanical control; a system prompt is not a control. | Andre |
+| 3 | The browser model may not call a tool, issue any fetch, or receive any origin data beyond the item currently displayed. | Andre |
+| 4 | Generated text and published summary text are structurally distinct surfaces, and generated text never appears inside an item card. | Andre, Jony |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Reusing the build-time canaries unchanged | They guard a different boundary. The browser surface has attacks the pipeline does not - transcript rendering and exfiltration through markup. | Andre |
+| 2 | Instructing the browser model to refuse injected instructions | A prompt is a request, not a control. | Andre |
+
+---
+
+## Row #22 - Read-aloud via Web Speech API
+
+- **Scope:** Let a reader listen to a summary, at zero byte cost.
+- **Files touched:** `frontend/src/lib/assist/speak.ts`, `frontend/src/lib/components/Item.svelte`, `frontend/tests/speak.spec.ts`
+- **Acceptance gates:** uses the platform `speechSynthesis` already present on the device; ships no model and no weights; absent cleanly where the API is unavailable; reads published summary text only, never generated text.
+- **Oracle:** byte parity - the built bundle is byte-identical in size with the feature enabled and disabled, apart from its own small module. If read-aloud costs megabytes, the wrong implementation shipped.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The platform speech API costs zero bytes and is already on the device. A neural voice model costs tens of megabytes against the same 1 GB cap that carries the search encoder. | Carmack |
+| 2 | It speaks published, scored summary text verbatim, which makes the whole feature auditable by listening. | Andre |
+| 3 | Revisit a neural voice only when a reader complains about the platform voice, and only against a measured byte budget. | Carmack |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A neural TTS model in the bundle | Tens of megabytes plus a phonemiser dependency, to improve a voice the platform already provides free. | Carmack |
+| 2 | Generating an audio file in the pipeline | Audio per item per day is the heaviest artifact class in the system, against the cap that is already the binding ceiling. | Carmack |
+
+---
+
+## Row #23 - Browser chat SLM (ESCALATE-gated)
+
+- **Scope:** Let a reader ask a follow-up about the summary in front of them, on their own device, clearly marked as unmeasured.
+- **Files touched:** `frontend/src/lib/assist/chat.ts`, `frontend/public/assist/models/**`, `evals/assist-qa.csv`, `frontend/tests/chat.spec.ts`
+- **Acceptance gates:** row 21 canaries green; every weight file under GitHub's 100 MB per-file hard limit; off by default behind an explicit reader action; chat answers carry no confidence band; a golden question set with human labels is published on the dashboard as a separate, lower number.
+- **Oracle:** the eight browser canaries plus the file-size gate. A single weight file over 100 MB cannot be committed at all, which fails the row before any quality question is asked.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **ESCALATE before starting.** The instruct-tuned models that would make this good are single files far above GitHub's 100 MB limit; only the very smallest class fits. Whether that class is good enough is a question for measurement and a sign-off, not for an executing agent. | Carmack, Andre |
+| 2 | Chat is unmeasured by construction - no faithfulness score, no ledger row, no golden set. The absence of a confidence band is the honest signal. | Andre |
+| 3 | A human-labelled question set, re-run periodically and published as its own lower number. Not a faithfulness score, not a ledger row, and never a model judging a model. | Andre |
+| 4 | Chat appears at an item only after the model has loaded. Rendering a chat control on every item turns a reading page into an application. | Jony |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A mid-size instruct model | Its single largest file exceeds the platform's hard per-file limit, so it cannot be committed at any budget. | Carmack |
+| 2 | Sharding weights across files to dodge the per-file limit | It defeats the limit rather than respecting it, and it makes the load path fragile for a feature that is explicitly secondary. | Carmack |
+| 3 | Shipping chat before search | Search is 20x smaller and cannot hallucinate. Ordering it second means the risky surface arrives before the safe one has proven the loader. | Andre |
+| 4 | A disclaimer as the mitigation for unmeasured output | A reader who gets one fluent wrong answer downgrades their trust in the measured text beside it. A label does not undo that; only keeping the surfaces visibly separate limits it. | Andre |
 
 ---
 

@@ -11,7 +11,7 @@ Two pages, both static files with nothing computed at read time:
 - **The digest** - the day's items. This is what the project is for.
 - **The eval dashboard** - the committed ledger, rendered. It reads the CSV and never recomputes a score ([evaluation.md](evaluation.md)).
 
-The digest is a **rendering, never a source of truth.** The truth is the per-item payloads and the ledger; the page is one view over them and can be regenerated at any time. This is why an item is content-addressed and the digest is not.
+The digest is a **rendering, never a source of truth.** The truth is the per-item payloads and the ledger; the page is one view over them and can be regenerated at any time. This is why an item carries its own identity as a field and the digest does not.
 
 ## The item
 
