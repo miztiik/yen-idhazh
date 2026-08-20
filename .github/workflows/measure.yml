@@ -13,6 +13,9 @@ on:
       threads:
         description: 'Threads for llama-bench (runner has 4 vCPU)'
         default: '4'
+      corpus_links:
+        description: 'How many real links to measure for the length distribution'
+        default: '200'
 
 permissions:
   contents: read
@@ -49,6 +52,14 @@ jobs:
           path: backend/models
           key: gguf-${{ hashFiles('.github/workflows/measure.yml') }}
 
+      - name: Record weight-cache state
+        run: |
+          mkdir -p backend/var
+          # A cache-hit run and a cache-miss run are different measurements. The
+          # artifact has to say which one it was, or the wall-clock is unreadable.
+          echo "gguf_cache_hit=${{ steps.gguf.outputs.cache-hit == 'true' }}" \
+            | tee backend/var/cache-state.txt
+
       - name: Download weights (timed)
         if: steps.gguf.outputs.cache-hit != 'true'
         run: |
@@ -60,7 +71,8 @@ jobs:
             start=$(date +%s)
             curl -sSL --retry 3 -o "backend/models/${file}" \
               "https://huggingface.co/${repo}/resolve/main/${file}"
-            echo "download ${file} $(( $(date +%s) - start ))s $(du -h "backend/models/${file}" | cut -f1)"
+            echo "download ${file} $(( $(date +%s) - start ))s $(du -h "backend/models/${file}" | cut -f1)" \
+              | tee -a backend/var/cache-state.txt
           done
 
       - name: Benchmark at real article lengths
@@ -104,3 +116,33 @@ jobs:
         with:
           name: bench-image
           path: backend/var/
+
+  corpus:
+    # The length buckets every per-article cost figure multiplies by are invented
+    # until this job runs. It reaches the open web, which is why it lives here and
+    # never in a test (Holy Law #7).
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Record runner hardware
+        run: |
+          echo "nproc=$(nproc)"
+          lscpu | grep -E 'Model name' | head -1
+
+      - name: Install the measurement extra
+        run: pip install -e ".[measure]"
+
+      - name: Measure real article lengths
+        run: |
+          python3 backend/utilities/measure_corpus.py \
+            --limit ${{ inputs.corpus_links }} --sleep 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: bench-corpus
+          path: backend/var/corpus.json

@@ -27,6 +27,12 @@ bench-image = [
     "diffusers>=0.31",
     "torch>=2.5",
 ]
+# Only for backend/utilities/measure_corpus.py, which measures how long real
+# articles actually are. Reaches the network, so it never runs inside a test.
+measure = [
+    "feedparser>=6.0",
+    "trafilatura>=1.12",
+]
 
 [project.scripts]
 idhazh-export-schemas = "idhazh.contracts.export:main"
@@ -65,9 +71,10 @@ strict = true
 warn_unreachable = true
 enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 
-# The image-benchmark dependencies are an extra, absent from a default install.
+# Measurement-only dependencies, absent from a default install and shipping no
+# type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["diffusers.*", "torch.*"]
+module = ["diffusers.*", "feedparser.*", "torch.*", "trafilatura.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
