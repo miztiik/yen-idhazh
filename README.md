@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-20
 
-*idhazh* (இதழ்) is Tamil for a journal or magazine. **yen-idhazh** is "my journal": a daily, self-evaluating article digest that reads the open web, summarizes it with a small language model, scores every summary for faithfulness, and publishes the result as static pages.
+*idhazh* is Tamil for a journal or magazine. **yen-idhazh** is "my journal": a daily, self-evaluating article digest that reads the open web, summarizes it with a small language model, scores every summary for faithfulness, and publishes the result as static pages.
 
 Nothing runs at read time. The whole pipeline executes in GitHub Actions on a stock runner, commits what it produced, and the published site is plain files.
 
