@@ -6,7 +6,7 @@ The procedure for turning a rough idea or draft into a `TODO/<YYYYMMDD>-<slug>-p
 
 Authoring produces the plan; it does NOT start the work. Running the plan is a separate ritual in [execute-a-plan.md](execute-a-plan.md).
 
-Run the `bootstrap` skill first (skip only for Level-0/1). The plan-doc is a living doc on `master`, never a frozen artifact.
+Run the `bootstrap` skill first (skip only for Level-0/1). The plan-doc is a living doc on the default branch, never a frozen artifact.
 
 When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "section".
 

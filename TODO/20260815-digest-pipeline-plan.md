@@ -17,6 +17,7 @@ Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktre
 | ESCALATE triggers | (1) Row 7 model-validation gate fails its decision rule -> model pick is re-derived, PAUSE. (2) Any move to hosted inference (GitHub Models) - reverses the static-first premise. (3) Row 9 canaries fail against the chosen image model. (4) 3x cost overrun on any row. |
 | Chosen strategy | Runtime pipeline is orchestrator + disposable sharded workers, mirroring the plan-execution model: a `plan` job emits and shards the URL list, a `matrix` of workers each handles ~5 URLs on its own VM and writes one content-addressed JSON per URL, an `assemble` job renders the digest. Ruled by Fowler (contracts before logic) and Carmack (fresh-VM-per-job is the parallelism primitive; shard size is set by measured model-load amortization). |
 | Execution | autonomous orchestrator per `docs/how-to/execute-a-plan.md`. Parallel N = 3. |
+| Roster note (2026-08-20) | This plan was authored against a five-persona roster that included Palm (casual-game design) and Player. Both are gone; the roster is now Reader, Jony, Andre, Fowler, Carmack (`CLAUDE.md` section 14). Decisions already ruled stand as written and are NOT reopened. But **Andre (AI / LLM) now owns model quality, prompt strategy, constrained decoding, eval design and metric choice** - so rows 4, 6, 7 and 9 must consult him even where the existing attribution says Fowler or Carmack. The standing split: Andre owns whether a model is good enough, Carmack owns whether it fits. |
 
 ### 0.2 Capacity ceilings (platform verified 2026-08-15)
 
@@ -28,6 +29,13 @@ Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktre
 | Artifact storage | 500 MB | 1 GB | 2 GB | same |
 | Cache storage / repo | 10 GB | 10 GB | 10 GB | same |
 | Larger runners (8+ vCPU) | **not available** | **not available** | available | same |
+
+**Cache eviction is the ceiling nobody plans for** (verified against GitHub's dependency-caching reference, 2026-08-20): a cache entry **not accessed in over 7 days is deleted**, and once the repo passes 10 GB entries are evicted oldest-access-first. Two consequences for this design:
+
+- The weights survive between runs **only because the schedule is daily.** A pause longer than a week - a holiday, a paused workflow, a repo left alone - costs a full re-download on the next run. That is a recoverable cost, not a failure, but the run that pays it will look anomalously slow and should not be mistaken for a regression.
+- **Cache restore happens once per JOB, not once per run.** Every matrix worker restores the weights onto its own fresh VM. Four parallel workers pay it four times. This is the measurement behind row 10 decision 6 (shard rather than fan out per URL) and it is the single largest fixed cost in the pipeline.
+
+Committing the weights instead is not an option and is not a tradeoff worth re-examining: GitHub hard-rejects any file over 100 MB, and the quantisations here are 2.4 GB and 4.8 GB. Git LFS is the only "commit" path and it is strictly worse - the free tier is 1 GB of storage and 1 GB of bandwidth per month against 7.2 GB of weights, and every runner would still download on checkout, only now metered.
 
 Derived article ceilings, using the section 2.1 blended figure:
 
@@ -399,7 +407,7 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | --- | --- | --- | --- |
 | 1 | Gemma for image generation | Gemma 4 emits text only. Google ships no open text-to-image model (HF query returned empty). The `any-to-any` HF tag reflects multimodal input and is misleading. | Carmack |
 | 2 | FLUX.1-dev | 12B and a non-commercial licence. | Carmack |
-| 3 | Skipping images entirely | Narrative articles are the one case the deterministic renderers cannot serve. | Palm |
+| 3 | Skipping images entirely | Narrative articles are the one case the deterministic renderers cannot serve. | Jony |
 
 ---
 
