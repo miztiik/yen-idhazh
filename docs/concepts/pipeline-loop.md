@@ -38,7 +38,7 @@ In order, with what each one owns:
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
 | **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. | A route decision per item. |
 | **Render** | Producing the visual the route asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
-| **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. | The digest payload under `frontend/public/`, and the run manifest. |
+| **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md). | One dated day payload plus its run manifest under `frontend/public/digest/`. |
 
 **Collect and Assemble are the only stages that see the whole day.** Everything between them sees exactly one item, which is what allows the middle of the pipeline to run as many independent workers.
 
@@ -62,6 +62,7 @@ Three invariants hold regardless of how the batches are sized:
 ## See also
 
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - what Collect consults, and how the source set changes over time.
+- [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - what Assemble writes, the reader's routes, and retention.
 - [evaluation.md](evaluation.md) - what the Evaluate stage measures and what it cannot see.
 - [digest.md](digest.md) - what Assemble publishes and what a reader gets.
 - [config.md](config.md) - the knobs that tune the stages.
