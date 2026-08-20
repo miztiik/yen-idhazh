@@ -1,6 +1,6 @@
 # yen-idhazh - static-first article digest pipeline - plan
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 **Level**: 4 (structural, new subsystem) with named Level-5 ESCALATE triggers.
 
 Execute per `docs/how-to/execute-a-plan.md`: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 3; honor the ESCALATE triggers in section 0. A trigger that fires mid-execution is handled per `docs/how-to/handle-scope-change.md`.
@@ -137,24 +137,24 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 3 | Source discovery, fetch + extract | 1 | B | PENDING | - | - | - |
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | PENDING | - | - | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | PENDING | - | - | - |
-| 6 | Summarize worker | 1, 2, 5 | C | PENDING | - | - | - |
+| 15 | Pipeline fingerprint contract | 1 | B | PENDING | - | - | - |
+| 6 | Summarize worker | 1, 2, 5, 15 | C | PENDING | - | - | - |
+| 11 | Pages eval dashboard | 4 | C | PENDING | - | - | - |
+| 19 | Build-time embeddings in the day payload | 1, 15 | C | PENDING | - | - | - |
 | 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | PENDING | - | - | - |
 | 8 | Route worker + deterministic renderers | 6, 7 | E | PENDING | - | - | - |
-| 9 | Image model selection + renderer | 2, 5, 8 | F | PENDING | - | - | - |
+| 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | PENDING | - | - | - |
+| 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
 | 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | PENDING | - | - | - |
-| 11 | Pages eval dashboard | 4 | F | PENDING | - | - | - |
-| 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | F | PENDING | - | - | - |
-| 13 | Published layout, date routing and the frontend shell | 1, 10 | F | PENDING | - | - | - |
+| 13 | Published layout, date routing and the frontend shell | 1, 10 | G | PENDING | - | - | - |
 | 14 | Retention job + site-budget alarm | 13 | H | PENDING | - | - | - |
-| 15 | Pipeline fingerprint contract | 1 | A | PENDING | - | - | - |
-| 16 | Read-state, new-arrivals block and pagination | 13 | G | PENDING | - | - | - |
-| 17 | Icon sprite + registry allowlist | 13 | G | PENDING | - | - | - |
-| 18 | On-device assist enabler (no feature) | 13 | G | PENDING | - | - | - |
-| 19 | Build-time embeddings in the day payload | 1, 15 | G | PENDING | - | - | - |
-| 20 | Browser semantic search | 18, 19 | H | PENDING | - | - | - |
-| 21 | Browser-runtime injection canaries | 18 | H | PENDING | - | - | - |
-| 22 | Read-aloud via Web Speech API | 13 | G | PENDING | - | - | - |
-| 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | I | PENDING | - | - | - |
+| 16 | Read-state, new-arrivals block and pagination | 13 | H | PENDING | - | - | - |
+| 17 | Icon sprite + registry allowlist | 13 | H | PENDING | - | - | - |
+| 18 | On-device assist enabler (no feature) | 13 | H | PENDING | - | - | - |
+| 22 | Read-aloud via Web Speech API | 13 | H | PENDING | - | - | - |
+| 20 | Browser semantic search | 18, 19 | I | PENDING | - | - | - |
+| 21 | Browser-runtime injection canaries | 18 | I | PENDING | - | - | - |
+| 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | J | PENDING | - | - | - |
 
 ---
 
@@ -554,7 +554,7 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | 4 | `latest` and `archive` are **derived at build time** from the directory listing and never committed. A committed pointer can disagree with disk after a prune or a raced deploy; a derived one cannot. | Fowler |
 | 5 | **One `digest.json` per day carrying all items.** The vertical route is a filter over that same payload, never a second file. The day gzips to 12.8 KB (measured 2.92x ratio). | Carmack |
 | 6 | **Requests to render any page is a constant, at most 2, independent of archive age.** Any scheme whose request count or index size grows with history is vetoed at any granularity. | Carmack |
-| 7 | **Read items never move relative to each other.** Superseded the earlier frozen-position rule on 2026-08-20 after the owner asked for multiple runs per day. Unread items may be re-ranked and demoted between runs; anything the reader has already opened keeps its relative order forever. New arrivals land in one labelled block, never sprinkled through what was already read. Ranking gets a second vote only over items the reader has not seen. | Reader |
+| 7 | **The published order is global, deterministic and identical for every reader, and read-state may never influence it.** Corrected 2026-08-21: the earlier "read items never move" rule was unimplementable, because there is one payload and read-state is per-device - honouring it would require rendering a different page per person. An item is never removed or demoted because someone read it; one reader having read it says nothing about everyone who has not. Ranking is a pure function of the ranking inputs. | Reader, Fowler |
 | 8 | **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item carries an `updated_at` and says so. Silently swapping better wording under a reader who already read it makes them doubt their own memory, and the summaries are the entire product. | Reader |
 | 9 | When a day has more than one run, the page carries one plain line - "5 stories added since this morning" - and the new items are findable without re-skimming the old ones. | Reader |
 | 10 | **No run identifier and no hash in any data path or any reader URL.** An item is addressed by its vertical and its ordinal within the day - `ai-03` - which is predictable, derivable, free of fetched text, and readable aloud. The run id lives in the footer and in `run.json`. | Fowler, Jony |
@@ -668,18 +668,18 @@ is what makes row 14 a single `rm -r` with no second edit.
 - **Scope:** Give a returning reader their place back without an account, and make a re-ranked day legible rather than disorienting.
 - **Files touched:** `frontend/src/lib/readstate.ts`, `frontend/src/lib/components/{Item,NewBlock,LoadMore}.svelte`, `frontend/tests/*`
 - **Acceptance gates:** read-state in `localStorage` only, never a cookie; the page renders fully when storage is unavailable or cleared; read-state never feeds ranking; an anchor link force-reveals its item regardless of pagination; back-button returns to a truthful state.
-- **Oracle:** the returning-reader trap - render a day, mark items read, publish a later run that re-ranks unread items, re-render. Every read item holds its position relative to every other read item, and every new item appears inside the labelled block. A single read item that moved relative to another fails the row.
+- **Oracle:** reader-independence - render the same published day in two clients with different read-state, one with every item marked read and one entirely fresh. The rendered item set and item order are identical in both. Any divergence means read-state has leaked into ordering, and the row fails.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | New arrivals go in **one labelled block** - "12 new since this morning" - never sprinkled through what was already read. This is the thing the reader actually asked for and the thing most likely to be skipped. | Reader |
+| 1 | New arrivals are grouped and labelled by **the run that introduced them** - a global fact, true for every reader, asserted without any storage. Never a diff against a remembered last-visit time. | Reader, Fowler |
 | 2 | Read is marked on the **title link only**: one step down the text ramp, accent removed, one weight step lighter, plus the gutter marker going filled to hollow. Summary body and source link stay at full strength. | Jony |
 | 3 | **Not dimming.** A dimmed item reads as disabled - "you cannot have this" - rather than read - "you already had this". Never colour alone. | Jony |
 | 4 | Read is set on **source-link activation only**, never on scroll dwell. A wrong guess silently hides something unread and the reader cannot tell it happened. | Jony |
 | 5 | Exactly two controls: a "hide read" toggle, off by default and persisted, and a "forget what I've read" escape in the footer. With no account, `localStorage` is the reader's only record and they need a way out of it. | Jony |
 | 6 | Pagination is a **"load more" button** over the already-fetched day payload - zero extra requests. The label carries the remainder so the reader knows the end exists. | Jony |
 | 7 | A reader who presses nothing gets the first page and that is the complete experience, not a truncated one. | Reader |
-| 8 | Read-state may never influence ranking. The moment it does, this is personalization with no ground truth and no way to evaluate it. | Fowler |
+| 8 | Read-state may never influence ranking, ordering or membership - only appearance. The moment it does, the page is personalized with no ground truth, no way to evaluate it, and a shared link stops showing the recipient what the sender saw. | Fowler |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
@@ -688,6 +688,8 @@ is what makes row 14 a single `rm -r` with no second edit.
 | 3 | Mark-all-read | An inbox gesture. A digest is not an inbox, and it destroys the only signal the reader has. | Jony |
 | 4 | A cookie for read-state | Sent on every request, which puts reading history into the host's access logs. `localStorage` never leaves the device. | Fowler |
 | 5 | "3 new since your last visit" wording | It stakes a claim on a memory that evaporates when storage is cleared. Never make a claim about the reader's history that storage cannot back. | Reader |
+| 6 | Client-side re-sorting so read items keep their place | Two readers would see different orders at the same URL, so a shared link stops showing the recipient what the sender saw. The order is part of what is being shared. | Fowler |
+| 7 | Hiding or demoting an item once it has been read | Reading is one person's private fact. Everyone else has not read it, and a working news front page leaves an important story where its importance puts it. | Reader |
 
 ---
 
@@ -846,17 +848,17 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 ## 2. Open questions (blocking, not deferred work)
 
-| # | Question | Blocks | Resolution path |
-| --- | --- | --- | --- |
-| 1 | Hosted inference (GitHub Models free tier) versus local weights. | Row 6 | Decide on row 2 measurement; reverses the static-first premise, so ESCALATE. |
-| 2 | Who reads the digest? If nobody, the eval loop is the product and the digest is a test fixture. | Row 11 | User decision; changes whether row 11 ships at all. |
-| 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | `word_count` and `extractiveness` need alert thresholds, not just CSV columns. Fold into row 4 acceptance gates. Feed-level rot - a source that stops publishing rather than one that changes shape - is handled separately by row 3 decision 6. |
-| 4 | Do extremely low-bit (1-2 bit) quantisations change the model fit? Published for several open-weights families; unevaluated here. | Row 7 | Research + measure. Andre on whether quality survives, Carmack on whether it fits - both measured, not assumed. See `docs/how-to/set-up-local-inference.md`. |
-| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | Curate `ai` first - most tier-1 primary sources, fewest editorial judgement calls - and prove the loop end to end on one vertical. Then add one vertical per week under `status: draft` until each clears the floor. |
-| 6 | **`temperature=0, seed=0` is not determinism.** It is determinism *given identical logits*, and logits move with batch shape, thread count, KV-prefix reuse, `llama.cpp` build and CPU dispatch path. `seed` is dead code under greedy decoding - it consumes no RNG. Eleven of sixteen enumerated drift sources are silent today because no published item stamps the model, quantisation, prompt, output schema or truncation cap that produced it. | Rows 4, 6, 10, 12 | Andre's ruling: replace skip-if-exists with **skip-if-fingerprint-matches** over a `pipeline_fingerprint`; scope row 6's determinism oracle to one runner class at fixed threads and batch shape; treat a fingerprint match with unequal output as a recorded `determinism_violation` rather than a build failure. Needs its own row before row 6 ships. |
+| # | Question | Blocks | Needs | Resolution path |
+| --- | --- | --- | --- | --- |
+| 2 | Who reads the digest? If nobody, the eval loop is the product and the digest is a test fixture. | Row 11 | **OWNER** | Changes whether row 11 ships at all. An executing agent cannot answer it. |
+| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **OWNER ratifies** | The agent proposes a tier-1-first list for `ai` and the owner accepts or edits it. Curate `ai` first - most tier-1 primary sources, fewest editorial judgement calls - prove the loop end to end on one vertical, then add one vertical per week under `status: draft` until each clears the floor. |
+| 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | agent | `word_count` and `extractiveness` need alert thresholds, not just CSV columns. Fold into row 4 acceptance gates. Feed-level rot - a source that stops publishing rather than one that changes shape - is handled separately by row 3 decision 6. |
+| 4 | Do extremely low-bit (1-2 bit) quantisations change the model fit? Published for several open-weights families; unevaluated here. | Row 7 | agent, then ESCALATE | Research + measure. Andre on whether quality survives, Carmack on whether it fits - both measured, not assumed. See `docs/how-to/set-up-local-inference.md`. |
 
 ### RESOLVED
 
 | # | Question | Resolution |
 | --- | --- | --- |
+| 6 | `temperature=0, seed=0` is not determinism, and eleven of sixteen drift sources were silent. | **Row 15** (2026-08-21). A `pipeline_fingerprint` stamps every input that can move an output; skip-if-exists becomes skip-if-fingerprint-matches; row 6's oracle is scoped to one runner class; a fingerprint match with unequal output is a recorded `determinism_violation` rather than a build failure. |
+| 1 | Hosted inference (GitHub Models free tier) versus local weights. | **Local weights** (2026-08-21). Settled by contract rather than measurement: CLAUDE.md section 0a makes hosted inference a non-goal anywhere - pipeline, site or browser. On-device inference over committed weights is not hosted inference and is governed by Holy Law #1. |
 | - | Which repo does this live in? Not yen-tamizh - that is a Tamil word game and this violates its CLAUDE.md scope. | **`yen-idhazh`** (2026-08-20). Own repo, own contract, own persona roster. Tamil *idhazh* = journal / magazine. |
