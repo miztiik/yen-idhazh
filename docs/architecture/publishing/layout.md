@@ -37,17 +37,19 @@ evals/scores.csv                                        the ledger - one path, n
 
 **`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
 
-## The day is monotonic
+## The day is one artifact, shared by everyone
 
-The pipeline may run several times in one day. What that means for a reader is fixed:
+The pipeline may run several times in one day. The rule that governs what that means starts from a fact about the medium: **there is one published payload, and every reader gets the same bytes.** Reading is private and per-device; ordering is public and global. Ordering can therefore never depend on who has read what.
 
-- **An item's position is assigned once, at first publication, and never recomputed.** A later run appends. It never reorders, never removes, never renumbers. Ranking decides which items enter and in what initial order; it does not get a second vote once a human has read the page.
-- **Membership only grows, and the cap is a day cap.** Three runs produce one day of the configured size, not three days' worth.
-- **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item says so. Silently improving wording under a reader who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
-- **A second run announces itself in one plain line** - how many items arrived since - and the new ones are findable without re-reading the old ones.
+- **The published order is global, deterministic and identical for every reader.** It is a pure function of the ranking inputs, and no reader's behaviour changes it. Two people opening the same dated URL see the same items in the same order, always.
+- **An item is never removed, demoted or hidden because someone read it.** One person having read an item says nothing about the thousands who have not. This is the behaviour of every working news front page: the story stays where its importance puts it, read or unread.
+- **Read-state is a client-side mark and nothing more.** It may change how an item looks. It may never change where an item sits, whether it appears, or how it ranks. The only exception is a filter the reader switches on themselves, and it is off by default.
+- **"New" is a property of the item, not of the reader.** An item is new because a later run introduced it, which is true for everybody and needs no storage to assert. It is never a diff against a remembered last-visit time, which would be a claim that evaporates the moment a browser is cleared.
+- **Membership only grows, and the cap is a day cap.** Several runs produce one day of the configured size, not several days' worth.
+- **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item says so. Silently improving wording under someone who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
 - **No run identifier appears in any data path or any reader URL.** It lives in the run manifest and in the page footer.
 
-The reason this is stated so firmly: re-ranking a day at 18:00 is correct by every internal rule and still feels, to the person who read it at 07:00, like the page is rearranging itself behind them.
+The returning reader is protected by the read mark and by the run-scoped "new" grouping - both of which work identically for everyone - rather than by freezing an order, which cannot be done in a shared artifact without rendering a different page per person.
 
 ## One file per day
 
