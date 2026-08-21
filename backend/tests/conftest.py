@@ -8,6 +8,7 @@ from typing import Final
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 SCHEMAS_DIR: Final = REPO_ROOT / "schemas"
 CONFIG_DIR: Final = REPO_ROOT / "config"
+EVALS_DIR: Final = REPO_ROOT / "evals"
 FIXTURES_DIR: Final = REPO_ROOT / "tests" / "fixtures"
 CONTRACT_FIXTURES_DIR: Final = FIXTURES_DIR / "contracts"
 

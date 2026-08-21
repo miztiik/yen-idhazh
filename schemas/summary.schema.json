@@ -15,6 +15,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added required pipeline_fingerprint and output_digest.",
+      "version": "2026-08-21T02:00",
+      "why": "Skip-if-exists becomes skip-if-fingerprint-matches, and a match with unequal output has to be detectable. No payload predates this - the pipeline has never run - so the read-side migration is the fixtures, restamped here."
+    },
+    {
       "change": "Initial shape: summary text, key points, the model, and the cost.",
       "version": "2026-08-21",
       "why": "Contracts before logic - Summarize is written against a fixed payload."
@@ -78,11 +83,23 @@
       "title": "Model Id",
       "type": "string"
     },
+    "output_digest": {
+      "description": "Digest of the words only. Recomputed on read, never trusted.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
     "output_tokens": {
       "default": 0,
       "minimum": 0,
       "title": "Output Tokens",
       "type": "integer"
+    },
+    "pipeline_fingerprint": {
+      "description": "The stamp of every input that could have moved this text.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
     },
     "source_truncated": {
       "default": false,
@@ -110,7 +127,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-21T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -119,11 +136,13 @@
   "required": [
     "item_id",
     "url_key",
+    "pipeline_fingerprint",
+    "output_digest",
     "model_id",
     "generated_at",
     "status"
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-21T02:00"
 }

@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added pipeline_fingerprint, output_digest and determinism_violation.",
+      "version": "2026-08-21T02:00",
+      "why": "The ledger is the only committed record that survives a run, so it is the only place a later run can detect that identical inputs produced different words. No payload predates this - the ledger has never been written."
+    },
+    {
       "change": "Initial shape: dual faithfulness scores, the counterweights, and the band.",
       "version": "2026-08-21",
       "why": "Contracts before logic - the columns are fixed before the first row lands."
@@ -48,6 +53,12 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Date",
       "type": "string"
+    },
+    "determinism_violation": {
+      "default": false,
+      "description": "Identical inputs, different words. Counted and published, never fatal.",
+      "title": "Determinism Violation",
+      "type": "boolean"
     },
     "extractiveness": {
       "description": "Verbatim overlap. High here plus high hhem means copying.",
@@ -83,6 +94,16 @@
     "model_id": {
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
       "title": "Model Id",
+      "type": "string"
+    },
+    "output_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
       "type": "string"
     },
     "run_id": {
@@ -132,7 +153,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-21T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -163,10 +184,12 @@
     "band",
     "source_word_count",
     "summary_word_count",
+    "pipeline_fingerprint",
+    "output_digest",
     "scorer_version",
     "scored_at"
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-21T02:00"
 }

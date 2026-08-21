@@ -69,6 +69,8 @@ Committing the scores rather than deriving them is what makes a claim about last
 
 **Run-level facts are not ledger rows.** How many items a run planned, finished and failed is a property of the run, not of any item, and it lives in the run manifest - which is committed, dated and published alongside the day. Widening the per-item row to carry a second kind of row would leave every item row with columns that are blank for it and would break the dashboard's one honest question: group the rows by band and count them.
 
+**An item whose inputs did not change writes no row at all.** A re-run that changed nothing measured nothing, and a ledger padded with re-observations of the same summary makes every trend a function of how often the job ran. What counts as unchanged is the pipeline fingerprint ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)), which is stamped on every row so a trend can be attributed to the inputs that produced it.
+
 ## See also
 
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
@@ -76,4 +78,5 @@ Committing the scores rather than deriving them is what makes a claim about last
 - [config.md](config.md) - the band thresholds and retry budget.
 - [principles.md](principles.md) - principle 6, the belief this page implements.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the eval-row contract.
+- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the stamp every row carries, and why an unchanged item writes none.
 - [../../.github/agents/andre.agent.md](../../.github/agents/andre.agent.md) - the persona who owns metric choice.

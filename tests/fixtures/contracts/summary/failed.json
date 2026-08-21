@@ -7,10 +7,12 @@
   "item_id": "energy-01",
   "key_points": [],
   "model_id": "qwen3-4b-q4-k-m",
+  "output_digest": "8254cc9b9d84471f2b0bbc98ea4cd08ee7351c7be86704da9b2f96cfb7b7fb78",
   "output_tokens": 0,
+  "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "source_truncated": true,
   "status": "failed",
   "summary": null,
   "url_key": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933010852380f9b5b6f78b8dd90",
-  "version": "2026-08-21"
+  "version": "2026-08-21T02:00"
 }

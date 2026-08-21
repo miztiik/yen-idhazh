@@ -11,10 +11,12 @@
     "Weights are published under a permissive licence."
   ],
   "model_id": "qwen3-8b-q4-k-m",
+  "output_digest": "3469c80fe6cf09abdc1ad5e9dca09031d233386da57930506138f7f5318e98bf",
   "output_tokens": 214,
+  "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "source_truncated": false,
   "status": "ok",
   "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
   "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
-  "version": "2026-08-21"
+  "version": "2026-08-21T02:00"
 }

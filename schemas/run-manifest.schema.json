@@ -125,6 +125,13 @@
           "title": "Config Digests",
           "type": "array"
         },
+        "determinism_violations": {
+          "default": 0,
+          "description": "Recorded, not raised. A gate that fires on a CPU class gets switched off.",
+          "minimum": 0,
+          "title": "Determinism Violations",
+          "type": "integer"
+        },
         "items_failed": {
           "minimum": 0,
           "title": "Items Failed",
@@ -170,6 +177,15 @@
           ],
           "default": null,
           "title": "Note"
+        },
+        "pipeline_fingerprints": {
+          "description": "The distinct stamps this run wrote under.",
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Pipeline Fingerprints",
+          "type": "array"
         },
         "run_id": {
           "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
@@ -278,6 +294,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional pipeline_fingerprints and determinism_violations to a run.",
+      "version": "2026-08-21T02:00",
+      "why": "A run that cannot say which stamps it wrote under cannot be audited later."
+    },
+    {
       "change": "Initial shape: append-only runs for one date, with counts and site size.",
       "version": "2026-08-21",
       "why": "Contracts before logic - a partial day is a recorded fact from run one."
@@ -299,7 +320,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-21T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -311,5 +332,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-21T02:00"
 }

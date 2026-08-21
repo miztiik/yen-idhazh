@@ -137,7 +137,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 3 | Source discovery, fetch + extract | 1 | B | PENDING | - | - | - |
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | PENDING | - | - | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | PENDING | - | - | - |
-| 15 | Pipeline fingerprint contract | 1 | B | PENDING | - | - | - |
+| 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
 | 6 | Summarize worker | 1, 2, 5, 15 | C | PENDING | - | - | - |
 | 11 | Pages eval dashboard | 4 | C | PENDING | - | - | - |
 | 19 | Build-time embeddings in the day payload | 1, 15 | C | PENDING | - | - | - |
@@ -649,6 +649,8 @@ is what makes row 14 a single `rm -r` with no second edit.
 - **Files touched:** `backend/idhazh/contracts/{summary,eval_row,run_manifest}.py`, `backend/idhazh/fingerprint.py`, `schemas/*`, `evals/fingerprints.csv`, `backend/tests/test_fingerprint.py`
 - **Acceptance gates:** the fingerprint is a sha256 over a sorted, fully-enumerated input set; `evals/fingerprints.csv` expands each distinct fingerprint into its components; a fingerprint match with unequal output records `determinism_violation` rather than failing the build.
 - **Oracle:** the silent-drift trap - change only the truncation cap on a fixture, re-run, and assert the fingerprint changes and a second observation is recorded. If the fingerprint is stable across a changed cap, the stamp is blind and the row fails.
+
+**Landed 2026-08-21.** The canonical page is [`docs/architecture/contracts/determinism.md`](../docs/architecture/contracts/determinism.md). `PipelineInputs` is the enumeration and the digest is taken over its own serialization, so a field added to the model changes every stamp and a field that was never declared cannot be silently forgotten. The oracle is generalised past the named case: the suite mutates *every* declared input one at a time and asserts each one moves the digest. `host_cpu` is excluded structurally rather than by filter. Skip-if-fingerprint-matches, and the recorded-not-raised violation, live in `backend/idhazh/fingerprint.py`.
 
 | # | Decision | Authority |
 | --- | --- | --- |

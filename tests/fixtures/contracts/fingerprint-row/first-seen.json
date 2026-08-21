@@ -1,0 +1,24 @@
+{
+  "first_seen_at": "2026-08-21T06:00:11Z",
+  "first_seen_run": "2026-08-21-1",
+  "host_cpu": "AMD EPYC 7763 64-Core Processor",
+  "inputs": {
+    "chat_template_sha256": "4f2b8c1d9e7a350628b4c6d8f0a2e4c6b8d0f2a4c6e8b0d2f4a6c8e0b2d4f6a8",
+    "extractor_version": "trafilatura-2.0.0",
+    "model_sha256": "d3a1c0f4b26e58917a4f0b2c7d8e5a6314f9027b8c5d1e3a6f7b90c2d4e81a5f",
+    "n_batch": 512,
+    "n_ctx": 8192,
+    "n_threads": 4,
+    "n_ubatch": 512,
+    "output_schema_sha256": "1b3d5f7902468ace1b3d5f7902468ace1b3d5f7902468ace1b3d5f7902468ace",
+    "prompt_sha256": "7c9e1a3b5d7f9012345678abcdef0123456789abcdef0123456789abcdef0123",
+    "quantisation": "Q4_K_M",
+    "runner_class": "ubuntu-latest-4vcpu",
+    "runtime_build": "llama.cpp-b4200",
+    "sampling": "temperature=0.0000;top_p=1.0000;seed=0;max_output_tokens=250;thinking=off",
+    "sanitizer_version": "idhazh-sanitizer-1",
+    "truncation_cap_tokens": 2500
+  },
+  "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
+  "version": "2026-08-21T02:00"
+}

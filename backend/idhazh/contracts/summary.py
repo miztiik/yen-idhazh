@@ -14,7 +14,16 @@ from typing import ClassVar, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.article import UntrustedLine
-from idhazh.contracts.base import ChangelogEntry, Contract, ItemId, Slug, Timestamp, UrlKey
+from idhazh.contracts.base import (
+    ChangelogEntry,
+    Contract,
+    ItemId,
+    Sha256,
+    Slug,
+    Timestamp,
+    UrlKey,
+    derive_output_digest,
+)
 
 
 class SummaryStatus(StrEnum):
@@ -29,6 +38,15 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-21T02:00",
+            change="Added required pipeline_fingerprint and output_digest.",
+            why=(
+                "Skip-if-exists becomes skip-if-fingerprint-matches, and a match with unequal "
+                "output has to be detectable. No payload predates this - the pipeline has "
+                "never run - so the read-side migration is the fixtures, restamped here."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: summary text, key points, the model, and the cost.",
             why="Contracts before logic - Summarize is written against a fixed payload.",
@@ -39,6 +57,13 @@ class Summary(Contract):
     url_key: UrlKey
     summary: str | None = None
     key_points: list[str] = Field(default_factory=list)
+
+    pipeline_fingerprint: Sha256 = Field(
+        description="The stamp of every input that could have moved this text."
+    )
+    output_digest: Sha256 = Field(
+        description="Digest of the words only. Recomputed on read, never trusted."
+    )
 
     model_id: Slug = Field(
         description="The ModelRef id from config. The full ref lives in the manifest."
@@ -54,6 +79,12 @@ class Summary(Contract):
     generated_at: Timestamp
     status: SummaryStatus
     failure_detail: UntrustedLine | None = None
+
+    @model_validator(mode="after")
+    def _output_digest_is_rebuilt_not_trusted(self) -> Self:
+        if self.output_digest != derive_output_digest(self.summary, self.key_points):
+            raise ValueError("output_digest must be the digest of summary and key_points")
+        return self
 
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:
