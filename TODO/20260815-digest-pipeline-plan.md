@@ -143,7 +143,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 19 | Build-time embeddings in the day payload | 1, 15 | C | PENDING | - | - | - |
 | 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | PENDING | - | - | - |
 | 8 | Route worker + deterministic renderers | 6, 7 | E | PENDING | - | - | - |
-| 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | PENDING | - | - | - |
+| 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | LANDED (per-domain alerts; weekly workflow reads the ledger) | main | direct | - |
 | 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
 | 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | LANDED (plan -> sharded workers -> assemble; visual routing still absent) | main | direct | - |
 | 13 | Published layout, date routing and the frontend shell | 1, 10 | G | LANDED (prerendered, themed, browser-verified) | main | direct | - |

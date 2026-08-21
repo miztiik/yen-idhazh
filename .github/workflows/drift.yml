@@ -1,0 +1,95 @@
+name: drift
+
+# The instrument that sees the system rather than the article. Per-item scores
+# measure variance within a day; drift is a movement across months, and the
+# failure it catches is the quiet one - extraction breaks on a site redesign,
+# summaries start describing navigation chrome, and every individual score stays
+# healthy because the summary is faithful to the garbage it was given.
+
+on:
+  schedule:
+    # Sunday, after the week's runs have landed.
+    - cron: '0 8 * * 0'
+  workflow_dispatch:
+    inputs:
+      recent_days:
+        description: 'Days in the recent window'
+        default: '7'
+      baseline_days:
+        description: 'Days in the trailing baseline window'
+        default: '28'
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  drift:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      # Reads the committed ledger. It never re-scores anything: a trend
+      # computed against a model that has since moved is not a trend.
+      - name: Compare the windows
+        id: compare
+        run: |
+          python - <<'PY' | tee drift.txt
+          import csv, datetime, pathlib
+          from idhazh.drift import Observation, compare
+
+          recent_days = int("${{ inputs.recent_days || '7' }}")
+          baseline_days = int("${{ inputs.baseline_days || '28' }}")
+          today = datetime.date.today()
+          ledger = pathlib.Path("evals/scores.csv")
+          if not ledger.exists():
+              print("ledger is empty - nothing to compare")
+              raise SystemExit(0)
+
+          recent, baseline = [], []
+          for row in csv.DictReader(ledger.open(encoding="utf-8")):
+              try:
+                  when = datetime.date.fromisoformat(row["date"])
+                  observation = Observation(
+                      row["source_url"],
+                      float(row["hhem"]),
+                      float(row["extractiveness"]),
+                      int(row["source_word_count"]),
+                  )
+              except (KeyError, ValueError):
+                  continue
+              age = (today - when).days
+              if age <= recent_days:
+                  recent.append(observation)
+              elif age <= recent_days + baseline_days:
+                  baseline.append(observation)
+
+          findings = compare(recent, baseline)
+          if not findings:
+              print(f"no drift across {len(recent)} recent and {len(baseline)} baseline rows")
+              raise SystemExit(0)
+          for finding in findings:
+              print(f"{finding.alert.value} {finding.domain}: {finding.detail}")
+          PY
+
+      - name: Open an issue when something moved
+        if: success()
+        run: |
+          set -euo pipefail
+          if grep -qE '^(shorter_sources|more_copying|scoring_chrome) ' drift.txt; then
+            gh issue create \
+              --title "Drift detected $(date -u +%F)" \
+              --body "$(cat drift.txt)"
+          fi
+        env:
+          GH_TOKEN: ${{ github.token }}
