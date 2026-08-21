@@ -428,6 +428,15 @@
       "title": "RunConfig",
       "type": "object"
     },
+    "ThemeChoice": {
+      "enum": [
+        "system",
+        "light",
+        "dark"
+      ],
+      "title": "ThemeChoice",
+      "type": "string"
+    },
     "TierWeights": {
       "additionalProperties": false,
       "description": "The ranking weight of a source tier. Tier 1 is the institution that IS the fact.",
@@ -456,12 +465,82 @@
       },
       "title": "TierWeights",
       "type": "object"
+    },
+    "UiConfig": {
+      "additionalProperties": false,
+      "description": "The published surface's knobs.\n\n`sections` is the modularity story: reordering the page is a config edit,\nnot a code change. What is deliberately absent is a per-element layout\nengine - on the surface that matters, a phone, there is no left and no\nright, and a per-reader layout would break the promise that a shared link\nshows the recipient what the sender saw.",
+      "properties": {
+        "repo_url": {
+          "default": "https://github.com/miztiik/yen-idhazh",
+          "minLength": 1,
+          "title": "Repo Url",
+          "type": "string"
+        },
+        "sections": {
+          "description": "Render order of the day page's sections, by registry id.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Sections",
+          "type": "array"
+        },
+        "show_filter": {
+          "default": true,
+          "description": "An in-place filter inside the topic row. Never a top-level search bar: on a page this short it would promise an archive it cannot reach.",
+          "title": "Show Filter",
+          "type": "boolean"
+        },
+        "site_title": {
+          "default": "yen-idhazh",
+          "minLength": 1,
+          "title": "Site Title",
+          "type": "string"
+        },
+        "source_mark": {
+          "default": true,
+          "description": "The monogram beside a source name. A scanning aid, not the id.",
+          "title": "Source Mark",
+          "type": "boolean"
+        },
+        "tagline": {
+          "default": "A daily digest that checks its own work.",
+          "minLength": 1,
+          "title": "Tagline",
+          "type": "string"
+        },
+        "theme_default": {
+          "$ref": "#/$defs/ThemeChoice",
+          "default": "system"
+        },
+        "visual_side": {
+          "$ref": "#/$defs/VisualSide",
+          "default": "above"
+        }
+      },
+      "title": "UiConfig",
+      "type": "object"
+    },
+    "VisualSide": {
+      "description": "Where a visual sits beside its text, at `sm` and above. Below that, always above.",
+      "enum": [
+        "above",
+        "leading",
+        "trailing"
+      ],
+      "title": "VisualSide",
+      "type": "string"
     }
   },
   "$id": "app-config.schema.json",
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added the ui block.",
+      "version": "2026-08-21T06:00",
+      "why": "The published surface's knobs need a home before a component reads one."
+    },
     {
       "change": "Added collect.max_per_source.",
       "version": "2026-08-21T05:00",
@@ -504,8 +583,11 @@
     "run": {
       "$ref": "#/$defs/RunConfig"
     },
+    "ui": {
+      "$ref": "#/$defs/UiConfig"
+    },
     "version": {
-      "default": "2026-08-21T05:00",
+      "default": "2026-08-21T06:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -516,5 +598,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-21T05:00"
+  "version": "2026-08-21T06:00"
 }

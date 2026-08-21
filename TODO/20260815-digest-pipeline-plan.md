@@ -139,17 +139,17 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
 | 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
 | 6 | Summarize worker | 1, 2, 5, 15 | C | LANDED (determinism oracle needs a real model run - folds into row 7) | main | direct | - |
-| 11 | Pages eval dashboard | 4 | C | PENDING (unblocked 2026-08-21: operator surface) | - | - | - |
+| 11 | Pages eval dashboard | 4 | C | LANDED (operator surface, states its own denominator) | main | direct | - |
 | 19 | Build-time embeddings in the day payload | 1, 15 | C | PENDING | - | - | - |
 | 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | PENDING | - | - | - |
 | 8 | Route worker + deterministic renderers | 6, 7 | E | PENDING | - | - | - |
 | 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | PENDING | - | - | - |
 | 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
 | 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | LANDED (plan -> sharded workers -> assemble; visual routing still absent) | main | direct | - |
-| 13 | Published layout, date routing and the frontend shell | 1, 10 | G | PENDING | - | - | - |
+| 13 | Published layout, date routing and the frontend shell | 1, 10 | G | LANDED (prerendered, themed, browser-verified) | main | direct | - |
 | 14 | Retention job + site-budget alarm | 13 | H | PENDING | - | - | - |
 | 16 | Read-state, new-arrivals block and pagination | 13 | H | PENDING | - | - | - |
-| 17 | Icon sprite + registry allowlist | 13 | H | PENDING | - | - | - |
+| 17 | Icon sprite + registry allowlist | 13 | H | DESCOPED (build-time monogram; no per-publisher artwork) | main | direct | - |
 | 18 | On-device assist enabler (no feature) | 13 | H | PENDING | - | - | - |
 | 22 | Read-aloud via Web Speech API | 13 | H | PENDING | - | - | - |
 | 20 | Browser semantic search | 18, 19 | I | PENDING | - | - | - |

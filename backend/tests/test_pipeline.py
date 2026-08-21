@@ -23,6 +23,7 @@ from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary
+from idhazh.contracts.taxonomy import SourceKind
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
 from idhazh.evals.score import band, counterweight_band, to_eval_row
@@ -209,6 +210,7 @@ def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
         summary=summary(),
         band=row().band,
         source_name="Example Lab",
+        source_kind=SourceKind.ANNOUNCEMENT,
         run_n=run_n,
     )
 

@@ -2,6 +2,7 @@
   "feeds": [
     {
       "id": "openai-news",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -12,6 +13,7 @@
     },
     {
       "id": "anthropic-news",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -22,6 +24,7 @@
     },
     {
       "id": "deepmind-blog",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -32,6 +35,7 @@
     },
     {
       "id": "google-research-blog",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -42,6 +46,7 @@
     },
     {
       "id": "meta-ai-blog",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -52,6 +57,7 @@
     },
     {
       "id": "microsoft-research-blog",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -62,6 +68,7 @@
     },
     {
       "id": "nvidia-technical-blog",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -72,6 +79,7 @@
     },
     {
       "id": "nvidia-newsroom",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -82,6 +90,7 @@
     },
     {
       "id": "huggingface-blog",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -92,6 +101,7 @@
     },
     {
       "id": "mistral-news",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -102,6 +112,7 @@
     },
     {
       "id": "cohere-blog",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -112,6 +123,7 @@
     },
     {
       "id": "ai2-blog",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -122,6 +134,7 @@
     },
     {
       "id": "bair-blog",
+      "kind": "research",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 1,
@@ -132,6 +145,7 @@
     },
     {
       "id": "stanford-hai",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -142,6 +156,7 @@
     },
     {
       "id": "mit-news-ai",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -152,6 +167,7 @@
     },
     {
       "id": "apple-ml-research",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -162,6 +178,7 @@
     },
     {
       "id": "amazon-science",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -172,6 +189,7 @@
     },
     {
       "id": "ibm-research-blog",
+      "kind": "research",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -182,6 +200,7 @@
     },
     {
       "id": "pytorch-blog",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -192,6 +211,7 @@
     },
     {
       "id": "databricks-blog",
+      "kind": "announcement",
       "retired_on": null,
       "status": "active",
       "tier": 1,
@@ -202,6 +222,7 @@
     },
     {
       "id": "llama-cpp-releases",
+      "kind": "announcement",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 1,
@@ -212,6 +233,7 @@
     },
     {
       "id": "vllm-releases",
+      "kind": "announcement",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 1,
@@ -222,6 +244,7 @@
     },
     {
       "id": "transformers-releases",
+      "kind": "announcement",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 1,
@@ -232,6 +255,7 @@
     },
     {
       "id": "ars-technica-ai",
+      "kind": "reporting",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -242,6 +266,7 @@
     },
     {
       "id": "techcrunch-ai",
+      "kind": "reporting",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -252,6 +277,7 @@
     },
     {
       "id": "venturebeat-ai",
+      "kind": "reporting",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -262,6 +288,7 @@
     },
     {
       "id": "the-verge-ai",
+      "kind": "reporting",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -272,6 +299,7 @@
     },
     {
       "id": "mit-tech-review-ai",
+      "kind": "reporting",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -282,6 +310,7 @@
     },
     {
       "id": "ieee-spectrum-ai",
+      "kind": "reporting",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -292,6 +321,7 @@
     },
     {
       "id": "the-register-ai",
+      "kind": "reporting",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 2,
@@ -302,6 +332,7 @@
     },
     {
       "id": "simon-willison",
+      "kind": "analysis",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -312,6 +343,7 @@
     },
     {
       "id": "the-batch",
+      "kind": "analysis",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 2,
@@ -322,6 +354,7 @@
     },
     {
       "id": "import-ai",
+      "kind": "analysis",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -332,6 +365,7 @@
     },
     {
       "id": "interconnects",
+      "kind": "analysis",
       "retired_on": null,
       "status": "active",
       "tier": 2,
@@ -342,6 +376,7 @@
     },
     {
       "id": "localllama",
+      "kind": "community",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 3,
@@ -352,6 +387,7 @@
     },
     {
       "id": "lobsters-ai",
+      "kind": "community",
       "retired_on": "2026-08-21",
       "status": "retired",
       "tier": 3,

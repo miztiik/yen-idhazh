@@ -29,6 +29,7 @@ from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.contracts.taxonomy import SourceKind
 from idhazh.evals import metrics, score, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
@@ -239,6 +240,7 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
     """Collect whatever finished, publish it, and append the ledger."""
     items_dir = _run_dir(plan.date) / "items"
     names = assemble.source_names(settings.sources)
+    kinds = assemble.source_kinds(settings.sources)
     digest_items = []
     summaries: list[Summary] = []
     rows = []
@@ -272,6 +274,7 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
                 summary=summary,
                 band=band,
                 source_name=names.get(article.source_id, article.source_id),
+                source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
                 run_n=1,
             )
         )

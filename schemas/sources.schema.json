@@ -9,6 +9,11 @@
           "title": "Id",
           "type": "string"
         },
+        "kind": {
+          "$ref": "#/$defs/SourceKind",
+          "default": "reporting",
+          "description": "Who is speaking. A reader needs this before they will share an item."
+        },
         "retired_on": {
           "anyOf": [
             {
@@ -127,6 +132,19 @@
       "title": "SalienceFeedDef",
       "type": "object"
     },
+    "SourceKind": {
+      "description": "What kind of speaker this is - the thing a reader uses to decide belief.\n\n\"A company said its product is faster\" and \"a reporter measured it\" are not\nthe same claim, and without this they arrive looking identical. The\ndangerous case is `announcement`: forwarding a vendor's own copy without\nknowing it was the vendor is how a reader ends up carrying an ad.",
+      "enum": [
+        "reporting",
+        "announcement",
+        "research",
+        "analysis",
+        "government",
+        "community"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
     "SourceTier": {
       "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
       "enum": [
@@ -142,6 +160,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added kind to a feed.",
+      "version": "2026-08-21T06:00",
+      "why": "A company announcing its own product and a reporter measuring it arrived looking identical. Reader named this as the one thing an item lacked before they would share it."
+    },
     {
       "change": "Initial shape: per-vertical feeds plus a separate salience list.",
       "version": "2026-08-21",
@@ -165,7 +188,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-21T06:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -177,5 +200,5 @@
   ],
   "title": "Sources",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-21T06:00"
 }

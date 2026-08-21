@@ -81,5 +81,19 @@
     "shard_timeout_minutes": 90,
     "success_floor_pct": 80
   },
-  "version": "2026-08-21"
+  "ui": {
+    "repo_url": "https://github.com/miztiik/yen-idhazh",
+    "sections": [
+      "notice",
+      "topics",
+      "items"
+    ],
+    "show_filter": true,
+    "site_title": "yen-idhazh",
+    "source_mark": true,
+    "tagline": "A daily digest that checks its own work.",
+    "theme_default": "system",
+    "visual_side": "above"
+  },
+  "version": "2026-08-21T06:00"
 }
