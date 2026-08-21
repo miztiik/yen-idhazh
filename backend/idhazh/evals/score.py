@@ -21,6 +21,8 @@ from idhazh.evals import metrics
 
 _DELTA_PLACES: Final = 6
 _UNTITLED: Final = "Untitled item"
+#: Below this the summary dropped the story's own opening facts.
+_LEAD_COVERAGE_FLOOR: Final = 0.3
 
 
 def band(
@@ -38,6 +40,27 @@ def band(
     if faithfulness >= config.band_medium_min:
         return ConfidenceBand.MEDIUM
     return ConfidenceBand.LOW
+
+
+def counterweight_band(summary: str, full_text: str, config: EvaluationConfig) -> ConfidenceBand:
+    """The band a reader sees when no faithfulness score exists.
+
+    The counterweights are free and run on every item, so this is always
+    available - which is what keeps a reader-facing promise off the most
+    expensive metric in the system.
+
+    It never returns `high`. Without a faithfulness score there is no basis for
+    claiming one, and inventing the top band from cheap checks would be exactly
+    the false confidence the second artifact exists to prevent.
+    """
+    if metrics.unsupported_numbers(summary, full_text):
+        return ConfidenceBand.LOW
+    if metrics.lead_coverage(summary, full_text) < _LEAD_COVERAGE_FLOOR:
+        return ConfidenceBand.LOW
+    if metrics.hedge_dropped(summary, full_text):
+        return ConfidenceBand.LOW
+    del config
+    return ConfidenceBand.MEDIUM
 
 
 def to_eval_row(

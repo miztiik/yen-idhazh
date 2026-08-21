@@ -25,7 +25,7 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
-from idhazh.evals.score import band, to_eval_row
+from idhazh.evals.score import band, counterweight_band, to_eval_row
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -205,8 +205,33 @@ def test_an_empty_premise_scores_zero_rather_than_raising() -> None:
 
 def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
     return assemble.to_digest_item(
-        article=article(), summary=summary(), row=row(), source_name="Example Lab", run_n=run_n
+        article=article(),
+        summary=summary(),
+        band=row().band,
+        source_name="Example Lab",
+        run_n=run_n,
     )
+
+
+def test_the_counterweights_alone_never_claim_the_top_band() -> None:
+    """Without a faithfulness score there is no basis for claiming high confidence."""
+    faithful = (
+        "Example Lab released a smaller model, claiming a 34 percent lower cost per million "
+        "tokens and 2.1 times the throughput of the model it replaces."
+    )
+    assert (
+        counterweight_band(faithful, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.MEDIUM
+    )
+
+
+def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
+    invented = "Example Lab claims a 91 percent lower cost per million tokens."
+    assert counterweight_band(invented, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.LOW
+
+
+def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_low() -> None:
+    vague = "A company has published something about a product."
+    assert counterweight_band(vague, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.LOW
 
 
 def test_a_day_publishes_even_when_items_failed() -> None:

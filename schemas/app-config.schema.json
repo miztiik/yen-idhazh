@@ -204,7 +204,8 @@
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
       "properties": {
         "max_output_tokens": {
-          "default": 250,
+          "default": 500,
+          "description": "Covers the summary AND its key points. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause.",
           "minimum": 1,
           "title": "Max Output Tokens",
           "type": "integer"

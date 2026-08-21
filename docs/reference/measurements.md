@@ -145,21 +145,27 @@ bespoke script, because it exercises the code that will do it daily.
 | Quantity | Value |
 | --- | --- |
 | Feeds configured | 36 |
-| Resolved and parsed | **26** |
-| HTTP 404 | 6 |
-| Refused by `robots.txt` | 3 |
-| `robots.txt` unreadable, so refused | 1 |
-| Live feeds after retiring the ten | **26, against a floor of 25** |
+| Resolved on the first pass | 26 |
+| Recovered by finding the real feed URL | 5 |
+| **Live after correction** | **31, against a floor of 25** |
+| Retired: `robots.txt` forbids or is unreadable | 4 |
+| Retired: the publisher declares no feed at all | 1 |
 
-The margin is one feed, not a comfortable clearance. Six of the ten failures are
-wrong URLs rather than absent publishers, so the honest next step is correcting
-them rather than treating the list as settled.
+Two of the retirements are permanent by the host's own instruction rather than
+defects to fix. One publisher (`ai.meta.com`) is a JavaScript application that
+declares no feed on any path, which is a category the plan did not anticipate:
+a source can be real, active and unreachable by RSS.
 
-Two figures from the same run, both single observations and both a laptop
+Two figures from the same runs, both single observations and both a laptop
 rather than a runner: **one feed read takes roughly 0.5-4 s including its
 `robots.txt`**, and a whole 36-feed plan pass finishes in **under a minute**.
 That matters only as a shape: the planning step loads no weights, so fanning out
 afterwards is what costs, not deciding the day.
+
+**Summarization, Qwen3-4B-Q4_K_M, 4 threads, i7-1265U, 2026-08-21, n=1:** a
+2,557-token article took **89 s** end to end for 179 output tokens. One
+observation on a laptop, recorded because it is the first real per-article
+number this project has; it is not a runner figure and may not be used as one.
 
 ## Corpus shape
 

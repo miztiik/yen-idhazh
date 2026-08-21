@@ -149,6 +149,13 @@ def to_summary(
             detail="the article did not extract, so there was nothing to summarize",
             generated_at=generated_at,
         )
+    if completion.hit_the_budget:
+        return _failed(
+            article,
+            model_id=model_id,
+            detail="the reply was cut off by the output budget, so it never closed its JSON",
+            generated_at=generated_at,
+        )
     try:
         draft = parse_draft(completion.content)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:

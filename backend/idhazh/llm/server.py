@@ -31,6 +31,12 @@ class Completion:
     content: str
     prompt_tokens: int = 0
     completion_tokens: int = 0
+    finish_reason: str = "stop"
+
+    @property
+    def hit_the_budget(self) -> bool:
+        """The reply stopped because it ran out of tokens, not because it was done."""
+        return self.finish_reason == "length"
 
 
 def server_argv(
@@ -108,6 +114,7 @@ def parse_completion(body: str) -> Completion:
         content=choices[0].get("message", {}).get("content") or "",
         prompt_tokens=int(usage.get("prompt_tokens", 0)),
         completion_tokens=int(usage.get("completion_tokens", 0)),
+        finish_reason=choices[0].get("finish_reason") or "stop",
     )
 
 
