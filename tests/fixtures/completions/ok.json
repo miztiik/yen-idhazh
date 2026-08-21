@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\"summary\": \"Example Lab has released a smaller inference model, which the company says costs 34 percent less per million tokens than the model it replaces and delivers 2.1 times the throughput on commodity processors. The weights are published under a permissive licence. The company did not say when the model being replaced will be retired, and declined to give accuracy figures against the previous release. Independent benchmarks have not yet been published.\", \"key_points\": [\"Cost per million tokens falls 34 percent against the model it replaces.\", \"Throughput on commodity processors is 2.1 times the previous release.\", \"The weights carry a permissive licence, and no retirement date was given.\"]}",
+        "role": "assistant"
+      }
+    }
+  ],
+  "model": "qwen3-8b-q4-k-m",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 214,
+    "prompt_tokens": 1796,
+    "total_tokens": 2010
+  }
+}
