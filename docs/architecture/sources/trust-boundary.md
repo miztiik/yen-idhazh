@@ -42,6 +42,20 @@ Its bounds are structural, not tunable. A knob that weakens the trust boundary i
 
 The version string, `SANITIZER_VERSION`, is a pipeline-fingerprint input ([../contracts/determinism.md](../contracts/determinism.md)). Changing the transformation without bumping it would leave every prior summary looking current.
 
+## The address is untrusted before the text is
+
+A feed is a stranger's list of addresses, and the pipeline dials them from inside CI with a repository token in the environment. So an address is validated before it is dialled, not after:
+
+- **Only `http` and `https`.** A `file://` entry in a feed is not a fetch, it is a read of the build machine.
+- **The loopback, private, link-local and reserved ranges are refused**, by literal and again after DNS resolution. A cloud metadata endpoint is otherwise one feed entry away, and it is the single highest-value target on a build runner.
+- **Names that resolve inward are refused** - `localhost`, and the `.local` / `.internal` / `.localdomain` suffixes.
+
+This is Holy Law #11 applied one step earlier than it is usually read. "Fetched text never becomes a URL to fetch" is the well-known half; the half that bites in CI is that a *feed entry* is fetched text too.
+
+**An unreadable `robots.txt` is a refusal, not a permission.** Assuming consent from silence is how a polite crawler becomes an impolite one, and the failure mode is asymmetric: the cost of skipping a host wrongly is one missing item, and the cost of crawling one wrongly is a complaint we cannot take back.
+
+**A permanent status is recorded and skipped, never retried.** Retrying a 404 burns the budget the transient failures need, and on a shared runner that budget is wall-clock the rest of the matrix is waiting on.
+
 ## Model output never becomes an action
 
 Asserted structurally rather than promised:
