@@ -13,6 +13,13 @@ dependencies = [
     # The single source of truth for every persisted shape (Holy Law #3). Also
     # the JSON Schema emitter that schemas/ is generated from.
     "pydantic>=2.12",
+    # Feed parsing for the Collect stage. Mature, tolerant of the malformed RSS
+    # the open web actually serves, and parses a string without any network of
+    # its own - so a test drives it from a committed fixture (Holy Law #8).
+    "feedparser>=6.0",
+    # Boilerplate removal for the Extract stage. A custom HTML extractor is a
+    # maintenance surface with no beneficiary feature.
+    "trafilatura>=1.12",
 ]
 
 [project.optional-dependencies]
@@ -29,10 +36,7 @@ bench-image = [
 ]
 # Only for backend/utilities/measure_corpus.py, which measures how long real
 # articles actually are. Reaches the network, so it never runs inside a test.
-measure = [
-    "feedparser>=6.0",
-    "trafilatura>=1.12",
-]
+measure = []
 
 [project.scripts]
 idhazh-export-schemas = "idhazh.contracts.export:main"

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<feed xmlns="http://www.w3.org/2005/Atom">
+  <title>Example Community</title>
+  <link href="https://community.example.org/"/>
+  <updated>2026-08-21T09:00:00Z</updated>
+  <entry>
+    <title>Example Lab releases a smaller model</title>
+    <link href="https://blog.example-lab.org:443/2026/08/model-release#discussion"/>
+    <updated>2026-08-21T09:00:00Z</updated>
+  </entry>
+  <entry>
+    <title>Running the new weights on four cores</title>
+    <link href="https://community.example.org/t/four-cores"/>
+    <updated>2026-08-21T09:05:00Z</updated>
+  </entry>
+</feed>

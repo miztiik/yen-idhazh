@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Front Page</title>
+    <link>https://salience.example.org/</link>
+    <item>
+      <title>Example Lab releases a smaller model</title>
+      <link>https://blog.example-lab.org/2026/08/model-release?utm_medium=social</link>
+    </item>
+    <item>
+      <title>Something nobody in the pool published</title>
+      <link>https://elsewhere.example.net/2026/08/unrelated</link>
+    </item>
+  </channel>
+</rss>

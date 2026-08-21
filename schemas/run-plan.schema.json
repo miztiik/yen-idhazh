@@ -1,0 +1,235 @@
+{
+  "$defs": {
+    "PlannedItem": {
+      "additionalProperties": false,
+      "description": "One URL that survived deduplication and made its vertical's cap.",
+      "properties": {
+        "canonical_url": {
+          "description": "After canonicalisation. url_key derives from it.",
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Canonical Url",
+          "type": "string"
+        },
+        "carried_by": {
+          "default": 1,
+          "description": "Independent feeds that carried this story today.",
+          "minimum": 1,
+          "title": "Carried By",
+          "type": "integer"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "on_front_page": {
+          "default": false,
+          "description": "A salience feed voted for it. A vote, never a discovery.",
+          "title": "On Front Page",
+          "type": "boolean"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "rank_score": {
+          "minimum": 0.0,
+          "title": "Rank Score",
+          "type": "number"
+        },
+        "source_id": {
+          "description": "The feed that carried it first.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_url": {
+          "description": "The address as the feed gave it.",
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Source Url",
+          "type": "string"
+        },
+        "tier": {
+          "$ref": "#/$defs/SourceTier"
+        },
+        "title": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Title"
+        },
+        "url_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Url Key",
+          "type": "string"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        },
+        "watchlist_hit": {
+          "default": false,
+          "title": "Watchlist Hit",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "item_id",
+        "url_key",
+        "source_url",
+        "canonical_url",
+        "source_id",
+        "tier",
+        "vertical",
+        "rank_score"
+      ],
+      "title": "PlannedItem",
+      "type": "object"
+    },
+    "SourceTier": {
+      "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
+      "enum": [
+        1,
+        2,
+        3
+      ],
+      "title": "SourceTier",
+      "type": "integer"
+    },
+    "VerticalPlan": {
+      "additionalProperties": false,
+      "description": "Why a vertical contributed what it did, including when it contributed nothing.",
+      "properties": {
+        "below_feed_floor": {
+          "default": false,
+          "description": "Under its floor, so it is collected but never rendered.",
+          "title": "Below Feed Floor",
+          "type": "boolean"
+        },
+        "considered": {
+          "description": "Distinct URLs the feeds offered.",
+          "minimum": 0,
+          "title": "Considered",
+          "type": "integer"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "live_feeds": {
+          "minimum": 0,
+          "title": "Live Feeds",
+          "type": "integer"
+        },
+        "planned": {
+          "minimum": 0,
+          "title": "Planned",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "considered",
+        "planned",
+        "live_feeds"
+      ],
+      "title": "VerticalPlan",
+      "type": "object"
+    }
+  },
+  "$id": "run-plan.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the ranked, capped, deduplicated work list for one run.",
+      "version": "2026-08-21T04:00",
+      "why": "Contracts before logic - a worker reads a fixed shape and never re-decides."
+    }
+  ],
+  "description": "What the plan job decided, before a single byte of an article was fetched.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "feeds_failed": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Feeds Failed",
+      "type": "integer"
+    },
+    "feeds_read": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Feeds Read",
+      "type": "integer"
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/PlannedItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "stale": {
+      "default": false,
+      "description": "Discovery failed and an earlier list was reused. Never skip a day silently.",
+      "title": "Stale",
+      "type": "boolean"
+    },
+    "version": {
+      "default": "2026-08-21T04:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "verticals": {
+      "items": {
+        "$ref": "#/$defs/VerticalPlan"
+      },
+      "title": "Verticals",
+      "type": "array"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "generated_at"
+  ],
+  "title": "RunPlan",
+  "type": "object",
+  "version": "2026-08-21T04:00"
+}
