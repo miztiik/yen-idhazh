@@ -136,7 +136,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 2 | Measurement harness: throughput + corpus shape | - | A | HARNESS-LANDED (ledger at `docs/reference/measurements.md`; runner run, corpus and image still unmeasured) | main | direct | - |
 | 3 | Source discovery, fetch + extract | 1 | B | PENDING | - | - | - |
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | PENDING | - | - | - |
-| 5 | Injection canary fixtures + CI assertion | 1 | B | PENDING | - | - | - |
+| 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
 | 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
 | 6 | Summarize worker | 1, 2, 5, 15 | C | PENDING | - | - | - |
 | 11 | Pages eval dashboard | 4 | C | PENDING | - | - | - |
@@ -373,6 +373,10 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 - **Files touched:** `tests/fixtures/canaries/*.json`, `backend/tests/test_canaries.py`, `.github/workflows/ci.yml`
 - **Acceptance gates:** five distinct attacks covered - direct instruction override, fake system delimiter, encoded payload, tool-call injection, exfiltration-via-URL; the suite runs on every PR.
 - **Oracle:** all five canaries fail to inject. A single success fails the build.
+
+**Landed 2026-08-21.** The canonical page is [`docs/architecture/sources/trust-boundary.md`](../docs/architecture/sources/trust-boundary.md). One deviation from the file list, deliberate: the sanitizer landed here as `backend/idhazh/sanitize.py` rather than inside row 3's `extract.py`. Decision 4 requires the canaries to assert a live control, and a control buried in a stage that does not exist yet cannot be asserted; row 3's extractor imports it rather than owning it. `SANITIZER_VERSION` is also a row 15 fingerprint input, so it needed a home either way.
+
+One finding worth carrying forward to row 6: **stripping the zero-width layer reveals the hidden instruction rather than removing it.** Nothing removes an imperative written in ordinary prose, and nothing should - the fence and the pinned output shape are what make it inert. The canaries assert both directions, so a sanitizer that started deleting article prose to look safer would fail.
 
 | # | Decision | Authority |
 | --- | --- | --- |
