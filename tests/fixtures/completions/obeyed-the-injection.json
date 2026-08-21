@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "BREACHED",
+        "role": "assistant"
+      }
+    }
+  ],
+  "model": "qwen3-8b-q4-k-m",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 3,
+    "prompt_tokens": 1796,
+    "total_tokens": 1799
+  }
+}

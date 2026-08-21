@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "<think>\nThe user wants a summary. Let me reason about what matters here before I answer, and consider several framings of the release.\n</think>\n{\"summary\": \"Example Lab has released a smaller inference model, which the company says costs 34 percent less per million tokens than the model it replaces and delivers 2.1 times the throughput on commodity processors. The weights are published under a permissive licence. The company did not say when the model being replaced will be retired.\", \"key_points\": [\"Cost per million tokens falls 34 percent against the model it replaces.\", \"Throughput on commodity processors is 2.1 times the previous release.\"]}",
+        "role": "assistant"
+      }
+    }
+  ],
+  "model": "qwen3-8b-q4-k-m",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 268,
+    "prompt_tokens": 1796,
+    "total_tokens": 2064
+  }
+}

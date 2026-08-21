@@ -138,7 +138,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | IN PROGRESS (contracts + model-free metrics landed; HHEM pending) | main | direct | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
 | 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
-| 6 | Summarize worker | 1, 2, 5, 15 | C | PENDING | - | - | - |
+| 6 | Summarize worker | 1, 2, 5, 15 | C | LANDED (determinism oracle needs a real model run - folds into row 7) | main | direct | - |
 | 11 | Pages eval dashboard | 4 | C | PENDING (unblocked 2026-08-21: operator surface) | - | - | - |
 | 19 | Build-time embeddings in the day payload | 1, 15 | C | PENDING | - | - | - |
 | 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | PENDING | - | - | - |
@@ -527,6 +527,12 @@ One finding worth carrying forward to row 6: **stripping the zero-width layer re
 | 4 | Qwen3.5 / GLM / Kimi / DeepSeek | Newer is worse here (qwen3.5-27b 12.1% vs qwen3-4b 5.7%); the rest are 600B+ or trillion-scale and score 9.3-17.9% regardless. | Carmack |
 | 5 | `pip install llama-cpp-python` | Compiles from source and costs minutes per run; the prebuilt binary is a download. | Carmack |
 | 6 | Gemma-4-26B-A4B (5.2%, MoE) | ~14 GB at Q4 busts the 10 GB cache, forcing a full re-download every run. | Carmack |
+
+**Landed 2026-08-21.** One deviation from the file list, deliberate: there is no committed `prompts/summarize.schema.json`. The constrained-decoding schema is generated from a `SummaryDraft` Pydantic model, because hand-writing it would mean the decoder's constraint and the validator that reads the reply could disagree, and Holy Law #3 forbids hand-writing a schema anyway. Its digest is still a fingerprint input; the serialization is the same canonical one every payload uses, so the stamp is stable.
+
+The tests are all about the failure paths, because a summarizer that handles a good reply is easy and a summarizer that cannot be talked out of its shape is the product: a planted tool call cannot reach a payload, a model that obeyed an injection produces no summary rather than a wrong one, a model that reasoned despite the flag is a recorded failure rather than a curiosity, and a reply outside the publishable word range is refused. The model boundary is driven by recorded llama-server envelopes under `tests/fixtures/completions/` (CLAUDE.md section 13); nothing is mocked and no test runs a model.
+
+**The row's own oracle - the golden set re-run at seed 0 producing identical strings - cannot run here**, because it needs the real weights on a real runner. It folds into row 7, which already stands up the full pipeline against candidate models. Row 15's stamp is what makes that check meaningful when it happens: without it, "identical output" would be a claim about the sampler rather than about the pipeline.
 
 ---
 
