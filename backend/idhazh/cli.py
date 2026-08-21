@@ -247,23 +247,34 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
         article_path = items_dir / f"{item.item_id}.article.json"
         summary_path = items_dir / f"{item.item_id}.summary.json"
         eval_path = items_dir / f"{item.item_id}.eval.json"
-        if not (article_path.exists() and summary_path.exists() and eval_path.exists()):
+        if not (article_path.exists() and summary_path.exists()):
             continue
         article = Article.from_json(article_path.read_text(encoding="utf-8"))
         summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
-        row = EvalRow.from_json(eval_path.read_text(encoding="utf-8"))
         summaries.append(summary)
-        rows.append(row)
-        if summary.status is SummaryStatus.OK:
-            digest_items.append(
-                assemble.to_digest_item(
-                    article=article,
-                    summary=summary,
-                    row=row,
-                    source_name=names.get(article.source_id, article.source_id),
-                    run_n=1,
-                )
+        if summary.status is not SummaryStatus.OK:
+            continue
+
+        # An item publishes with a band whether or not the faithfulness scorer
+        # ran. The counterweights are free and always available, and they never
+        # claim the top band on their own.
+        if eval_path.exists():
+            row = EvalRow.from_json(eval_path.read_text(encoding="utf-8"))
+            rows.append(row)
+            band = row.band
+        else:
+            band = score.counterweight_band(
+                summary.summary or "", article.text or "", settings.app.evaluation
             )
+        digest_items.append(
+            assemble.to_digest_item(
+                article=article,
+                summary=summary,
+                band=band,
+                source_name=names.get(article.source_id, article.source_id),
+                run_n=1,
+            )
+        )
 
     target = assemble.day_dir(PUBLIC_ROOT, plan.date)
     previous_day = _load_day(target / "digest.json")

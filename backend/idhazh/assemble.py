@@ -24,7 +24,7 @@ from idhazh.contracts.digest_day import (
     DigestRunRef,
     DigestVerticalRef,
 )
-from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
     ModelUse,
@@ -71,14 +71,14 @@ def to_digest_item(
     *,
     article: Article,
     summary: Summary,
-    row: EvalRow,
+    band: ConfidenceBand,
     source_name: str,
     run_n: int,
 ) -> DigestItem:
     """One finished item as a reader consumes it. The link is a first-class element."""
     return DigestItem(
         item_id=summary.item_id,
-        vertical=row.vertical,
+        vertical=article.vertical,
         title=article.title or _UNTITLED,
         source_url=article.canonical_url,
         source_id=article.source_id,
@@ -89,7 +89,7 @@ def to_digest_item(
         lenses=article.lenses,
         events=article.events,
         entities=article.entities,
-        band=row.band,
+        band=band,
         truncated=article.truncated,
         introduced_by_run=run_n,
     )

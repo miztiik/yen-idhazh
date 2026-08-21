@@ -400,22 +400,28 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 
 **Honesty note (Holy Law #10 applied to a URL).** Not one of these 36 has been fetched - no test may touch the network, and the agent has not verified them out of band. Roughly a third use a well-known stable pattern (the GitHub `releases.atom` feeds, the major trade-press category feeds, `machinelearning.apple.com/rss.xml`); the rest are plausible-but-unconfirmed, and `anthropic-news` is a page rather than a known feed and will likely need replacing. **Row 3's first task is a `backend/utilities/check_feeds.py` run that reports which resolve, parse, and carry recent items** - the list is ratified in shape here and corrected in detail there. Decision 6's quarantine mechanism then handles rot after launch.
 
-### 3.3 Verification, measured 2026-08-21 (first live run)
+### 3.3 Verification, measured 2026-08-21 (first live runs)
 
-The list was checked by running the real plan stage, which is a better check than a bespoke script: **26 of 36 feeds resolved and parsed.** The ten that did not are now `status: retired` with `retired_on: 2026-08-21`, keeping their ids so any payload written under them still validates.
+The list was checked by running the real plan stage, which is a better check than a bespoke script: **26 of 36 feeds resolved on the first pass.** The ten that did not were retired, then five were recovered by finding the real feed URL - four by probing conventional paths, one by reading the site's own `<link rel="alternate">`. **31 live, 5 retired.**
 
-| Reason | Feeds |
-| --- | --- |
-| HTTP 404 - the URL guess was wrong | `meta-ai-blog`, `mistral-news`, `ai2-blog`, `ibm-research-blog`, `databricks-blog`, `the-batch` |
-| `robots.txt` unreadable, so refused | `bair-blog` |
-| `robots.txt` disallows the path | `the-register-ai`, `localllama`, `lobsters-ai` |
+| Feed | First guess | Outcome |
+| --- | --- | --- |
+| `mistral-news` | `/news/rss.xml` | fixed -> `https://mistral.ai/rss.xml` (81 entries) |
+| `ai2-blog` | `/blog/rss.xml` | fixed -> `https://allenai.org/rss.xml` (25 entries) |
+| `databricks-blog` | `/blog/feed` | fixed -> `https://www.databricks.com/blog/feed.xml` (10 entries) |
+| `ibm-research-blog` | `/blog/rss.xml` | fixed -> `https://research.ibm.com/rss` (20 entries), found in the page's own feed link |
+| `meta-ai-blog` | `ai.meta.com/blog/rss/` | **no feed exists.** `ai.meta.com` is a JS application and declares none. Repointed to `https://engineering.fb.com/feed/` and retitled "Meta Engineering" - the id is an immutable slug and the display title is not, which is exactly what that rule is for. |
+| `the-batch` | `/the-batch/feed/` | **retired.** `deeplearning.ai` declares no feed on any conventional path. |
+| `bair-blog` | `/blog/feed.xml` | **retired.** `robots.txt` unreadable, and an unreadable robots file is a refusal. |
+| `the-register-ai`, `localllama`, `lobsters-ai` | - | **retired permanently.** `robots.txt` disallows the path. Not a bug to fix. |
 
-**That leaves the `ai` vertical at 26 live feeds against a floor of 25, which is one bad day from not rendering.** Say it plainly rather than calling the list done: the floor is being cleared, not comfortably met, and the six 404s are worth replacing with correct URLs rather than treated as sources that do not exist.
+**31 live against a floor of 25** is a real margin rather than the one-feed clearance the first pass left. Two of the five retirements are permanent by the host's own instruction, and two are absent feeds rather than wrong guesses.
 
-Two design defects surfaced that no unit test would have caught, both now fixed:
+Three design defects surfaced that no unit test would have caught, all now fixed:
 
 - **The whole vertical planned from one blog.** On a day when no story is carried twice, every score is identical and the *tie-break* decides the running order - and an alphabetical tie-break silently hands the day to whichever host sorts first. Ties now break on recency, and `collect.max_per_source` caps how much of a vertical any one feed may take.
-- **A GitHub `releases.atom` feed produced a git changelog, not an article.** It cleared the 120-word extraction floor and reached the model as commit messages. `extract.min_source_words` is now 250, which is well under the shortest real article bucket and well over a changelog stub.
+- **A GitHub `releases.atom` feed produced a git changelog, not an article.** It cleared the 120-word extraction floor and reached the model as commit messages, which summarized to "includes various updates and improvements" - perfectly faithful, and it says nothing. `extract.min_source_words` is now 250, which is well under the shortest real article bucket and well over a changelog stub.
+- **Three of five summaries failed as "the reply did not hold its shape", and the shape was not the problem.** `max_output_tokens` was 250, which covers a summary but not a summary *plus* its key points, so the reply ran out of budget mid-object and never closed its JSON. The budget is now 500, and a reply that stops on `length` is reported as itself rather than as a schema error - a diagnostic that named the wrong cause is worse than no diagnostic.
 
 **Excluded on purpose:**
 

@@ -129,7 +129,14 @@ class InferenceConfig(Model):
         default=False,
         description="Off. Reasoning measurably increases hallucination when summarizing.",
     )
-    max_output_tokens: int = Field(default=250, ge=1)
+    max_output_tokens: int = Field(
+        default=500,
+        ge=1,
+        description=(
+            "Covers the summary AND its key points. Sized at 250 the reply ran out of "
+            "budget mid-object and failed as a shape error, which named the wrong cause."
+        ),
+    )
 
 
 class ModelsConfig(Model):

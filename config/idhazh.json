@@ -42,7 +42,7 @@
   },
   "models": {
     "inference": {
-      "max_output_tokens": 250,
+      "max_output_tokens": 500,
       "n_batch": 512,
       "n_ctx": 8192,
       "n_threads": 4,
