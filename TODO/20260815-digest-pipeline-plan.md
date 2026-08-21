@@ -134,7 +134,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Contracts, schemas and repo scaffold | - | A | DONE | main | direct | - |
 | 2 | Measurement harness: throughput + corpus shape | - | A | HARNESS-LANDED (ledger at `docs/reference/measurements.md`; runner run, corpus and image still unmeasured) | main | direct | - |
-| 3 | Source discovery, fetch + extract | 1 | B | IN PROGRESS (feeds ratified, discover + rank landed; fetch + extract pending) | main | direct | - |
+| 3 | Source discovery, fetch + extract | 1 | B | DONE | main | direct | - |
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | IN PROGRESS (contracts + model-free metrics landed; HHEM pending) | main | direct | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
 | 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
