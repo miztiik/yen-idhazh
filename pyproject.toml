@@ -37,8 +37,16 @@ bench-image = [
 # Only for backend/utilities/measure_corpus.py, which measures how long real
 # articles actually are. Reaches the network, so it never runs inside a test.
 measure = []
+# The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is
+# hundreds of megabytes, so it stays out of the default install and out of the
+# test path - the model-free counterweights are what run everywhere.
+faithfulness = [
+    "torch>=2.5",
+    "transformers>=4.46",
+]
 
 [project.scripts]
+idhazh = "idhazh.cli:main"
 idhazh-export-schemas = "idhazh.contracts.export:main"
 
 [tool.hatch.build.targets.wheel]
@@ -78,7 +86,7 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # Measurement-only dependencies, absent from a default install and shipping no
 # type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["diffusers.*", "feedparser.*", "torch.*", "trafilatura.*"]
+module = ["diffusers.*", "feedparser.*", "torch.*", "trafilatura.*", "transformers.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]

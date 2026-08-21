@@ -21,7 +21,7 @@ from typing import Any, Final
 
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
 
-from idhazh.contracts.app_config import InferenceConfig
+from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -32,9 +32,6 @@ PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
 
 _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
-
-SUMMARY_MIN_WORDS: Final = 60
-SUMMARY_MAX_WORDS: Final = 200
 
 
 class SummaryDraft(BaseModel):
@@ -139,10 +136,12 @@ def to_summary(
     model_id: str,
     pipeline_fingerprint: str,
     generated_at: str,
+    evaluation: EvaluationConfig | None = None,
     duration_ms: int = 0,
     attempt: int = 1,
 ) -> Summary:
     """One article plus one completion becomes exactly one payload, valid or failed."""
+    bounds = evaluation or EvaluationConfig()
     if article.status is not ArticleStatus.OK:
         return _failed(
             article,
@@ -161,7 +160,7 @@ def to_summary(
         )
 
     words = len(draft.summary.split())
-    if not SUMMARY_MIN_WORDS <= words <= SUMMARY_MAX_WORDS:
+    if not bounds.summary_words_min <= words <= bounds.summary_words_max:
         return _failed(
             article,
             model_id=model_id,

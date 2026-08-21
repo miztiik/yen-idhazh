@@ -199,8 +199,9 @@ def test_a_fenced_code_block_is_still_read() -> None:
 
 
 def test_a_summary_outside_the_publishable_range_is_refused() -> None:
+    """The bounds are config, not constants - the prompt asks, config decides."""
     rambling = json.dumps(
-        {"summary": "y " * 250, "key_points": ["one point here", "two points here"]}
+        {"summary": "y " * 300, "key_points": ["one point here", "two points here"]}
     )
     result = to_summary(
         article(),
@@ -211,6 +212,37 @@ def test_a_summary_outside_the_publishable_range_is_refused() -> None:
     )
     assert result.status is SummaryStatus.FAILED
     assert "words" in (result.failure_detail or "")
+
+
+def test_the_publishable_range_comes_from_config() -> None:
+    from idhazh.contracts.app_config import EvaluationConfig
+
+    body = json.dumps(
+        {"summary": "y " * 100, "key_points": ["one point here", "two points here"]}
+    )
+    reply = Completion(content=body, prompt_tokens=10, completion_tokens=10)
+    assert (
+        to_summary(
+            article(),
+            reply,
+            model_id="m",
+            pipeline_fingerprint=FINGERPRINT,
+            generated_at=GENERATED_AT,
+        ).status
+        is SummaryStatus.OK
+    )
+    tightened = EvaluationConfig(summary_words_min=150, summary_words_max=200)
+    assert (
+        to_summary(
+            article(),
+            reply,
+            model_id="m",
+            pipeline_fingerprint=FINGERPRINT,
+            generated_at=GENERATED_AT,
+            evaluation=tightened,
+        ).status
+        is SummaryStatus.FAILED
+    )
 
 
 def test_a_failed_article_is_never_sent_to_the_model() -> None:
