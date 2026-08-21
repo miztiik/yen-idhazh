@@ -1,6 +1,7 @@
 {
   "collect": {
     "front_page_bonus": 0.4,
+    "max_per_source": 2,
     "min_feeds_floor": 25,
     "quarantine_after_failures": 5,
     "repetition_weight": 1.0,
@@ -22,8 +23,8 @@
     "band_medium_min": 0.5,
     "golden_set_size": 20,
     "spot_checks_per_week": 10,
-    "summary_words_max": 200,
-    "summary_words_min": 60,
+    "summary_words_max": 250,
+    "summary_words_min": 40,
     "truncation_gap_max": 0.1
   },
   "extract": {
@@ -31,6 +32,7 @@
     "backoff_multiplier": 2.0,
     "max_body_bytes": 2000000,
     "max_retries": 3,
+    "min_source_words": 250,
     "request_timeout_seconds": 20.0,
     "truncation_cap_tokens": 2500,
     "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"

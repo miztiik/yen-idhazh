@@ -66,9 +66,34 @@ def score(
     return round(total, 6)
 
 
-def _sort_key(item: tuple[float, Candidate]) -> tuple[float, str]:
-    ranked, candidate = item
-    return (-ranked, candidate.canonical_url)
+def _ordered(scored: list[tuple[float, Candidate]]) -> list[tuple[float, Candidate]]:
+    """Score first, then recency, then the address.
+
+    The tie-break matters more than it looks. On a day when no story is carried
+    twice, every score is identical and the tie-break IS the running order - so
+    an alphabetical one silently hands the day to whichever host sorts first.
+    Sorts are stable, so these compose least-significant first.
+    """
+    ordered = sorted(scored, key=lambda pair: pair[1].canonical_url)
+    ordered.sort(key=lambda pair: pair[1].published_at or "", reverse=True)
+    ordered.sort(key=lambda pair: pair[0], reverse=True)
+    return ordered
+
+
+def _take(
+    ordered: list[tuple[float, Candidate]], *, cap: int, max_per_source: int
+) -> list[tuple[float, Candidate]]:
+    """Fill the vertical, but never let one feed become the vertical."""
+    taken: list[tuple[float, Candidate]] = []
+    per_source: dict[str, int] = {}
+    for ranked, candidate in ordered:
+        if len(taken) >= cap:
+            break
+        if per_source.get(candidate.source_id, 0) >= max_per_source:
+            continue
+        per_source[candidate.source_id] = per_source.get(candidate.source_id, 0) + 1
+        taken.append((ranked, candidate))
+    return taken
 
 
 def plan_vertical(
@@ -118,7 +143,11 @@ def plan_vertical(
         )
 
     items: list[PlannedItem] = []
-    ordered = sorted(scored, key=_sort_key)[: vertical.daily_cap]
+    ordered = _take(
+        _ordered(scored),
+        cap=vertical.daily_cap,
+        max_per_source=config.max_per_source,
+    )
     for ordinal, (ranked, first) in enumerate(ordered, 1):
         watchlist_hit, on_front_page = flags[first.url_key]
         items.append(

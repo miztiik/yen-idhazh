@@ -1,6 +1,7 @@
 {
   "collect": {
     "front_page_bonus": 0.25,
+    "max_per_source": 2,
     "min_feeds_floor": 30,
     "quarantine_after_failures": 3,
     "repetition_weight": 1.5,

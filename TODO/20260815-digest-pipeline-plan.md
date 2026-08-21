@@ -135,7 +135,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 1 | Contracts, schemas and repo scaffold | - | A | DONE | main | direct | - |
 | 2 | Measurement harness: throughput + corpus shape | - | A | HARNESS-LANDED (ledger at `docs/reference/measurements.md`; runner run, corpus and image still unmeasured) | main | direct | - |
 | 3 | Source discovery, fetch + extract | 1 | B | DONE | main | direct | - |
-| 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | IN PROGRESS (contracts + model-free metrics landed; HHEM pending) | main | direct | - |
+| 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | LANDED (scorer behind an optional extra; timing still unmeasured) | main | direct | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
 | 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
 | 6 | Summarize worker | 1, 2, 5, 15 | C | LANDED (determinism oracle needs a real model run - folds into row 7) | main | direct | - |
@@ -145,7 +145,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 8 | Route worker + deterministic renderers | 6, 7 | E | PENDING | - | - | - |
 | 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | PENDING | - | - | - |
 | 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
-| 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | PENDING | - | - | - |
+| 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | LANDED (plan -> sharded workers -> assemble; visual routing still absent) | main | direct | - |
 | 13 | Published layout, date routing and the frontend shell | 1, 10 | G | PENDING | - | - | - |
 | 14 | Retention job + site-budget alarm | 13 | H | PENDING | - | - | - |
 | 16 | Read-state, new-arrivals block and pagination | 13 | H | PENDING | - | - | - |
@@ -399,6 +399,23 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | `lobsters-ai` | Lobsters - AI tag | `https://lobste.rs/t/ai.rss` |
 
 **Honesty note (Holy Law #10 applied to a URL).** Not one of these 36 has been fetched - no test may touch the network, and the agent has not verified them out of band. Roughly a third use a well-known stable pattern (the GitHub `releases.atom` feeds, the major trade-press category feeds, `machinelearning.apple.com/rss.xml`); the rest are plausible-but-unconfirmed, and `anthropic-news` is a page rather than a known feed and will likely need replacing. **Row 3's first task is a `backend/utilities/check_feeds.py` run that reports which resolve, parse, and carry recent items** - the list is ratified in shape here and corrected in detail there. Decision 6's quarantine mechanism then handles rot after launch.
+
+### 3.3 Verification, measured 2026-08-21 (first live run)
+
+The list was checked by running the real plan stage, which is a better check than a bespoke script: **26 of 36 feeds resolved and parsed.** The ten that did not are now `status: retired` with `retired_on: 2026-08-21`, keeping their ids so any payload written under them still validates.
+
+| Reason | Feeds |
+| --- | --- |
+| HTTP 404 - the URL guess was wrong | `meta-ai-blog`, `mistral-news`, `ai2-blog`, `ibm-research-blog`, `databricks-blog`, `the-batch` |
+| `robots.txt` unreadable, so refused | `bair-blog` |
+| `robots.txt` disallows the path | `the-register-ai`, `localllama`, `lobsters-ai` |
+
+**That leaves the `ai` vertical at 26 live feeds against a floor of 25, which is one bad day from not rendering.** Say it plainly rather than calling the list done: the floor is being cleared, not comfortably met, and the six 404s are worth replacing with correct URLs rather than treated as sources that do not exist.
+
+Two design defects surfaced that no unit test would have caught, both now fixed:
+
+- **The whole vertical planned from one blog.** On a day when no story is carried twice, every score is identical and the *tie-break* decides the running order - and an alphabetical tie-break silently hands the day to whichever host sorts first. Ties now break on recency, and `collect.max_per_source` caps how much of a vertical any one feed may take.
+- **A GitHub `releases.atom` feed produced a git changelog, not an article.** It cleared the 120-word extraction floor and reached the model as commit messages. `extract.min_source_words` is now 250, which is well under the shortest real article bucket and well over a changelog stub.
 
 **Excluded on purpose:**
 

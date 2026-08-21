@@ -9,6 +9,13 @@
           "title": "Front Page Bonus",
           "type": "number"
         },
+        "max_per_source": {
+          "default": 2,
+          "description": "Most items one feed may contribute to one vertical in a day. Without it, a quiet news day is whichever blog published most.",
+          "minimum": 1,
+          "title": "Max Per Source",
+          "type": "integer"
+        },
         "min_feeds_floor": {
           "default": 25,
           "description": "Default feed floor. A vertical may raise it; below it, nothing renders.",
@@ -103,15 +110,15 @@
           "type": "integer"
         },
         "summary_words_max": {
-          "default": 200,
+          "default": 250,
           "description": "Above this it is a copy. Absolute, not a ratio.",
           "minimum": 1,
           "title": "Summary Words Max",
           "type": "integer"
         },
         "summary_words_min": {
-          "default": 60,
-          "description": "Below this the summary is a headline, not a summary.",
+          "default": 40,
+          "description": "Below this it is a headline, not a summary. Set under what the prompt asks for: the prompt is a request, and dropping an item for missing it by two words loses a story to a rounding error.",
           "minimum": 1,
           "title": "Summary Words Min",
           "type": "integer"
@@ -455,6 +462,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added collect.max_per_source.",
+      "version": "2026-08-21T05:00",
+      "why": "The first live run planned a whole vertical from one blog: with no story carried twice, the tie-break decided the day and one source won it."
+    },
+    {
       "change": "Replaced evaluation.compression_min/max with summary_words_min/max; added extract.min_source_words and extract.boilerplate_ratio_max.",
       "version": "2026-08-21T03:00",
       "why": "At a fixed output budget a compression ratio measures the article's length, not the summary's quality - it would have flagged every short article forever. Absolute word bounds detect the two real failures directly."
@@ -492,7 +504,7 @@
       "$ref": "#/$defs/RunConfig"
     },
     "version": {
-      "default": "2026-08-21T03:00",
+      "default": "2026-08-21T05:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -503,5 +515,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-21T03:00"
+  "version": "2026-08-21T05:00"
 }

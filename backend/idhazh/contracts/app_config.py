@@ -73,6 +73,14 @@ class CollectConfig(Model):
     )
     quarantine_after_failures: int = Field(default=5, ge=1)
     watchlist_max_entities: int = Field(default=30, ge=1)
+    max_per_source: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Most items one feed may contribute to one vertical in a day. Without it, a "
+            "quiet news day is whichever blog published most."
+        ),
+    )
     tier_weights: TierWeights = Field(default_factory=TierWeights)
     repetition_weight: float = Field(default=1.0, ge=0.0)
     watchlist_bonus: float = Field(default=0.5, ge=0.0)
@@ -140,10 +148,16 @@ class EvaluationConfig(Model):
         description="Score gap that flags a truncation artifact rather than a hallucination.",
     )
     summary_words_min: int = Field(
-        default=60, ge=1, description="Below this the summary is a headline, not a summary."
+        default=40,
+        ge=1,
+        description=(
+            "Below this it is a headline, not a summary. Set under what the prompt asks "
+            "for: the prompt is a request, and dropping an item for missing it by two "
+            "words loses a story to a rounding error."
+        ),
     )
     summary_words_max: int = Field(
-        default=200, ge=1, description="Above this it is a copy. Absolute, not a ratio."
+        default=250, ge=1, description="Above this it is a copy. Absolute, not a ratio."
     )
     spot_checks_per_week: int = Field(default=10, ge=0)
     golden_set_size: int = Field(default=20, ge=1)
@@ -191,6 +205,14 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-21T05:00",
+            change="Added collect.max_per_source.",
+            why=(
+                "The first live run planned a whole vertical from one blog: with no story "
+                "carried twice, the tie-break decided the day and one source won it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21T03:00",
             change=(

@@ -136,6 +136,31 @@ The ordering of the levers falls straight out of this: encoding buys 5.6x,
 honouring the visual rule buys another 2.9x, and retention is what remains
 after both. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md).
 
+## Feed availability
+
+**Measured** on a developer machine (i7-1265U, Windows, 2026-08-21) by running
+the real plan stage against the ratified `ai` list - a better check than a
+bespoke script, because it exercises the code that will do it daily.
+
+| Quantity | Value |
+| --- | --- |
+| Feeds configured | 36 |
+| Resolved and parsed | **26** |
+| HTTP 404 | 6 |
+| Refused by `robots.txt` | 3 |
+| `robots.txt` unreadable, so refused | 1 |
+| Live feeds after retiring the ten | **26, against a floor of 25** |
+
+The margin is one feed, not a comfortable clearance. Six of the ten failures are
+wrong URLs rather than absent publishers, so the honest next step is correcting
+them rather than treating the list as settled.
+
+Two figures from the same run, both single observations and both a laptop
+rather than a runner: **one feed read takes roughly 0.5-4 s including its
+`robots.txt`**, and a whole 36-feed plan pass finishes in **under a minute**.
+That matters only as a shape: the planning step loads no weights, so fanning out
+afterwards is what costs, not deciding the day.
+
 ## Corpus shape
 
 **Still invented.** The cost model assumes articles cluster at 400 / 1200 /
@@ -155,6 +180,7 @@ to justify a design decision.
 | --- | --- | --- |
 | Prefill and decode on a real runner | laptop figures above | the `llm` job in `.github/workflows/measure.yml` |
 | Article length distribution | invented buckets | the `corpus` job |
+| **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | Weight download time, cache-miss | unmeasured | the timed download step, which now records itself into `cache-state.txt` |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
 | Image render seconds at 512 and 768 | unmeasured | the `image` job, against both candidate models |

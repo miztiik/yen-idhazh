@@ -1,0 +1,215 @@
+name: digest
+
+# The daily run. An orchestrator that never does the work, disposable workers
+# that do, and an assemble step that publishes whatever finished.
+#
+# The shape mirrors the runner's own economics (Holy Law #2): weights are
+# restored once per JOB rather than once per run, so a worker handles a shard of
+# several items to amortize the restore rather than one item per machine.
+
+on:
+  schedule:
+    # 06:00 UTC. Daily matters more than the hour: a cache entry unread for
+    # seven days is deleted, and a paused schedule costs a full re-download.
+    - cron: '0 6 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Digest date (YYYY-MM-DD). Defaults to today, UTC.'
+        default: ''
+      shards:
+        description: 'Worker jobs to fan out across'
+        default: '4'
+      faithfulness:
+        description: 'Run the faithfulness scorer (slow first run - downloads weights)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: digest
+  cancel-in-progress: false
+
+env:
+  MODEL_REPO: Qwen/Qwen3-8B-GGUF
+  MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      date: ${{ steps.decide.outputs.date }}
+      shards: ${{ steps.decide.outputs.shards }}
+      matrix: ${{ steps.decide.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - id: decide
+        run: |
+          set -euo pipefail
+          DATE="${{ inputs.date }}"
+          [ -n "$DATE" ] || DATE=$(date -u +%F)
+          SHARDS="${{ inputs.shards }}"
+          [ -n "$SHARDS" ] || SHARDS=4
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+      # No weights load here. The plan job is feed reads and arithmetic, and it
+      # finishes in seconds - which is what makes fanning out afterwards cheap.
+      - name: Plan the day
+        run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: plan
+          path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
+          retention-days: 1
+
+  work:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: |
+          if [ "${{ inputs.faithfulness }}" = "false" ]; then
+            pip install -e .
+          else
+            pip install -e ".[faithfulness]"
+          fi
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      # Restored once per JOB, not once per run. Four workers pay this four
+      # times, and it is the single largest fixed cost in the pipeline.
+      - name: Cache weights and runtime
+        id: weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: llm-${{ env.MODEL_FILE }}-v1
+
+      - name: Fetch runtime and weights
+        if: steps.weights.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin backend/models
+          TAG=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | jq -r .tag_name)
+          curl -sSL -o llama.zip \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.zip"
+          unzip -q llama.zip -d llama
+          find llama -type f -exec cp {} backend/bin/ \;
+          chmod +x backend/bin/llama-server
+          curl -sSL -o "backend/models/${MODEL_FILE}" \
+            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
+
+      - name: Start the model
+        run: |
+          set -euo pipefail
+          chmod +x backend/bin/llama-server
+          LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
+            --model "backend/models/${MODEL_FILE}" \
+            --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
+            --port 8080 --no-warmup > llama-server.log 2>&1 &
+          for _ in $(seq 1 120); do
+            curl -sf http://127.0.0.1:8080/health && break
+            sleep 5
+          done
+
+      - name: Work the shard
+        run: |
+          python -m idhazh work \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard ${{ matrix.shard }} \
+            --shards ${{ needs.plan.outputs.shards }} \
+            ${{ inputs.faithfulness == false && '--no-faithfulness' || '' }}
+
+      - name: Runtime log on failure
+        if: failure()
+        run: tail -50 llama-server.log || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: items-${{ matrix.shard }}
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  assemble:
+    needs: [plan, work]
+    # Always runs, even when a worker failed. A run that publishes nothing on a
+    # bad day is a run whose bad days are invisible.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: items-*
+          merge-multiple: true
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+
+      - name: Assemble and publish
+        run: |
+          python -m idhazh assemble \
+            --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}"
+
+      - name: Commit the day
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add frontend/public/digest evals
+          if git diff --cached --quiet; then
+            echo "nothing changed"
+            exit 0
+          fi
+          git commit -m "digest: ${{ needs.plan.outputs.date }}"
+          git push
