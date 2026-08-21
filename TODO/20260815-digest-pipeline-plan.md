@@ -139,7 +139,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
 | 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
 | 6 | Summarize worker | 1, 2, 5, 15 | C | PENDING | - | - | - |
-| 11 | Pages eval dashboard | 4 | C | PENDING | - | - | - |
+| 11 | Pages eval dashboard | 4 | C | PENDING (unblocked 2026-08-21: operator surface) | - | - | - |
 | 19 | Build-time embeddings in the day payload | 1, 15 | C | PENDING | - | - | - |
 | 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | PENDING | - | - | - |
 | 8 | Route worker + deterministic renderers | 6, 7 | E | PENDING | - | - | - |
@@ -340,6 +340,71 @@ Derived per-article seconds (best / typical / worst):
 **Sources are tiered**, and the tier is the ranking weight: tier 1 is the institution that *is* the fact (lab blog, central bank, IEA, ACLED, an SEC filing, a company newsroom); tier 2 is trade press; tier 3 is community and aggregators.
 
 One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `energy` + `business-economy`, lenses `ai-roi` + `markets`, events `deal` + `capex`, entity `nvidia`: six index entries, one fetch, one summary. That is the whole argument for lenses over verticals.
+
+### 3.2 Proposed `ai` feed list (drafted 2026-08-21, AWAITING OWNER SIGN-OFF)
+
+36 feeds against a floor of 25, so up to 11 may fail verification and the vertical still renders. **Not written to `config/sources.json` until ratified.**
+
+**Every choice here is reversible in one field, which is why sign-off is low-stakes.** Adding a feed is a one-object append. Removing one is decision 7's soft path - drop `weight` to 0, observe a week, then set `status: retired` with `retired_on`, which keeps the id alive so payloads written under it still validate (decision 4). The vertical stays `status: draft` and renders nothing until it clears its floor, so a wrong list costs nothing a reader can see.
+
+**Tier 1 - the institution that IS the fact (23)**
+
+| id | title | url |
+| --- | --- | --- |
+| `openai-news` | OpenAI | `https://openai.com/news/rss.xml` |
+| `anthropic-news` | Anthropic | `https://www.anthropic.com/news` |
+| `deepmind-blog` | Google DeepMind | `https://deepmind.google/blog/rss.xml` |
+| `google-research-blog` | Google Research | `https://research.google/blog/rss/` |
+| `meta-ai-blog` | Meta AI | `https://ai.meta.com/blog/rss/` |
+| `microsoft-research-blog` | Microsoft Research | `https://www.microsoft.com/en-us/research/feed/` |
+| `nvidia-technical-blog` | NVIDIA Technical Blog | `https://developer.nvidia.com/blog/feed` |
+| `nvidia-newsroom` | NVIDIA Newsroom | `https://nvidianews.nvidia.com/releases.xml` |
+| `huggingface-blog` | Hugging Face | `https://huggingface.co/blog/feed.xml` |
+| `mistral-news` | Mistral AI | `https://mistral.ai/news/rss.xml` |
+| `cohere-blog` | Cohere | `https://cohere.com/blog/rss.xml` |
+| `ai2-blog` | Allen Institute for AI | `https://allenai.org/blog/rss.xml` |
+| `bair-blog` | Berkeley AI Research | `https://bair.berkeley.edu/blog/feed.xml` |
+| `stanford-hai` | Stanford HAI | `https://hai.stanford.edu/news/rss.xml` |
+| `mit-news-ai` | MIT News - AI | `https://news.mit.edu/rss/topic/artificial-intelligence2` |
+| `apple-ml-research` | Apple Machine Learning Research | `https://machinelearning.apple.com/rss.xml` |
+| `amazon-science` | Amazon Science | `https://www.amazon.science/index.rss` |
+| `ibm-research-blog` | IBM Research | `https://research.ibm.com/blog/rss.xml` |
+| `pytorch-blog` | PyTorch | `https://pytorch.org/blog/feed.xml` |
+| `databricks-blog` | Databricks | `https://www.databricks.com/blog/feed` |
+| `llama-cpp-releases` | llama.cpp releases | `https://github.com/ggml-org/llama.cpp/releases.atom` |
+| `vllm-releases` | vLLM releases | `https://github.com/vllm-project/vllm/releases.atom` |
+| `transformers-releases` | Transformers releases | `https://github.com/huggingface/transformers/releases.atom` |
+
+**Tier 2 - trade press and named analysts (11)**
+
+| id | title | url |
+| --- | --- | --- |
+| `ars-technica-ai` | Ars Technica - AI | `https://arstechnica.com/ai/feed/` |
+| `techcrunch-ai` | TechCrunch - AI | `https://techcrunch.com/category/artificial-intelligence/feed/` |
+| `venturebeat-ai` | VentureBeat - AI | `https://venturebeat.com/category/ai/feed/` |
+| `the-verge-ai` | The Verge - AI | `https://www.theverge.com/rss/ai-artificial-intelligence/index.xml` |
+| `mit-tech-review-ai` | MIT Technology Review - AI | `https://www.technologyreview.com/topic/artificial-intelligence/feed` |
+| `ieee-spectrum-ai` | IEEE Spectrum - AI | `https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss` |
+| `the-register-ai` | The Register - AI/ML | `https://www.theregister.com/software/ai_ml/headlines.atom` |
+| `simon-willison` | Simon Willison | `https://simonwillison.net/atom/everything/` |
+| `the-batch` | The Batch (DeepLearning.AI) | `https://www.deeplearning.ai/the-batch/feed/` |
+| `import-ai` | Import AI | `https://importai.substack.com/feed` |
+| `interconnects` | Interconnects | `https://www.interconnects.ai/feed` |
+
+**Tier 3 - community (2)**
+
+| id | title | url |
+| --- | --- | --- |
+| `localllama` | r/LocalLLaMA | `https://www.reddit.com/r/LocalLLaMA/.rss` |
+| `lobsters-ai` | Lobsters - AI tag | `https://lobste.rs/t/ai.rss` |
+
+**Honesty note (Holy Law #10 applied to a URL).** Not one of these 36 has been fetched - no test may touch the network, and the agent has not verified them out of band. Roughly a third use a well-known stable pattern (the GitHub `releases.atom` feeds, the major trade-press category feeds, `machinelearning.apple.com/rss.xml`); the rest are plausible-but-unconfirmed, and `anthropic-news` is a page rather than a known feed and will likely need replacing. **Row 3's first task is a `backend/utilities/check_feeds.py` run that reports which resolve, parse, and carry recent items** - the list is ratified in shape here and corrected in detail there. Decision 6's quarantine mechanism then handles rot after launch.
+
+**Excluded on purpose:**
+
+- **arXiv category feeds** (`cs.AI`, `cs.CL`, `cs.LG`). Hundreds of items a day with no cross-source repetition, so they rank below the daily cap every day and surface nothing - while counting toward the 25-feed floor. Padding the floor with feeds that never publish an item defeats what the floor is for.
+- **Hacker News.** Already in `config/sources.json` as a salience feed. Decision 3: it is a vote on a URL already in the pool, never a discovery source.
+- **Anything paywalled or login-walled** (`CLAUDE.md` section 0a).
 
 ---
 
@@ -858,8 +923,7 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 | # | Question | Blocks | Needs | Resolution path |
 | --- | --- | --- | --- | --- |
-| 2 | Who reads the digest? If nobody, the eval loop is the product and the digest is a test fixture. | Row 11 | **OWNER** | Changes whether row 11 ships at all. An executing agent cannot answer it. |
-| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **OWNER ratifies** | The agent proposes a tier-1-first list for `ai` and the owner accepts or edits it. Curate `ai` first - most tier-1 primary sources, fewest editorial judgement calls - prove the loop end to end on one vertical, then add one vertical per week under `status: draft` until each clears the floor. |
+| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **OWNER ratifies** | The agent proposes a tier-1-first list for `ai` and the owner accepts or edits it. Curate `ai` first - most tier-1 primary sources, fewest editorial judgement calls - prove the loop end to end on one vertical, then add one vertical per week under `status: draft` until each clears the floor. **A 36-feed `ai` list is drafted and awaiting sign-off (2026-08-21); it is not committed to `config/sources.json` until then.** |
 | 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | agent | `word_count` and `extractiveness` need alert thresholds, not just CSV columns. Fold into row 4 acceptance gates. Feed-level rot - a source that stops publishing rather than one that changes shape - is handled separately by row 3 decision 6. |
 | 4 | Do extremely low-bit (1-2 bit) quantisations change the model fit? Published for several open-weights families; unevaluated here. | Row 7 | agent, then ESCALATE | Research + measure. Andre on whether quality survives, Carmack on whether it fits - both measured, not assumed. See `docs/how-to/set-up-local-inference.md`. |
 
@@ -867,6 +931,7 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 | # | Question | Resolution |
 | --- | --- | --- |
+| 2 | Who reads the digest? If nobody, the eval loop is the product and the digest is a test fixture. | **A general reader, the way a newspaper has one** (owner, 2026-08-21). The question was asked because a digest with no reader would make the dashboard the product; the answer inverts that. Row 11 ships, but as **operator instrumentation** - off the reading path, no design budget, obliged only to be correct - while the digest page carries the design effort (rows 13, 16, 17). The evaluation remains the product in the principle-6 sense: it is what makes the digest worth a stranger's two minutes. Recorded in `docs/concepts/vision.md`. |
 | 6 | `temperature=0, seed=0` is not determinism, and eleven of sixteen drift sources were silent. | **Row 15** (2026-08-21). A `pipeline_fingerprint` stamps every input that can move an output; skip-if-exists becomes skip-if-fingerprint-matches; row 6's oracle is scoped to one runner class; a fingerprint match with unequal output is a recorded `determinism_violation` rather than a build failure. |
 | 1 | Hosted inference (GitHub Models free tier) versus local weights. | **Local weights** (2026-08-21). Settled by contract rather than measurement: CLAUDE.md section 0a makes hosted inference a non-goal anywhere - pipeline, site or browser. On-device inference over committed weights is not hosted inference and is governed by Holy Law #1. |
 | - | Which repo does this live in? Not yen-tamizh - that is a Tamil word game and this violates its CLAUDE.md scope. | **`yen-idhazh`** (2026-08-20). Own repo, own contract, own persona roster. Tamil *idhazh* = journal / magazine. |

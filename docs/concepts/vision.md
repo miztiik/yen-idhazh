@@ -1,6 +1,6 @@
 # Vision
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 
 What yen-idhazh is, what it is not, and the one-sentence product idea every other concept doc serves. This is the top of the concept tier; if a later doc contradicts this page, this page is wrong and gets fixed.
 
@@ -9,6 +9,14 @@ What yen-idhazh is, what it is not, and the one-sentence product idea every othe
 yen-idhazh is a daily **article digest that scores its own work**: a build-time pipeline reads public web articles, summarizes each one with a small open-weights model, measures how faithful the summary is to the source, and publishes both the digest and the scores as static pages.
 
 *idhazh* is Tamil for a journal or magazine. The name is "my journal".
+
+## Who it is for
+
+The digest is for **a general reader**, in the sense a newspaper is: no assumed background, no account, no reason to explain who it is for. The Reader persona is the median non-technical person, not an ML researcher and not the person who built the pipeline.
+
+The eval dashboard is for **the operator**. It is instrumentation, not a reading surface: it sits off the reading path, it earns no design budget, and its only obligation is to be correct.
+
+The two audiences are why the two surfaces are held to different standards, and it is worth being explicit about what does *not* follow from it. The evaluation is still the product in the sense of [principles.md](principles.md) principle 6 - it is what makes the digest worth a stranger's two minutes. What the split settles is who each surface is written for, not which one matters.
 
 ## The shape
 
