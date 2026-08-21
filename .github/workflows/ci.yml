@@ -1,0 +1,55 @@
+name: ci
+
+# Every gate CLAUDE.md section 9 names, on every change. The suite includes the
+# five injection canaries (row 5), so a prompt, sanitizer or contract edit that
+# lets an attack through fails the build rather than shipping.
+#
+# The runner here is the same stock ubuntu-latest the pipeline runs on
+# (Holy Law #2), so a gate that would not fit the pipeline's budget does not
+# fit this one either.
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[dev]"
+
+      - name: Lint
+        run: ruff check .
+
+      - name: Type-check
+        run: mypy
+
+      - name: Tests, including the five injection canaries
+        run: pytest
+
+      # A generated artifact that was hand-edited regenerates to something else.
+      # The suite already asserts this against a temp directory; doing it again
+      # against the working tree catches an exporter that writes in place.
+      - name: Contract drift gate
+        run: |
+          python -m idhazh.contracts.export
+          git diff --exit-code -- schemas/

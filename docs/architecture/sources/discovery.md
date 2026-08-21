@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -79,6 +79,7 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 
 ## See also
 
+- [trust-boundary.md](trust-boundary.md) - what happens to the text once a discovered link is fetched.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Collect stage and the invariants that hold across all stages.
 - [../../concepts/config.md](../../concepts/config.md) - where the feed lists and caps live, and the knob-versus-identifier rule.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contracts these vocabularies are enums in, and the versioning rules.
