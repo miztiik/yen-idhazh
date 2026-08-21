@@ -1,5 +1,366 @@
 {
-  "feeds": [],
+  "feeds": [
+    {
+      "id": "openai-news",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "OpenAI",
+      "url": "https://openai.com/news/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "anthropic-news",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Anthropic",
+      "url": "https://www.anthropic.com/news",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "deepmind-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Google DeepMind",
+      "url": "https://deepmind.google/blog/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "google-research-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Google Research",
+      "url": "https://research.google/blog/rss/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "meta-ai-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Meta AI",
+      "url": "https://ai.meta.com/blog/rss/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "microsoft-research-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Microsoft Research",
+      "url": "https://www.microsoft.com/en-us/research/feed/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "nvidia-technical-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "NVIDIA Technical Blog",
+      "url": "https://developer.nvidia.com/blog/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "nvidia-newsroom",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "NVIDIA Newsroom",
+      "url": "https://nvidianews.nvidia.com/releases.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "huggingface-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Hugging Face",
+      "url": "https://huggingface.co/blog/feed.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "mistral-news",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Mistral AI",
+      "url": "https://mistral.ai/news/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "cohere-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Cohere",
+      "url": "https://cohere.com/blog/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "ai2-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Allen Institute for AI",
+      "url": "https://allenai.org/blog/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "bair-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Berkeley AI Research",
+      "url": "https://bair.berkeley.edu/blog/feed.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "stanford-hai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Stanford HAI",
+      "url": "https://hai.stanford.edu/news/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "mit-news-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "MIT News - Artificial Intelligence",
+      "url": "https://news.mit.edu/rss/topic/artificial-intelligence2",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "apple-ml-research",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Apple Machine Learning Research",
+      "url": "https://machinelearning.apple.com/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "amazon-science",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Amazon Science",
+      "url": "https://www.amazon.science/index.rss",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "ibm-research-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "IBM Research",
+      "url": "https://research.ibm.com/blog/rss.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "pytorch-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "PyTorch",
+      "url": "https://pytorch.org/blog/feed.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "databricks-blog",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Databricks",
+      "url": "https://www.databricks.com/blog/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "llama-cpp-releases",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "llama.cpp releases",
+      "url": "https://github.com/ggml-org/llama.cpp/releases.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "vllm-releases",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "vLLM releases",
+      "url": "https://github.com/vllm-project/vllm/releases.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "transformers-releases",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Transformers releases",
+      "url": "https://github.com/huggingface/transformers/releases.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "ars-technica-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Ars Technica - AI",
+      "url": "https://arstechnica.com/ai/feed/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "techcrunch-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "TechCrunch - AI",
+      "url": "https://techcrunch.com/category/artificial-intelligence/feed/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "venturebeat-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "VentureBeat - AI",
+      "url": "https://venturebeat.com/category/ai/feed/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "the-verge-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "The Verge - AI",
+      "url": "https://www.theverge.com/rss/ai-artificial-intelligence/index.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "mit-tech-review-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "MIT Technology Review - AI",
+      "url": "https://www.technologyreview.com/topic/artificial-intelligence/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "ieee-spectrum-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "IEEE Spectrum - AI",
+      "url": "https://spectrum.ieee.org/feeds/topic/artificial-intelligence.rss",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "the-register-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "The Register - AI/ML",
+      "url": "https://www.theregister.com/software/ai_ml/headlines.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "simon-willison",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Simon Willison",
+      "url": "https://simonwillison.net/atom/everything/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "the-batch",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "The Batch",
+      "url": "https://www.deeplearning.ai/the-batch/feed/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "import-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Import AI",
+      "url": "https://importai.substack.com/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "interconnects",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Interconnects",
+      "url": "https://www.interconnects.ai/feed",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "localllama",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "r/LocalLLaMA",
+      "url": "https://www.reddit.com/r/LocalLLaMA/.rss",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "lobsters-ai",
+      "retired_on": null,
+      "status": "active",
+      "tier": 3,
+      "title": "Lobsters - AI",
+      "url": "https://lobste.rs/t/ai.rss",
+      "vertical": "ai",
+      "weight": 1.0
+    }
+  ],
   "salience": [
     {
       "id": "hn-frontpage",

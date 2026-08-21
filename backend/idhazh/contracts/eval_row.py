@@ -48,6 +48,19 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-21T03:00",
+            change=(
+                "Added unsupported_numbers, hedge_dropped, extraction_suspect, "
+                "verbatim_run and source_seen_word_count."
+            ),
+            why=(
+                "Faithfulness cannot see a wrong number, a rumour asserted as fact, or a "
+                "summary of navigation chrome - it scores all three generously. The ledger "
+                "is still empty, so these cost a changelog entry today and a migration ever "
+                "after."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21T02:00",
             change="Added pipeline_fingerprint, output_digest and determinism_violation.",
             why=(
@@ -82,15 +95,45 @@ class EvalRow(Contract):
     coverage: Score = Field(
         ge=0.0,
         le=1.0,
-        description="Named-entity and numeric survival. The instrument for selective omission.",
+        description="Survival of the lead's entities and numbers. The instrument for omission.",
     )
-    compression: Score = Field(ge=0.0, description="Summary length as a fraction of source length.")
+    compression: Score = Field(
+        ge=0.0,
+        description=(
+            "Summary length over source length. Recorded, never flagged: at a fixed output "
+            "budget this measures the article's length, not the summary's quality."
+        ),
+    )
     extractiveness: Score = Field(
-        ge=0.0, le=1.0, description="Verbatim overlap. High here plus high hhem means copying."
+        ge=0.0,
+        le=1.0,
+        description="Share of the summary's 4-grams found verbatim in the source.",
+    )
+    verbatim_run: Score = Field(
+        default=0.0,
+        ge=0.0,
+        le=1.0,
+        description="Longest unbroken copied stretch. This is the one that names copying.",
+    )
+    unsupported_numbers: int = Field(
+        default=0,
+        ge=0,
+        description="Numbers asserted by the summary that appear nowhere in the full source.",
+    )
+    hedge_dropped: bool = Field(
+        default=False,
+        description="The source hedged and the summary asserted. A rumour became a fact.",
+    )
+    extraction_suspect: bool = Field(
+        default=False,
+        description="The text looks like page furniture. A faithful summary of chrome scores high.",
     )
     band: ConfidenceBand
 
-    source_word_count: int = Field(ge=0)
+    source_word_count: int = Field(ge=0, description="The full article.")
+    source_seen_word_count: int = Field(
+        default=0, ge=0, description="What the model actually got, after truncation."
+    )
     summary_word_count: int = Field(ge=0)
     pipeline_fingerprint: Sha256
     output_digest: Sha256
@@ -98,7 +141,13 @@ class EvalRow(Contract):
         default=False,
         description="Identical inputs, different words. Counted and published, never fatal.",
     )
-    scorer_version: str = Field(min_length=1)
+    scorer_version: str = Field(
+        min_length=1,
+        description=(
+            "Derived, never hand-typed: the scorer, its weights, the tagger and the band "
+            "thresholds, spelled so a row still explains itself years later."
+        ),
+    )
     scored_at: Timestamp
 
     @model_validator(mode="after")

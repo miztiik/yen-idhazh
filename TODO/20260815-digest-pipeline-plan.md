@@ -134,8 +134,8 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Contracts, schemas and repo scaffold | - | A | DONE | main | direct | - |
 | 2 | Measurement harness: throughput + corpus shape | - | A | HARNESS-LANDED (ledger at `docs/reference/measurements.md`; runner run, corpus and image still unmeasured) | main | direct | - |
-| 3 | Source discovery, fetch + extract | 1 | B | PENDING | - | - | - |
-| 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | PENDING | - | - | - |
+| 3 | Source discovery, fetch + extract | 1 | B | IN PROGRESS (feeds ratified 2026-08-21; discover/fetch/extract pending) | main | direct | - |
+| 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | IN PROGRESS (contracts + model-free metrics landed; HHEM pending) | main | direct | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
 | 15 | Pipeline fingerprint contract | 1 | B | DONE | main | direct | - |
 | 6 | Summarize worker | 1, 2, 5, 15 | C | PENDING | - | - | - |
@@ -341,9 +341,9 @@ Derived per-article seconds (best / typical / worst):
 
 One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `energy` + `business-economy`, lenses `ai-roi` + `markets`, events `deal` + `capex`, entity `nvidia`: six index entries, one fetch, one summary. That is the whole argument for lenses over verticals.
 
-### 3.2 Proposed `ai` feed list (drafted 2026-08-21, AWAITING OWNER SIGN-OFF)
+### 3.2 Ratified `ai` feed list (owner sign-off 2026-08-21)
 
-36 feeds against a floor of 25, so up to 11 may fail verification and the vertical still renders. **Not written to `config/sources.json` until ratified.**
+36 feeds against a floor of 25, **written to `config/sources.json`**. Up to eleven may fail verification and the vertical still renders.
 
 **Every choice here is reversible in one field, which is why sign-off is low-stakes.** Adding a feed is a one-object append. Removing one is decision 7's soft path - drop `weight` to 0, observe a week, then set `status: retired` with `retired_on`, which keeps the id alive so payloads written under it still validate (decision 4). The vertical stays `status: draft` and renders nothing until it clears its floor, so a wrong list costs nothing a reader can see.
 
@@ -429,6 +429,52 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | 3 | 3 spot-checks per week | ~2% sampling cannot detect a 5% defect rate inside a month. | Fowler |
 | 4 | Summarize twice and compare (any variant) | At `temperature=0, seed=0` a second identical pass is a no-op by construction. Sampling at temp>0 measures stability, not correctness. Two prompts doubles cost with no evidence of prompt fragility. Summarize-then-verify is LLM-as-judge with extra steps. Cross-model (8B vs 4B) disagreement is the only variant with real signal - it proxies selective omission - but `coverage` targets that blind spot directly at ~0 cost, so disagreement is a more expensive route to something already measured. Spend the compute on row 12 instead. | Fowler |
 | 5 | Best-of-N with HHEM as the selector | Goodharting, and structurally worse than it looks: HHEM is the *regression detector*. Optimizing against it at inference time destroys its value as a monitor. A metric cannot be both the selector and the alarm. | Fowler |
+
+### 4.1 Andre consult (2026-08-21) - the row as written was wrong in five places
+
+Required by the section 0 roster note. Andre owns eval design and metric choice; the verdicts below supersede the Fowler attributions above where they conflict.
+
+| Item | Verdict | Reason |
+| --- | --- | --- |
+| HHEM-2.1-Open | KEEP | Right instrument class - a purpose-built cross-encoder satisfies the LLM-as-judge ban directly rather than by argument. Two conditions: pin `trust_remote_code` to an immutable revision and verify the weight digest (it is remote code execution on the build machine otherwise), and derive `scorer_version` rather than typing it. |
+| Dual scoring | KEEP | The best decision in the row. But `hhem_full` on a long article needs chunking, and it must aggregate **max-over-chunks, never mean** - a mean drives the score down as the article lengthens, which manufactures a large delta on exactly the longest articles and inverts the flag. |
+| The 0.10 delta threshold | DEFER | Arbitrary, and there is no honest way to calibrate it before real rows exist (an untruncated article gives delta exactly 0, so there is no noise floor to measure). Record the raw delta; branch on nothing until ~200 rows. |
+| 20 hand-written reference summaries | **DELETE** | No oracle in rows 4, 6, 7 or 12 reads a reference - HHEM and every counterweight are reference-free. The most expensive line item in the row, and no code would have consumed it. |
+| Retry on Qwen3-4B | **DELETE** | The 4B carries the worse base hallucination rate (5.7% vs 4.8%, row 6's own table). Worse, a retry writes two rows for one article across two models, which corrupts the ledger's one honest question and would make row 12 alarm on its own retry policy. Publish marked. The retry lever becomes a row 7 experiment; the cheapest candidate is `max_output_tokens` 250 -> 120 on the same model. |
+| `coverage` as entity survival | **REPLACE** | Lands near the same low value for a good summary and a bad one - a constant column that looks like a measurement. Replaced by lead-anchored recall. |
+| `compression` 0.03-0.20 band | **DELETE the flag, keep the column** | A length detector: at a fixed output budget it fires on roughly a quarter of the corpus for reasons that are purely article length. Replaced by absolute summary-word bounds. |
+| LCS extractiveness | **REPLACE** | Subsequence matching permits gaps, so function words match in order almost anywhere. Replaced by 4-gram precision plus the longest unbroken run. |
+| `unsupported_numbers` | **ADD** | A wrong number is the most damaging defect a news summary can carry, and every metric previously specified is blind to it - they see omission, never invention. |
+| `hedge_dropped` | **ADD** | A rumour asserted as fact. HHEM scores it generously because the entity and the relation both survive; only the uncertainty went missing. |
+| `source_seen_word_count` | **ADD** | Otherwise `compression` silently means two different things depending on whether the item was truncated. |
+| Spot-check sampler | **CHANGE to stratified** | Seeded-random over all items spends most checks on the band nobody is worried about, and can go a month without labelling a single low-band item. |
+| Bands 0.80 / 0.50 | KEEP, mark provisional | 0.50 has provenance (HHEM's own decision boundary); 0.80 is taste. Re-tune against the human-judged defect rate in the high band, not the score histogram - and not before ~120 labels, because 40 cannot estimate a 5% rate. |
+
+**Open question 3 is split by this consult.** Per-item extraction floors belong to row 4 - `min_source_words` (below it the item is not summarized at all) and a cross-page boilerplate ratio feeding `extraction_suspect`. The trend alerts belong to row 12 and must be **per-domain against that domain's own trailing median**: a global 10% month-over-month mean cannot fire for weeks when a single site breaks. The alert that names the failure directly is a domain's faithfulness staying flat or rising *while* its median source word count falls sharply.
+
+### 4.2 Owner rulings (2026-08-21)
+
+1. **Article bodies are never committed to the repo. Only summaries, and the source link for citation.** Absolute. This kills the row's original acceptance gate ("20 articles committed to `tests/fixtures/golden/`") and also kills Andre's redistributable-corpus workaround.
+2. **No content digests, no fixed-set fingerprints.** The URL is already unique and is the reference. Andre's URL-plus-content-digest golden corpus is dropped.
+3. **Sampled evaluation was proposed and withdrawn** after Andre's REJECT (see 4.3). The ledger is a census over items whose inputs changed.
+
+### 4.3 Why the eval is a census (2026-08-21)
+
+The owner proposed scoring on a ~3-day interval, sampled from one or two copyright-safe sources. Andre returned REJECT. The reasoning now lives in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) under "Why this is a census and not a sample"; the three load-bearing points:
+
+- **A per-item claim to a reader cannot be backed by a sample.** Every item carries a confidence signal; if most items are unscored, the only options are to render "not measured" as "fine", caveat the whole page, or delete the signal.
+- **Sampling by source is the one axis guaranteed to bias the result**, and it disarms specific instruments - `hedge_dropped` would report 0 forever on institutional prose, and extraction rot concentrates on exactly the messy sources a clean-source sample never fetches.
+- **Copyright does not constrain scoring at all.** Scoring runs in-process on text already in memory and publishes nothing; the pipeline already performs the strictly more aggressive act of generating a published derivative. The constraint applies only to committed bytes, which ruling 1 already forbids.
+
+The economics are settled by measurement rather than preference: the model-free counterweights are a rounding error, and if the faithfulness scorer's measured share of per-item wall-clock exceeds a stated fraction of the budget, **it alone** is sampled - stratified across source tiers, within every day, deterministically selected, recorded as a field on a written row and never as an absent one.
+
+### 4.4 Landed 2026-08-21
+
+- `EvalRow` gains `unsupported_numbers`, `hedge_dropped`, `extraction_suspect`, `verbatim_run`, `source_seen_word_count`; `coverage` and `extractiveness` are redefined; `scorer_version` is derived. Taken now because the ledger has never been written, so it cost one changelog entry rather than a read-side migration.
+- `AppConfig` drops `evaluation.compression_min/max` for `summary_words_min/max`, and gains `extract.min_source_words` and `extract.boilerplate_ratio_max`.
+- `backend/idhazh/evals/metrics.py` implements every model-free counterweight, with tests written against the defect each one exists to catch and a counter-test that a metric separating nothing fails.
+- **One recorded deviation from the consult:** entity detection is a capitalisation rule over the document rather than spaCy. Andre preferred the mature library; the dependency (a package plus a model download on every CI run) was judged not to pay for itself for one signal while the metric is unproven. The rule self-calibrates - a single capitalised word opening a sentence counts only if the same token appears mid-sentence somewhere - and swapping in spaCy is a one-function change behind the same signature. Revisit if lead coverage proves noisy against real articles.
+- Still pending in this row: `hhem.py` (pinned revision, chunked, max-over-chunks), the HHEM timing measurement, `writer.py` plus `evals/scores.csv`, the stratified spot-check sampler, and the fixture corpus under rulings 1 and 2.
 
 ---
 
@@ -923,8 +969,8 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 | # | Question | Blocks | Needs | Resolution path |
 | --- | --- | --- | --- | --- |
-| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **OWNER ratifies** | The agent proposes a tier-1-first list for `ai` and the owner accepts or edits it. Curate `ai` first - most tier-1 primary sources, fewest editorial judgement calls - prove the loop end to end on one vertical, then add one vertical per week under `status: draft` until each clears the floor. **A 36-feed `ai` list is drafted and awaiting sign-off (2026-08-21); it is not committed to `config/sources.json` until then.** |
-| 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | agent | `word_count` and `extractiveness` need alert thresholds, not just CSV columns. Fold into row 4 acceptance gates. Feed-level rot - a source that stops publishing rather than one that changes shape - is handled separately by row 3 decision 6. |
+| 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **OWNER ratifies** | **RESOLVED 2026-08-21.** The 36-feed `ai` list in section 3.2 is ratified and written to `config/sources.json`. The vertical stays `status: draft` until a feed-verification run confirms it clears the floor. Remaining verticals follow one per week under `draft`. |
+| 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | agent | **RESOLVED 2026-08-21** by the row 4 Andre consult (section 4.1): per-item floors to row 4, per-domain trend alerts to row 12. |
 | 4 | Do extremely low-bit (1-2 bit) quantisations change the model fit? Published for several open-weights families; unevaluated here. | Row 7 | agent, then ESCALATE | Research + measure. Andre on whether quality survives, Carmack on whether it fits - both measured, not assumed. See `docs/how-to/set-up-local-inference.md`. |
 
 ### RESOLVED

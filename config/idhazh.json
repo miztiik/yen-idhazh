@@ -20,10 +20,10 @@
   "evaluation": {
     "band_high_min": 0.8,
     "band_medium_min": 0.5,
-    "compression_max": 0.2,
-    "compression_min": 0.03,
     "golden_set_size": 20,
     "spot_checks_per_week": 10,
+    "summary_words_max": 200,
+    "summary_words_min": 60,
     "truncation_gap_max": 0.1
   },
   "extract": {

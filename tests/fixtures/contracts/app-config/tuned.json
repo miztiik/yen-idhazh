@@ -20,17 +20,19 @@
   "evaluation": {
     "band_high_min": 0.85,
     "band_medium_min": 0.55,
-    "compression_max": 0.18,
-    "compression_min": 0.04,
     "golden_set_size": 40,
     "spot_checks_per_week": 15,
+    "summary_words_max": 180,
+    "summary_words_min": 70,
     "truncation_gap_max": 0.08
   },
   "extract": {
     "backoff_initial_seconds": 2.0,
     "backoff_multiplier": 3.0,
+    "boilerplate_ratio_max": 0.35,
     "max_body_bytes": 1000000,
     "max_retries": 2,
+    "min_source_words": 150,
     "request_timeout_seconds": 15.0,
     "truncation_cap_tokens": 4000,
     "user_agent": "yen-idhazh-test/1.0 (+https://example.org/contact)"
