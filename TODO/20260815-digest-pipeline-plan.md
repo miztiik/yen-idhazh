@@ -147,7 +147,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
 | 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | LANDED (plan -> sharded workers -> assemble; visual routing still absent) | main | direct | - |
 | 13 | Published layout, date routing and the frontend shell | 1, 10 | G | LANDED (prerendered, themed, browser-verified) | main | direct | - |
-| 14 | Retention job + site-budget alarm | 13 | H | PENDING | - | - | - |
+| 14 | Retention job + site-budget alarm | 13 | H | LANDED (alarm on; prune disabled, dry-run, fused) | main | direct | - |
 | 16 | Read-state, new-arrivals block and pagination | 13 | H | LANDED (reader-independence oracle asserted in a browser) | main | direct | - |
 | 17 | Icon sprite + registry allowlist | 13 | H | DESCOPED (build-time monogram; no per-publisher artwork) | main | direct | - |
 | 18 | On-device assist enabler (no feature) | 13 | H | PENDING | - | - | - |
