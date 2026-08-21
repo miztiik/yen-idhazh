@@ -10,6 +10,7 @@
           "sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"
         }
       ],
+      "determinism_violations": 0,
       "items_failed": 1,
       "items_planned": 3,
       "items_skipped": 0,
@@ -38,6 +39,9 @@
       ],
       "n": 1,
       "note": null,
+      "pipeline_fingerprints": [
+        "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
+      ],
       "run_id": "2026-08-21-1",
       "runner": "github-hosted ubuntu-latest, 4 vCPU, 16 GB",
       "site_bytes": 1048576,
@@ -75,6 +79,7 @@
           "sha256": "f6bc768f3cd372eb174e921f2014a911d0d1f5569eba5fd7d9566bf3cd72ba04"
         }
       ],
+      "determinism_violations": 1,
       "items_failed": 0,
       "items_planned": 3,
       "items_skipped": 2,
@@ -92,7 +97,10 @@
         }
       ],
       "n": 2,
-      "note": "Evening run. Two items were already present and did no work.",
+      "note": "Evening run. Two items matched their stamp and did no work; the third was forced and returned different words under the same stamp.",
+      "pipeline_fingerprints": [
+        "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
+      ],
       "run_id": "2026-08-21-2",
       "runner": "github-hosted ubuntu-latest, 4 vCPU, 16 GB",
       "site_bytes": 1052672,
@@ -116,5 +124,5 @@
       ]
     }
   ],
-  "version": "2026-08-21"
+  "version": "2026-08-21T02:00"
 }

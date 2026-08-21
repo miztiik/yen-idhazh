@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-21
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -50,6 +50,7 @@ Three invariants hold regardless of how the batches are sized:
 
 - **A worker failure is contained to its batch**, and does not cancel its siblings.
 - **The batch size is a measured decision, not a preference.** It is set by how long loading the model takes relative to how long an item takes - if loading dominates, the batch is too small. Per-item atomicity survives inside a batch through the temp-then-rename write plus a fingerprint comparison against the run index.
+- **An item whose fingerprint already matches does no work and writes no eval row.** A re-run that changed nothing measured nothing. What the fingerprint covers, and what happens when it matches but the words differ, is [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
 
 ## What never happens in the loop
@@ -69,4 +70,5 @@ Three invariants hold regardless of how the batches are sized:
 - [telemetry.md](telemetry.md) - the event envelope each stage emits and logs.
 - [principles.md](principles.md) - the beliefs behind the invariants on this page.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the payload contracts.
+- [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - what makes "this re-run changed nothing" checkable.
 - [../../CLAUDE.md](../../CLAUDE.md) - the contract, including the layer rules for stages.

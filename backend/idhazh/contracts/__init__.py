@@ -26,6 +26,7 @@ from idhazh.contracts.base import (
     Contract,
     Model,
     canonical_json,
+    derive_output_digest,
     derive_url_key,
 )
 from idhazh.contracts.digest_day import (
@@ -36,6 +37,7 @@ from idhazh.contracts.digest_day import (
     DigestVisual,
 )
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
@@ -85,6 +87,7 @@ __all__ = [
     "EventType",
     "ExtractConfig",
     "FeedDef",
+    "FingerprintRow",
     "InferenceConfig",
     "LensDef",
     "LensId",
@@ -97,6 +100,7 @@ __all__ = [
     "ModelRole",
     "ModelUse",
     "ModelsConfig",
+    "PipelineInputs",
     "RetentionConfig",
     "Route",
     "RunConfig",
@@ -117,5 +121,6 @@ __all__ = [
     "VisualState",
     "Watchlist",
     "canonical_json",
+    "derive_output_digest",
     "derive_url_key",
 ]

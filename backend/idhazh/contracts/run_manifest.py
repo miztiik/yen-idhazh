@@ -92,6 +92,15 @@ class RunRecord(Model):
     items_skipped: int = Field(default=0, ge=0)
     verticals: list[VerticalCount] = Field(default_factory=list)
 
+    pipeline_fingerprints: list[Sha256] = Field(
+        default_factory=list, description="The distinct stamps this run wrote under."
+    )
+    determinism_violations: int = Field(
+        default=0,
+        ge=0,
+        description="Recorded, not raised. A gate that fires on a CPU class gets switched off.",
+    )
+
     site_bytes: int = Field(ge=0)
     site_files: int = Field(ge=0)
     config_digests: list[ConfigDigest] = Field(default_factory=list)
@@ -112,6 +121,11 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-21T02:00",
+            change="Added optional pipeline_fingerprints and determinism_violations to a run.",
+            why="A run that cannot say which stamps it wrote under cannot be audited later.",
+        ),
         ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: append-only runs for one date, with counts and site size.",

@@ -4,12 +4,15 @@
   "compression": 0.04,
   "coverage": 0.52,
   "date": "2026-08-21",
+  "determinism_violation": false,
   "extractiveness": 0.33,
   "hhem": 0.94,
   "hhem_delta": 0.33,
   "hhem_full": 0.61,
   "item_id": "energy-01",
   "model_id": "qwen3-8b-q4-k-m",
+  "output_digest": "8254cc9b9d84471f2b0bbc98ea4cd08ee7351c7be86704da9b2f96cfb7b7fb78",
+  "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "run_id": "2026-08-21-1",
   "scored_at": "2026-08-21T06:19:41Z",
   "scorer_version": "hhem-2.1-open",
@@ -19,6 +22,6 @@
   "title": "Example Grid orders four small modular reactors",
   "truncation_flagged": true,
   "url_key": "36b42cd95d6ddd2f9b44509cc35014e29ab3f933010852380f9b5b6f78b8dd90",
-  "version": "2026-08-21",
+  "version": "2026-08-21T02:00",
   "vertical": "energy"
 }

@@ -1,0 +1,160 @@
+{
+  "$defs": {
+    "PipelineInputs": {
+      "additionalProperties": false,
+      "description": "Every input that can move an output, and nothing that cannot.\n\n`host_cpu` is deliberately absent: it is the one field that explains a\ndeterminism violation, and including it would make every runner a different\nfingerprint, which would hide the violation it exists to expose.",
+      "properties": {
+        "chat_template_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Chat Template Sha256",
+          "type": "string"
+        },
+        "extractor_version": {
+          "minLength": 1,
+          "title": "Extractor Version",
+          "type": "string"
+        },
+        "model_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Model Sha256",
+          "type": "string"
+        },
+        "n_batch": {
+          "minimum": 1,
+          "title": "N Batch",
+          "type": "integer"
+        },
+        "n_ctx": {
+          "minimum": 1,
+          "title": "N Ctx",
+          "type": "integer"
+        },
+        "n_threads": {
+          "minimum": 1,
+          "title": "N Threads",
+          "type": "integer"
+        },
+        "n_ubatch": {
+          "minimum": 1,
+          "title": "N Ubatch",
+          "type": "integer"
+        },
+        "output_schema_sha256": {
+          "description": "The constrained-decoding schema. Its shape is the only guard on the output.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Schema Sha256",
+          "type": "string"
+        },
+        "prompt_sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Prompt Sha256",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "runner_class": {
+          "minLength": 1,
+          "title": "Runner Class",
+          "type": "string"
+        },
+        "runtime_build": {
+          "description": "The llama.cpp build the weights were decoded by.",
+          "minLength": 1,
+          "title": "Runtime Build",
+          "type": "string"
+        },
+        "sampling": {
+          "description": "One canonical spelling of the decoding parameters.",
+          "minLength": 1,
+          "title": "Sampling",
+          "type": "string"
+        },
+        "sanitizer_version": {
+          "minLength": 1,
+          "title": "Sanitizer Version",
+          "type": "string"
+        },
+        "truncation_cap_tokens": {
+          "minimum": 1,
+          "title": "Truncation Cap Tokens",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "model_sha256",
+        "quantisation",
+        "runtime_build",
+        "chat_template_sha256",
+        "prompt_sha256",
+        "output_schema_sha256",
+        "truncation_cap_tokens",
+        "sampling",
+        "n_ctx",
+        "n_batch",
+        "n_ubatch",
+        "n_threads",
+        "runner_class",
+        "extractor_version",
+        "sanitizer_version"
+      ],
+      "title": "PipelineInputs",
+      "type": "object"
+    }
+  },
+  "$id": "fingerprint-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the stamp, the inputs it digests, and the host as diagnostic.",
+      "version": "2026-08-21",
+      "why": "A fingerprint nobody can expand is meaningless hex three years from now."
+    }
+  ],
+  "description": "One row of `evals/fingerprints.csv`, appended the first time a stamp is seen.",
+  "properties": {
+    "first_seen_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "First Seen At",
+      "type": "string"
+    },
+    "first_seen_run": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "First Seen Run",
+      "type": "string"
+    },
+    "host_cpu": {
+      "description": "Diagnostic only. Excluded from the digest by construction, not by filter.",
+      "minLength": 1,
+      "title": "Host Cpu",
+      "type": "string"
+    },
+    "inputs": {
+      "$ref": "#/$defs/PipelineInputs"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-21",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "pipeline_fingerprint",
+    "first_seen_run",
+    "first_seen_at",
+    "inputs",
+    "host_cpu"
+  ],
+  "title": "FingerprintRow",
+  "type": "object",
+  "version": "2026-08-21"
+}

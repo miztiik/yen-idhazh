@@ -32,7 +32,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `schemas/<name>.schema.json` | Generated. One flat file per model. |
 | `frontend/src/contracts/` | Generated TypeScript types and runtime validators. |
 
-The ten shapes, and where each one lives once written:
+The eleven shapes, and where each one lives once written:
 
 | Model | Schema | Persisted as |
 | --- | --- | --- |
@@ -44,6 +44,7 @@ The ten shapes, and where each one lives once written:
 | `Summary` | `summary` | one file per item under the run directory |
 | `Route` | `route` | one file per item under the run directory |
 | `EvalRow` | `eval-row` | one appended row of `evals/scores.csv` |
+| `FingerprintRow` | `fingerprint-row` | one appended row of `evals/fingerprints.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 
@@ -77,6 +78,8 @@ Where a field is a function of other fields on the same payload, the model recom
 
 - `url_key` is the sha256 of `canonical_url`. It is item identity for dedupe and skip, it is a **field and never a path segment**, and a payload that carries someone else's key does not load.
 - `hhem_delta` is `hhem - hhem_full`. The truncation signal cannot be silently wrong.
+- `output_digest` is the sha256 of the summary and its key points - the published words only, so a re-run that produced the same text in a different wall-clock does not read as drift.
+- `pipeline_fingerprint` is the sha256 of the `PipelineInputs` model's own serialization, so a ledger row cannot claim a stamp its components do not produce. See [determinism.md](determinism.md).
 
 The alternative - trusting the stored value - makes a stale derived field indistinguishable from a correct one, and the mismatch surfaces months later as a dedupe that quietly stopped working.
 
@@ -115,6 +118,7 @@ The shapes this subsystem owns, from `CLAUDE.md` section 11:
 | --- | --- | --- |
 | **Stage payloads** | Each pipeline stage | The next stage, and any re-run |
 | **The eval ledger** | The evaluate stage, appended | The dashboard, and any trend query |
+| **The fingerprint ledger** | Any stage writing under a new stamp, appended | A later run deciding whether to skip, and anyone auditing drift |
 | **The run manifest** | The assemble stage | A later run, and anyone auditing what produced what |
 | **Config** | A human | Both `backend/` and, where a surface needs it, `frontend/` |
 | **Published payloads** | The assemble stage | The published site |
@@ -137,6 +141,7 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 
 ## See also
 
+- [determinism.md](determinism.md) - the pipeline fingerprint, its ledger, and the skip rule built on it.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, one of these shapes.

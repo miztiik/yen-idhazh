@@ -12,6 +12,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
+from collections.abc import Sequence
 from typing import Annotated, Any, ClassVar, Final, Self
 
 from pydantic import BaseModel, ConfigDict, StringConstraints, model_validator
@@ -74,6 +75,17 @@ def canonical_json(payload: Any) -> str:
     reshuffled dict.
     """
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+
+
+def derive_output_digest(summary: str | None, key_points: Sequence[str]) -> str:
+    """What a later run compares against to detect a determinism violation.
+
+    Digests the published words only. A re-run that produced the same text in a
+    different wall-clock or token count did not drift, and must not read as if
+    it had.
+    """
+    payload = {"key_points": list(key_points), "summary": summary}
+    return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 
 class Model(BaseModel):

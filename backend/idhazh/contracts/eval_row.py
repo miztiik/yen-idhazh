@@ -23,6 +23,7 @@ from idhazh.contracts.base import (
     DateStamp,
     ItemId,
     RunId,
+    Sha256,
     Slug,
     Timestamp,
     Url,
@@ -46,6 +47,15 @@ class EvalRow(Contract):
 
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-21T02:00",
+            change="Added pipeline_fingerprint, output_digest and determinism_violation.",
+            why=(
+                "The ledger is the only committed record that survives a run, so it is the "
+                "only place a later run can detect that identical inputs produced different "
+                "words. No payload predates this - the ledger has never been written."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: dual faithfulness scores, the counterweights, and the band.",
@@ -82,6 +92,12 @@ class EvalRow(Contract):
 
     source_word_count: int = Field(ge=0)
     summary_word_count: int = Field(ge=0)
+    pipeline_fingerprint: Sha256
+    output_digest: Sha256
+    determinism_violation: bool = Field(
+        default=False,
+        description="Identical inputs, different words. Counted and published, never fatal.",
+    )
     scorer_version: str = Field(min_length=1)
     scored_at: Timestamp
 
