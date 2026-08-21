@@ -46,6 +46,28 @@ Ranking is deterministic and loads no model: **tier weight, multiplied by how ma
 
 The consequence worth stating plainly: **a link aggregator is a vote, not a source.** It contributes rank to a URL already in the pool. It never discovers, because a site with no subject taxonomy cannot be asked for a subject.
 
+## One address per story
+
+Deduplication is the whole point of collecting from many feeds, and it only works if the same article arriving three ways produces one address. Canonicalisation is therefore a load-bearing step, not tidying:
+
+- The scheme and host are lowercased, a default port is dropped, and a leading `www.` goes. These are the same server.
+- Campaign and click identifiers are stripped. They differ per referrer for the same article, so leaving them in means one story arrives as several.
+- The fragment goes; a trailing slash goes from a non-root path.
+- **What remains of the query is kept and sorted.** Stripping every parameter would be simpler and wrong: on plenty of sites the query *is* the article.
+
+Identity is the digest of the canonical address, and it lives in a payload field - never in a path, a filename or a URL. Paths are for humans and for globs.
+
+## Ranking is arithmetic, not judgement
+
+The day is decided before any model loads, by a score with four terms: the authority of the source, multiplied by how widely the story is carried, plus a bonus for naming a watchlist entity, plus a bonus for an aggregator vote.
+
+Two details in that sentence carry weight:
+
+- **Authority is the best tier that carried the story, not the average.** One institution saying it makes it true however many aggregators repeated it, and averaging would let volume dilute provenance.
+- **Ties break on the canonical address.** Without a deterministic tie-break, two runs over identical feeds can publish different orders, and the order is part of what a shared link shows.
+
+The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
+
 ## Changing the source set without breaking history
 
 A vertical will be retired. A feed will die quietly when a site is redesigned. Both are normal, and both are handled in config rather than in code.

@@ -48,6 +48,7 @@ from idhazh.contracts.run_manifest import (
     RunStatus,
     VerticalCount,
 )
+from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import (
@@ -101,10 +102,12 @@ __all__ = [
     "ModelUse",
     "ModelsConfig",
     "PipelineInputs",
+    "PlannedItem",
     "RetentionConfig",
     "Route",
     "RunConfig",
     "RunManifest",
+    "RunPlan",
     "RunRecord",
     "RunStatus",
     "SalienceFeedDef",
@@ -117,6 +120,7 @@ __all__ = [
     "TierWeights",
     "VerticalCount",
     "VerticalDef",
+    "VerticalPlan",
     "VisualKind",
     "VisualState",
     "Watchlist",
