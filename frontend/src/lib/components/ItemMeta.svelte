@@ -9,10 +9,15 @@
 	import { shortDate } from '$lib/format';
 	import type { DigestItem } from '$lib/payload/types';
 	import ConfidenceChip from './ConfidenceChip.svelte';
+	import ReadAloud from './ReadAloud.svelte';
 	import SourceLink from './SourceLink.svelte';
 	import SourceMark from './SourceMark.svelte';
 
-	let { item, showMark = true }: { item: DigestItem; showMark?: boolean } = $props();
+	let {
+		item,
+		showMark = true,
+		onRead
+	}: { item: DigestItem; showMark?: boolean; onRead?: () => void } = $props();
 	const kindWorthSaying = $derived(KIND_WORTH_SAYING.includes(item.source_kind));
 </script>
 
@@ -40,5 +45,7 @@
 		<span class="text-text-tertiary">Source was cut short</span>
 	{/if}
 
-	<SourceLink url={item.source_url} />
+	<ReadAloud title={item.title} summary={item.summary} />
+
+	<SourceLink url={item.source_url} {onRead} />
 </div>
