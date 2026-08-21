@@ -90,20 +90,6 @@
           "title": "Band Medium Min",
           "type": "number"
         },
-        "compression_max": {
-          "default": 0.2,
-          "exclusiveMinimum": 0.0,
-          "maximum": 1.0,
-          "title": "Compression Max",
-          "type": "number"
-        },
-        "compression_min": {
-          "default": 0.03,
-          "exclusiveMinimum": 0.0,
-          "maximum": 1.0,
-          "title": "Compression Min",
-          "type": "number"
-        },
         "golden_set_size": {
           "default": 20,
           "minimum": 1,
@@ -114,6 +100,20 @@
           "default": 10,
           "minimum": 0,
           "title": "Spot Checks Per Week",
+          "type": "integer"
+        },
+        "summary_words_max": {
+          "default": 200,
+          "description": "Above this it is a copy. Absolute, not a ratio.",
+          "minimum": 1,
+          "title": "Summary Words Max",
+          "type": "integer"
+        },
+        "summary_words_min": {
+          "default": 60,
+          "description": "Below this the summary is a headline, not a summary.",
+          "minimum": 1,
+          "title": "Summary Words Min",
           "type": "integer"
         },
         "truncation_gap_max": {
@@ -143,6 +143,14 @@
           "title": "Backoff Multiplier",
           "type": "number"
         },
+        "boilerplate_ratio_max": {
+          "default": 0.4,
+          "description": "Share of an item's lines also seen on sibling items from the same host.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Boilerplate Ratio Max",
+          "type": "number"
+        },
         "max_body_bytes": {
           "default": 2000000,
           "minimum": 1024,
@@ -153,6 +161,13 @@
           "default": 3,
           "minimum": 0,
           "title": "Max Retries",
+          "type": "integer"
+        },
+        "min_source_words": {
+          "default": 120,
+          "description": "Below this the item is not summarized at all. Page furniture is short.",
+          "minimum": 1,
+          "title": "Min Source Words",
           "type": "integer"
         },
         "request_timeout_seconds": {
@@ -440,6 +455,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Replaced evaluation.compression_min/max with summary_words_min/max; added extract.min_source_words and extract.boilerplate_ratio_max.",
+      "version": "2026-08-21T03:00",
+      "why": "At a fixed output budget a compression ratio measures the article's length, not the summary's quality - it would have flagged every short article forever. Absolute word bounds detect the two real failures directly."
+    },
+    {
       "change": "Initial shape: run, collect, extract, models, evaluation, drift, retention.",
       "version": "2026-08-21",
       "why": "Contracts before logic - no stage may reach for a tunable that has no home."
@@ -472,7 +492,7 @@
       "$ref": "#/$defs/RunConfig"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-21T03:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -483,5 +503,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-21T03:00"
 }

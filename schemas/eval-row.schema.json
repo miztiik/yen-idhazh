@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added unsupported_numbers, hedge_dropped, extraction_suspect, verbatim_run and source_seen_word_count.",
+      "version": "2026-08-21T03:00",
+      "why": "Faithfulness cannot see a wrong number, a rumour asserted as fact, or a summary of navigation chrome - it scores all three generously. The ledger is still empty, so these cost a changelog entry today and a migration ever after."
+    },
+    {
       "change": "Added pipeline_fingerprint, output_digest and determinism_violation.",
       "version": "2026-08-21T02:00",
       "why": "The ledger is the only committed record that survives a run, so it is the only place a later run can detect that identical inputs produced different words. No payload predates this - the ledger has never been written."
@@ -37,13 +42,13 @@
       "$ref": "#/$defs/ConfidenceBand"
     },
     "compression": {
-      "description": "Summary length as a fraction of source length.",
+      "description": "Summary length over source length. Recorded, never flagged: at a fixed output budget this measures the article's length, not the summary's quality.",
       "minimum": 0.0,
       "title": "Compression",
       "type": "number"
     },
     "coverage": {
-      "description": "Named-entity and numeric survival. The instrument for selective omission.",
+      "description": "Survival of the lead's entities and numbers. The instrument for omission.",
       "maximum": 1.0,
       "minimum": 0.0,
       "title": "Coverage",
@@ -60,12 +65,24 @@
       "title": "Determinism Violation",
       "type": "boolean"
     },
+    "extraction_suspect": {
+      "default": false,
+      "description": "The text looks like page furniture. A faithful summary of chrome scores high.",
+      "title": "Extraction Suspect",
+      "type": "boolean"
+    },
     "extractiveness": {
-      "description": "Verbatim overlap. High here plus high hhem means copying.",
+      "description": "Share of the summary's 4-grams found verbatim in the source.",
       "maximum": 1.0,
       "minimum": 0.0,
       "title": "Extractiveness",
       "type": "number"
+    },
+    "hedge_dropped": {
+      "default": false,
+      "description": "The source hedged and the summary asserted. A rumour became a fact.",
+      "title": "Hedge Dropped",
+      "type": "boolean"
     },
     "hhem": {
       "description": "Faithfulness against the text the model saw.",
@@ -117,9 +134,17 @@
       "type": "string"
     },
     "scorer_version": {
+      "description": "Derived, never hand-typed: the scorer, its weights, the tagger and the band thresholds, spelled so a row still explains itself years later.",
       "minLength": 1,
       "title": "Scorer Version",
       "type": "string"
+    },
+    "source_seen_word_count": {
+      "default": 0,
+      "description": "What the model actually got, after truncation.",
+      "minimum": 0,
+      "title": "Source Seen Word Count",
+      "type": "integer"
     },
     "source_url": {
       "maxLength": 2048,
@@ -128,6 +153,7 @@
       "type": "string"
     },
     "source_word_count": {
+      "description": "The full article.",
       "minimum": 0,
       "title": "Source Word Count",
       "type": "integer"
@@ -147,13 +173,28 @@
       "title": "Truncation Flagged",
       "type": "boolean"
     },
+    "unsupported_numbers": {
+      "default": 0,
+      "description": "Numbers asserted by the summary that appear nowhere in the full source.",
+      "minimum": 0,
+      "title": "Unsupported Numbers",
+      "type": "integer"
+    },
     "url_key": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Url Key",
       "type": "string"
     },
+    "verbatim_run": {
+      "default": 0.0,
+      "description": "Longest unbroken copied stretch. This is the one that names copying.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Verbatim Run",
+      "type": "number"
+    },
     "version": {
-      "default": "2026-08-21T02:00",
+      "default": "2026-08-21T03:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -191,5 +232,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-21T02:00"
+  "version": "2026-08-21T03:00"
 }

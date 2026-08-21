@@ -85,6 +85,17 @@ class ExtractConfig(Model):
         ge=256,
         description="A performance lever, not only a safety cap: prefill degrades with length.",
     )
+    min_source_words: int = Field(
+        default=120,
+        ge=1,
+        description="Below this the item is not summarized at all. Page furniture is short.",
+    )
+    boilerplate_ratio_max: float = Field(
+        default=0.4,
+        gt=0.0,
+        le=1.0,
+        description="Share of an item's lines also seen on sibling items from the same host.",
+    )
     max_body_bytes: int = Field(default=2_000_000, ge=1024)
     max_retries: int = Field(default=3, ge=0)
     backoff_initial_seconds: float = Field(default=1.0, ge=0.0)
@@ -128,8 +139,12 @@ class EvaluationConfig(Model):
         le=1.0,
         description="Score gap that flags a truncation artifact rather than a hallucination.",
     )
-    compression_min: float = Field(default=0.03, gt=0.0, le=1.0)
-    compression_max: float = Field(default=0.20, gt=0.0, le=1.0)
+    summary_words_min: int = Field(
+        default=60, ge=1, description="Below this the summary is a headline, not a summary."
+    )
+    summary_words_max: int = Field(
+        default=200, ge=1, description="Above this it is a copy. Absolute, not a ratio."
+    )
     spot_checks_per_week: int = Field(default=10, ge=0)
     golden_set_size: int = Field(default=20, ge=1)
 
@@ -137,8 +152,8 @@ class EvaluationConfig(Model):
     def _bands_and_ranges_are_ordered(self) -> Self:
         if self.band_medium_min >= self.band_high_min:
             raise ValueError("band_medium_min must sit below band_high_min")
-        if self.compression_min >= self.compression_max:
-            raise ValueError("compression_min must sit below compression_max")
+        if self.summary_words_min >= self.summary_words_max:
+            raise ValueError("summary_words_min must sit below summary_words_max")
         return self
 
 
@@ -176,6 +191,18 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-21T03:00",
+            change=(
+                "Replaced evaluation.compression_min/max with summary_words_min/max; added "
+                "extract.min_source_words and extract.boilerplate_ratio_max."
+            ),
+            why=(
+                "At a fixed output budget a compression ratio measures the article's length, "
+                "not the summary's quality - it would have flagged every short article "
+                "forever. Absolute word bounds detect the two real failures directly."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: run, collect, extract, models, evaluation, drift, retention.",
