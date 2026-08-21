@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta name="color-scheme" content="light dark" />
+		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<!-- The one inline script this site carries. It runs before first paint so a
+		     reader on a dark phone never gets a white flash. -->
+		<script>
+			(function () {
+				try {
+					var stored = localStorage.getItem('idhazh:theme');
+					var choice = stored === 'light' || stored === 'dark' ? stored : null;
+					var dark = choice
+						? choice === 'dark'
+						: window.matchMedia('(prefers-color-scheme: dark)').matches;
+					document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+				} catch (e) {
+					document.documentElement.setAttribute('data-theme', 'light');
+				}
+			})();
+		</script>
+		%sveltekit.head%
+	</head>
+	<body data-sveltekit-preload-data="hover">
+		<div style="display: contents">%sveltekit.body%</div>
+	</body>
+</html>

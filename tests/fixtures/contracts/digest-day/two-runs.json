@@ -22,6 +22,7 @@
       ],
       "published_at": "2026-08-21T05:30:00Z",
       "source_id": "example-lab-blog",
+      "source_kind": "reporting",
       "source_name": "Example Lab blog",
       "source_url": "https://blog.example-lab.org/2026/08/model-release",
       "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
@@ -55,6 +56,7 @@
       ],
       "published_at": "2026-08-20T22:10:00Z",
       "source_id": "example-grid-newsroom",
+      "source_kind": "reporting",
       "source_name": "Example Grid newsroom",
       "source_url": "https://newsroom.example-grid.com/2026/08/reactor-order",
       "summary": "Example Grid has ordered four small modular reactors totalling 1.2 gigawatts for a datacentre campus. The order is worth 3.2 billion dollars and the first unit is due in 2031.",
@@ -81,6 +83,7 @@
       "lenses": [],
       "published_at": "2026-08-21T16:40:00Z",
       "source_id": "example-lab-research",
+      "source_kind": "reporting",
       "source_name": "Example Lab research",
       "source_url": "https://research.example-lab.org/2026/08/paper",
       "summary": "A paper from Example Lab reports a 12 point gain on a summarization benchmark, trained in 4,000 GPU hours.",
@@ -107,7 +110,7 @@
       "n": 2
     }
   ],
-  "version": "2026-08-21",
+  "version": "2026-08-21T06:00",
   "verticals": [
     {
       "count": 2,

@@ -1,0 +1,71 @@
+name: pages
+
+# Publishes the static bundle. It builds from committed data only - nothing here
+# fetches, and nothing here runs a model (Holy Law #1).
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'frontend/**'
+      - 'config/idhazh.json'
+      - 'evals/**'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# One deploy at a time, and never cancel one in flight: a half-replaced site is
+# worse than an old one.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      - name: Build
+        working-directory: frontend
+        env:
+          # The repository name is the Pages sub-path, so every asset URL needs
+          # it. Getting this wrong is the single most common Pages failure.
+          BASE_PATH: /${{ github.event.repository.name }}
+        run: npm run build
+
+      - name: Report published size
+        working-directory: frontend
+        run: |
+          echo "site bytes: $(du -sb build | cut -f1)"
+          echo "site files: $(find build -type f | wc -l)"
+
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: frontend/build
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    environment:
+      name: github-pages
+      url: ${{ steps.deploy.outputs.page_url }}
+    steps:
+      - id: deploy
+        uses: actions/deploy-pages@v4

@@ -207,11 +207,65 @@ class LoggingConfig(Model):
     level: LogLevel = LogLevel.INFO
 
 
+class ThemeChoice(StrEnum):
+    SYSTEM = "system"
+    LIGHT = "light"
+    DARK = "dark"
+
+
+class VisualSide(StrEnum):
+    """Where a visual sits beside its text, at `sm` and above. Below that, always above."""
+
+    ABOVE = "above"
+    LEADING = "leading"
+    TRAILING = "trailing"
+
+
+class UiConfig(Model):
+    """The published surface's knobs.
+
+    `sections` is the modularity story: reordering the page is a config edit,
+    not a code change. What is deliberately absent is a per-element layout
+    engine - on the surface that matters, a phone, there is no left and no
+    right, and a per-reader layout would break the promise that a shared link
+    shows the recipient what the sender saw.
+    """
+
+    sections: list[str] = Field(
+        default_factory=lambda: ["notice", "topics", "items"],
+        min_length=1,
+        description="Render order of the day page's sections, by registry id.",
+    )
+    theme_default: ThemeChoice = ThemeChoice.SYSTEM
+    visual_side: VisualSide = VisualSide.ABOVE
+    source_mark: bool = Field(
+        default=True, description="The monogram beside a source name. A scanning aid, not the id."
+    )
+    show_filter: bool = Field(
+        default=True,
+        description=(
+            "An in-place filter inside the topic row. Never a top-level search bar: on a "
+            "page this short it would promise an archive it cannot reach."
+        ),
+    )
+    repo_url: str = Field(default="https://github.com/miztiik/yen-idhazh", min_length=1)
+    site_title: str = Field(default="yen-idhazh", min_length=1)
+    tagline: str = Field(
+        default="A daily digest that checks its own work.",
+        min_length=1,
+    )
+
+
 class AppConfig(Contract):
     """`config/idhazh.json` - every tunable, schema-validated."""
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-21T06:00",
+            change="Added the ui block.",
+            why="The published surface's knobs need a home before a component reads one.",
+        ),
         ChangelogEntry(
             version="2026-08-21T05:00",
             change="Added collect.max_per_source.",
@@ -246,4 +300,5 @@ class AppConfig(Contract):
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
+    ui: UiConfig = Field(default_factory=UiConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

@@ -15,7 +15,7 @@ from typing import ClassVar, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url
-from idhazh.contracts.taxonomy import Lifecycled, SourceTier
+from idhazh.contracts.taxonomy import Lifecycled, SourceKind, SourceTier
 
 
 class FeedDef(Lifecycled):
@@ -26,6 +26,10 @@ class FeedDef(Lifecycled):
     title: str = Field(min_length=1)
     url: Url
     tier: SourceTier
+    kind: SourceKind = Field(
+        default=SourceKind.REPORTING,
+        description="Who is speaking. A reader needs this before they will share an item.",
+    )
     weight: float = Field(
         default=1.0,
         ge=0.0,
@@ -48,6 +52,15 @@ class Sources(Contract):
 
     __schema_stem__: ClassVar[str] = "sources"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-21T06:00",
+            change="Added kind to a feed.",
+            why=(
+                "A company announcing its own product and a reporter measuring it arrived "
+                "looking identical. Reader named this as the one thing an item lacked "
+                "before they would share it."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: per-vertical feeds plus a separate salience list.",

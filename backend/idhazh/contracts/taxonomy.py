@@ -35,6 +35,23 @@ class SourceTier(IntEnum):
     COMMUNITY = 3
 
 
+class SourceKind(StrEnum):
+    """What kind of speaker this is - the thing a reader uses to decide belief.
+
+    "A company said its product is faster" and "a reporter measured it" are not
+    the same claim, and without this they arrive looking identical. The
+    dangerous case is `announcement`: forwarding a vendor's own copy without
+    knowing it was the vendor is how a reader ends up carrying an ad.
+    """
+
+    REPORTING = "reporting"
+    ANNOUNCEMENT = "announcement"
+    RESEARCH = "research"
+    ANALYSIS = "analysis"
+    GOVERNMENT = "government"
+    COMMUNITY = "community"
+
+
 class LensId(StrEnum):
     """A question asked of items already collected. Costs no extra request."""
 

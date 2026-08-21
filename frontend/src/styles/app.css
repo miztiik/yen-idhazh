@@ -1,0 +1,53 @@
+@import 'tailwindcss';
+@import './tokens.css';
+
+/* Class strategy, not media: a reader on a dark-defaulted phone who wants to
+   read in bed needs a way to say so. */
+@custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
+
+/* One source of truth: bg-surface and var(--color-surface) resolve to the same
+   value, so a token cannot drift from its utility. */
+@theme inline {
+	--color-bg: var(--color-bg);
+	--color-surface: var(--color-surface);
+	--color-rule: var(--color-rule);
+	--color-text: var(--color-text);
+	--color-text-secondary: var(--color-text-secondary);
+	--color-text-tertiary: var(--color-text-tertiary);
+	--color-accent: var(--color-accent);
+	--color-band-high: var(--band-high);
+	--color-band-medium: var(--band-medium);
+	--color-band-low: var(--band-low);
+	--font-reading:
+		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+		sans-serif;
+	--font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+html {
+	background-color: var(--color-bg);
+	color: var(--color-text);
+	font-family: var(--font-reading);
+	-webkit-text-size-adjust: 100%;
+}
+
+body {
+	margin: 0;
+	min-height: 100dvh;
+}
+
+:focus-visible {
+	outline: 2px solid var(--color-focus);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+/* A reading surface that animates is a reading surface that interrupts. */
+@media (prefers-reduced-motion: reduce) {
+	*,
+	*::before,
+	*::after {
+		animation-duration: 0.01ms !important;
+		transition-duration: 0.01ms !important;
+	}
+}

@@ -76,6 +76,11 @@
           "title": "Source Id",
           "type": "string"
         },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind",
+          "default": "reporting",
+          "description": "Who is speaking. A vendor's own copy must not look like a reporter's."
+        },
         "source_name": {
           "minLength": 1,
           "title": "Source Name",
@@ -277,6 +282,19 @@
       "title": "LensId",
       "type": "string"
     },
+    "SourceKind": {
+      "description": "What kind of speaker this is - the thing a reader uses to decide belief.\n\n\"A company said its product is faster\" and \"a reporter measured it\" are not\nthe same claim, and without this they arrive looking identical. The\ndangerous case is `announcement`: forwarding a vendor's own copy without\nknowing it was the vendor is how a reader ends up carrying an ad.",
+      "enum": [
+        "reporting",
+        "announcement",
+        "research",
+        "analysis",
+        "government",
+        "community"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
     "VisualKind": {
       "enum": [
         "chart",
@@ -302,6 +320,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added source_kind to a published item.",
+      "version": "2026-08-21T06:00",
+      "why": "Reader's ruling: a company announcing itself and a reporter measuring it arrived on the page looking identical, and that is the risk a reader carries when they forward something."
+    },
     {
       "change": "Initial shape: the day's items in published order, its runs, and its counts.",
       "version": "2026-08-21",
@@ -358,7 +381,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-21T06:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -383,5 +406,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-21T06:00"
 }

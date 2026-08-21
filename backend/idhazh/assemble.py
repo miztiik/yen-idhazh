@@ -36,7 +36,7 @@ from idhazh.contracts.run_manifest import (
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import Taxonomy
+from idhazh.contracts.taxonomy import SourceKind, Taxonomy
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 _UNTITLED: Final = "Untitled item"
@@ -73,6 +73,7 @@ def to_digest_item(
     summary: Summary,
     band: ConfidenceBand,
     source_name: str,
+    source_kind: SourceKind,
     run_n: int,
 ) -> DigestItem:
     """One finished item as a reader consumes it. The link is a first-class element."""
@@ -83,6 +84,7 @@ def to_digest_item(
         source_url=article.canonical_url,
         source_id=article.source_id,
         source_name=source_name,
+        source_kind=source_kind,
         published_at=article.published_at,
         summary=summary.summary or "",
         key_points=summary.key_points,
@@ -97,6 +99,10 @@ def to_digest_item(
 
 def source_names(sources: Sources) -> dict[str, str]:
     return {feed.id: feed.title for feed in sources.feeds}
+
+
+def source_kinds(sources: Sources) -> dict[str, SourceKind]:
+    return {feed.id: feed.kind for feed in sources.feeds}
 
 
 def vertical_names(taxonomy: Taxonomy) -> dict[str, str]:

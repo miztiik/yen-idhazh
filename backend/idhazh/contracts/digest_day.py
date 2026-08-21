@@ -31,7 +31,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.route import VisualKind, VisualState
-from idhazh.contracts.taxonomy import EventType, LensId
+from idhazh.contracts.taxonomy import EventType, LensId, SourceKind
 
 
 class DigestVisual(Model):
@@ -70,6 +70,10 @@ class DigestItem(Model):
     source_url: Url
     source_id: Slug
     source_name: str = Field(min_length=1)
+    source_kind: SourceKind = Field(
+        default=SourceKind.REPORTING,
+        description="Who is speaking. A vendor's own copy must not look like a reporter's.",
+    )
     published_at: Timestamp | None = None
 
     summary: str = Field(min_length=1)
@@ -103,6 +107,15 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-21T06:00",
+            change="Added source_kind to a published item.",
+            why=(
+                "Reader's ruling: a company announcing itself and a reporter measuring it "
+                "arrived on the page looking identical, and that is the risk a reader "
+                "carries when they forward something."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: the day's items in published order, its runs, and its counts.",

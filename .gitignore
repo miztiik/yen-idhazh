@@ -12,6 +12,8 @@ build/
 # Node / frontend
 node_modules/
 frontend/dist/
+frontend/build/
+frontend/.svelte-kit/
 dev-dist/
 *.tsbuildinfo
 .vite/
