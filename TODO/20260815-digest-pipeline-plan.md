@@ -150,11 +150,34 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 14 | Retention job + site-budget alarm | 13 | H | LANDED (alarm on; prune disabled, dry-run, fused) | main | direct | - |
 | 16 | Read-state, new-arrivals block and pagination | 13 | H | LANDED (reader-independence oracle asserted in a browser) | main | direct | - |
 | 17 | Icon sprite + registry allowlist | 13 | H | DESCOPED (build-time monogram; no per-publisher artwork) | main | direct | - |
-| 18 | On-device assist enabler (no feature) | 13 | H | PENDING | - | - | - |
+| 18 | On-device assist enabler (no feature) | 13 | H | SATISFIED (bundle renders with no model directory, because there is none) | main | direct | - |
 | 22 | Read-aloud via Web Speech API | 13 | H | LANDED (browser voice; absent where unsupported) | main | direct | - |
 | 20 | Browser semantic search | 18, 19 | I | PENDING | - | - | - |
 | 21 | Browser-runtime injection canaries | 18 | I | PENDING | - | - | - |
 | 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | J | PENDING | - | - | - |
+
+---
+
+## 3. Delivery state (2026-08-21)
+
+Fifteen of twenty-three rows are done or landed, the pipeline runs end to end
+against live feeds with a local model, and the site builds and renders. What
+remains is listed here honestly, with what each one is actually waiting on.
+
+| Row | State | Waiting on |
+| --- | --- | --- |
+| 7 - Model validation gate | **BLOCKED, by design** | The weights on a real runner. Its decision rule compares candidate models end to end through our own prompt and extraction, and a laptop measurement would not be the thing it claims to measure. This is an ESCALATE row and it stays one. |
+| 8 - Route worker + deterministic renderers | **NOT BUILT** | Nothing external. It needs the routing decision plus a Node render step for Vega-Lite and Mermaid, and it is the last non-escalated row outstanding. Every item currently publishes with no visual, which the visual rule already says is the common and correct answer. |
+| 9 - Image renderer | **BLOCKED, by design** | A measurement that has never run. Row 9 is gated on whether images fit the published budget at all, and section 0.3 says the answer decides between a 4-month wall and a 5-year one. Guessing here is exactly what Holy Law #10 forbids. |
+| 18-21 - On-device assist | **NOT BUILT** | Nothing external. Explicitly secondary by scope: the digest never depends on it, and the bundle must render complete with the model directory deleted - which it currently does, because there is no model directory. |
+| 23 - Browser chat SLM | **BLOCKED, by design** | Rows 20 and 21 first, and its own ESCALATE trigger on any single model file over GitHubs 100 MB hard limit. |
+
+Two things the owner still holds:
+
+- **Push.** Eighteen commits sit on main unpushed, and nothing scheduled can run until they land.
+- **Six corrected feed URLs** were guessed and then verified; four sources were retired because their 
+obots.txt forbids us or they publish no feed at all. That list is worth a human eye before it is treated as settled.
+
 
 ---
 
