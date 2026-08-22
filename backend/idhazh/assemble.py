@@ -20,6 +20,7 @@ from typing import Final
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import (
     DigestDay,
+    DigestEmbeddings,
     DigestItem,
     DigestRunRef,
     DigestVerticalRef,
@@ -39,6 +40,7 @@ from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind, Taxonomy
+from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, text_for, to_base64
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 _UNTITLED: Final = "Untitled item"
@@ -130,6 +132,34 @@ def vertical_names(taxonomy: Taxonomy) -> dict[str, str]:
     return {vertical.id: vertical.display_name for vertical in taxonomy.verticals}
 
 
+def build_embeddings(
+    items: Sequence[DigestItem], embedder: Embedder, *, batch: int = 16
+) -> DigestEmbeddings | None:
+    """Vectors for the day's items, or nothing at all.
+
+    Returns `None` rather than raising when the encoder is missing or fails. A
+    day that cannot be searched on a device is a day that still publishes; the
+    search surface is secondary by construction and removing it must never cost
+    a reader a single summary.
+    """
+    if not items or not embedder.available:
+        return None
+    try:
+        embedder.load()
+        vectors: dict[str, str] = {}
+        for start in range(0, len(items), batch):
+            window = items[start : start + batch]
+            for item, vector in zip(
+                window, embedder.encode([text_for(i) for i in window]), strict=True
+            ):
+                vectors[item.item_id] = to_base64(vector)
+    except (OSError, RuntimeError, ValueError, ImportError):
+        return None
+    return DigestEmbeddings(
+        model_id=EMBEDDER_ID, dimensions=DIMENSIONS, dtype=DTYPE, vectors=vectors
+    )
+
+
 def build_day(
     *,
     plan: RunPlan,
@@ -139,6 +169,7 @@ def build_day(
     run_n: int,
     generated_at: str,
     retention_window_months: int,
+    embeddings: DigestEmbeddings | None = None,
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
 
@@ -178,6 +209,7 @@ def build_day(
             for vertical_id in present
         ],
         items=combined,
+        embeddings=embeddings,
     )
 
 

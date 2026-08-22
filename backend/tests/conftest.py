@@ -8,6 +8,7 @@ from typing import Final
 import pytest
 
 from idhazh.contracts.article import Article
+from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.summary import Summary
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -31,3 +32,9 @@ def article_ok() -> Article:
 @pytest.fixture
 def summary_ok() -> Summary:
     return Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
+
+
+@pytest.fixture
+def digest_day_ok() -> DigestDay:
+    path = next((CONTRACT_FIXTURES_DIR / "digest-day").glob("*.json"))
+    return DigestDay.from_json(read_text(path))

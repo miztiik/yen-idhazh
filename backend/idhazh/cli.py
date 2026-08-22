@@ -31,6 +31,7 @@ from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind
+from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
@@ -373,6 +374,7 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
         run_n=run_n,
         generated_at=generated_at,
         retention_window_months=settings.app.retention.image_months,
+        embeddings=assemble.build_embeddings(digest_items, Embedder(config.REPO_ROOT)),
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 

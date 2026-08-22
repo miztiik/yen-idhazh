@@ -25,6 +25,13 @@ dependencies = [
     # browser. Measured 2026-08-22 (Windows 11, 8 vCPU): 2568 ms for the first
     # render in a process, 49 ms warm, ~7 KB of SVG. Beneficiary: Row #8.
     "vl-convert-python>=1.9",
+    # The sentence encoder for build-time embeddings, run through the SAME ONNX
+    # file the browser loads - one artifact, two runtimes, no drift. Chosen over
+    # torch plus transformers, which is roughly 800 MB of wheels for weights
+    # that would then have to agree with a second copy. Measured 2026-08-22
+    # (Windows 11, 8 vCPU): 16 ms to embed three summaries. Beneficiary: Row #19.
+    "onnxruntime>=1.20",
+    "tokenizers>=0.21",
 ]
 
 [project.optional-dependencies]
@@ -91,7 +98,7 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # Measurement-only dependencies, absent from a default install and shipping no
 # type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["diffusers.*", "feedparser.*", "torch.*", "trafilatura.*", "transformers.*", "vl_convert.*"]
+module = ["diffusers.*", "feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*", "vl_convert.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
