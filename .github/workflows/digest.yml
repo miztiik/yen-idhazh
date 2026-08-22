@@ -126,10 +126,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p backend/bin backend/models
-          TAG=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | jq -r .tag_name)
-          curl -sSL -o llama.zip \
-            "https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.zip"
-          unzip -q llama.zip -d llama
+          URL=$(curl -sS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
+            | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
+          curl -sSL -o llama.tar.gz "$URL"
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
           find llama -type f -exec cp {} backend/bin/ \;
           chmod +x backend/bin/llama-server
           curl -sSL -o "backend/models/${MODEL_FILE}" \
@@ -214,10 +214,10 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p backend/bin backend/models
-          TAG=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | jq -r .tag_name)
-          curl -sSL -o llama.zip \
-            "https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.zip"
-          unzip -q llama.zip -d llama
+          URL=$(curl -sS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
+            | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
+          curl -sSL -o llama.tar.gz "$URL"
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
           find llama -type f -exec cp {} backend/bin/ \;
           chmod +x backend/bin/llama-server
           curl -sSL -o "backend/models/${ROUTE_FILE}" \

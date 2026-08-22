@@ -34,14 +34,22 @@ jobs:
           lscpu | grep -E 'Model name|MHz|Flags' | head -3
           df -h / /mnt 2>/dev/null | sed -n '1,4p'
 
+      # Search recent releases for the Linux binary rather than building a URL
+      # from `releases/latest`. On 2026-08-22 that endpoint returned a tag with
+      # no binaries at all, so the constructed URL 404ed and the whole
+      # measurement failed on a step that had nothing to do with measuring.
       - name: Install llama.cpp
         run: |
           set -euo pipefail
-          TAG=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | jq -r .tag_name)
-          echo "llama.cpp $TAG"
-          curl -sSL -o llama.zip \
-            "https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.zip"
-          unzip -q llama.zip -d llama
+          URL=$(curl -sS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
+            | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "no plain ubuntu-x64 build in the last 30 llama.cpp releases" >&2
+            exit 1
+          fi
+          echo "llama.cpp from $URL"
+          curl -sSL -o llama.tar.gz "$URL"
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
           find llama -name 'llama-bench' -exec chmod +x {} \; -exec cp {} /usr/local/bin/ \;
           llama-bench --help >/dev/null && echo "llama-bench ok"
 
