@@ -39,10 +39,13 @@ jobs:
       # no binaries at all, so the constructed URL 404ed and the whole
       # measurement failed on a step that had nothing to do with measuring.
       - name: Install llama.cpp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          URL=$(curl -sS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
-            | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
+          URL=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
+            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
           if [ -z "$URL" ] || [ "$URL" = "null" ]; then
             echo "no plain ubuntu-x64 build in the last 30 llama.cpp releases" >&2
             exit 1
