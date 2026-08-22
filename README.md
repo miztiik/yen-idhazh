@@ -149,8 +149,10 @@ Model weights and llama.cpp binaries are downloaded, never committed.
 | `frontend/` | The published static site, plus generated TypeScript contracts. |
 | `config/` | Human-edited tunable knobs, schema-validated. A fresh clone runs on the defaults. |
 | `schemas/` | JSON Schema generated from the Pydantic models. Never hand-edited. |
-| `evals/` | The committed score ledger the dashboard reads. |
+| `state/` | Everything one run commits for a later run to read: scores, fingerprints, seen URLs, feed health. Never served to a reader. |
+| `tests/` | Cross-cutting fixtures only - captured pages, golden summaries, injection canaries. The tests themselves live in `backend/tests/`. |
 | `docs/` | Canonical knowledge, in Diataxis tiers. |
+| `TODO/` | Active plan-docs. Working material, never the source of truth. |
 
 ## See also
 

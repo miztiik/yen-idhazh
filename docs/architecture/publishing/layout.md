@@ -19,7 +19,7 @@ Coupling them means a change of mind about URL aesthetics rewrites every committ
 frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, every item
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
 frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.webp  optional visual
-evals/scores.csv                                        the ledger - one path, never published twice
+state/scores.csv                                        the ledger - one path, never published twice
 ```
 
 ```

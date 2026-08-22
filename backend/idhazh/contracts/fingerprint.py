@@ -10,7 +10,7 @@ is `PipelineInputs` itself: the digest is taken over the model's own
 serialization, which means a field added here changes every fingerprint, and a
 field that was never declared cannot be silently forgotten.
 
-`evals/fingerprints.csv` is append-only and never pruned, because a fingerprint
+`state/fingerprints.csv` is append-only and never pruned, because a fingerprint
 with nothing to expand it into is meaningless hex three years from now.
 """
 
@@ -70,7 +70,7 @@ class PipelineInputs(Model):
 
 
 class FingerprintRow(Contract):
-    """One row of `evals/fingerprints.csv`, appended the first time a stamp is seen."""
+    """One row of `state/fingerprints.csv`, appended the first time a stamp is seen."""
 
     __schema_stem__: ClassVar[str] = "fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (

@@ -65,7 +65,7 @@ export function latestDate(root: string = DIGEST_ROOT): string | null {
 
 /** One row per scored item, read from the committed ledger and never recomputed. */
 export function evalRows(): { rows: Record<string, string>[]; columns: string[] } {
-	const path = join(REPO_ROOT, 'evals', 'scores.csv');
+	const path = join(REPO_ROOT, 'state', 'scores.csv');
 	if (!existsSync(path)) return { rows: [], columns: [] };
 	const lines = readFileSync(path, 'utf8').trim().split('\n');
 	const columns = lines[0]?.split(',') ?? [];

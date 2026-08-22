@@ -95,7 +95,7 @@ backend/var/run/2026-08-22/items/*.summary.json    what the model wrote
 backend/var/run/2026-08-22/items/*.eval.json       what it scored
 frontend/public/digest/2026/08/22/digest.json      the published day
 frontend/public/digest/2026/08/22/*.svg            any rendered visual
-evals/scores.csv                                   one row per scored item
+state/scores.csv                                   one row per scored item
 ```
 
 ## Read the timings
@@ -137,7 +137,7 @@ because that cap is how much a reader wants in a morning, not how much a
 measurement needs.
 
 `validate` writes one result file per model under `backend/var/validation/`.
-`decide` applies the rule and writes `evals/validation-<date>.csv`.
+`decide` applies the rule and writes `state/validation-<date>.csv`.
 
 The rule, in full:
 

@@ -6,7 +6,7 @@ that only works as part of the whole is a stage nobody can debug.
 
     idhazh plan       read feeds, rank, cap        -> run/<date>/plan.json
     idhazh work       fetch, extract, summarize, score -> run/<date>/items/*
-    idhazh assemble   collect what finished        -> frontend/public/... + evals/
+    idhazh assemble   collect what finished        -> frontend/public/... + state/
 
 `idhazh run` is the three in order, which is what a developer wants and what
 the daily workflow calls.

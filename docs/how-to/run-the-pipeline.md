@@ -63,7 +63,7 @@ section 0a).
 | `backend/var/run/<date>/plan.json` | The day's work list | no - gitignored |
 | `backend/var/run/<date>/items/*.json` | Per-item article, summary and eval | no - gitignored |
 | `frontend/public/digest/<YYYY>/<MM>/<DD>/` | `digest.json` and `run.json` | **yes** |
-| `evals/scores.csv` | One row per scored item, appended forever | **yes** |
+| `state/scores.csv` | One row per scored item, appended forever | **yes** |
 
 **No article body is ever committed.** The extracted text lives under
 `backend/var/`, which is gitignored, and is what the model reads. What ships is
