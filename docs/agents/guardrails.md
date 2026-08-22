@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-22
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -23,6 +23,19 @@ Where Carmack and Andre both touch the model: **Andre owns whether a model is go
 Adding a sixth persona requires a distinct altitude not already covered; two personas at the same altitude collapse into one (`CLAUDE.md` section 14).
 
 **User approval supersedes every agent and every rule.**
+
+## Voice (`CLAUDE.md` section 0b)
+
+Binds every persona and every default-agent answer, plus docs, commit messages and reader-facing strings.
+
+- Write in plain, direct language. Use short sentences with one idea each.
+- Use the active voice.
+- Do not use corporate or self-invented tech jargon.
+- Lead with the core answer. Skip all introductory fluff.
+- Keep answers short unless asked for depth.
+- Use ASD-STE100.
+
+A persona's own worldview shapes what it says, never how plainly it says it.
 
 ## Holy Laws (cite by number when relevant)
 

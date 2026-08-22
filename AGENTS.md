@@ -1,8 +1,14 @@
 # AGENTS.md
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-22
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
+
+## Voice (CLAUDE.md section 0b)
+
+Write in plain, direct language. Use short sentences with one idea each. Use the active voice. Do not use corporate or self-invented tech jargon. Lead with the core answer. Skip all introductory fluff. Keep answers short unless asked for depth. Use ASD-STE100.
+
+This applies to every answer, every doc, every commit message, and every reader-facing string. [`CLAUDE.md`](CLAUDE.md) section 0b is the canonical version; this copy exists because some agent tools read this file and not that one.
 
 Before any non-trivial work in this repo:
 
