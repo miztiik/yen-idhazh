@@ -48,6 +48,22 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-23",
+            change=(
+                "Added evidential_density and speculative_density, nullable, at the end "
+                "of the row. The ledger's header is migrated in the same commit."
+            ),
+            why=(
+                "Every other column scores our summary against the article. These two "
+                "score the article, which nothing did: a faithful summary of an "
+                "unsourced rumour scores high on all of them and is still an unsourced "
+                "rumour. First columns to land after the ledger had rows in it, hence "
+                "appended rather than filed by meaning, and null rather than zero on "
+                "the ten rows that predate them. Recorded only - no band reads them "
+                "until enough rows exist to say what a normal value is (Holy Law #10)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21T03:00",
             change=(
                 "Added unsupported_numbers, hedge_dropped, extraction_suspect, "
@@ -155,6 +171,35 @@ class EvalRow(Contract):
         description=(
             "How long the faithfulness scorer took on this item. It decides whether the "
             "scorer can stay a census or has to become a sample."
+        ),
+    )
+
+    # Appended at the end, and not filed next to `hedge_dropped` where they belong
+    # by meaning. The ledger is a committed append-only CSV with rows already in
+    # it; a column inserted mid-row shifts every historical cell one place right
+    # under a reader that maps by position. Meaning loses to layout here.
+    #
+    # Null and not 0.0, for the same reason: 0.0 is a measurement that says the
+    # article marked nothing. A row written before these existed measured neither,
+    # and the difference is the whole value of the column.
+    evidential_density: Score | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Attribution markers as a share of the ARTICLE's words. How often the story "
+            "says where it got a claim. Scores the source, not our summary of it. Null "
+            "on a row scored before metrics-2."
+        ),
+    )
+    speculative_density: Score | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Unresolved-claim markers as a share of the ARTICLE's words. Read against "
+            "evidential_density: speculation nobody is cited for is the fragile case. "
+            "Null on a row scored before metrics-2."
         ),
     )
 

@@ -14,6 +14,13 @@ Two of them see defects nothing else here can:
 - `hedge_dropped` catches a rumour becoming a fact. A faithfulness scorer marks
   it generously, because the entity and the relation are both present - only the
   uncertainty went missing.
+
+The two densities are the odd pair here: they score the ARTICLE, not our summary
+of it. Everything else asks whether we were faithful to the source. They ask what
+the source was worth - whether it named who told it, or only said a thing may
+happen. A perfectly faithful summary of an unsourced rumour is still an unsourced
+rumour, and no faithfulness metric can say so, because faithfulness to a fragile
+article is exactly what it measures.
 """
 
 from __future__ import annotations
@@ -26,7 +33,7 @@ from idhazh.contracts.app_config import EvaluationConfig
 
 #: Bumped whenever any definition below changes. Part of the derived
 #: `scorer_version`, so a ledger row keeps meaning what it meant when written.
-METRICS_VERSION: Final = "1"
+METRICS_VERSION: Final = "2"
 
 LEAD_SENTENCES: Final = 3
 _NGRAM: Final = 4
@@ -103,35 +110,67 @@ _NOT_AN_ENTITY: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: Closed lexicon. A source that hedges and a summary that does not is a rumour
-#: published as a fact. Multi-word entries are matched as phrases.
-HEDGE_TERMS: Final[tuple[str, ...]] = (
+# The two halves of what used to be one flat list of hedges. They read alike and
+# they do opposite work, which is why splitting them is worth a metrics version.
+#
+# "Reportedly" and "may" are both hedges, and a summary that drops either has
+# published a rumour as a fact - so `hedge_dropped` wants them in one bucket and
+# still gets them in one bucket. But asked about the ARTICLE they say opposite
+# things. "According to the ministry" is a claim you can go and check. "Could
+# happen" is a claim nobody has made yet. Counting them together produces one
+# number that rises for a well-sourced report and for pure speculation alike,
+# which is a number that means nothing.
+
+#: Reportative markers: the article is saying how it knows. These are the
+#: evidence a claim rests on, not a weakness in it.
+EVIDENTIAL_TERMS: Final[tuple[str, ...]] = (
     "according to",
     "alleged",
     "allegedly",
-    "apparently",
     "claimed",
     "claims",
+    "is said to",
+    "purportedly",
+    "reported to",
+    "reportedly",
+    "sources say",
+)
+
+#: Epistemic markers: the claim itself is unresolved, future or merely possible.
+#: Nobody is being cited - the article is telling you the thing may not be so.
+#: "Rumored" and "unconfirmed" sit here and not above: they name the absence of a
+#: source, which is the opposite of naming one.
+SPECULATIVE_TERMS: Final[tuple[str, ...]] = (
+    "apparently",
     "could",
     "expected to",
-    "is said to",
     "may",
     "might",
     "plans to",
     "potential",
-    "purportedly",
-    "reportedly",
-    "reported to",
     "rumored",
     "rumoured",
     "seemingly",
-    "sources say",
     "unconfirmed",
     "would",
 )
-_HEDGE = re.compile(
-    r"\b(?:" + "|".join(re.escape(term) for term in HEDGE_TERMS) + r")\b", re.IGNORECASE
-)
+
+#: Both halves, derived and never typed twice. A source that hedges and a summary
+#: that does not is a rumour published as a fact, whichever kind of hedge went
+#: missing. Multi-word entries are matched as phrases.
+HEDGE_TERMS: Final[tuple[str, ...]] = tuple(sorted(EVIDENTIAL_TERMS + SPECULATIVE_TERMS))
+
+
+def _lexicon(terms: Sequence[str]) -> re.Pattern[str]:
+    """Whole words only, so "claims" does not fire inside "claimsmanship"."""
+    return re.compile(
+        r"\b(?:" + "|".join(re.escape(term) for term in terms) + r")\b", re.IGNORECASE
+    )
+
+
+_HEDGE = _lexicon(HEDGE_TERMS)
+_EVIDENTIAL = _lexicon(EVIDENTIAL_TERMS)
+_SPECULATIVE = _lexicon(SPECULATIVE_TERMS)
 
 
 def words(text: str) -> list[str]:
@@ -280,6 +319,45 @@ def lead_coverage(summary: str, source: str, sentences: int = LEAD_SENTENCES) ->
 def hedge_dropped(summary: str, source: str, sentences: int = LEAD_SENTENCES) -> bool:
     """The source hedged its lead and the summary asserted it flat."""
     return bool(_HEDGE.search(lead(source, sentences))) and not _HEDGE.search(summary)
+
+
+def _density(pattern: re.Pattern[str], text: str) -> float:
+    """Markers as a share of the text's words.
+
+    A share and not a count, because a count is mostly a measure of length: a
+    3,000-word feature carries more of everything than a wire brief, and the
+    question is how thick the marking is, not how long the article is.
+    """
+    total = word_count(text)
+    if not total:
+        return 0.0
+    return len(pattern.findall(text)) / total
+
+
+def evidential_density(source: str) -> float:
+    """How often the article says where a claim came from.
+
+    Over the whole article and not the lead, unlike `lead_coverage`. That one is
+    a recall and needs a small denominator to keep any dynamic range. This is a
+    rate, so the denominator can be the honest one - and the lead is exactly
+    where the style guide puts an attribution, so anchoring there would measure
+    the convention instead of the reporting.
+
+    Read it against `speculative_density`, never alone. High on both is normal
+    for a court report. High on speculation and near zero on attribution is an
+    article built out of what might happen, told by nobody.
+    """
+    return _density(_EVIDENTIAL, source)
+
+
+def speculative_density(source: str) -> float:
+    """How much of the article has not happened yet, or is not confirmed.
+
+    Not a defect on its own. A forecast is a legitimate story, and a preview of
+    a launch is honest work. It is a defect in company: see
+    `evidential_density`.
+    """
+    return _density(_SPECULATIVE, source)
 
 
 def scorer_version(
