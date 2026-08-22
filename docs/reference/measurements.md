@@ -169,13 +169,41 @@ number this project has; it is not a runner figure and may not be used as one.
 
 ## Corpus shape
 
-**Still invented.** The cost model assumes articles cluster at 400 / 1200 /
-3500 words with a 25 / 55 / 20 share, and every per-article second in this page
-is multiplied by that assumption. `backend/utilities/measure_corpus.py` fetches
-real links, extracts them the way the pipeline will, and reports the
-distribution against those bucket edges. Until the `corpus` job in
-`.github/workflows/measure.yml` has run, the buckets are the largest unmeasured
-input in the design.
+**Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
+`.github/workflows/measure.yml`, over 20 live articles pulled from the
+configured feeds and extracted the way the pipeline extracts them.
+
+| Statistic | Words |
+| --- | --- |
+| mean | 1323.5 (+/- 1297.6) |
+| p10 | 248 |
+| p50 | 978 |
+| p90 | 2769 |
+| max | 5077 |
+
+| Bucket | n | Share | Median words |
+| --- | --- | --- | --- |
+| short | 10 | 0.50 | 411 |
+| medium | 5 | 0.25 | 1546 |
+| long | 5 | 0.25 | 2769 |
+
+**This contradicts the design's assumption, so the design moves.** The cost
+model assumed 400 / 1200 / 3500 words at a 25 / 55 / 20 share. The real share is
+50 / 25 / 25: the corpus is far more bimodal than assumed, with twice as many
+short articles and a quarter rather than a fifth long. The standard deviation is
+roughly the mean, so "the average article" is not a thing that exists here - any
+per-article figure multiplied by a mean is describing a corpus we do not have.
+
+Two consequences, stated before anyone re-derives them:
+
+- **Blended throughput estimates were too pessimistic.** Half the corpus is in
+  the cheapest bucket, not a quarter of it.
+- **Worst-case shard timeouts were too optimistic.** The long bucket is bigger
+  than assumed and p90 sits at 2769 words. The timeout must keep coming from the
+  worst case, never from the blend.
+
+Caveat, stated rather than buried: n=20, one sample, one day. It settles that
+the old buckets were wrong. It does not settle what the right ones are.
 
 ## Still unmeasured
 
@@ -185,7 +213,6 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | Prefill and decode on a real runner | laptop figures above | the `llm` job in `.github/workflows/measure.yml` |
-| Article length distribution | invented buckets | the `corpus` job |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | Weight download time, cache-miss | unmeasured | the timed download step, which now records itself into `cache-state.txt` |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
