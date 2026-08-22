@@ -11,7 +11,7 @@ import { execFileSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { resolve } from 'node:path';
 
-const ROOT = resolve(process.cwd(), '..', 'backend', 'var', 'canary-digest');
+const ROOT = resolve(process.cwd(), '..', 'backend', 'var', 'canary', 'digest');
 
 if (!existsSync(ROOT)) {
 	console.error(
@@ -22,7 +22,7 @@ if (!existsSync(ROOT)) {
 }
 
 console.log(`building the site from ${ROOT}`);
-execFileSync('npx', ['vite', 'build'], {
+execFileSync('npm', ['run', 'build'], {
 	stdio: 'inherit',
 	shell: process.platform === 'win32',
 	env: { ...process.env, DIGEST_ROOT: ROOT }
