@@ -50,8 +50,15 @@ jobs:
           echo "llama.cpp from $URL"
           curl -sSL -o llama.tar.gz "$URL"
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
-          find llama -name 'llama-bench' -exec chmod +x {} \; -exec cp {} /usr/local/bin/ \;
-          llama-bench --help >/dev/null && echo "llama-bench ok"
+          # The whole directory, not one binary. These builds are dynamically
+          # linked, so copying llama-bench alone leaves libllama-bench-impl.so
+          # behind and the binary dies at exec with a 127 that names a library
+          # rather than the mistake.
+          BIN=$(dirname "$(find llama -type f -name 'llama-bench' | head -1)")
+          echo "LLAMA_BIN=$BIN" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$BIN" >> "$GITHUB_ENV"
+          chmod +x "$BIN"/llama-* || true
+          LD_LIBRARY_PATH="$BIN" "$BIN/llama-bench" --help >/dev/null && echo "llama-bench ok"
 
       - name: Cache GGUF weights
         id: gguf
@@ -90,7 +97,7 @@ jobs:
           # 730 / 1800 / 4850 input tokens = short / medium / long article buckets
           for m in backend/models/*.gguf; do
             echo "=== $m"
-            llama-bench -m "$m" -p 730,1800,4850 -n 250 \
+            "$LLAMA_BIN/llama-bench" -m "$m" -p 730,1800,4850 -n 250 \
               -t ${{ inputs.threads }} -r 3 -o json >> backend/var/llm.json
           done
 
