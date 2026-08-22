@@ -13,7 +13,7 @@ import csv
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import assemble, cli, config
 from idhazh.contracts.app_config import EvaluationConfig
@@ -144,6 +144,35 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
     assert built.truncation_flagged
 
 
+def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
+    """The two densities are the only columns that measure the input.
+
+    Checked with a source the summary does not quote, so a value that came from
+    the summary instead would read as zero and fail here.
+    """
+    sourced = (
+        "The Ministry of Energy said the plant will close in March, according to a "
+        "statement on Tuesday. Officials familiar with the decision claimed the date "
+        "was set in June."
+    )
+    built = to_eval_row(
+        item=plan().items[0],
+        article=article(),
+        summary=summary(),
+        full_text=sourced,
+        hhem=0.91,
+        hhem_full=0.89,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="v",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+    assert built.evidential_density is not None
+    assert built.evidential_density > 0.0
+    assert built.speculative_density == 0.0, "measured, and measured as none"
+
+
 # --- The ledger --------------------------------------------------------------
 
 
@@ -165,6 +194,30 @@ def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
 
 def test_the_ledger_columns_match_the_contract() -> None:
     assert writer.columns() == EvalRow.csv_columns()
+
+
+def test_the_committed_ledger_carries_todays_columns() -> None:
+    """The header is written once, and the file is appended to forever.
+
+    A contract that grew a column while the committed header did not would put
+    more cells on tomorrow's row than the header names, and the dashboard reads
+    cells by position.
+    """
+    ledger = REPO_ROOT / writer.LEDGER_RELPATH
+    if not ledger.exists():
+        pytest.skip("no ledger committed yet")
+    assert writer.read_header(ledger) == writer.columns()
+
+
+def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
+    """Silent corruption is the alternative, and it is unrecoverable once shipped."""
+    ledger = tmp_path / "state" / "scores.csv"
+    writer.append(ledger, [row()])
+    kept = ledger.read_text(encoding="utf-8").split("\n")
+    kept[0] = ",".join(writer.columns()[:-1])
+    ledger.write_text("\n".join(kept), encoding="utf-8")
+    with pytest.raises(ValueError, match="Migrate the ledger"):
+        writer.append(ledger, [row(item_id="ai-02")])
 
 
 # --- Chunking ----------------------------------------------------------------
