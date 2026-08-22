@@ -1,0 +1,145 @@
+{
+  "articles": [
+    {
+      "added_on": "2026-08-22",
+      "source_id": "ai2-blog",
+      "title": "How a Georgia Tech team used the open Olmo stack to trace social reasoning",
+      "url": "https://allenai.org/blog/olmo-capability-tracing",
+      "vertical": "ai"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "ai2-blog",
+      "title": "When a model reads a drug's class from its name\u2014not its knowledge",
+      "url": "https://allenai.org/blog/olmo-drug-morphology",
+      "vertical": "ai"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "amazon-science",
+      "title": "SOP-Bench: A new benchmark for evaluating AI agents on real business procedures",
+      "url": "https://amazon.science/blog/sop-bench-a-new-benchmark-for-evaluating-ai-agents-on-real-business-procedures",
+      "vertical": "ai"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "amazon-science",
+      "title": "A decade of mathematical certainty: Reflections on the Automated Reasoning Group",
+      "url": "https://amazon.science/blog/a-decade-of-mathematical-certainty-reflections-on-the-automated-reasoning-group",
+      "vertical": "ai"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "eia-today",
+      "title": "Longer wells boost Permian crude oil and natural gas production",
+      "url": "https://eia.gov/todayinenergy/detail.php?id=67984",
+      "vertical": "energy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "eia-today",
+      "title": "Waterborne shipments from the U.S. Gulf Coast increased in April and May",
+      "url": "https://eia.gov/todayinenergy/detail.php?id=67964",
+      "vertical": "energy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "balkangreen",
+      "title": "PowerChina wins 30 MW solar project in North Macedonia",
+      "url": "https://balkangreenenergynews.com/powerchina-wins-30-mw-solar-project-in-north-macedonia",
+      "vertical": "energy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "balkangreen",
+      "title": "Croatia updates rules for constructing new power plants",
+      "url": "https://balkangreenenergynews.com/croatia-updates-rules-for-constructing-new-power-plants",
+      "vertical": "energy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "aljazeera-economy",
+      "title": "Man Utd humiliated at Hull to open Premier League account",
+      "url": "https://aljazeera.com/sports/2026/8/22/man-utd-slump-to-opening-day-premier-league-defeat-at-hull-city?traffic_source=rss",
+      "vertical": "business-economy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "axios-business",
+      "title": "Scoop: Mike Rogers-AIPAC rupture roils Michigan Senate race",
+      "url": "https://axios.com/2026/08/22/mike-rogers-aipac-michigan-senate",
+      "vertical": "business-economy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "bbc-business",
+      "title": "Royal Mail misses delivery targets again but hails 'encouraging' signs",
+      "url": "https://bbc.co.uk/news/articles/c1w1rg208xdo?at_campaign=rss&at_medium=RSS",
+      "vertical": "business-economy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "bbc-business",
+      "title": "'We have more work to do', says Canada negotiator as US trade deadline looms",
+      "url": "https://bbc.co.uk/news/articles/czjlr0evy0do?at_campaign=rss&at_medium=RSS",
+      "vertical": "business-economy"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "reliefweb",
+      "title": "Venezuela (Bolivarian Republic of): Earthquake Response Situation Report #24 (18 to 20 August 2026)",
+      "url": "https://reliefweb.int/report/venezuela-bolivarian-republic/venezuela-bolivarian-republic-earthquake-response-situation-report-24-18-20-august-2026",
+      "vertical": "world"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "reliefweb",
+      "title": "Venezuela (Rep\u00fablica Bolivariana de): Respuesta a Terremotos - Reporte de Situaci\u00f3n #24 (18 al 20 de agosto 2026)",
+      "url": "https://reliefweb.int/report/venezuela-bolivarian-republic/venezuela-republica-bolivariana-de-respuesta-terremotos-reporte-de-situacion-24-18-al-20-de-agosto-2026",
+      "vertical": "world"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "abc-au-world",
+      "title": "Ukraine strikes Russian retail warehouse in wave of drone attacks",
+      "url": "https://abc.net.au/news/2026-08-22/civilians-killed-in-ukrainian-drone-strikes-over-russia-/107067556",
+      "vertical": "world"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "africanews",
+      "title": "Ceuta authorities bury migrants who died in border rush from Morocco",
+      "url": "http://africanews.com/2026/08/22/ceuta-authorities-bury-migrants-who-died-in-border-rush-from-morocco",
+      "vertical": "world"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "economic-times",
+      "title": "Iraq rejects use of its territory for attacks",
+      "url": "https://economictimes.indiatimes.com/news/defence/we-do-not-accept-the-use-of-iraqi-territory-to-attack-any-country-iraqi-president-nizar-amidi/articleshow/133424627.cms",
+      "vertical": "india"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "et-default",
+      "title": "Dalal Street Week Ahead: Selective Buying Favoured as Nifty Remains Range-Bound",
+      "url": "https://economictimes.indiatimes.com/markets/stocks/news/dalal-street-week-ahead-selective-buying-favoured-as-nifty-remains-range-bound/articleshow/133423333.cms",
+      "vertical": "india"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "et-default",
+      "title": "CAS chaos triggers liquidity spiral: Nuvama says higher participation needed to break cycle",
+      "url": "https://economictimes.indiatimes.com/markets/stocks/news/cas-chaos-triggers-liquidity-spiral-nuvama-says-higher-participation-needed-to-break-cycle/articleshow/133421238.cms",
+      "vertical": "india"
+    },
+    {
+      "added_on": "2026-08-22",
+      "source_id": "frontline",
+      "title": "Fragments of home",
+      "url": "https://frontline.thehindu.com/photo-essay/women-displacement-memory-migration-exhibition/article71374028.ece",
+      "vertical": "india"
+    }
+  ],
+  "version": "2026-08-22"
+}
