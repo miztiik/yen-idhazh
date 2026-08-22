@@ -70,6 +70,12 @@ jobs:
         working-directory: frontend
         run: npm ci
 
+      # The build strips types, so it passes on code the type-checker rejects.
+      # Without this gate a type error only shows up in an editor.
+      - name: Type-check
+        working-directory: frontend
+        run: npm run check
+
       # A payload that fails its contract never reaches a reader: prerendering
       # turns what would be a runtime error into a build failure.
       - name: Build the site
