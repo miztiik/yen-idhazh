@@ -133,7 +133,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Contracts, schemas and repo scaffold | - | A | DONE | main | direct | - |
-| 2 | Measurement harness: throughput + corpus shape | - | A | HARNESS-LANDED (ledger at `docs/reference/measurements.md`; runner run, corpus and image still unmeasured) | main | direct | - |
+| 2 | Measurement harness: throughput + corpus shape | - | A | LANDED AND RUN (throughput and corpus measured on `ubuntu-latest` 2026-08-22; the image job killed its runner) | main | direct | - |
 | 3 | Source discovery, fetch + extract | 1 | B | DONE | main | direct | - |
 | 4 | Eval harness: HHEM dual-score + deterministic metrics | 1 | B | LANDED (scorer behind an optional extra; timing still unmeasured) | main | direct | - |
 | 5 | Injection canary fixtures + CI assertion | 1 | B | DONE | main | direct | - |
@@ -160,16 +160,38 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 
 ## 3. Delivery state (2026-08-22)
 
-Seventeen of twenty-three rows are done or landed. The pipeline runs end to end
-against live feeds with a local model, all five verticals carry a verified feed
-list, the site builds and renders, and every commit is pushed. What remains is
-listed here honestly, with what each one is actually waiting on.
+**Twenty of twenty-three rows are settled.** The pipeline ran end to end on a
+GitHub runner and published a real day: 10 items across all five verticals, all
+banded `high`, 10 eval rows, and one rendered chart - live at
+<https://miztiik.github.io/yen-idhazh/>. Three rows remain, each for a stated
+reason rather than for want of effort.
+
+### The six bugs the first real run found
+
+None of these was findable without running the pipeline on a runner. They are
+listed because the pattern matters more than the fixes: every one sat between
+"the code is correct" and "a reader sees today's news".
+
+| # | Bug | Why it hid |
+| --- | --- | --- |
+| 1 | `transformers` pinned `>=4.46` with no ceiling; CI resolved to 5.x, which the HHEM checkpoint's own modelling code predates | A dependency nobody changed broke on a day nobody touched it |
+| 2 | A scorer that would not load took the whole run down | The degrade path existed in `assemble` and was never reached, because the crash happened earlier |
+| 3 | `find -type f` skipped the runtime's symlinked `.so` files | The copy reported success; the binary died at exec |
+| 4 | Anonymous `api.github.com` rate limit, five jobs asking at once | `jq` failed with "Cannot index string with string", which names the symptom |
+| 5 | A cache key that did not change when its contents did | The fix was written, pushed, and immediately overwritten by the cached bug |
+| 6 | The bot's commit never triggered the Pages deploy | Every job green, every test passing, site stale. **No alarm exists for this.** |
+
+A seventh was latent rather than fired: the model-server health check ended its
+wait loop whether or not the server came up, so a dead server published
+`items=0` - a page that reads exactly like a quiet news day. It now asserts.
+
+### What remains
 
 | Row | State | Waiting on |
 | --- | --- | --- |
-| 7 - Model validation gate | **RULE LANDED, measurement outstanding** | The weights on a real runner. The rule that will judge the result is written, config-driven and covered by 19 tests, so nothing about the decision is still up for argument - only the numbers are missing. A laptop measurement would not be the thing this claims to measure. It stays an ESCALATE row: the verdict pauses rather than switching. |
-| 9 - Image renderer | **BLOCKED, by design** | A measurement that has never run. Row 9 is gated on whether images fit the published budget at all, and section 0.3 says the answer decides between a 4-month wall and a 5-year one. Guessing here is exactly what Holy Law #10 forbids. |
-| 23 - Browser chat SLM | **BLOCKED, by design** | Its ESCALATE trigger on any single model file over GitHub's 100 MB hard limit. Rows 20 and 21 are now clear, so this is the only remaining gate - and rows 20/21 also showed what shipping one would cost: the search encoder alone is 43 MB. |
+| 7 - Model validation gate | **RULE LANDED, GATE NEVER RUN** | The rule is config-driven and covered by 19 tests, so nothing about the decision is up for argument. What has never happened is the measurement it judges: 20 golden articles scored end to end per candidate model. The `llm` job measured throughput, not per-model faithfulness. Until that runs, the gate has judged nothing. |
+| 9 - Image renderer | **BLOCKED, and now for a measured reason** | The `image` job ran 48 minutes inside a 120-minute budget and then took a runner shutdown signal - memory exhaustion, on a 16 GB machine running CPU diffusion. That does not answer the byte question. It answers that the current way of asking it does not survive the platform. |
+| 23 - Browser chat SLM | **BLOCKED, by design** | Its ESCALATE trigger. Rows 20 and 21 are clear, but they also priced it: the search encoder alone is 43 MB, and a generative model is the surface every browser canary exists to guard. |
 
 ### What changed on 2026-08-22
 
