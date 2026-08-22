@@ -21,6 +21,53 @@ Two rules govern this page:
 `llama-bench -m <model> -p 730,1800,4850 -n 250 -t 4`, at the three input
 lengths a short, medium and long article actually produce.
 
+### On the runner (authoritative)
+
+**Measured 2026-08-22** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4 threads,
+llama.cpp `b10580`, 3 repeats. This is the hardware the pipeline runs on, so
+these are the numbers a design decision may cite. The laptop tables below are
+kept only to show how far a laptop misleads.
+
+| Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
+| --- | --- | --- | --- | --- |
+| Qwen3-4B-Q4_K_M | 22.1 +/- 0.2 | 20.8 +/- 0.0 | 17.1 +/- 0.1 | **13.00 +/- 0.03** |
+| Qwen3-8B-Q4_K_M | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
+
+The spread collapsed against the laptop: stddev on the runner is 0.0-0.2 tok/s
+where the laptop showed up to 4.49. A shared laptop with thermal throttling was
+measuring its own scheduler as much as the model.
+
+**The 8B is 1.8x slower to decode, not 3.3x.** The laptop's 3.3x was the
+headline number behind "the 8B may not fit". On real hardware the gap is roughly
+half that, and the 8B fits comfortably.
+
+**Weight download, cache miss:** 4B 2.4 GB in 32s, 8B 4.7 GB in 180s. Both are
+one-off per cache key; the 10 GB cache holds both.
+
+### Derived seconds per article
+
+Derived from the runner table by `backend/utilities/summarise_bench.py`, using
+the **measured** length buckets in [Corpus shape](#corpus-shape). Derived, not
+measured: they inherit both the throughput spread and the bucket error.
+
+| Model | short | medium | long | blended | worst long |
+| --- | --- | --- | --- | --- | --- |
+| Qwen3-4B-Q4_K_M | 45s | 127s | 232s | **112s** | 363s |
+| Qwen3-8B-Q4_K_M | 82s | 225s | 393s | **196s** | 597s |
+
+The blended figures were first published as 128s and 196s -> corrected to 112s
+and 196s when the bucket shares were replaced by the measured ones. A blended
+number is a statement about a corpus; blending against a corpus that was
+disproved the same day is arithmetic on a fiction.
+
+**The shard timeout stays worst-case.** A 5-item shard drawing five long
+articles on the 8B is 5 x 597s = 50 minutes. `digest.yml` sets 330 minutes,
+which is generous - and a timeout should be. It must never be re-derived from
+the 196s blend, which would set it at 17 minutes and kill healthy shards that
+happened to draw long articles.
+
+### On a laptop (kept only as a warning)
+
 ### Qwen3-4B-Q4_K_M
 
 Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 3.
@@ -43,12 +90,11 @@ Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 2.
 | 4850 | 6.30 | 0.30 | 2.0x slower |
 | decode (250) | 1.84 | 0.17 | **3.3x slower** |
 
-### Derived seconds per article
+### Derived seconds per article, on the laptop
 
-Derived from the two tables above by `backend/utilities/summarise_bench.py`,
-using the length buckets in [Corpus shape](#corpus-shape). Derived, not
-measured: they inherit both the throughput spread and the bucket error.
-
+Superseded by the runner table above. Kept because the gap between the two is
+the finding: this said the 8B cost 2.9x a short article, and the runner says
+1.8x. Nothing here may be cited.
 | bucket | 4B typical | 8B typical | multiple |
 | --- | --- | --- | --- |
 | short | 55 s | 160 s | 2.9x |
@@ -205,6 +251,29 @@ Two consequences, stated before anyone re-derives them:
 Caveat, stated rather than buried: n=20, one sample, one day. It settles that
 the old buckets were wrong. It does not settle what the right ones are.
 
+## The image measurement killed the runner
+
+**Attempted 2026-08-22**, `ubuntu-latest`, the `image` job timing Z-Image-Turbo
+on CPU. It ran for 48 minutes inside a 120-minute budget and then:
+
+```
+##[error]The runner has received a shutdown signal.
+```
+
+That is not a timeout. The job had 72 minutes left. A shutdown signal with time
+on the clock is the runner agent being taken down underneath the job, which on a
+16 GB machine running CPU diffusion is what memory exhaustion looks like from
+the inside.
+
+**This is itself evidence for Row #9.** The question that row asks is whether
+generated images fit the published budget. Before reaching the byte count, the
+measurement could not survive the machine. A feature whose *benchmark* cannot
+complete in a job is not a feature that belongs on a 4 vCPU runner without
+something changing first.
+
+It does not settle the byte question, and it must not be cited as if it did. It
+settles that the current approach to answering it does not run.
+
 ## Still unmeasured
 
 Each line names the measurement that would settle it. Nothing here may be cited
@@ -212,11 +281,9 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
-| Prefill and decode on a real runner | laptop figures above | the `llm` job in `.github/workflows/measure.yml` |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
-| Weight download time, cache-miss | unmeasured | the timed download step, which now records itself into `cache-state.txt` |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
-| Image render seconds at 512 and 768 | unmeasured | the `image` job, against both candidate models |
+| Image render seconds at 512 and 768 | the job cannot complete | a smaller model, a smaller resolution, or a machine that survives it |
 | Image bytes, PNG at 768 | ~500 KB, estimate | the `image` job writes the file; measure it |
 | Image bytes, WebP q80 at 768 | ~90 KB, estimate | re-encode the same file and measure |
 | A production day payload | fixture figure above | the first real pipeline run |
