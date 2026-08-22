@@ -132,11 +132,16 @@ test.describe('the eight canaries, on the published surface', () => {
 	});
 
 	test('planted markup rendered as words, not as elements', async ({ page }) => {
+		// `figure img` is excluded because a rendered visual is a legitimate image
+		// the pipeline produced. Everything else is markup that came from a
+		// stranger's page, and none of it may become an element.
 		await page.goto('/2026-08-20/');
 		const smuggled = await page.evaluate(() =>
-			[...document.querySelectorAll('main iframe, main img, main object, main embed')].map(
-				(node) => node.outerHTML
-			)
+			[
+				...document.querySelectorAll(
+					'main iframe, main object, main embed, main img:not(figure img)'
+				)
+			].map((node) => node.outerHTML)
 		);
 		expect(smuggled).toEqual([]);
 	});
@@ -164,6 +169,44 @@ test.describe('the eight canaries, on the published surface', () => {
 				.includes('[SYSTEM]');
 		});
 		expect(outside).toBe(false);
+	});
+});
+
+test.describe('the visual path', () => {
+	// A payload that promises a picture at a 404 is worse than routing the item
+	// to no visual: the reader gets a broken frame where evidence should be.
+	// Until this ran, no rendered visual had ever been fetched by a browser.
+	test('a promised visual is actually served', async ({ page }) => {
+		const misses: string[] = [];
+		page.on('response', (response) => {
+			if (response.url().endsWith('.svg') && response.status() >= 400) {
+				misses.push(`${response.status()} ${response.url()}`);
+			}
+		});
+		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
+
+		const figures = page.locator('main figure img');
+		await expect(figures).toHaveCount(2);
+		expect(misses).toEqual([]);
+	});
+
+	test('every visual carries alt text that repeats its numbers', async ({ page }) => {
+		// The visual is never the only carrier of a fact.
+		await page.goto('/2026-08-20/');
+		const alts = await page.locator('main figure img').evaluateAll((nodes) =>
+			nodes.map((node) => node.getAttribute('alt') ?? '')
+		);
+		expect(alts).toHaveLength(2);
+		expect(alts[0]).toContain('15,400');
+		expect(alts[1]).toContain('Filed');
+	});
+
+	test('the rendered SVG decoded as an image, not as a broken frame', async ({ page }) => {
+		await page.goto('/2026-08-20/', { waitUntil: 'networkidle' });
+		const widths = await page.locator('main figure img').evaluateAll((nodes) =>
+			nodes.map((node) => (node as HTMLImageElement).naturalWidth)
+		);
+		expect(widths.every((width) => width > 0)).toBe(true);
 	});
 });
 
