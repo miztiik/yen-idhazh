@@ -20,15 +20,17 @@ The payoff compounds. One supply agreement between a chip maker and a datacentre
 
 ## Verticals
 
-Each carries a feed list, a daily cap and a lifecycle status. The current set:
+Each carries a feed list, a daily cap and a lifecycle status. **The feed floor is seven times the daily cap.** A vertical below its floor is not published.
 
-| id | daily cap |
-| --- | --- |
-| `ai` | 5 |
-| `energy` | 3 |
-| `business-economy` | 3 |
-| `world` | 3 |
-| `india` | 3 |
+| id | daily cap | feed floor | live feeds |
+| --- | --- | --- | --- |
+| `ai` | 5 | 35 | 38 |
+| `energy` | 3 | 21 | 24 |
+| `business-economy` | 3 | 21 | 22 |
+| `world` | 3 | 21 | 27 |
+| `india` | 3 | 21 | 27 |
+
+Live counts measured 2026-08-22 by fetching and parsing every configured feed. A feed counts as live only if it resolves, parses and carries entries.
 
 The caps sum to less than the daily item ceiling on purpose, so a vertical can be added without re-opening that ruling.
 
@@ -74,7 +76,7 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 
 - **An id is an immutable slug; the display name is a separate, freely mutable field.** Renaming what a reader sees must never orphan a payload that referenced the id.
 - **Retire, never delete.** A retired vertical, lens or entity keeps its entry with a retired status and the date. Deleting an id breaks every payload written under it and forces a read-side migration; a tombstone costs one object.
-- **A draft status plus a minimum-feed floor** lets a vertical be built in the open over weeks. Below the floor it is not published, so an under-sourced desk never reaches a reader.
+- **A draft status plus a minimum-feed floor** lets a vertical be built in the open over weeks. The floor is seven times the vertical's daily cap. Below the floor it is not published, so an under-sourced desk never reaches a reader.
 - **Feed health is recorded, not configured.** Repeated failures quarantine a feed automatically and degrade its vertical. The run never fails because a source died.
 - **Soft retirement before hard.** Drop a source's weight, watch what changes, then retire it. Reversible in one field.
 
@@ -82,7 +84,13 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 
 Segmenting by subject is a source-diversity problem, not a compute one. The pipeline had spare capacity long before it had spare sources, so the binding constraint was never how many items could be summarized - it was how many were worth summarizing, and whether they covered more than one subject.
 
-Two findings from prior art settled the shape. First, every system that publishes a multi-subject daily digest attaches a curated feed list per subject; none of them sorts a single firehose into subjects. Second, those systems enforce a floor - roughly twenty-five feeds - below which a subject is not surfaced at all, because a thin list produces a thin day and the reader cannot tell the difference between a quiet day and a broken one.
+Two findings from prior art settled the shape. First, every system that publishes a multi-subject daily digest attaches a curated feed list per subject; none of them sorts a single firehose into subjects. Second, those systems enforce a floor below which a subject is not surfaced at all, because a thin list produces a thin day and the reader cannot tell the difference between a quiet day and a broken one.
+
+The floor started as a borrowed constant: twenty-five feeds for every vertical, taken from prior art. That number is wrong here, because it does not scale with how much a vertical publishes. The systems it came from surface dozens of items per subject per day. Four of our five verticals surface three. A floor that ignores the cap asks a three-item desk to carry the same source pool as a thirty-item one.
+
+The floor is now seven times the daily cap. Seven is a judgement, not a measurement: it is the point at which the candidate pool stays several times larger than the slots, so the ranking still has something to choose between on a quiet day. State the sequence honestly - the counts were measured first, then the rule was written, so the rule is fitted to what the source pool supports rather than derived from an independent finding. It is recorded here so a later reader can overturn it with a real measurement instead of re-deriving it.
+
+The floor still does its job. It is not a formality that always passes: `business-economy` clears twenty-one by one feed, and a single dead source puts it back under.
 
 Tiering the sources was the cheap half. Once a source carries a tier, ranking needs no model, no classifier and no judgement at run time: the arithmetic of "how authoritative" times "how widely carried" reproduces most of what an editor would pick, and it reproduces it identically on every re-run.
 
@@ -98,6 +106,8 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | A market-prices vertical | A once-daily, statically-committed digest is the wrong instrument for a number that moves continuously. Kept as a lens so a structural story still surfaces. |
 | Splitting a subject into two verticals by angle | The same feed list serves both, so the split doubles curation to buy one taxonomy line. The separation is recovered for free by the event vocabulary. |
 | Deleting a retired entry from config | Breaks every payload written under that id and forces a read-side migration. |
+| Keeping the flat floor of twenty-five and leaving two verticals unpublished | The floor would then be measuring the borrowed constant, not the health of the desk. Two verticals stay dark for a reason that does not survive being stated. |
+| Dropping the floor to whatever the thinnest vertical reached | That is tuning the target to the result with no rule behind it, and the floor stops being able to fail. |
 
 ## See also
 

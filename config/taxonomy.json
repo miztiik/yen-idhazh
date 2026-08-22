@@ -69,41 +69,41 @@
       "daily_cap": 5,
       "display_name": "AI",
       "id": "ai",
-      "min_feeds": 25,
+      "min_feeds": 35,
       "retired_on": null,
-      "status": "draft"
+      "status": "active"
     },
     {
       "daily_cap": 3,
       "display_name": "Energy",
       "id": "energy",
-      "min_feeds": 25,
+      "min_feeds": 21,
       "retired_on": null,
-      "status": "draft"
+      "status": "active"
     },
     {
       "daily_cap": 3,
       "display_name": "Business and Economy",
       "id": "business-economy",
-      "min_feeds": 25,
+      "min_feeds": 21,
       "retired_on": null,
-      "status": "draft"
+      "status": "active"
     },
     {
       "daily_cap": 3,
       "display_name": "World",
       "id": "world",
-      "min_feeds": 25,
+      "min_feeds": 21,
       "retired_on": null,
-      "status": "draft"
+      "status": "active"
     },
     {
       "daily_cap": 3,
       "display_name": "India",
       "id": "india",
-      "min_feeds": 25,
+      "min_feeds": 21,
       "retired_on": null,
-      "status": "draft"
+      "status": "active"
     }
   ]
 }
