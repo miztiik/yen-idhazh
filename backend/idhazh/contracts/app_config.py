@@ -17,6 +17,7 @@ from typing import ClassVar, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model, Sha256, Slug
+from idhazh.contracts.route import VisualKind
 
 
 class LogLevel(StrEnum):
@@ -207,6 +208,62 @@ class LoggingConfig(Model):
     level: LogLevel = LogLevel.INFO
 
 
+class VisualsConfig(Model):
+    """Routing and rendering knobs. "Nothing" is the common answer, by design.
+
+    `enabled_kinds` is the gate that keeps an unbuilt renderer unreachable. The
+    four-way enum lives in the contract because a payload must be able to say
+    `image`; the router may only choose a kind whose renderer exists, so turning
+    one on is a config edit rather than a code change.
+    """
+
+    enabled_kinds: list[VisualKind] = Field(
+        default_factory=lambda: [VisualKind.CHART, VisualKind.DIAGRAM],
+        description="Kinds the router may choose. `none` is always available and never listed.",
+    )
+    min_chart_points: int = Field(
+        default=3,
+        ge=2,
+        description="Below this a chart says less than the sentence it sits under.",
+    )
+    max_chart_points: int = Field(default=8, ge=2)
+    min_diagram_steps: int = Field(default=3, ge=2)
+    max_diagram_steps: int = Field(default=6, ge=2)
+    canvas_width: int = Field(
+        default=800,
+        ge=200,
+        description="One fixed canvas for every visual. Height follows the 16:10 ratio.",
+    )
+    max_output_tokens: int = Field(
+        default=400,
+        ge=1,
+        description="Routing emits a small object. It does not need the summarizer's budget.",
+    )
+    max_facts: int = Field(
+        default=16,
+        ge=2,
+        description=(
+            "How many quantities the router may choose between. A long indexed menu is "
+            "lost-in-the-middle for a small model picking an integer index."
+        ),
+    )
+
+    @property
+    def canvas_height(self) -> int:
+        """16:10, matching the frontend's fixed figure box exactly."""
+        return round(self.canvas_width * 10 / 16)
+
+    @model_validator(mode="after")
+    def _bounds_are_orderable(self) -> Self:
+        if self.max_chart_points < self.min_chart_points:
+            raise ValueError("max_chart_points is below min_chart_points")
+        if self.max_diagram_steps < self.min_diagram_steps:
+            raise ValueError("max_diagram_steps is below min_diagram_steps")
+        if VisualKind.NONE in self.enabled_kinds:
+            raise ValueError("`none` is always reachable and is never listed as enabled")
+        return self
+
+
 class ThemeChoice(StrEnum):
     SYSTEM = "system"
     LIGHT = "light"
@@ -262,6 +319,14 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-22",
+            change="Added the visuals block.",
+            why=(
+                "Routing needs its bounds and its enabled-kinds gate in config before the "
+                "router may choose a kind. Additive - an older payload still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21T06:00",
             change="Added the ui block.",
             why="The published surface's knobs need a home before a component reads one.",
@@ -300,5 +365,6 @@ class AppConfig(Contract):
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
+    visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)

@@ -30,6 +30,7 @@
   "extract": {
     "backoff_initial_seconds": 1.0,
     "backoff_multiplier": 2.0,
+    "boilerplate_ratio_max": 0.4,
     "max_body_bytes": 2000000,
     "max_retries": 3,
     "min_source_words": 250,
@@ -94,5 +95,18 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-21"
+  "version": "2026-08-21",
+  "visuals": {
+    "canvas_width": 800,
+    "enabled_kinds": [
+      "chart",
+      "diagram"
+    ],
+    "max_chart_points": 8,
+    "max_diagram_steps": 6,
+    "max_facts": 16,
+    "max_output_tokens": 400,
+    "min_chart_points": 3,
+    "min_diagram_steps": 3
+  }
 }

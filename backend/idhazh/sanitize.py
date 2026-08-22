@@ -42,8 +42,7 @@ BLOB_PLACEHOLDER: Final = "[omitted]"
 # arbitrary ASCII in codepoints that render as nothing at all.
 _CONTROL = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f-\x9f]")
 _INVISIBLE = re.compile(
-    "[\u00ad\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\ufeff"
-    "\U000e0000-\U000e007f]"
+    "[\u00ad\u200b-\u200f\u2028\u2029\u202a-\u202e\u2060-\u2064\ufeff\U000e0000-\U000e007f]"
 )
 _HTML_COMMENT = re.compile(r"<!--.*?-->", re.DOTALL)
 # End the user's turn and start a forged system turn. Covers the ChatML family,

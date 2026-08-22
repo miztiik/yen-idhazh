@@ -86,9 +86,7 @@ def test_a_hostile_feed_cannot_aim_the_fetcher_inward(url: str) -> None:
     assert why
 
 
-@pytest.mark.parametrize(
-    "url", ["https://newsroom.example-grid.com/a", "http://example.org/b?c=1"]
-)
+@pytest.mark.parametrize("url", ["https://newsroom.example-grid.com/a", "http://example.org/b?c=1"])
 def test_an_ordinary_public_address_is_dialable(url: str) -> None:
     assert address_is_dialable(url) == (True, None)
 
@@ -103,7 +101,9 @@ def test_a_disallowed_path_is_refused() -> None:
 
 
 def test_a_blanket_disallow_is_refused() -> None:
-    assert not robots_allows("User-agent: *\nDisallow: /\n", "yen-idhazh/1.0", "https://x.example/a")
+    assert not robots_allows(
+        "User-agent: *\nDisallow: /\n", "yen-idhazh/1.0", "https://x.example/a"
+    )
 
 
 def test_an_unreadable_robots_file_is_a_refusal_not_a_permission() -> None:
@@ -196,7 +196,9 @@ def test_a_hostile_page_crosses_the_boundary_sanitized() -> None:
 
 
 def test_a_page_with_no_article_extracts_to_nothing() -> None:
-    article = to_article(ITEM, ok("chrome-only.html"), config=ExtractConfig(), fetched_at=FETCHED_AT)
+    article = to_article(
+        ITEM, ok("chrome-only.html"), config=ExtractConfig(), fetched_at=FETCHED_AT
+    )
     assert article.status is ArticleStatus.EXTRACT_FAILED
     assert article.failure_detail
     assert article.text is None
@@ -236,7 +238,9 @@ def test_every_failure_is_a_state_of_the_payload(
 
 def test_a_short_extraction_is_refused_before_the_model_sees_it() -> None:
     """Page furniture is short, and 400 seconds spent summarizing it is wasted."""
-    thin = FetchResult(FetchOutcome.OK, status=200, body=b"<html><body><p>Two words.</p></body></html>")
+    thin = FetchResult(
+        FetchOutcome.OK, status=200, body=b"<html><body><p>Two words.</p></body></html>"
+    )
     article = to_article(ITEM, thin, config=ExtractConfig(), fetched_at=FETCHED_AT)
     assert article.status is ArticleStatus.EXTRACT_FAILED
 
@@ -264,7 +268,9 @@ def test_truncation_is_deterministic() -> None:
 
 def test_a_truncated_article_records_where_it_was_cut() -> None:
     article = to_article(
-        ITEM, ok("article.html"), config=ExtractConfig(truncation_cap_tokens=256),
+        ITEM,
+        ok("article.html"),
+        config=ExtractConfig(truncation_cap_tokens=256),
         fetched_at=FETCHED_AT,
     )
     assert article.truncated

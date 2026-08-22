@@ -51,9 +51,7 @@ def _detail(message: str) -> UntrustedLine:
     return message[:_DETAIL_MAX] or "unspecified failure"
 
 
-def _failed(
-    item: PlannedItem, *, status: ArticleStatus, detail: str, fetched_at: str
-) -> Article:
+def _failed(item: PlannedItem, *, status: ArticleStatus, detail: str, fetched_at: str) -> Article:
     return Article(
         version=Article.schema_version(),
         item_id=item.item_id,

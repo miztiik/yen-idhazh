@@ -95,5 +95,18 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-21T06:00"
+  "version": "2026-08-21T06:00",
+  "visuals": {
+    "canvas_width": 800,
+    "enabled_kinds": [
+      "chart",
+      "diagram"
+    ],
+    "max_chart_points": 8,
+    "max_diagram_steps": 6,
+    "max_facts": 16,
+    "max_output_tokens": 400,
+    "min_chart_points": 3,
+    "min_diagram_steps": 3
+  }
 }

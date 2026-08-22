@@ -70,8 +70,7 @@ def canonicalise(url: str) -> str:
     kept = sorted(
         (key, value)
         for key, value in parse_qsl(parts.query, keep_blank_values=True)
-        if key.lower() not in _TRACKING_KEYS
-        and not key.lower().startswith(_TRACKING_PREFIXES)
+        if key.lower() not in _TRACKING_KEYS and not key.lower().startswith(_TRACKING_PREFIXES)
     )
     query = "&".join(f"{key}={value}" for key, value in kept)
     return urlunsplit((scheme, host, path, query, ""))

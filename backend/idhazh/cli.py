@@ -22,10 +22,11 @@ from collections.abc import Sequence
 from pathlib import Path
 from typing import Final
 
-from idhazh import assemble, config, discover, extract, fetch, rank, summarize
+from idhazh import assemble, config, discover, extract, fetch, rank, route, summarize
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -34,6 +35,7 @@ from idhazh.evals import metrics, score, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
 from idhazh.llm.server import Completion, post
+from idhazh.render import asset_relpath, render_route
 from idhazh.sanitize import SANITIZER_VERSION
 
 LOG: Final = logging.getLogger("idhazh")
@@ -233,6 +235,77 @@ def _summarize_one(article: Article, settings: config.Settings, fingerprint: str
     )
 
 
+# --- route -------------------------------------------------------------------
+
+
+def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
+    """Decide and draw the visuals, one item at a time.
+
+    A separate stage from `work` because it runs a different, smaller model, and
+    one llama-server serves one set of weights. Splitting it also means a run
+    that never starts a router still publishes - every item simply carries no
+    picture, which is already the common and correct answer.
+    """
+    items_dir = _run_dir(plan.date) / "items"
+    visuals = settings.app.visuals
+    ordinals: dict[str, int] = {}
+
+    for item in plan.items:
+        article_path = items_dir / f"{item.item_id}.article.json"
+        summary_path = items_dir / f"{item.item_id}.summary.json"
+        if not (article_path.exists() and summary_path.exists()):
+            continue
+        article = Article.from_json(article_path.read_text(encoding="utf-8"))
+        summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
+        if summary.status is not SummaryStatus.OK:
+            continue
+
+        decision = _route_one(article, summary, settings)
+        if decision.kind is not VisualKind.NONE:
+            ordinals[article.vertical] = ordinals.get(article.vertical, 0) + 1
+            decision = render_route(
+                decision,
+                public_root=PUBLIC_ROOT.parent,
+                relpath=asset_relpath(plan.date, article.vertical, ordinals[article.vertical]),
+                canvas_width=visuals.canvas_width,
+                canvas_height=visuals.canvas_height,
+            )
+        assemble.write_atomic(items_dir / f"{item.item_id}.route.json", decision.to_json())
+        LOG.info(
+            "item routed id=%s kind=%s state=%s",
+            item.item_id,
+            decision.kind.value,
+            decision.visual_state.value,
+        )
+
+
+def _route_one(article: Article, summary: Summary, settings: config.Settings) -> Route:
+    facts = route.numeric_facts(article.text or "", limit=settings.app.visuals.max_facts)
+    model_id = settings.app.models.route.id
+    payload = route.build_request(
+        article,
+        summary,
+        facts,
+        model_id=model_id,
+        inference=settings.app.models.inference,
+        visuals=settings.app.visuals,
+    )
+    try:
+        completion = post(payload, timeout=settings.app.run.shard_timeout_minutes * 60)
+    except OSError as error:
+        completion = Completion(content="")
+        LOG.warning("router unreachable id=%s reason=%s", article.item_id, type(error).__name__)
+    return route.to_route(
+        article,
+        summary,
+        completion,
+        model_id=model_id,
+        routed_at=assemble.utc_now(),
+        visuals=settings.app.visuals,
+        facts=facts,
+    )
+
+
 # --- assemble ----------------------------------------------------------------
 
 
@@ -249,6 +322,7 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
         article_path = items_dir / f"{item.item_id}.article.json"
         summary_path = items_dir / f"{item.item_id}.summary.json"
         eval_path = items_dir / f"{item.item_id}.eval.json"
+        route_path = items_dir / f"{item.item_id}.route.json"
         if not (article_path.exists() and summary_path.exists()):
             continue
         article = Article.from_json(article_path.read_text(encoding="utf-8"))
@@ -276,6 +350,11 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
                 source_name=names.get(article.source_id, article.source_id),
                 source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
                 run_n=1,
+                route=(
+                    Route.from_json(route_path.read_text(encoding="utf-8"))
+                    if route_path.exists()
+                    else None
+                ),
             )
         )
 
@@ -356,7 +435,7 @@ def _scorer(enabled: bool) -> object | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
-    parser.add_argument("stage", choices=("plan", "work", "assemble", "run"))
+    parser.add_argument("stage", choices=("plan", "work", "route", "assemble", "run"))
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--commit", default="0" * 40)
@@ -366,6 +445,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         "--no-faithfulness",
         action="store_true",
         help="Skip the scorer. The digest still publishes; the ledger stays empty.",
+    )
+    parser.add_argument(
+        "--visuals",
+        action="store_true",
+        help="Include the route stage in a full run. It needs the router model served.",
     )
     args = parser.parse_args(argv)
 
@@ -390,6 +474,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             shard=args.shard,
             shards=args.shards,
         )
+
+    if args.stage == "route" or (args.stage == "run" and args.visuals):
+        stage_route(_load_plan(date), settings=settings)
 
     if args.stage in ("assemble", "run"):
         stage_assemble(_load_plan(date), settings=settings, commit_sha=args.commit)
