@@ -314,6 +314,57 @@ def test_a_band_that_asks_for_more_than_the_gate_accepts_is_refused() -> None:
         )
 
 
+# --- The prompt asks for the evidence, not only the facts --------------------
+
+
+def flattened(prompt: str | None = None) -> str:
+    """The prompt as one lowercase line, so an assertion is not about line wrapping."""
+    return " ".join((prompt if prompt is not None else system_prompt()).lower().split())
+
+
+def test_the_prompt_names_the_job_as_epistemological() -> None:
+    """The rare word is the point. The sentence after it says what to do about it."""
+    prompt = flattened()
+    assert "epistemological" in prompt
+    assert "how the article knows what it says" in prompt
+
+
+def test_the_prompt_asks_for_the_attribution_and_not_just_the_claim() -> None:
+    """Who said it is part of what was said - the article's own evidence, carried."""
+    prompt = flattened()
+    assert "carry the source of a claim into your summary" in prompt
+    assert "never name a source the article did not name" in prompt
+
+
+def test_a_figure_an_organisation_reports_about_itself_is_marked_as_its_own() -> None:
+    assert "reports about itself" in flattened()
+
+
+def test_the_prompt_protects_the_hedge_in_both_directions() -> None:
+    """Dropping one and inventing one are different failures with one cause."""
+    prompt = flattened()
+    assert "keep the source's hedges" in prompt
+    assert "do not add a hedge the source did not use" in prompt
+
+
+def test_the_prompt_separates_a_plan_from_a_result() -> None:
+    """The kind of claim is the claim. A target read as a result is a wrong summary."""
+    prompt = flattened()
+    assert "a plan, a proposal, a target, a forecast and a result" in prompt
+
+
+def test_the_prompt_bans_the_verbs_that_smuggle_a_judgement() -> None:
+    prompt = flattened()
+    assert "neutral verbs" in prompt
+    for loaded in ("slammed", "blasted", "admitted", "revealed", "confirmed"):
+        assert loaded in prompt, "named, so the model can recognise the class"
+
+
+def test_a_key_point_is_asked_to_add_something() -> None:
+    """Three restatements of the summary are three lines a reader skips."""
+    assert "a key point that restates the summary is a wasted line" in flattened()
+
+
 # --- Quoting is allowed, and always attributed -------------------------------
 
 
@@ -454,6 +505,18 @@ def test_an_article_that_would_be_cut_off_mid_reply_does_not_fit() -> None:
     """Prompt plus reply must fit, or the reply ends mid-sentence and looks fine."""
     oversized = article().model_copy(update={"token_count": 8000})
     assert not fits_context(oversized, InferenceConfig())
+
+
+def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
+    """Holy Law #2. The prompt can grow a rule at a time until it eats the budget.
+
+    Nothing else would catch it: a prompt that crowds out the article does not
+    fail, it just quietly drops every long read from the day.
+    """
+    from idhazh.contracts.app_config import ExtractConfig
+
+    capped = article().model_copy(update={"token_count": ExtractConfig().truncation_cap_tokens})
+    assert fits_context(capped, InferenceConfig())
 
 
 def test_the_summary_of_an_ok_article_carries_the_items_identity() -> None:
