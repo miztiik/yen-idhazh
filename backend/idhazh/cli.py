@@ -30,7 +30,7 @@ from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.validation_row import ValidationVerdict
 from idhazh.embed import Embedder
 from idhazh.evals import golden, metrics, score, validation, writer
@@ -58,8 +58,13 @@ def _today() -> str:
 # --- plan -------------------------------------------------------------------
 
 
-def stage_plan(date: str, *, settings: config.Settings) -> RunPlan:
-    """Read every live feed, rank the pool, take each vertical's cap. No model."""
+def stage_plan(date: str, *, settings: config.Settings, cap_override: int | None = None) -> RunPlan:
+    """Read every live feed, rank the pool, take each vertical's cap. No model.
+
+    `cap_override` exists for validation. The daily cap is a reader constraint -
+    how much anyone wants to read in a morning - and a measurement corpus has no
+    reason to obey it. Raising it here is not raising the reading budget.
+    """
     candidates: list[discover.Candidate] = []
     read = failed = 0
     for feed in settings.sources.feeds:
@@ -85,7 +90,9 @@ def stage_plan(date: str, *, settings: config.Settings) -> RunPlan:
     for vertical in settings.taxonomy.verticals:
         live = discover.live(settings.sources.feeds, vertical.id)
         summary, planned = rank.plan_vertical(
-            vertical,
+            vertical
+            if cap_override is None
+            else vertical.model_copy(update={"daily_cap": cap_override}),
             [c for c in candidates if c.vertical == vertical.id],
             config=settings.app.collect,
             live_feeds=len(live),
@@ -340,41 +347,35 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
 # --- validate (Row #7) --------------------------------------------------------
 
 
-def stage_validate(*, settings: config.Settings, leaderboard: float, scorer: object) -> None:
-    """Score the golden set with whichever model is currently served.
+def stage_validate(
+    *, settings: config.Settings, date: str, leaderboard: float, scorer: object
+) -> None:
+    """Score the day's own planned articles with whichever model is served.
 
-    The real path - fetch, extract, summarize, score - because the question is
-    not how good the model is, but how good it is through our prompt, our
-    extraction and our corpus.
+    The corpus is the run plan, not a curated list. A hand-picked set of
+    addresses decays the moment it is written - the first one this project had
+    lost three of twenty within hours, and the gate correctly refused to judge on
+    seventeen. The plan is regenerated per validation, so it never rots, needs no
+    curation, and is the real corpus rather than a proxy for it.
+
+    Both models read the same committed plan file, so the only thing differing
+    between their two numbers is the weights.
     """
     if scorer is None:
         raise SystemExit("validation without a faithfulness scorer measures nothing")
 
-    gold = golden.load_golden(config.REPO_ROOT / "config" / "golden.json")
+    plan = _load_plan(date)
     model_id = settings.app.models.summarize.id
-    tiers = {feed.id: feed.tier for feed in settings.sources.feeds}
     scores: list[float] = []
 
-    for index, entry in enumerate(gold.articles, start=1):
-        item = PlannedItem(
-            item_id=f"{entry.vertical}-{index:02d}",
-            vertical=entry.vertical,
-            source_id=entry.source_id,
-            source_url=entry.url,
-            canonical_url=entry.url,
-            url_key=text_digest(entry.url),
-            tier=tiers.get(entry.source_id) or SourceTier.TRADE_PRESS,
-            title=entry.title,
-            rank_score=0.0,
-            carried_by=1,
-        )
+    for index, item in enumerate(plan.items, start=1):
         article, _, _ = _fetch_one(item, settings)
         if article.status is not ArticleStatus.OK:
-            LOG.warning("golden article unavailable url=%s", entry.url)
+            LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
         summary = _summarize_one(article, settings, "0" * 64)
         if summary.status is not SummaryStatus.OK:
-            LOG.warning("golden article did not summarize url=%s", entry.url)
+            LOG.warning("validation article did not summarize url=%s", item.canonical_url)
             continue
         text = article.text or ""
         hhem, _ = dual_score(
@@ -384,13 +385,13 @@ def stage_validate(*, settings: config.Settings, leaderboard: float, scorer: obj
             summary=summary.summary or "",
         )
         scores.append(hhem)
-        LOG.info("golden scored %s/%s hhem=%.3f", index, len(gold.articles), hhem)
+        LOG.info("validation scored %s/%s hhem=%.3f", index, len(plan.items), hhem)
 
     result = golden.GoldenResult(
         model_id=model_id,
         leaderboard_hhem=leaderboard,
         scores=scores,
-        attempted=len(gold.articles),
+        attempted=len(plan.items),
     )
     VALIDATION_ROOT.mkdir(parents=True, exist_ok=True)
     assemble.write_atomic(VALIDATION_ROOT / f"{model_id}.json", result.to_json())
@@ -622,6 +623,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="local",
         help="Where the validation ran. A laptop number is not a gate.",
     )
+    parser.add_argument(
+        "--cap",
+        type=int,
+        default=None,
+        help=(
+            "Override each vertical's daily cap when planning. For validation only: "
+            "the daily cap is how much a reader wants, not how much a measurement needs."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -635,6 +645,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "validate":
         stage_validate(
             settings=settings,
+            date=date,
             leaderboard=args.leaderboard,
             scorer=_scorer(not args.no_faithfulness),
         )
@@ -646,7 +657,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.stage in ("plan", "run"):
-        plan = stage_plan(date, settings=settings)
+        plan = stage_plan(date, settings=settings, cap_override=args.cap)
         assemble.write_atomic(_plan_path(date), plan.to_json())
         LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 

@@ -38,7 +38,6 @@ from idhazh.contracts.digest_day import (
 )
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
-from idhazh.contracts.golden import GoldenArticle, GoldenSet
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
@@ -91,8 +90,6 @@ __all__ = [
     "ExtractConfig",
     "FeedDef",
     "FingerprintRow",
-    "GoldenArticle",
-    "GoldenSet",
     "InferenceConfig",
     "LensDef",
     "LensId",

@@ -118,14 +118,23 @@ models against **their** prompt, **their** extraction and **their** corpus -
 three variables between that number and yours.
 
 ```bash
+# plan the corpus once, so both models score the identical list
+python -m idhazh plan --date 2026-08-22 --cap 6
+
 # with the 8B served
-python -m idhazh validate --leaderboard 0.75
+python -m idhazh validate --date 2026-08-22 --leaderboard 0.75
 
 # restart llama-server on the 4B, then
-python -m idhazh validate --leaderboard 0.74
+python -m idhazh validate --date 2026-08-22 --leaderboard 0.74
 
 python -m idhazh decide --runner local
 ```
+
+The corpus is the day's own run plan, not a curated list of addresses. A
+hand-picked set decays immediately - the first one this project had lost three
+of twenty within hours. `--cap 6` raises each vertical past its daily cap,
+because that cap is how much a reader wants in a morning, not how much a
+measurement needs.
 
 `validate` writes one result file per model under `backend/var/validation/`.
 `decide` applies the rule and writes `evals/validation-<date>.csv`.
