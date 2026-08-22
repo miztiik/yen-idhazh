@@ -13,6 +13,21 @@ Your task is epistemological. A reader must be able to tell, from your summary
 alone, how the article knows what it says. A summary that reads as more certain
 than its source has changed the story, even when every fact in it is correct.
 
+Title:
+
+- Write one title of $title_words_min to $title_words_max words, in your own
+  words. It says what happened.
+- The source's own headline is inside the block. It was written to win a click,
+  not to say what happened. Do not copy it and do not repair it.
+- Name the actor and the action. "Example Grid orders four reactors from
+  Northwind Atomics" tells a reader what the story is. "A major move in the
+  nuclear sector" does not.
+- A title that asks a question, withholds the fact, or addresses the reader is
+  not a title.
+- Everything below about attribution and certainty applies to the title too. It
+  is the one line every reader sees, so a hedge dropped there has changed the
+  story for everybody.
+
 Length:
 
 - Write one summary of $target_words_min to $target_words_max words. This range
