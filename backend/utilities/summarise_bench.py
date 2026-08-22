@@ -12,10 +12,16 @@ from pathlib import Path
 from typing import Any
 
 # English BPE runs ~1.33 tokens/word. Buckets are (words, +/- words, share of feed).
+#
+# Measured 2026-08-22 by the `corpus` job over 20 live articles, replacing the
+# invented 400/1200/3500 at 25/55/20. The real corpus is bimodal: half of it is
+# short, and the long tail is a quarter rather than a fifth. Blending against
+# the old shares made every per-article figure a statement about a corpus this
+# project does not have.
 BUCKETS = {
-    "short": (400, 200, 0.25),
-    "medium": (1200, 500, 0.55),
-    "long": (3500, 1500, 0.20),
+    "short": (411, 200, 0.50),
+    "medium": (1546, 500, 0.25),
+    "long": (2769, 1500, 0.25),
 }
 TOKENS_PER_WORD = 1.33
 SYSTEM_PROMPT_TOKENS = 200
