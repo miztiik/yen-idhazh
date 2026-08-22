@@ -62,6 +62,7 @@ from idhazh.contracts.taxonomy import (
     Taxonomy,
     VerticalDef,
 )
+from idhazh.contracts.validation_row import ValidationRow, ValidationVerdict
 from idhazh.contracts.watchlist import EdgarPolicy, EntityDef, EntityFeed, Watchlist
 
 __all__ = [
@@ -118,6 +119,8 @@ __all__ = [
     "SummaryStatus",
     "Taxonomy",
     "TierWeights",
+    "ValidationRow",
+    "ValidationVerdict",
     "VerticalCount",
     "VerticalDef",
     "VerticalPlan",

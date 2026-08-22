@@ -130,6 +130,29 @@
           "minimum": 0.0,
           "title": "Truncation Gap Max",
           "type": "number"
+        },
+        "validation_articles": {
+          "default": 20,
+          "description": "Golden articles a candidate must be scored on before its mean counts.",
+          "minimum": 1,
+          "title": "Validation Articles",
+          "type": "integer"
+        },
+        "validation_drop_max": {
+          "default": 0.1,
+          "description": "How far below its leaderboard number the incumbent may land before the ranking stops being a usable prior and the challengers get scored too.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Validation Drop Max",
+          "type": "number"
+        },
+        "validation_switch_margin": {
+          "default": 0.05,
+          "description": "How much better a challenger must be on our own corpus to change the pick. A number, because 'materially diverges' is an argument waiting to happen.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Validation Switch Margin",
+          "type": "number"
         }
       },
       "title": "EvaluationConfig",
