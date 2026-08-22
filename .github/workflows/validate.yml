@@ -37,7 +37,7 @@ env:
 jobs:
   validate:
     runs-on: ubuntu-latest
-    # The golden set is 20 articles through the 8B and again through the
+    # The corpus is the day's own plan through the 8B and again through the
     # challenger, plus a faithfulness pass over each. Measured 2026-08-22: the
     # 8B blends to 196 s an article, so 20 is a bit over an hour per model.
     timeout-minutes: 330
@@ -86,7 +86,24 @@ jobs:
           curl -sSL -o "backend/models/${{ inputs.challenger_file }}" \
             "https://huggingface.co/${{ inputs.challenger_repo }}/resolve/main/${{ inputs.challenger_file }}?download=true"
 
-      - name: Score the golden set with the incumbent
+      - name: Plan the validation corpus
+        # Once, before either model runs, so both score the identical list and
+        # the only difference between their numbers is the weights. `--cap 6`
+        # raises each vertical past its daily cap: that cap is how much a reader
+        # wants in a morning, not how much a measurement needs.
+        run: |
+          set -euo pipefail
+          python -m idhazh plan --date "$(date -u +%F)" --cap 6
+          python - <<'PY'
+          import datetime, json, pathlib
+          date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
+          plan = json.loads(
+              pathlib.Path(f"backend/var/run/{date}/plan.json").read_text(encoding="utf-8")
+          )
+          print(f"validation corpus: {len(plan['items'])} articles from {plan['feeds_read']} feeds")
+          PY
+
+      - name: Score the corpus with the incumbent
         run: |
           set -euo pipefail
           LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
@@ -99,7 +116,7 @@ jobs:
 
       # The challenger is served under the same config, so the only thing that
       # differs between the two numbers is the weights.
-      - name: Score the golden set with the challenger
+      - name: Score the corpus with the challenger
         run: |
           set -euo pipefail
           python - <<'PY'

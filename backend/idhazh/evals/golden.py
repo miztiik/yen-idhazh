@@ -13,8 +13,6 @@ import statistics
 from dataclasses import dataclass
 from pathlib import Path
 
-from idhazh.contracts.golden import GoldenSet
-
 
 @dataclass(frozen=True, slots=True)
 class GoldenResult:
@@ -60,10 +58,6 @@ class GoldenResult:
             scores=payload["scores"],
             attempted=payload["attempted"],
         )
-
-
-def load_golden(path: Path) -> GoldenSet:
-    return GoldenSet.from_json(path.read_text(encoding="utf-8"))
 
 
 def results_in(directory: Path) -> list[GoldenResult]:
