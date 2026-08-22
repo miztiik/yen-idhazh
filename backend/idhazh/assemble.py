@@ -23,8 +23,10 @@ from idhazh.contracts.digest_day import (
     DigestItem,
     DigestRunRef,
     DigestVerticalRef,
+    DigestVisual,
 )
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
     ModelUse,
@@ -75,6 +77,7 @@ def to_digest_item(
     source_name: str,
     source_kind: SourceKind,
     run_n: int,
+    route: Route | None = None,
 ) -> DigestItem:
     """One finished item as a reader consumes it. The link is a first-class element."""
     return DigestItem(
@@ -94,6 +97,24 @@ def to_digest_item(
         band=band,
         truncated=article.truncated,
         introduced_by_run=run_n,
+        visual=to_digest_visual(route),
+    )
+
+
+def to_digest_visual(route: Route | None) -> DigestVisual | None:
+    """A routed-to-nothing item carries no visual object at all.
+
+    The absence and the empty object would render identically today, and the
+    absence is one fewer thing in every payload for the two items in three that
+    correctly get no picture.
+    """
+    if route is None or route.kind is VisualKind.NONE:
+        return None
+    return DigestVisual(
+        kind=route.kind,
+        state=route.visual_state,
+        path=route.asset_path,
+        alt=route.alt_text,
     )
 
 

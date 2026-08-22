@@ -83,7 +83,5 @@ class Sources(Contract):
 
     def live_feeds_for(self, vertical_id: str) -> list[FeedDef]:
         return [
-            feed
-            for feed in self.feeds
-            if feed.vertical == vertical_id and feed.retired_on is None
+            feed for feed in self.feeds if feed.vertical == vertical_id and feed.retired_on is None
         ]

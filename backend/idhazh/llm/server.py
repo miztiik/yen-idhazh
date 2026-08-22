@@ -75,6 +75,7 @@ def request_payload(
     user: str,
     output_schema: dict[str, Any],
     inference: InferenceConfig,
+    schema_name: str = "summary",
 ) -> dict[str, Any]:
     """The request body, with the output shape enforced by the decoder.
 
@@ -94,7 +95,7 @@ def request_payload(
         "stream": False,
         "response_format": {
             "type": "json_schema",
-            "json_schema": {"name": "summary", "strict": True, "schema": output_schema},
+            "json_schema": {"name": schema_name, "strict": True, "schema": output_schema},
         },
         # Reasoning measurably increases hallucination when summarizing, and
         # summarization is compression - every reasoning token is a chance to

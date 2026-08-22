@@ -31,9 +31,27 @@ from idhazh.rank import merge, plan_vertical, score, tier_weight
 
 FEEDS = FIXTURES_DIR / "feeds"
 
-LAB = FeedDef(id="lab-blog", vertical="ai", title="Example Lab", url="https://blog.example-lab.org/feed", tier=SourceTier.INSTITUTION)
-TRADE = FeedDef(id="trade-press", vertical="ai", title="Example Trade Press", url="https://trade.example-press.net/feed", tier=SourceTier.TRADE_PRESS)
-COMMUNITY = FeedDef(id="community", vertical="ai", title="Example Community", url="https://community.example.org/feed", tier=SourceTier.COMMUNITY)
+LAB = FeedDef(
+    id="lab-blog",
+    vertical="ai",
+    title="Example Lab",
+    url="https://blog.example-lab.org/feed",
+    tier=SourceTier.INSTITUTION,
+)
+TRADE = FeedDef(
+    id="trade-press",
+    vertical="ai",
+    title="Example Trade Press",
+    url="https://trade.example-press.net/feed",
+    tier=SourceTier.TRADE_PRESS,
+)
+COMMUNITY = FeedDef(
+    id="community",
+    vertical="ai",
+    title="Example Community",
+    url="https://community.example.org/feed",
+    tier=SourceTier.COMMUNITY,
+)
 
 AI = VerticalDef(id="ai", display_name="AI", daily_cap=5, min_feeds=3)
 
@@ -73,7 +91,9 @@ def test_a_meaningful_query_survives_canonicalisation() -> None:
 
 
 def test_query_order_does_not_make_a_second_story() -> None:
-    assert canonicalise("https://x.example/a?b=2&a=1") == canonicalise("https://x.example/a?a=1&b=2")
+    assert canonicalise("https://x.example/a?b=2&a=1") == canonicalise(
+        "https://x.example/a?a=1&b=2"
+    )
 
 
 def test_a_root_path_keeps_its_slash() -> None:
@@ -131,12 +151,21 @@ def test_a_salience_feed_only_votes() -> None:
 
 def test_a_draft_or_retired_feed_is_not_read() -> None:
     retired = FeedDef(
-        id="gone", vertical="ai", title="Gone", url="https://gone.example/feed",
-        tier=SourceTier.TRADE_PRESS, status=LifecycleStatus.RETIRED, retired_on="2026-08-01",
+        id="gone",
+        vertical="ai",
+        title="Gone",
+        url="https://gone.example/feed",
+        tier=SourceTier.TRADE_PRESS,
+        status=LifecycleStatus.RETIRED,
+        retired_on="2026-08-01",
     )
     draft = FeedDef(
-        id="soon", vertical="ai", title="Soon", url="https://soon.example/feed",
-        tier=SourceTier.TRADE_PRESS, status=LifecycleStatus.DRAFT,
+        id="soon",
+        vertical="ai",
+        title="Soon",
+        url="https://soon.example/feed",
+        tier=SourceTier.TRADE_PRESS,
+        status=LifecycleStatus.DRAFT,
     )
     assert live([LAB, retired, draft], "ai") == [LAB]
 
@@ -148,7 +177,11 @@ def test_a_story_carried_three_ways_is_one_item() -> None:
     grouped = merge(all_candidates())
     carried = max(grouped.values(), key=len)
     assert len(carried) == 3
-    assert {candidate.source_id for candidate in carried} == {"lab-blog", "trade-press", "community"}
+    assert {candidate.source_id for candidate in carried} == {
+        "lab-blog",
+        "trade-press",
+        "community",
+    }
 
 
 def test_the_widely_carried_story_leads_the_day() -> None:
@@ -163,9 +196,9 @@ def test_authority_is_the_best_tier_that_carried_it_not_the_average() -> None:
     config = CollectConfig()
     institution = [c for c in all_candidates() if c.source_id == "lab-blog"][:1]
     community = [c for c in all_candidates() if c.source_id == "community"][:1]
-    assert score(institution + community, config=config, watchlist_hit=False, on_front_page=False) > score(
-        community, config=config, watchlist_hit=False, on_front_page=False
-    )
+    assert score(
+        institution + community, config=config, watchlist_hit=False, on_front_page=False
+    ) > score(community, config=config, watchlist_hit=False, on_front_page=False)
 
 
 def test_a_watchlist_hit_and_a_front_page_vote_both_lift_the_score() -> None:

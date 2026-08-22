@@ -228,17 +228,13 @@ def test_an_ok_article_must_carry_text() -> None:
 
 
 def test_a_failed_article_must_record_why() -> None:
-    payload = mutate(
-        CONTRACT_FIXTURES_DIR / "article" / "fetch-failed.json", failure_detail=None
-    )
+    payload = mutate(CONTRACT_FIXTURES_DIR / "article" / "fetch-failed.json", failure_detail=None)
     with pytest.raises(ValueError, match="must record why"):
         Article.model_validate(payload)
 
 
 def test_truncation_is_flagged_and_located_together() -> None:
-    payload = mutate(
-        CONTRACT_FIXTURES_DIR / "article" / "truncated.json", truncated_at_tokens=None
-    )
+    payload = mutate(CONTRACT_FIXTURES_DIR / "article" / "truncated.json", truncated_at_tokens=None)
     with pytest.raises(ValueError, match="truncated"):
         Article.model_validate(payload)
 
@@ -250,9 +246,7 @@ def test_a_routed_to_nothing_item_carries_no_spec() -> None:
 
 
 def test_only_a_rendered_visual_has_an_asset_path() -> None:
-    payload = mutate(
-        CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json", visual_state="absent"
-    )
+    payload = mutate(CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json", visual_state="absent")
     with pytest.raises(ValueError, match="asset_path"):
         Route.model_validate(payload)
 

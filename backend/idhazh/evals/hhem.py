@@ -38,9 +38,7 @@ HHEM_SCORER_ID: Final = "hhem-2.1-open"
 CHUNK_WORDS: Final = 900
 CHUNK_OVERLAP_WORDS: Final = 150
 
-_MISSING = (
-    "HHEM is not installed. Install the faithfulness extra: pip install -e '.[faithfulness]'"
-)
+_MISSING = "HHEM is not installed. Install the faithfulness extra: pip install -e '.[faithfulness]'"
 
 
 class Scorer(Protocol):

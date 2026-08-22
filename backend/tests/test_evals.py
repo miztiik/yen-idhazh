@@ -88,9 +88,7 @@ def test_a_number_only_in_the_full_article_still_counts_as_supported() -> None:
 
 
 def test_a_dropped_hedge_is_caught() -> None:
-    hedged = (
-        "Northwind is reportedly weighing a second order. The company declined to comment."
-    )
+    hedged = "Northwind is reportedly weighing a second order. The company declined to comment."
     assert hedge_dropped("Northwind will place a second order.", hedged)
 
 
@@ -157,7 +155,10 @@ def test_scorer_version_spells_its_components() -> None:
         weights_sha256="9f8e7d6c" + "0" * 56,
         evaluation=EvaluationConfig(),
     )
-    assert version == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};bands=0.80/0.50"
+    assert (
+        version
+        == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};bands=0.80/0.50"
+    )
 
 
 def test_a_moved_band_moves_the_scorer_version() -> None:

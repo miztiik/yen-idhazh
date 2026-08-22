@@ -221,9 +221,7 @@ def test_the_counterweights_alone_never_claim_the_top_band() -> None:
         "Example Lab released a smaller model, claiming a 34 percent lower cost per million "
         "tokens and 2.1 times the throughput of the model it replaces."
     )
-    assert (
-        counterweight_band(faithful, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.MEDIUM
-    )
+    assert counterweight_band(faithful, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.MEDIUM
 
 
 def test_an_invented_number_still_reaches_the_reader_as_low() -> None:

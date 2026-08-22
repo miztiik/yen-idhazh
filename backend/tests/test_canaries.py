@@ -142,7 +142,9 @@ def test_no_pipeline_module_can_turn_a_string_into_an_action() -> None:
         for node in ast.walk(tree):
             if isinstance(node, ast.Import):
                 for alias in node.names:
-                    assert alias.name not in FORBIDDEN_IMPORTS, f"{module.name} imports {alias.name}"
+                    assert alias.name not in FORBIDDEN_IMPORTS, (
+                        f"{module.name} imports {alias.name}"
+                    )
             elif isinstance(node, ast.ImportFrom) and node.module in FORBIDDEN_IMPORTS:
                 pytest.fail(f"{module.name} imports {node.module}")
             elif isinstance(node, ast.Call) and isinstance(node.func, ast.Name):

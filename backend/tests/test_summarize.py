@@ -110,7 +110,11 @@ def test_thinking_is_off_in_the_request() -> None:
 def test_the_output_shape_is_enforced_by_the_decoder() -> None:
     """Decision 2: an injection can change the words; it cannot change the shape."""
     payload = request_payload(
-        model_id="m", system="s", user="u", output_schema=output_schema(), inference=InferenceConfig()
+        model_id="m",
+        system="s",
+        user="u",
+        output_schema=output_schema(),
+        inference=InferenceConfig(),
     )
     assert payload["response_format"]["type"] == "json_schema"
     assert payload["response_format"]["json_schema"]["strict"] is True
@@ -191,9 +195,7 @@ def test_a_reply_that_is_not_json_fails_closed() -> None:
 
 def test_a_fenced_code_block_is_still_read() -> None:
     """Some runtimes wrap the object even under a schema. That is not a failure."""
-    body = json.dumps(
-        {"summary": "x" * 260, "key_points": ["one point here", "two points here"]}
-    )
+    body = json.dumps({"summary": "x" * 260, "key_points": ["one point here", "two points here"]})
     draft = parse_draft(f"```json\n{body}\n```")
     assert draft.summary.startswith("x")
 
@@ -217,9 +219,7 @@ def test_a_summary_outside_the_publishable_range_is_refused() -> None:
 def test_the_publishable_range_comes_from_config() -> None:
     from idhazh.contracts.app_config import EvaluationConfig
 
-    body = json.dumps(
-        {"summary": "y " * 100, "key_points": ["one point here", "two points here"]}
-    )
+    body = json.dumps({"summary": "y " * 100, "key_points": ["one point here", "two points here"]})
     reply = Completion(content=body, prompt_tokens=10, completion_tokens=10)
     assert (
         to_summary(

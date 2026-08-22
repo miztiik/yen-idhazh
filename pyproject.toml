@@ -20,6 +20,11 @@ dependencies = [
     # Boilerplate removal for the Extract stage. A custom HTML extractor is a
     # maintenance surface with no beneficiary feature.
     "trafilatura>=1.12",
+    # Vega-Lite spec to SVG for the Render stage. The Vega toolchain compiled as
+    # a Rust extension, so it renders without Node and without a headless
+    # browser. Measured 2026-08-22 (Windows 11, 8 vCPU): 2568 ms for the first
+    # render in a process, 49 ms warm, ~7 KB of SVG. Beneficiary: Row #8.
+    "vl-convert-python>=1.9",
 ]
 
 [project.optional-dependencies]
@@ -86,7 +91,7 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # Measurement-only dependencies, absent from a default install and shipping no
 # type stubs of their own.
 [[tool.mypy.overrides]]
-module = ["diffusers.*", "feedparser.*", "torch.*", "trafilatura.*", "transformers.*"]
+module = ["diffusers.*", "feedparser.*", "torch.*", "trafilatura.*", "transformers.*", "vl_convert.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
