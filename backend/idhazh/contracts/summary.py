@@ -38,6 +38,16 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-22",
+            change="Split duration_ms into fetch_ms, extract_ms and summarize_ms.",
+            why=(
+                "One number covering fetch, extract and summarize could not answer the "
+                "question it was there for: a slow item might be a slow host or a slow "
+                "model, and only one of those is ours to fix. Additive - the blended "
+                "field stays, and a payload written before this still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21T02:00",
             change="Added required pipeline_fingerprint and output_digest.",
             why=(
@@ -74,7 +84,16 @@ class Summary(Contract):
     source_truncated: bool = False
     input_tokens: int = Field(default=0, ge=0)
     output_tokens: int = Field(default=0, ge=0)
-    duration_ms: int = Field(default=0, ge=0)
+    duration_ms: int = Field(
+        default=0, ge=0, description="Fetch plus extract plus summarize. The three below sum to it."
+    )
+    fetch_ms: int = Field(default=0, ge=0, description="Network. Says more about the host than us.")
+    extract_ms: int = Field(default=0, ge=0, description="Boilerplate removal and sanitising.")
+    summarize_ms: int = Field(
+        default=0,
+        ge=0,
+        description="The model. The only one of the three that a model swap moves.",
+    )
 
     generated_at: Timestamp
     status: SummaryStatus

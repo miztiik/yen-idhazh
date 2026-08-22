@@ -15,6 +15,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Split duration_ms into fetch_ms, extract_ms and summarize_ms.",
+      "version": "2026-08-22",
+      "why": "One number covering fetch, extract and summarize could not answer the question it was there for: a slow item might be a slow host or a slow model, and only one of those is ours to fix. Additive - the blended field stays, and a payload written before this still validates."
+    },
+    {
       "change": "Added required pipeline_fingerprint and output_digest.",
       "version": "2026-08-21T02:00",
       "why": "Skip-if-exists becomes skip-if-fingerprint-matches, and a match with unequal output has to be detectable. No payload predates this - the pipeline has never run - so the read-side migration is the fixtures, restamped here."
@@ -36,8 +41,16 @@
     },
     "duration_ms": {
       "default": 0,
+      "description": "Fetch plus extract plus summarize. The three below sum to it.",
       "minimum": 0,
       "title": "Duration Ms",
+      "type": "integer"
+    },
+    "extract_ms": {
+      "default": 0,
+      "description": "Boilerplate removal and sanitising.",
+      "minimum": 0,
+      "title": "Extract Ms",
       "type": "integer"
     },
     "failure_detail": {
@@ -53,6 +66,13 @@
       ],
       "default": null,
       "title": "Failure Detail"
+    },
+    "fetch_ms": {
+      "default": 0,
+      "description": "Network. Says more about the host than us.",
+      "minimum": 0,
+      "title": "Fetch Ms",
+      "type": "integer"
     },
     "generated_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
@@ -109,6 +129,13 @@
     "status": {
       "$ref": "#/$defs/SummaryStatus"
     },
+    "summarize_ms": {
+      "default": 0,
+      "description": "The model. The only one of the three that a model swap moves.",
+      "minimum": 0,
+      "title": "Summarize Ms",
+      "type": "integer"
+    },
     "summary": {
       "anyOf": [
         {
@@ -127,7 +154,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-21T02:00",
+      "default": "2026-08-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -144,5 +171,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-21T02:00"
+  "version": "2026-08-22"
 }
