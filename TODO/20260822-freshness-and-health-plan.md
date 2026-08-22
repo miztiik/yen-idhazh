@@ -87,8 +87,8 @@ an 8192 window.
 | --- | --- | --- |
 | Item ids | Per-vertical high-water mark. `PlannedVertical.first_ordinal` carries the start; the ordinal validator is parameterized, not weakened. | Fowler |
 | Item 1 | Two commits: make `stage_plan` testable by injecting the fetcher and `now`, then the tests. Structural and behavioural never share a commit. | Fowler |
-| Retired feeds | New `retired` key, a validator that rejects a retired entry in `feeds`, and a before-validator migration that moves an older payload. | Fowler |
-| Dead settings | `SalienceFeedDef.weight` dies. `CollectConfig.quarantine_after_failures` LIVES - item 11 wires it. `CollectConfig.min_feeds_floor` dies instead: dead, and contradicted by `docs/architecture/sources/discovery.md`. | Fowler |
+| Retired feeds | New `retired` key, a validator that rejects a retired entry in `feeds`, and no read-side migration - see the amendment below. | Fowler |
+| Dead settings | `SalienceFeedDef.weight` dies. `CollectConfig.quarantine_after_failures` LIVES - item 11 wires it. `CollectConfig.min_feeds_floor` dies instead: nothing reads it, and the floor a vertical is actually held to is its own `min_feeds` in `taxonomy.json`. | Fowler |
 | Feed health | `state/feed-health/YYYY-MM.csv`, outcome as a closed vocabulary `ok / empty / unreachable / unparseable`. `empty` is the state HTTP cannot see and the one that killed 8 feeds. | Fowler, Carmack |
 | Schedule | `cron: '17 1,7,13,19 * * *'` - six-hourly, off the hour, off every 6-multiple hour, and the 01:17 run is published before 06:00 UTC. `work` timeout 330 -> 120. `work` gated on a non-empty plan. | Carmack |
 | Prompt determinism | `prompt_fingerprint_text()` digests the template plus every band's rendered policy line, so the per-run stamp covers the closed set rather than the one render an item got. | Andre |
@@ -96,6 +96,34 @@ an 8192 window.
 | Dashboard | A section of `/console`, placed first, replacing the Runs table's three health columns. Columns are dates, rows are run ordinals, squares are `RunStatus`. New colour tokens - the band ramp means "faithfulness", not "a job finished". | Jony |
 | Dashboard window | `min(config_window, days_since_first_run + 1)`, floored at 14. Two days of data must not render as 54 days of outage. | Jony |
 | Read mark | One key, `{"d": "<page date>", "ids": [...]}`. Wipe when `d` is not the page's date. `idhazh:hide-read` is a preference and does not wipe. | Jony |
+
+## Amendment: a config file gets no read-side migration
+
+The retired-feeds ruling above originally called for a `mode="before"` validator
+that moved an older payload's retired entries into the new key. Fowler withdrew
+it when the code was about to be written. The rule that replaced it governs items
+3, 10 and 11 as well, so it is recorded here and lands in
+`docs/concepts/config.md` under item 17.
+
+The section 11 migration obligation attaches to **who writes the payload**, not
+to which directory it sits in.
+
+- A **run-written** payload - a stage payload, an eval row, a run manifest, a
+  published payload, and the `state/*.csv` files items 3 and 10 add - gets the
+  full expand-migrate-contract treatment with a read-side migration in the same
+  commit. Yesterday's run wrote it, nobody is going to edit it, and today's build
+  must read it.
+- A **person-written** config file does not. `config/sources.json` is edited in
+  the same commit as the model that reads it, so the migration would run exactly
+  once, against a payload that no longer exists anywhere, and then be dead code.
+
+What replaces it is `Model.model_config = ConfigDict(extra="forbid")` and a
+validator whose message names the key. A stale config fails at load, by name, in
+the first second of the run. A before-validator would instead silently coerce at
+the boundary - a section 10 anti-pattern - and hide the fact that a human has a
+file to edit.
+
+Tested by `test_yesterdays_sources_file_fails_loudly_and_names_the_key`.
 
 ## Defects found during consultation, in scope
 
@@ -132,7 +160,7 @@ day would make that three wasted runs instead of one.
 | Phase | Items | Why together |
 | --- | --- | --- |
 | A | 1 | The safety net. Two commits: refactor, then tests. |
-| B | 2, 16 | One config shape, one changelog entry, one migration. |
+| B | 2, 16 | One config shape. Two commits: delete what nothing reads, then split the list. |
 | C | 3, 4, 5 | The store, then the rules that read it. |
 | D | 6, 9 | Identity, then what counts against a ceiling. |
 | E | 7 | Cadence, only once a second run can publish. |

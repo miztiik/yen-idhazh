@@ -155,11 +155,14 @@ def salience_urls(body: str | bytes) -> set[str]:
 
 
 def live(feeds: list[FeedDef], vertical_id: str) -> list[FeedDef]:
-    """Feeds a vertical may actually read: not retired, not still a draft."""
+    """Feeds a vertical may actually read: this vertical's, and not still a draft.
+
+    A retired feed never reaches here. It lives in `Sources.retired`, which the
+    plan stage does not loop, so retirement is enforced by the shape of the
+    config rather than by a filter every caller has to remember to apply.
+    """
     return [
         feed
         for feed in feeds
-        if feed.vertical == vertical_id
-        and feed.retired_on is None
-        and feed.status is LifecycleStatus.ACTIVE
+        if feed.vertical == vertical_id and feed.status is LifecycleStatus.ACTIVE
     ]

@@ -45,17 +45,6 @@
       "weight": 1.0
     },
     {
-      "id": "bair-blog",
-      "kind": "research",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 1,
-      "title": "Berkeley AI Research",
-      "url": "https://bair.berkeley.edu/blog/feed.xml",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
       "id": "cohere-blog",
       "kind": "announcement",
       "retired_on": null,
@@ -129,17 +118,6 @@
       "tier": 1,
       "title": "IBM Research",
       "url": "https://research.ibm.com/rss",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
-      "id": "llama-cpp-releases",
-      "kind": "announcement",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 1,
-      "title": "llama.cpp releases",
-      "url": "https://github.com/ggml-org/llama.cpp/releases.atom",
       "vertical": "ai",
       "weight": 1.0
     },
@@ -250,28 +228,6 @@
       "tier": 1,
       "title": "Stanford HAI",
       "url": "https://hai.stanford.edu/news/rss.xml",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
-      "id": "transformers-releases",
-      "kind": "announcement",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 1,
-      "title": "Transformers releases",
-      "url": "https://github.com/huggingface/transformers/releases.atom",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
-      "id": "vllm-releases",
-      "kind": "announcement",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 1,
-      "title": "vLLM releases",
-      "url": "https://github.com/vllm-project/vllm/releases.atom",
       "vertical": "ai",
       "weight": 1.0
     },
@@ -419,28 +375,6 @@
       "weight": 1.0
     },
     {
-      "id": "the-batch",
-      "kind": "analysis",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 2,
-      "title": "The Batch",
-      "url": "https://www.deeplearning.ai/the-batch/feed/",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
-      "id": "the-register-ai",
-      "kind": "reporting",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 2,
-      "title": "The Register - AI/ML",
-      "url": "https://www.theregister.com/software/ai_ml/headlines.atom",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
       "id": "the-verge-ai",
       "kind": "reporting",
       "retired_on": null,
@@ -481,28 +415,6 @@
       "tier": 2,
       "title": "ZDNET - AI",
       "url": "https://www.zdnet.com/topic/artificial-intelligence/rss.xml",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
-      "id": "lobsters-ai",
-      "kind": "community",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 3,
-      "title": "Lobsters - AI",
-      "url": "https://lobste.rs/t/ai.rss",
-      "vertical": "ai",
-      "weight": 1.0
-    },
-    {
-      "id": "localllama",
-      "kind": "community",
-      "retired_on": "2026-08-21",
-      "status": "retired",
-      "tier": 3,
-      "title": "r/LocalLLaMA",
-      "url": "https://www.reddit.com/r/LocalLLaMA/.rss",
       "vertical": "ai",
       "weight": 1.0
     },
@@ -1607,6 +1519,96 @@
       "weight": 1.0
     }
   ],
+  "retired": [
+    {
+      "id": "bair-blog",
+      "kind": "research",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 1,
+      "title": "Berkeley AI Research",
+      "url": "https://bair.berkeley.edu/blog/feed.xml",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "llama-cpp-releases",
+      "kind": "announcement",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 1,
+      "title": "llama.cpp releases",
+      "url": "https://github.com/ggml-org/llama.cpp/releases.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "transformers-releases",
+      "kind": "announcement",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 1,
+      "title": "Transformers releases",
+      "url": "https://github.com/huggingface/transformers/releases.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "vllm-releases",
+      "kind": "announcement",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 1,
+      "title": "vLLM releases",
+      "url": "https://github.com/vllm-project/vllm/releases.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "the-batch",
+      "kind": "analysis",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 2,
+      "title": "The Batch",
+      "url": "https://www.deeplearning.ai/the-batch/feed/",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "the-register-ai",
+      "kind": "reporting",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 2,
+      "title": "The Register - AI/ML",
+      "url": "https://www.theregister.com/software/ai_ml/headlines.atom",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "lobsters-ai",
+      "kind": "community",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 3,
+      "title": "Lobsters - AI",
+      "url": "https://lobste.rs/t/ai.rss",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
+      "id": "localllama",
+      "kind": "community",
+      "retired_on": "2026-08-21",
+      "status": "retired",
+      "tier": 3,
+      "title": "r/LocalLLaMA",
+      "url": "https://www.reddit.com/r/LocalLLaMA/.rss",
+      "vertical": "ai",
+      "weight": 1.0
+    }
+  ],
   "salience": [
     {
       "id": "hn-frontpage",
@@ -1616,5 +1618,5 @@
       "url": "https://hnrss.org/frontpage"
     }
   ],
-  "version": "2026-08-22T09:00"
+  "version": "2026-08-22T10:00"
 }

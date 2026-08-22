@@ -149,16 +149,14 @@ def test_a_salience_feed_only_votes() -> None:
     assert "https://blog.example-lab.org/2026/08/model-release" in voted
 
 
-def test_a_draft_or_retired_feed_is_not_read() -> None:
-    retired = FeedDef(
-        id="gone",
-        vertical="ai",
-        title="Gone",
-        url="https://gone.example/feed",
-        tier=SourceTier.TRADE_PRESS,
-        status=LifecycleStatus.RETIRED,
-        retired_on="2026-08-01",
-    )
+def test_a_draft_feed_is_not_read() -> None:
+    """Draft is the one status `live` still has to reason about.
+
+    A retired feed cannot reach this function at all - `Sources` keeps it in a
+    separate list and the plan stage never loops that list. Testing the retired
+    case here would still pass, because `live` takes a plain list rather than a
+    `Sources`, and it would be guarding a branch that no longer exists.
+    """
     draft = FeedDef(
         id="soon",
         vertical="ai",
@@ -167,7 +165,7 @@ def test_a_draft_or_retired_feed_is_not_read() -> None:
         tier=SourceTier.TRADE_PRESS,
         status=LifecycleStatus.DRAFT,
     )
-    assert live([LAB, retired, draft], "ai") == [LAB]
+    assert live([LAB, draft], "ai") == [LAB]
 
 
 # --- The day's order --------------------------------------------------------
