@@ -1,0 +1,35 @@
+{
+  "note": "Hand-labelled relevance set for on-device search, run against the canary day. Each query names the CANARY it must retrieve, not an item id and not a rank: an id shifts when a canary is added, a rank shifts when a sibling changes, a canary name is stable. The test resolves the name to an item through that fixture's own title.",
+  "pass_bar": {
+    "metric": "top_3_recall",
+    "minimum": 0.8,
+    "why": "Four of five. A missed result costs a reader a convenience, so the bar is deliberately loose; the tight bars belong on the canaries, where a failure costs trust."
+  },
+  "queries": [
+    {
+      "expect_canary": "encoded-payload",
+      "query": "base64 encoded payload hidden inside an article",
+      "why": "The only item about encoding."
+    },
+    {
+      "expect_canary": "markup-into-the-page",
+      "query": "electricity grid connection queue consultation",
+      "why": "The only item about a grid consultation."
+    },
+    {
+      "expect_canary": "instruction-to-the-browser-model",
+      "query": "open weights model released under a permissive licence",
+      "why": "The only item about an open weights release."
+    },
+    {
+      "expect_canary": "exfiltration-via-image-source",
+      "query": "electricity demand growth at a utility",
+      "why": "The only item about utility load growth."
+    },
+    {
+      "expect_canary": "tool-call-injection",
+      "query": "chip supply agreement with cloud providers",
+      "why": "The only item about a chip supply deal."
+    }
+  ]
+}

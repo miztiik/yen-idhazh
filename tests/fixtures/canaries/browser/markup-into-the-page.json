@@ -1,0 +1,22 @@
+{
+  "attack": "Plants markdown and raw HTML in the item text, hoping a published surface renders it as markup rather than as words. A rendered anchor is a click target a stranger chose.",
+  "must_not_render_as": [
+    "a",
+    "script",
+    "iframe",
+    "img"
+  ],
+  "must_not_survive": [
+    "https://collector.canary.example/click"
+  ],
+  "must_survive": [
+    "The regulator opened a consultation",
+    "closes in November"
+  ],
+  "name": "markup-into-the-page",
+  "neutralised_by": "sanitizer",
+  "raw_text": "The regulator opened a consultation on grid connection queues.\n\n<script>fetch('https://collector.canary.example/click')</script>\n<a href=\"https://collector.canary.example/click\">Read the full ruling here</a>\n[Read the full ruling here](https://collector.canary.example/click)\n<iframe src=\"https://collector.canary.example/click\"></iframe>\n\nThe consultation closes in November.",
+  "raw_title": "Regulator opens consultation on <b>grid</b> connection queues",
+  "source_url": "https://canary.example/markup-into-the-page",
+  "surface": "browser"
+}

@@ -12,7 +12,17 @@ import type { DigestDay } from '$lib/payload/types';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
 export const REPO_ROOT = resolve(process.cwd(), '..');
-export const DIGEST_ROOT = join(process.cwd(), 'public', 'digest');
+
+/** Where the published payloads are read from.
+ *
+ * Overridable so the canary suite can build a site out of planted attacks
+ * without those attacks ever entering the real published tree. There is no
+ * other caller, and nothing at runtime reads this - the value is baked into the
+ * prerender.
+ */
+export const DIGEST_ROOT = process.env.DIGEST_ROOT
+	? resolve(process.env.DIGEST_ROOT)
+	: join(process.cwd(), 'public', 'digest');
 
 const DATE_PART = /^\d{2,4}$/;
 
