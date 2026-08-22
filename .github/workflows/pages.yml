@@ -10,6 +10,13 @@ on:
       - 'frontend/**'
       - 'config/idhazh.json'
       - 'evals/**'
+  # The daily run commits the day with GITHUB_TOKEN, and GitHub deliberately does
+  # not let one workflow's push trigger another. Without this the digest would
+  # land in the repository every morning and never reach a reader - the failure
+  # mode where everything is green and the site is yesterday's.
+  workflow_run:
+    workflows: [digest]
+    types: [completed]
   workflow_dispatch:
 
 permissions:
