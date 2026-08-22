@@ -87,6 +87,28 @@
     "shard_timeout_minutes": 90,
     "success_floor_pct": 80
   },
+  "summarize": {
+    "bands": [
+      {
+        "min_source_words": 0,
+        "target_words_max": 110,
+        "target_words_min": 70
+      },
+      {
+        "min_source_words": 700,
+        "target_words_max": 150,
+        "target_words_min": 90
+      },
+      {
+        "min_source_words": 2000,
+        "target_words_max": 180,
+        "target_words_min": 110
+      }
+    ],
+    "key_points_max": 4,
+    "key_points_min": 3,
+    "max_verbatim_words": 15
+  },
   "ui": {
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [

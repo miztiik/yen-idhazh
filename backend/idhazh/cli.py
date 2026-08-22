@@ -344,8 +344,8 @@ def stage_work(
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build="llama-server-local",
         chat_template=model.id,
-        prompt=summarize.system_prompt(),
-        output_schema=summarize.output_schema_text(),
+        prompt=summarize.prompt_inputs(settings.app.summarize),
+        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
         runner_class="local",
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
@@ -441,7 +441,13 @@ def _fetch_one(
 def _summarize_one(article: Article, settings: config.Settings, fingerprint: str) -> Summary:
     inference = settings.app.models.inference
     model_id = settings.app.models.summarize.id
-    payload = summarize.build_request(article, model_id=model_id, inference=inference)
+    payload = summarize.build_request(
+        article,
+        model_id=model_id,
+        inference=inference,
+        prompt_config=settings.app.summarize,
+        evaluation=settings.app.evaluation,
+    )
     try:
         completion = post(payload, timeout=settings.app.run.shard_timeout_minutes * 60)
     except OSError as error:
@@ -453,6 +459,7 @@ def _summarize_one(article: Article, settings: config.Settings, fingerprint: str
         model_id=model_id,
         pipeline_fingerprint=fingerprint,
         generated_at=assemble.utc_now(),
+        prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
     )
 

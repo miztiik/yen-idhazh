@@ -16,20 +16,22 @@ import json
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from pydantic import ValidationError
 
-from idhazh.contracts.app_config import InferenceConfig
+from idhazh.contracts.app_config import InferenceConfig, SummarizeConfig, SummaryBand
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.server import Completion, parse_completion, request_payload, server_argv
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from idhazh.summarize import (
-    SummaryDraft,
     build_request,
+    draft_model,
     fits_context,
     output_schema,
     output_schema_text,
     parse_draft,
+    prompt_inputs,
     split_thinking,
     system_prompt,
     to_summary,
@@ -137,8 +139,193 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:
-    assert output_schema() == SummaryDraft.model_json_schema()
+    assert output_schema() == draft_model().model_json_schema()
     assert output_schema_text() == output_schema_text(), "stable, so the stamp is stable"
+
+
+# --- The prompt states no number of its own ---------------------------------
+
+
+def test_every_number_in_the_prompt_comes_from_config() -> None:
+    """Holy Law #6. A literal in the prompt is a knob no schema can see."""
+    asked = SummarizeConfig(
+        bands=[SummaryBand(min_source_words=0, target_words_min=71, target_words_max=93)],
+        max_verbatim_words=4,
+    )
+    rendered = system_prompt(asked)
+    assert "71 to 93 words" in rendered
+    assert "quote to 4 words or fewer" in rendered
+    assert "50 to 90" not in rendered
+
+
+def test_an_unrenderable_placeholder_never_reaches_a_model() -> None:
+    """`substitute`, not `safe_substitute` - a stray `$knob` reads as an instruction."""
+    import idhazh.summarize as module
+
+    template = module._template()
+    with pytest.raises(KeyError):
+        template.substitute({"target_words_min": 60})
+
+
+def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
+    """The band's numbers and the config's numbers both have to land."""
+    for words in (0, 800, 5000):
+        assert "$" not in system_prompt(source_words=words)
+
+
+def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
+    """Disagree, and the decoder rejects a reply that did exactly what was asked."""
+    asked = SummarizeConfig(key_points_min=3, key_points_max=4)
+    schema = output_schema(asked)["properties"]["key_points"]
+    assert (schema["minItems"], schema["maxItems"]) == (3, 4)
+    assert "3 to 4 key points" in system_prompt(asked)
+
+
+def test_the_decoder_rail_never_catches_a_summary_the_word_gate_would_pass() -> None:
+    """A publishable summary fails on "words" if it fails at all, never on shape.
+
+    Checked against real English - a little under six characters a word once the
+    space is counted - and not against a string of single letters. The floor is a
+    generation control as well as a check, so it is deliberately close enough to
+    a real summary to keep a constrained decoder writing; a string short enough
+    to trip it was never publishable.
+    """
+    from idhazh.contracts.app_config import EvaluationConfig
+
+    typical_chars_per_word = 6
+    bounds = EvaluationConfig()
+    rail = output_schema(None, bounds)["properties"]["summary"]
+    assert rail["minLength"] < bounds.summary_words_min * typical_chars_per_word
+    assert rail["maxLength"] > bounds.summary_words_max * typical_chars_per_word
+
+
+def test_the_decoder_rail_moves_with_the_gate_it_is_derived_from() -> None:
+    """Pinned, it would silently stop protecting a gate somebody widened."""
+    from idhazh.contracts.app_config import EvaluationConfig
+
+    wider = EvaluationConfig(summary_words_min=60, summary_words_max=400)
+    rail = output_schema(None, wider)["properties"]["summary"]
+    base = output_schema(None, EvaluationConfig())["properties"]["summary"]
+    assert rail["minLength"] > base["minLength"]
+    assert rail["maxLength"] > base["maxLength"]
+
+
+def test_changing_what_we_ask_for_changes_the_fingerprints_inputs() -> None:
+    """The old bounds lived only in the prompt text and in a gate nothing hashed."""
+    tighter = SummarizeConfig(
+        bands=[SummaryBand(min_source_words=0, target_words_min=50, target_words_max=120)]
+    )
+    assert prompt_inputs() != prompt_inputs(tighter)
+    assert output_schema_text() != output_schema_text(SummarizeConfig(key_points_max=4))
+
+
+def test_the_stamp_holds_still_while_the_rendered_prompt_moves() -> None:
+    """The ledger is keyed by it, so it means "which pipeline", not "which item"."""
+    ask = SummarizeConfig()
+    assert system_prompt(ask, source_words=0) != system_prompt(ask, source_words=4000)
+    assert prompt_inputs(ask) == prompt_inputs(ask)
+
+
+def test_a_band_the_wording_never_reaches_still_moves_the_stamp() -> None:
+    """A rendered prompt would hash one band. Every band is part of the ask."""
+    ask = SummarizeConfig()
+    longer_top = ask.model_copy(
+        update={
+            "bands": [
+                *ask.bands[:-1],
+                SummaryBand(
+                    min_source_words=ask.bands[-1].min_source_words,
+                    target_words_min=ask.bands[-1].target_words_min,
+                    target_words_max=ask.bands[-1].target_words_max - 1,
+                ),
+            ]
+        }
+    )
+    assert system_prompt(ask) == system_prompt(longer_top), "band one is untouched"
+    assert prompt_inputs(ask) != prompt_inputs(longer_top)
+
+
+# --- The length ask follows the article -------------------------------------
+
+
+def test_a_short_article_and_a_long_one_are_asked_for_different_lengths() -> None:
+    """Item 13. One range for both gives a padded release note and a thin long read."""
+    ask = SummarizeConfig()
+    short = ask.band_for(200)
+    long = ask.band_for(4000)
+    assert short.target_words_max < long.target_words_max
+    assert system_prompt(ask, source_words=200) != system_prompt(ask, source_words=4000)
+
+
+def test_every_article_length_lands_in_a_band() -> None:
+    """Selection is total, which is why the first band is pinned at zero."""
+    ask = SummarizeConfig()
+    for words in (0, 1, 249, 250, 699, 700, 1999, 2000, 100_000):
+        assert ask.band_for(words) in ask.bands
+
+
+def test_the_band_chosen_is_the_longest_one_the_article_reaches() -> None:
+    ask = SummarizeConfig(
+        bands=[
+            SummaryBand(min_source_words=0, target_words_min=40, target_words_max=60),
+            SummaryBand(min_source_words=500, target_words_min=60, target_words_max=90),
+            SummaryBand(min_source_words=1500, target_words_min=90, target_words_max=140),
+        ]
+    )
+    assert ask.band_for(499).target_words_max == 60
+    assert ask.band_for(500).target_words_max == 90
+    assert ask.band_for(1499).target_words_max == 90
+    assert ask.band_for(9000).target_words_max == 140
+
+
+def test_a_band_set_that_leaves_a_short_article_homeless_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        SummarizeConfig(
+            bands=[SummaryBand(min_source_words=300, target_words_min=50, target_words_max=90)]
+        )
+
+
+def test_bands_that_do_not_climb_are_refused() -> None:
+    """Out of order, `band_for` would quietly return the wrong ask instead of failing."""
+    with pytest.raises(ValidationError):
+        SummarizeConfig(
+            bands=[
+                SummaryBand(min_source_words=0, target_words_min=50, target_words_max=90),
+                SummaryBand(min_source_words=0, target_words_min=70, target_words_max=150),
+            ]
+        )
+
+
+def test_a_band_that_asks_for_more_than_the_gate_accepts_is_refused() -> None:
+    """The silent failure this stops: the model complies and the gate drops it, every run."""
+    from idhazh.contracts.app_config import AppConfig, EvaluationConfig, ModelRef, ModelsConfig
+
+    weights = ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M")
+    with pytest.raises(ValidationError):
+        AppConfig(
+            version=AppConfig.schema_version(),
+            models=ModelsConfig(summarize=weights, route=weights),
+            evaluation=EvaluationConfig(summary_words_min=40, summary_words_max=120),
+            summarize=SummarizeConfig(
+                bands=[
+                    SummaryBand(min_source_words=0, target_words_min=50, target_words_max=300),
+                ]
+            ),
+        )
+
+
+# --- Quoting is allowed, and always attributed -------------------------------
+
+
+def test_the_prompt_allows_a_quote_and_demands_a_speaker() -> None:
+    """Item 13. A quote with no speaker is borrowed text, not a quotation."""
+    prompt = " ".join(system_prompt().lower().split())
+    assert "you may quote the source" in prompt
+    assert "name the speaker in the same sentence" in prompt
+
+
+def test_the_quote_cap_is_config_and_reaches_the_prompt() -> None:
+    assert f"quote to {SummarizeConfig().max_verbatim_words} words or fewer" in system_prompt()
 
 
 # --- The empty think block is asserted, never assumed ------------------------
