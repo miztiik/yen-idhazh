@@ -10,6 +10,42 @@
       "title": "ConfidenceBand",
       "type": "string"
     },
+    "DigestEmbeddings": {
+      "additionalProperties": false,
+      "description": "The day's item vectors, so a browser only ever embeds a reader's query.\n\nInside the day payload rather than beside it, because the per-page request\ncount is fixed and a sidecar would add one to every page whether or not a\nreader ever searches.\n\nSelf-describing on purpose: a reader-side decoder that guesses the width or\nthe dtype produces plausible nonsense instead of an error. Every field here\nexists so that a mismatch fails loudly.\n\nThis whole block is optional and strippable. A day with no `embeddings`\nrenders identically; it simply cannot be searched on the device.",
+      "properties": {
+        "dimensions": {
+          "minimum": 1,
+          "title": "Dimensions",
+          "type": "integer"
+        },
+        "dtype": {
+          "const": "int8",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "vectors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "item_id -> base64 of the quantised vector, one entry per embedded item.",
+          "title": "Vectors",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_id",
+        "dimensions",
+        "dtype"
+      ],
+      "title": "DigestEmbeddings",
+      "type": "object"
+    },
     "DigestItem": {
       "additionalProperties": false,
       "description": "One item as a reader consumes it. The link is a first-class element, not a footnote.",
@@ -321,6 +357,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the optional embeddings block.",
+      "version": "2026-08-22",
+      "why": "On-device search needs the day's vectors committed, and the corpus is fixed at publish. Additive and optional - a day written before this, or a day whose encoder was unavailable, still validates and still renders."
+    },
+    {
       "change": "Added source_kind to a published item.",
       "version": "2026-08-21T06:00",
       "why": "Reader's ruling: a company announcing itself and a reporter measuring it arrived on the page looking identical, and that is the risk a reader carries when they forward something."
@@ -337,6 +378,17 @@
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Date",
       "type": "string"
+    },
+    "embeddings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DigestEmbeddings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
     },
     "generated_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
@@ -381,7 +433,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21T06:00",
+      "default": "2026-08-22",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -406,5 +458,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-21T06:00"
+  "version": "2026-08-22"
 }

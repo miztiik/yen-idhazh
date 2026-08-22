@@ -13,7 +13,7 @@ which is why `introduced_by_run` may never decrease down the list.
 
 from __future__ import annotations
 
-from typing import ClassVar, Self
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -102,11 +102,44 @@ class DigestItem(Model):
         return self
 
 
+class DigestEmbeddings(Model):
+    """The day's item vectors, so a browser only ever embeds a reader's query.
+
+    Inside the day payload rather than beside it, because the per-page request
+    count is fixed and a sidecar would add one to every page whether or not a
+    reader ever searches.
+
+    Self-describing on purpose: a reader-side decoder that guesses the width or
+    the dtype produces plausible nonsense instead of an error. Every field here
+    exists so that a mismatch fails loudly.
+
+    This whole block is optional and strippable. A day with no `embeddings`
+    renders identically; it simply cannot be searched on the device.
+    """
+
+    model_id: Slug
+    dimensions: int = Field(ge=1)
+    dtype: Literal["int8"]
+    vectors: dict[str, str] = Field(
+        default_factory=dict,
+        description="item_id -> base64 of the quantised vector, one entry per embedded item.",
+    )
+
+
 class DigestDay(Contract):
     """`frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json`."""
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-22",
+            change="Added the optional embeddings block.",
+            why=(
+                "On-device search needs the day's vectors committed, and the corpus is "
+                "fixed at publish. Additive and optional - a day written before this, or "
+                "a day whose encoder was unavailable, still validates and still renders."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21T06:00",
             change="Added source_kind to a published item.",
@@ -136,6 +169,7 @@ class DigestDay(Contract):
     runs: list[DigestRunRef] = Field(min_length=1)
     verticals: list[DigestVerticalRef]
     items: list[DigestItem]
+    embeddings: DigestEmbeddings | None = None
 
     @model_validator(mode="after")
     def _order_is_global_and_append_only(self) -> Self:
