@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
-from idhazh import assemble, config
+from idhazh import assemble, cli, config
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
@@ -232,6 +232,19 @@ def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
 def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_low() -> None:
     vague = "A company has published something about a product."
     assert counterweight_band(vague, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.LOW
+
+
+def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    """The first real runner attempt died here: a transformers upgrade broke the
+    checkpoint's own modelling code and all four workers exited before
+    summarizing anything. Losing the scorer must cost eval rows and nothing else.
+    """
+
+    def explode(self: object) -> None:
+        raise AttributeError("'HHEMv2ForSequenceClassification' has no 'all_tied_weights_keys'")
+
+    monkeypatch.setattr("idhazh.evals.hhem.HhemScorer.load", explode)
+    assert cli._scorer(enabled=True) is None
 
 
 def test_a_day_publishes_even_when_items_failed() -> None:

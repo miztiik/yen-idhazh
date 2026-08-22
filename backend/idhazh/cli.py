@@ -427,11 +427,27 @@ def _load_plan(date: str) -> RunPlan:
 
 
 def _scorer(enabled: bool) -> object | None:
+    """The faithfulness scorer, or nothing at all.
+
+    A scorer that will not load costs the run its eval rows. It must never cost
+    the run its digest: `stage_assemble` already bands every item from the
+    model-free counterweights when no row exists. The first real runner attempt
+    died here - a transformers upgrade broke the checkpoint's own modelling code
+    and all four workers exited before summarizing a single article.
+    """
     if not enabled:
         LOG.warning("faithfulness scoring disabled - no eval rows will be written")
         return None
     scorer = HhemScorer()
-    scorer.load()
+    try:
+        scorer.load()
+    except Exception as error:
+        LOG.error(
+            "the faithfulness scorer did not load, so this run writes no eval rows: %s: %s",
+            type(error).__name__,
+            error,
+        )
+        return None
     return scorer
 
 

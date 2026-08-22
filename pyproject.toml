@@ -54,7 +54,12 @@ measure = []
 # test path - the model-free counterweights are what run everywhere.
 faithfulness = [
     "torch>=2.5",
-    "transformers>=4.46",
+    # Capped below 5. The HHEM checkpoint ships its own modelling code, which
+    # defines `_tied_weights_keys`; transformers 5 expects
+    # `all_tied_weights_keys` and raises AttributeError while loading it. An
+    # unpinned ceiling meant CI resolved to a version the model predates, and
+    # every worker died before summarizing a single article.
+    "transformers>=4.46,<5",
 ]
 
 [project.scripts]
