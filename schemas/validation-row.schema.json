@@ -1,0 +1,119 @@
+{
+  "$defs": {
+    "ValidationVerdict": {
+      "description": "What the decision rule concluded. Never a free-text judgement.",
+      "enum": [
+        "confirmed",
+        "rescore_candidates",
+        "switch_and_pause"
+      ],
+      "title": "ValidationVerdict",
+      "type": "string"
+    }
+  },
+  "$id": "validation-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the incumbent and its challengers, measured and predicted.",
+      "version": "2026-08-22",
+      "why": "Row #7 is an ESCALATE gate, so its inputs and its verdict are a persisted contract rather than a paragraph in a pull request."
+    }
+  ],
+  "description": "One candidate model, scored end to end through our own pipeline.",
+  "properties": {
+    "articles": {
+      "description": "How many golden articles produced the mean. A mean of one is not one.",
+      "minimum": 1,
+      "title": "Articles",
+      "type": "integer"
+    },
+    "commit_sha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "The tree the measurement ran against.",
+      "minLength": 7,
+      "title": "Commit Sha"
+    },
+    "detail": {
+      "description": "The rule's own words for why, so a reader needs no code.",
+      "minLength": 1,
+      "title": "Detail",
+      "type": "string"
+    },
+    "is_incumbent": {
+      "description": "The model currently configured. Exactly one row per run carries this.",
+      "title": "Is Incumbent",
+      "type": "boolean"
+    },
+    "leaderboard_hhem": {
+      "description": "What the published leaderboard says. A prior, never evidence about us.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Leaderboard Hhem",
+      "type": "number"
+    },
+    "measured_hhem": {
+      "description": "Mean HHEM over the golden set, through our own pipeline.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Measured Hhem",
+      "type": "number"
+    },
+    "measured_on": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Measured On",
+      "type": "string"
+    },
+    "model_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "runner": {
+      "description": "Where it ran. A laptop number is not a gate.",
+      "minLength": 1,
+      "title": "Runner",
+      "type": "string"
+    },
+    "selected": {
+      "description": "The model this run would run with. On a confirmed run, the incumbent.",
+      "title": "Selected",
+      "type": "boolean"
+    },
+    "verdict": {
+      "$ref": "#/$defs/ValidationVerdict",
+      "description": "What the run concluded. A run-level fact, identical on every row."
+    },
+    "version": {
+      "default": "2026-08-22",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "model_id",
+    "is_incumbent",
+    "selected",
+    "leaderboard_hhem",
+    "measured_hhem",
+    "articles",
+    "measured_on",
+    "commit_sha",
+    "runner",
+    "verdict",
+    "detail"
+  ],
+  "title": "ValidationRow",
+  "type": "object",
+  "version": "2026-08-22"
+}

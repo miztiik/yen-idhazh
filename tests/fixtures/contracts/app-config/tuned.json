@@ -25,7 +25,10 @@
     "spot_checks_per_week": 15,
     "summary_words_max": 180,
     "summary_words_min": 70,
-    "truncation_gap_max": 0.08
+    "truncation_gap_max": 0.08,
+    "validation_articles": 20,
+    "validation_drop_max": 0.1,
+    "validation_switch_margin": 0.05
   },
   "extract": {
     "backoff_initial_seconds": 2.0,

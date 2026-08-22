@@ -169,6 +169,29 @@ class EvaluationConfig(Model):
     )
     spot_checks_per_week: int = Field(default=10, ge=0)
     golden_set_size: int = Field(default=20, ge=1)
+    validation_articles: int = Field(
+        default=20,
+        ge=1,
+        description="Golden articles a candidate must be scored on before its mean counts.",
+    )
+    validation_drop_max: float = Field(
+        default=0.10,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How far below its leaderboard number the incumbent may land before the "
+            "ranking stops being a usable prior and the challengers get scored too."
+        ),
+    )
+    validation_switch_margin: float = Field(
+        default=0.05,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How much better a challenger must be on our own corpus to change the pick. "
+            "A number, because 'materially diverges' is an argument waiting to happen."
+        ),
+    )
 
     @model_validator(mode="after")
     def _bands_and_ranges_are_ordered(self) -> Self:
