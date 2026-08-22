@@ -16,6 +16,7 @@ from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.fingerprint import FingerprintRow
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
@@ -32,6 +33,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Article,
     DigestDay,
     EvalRow,
+    FeedHealthRow,
     FingerprintRow,
     Route,
     RunManifest,

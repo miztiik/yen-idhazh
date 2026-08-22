@@ -1,13 +1,24 @@
-"""Read and append the two committed sight ledgers.
+"""Read and append the committed ledgers under `state/`.
 
-Both files are append-only and both are read at plan time. The seen store is
-sharded by month, so a plan run reads a few small files rather than one file
-that grows for the life of the project; the published store is one file,
-because one row per published item is a few thousand rows a year.
+Three files, all append-only, all written by CI and read by a later run. They
+exist because the pipeline has no memory of its own: every run starts on a
+fresh machine with a fresh checkout, so anything one run needs to tell the next
+has to be committed (Holy Law #1).
 
-Neither reader fails on a missing file. A fresh clone has no history, and a run
-with no history is a run where nothing was seen before and nothing was
-published before - which is exactly what an empty mapping says.
+`state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
+carried no date. Sharded by month, so a plan run reads a few small files rather
+than one file that grows for the life of the project.
+
+`state/published.csv` answers "have we already run this?" One file, because one
+row per published item is a few thousand rows a year.
+
+`state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
+row per feed per run, sharded like the seen store for the same reason: it is
+the fastest-growing of the three.
+
+No reader fails on a missing file. A fresh clone has no history, and a run with
+no history is a run where nothing was seen, nothing was published and no feed
+has a record yet - which is exactly what an empty result says.
 
 Callers pass the state directory and never the file name. The layout is one
 fact, and it lives here.
@@ -22,10 +33,12 @@ from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 
 STATE_DIRNAME: Final = "state"
 SEEN_DIRNAME: Final = "seen"
+HEALTH_DIRNAME: Final = "feed-health"
 PUBLISHED_FILENAME: Final = "published.csv"
 
 
@@ -37,6 +50,15 @@ def seen_relpath(date: str) -> str:
 def seen_path(state_dir: Path, date: str) -> Path:
     """The month shard a run on this date appends to."""
     return state_dir / SEEN_DIRNAME / f"{date[:7]}.csv"
+
+
+def health_relpath(date: str) -> str:
+    """`state/feed-health/<YYYY-MM>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{HEALTH_DIRNAME}/{date[:7]}.csv"
+
+
+def health_path(state_dir: Path, date: str) -> Path:
+    return state_dir / HEALTH_DIRNAME / f"{date[:7]}.csv"
 
 
 def published_path(state_dir: Path) -> Path:
@@ -116,3 +138,36 @@ def load_published(state_dir: Path) -> dict[str, str]:
         if url_key not in published or on < published[url_key]:
             published[url_key] = on
     return published
+
+
+def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> int:
+    """Append this run's verdict on every feed it tried."""
+    payloads = [row.csv_row() for row in rows]
+    return _append(health_path(state_dir, date), FeedHealthRow.csv_columns(), payloads)
+
+
+def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
+    """Every health row in the window, oldest run first.
+
+    Sorted by run rather than by file order so a caller can talk about "the last
+    N runs" without knowing that the file is append-ordered - which it is today,
+    and which a rebased CI push could stop being tomorrow.
+
+    A row that no longer parses is skipped rather than fatal. This ledger is
+    diagnostic: losing a stale row costs a quarantine decision some evidence,
+    and refusing to start costs the reader the whole day.
+    """
+    rows: list[FeedHealthRow] = []
+    for stem in _shards_in_window(today, within_days):
+        for raw in _read_rows(state_dir / HEALTH_DIRNAME / f"{stem}.csv"):
+            try:
+                rows.append(FeedHealthRow.from_csv_row(raw))
+            except (KeyError, ValueError):
+                continue
+    rows.sort(key=lambda row: (row.date, _run_n(row.run_id)))
+    return rows
+
+
+def _run_n(run_id: str) -> int:
+    """The run number out of `<date>-<n>`, so run 10 sorts after run 9."""
+    return int(run_id.rsplit("-", 1)[1])

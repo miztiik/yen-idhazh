@@ -1,0 +1,104 @@
+{
+  "$defs": {
+    "FetchOutcome": {
+      "description": "Why one read of one address ended the way it did.\n\nDeliberately coarser than an HTTP status. What a later decision needs is\nwhether the address is worth asking again, and 403 and 404 answer that the\nsame way while 503 answers it differently.",
+      "enum": [
+        "ok",
+        "robots_denied",
+        "blocked",
+        "permanent",
+        "transient"
+      ],
+      "title": "FetchOutcome",
+      "type": "string"
+    }
+  },
+  "$id": "feed-health-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the feed, the run, the outcome and what it yielded.",
+      "version": "2026-08-23",
+      "why": "A feed can go quiet for a week before anybody notices, and nothing recorded whether a source answered. A quarantine rule and a health dashboard both need a measurement that already exists."
+    }
+  ],
+  "description": "One feed, one run, one row.",
+  "properties": {
+    "checked_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Checked At",
+      "type": "string"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Our own one-line reason. Never the response body (Holy Law #11).",
+      "title": "Detail"
+    },
+    "feed_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Feed Id",
+      "type": "string"
+    },
+    "items": {
+      "default": 0,
+      "description": "Candidates the feed yielded. Zero with an ok outcome is its own kind of broken - a feed that parses to nothing is not a feed that is working.",
+      "minimum": 0,
+      "title": "Items",
+      "type": "integer"
+    },
+    "outcome": {
+      "$ref": "#/$defs/FetchOutcome"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "status": {
+      "anyOf": [
+        {
+          "maximum": 599,
+          "minimum": 100,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The HTTP status, when the request got far enough to have one.",
+      "title": "Status"
+    },
+    "version": {
+      "default": "2026-08-23",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "run_id",
+    "date",
+    "feed_id",
+    "checked_at",
+    "outcome"
+  ],
+  "title": "FeedHealthRow",
+  "type": "object",
+  "version": "2026-08-23"
+}

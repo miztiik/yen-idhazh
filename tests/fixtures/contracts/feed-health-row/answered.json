@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-08-23T06:00:00Z",
+  "date": "2026-08-23",
+  "detail": null,
+  "feed_id": "example-lab-blog",
+  "items": 7,
+  "outcome": "ok",
+  "run_id": "2026-08-23-1",
+  "status": 200,
+  "version": "2026-08-23"
+}

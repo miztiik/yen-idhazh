@@ -22,7 +22,8 @@ from pathlib import Path
 import pytest
 from conftest import FIXTURES_DIR, read_text
 
-from idhazh import cli, config, fetch, seen
+from idhazh import cli, config, fetch, ledger
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
@@ -111,7 +112,7 @@ BODIES = {
 def served(name: str) -> fetch.FetchResult:
     """A captured feed, answered as a live host would answer it."""
     return fetch.FetchResult(
-        outcome=fetch.FetchOutcome.OK,
+        outcome=FetchOutcome.OK,
         status=200,
         body=(FEEDS / name).read_bytes(),
     )
@@ -232,7 +233,7 @@ def test_an_unreachable_feed_is_counted_as_failed_and_never_stops_the_run() -> N
         [LAB, TRADE, COMMUNITY],
         fetcher=failing(
             TRADE_URL,
-            fetch.FetchResult(outcome=fetch.FetchOutcome.TRANSIENT, status=503, detail="503"),
+            fetch.FetchResult(outcome=FetchOutcome.TRANSIENT, status=503, detail="503"),
             LAB_URL,
             COMMUNITY_URL,
         ),
@@ -248,7 +249,7 @@ def test_a_feed_that_robots_refuses_is_a_failure_not_a_silent_skip() -> None:
         [LAB, TRADE, COMMUNITY],
         fetcher=failing(
             COMMUNITY_URL,
-            fetch.FetchResult(outcome=fetch.FetchOutcome.ROBOTS_DENIED, detail="robots.txt"),
+            fetch.FetchResult(outcome=FetchOutcome.ROBOTS_DENIED, detail="robots.txt"),
             LAB_URL,
             TRADE_URL,
         ),
@@ -396,7 +397,7 @@ def test_a_salience_feed_that_fails_costs_the_day_nothing() -> None:
         salience=[FRONT_PAGE],
         fetcher=failing(
             FRONT_PAGE_URL,
-            fetch.FetchResult(outcome=fetch.FetchOutcome.TRANSIENT, status=504),
+            fetch.FetchResult(outcome=FetchOutcome.TRANSIENT, status=504),
             LAB_URL,
             TRADE_URL,
             COMMUNITY_URL,
@@ -490,7 +491,7 @@ def test_an_undated_entry_gets_the_age_we_first_saw_it() -> None:
     for item in from_notices:
         assert item.published_at == NOW
 
-    recorded = seen.load_seen(state, today=DATE, within_days=90)
+    recorded = ledger.load_seen(state, today=DATE, within_days=90)
     assert all(recorded[item.url_key] == NOW for item in from_notices)
 
 
@@ -525,7 +526,7 @@ def test_a_published_address_is_never_planned_again() -> None:
     state = Path(tempfile.mkdtemp())
     first = plan([LAB, TRADE, COMMUNITY], state=state)
     ran = first.items[0]
-    seen.append_published(
+    ledger.append_published(
         state,
         [
             PublishedRow(
@@ -551,6 +552,101 @@ def test_a_weighted_down_feed_ranks_below_a_full_one_of_the_same_tier() -> None:
     strong = next(item for item in full.items if item.source_id == "lab-blog")
     weakened = next(item for item in halved.items if item.source_id == "lab-blog")
     assert weakened.rank_score < strong.rank_score
+
+
+# --- what every feed did -----------------------------------------------------
+
+
+def health_after(built_with: Path) -> list[FeedHealthRow]:
+    """Whatever the run just wrote about its feeds, read back through the contract."""
+    return ledger.load_health(built_with, today=DATE, within_days=1)
+
+
+def test_every_feed_gets_a_row_whether_it_answered_or_not() -> None:
+    """A source is only quarantinable if its silence was written down.
+
+    Recording only the failures would make a feed that has never been tried look
+    the same as a feed that has never failed.
+    """
+    state = Path(tempfile.mkdtemp())
+    plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=failing(
+            TRADE_URL,
+            fetch.FetchResult(outcome=FetchOutcome.TRANSIENT, status=503, detail="HTTP 503"),
+            LAB_URL,
+            COMMUNITY_URL,
+        ),
+        state=state,
+    )
+    rows = health_after(state)
+    assert {row.feed_id for row in rows} == {"lab-blog", "trade-press", "community"}
+    dead = next(row for row in rows if row.feed_id == "trade-press")
+    assert (dead.outcome, dead.status, dead.items) == (FetchOutcome.TRANSIENT, 503, 0)
+    assert dead.failing
+
+
+def test_a_feed_that_answered_with_nothing_is_recorded_as_failing() -> None:
+    """200 with an empty body is the failure that killed eight real feeds quietly."""
+    state = Path(tempfile.mkdtemp())
+    plan([LAB, TRADE, QUIET], state=state)
+    quiet = next(row for row in health_after(state) if row.feed_id == "quiet-desk")
+    assert (quiet.outcome, quiet.items) == (FetchOutcome.OK, 0)
+    assert quiet.failing, "an ok read that parsed to no entries still counts against the feed"
+
+
+def test_a_working_feed_records_what_it_yielded() -> None:
+    state = Path(tempfile.mkdtemp())
+    plan([LAB, TRADE, COMMUNITY], state=state)
+    rows = health_after(state)
+    assert all(row.outcome is FetchOutcome.OK for row in rows)
+    assert all(row.items > 0 for row in rows)
+    assert not any(row.failing for row in rows)
+
+
+def test_the_record_never_carries_the_response_body() -> None:
+    """A feed is a stranger's text and this row lands on a published page (Holy Law #11)."""
+    state = Path(tempfile.mkdtemp())
+    hostile = "<script>alert(1)</script>" * 40
+    plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=failing(
+            LAB_URL,
+            fetch.FetchResult(outcome=FetchOutcome.PERMANENT, status=404, detail=hostile),
+            TRADE_URL,
+            COMMUNITY_URL,
+        ),
+        state=state,
+    )
+    row = next(r for r in health_after(state) if r.feed_id == "lab-blog")
+    assert row.detail is not None
+    assert len(row.detail) <= 200, "a detail is one line of ours, never an unbounded body"
+
+
+def test_two_runs_on_one_day_both_leave_a_record() -> None:
+    """Quarantine counts runs, so a run that wrote nothing would be a run that never failed."""
+    state = Path(tempfile.mkdtemp())
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=1)
+    plan([LAB, TRADE, COMMUNITY], state=state, run_n=2)
+    rows = health_after(state)
+    assert len(rows) == 6
+    assert [row.run_id for row in rows[:3]] == ["2026-08-22-1"] * 3, "oldest run first"
+    assert [row.run_id for row in rows[3:]] == ["2026-08-22-2"] * 3
+
+
+def test_reading_a_history_that_was_never_written_is_empty_not_an_error() -> None:
+    """A fresh clone has no history, and that is a run where no feed has a record yet."""
+    assert ledger.load_health(Path(tempfile.mkdtemp()), today=DATE, within_days=30) == []
+
+
+def test_a_row_that_no_longer_parses_is_skipped_rather_than_fatal() -> None:
+    """This ledger is diagnostic. Losing a stale row costs evidence; refusing to start costs the day."""
+    state = Path(tempfile.mkdtemp())
+    plan([LAB, TRADE, COMMUNITY], state=state)
+    path = ledger.health_path(state, DATE)
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write("1999-01-01,not-a-date,,,,,,\n")
+    assert len(health_after(state)) == 3
 
 
 # --- sharding ----------------------------------------------------------------
