@@ -100,6 +100,10 @@ def to_eval_row(
         item_id=item.item_id,
         url_key=item.url_key,
         source_url=item.canonical_url,
+        # The source's headline, not ours. This column exists so a row still
+        # identifies its article after the day is pruned from the site, and
+        # identity has to be the thing that does not vary: our title is
+        # rewritten per run and is absent whenever the rewrite missed its range.
         title=(item.title or article.title or _UNTITLED),
         vertical=item.vertical,
         model_id=summary.model_id,

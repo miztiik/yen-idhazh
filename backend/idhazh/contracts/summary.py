@@ -38,6 +38,19 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-23",
+            change="Added optional title, and folded it into output_digest when present.",
+            why=(
+                "The digest published the source's own headline, which is written to win "
+                "a click. The summarizer now writes a title from the article's own facts "
+                "and it is published words like the rest, so it belongs in the digest "
+                "that detects drift. Additive both ways: the field is optional, and a "
+                "null title is left out of the digested payload rather than digested as "
+                "null, so every payload written before today still recomputes to the "
+                "same value."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-22",
             change="Split duration_ms into fetch_ms, extract_ms and summarize_ms.",
             why=(
@@ -65,6 +78,14 @@ class Summary(Contract):
 
     item_id: ItemId
     url_key: UrlKey
+    title: UntrustedLine | None = Field(
+        default=None,
+        description=(
+            "Our own headline, written from the article's facts. Optional because a "
+            "title outside the asked range degrades to the source's rather than "
+            "costing the item (section 1a)."
+        ),
+    )
     summary: str | None = None
     key_points: list[str] = Field(default_factory=list)
 
@@ -101,8 +122,9 @@ class Summary(Contract):
 
     @model_validator(mode="after")
     def _output_digest_is_rebuilt_not_trusted(self) -> Self:
-        if self.output_digest != derive_output_digest(self.summary, self.key_points):
-            raise ValueError("output_digest must be the digest of summary and key_points")
+        expected = derive_output_digest(self.summary, self.key_points, title=self.title)
+        if self.output_digest != expected:
+            raise ValueError("output_digest must be the digest of the published words")
         return self
 
     @model_validator(mode="after")
@@ -112,6 +134,9 @@ class Summary(Contract):
                 raise ValueError("an ok summary carries summary text and at least one key point")
             if self.failure_detail is not None:
                 raise ValueError("an ok summary carries no failure_detail")
-        elif self.failure_detail is None:
-            raise ValueError("a summary that did not land must record why")
+        else:
+            if self.failure_detail is None:
+                raise ValueError("a summary that did not land must record why")
+            if self.title is not None:
+                raise ValueError("a summary that did not land publishes no title")
         return self

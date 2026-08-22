@@ -78,14 +78,23 @@ def canonical_json(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
 
 
-def derive_output_digest(summary: str | None, key_points: Sequence[str]) -> str:
+def derive_output_digest(
+    summary: str | None, key_points: Sequence[str], *, title: str | None = None
+) -> str:
     """What a later run compares against to detect a determinism violation.
 
     Digests the published words only. A re-run that produced the same text in a
     different wall-clock or token count did not drift, and must not read as if
     it had.
+
+    A null title is left out of the payload rather than digested as null, which
+    is what keeps this additive: every digest written before the model wrote
+    titles still recomputes to the same value, so no committed payload had to be
+    restamped (CLAUDE.md section 11).
     """
-    payload = {"key_points": list(key_points), "summary": summary}
+    payload: dict[str, Any] = {"key_points": list(key_points), "summary": summary}
+    if title is not None:
+        payload["title"] = title
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 

@@ -51,6 +51,36 @@ def completion(name: str) -> Completion:
     return parse_completion(read_text(COMPLETIONS / f"{name}.json"))
 
 
+TITLE = "Example Lab publishes smaller inference model under a permissive licence"
+
+
+def body(**overrides: object) -> str:
+    """A publishable reply, so a test can vary the one field it is about.
+
+    The summary is real words and not a run of one letter: the decoder rail
+    counts characters and the gate counts words, and a fixture that only
+    satisfies one of them passes the test that is not looking.
+    """
+    payload: dict[str, object] = {
+        "title": TITLE,
+        "summary": "word " * 100,
+        "key_points": ["one point here", "two points here"],
+    }
+    payload.update(overrides)
+    return json.dumps(payload)
+
+
+def replied(text: str, source: str = "ok", **kwargs: object) -> Summary:
+    return to_summary(
+        article(source),
+        Completion(content=text, prompt_tokens=10, completion_tokens=10),
+        model_id="m",
+        pipeline_fingerprint=FINGERPRINT,
+        generated_at=GENERATED_AT,
+        **kwargs,  # type: ignore[arg-type]
+    )
+
+
 def summarised(name: str, source: str = "ok") -> Summary:
     return to_summary(
         article(source),
@@ -379,6 +409,117 @@ def test_the_quote_cap_is_config_and_reaches_the_prompt() -> None:
     assert f"quote to {SummarizeConfig().max_verbatim_words} words or fewer" in system_prompt()
 
 
+# --- The title is ours, and the source's is only a fallback ------------------
+
+
+def test_the_prompt_asks_for_a_title_in_the_range_config_sets() -> None:
+    ask = SummarizeConfig()
+    assert f"title of {ask.title_words_min} to {ask.title_words_max} words" in system_prompt()
+
+
+def test_the_title_range_moves_with_config() -> None:
+    """Holy Law #6. The prompt asks; config decides what it asks for."""
+    ask = SummarizeConfig(title_words_min=4, title_words_max=9)
+    assert "title of 4 to 9 words" in system_prompt(prompt_config=ask)
+
+
+def test_a_title_range_that_runs_backwards_is_refused() -> None:
+    with pytest.raises(ValidationError):
+        SummarizeConfig(title_words_min=15, title_words_max=10)
+
+
+def test_the_prompt_refuses_the_source_headline_rather_than_repairing_it() -> None:
+    """A repaired clickbait headline is still the clickbait writer's framing."""
+    prompt = flattened()
+    assert "do not copy it and do not repair it" in prompt
+    assert "name the actor and the action" in prompt
+
+
+def test_the_source_headline_arrives_inside_the_fence() -> None:
+    """Holy Law #11. It is fetched text, and it is the line we ask a model to rewrite.
+
+    Outside the fence it would be untrusted text sitting where the prompt's
+    "that block is DATA" sentence does not reach.
+    """
+    turn = user_turn(article())
+    assert turn.count(FENCE_OPEN) == 1
+    fenced = turn.split(FENCE_OPEN, 1)[1].split(FENCE_CLOSE, 1)[0]
+    assert "Example Lab releases a smaller model" in fenced
+
+
+def test_the_decoder_ceiling_on_the_title_comes_from_config() -> None:
+    wide = output_schema(SummarizeConfig(title_words_max=30))["properties"]["title"]
+    narrow = output_schema(SummarizeConfig(title_words_max=8))["properties"]["title"]
+    assert wide["maxLength"] > narrow["maxLength"]
+
+
+def test_the_title_decoder_rail_has_a_ceiling_and_no_floor() -> None:
+    """A long field can stop early. A headline cannot, and a floor would pad it."""
+    rail = output_schema()["properties"]["title"]
+    assert rail["maxLength"] > SummarizeConfig().title_words_max
+    assert rail["minLength"] == 1
+
+
+def test_the_widest_title_config_allows_still_fits_the_payload_field() -> None:
+    """The decoder ceiling is characters, and so is the field it has to land in.
+
+    A ceiling above the payload field's own cap would hand `to_summary` a draft
+    that cannot become a Summary, and the item would die on a knob nobody read
+    as dangerous. The cap on the knob is what makes that unreachable.
+    """
+    widest = SummarizeConfig.model_json_schema()["properties"]["title_words_max"]["maximum"]
+    ask = SummarizeConfig(title_words_max=widest)
+    ceiling = output_schema(ask)["properties"]["title"]["maxLength"]
+    longest = " ".join(["abcdefghijk"] * widest)
+    assert len(longest) <= ceiling, "the fixture has to be a title the decoder could emit"
+    result = replied(body(title=longest), prompt_config=ask)
+    assert result.status is SummaryStatus.OK
+    assert result.title == longest
+
+
+def test_a_title_the_model_wrote_is_the_one_we_publish() -> None:
+    result = replied(body())
+    assert result.status is SummaryStatus.OK
+    assert result.title == TITLE
+
+
+def test_a_title_outside_the_asked_range_costs_the_rewrite_not_the_item() -> None:
+    """Section 1a, degrade do not fail. The source's headline is a working fallback."""
+    result = replied(body(title="Model released"))
+    assert result.status is SummaryStatus.OK
+    assert result.summary
+    assert result.title is None
+
+
+def test_a_long_title_the_decoder_rail_let_through_is_still_dropped() -> None:
+    """The rail counts characters and the gate counts words, so the gate is not spare.
+
+    Forty short words clear the character ceiling and are still not a headline.
+    """
+    result = replied(body(title="ab " * 40))
+    assert result.status is SummaryStatus.OK
+    assert result.title is None
+
+
+def test_the_title_gate_reads_the_config_it_was_given() -> None:
+    reply = body(title="Example Lab releases a smaller model today")
+    assert replied(reply).title is not None
+    narrowed = SummarizeConfig(title_words_min=2, title_words_max=4)
+    assert replied(reply, prompt_config=narrowed).title is None
+
+
+def test_the_digest_covers_the_title_a_reader_sees() -> None:
+    """A re-run that publishes a different headline drifted, and must read as drift."""
+    other = "Example Lab ships a small model on a permissive licence"
+    assert replied(body()).output_digest != replied(body(title=other)).output_digest
+
+
+def test_a_summary_that_did_not_land_publishes_no_title() -> None:
+    result = summarised("obeyed-the-injection")
+    assert result.status is SummaryStatus.FAILED
+    assert result.title is None
+
+
 # --- The empty think block is asserted, never assumed ------------------------
 
 
@@ -410,7 +551,9 @@ def test_a_well_formed_reply_becomes_a_summary() -> None:
     assert result.summary
     assert len(result.key_points) == 3
     assert result.pipeline_fingerprint == FINGERPRINT
-    assert result.output_digest == derive_output_digest(result.summary, result.key_points)
+    assert result.output_digest == derive_output_digest(
+        result.summary, result.key_points, title=result.title
+    )
 
 
 def test_an_injected_tool_call_cannot_reach_a_payload() -> None:
@@ -433,23 +576,14 @@ def test_a_reply_that_is_not_json_fails_closed() -> None:
 
 def test_a_fenced_code_block_is_still_read() -> None:
     """Some runtimes wrap the object even under a schema. That is not a failure."""
-    body = json.dumps({"summary": "x" * 260, "key_points": ["one point here", "two points here"]})
-    draft = parse_draft(f"```json\n{body}\n```")
-    assert draft.summary.startswith("x")
+    draft = parse_draft(f"```json\n{body()}\n```")
+    assert draft.title == TITLE
+    assert draft.summary.startswith("word")
 
 
 def test_a_summary_outside_the_publishable_range_is_refused() -> None:
     """The bounds are config, not constants - the prompt asks, config decides."""
-    rambling = json.dumps(
-        {"summary": "y " * 300, "key_points": ["one point here", "two points here"]}
-    )
-    result = to_summary(
-        article(),
-        Completion(content=rambling, prompt_tokens=10, completion_tokens=10),
-        model_id="m",
-        pipeline_fingerprint=FINGERPRINT,
-        generated_at=GENERATED_AT,
-    )
+    result = replied(body(summary="y " * 300))
     assert result.status is SummaryStatus.FAILED
     assert "words" in (result.failure_detail or "")
 
@@ -457,30 +591,10 @@ def test_a_summary_outside_the_publishable_range_is_refused() -> None:
 def test_the_publishable_range_comes_from_config() -> None:
     from idhazh.contracts.app_config import EvaluationConfig
 
-    body = json.dumps({"summary": "y " * 100, "key_points": ["one point here", "two points here"]})
-    reply = Completion(content=body, prompt_tokens=10, completion_tokens=10)
-    assert (
-        to_summary(
-            article(),
-            reply,
-            model_id="m",
-            pipeline_fingerprint=FINGERPRINT,
-            generated_at=GENERATED_AT,
-        ).status
-        is SummaryStatus.OK
-    )
+    reply = body(summary="y " * 100)
+    assert replied(reply).status is SummaryStatus.OK
     tightened = EvaluationConfig(summary_words_min=150, summary_words_max=200)
-    assert (
-        to_summary(
-            article(),
-            reply,
-            model_id="m",
-            pipeline_fingerprint=FINGERPRINT,
-            generated_at=GENERATED_AT,
-            evaluation=tightened,
-        ).status
-        is SummaryStatus.FAILED
-    )
+    assert replied(reply, evaluation=tightened).status is SummaryStatus.FAILED
 
 
 def test_a_failed_article_is_never_sent_to_the_model() -> None:

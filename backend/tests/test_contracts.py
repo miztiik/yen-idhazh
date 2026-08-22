@@ -115,6 +115,19 @@ def load_summary(payload: dict[str, Any]) -> Contract:
     return BY_STEM["summary"].model_validate(payload)
 
 
+def test_a_payload_written_before_a_field_existed_still_reads() -> None:
+    """Section 11's release blocker, tested against the key rather than the stamp.
+
+    A payload from before the summarizer wrote titles has no `title` key at all.
+    It must still load, and its committed `output_digest` must still verify -
+    which it does because a null title is left out of the digested payload
+    rather than digested as null.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
+    del payload["title"]
+    assert load_summary(payload).title is None  # type: ignore[attr-defined]
+
+
 def test_version_is_stamped_when_a_writer_omits_it() -> None:
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
     del payload["version"]

@@ -107,7 +107,9 @@
     ],
     "key_points_max": 4,
     "key_points_min": 3,
-    "max_verbatim_words": 15
+    "max_verbatim_words": 15,
+    "title_words_max": 12,
+    "title_words_min": 5
   },
   "ui": {
     "repo_url": "https://github.com/miztiik/yen-idhazh",
