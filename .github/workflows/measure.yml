@@ -127,8 +127,19 @@ jobs:
           pip install --index-url https://download.pytorch.org/whl/cpu torch
           pip install "git+https://github.com/huggingface/diffusers" transformers accelerate
 
-      - name: Time Z-Image-Turbo on CPU
-        run: python3 backend/utilities/bench_image.py --model Tongyi-MAI/Z-Image-Turbo --steps 9 --sizes 512,768
+      # The smaller candidate first, at the smaller size, in bfloat16. The first
+      # attempt loaded float32 - roughly 24 GB for a 6B model on a 16 GB runner -
+      # and the agent was killed under it. Decision #1 on Row #9 already said the
+      # smaller model matters more on CPU than its newness counts against it.
+      - name: Time the candidates on CPU
+        run: |
+          set -euo pipefail
+          python3 backend/utilities/bench_image.py \
+            --model alpha-vllm/Anima-2.9B --steps 9 --sizes 512 --dtype bfloat16 \
+            || echo "Anima-2.9B did not complete on this runner"
+          python3 backend/utilities/bench_image.py \
+            --model Tongyi-MAI/Z-Image-Turbo --steps 9 --sizes 512 --dtype bfloat16 \
+            || echo "Z-Image-Turbo did not complete on this runner"
 
       - uses: actions/upload-artifact@v4
         with:
