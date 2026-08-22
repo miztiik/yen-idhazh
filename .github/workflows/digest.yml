@@ -119,15 +119,27 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ env.MODEL_FILE }}-v1
+          key: llm-${{ env.MODEL_FILE }}-v2
 
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
+        # Authenticated, because four shards and the router all ask at once and
+        # anonymous api.github.com allows 60 requests an hour. Rate-limited, the
+        # endpoint returns an object rather than a list and jq failed with
+        # "Cannot index string with string" - which names the symptom and hides
+        # the cause.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p backend/bin backend/models
-          URL=$(curl -sS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
-            | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
+          URL=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
+            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ]; then
+            echo "no ubuntu-x64 llama.cpp build found - rate limited, or the asset was renamed" >&2
+            exit 1
+          fi
           curl -sSL -o llama.tar.gz "$URL"
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           # `cp -a`, not `find -type f`. These builds ship versioned shared
@@ -220,15 +232,22 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ env.ROUTE_FILE }}-v1
+          key: llm-${{ env.ROUTE_FILE }}-v2
 
       - name: Fetch runtime and router weights
         if: steps.router.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p backend/bin backend/models
-          URL=$(curl -sS 'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
-            | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
+          URL=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
+            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ]; then
+            echo "no ubuntu-x64 llama.cpp build found - rate limited, or the asset was renamed" >&2
+            exit 1
+          fi
           curl -sSL -o llama.tar.gz "$URL"
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
