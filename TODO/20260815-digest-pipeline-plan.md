@@ -141,7 +141,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 6 | Summarize worker | 1, 2, 5, 15 | C | LANDED (determinism oracle needs a real model run - folds into row 7) | main | direct | - |
 | 11 | Pages eval dashboard | 4 | C | LANDED (operator surface, states its own denominator) | main | direct | - |
 | 19 | Build-time embeddings in the day payload | 1, 15 | C | LANDED (384-dim int8 in the day payload; one ONNX file shared by runner and browser) | main | direct | - |
-| 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | RULE LANDED (19 tests); waiting on the runner's own scores | main | direct | - |
+| 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | LANDED (20-article golden set, `validate` + `decide` stages, `validate.yml` runs both models) | main | direct | - |
 | 8 | Route worker + deterministic renderers | 6, 7 | E | LANDED (chart + diagram; the model picks an index and never writes a number) | main | direct | - |
 | 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | LANDED (per-domain alerts; weekly workflow reads the ledger) | main | direct | - |
 | 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
@@ -154,13 +154,13 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 22 | Read-aloud via Web Speech API | 13 | H | LANDED (browser voice; absent where unsupported) | main | direct | - |
 | 20 | Browser semantic search | 18, 19 | I | LANDED (top-3 recall 0.80 on five hand-labelled queries, measured 2026-08-22) | main | direct | - |
 | 21 | Browser-runtime injection canaries | 18 | I | LANDED (eight canaries on the published surface, gated in CI) | main | direct | - |
-| 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | J | PENDING | - | - | - |
+| 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | J | ESCALATED - PAUSED FOR SIGN-OFF (every candidate's smallest weight file is over the 100 MB limit; smallest measured 347.7 MB) | main | direct | - |
 
 ---
 
 ## 3. Delivery state (2026-08-22)
 
-**Twenty of twenty-three rows are settled.** The pipeline ran end to end on a
+**Twenty-two of twenty-three rows are settled, and the twenty-third is an ESCALATE that fired.** The pipeline ran end to end on a
 GitHub runner and published a real day: 10 items across all five verticals, all
 banded `high`, 10 eval rows, and one rendered chart - live at
 <https://miztiik.github.io/yen-idhazh/>. Three rows remain, each for a stated
@@ -189,9 +189,36 @@ wait loop whether or not the server came up, so a dead server published
 
 | Row | State | Waiting on |
 | --- | --- | --- |
-| 7 - Model validation gate | **RULE LANDED, GATE NEVER RUN** | The rule is config-driven and covered by 19 tests, so nothing about the decision is up for argument. What has never happened is the measurement it judges: 20 golden articles scored end to end per candidate model. The `llm` job measured throughput, not per-model faithfulness. Until that runs, the gate has judged nothing. |
-| 9 - Image renderer | **BLOCKED, and now for a measured reason** | The `image` job ran 48 minutes inside a 120-minute budget and then took a runner shutdown signal - memory exhaustion, on a 16 GB machine running CPU diffusion. That does not answer the byte question. It answers that the current way of asking it does not survive the platform. |
-| 23 - Browser chat SLM | **BLOCKED, by design** | Its ESCALATE trigger. Rows 20 and 21 are clear, but they also priced it: the search encoder alone is 43 MB, and a generative model is the surface every browser canary exists to guard. |
+| 9 - Image renderer | **MEASUREMENT RE-DISPATCHED** | The first attempt loaded float32 - about 24 GB for a 6B model on a 16 GB runner - and the agent was killed under it with 72 minutes still on its own clock. Now bfloat16, one size, the smaller candidate first, reporting resident memory and both PNG and WebP byte counts so a success answers the retention question in the same pass and a failure leaves a number behind it. |
+| 23 - Browser chat SLM | **ESCALATED. Paused for sign-off.** | Nothing technical. Its trigger fired on a measured fact, so the contract says stop (`CLAUDE.md` section 6, level 5). See below. |
+
+### Row #23: the ESCALATE fired
+
+The trigger is any single model file over GitHub's 100 MB hard limit. Measured
+2026-08-22 against the Hugging Face API, smallest usable weight file per
+candidate:
+
+| Candidate | Smallest weight file |
+| --- | --- |
+| SmolLM2-360M-Instruct | 347.7 MB (uint8) |
+| Qwen2.5-0.5B-Instruct | 488.4 MB (int8) |
+| Qwen1.5-0.5B-Chat | 470.9 MB (q4f16) |
+| Llama-3.2-1B-Instruct | 1179.4 MB (int8) |
+
+Every one is over, and the smallest is 3.5x the limit. Two further facts the
+owner should weigh together with that:
+
+- **The reader already pays 43 MB** for on-device search. A chat model takes
+  that past 390 MB before it answers a single question.
+- **Rows 20 and 21 priced the surface, not just the bytes.** Eight canaries
+  exist because our summary is derived from a stranger's page, and feeding it to
+  a second model is the same trust boundary a second time. Row 21's own decision
+  #2 is that assist output is inserted as plain text with no markdown, no
+  autolinking and no image rendering - which is most of what makes a chat
+  transcript feel like a chat transcript.
+
+This row is not blocked on effort. It is blocked because shipping it is a
+decision about what the product is, and that decision is not mine.
 
 ### What changed on 2026-08-22
 
