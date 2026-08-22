@@ -28,8 +28,9 @@ DATE_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}$"
 # payload is byte-identical to the one that was read.
 TIMESTAMP_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
 SLUG_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
-# `<vertical>-<NN>`: the reader-facing item address. Zero-padded to at least two
-# digits and never capped, because the per-day item count is config-driven.
+# `<vertical>-<NN>`: the reader-facing item address. The digits are derived from
+# the address hash, not from a rank position, so the same article keeps the same
+# id across every run of the day. At least two, never capped.
 ITEM_ID_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$"
 # `<YYYY-MM-DD>-<N>`: the run address. Readable, sortable, and free of hashes.
 RUN_ID_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}-[0-9]+$"

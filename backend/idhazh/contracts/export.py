@@ -20,6 +20,7 @@ from idhazh.contracts.fingerprint import FingerprintRow
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import Taxonomy
@@ -34,7 +35,9 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     FingerprintRow,
     Route,
     RunManifest,
+    PublishedRow,
     RunPlan,
+    SeenRow,
     Sources,
     Summary,
     Taxonomy,

@@ -2,7 +2,7 @@
   "$defs": {
     "PlannedItem": {
       "additionalProperties": false,
-      "description": "One URL that survived deduplication and made its vertical's cap.",
+      "description": "One URL that survived deduplication and was chosen for the day.\n\n`item_id` is derived from `url_key`, so the same article carries the same\nid on every run of every day. `published_at` is the time the run believes -\nthe feed's own date, unless it claimed a future too far ahead to be true,\nin which case it is when we first saw the address.",
       "properties": {
         "canonical_url": {
           "description": "After canonicalisation. url_key derives from it.",
@@ -163,6 +163,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "item_id is derived from the address instead of the rank position, and published_at now carries the time the run believes rather than the time the feed claimed.",
+      "version": "2026-08-22T11:00",
+      "why": "A rank position renumbers the day on every run, so on a six-hourly schedule the same story came back under a new id and published twice. A date a feed puts in the future is not a date, and forwarding one to a reader repeats the feed's claim as our own."
+    },
+    {
       "change": "Initial shape: the ranked, capped, deduplicated work list for one run.",
       "version": "2026-08-21T04:00",
       "why": "Contracts before logic - a worker reads a fixed shape and never re-decides."
@@ -211,7 +216,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2026-08-21T04:00",
+      "default": "2026-08-22T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -231,5 +236,5 @@
   ],
   "title": "RunPlan",
   "type": "object",
-  "version": "2026-08-21T04:00"
+  "version": "2026-08-22T11:00"
 }

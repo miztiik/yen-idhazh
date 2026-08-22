@@ -49,7 +49,15 @@ class TierWeights(Model):
 
 
 class RunConfig(Model):
-    item_cap_per_day: int = Field(default=20, ge=1)
+    safety_ceiling_per_run: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "A crash guard, not an editorial choice. Supply and the ranking decide how "
+            "big a day is; this only stops a mis-parsed feed from publishing hundreds "
+            "of items in one run. A normal day never reaches it."
+        ),
+    )
     shard_size: int = Field(
         default=5,
         ge=1,
@@ -81,6 +89,36 @@ class CollectConfig(Model):
     repetition_weight: float = Field(default=1.0, ge=0.0)
     watchlist_bonus: float = Field(default=0.5, ge=0.0)
     front_page_bonus: float = Field(default=0.4, ge=0.0)
+    recency_weight: float = Field(
+        default=0.6,
+        ge=0.0,
+        description=(
+            "How much freshness may move a score. A bonus, never a filter: a strong "
+            "older item still outranks a weak new one, which a hard age cutoff cannot do."
+        ),
+    )
+    recency_half_life_hours: float = Field(
+        default=18.0,
+        gt=0.0,
+        description=("Hours for the recency bonus to halve. At 18 h a day-old item keeps a third."),
+    )
+    max_future_hours: float = Field(
+        default=6.0,
+        ge=0.0,
+        description=(
+            "A publish date further ahead than this is not believed and the item falls "
+            "back to first sight. Feeds that stamp tomorrow would otherwise take the "
+            "top slot every single day."
+        ),
+    )
+    seen_window_days: int = Field(
+        default=90,
+        ge=1,
+        description=(
+            "How far back the first-sight store is consulted. Older shards stay "
+            "committed and readable; they are just not evidence about today."
+        ),
+    )
 
 
 class ExtractConfig(Model):
@@ -126,11 +164,13 @@ class InferenceConfig(Model):
         description="Off. Reasoning measurably increases hallucination when summarizing.",
     )
     max_output_tokens: int = Field(
-        default=500,
+        default=900,
         ge=1,
         description=(
-            "Covers the summary AND its key points. Sized at 250 the reply ran out of "
-            "budget mid-object and failed as a shape error, which named the wrong cause."
+            "A crash guard, not a length target. The prompt sets the length; this only "
+            "stops a runaway decode from burning a shard's whole timeout. Sized at 250 "
+            "the reply ran out of budget mid-object and failed as a shape error, which "
+            "named the wrong cause - so it is set well above any summary we want."
         ),
     )
 
@@ -336,6 +376,22 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-22T11:00",
+            change=(
+                "Replaced run.item_cap_per_day with run.safety_ceiling_per_run. Added "
+                "collect.recency_weight, collect.recency_half_life_hours, "
+                "collect.max_future_hours and collect.seen_window_days. Raised "
+                "inference.max_output_tokens to 900."
+            ),
+            why=(
+                "A daily cap decided the size of the day; supply and the ranking should. "
+                "The ceiling that remains is a crash guard against a mis-parsed feed. "
+                "Recency is a bonus rather than a cutoff so a strong older item is never "
+                "dropped for a weak new one. The token stop is labelled as the crash "
+                "guard it always was, and sized so the prompt sets the length."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22T09:00",
             change="Removed collect.min_feeds_floor.",

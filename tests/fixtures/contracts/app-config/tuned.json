@@ -1,9 +1,13 @@
 {
   "collect": {
     "front_page_bonus": 0.25,
+    "max_future_hours": 6.0,
     "max_per_source": 2,
     "quarantine_after_failures": 3,
+    "recency_half_life_hours": 18.0,
+    "recency_weight": 0.6,
     "repetition_weight": 1.5,
+    "seen_window_days": 90,
     "tier_weights": {
       "community": 0.2,
       "institution": 1.0,
@@ -77,8 +81,8 @@
     "site_budget_mb": 600
   },
   "run": {
-    "item_cap_per_day": 12,
     "max_parallel": 2,
+    "safety_ceiling_per_run": 120,
     "shard_size": 3,
     "shard_timeout_minutes": 90,
     "success_floor_pct": 80

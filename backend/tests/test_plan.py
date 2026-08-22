@@ -1,30 +1,30 @@
 """Integration-tier tests for the plan stage - the day, decided before any weights load.
 
 `stage_plan` is the one stage that reads the open web and the one stage nothing
-tested. Every rule about freshness, identity and feed health is about to be
-written into it, so it gets its safety net first.
+tested. Every rule about freshness, identity and feed health is written into it,
+so it keeps a safety net around all of them.
 
-The two seams `cli` exposes are what make this possible. The fetcher is a
+The three seams `cli` exposes are what make this possible. The fetcher is a
 callable, so a test drives it from `tests/fixtures/feeds/` - a real function
 reading a real captured file, not a mock (Holy Law #7). The clock is a callable,
 so a rule about how old an article is has a fixed `now` and cannot change its
-answer at midnight.
-
-Several tests here record behaviour that is wrong and about to change. Each says
-so, and names the item that changes it. A characterization test is how you prove
-the net can see the bug before you fix it.
+answer at midnight. The state directory is a path, so a test appends its sight
+ledgers to a temp directory rather than to the repository's own.
 """
 
 from __future__ import annotations
 
 import dataclasses
 import json
+import tempfile
+from pathlib import Path
 
 import pytest
 from conftest import FIXTURES_DIR, read_text
 
-from idhazh import cli, config, fetch
+from idhazh import cli, config, fetch, seen
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
 
@@ -88,7 +88,7 @@ FRONT_PAGE = SalienceFeedDef(
     url=FRONT_PAGE_URL,
 )
 
-AI = VerticalDef(id="ai", display_name="AI", daily_cap=5, min_feeds=3)
+AI = VerticalDef(id="ai", display_name="AI", min_feeds=3)
 
 #: A fixed morning. Every date in the fixtures is placed relative to it.
 NOW = "2026-08-22T06:00:00Z"
@@ -178,7 +178,8 @@ def plan(
     retired: list[FeedDef] | None = None,
     fetcher: cli.Fetcher | None = None,
     now: str = NOW,
-    cap_override: int | None = None,
+    run_n: int = 1,
+    state: Path | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
     # A retired feed's address is deliberately left out of the fetcher's table,
@@ -188,9 +189,10 @@ def plan(
     return cli.stage_plan(
         DATE,
         settings=settings,
-        cap_override=cap_override,
         fetcher=fetcher or fetcher_over(*urls),
         now=lambda: now,
+        run_n=run_n,
+        state_dir=state if state is not None else Path(tempfile.mkdtemp()),
     )
 
 
@@ -322,22 +324,21 @@ def test_a_vertical_below_its_feed_floor_is_counted_but_renders_nothing() -> Non
 
 def test_a_second_vertical_with_no_feeds_still_appears_in_the_plan() -> None:
     """A desk that planned nothing is a fact about the day, not an absence."""
-    energy = VerticalDef(id="energy", display_name="Energy", daily_cap=5, min_feeds=3)
+    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=3)
     built = plan([LAB, TRADE, COMMUNITY], verticals=[AI, energy])
     assert [vertical.id for vertical in built.verticals] == ["ai", "energy"]
     assert built.verticals[1].live_feeds == 0
     assert built.verticals[1].planned == 0
 
 
-# --- the caps ----------------------------------------------------------------
+# --- what bounds the size ----------------------------------------------------
 
 
-def test_the_daily_cap_bounds_what_a_vertical_contributes() -> None:
-    capped = VerticalDef(id="ai", display_name="AI", daily_cap=2, min_feeds=3)
-    built = plan([LAB, TRADE, COMMUNITY], verticals=[capped])
-    assert len(built.items) == 2
-    assert built.verticals[0].planned == 2
-    assert built.verticals[0].considered > 2
+def test_supply_decides_the_size_of_the_day() -> None:
+    """No per-vertical cap. What the feeds offered is what the day is."""
+    built = plan([LAB, TRADE, COMMUNITY])
+    assert len(built.items) == built.verticals[0].planned
+    assert built.verticals[0].planned > 0
 
 
 def test_no_single_feed_becomes_the_vertical() -> None:
@@ -347,13 +348,27 @@ def test_no_single_feed_becomes_the_vertical() -> None:
     assert len(from_lab) <= config.load().app.collect.max_per_source
 
 
-def test_the_cap_override_raises_the_ceiling_for_validation_only() -> None:
-    """A measurement corpus has no reason to obey a reading budget."""
-    capped = VerticalDef(id="ai", display_name="AI", daily_cap=1, min_feeds=3)
-    normal = plan([LAB, TRADE, COMMUNITY], verticals=[capped])
-    raised = plan([LAB, TRADE, COMMUNITY], verticals=[capped], cap_override=10)
-    assert len(normal.items) == 1
-    assert len(raised.items) > 1
+def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
+    """A mis-parsed feed cannot hand the workers ten thousand articles.
+
+    It drops the weakest items across the whole day rather than truncating one
+    vertical, and a normal day never comes near it.
+    """
+    built = plan([LAB, TRADE, COMMUNITY])
+    every = list(built.items)
+    trimmed = cli._within_ceiling(every, ceiling=2)
+    assert len(trimmed) == 2
+    assert [item.item_id for item in trimmed] == [
+        item.item_id for item in every if item in trimmed
+    ], "the surviving items keep the order the plan gave them"
+    weakest = min(every, key=lambda item: item.rank_score)
+    assert weakest not in trimmed
+    assert cli._within_ceiling(every, ceiling=len(every) + 1) == every
+
+
+def test_the_committed_ceiling_is_far_above_any_real_day() -> None:
+    built = plan([LAB, TRADE, COMMUNITY])
+    assert len(built.items) < config.load().app.run.safety_ceiling_per_run
 
 
 # --- salience: a vote, never a discovery -------------------------------------
@@ -421,69 +436,121 @@ def test_a_plan_round_trips_through_its_own_schema() -> None:
     assert json.loads(built.to_json())["version"] == RunPlan.schema_version()
 
 
-# --- what is wrong today, recorded before it is fixed ------------------------
+# --- freshness, identity, and the two ledgers --------------------------------
 
 
-def test_a_future_dated_entry_takes_the_top_slot() -> None:
-    """Today's behaviour. Item 5 bounds it.
+def test_a_date_too_far_in_the_future_is_not_a_date() -> None:
+    """A feed that stamps tomorrow would otherwise lead its vertical every day.
 
-    Recency is the tie-break, and nothing checks a date against the clock. On a
-    day when no story is carried twice - which is most days - every score is
-    identical and the tie-break IS the running order. So a feed whose entries
-    are dated 14 hours ahead of `now` leads its vertical, and would lead it
-    again tomorrow, and the day after.
-
-    Two same-tier feeds, so score cannot mask what recency is doing.
+    The fixture carries all three cases against a 06:00 clock: 20:00 the same
+    day (14 hours ahead, impossible), 09:00 (three hours ahead, ordinary clock
+    skew), and 05:00 (already published). Only the impossible one is replaced,
+    and it is replaced rather than dropped - a bad date is not a reason to lose
+    a story. `max_per_source` is 2, so the oldest of the three does not land.
     """
-    pair = VerticalDef(id="ai", display_name="AI", daily_cap=5, min_feeds=2)
+    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2)
     built = plan([FORWARD, TRADE], verticals=[pair])
-    assert len({item.rank_score for item in built.items}) == 1, "nothing here outscores anything"
-    assert built.items[0].published_at == "2026-08-22T20:00:00Z"
-    assert built.items[0].published_at > NOW
+    dated = {item.title: item.published_at for item in built.items}
+    assert dated["Datacentre build announced for the northern corridor"] == NOW, (
+        "14 hours ahead is not a date - first sight replaces it"
+    )
+    assert dated["Quarterly capex guidance raised on accelerator demand"] == (
+        "2026-08-22T09:00:00Z"
+    ), "three hours ahead is clock skew, and is left alone"
+    assert all((at or "") <= "2026-08-22T09:00:00Z" for at in dated.values()), (
+        "and no reader is shown a time the run does not believe"
+    )
 
 
-def test_an_article_four_months_old_is_still_planned() -> None:
-    """Today's behaviour. Item 4 bounds it.
-
-    Nothing compares a publish date to `now`, so an old article that reappears
-    in a feed - a re-index, a URL change, a backfill - is planned as news.
-    """
-    built = plan([LAB, TRADE, COMMUNITY], now="2027-01-01T06:00:00Z")
-    assert built.items
-    assert all((item.published_at or "") < "2026-09-01" for item in built.items)
+def test_a_small_forward_skew_is_left_alone() -> None:
+    """Clocks drift. A feed a few minutes ahead is not lying."""
+    built = plan([LAB, TRADE, COMMUNITY], now="2026-08-21T05:55:00Z")
+    early = next(item for item in built.items if item.canonical_url == MODEL_RELEASE)
+    assert early.published_at == "2026-08-21T06:00:00Z", "five minutes ahead is inside the window"
 
 
-def test_an_undated_entry_sorts_last_but_is_still_planned() -> None:
-    """Today's behaviour. Items 3 and 4 give it a real age instead of an empty string.
-
-    `_ordered` sorts on `published_at or ""`, so no date means bottom of the
-    vertical. That is a reasonable accident, not a decision, and it breaks the
-    moment an age limit has to ask how old an undated item is.
-    """
-    built = plan([LAB, TRADE, NOTICES])
-    undated = [item for item in built.items if item.published_at is None]
-    assert undated, "an undated entry is planned"
-    positions = [index for index, item in enumerate(built.items) if item.published_at is None]
-    assert min(positions) > 0, "and it sorts below everything that carried a date"
+def test_an_old_article_is_ranked_down_but_never_dropped() -> None:
+    """No cutoff. A cutoff throws away a strong old story to keep a weak fresh one."""
+    fresh = plan([LAB, TRADE, COMMUNITY], now="2026-08-21T12:00:00Z")
+    stale = plan([LAB, TRADE, COMMUNITY], now="2027-01-01T06:00:00Z")
+    assert [item.canonical_url for item in stale.items] == [
+        item.canonical_url for item in fresh.items
+    ], "the same stories are planned four months later"
+    assert max(item.rank_score for item in stale.items) < max(
+        item.rank_score for item in fresh.items
+    ), "but the whole day scores lower"
 
 
-def test_item_ids_restart_at_one_on_every_run() -> None:
-    """Today's behaviour. Item 6 gives an item an id that survives a second run.
+def test_an_undated_entry_gets_the_age_we_first_saw_it() -> None:
+    """First sight is the only honest age an undated article has."""
+    state = Path(tempfile.mkdtemp())
+    built = plan([LAB, TRADE, NOTICES], state=state)
+    from_notices = [item for item in built.items if item.source_id == "notices"]
+    assert from_notices, "an undated entry is planned"
+    for item in from_notices:
+        assert item.published_at == NOW
 
-    The id is a rank position, so run 2 renumbers the day. `build_day` dedupes
-    on that id, which means a story that moved one place is published twice.
-    """
+    recorded = seen.load_seen(state, today=DATE, within_days=90)
+    assert all(recorded[item.url_key] == NOW for item in from_notices)
+
+
+def test_first_sight_survives_the_run_that_saw_it() -> None:
+    """The second run of a later day reads the age the first run wrote down."""
+    state = Path(tempfile.mkdtemp())
+    plan([LAB, TRADE, NOTICES], now="2026-08-22T06:00:00Z", state=state)
+    later = plan([LAB, TRADE, NOTICES], now="2026-08-22T18:00:00Z", state=state)
+    undated = [item for item in later.items if item.source_id == "notices"]
+    assert undated
+    for item in undated:
+        assert item.published_at == "2026-08-22T06:00:00Z", "twelve hours old, not brand new"
+
+
+def test_an_item_id_survives_a_second_run_of_the_same_day() -> None:
+    """The id is the address. Run 2 must recognise what run 1 already published."""
     first = plan([LAB, TRADE, COMMUNITY])
     second = plan([LAB, TRADE, COMMUNITY, FORWARD])
-    assert first.items[0].item_id == "ai-01"
-    assert second.items[0].item_id == "ai-01"
-    moved = {item.canonical_url: item.item_id for item in first.items}
-    changed = [
-        url
-        for item in second.items
-        if (url := item.canonical_url) in moved and moved[url] != item.item_id
-    ]
-    assert changed, "the same story carries a different id once the pool changes"
+    known = {item.canonical_url: item.item_id for item in first.items}
+    shared = [item for item in second.items if item.canonical_url in known]
+    assert shared, "the two runs overlap"
+    for item in shared:
+        assert known[item.canonical_url] == item.item_id
+
+
+def test_a_published_address_is_never_planned_again() -> None:
+    """A freshness window cannot do this on its own.
+
+    An article published at 23:00 is seven hours old at 06:00 the next morning,
+    so any window wide enough to be useful is wide enough to republish it.
+    """
+    state = Path(tempfile.mkdtemp())
+    first = plan([LAB, TRADE, COMMUNITY], state=state)
+    ran = first.items[0]
+    seen.append_published(
+        state,
+        [
+            PublishedRow(
+                version=PublishedRow.schema_version(),
+                url_key=ran.url_key,
+                canonical_url=ran.canonical_url,
+                published_on=DATE,
+                item_id=ran.item_id,
+            )
+        ],
+    )
+    again = plan([LAB, TRADE, COMMUNITY], state=state)
+    assert ran.url_key not in {item.url_key for item in again.items}
+    assert again.verticals[0].considered == first.verticals[0].considered - 1, (
+        "and it is not counted as considered either - it was settled, not weighed"
+    )
+
+
+def test_a_weighted_down_feed_ranks_below_a_full_one_of_the_same_tier() -> None:
+    """Weight is soft retirement: drop it, watch what it costs, then decide."""
+    full = plan([LAB, TRADE, COMMUNITY])
+    halved = plan([LAB.model_copy(update={"weight": 0.2}), TRADE, COMMUNITY])
+    strong = next(item for item in full.items if item.source_id == "lab-blog")
+    weakened = next(item for item in halved.items if item.source_id == "lab-blog")
+    assert weakened.rank_score < strong.rank_score
 
 
 # --- sharding ----------------------------------------------------------------

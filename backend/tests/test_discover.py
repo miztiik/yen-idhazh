@@ -11,6 +11,8 @@ and `feedparser` parses a string with no network of its own.
 
 from __future__ import annotations
 
+from collections import Counter
+from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -27,7 +29,7 @@ from idhazh.discover import (
     live,
     salience_urls,
 )
-from idhazh.rank import merge, plan_vertical, score, tier_weight
+from idhazh.rank import ITEM_ID_DIGITS, merge, plan_vertical, score, tier_weight
 
 FEEDS = FIXTURES_DIR / "feeds"
 
@@ -53,7 +55,11 @@ COMMUNITY = FeedDef(
     tier=SourceTier.COMMUNITY,
 )
 
-AI = VerticalDef(id="ai", display_name="AI", daily_cap=5, min_feeds=3)
+AI = VerticalDef(id="ai", display_name="AI", min_feeds=3)
+
+NOW = "2026-08-21T12:00:00Z"
+"""A fixed clock. Recency is part of the score now, so a real clock would make
+every assertion here answer differently tomorrow."""
 
 
 def body(name: str) -> str:
@@ -66,6 +72,20 @@ def all_candidates() -> list[Candidate]:
         *candidates_from_feed(TRADE, body("trade-press.xml")),
         *candidates_from_feed(COMMUNITY, body("community.atom")),
     ]
+
+
+def rate(
+    carried: list[Candidate], *, watchlist_hit: bool = False, front_page: bool = False
+) -> float:
+    """Score with the clock and the appearance time held still."""
+    return score(
+        carried,
+        config=CollectConfig(),
+        watchlist_hit=watchlist_hit,
+        on_front_page=front_page,
+        appeared=None,
+        now=NOW,
+    )
 
 
 # --- One address per story --------------------------------------------------
@@ -183,57 +203,80 @@ def test_a_story_carried_three_ways_is_one_item() -> None:
 
 
 def test_the_widely_carried_story_leads_the_day() -> None:
-    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), live_feeds=3)
+    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), live_feeds=3, now=NOW)
     assert items[0].canonical_url == "https://blog.example-lab.org/2026/08/model-release"
     assert items[0].carried_by == 3
-    assert items[0].item_id == "ai-01"
 
 
 def test_authority_is_the_best_tier_that_carried_it_not_the_average() -> None:
     """One institution saying it makes it true, however many aggregators repeated it."""
-    config = CollectConfig()
     institution = [c for c in all_candidates() if c.source_id == "lab-blog"][:1]
     community = [c for c in all_candidates() if c.source_id == "community"][:1]
-    assert score(
-        institution + community, config=config, watchlist_hit=False, on_front_page=False
-    ) > score(community, config=config, watchlist_hit=False, on_front_page=False)
+    assert rate(institution + community) > rate(community)
 
 
 def test_a_watchlist_hit_and_a_front_page_vote_both_lift_the_score() -> None:
-    config = CollectConfig()
     carried = all_candidates()[:1]
-    base = score(carried, config=config, watchlist_hit=False, on_front_page=False)
-    assert score(carried, config=config, watchlist_hit=True, on_front_page=False) > base
-    assert score(carried, config=config, watchlist_hit=False, on_front_page=True) > base
+    base = rate(carried)
+    assert rate(carried, watchlist_hit=True) > base
+    assert rate(carried, front_page=True) > base
 
 
-def test_the_daily_cap_is_config_driven() -> None:
-    capped = VerticalDef(id="ai", display_name="AI", daily_cap=2, min_feeds=3)
-    summary, items = plan_vertical(capped, all_candidates(), config=CollectConfig(), live_feeds=3)
-    assert len(items) == 2
-    assert summary.planned == 2
-    assert summary.considered > 2
+def test_a_weighted_down_feed_scores_below_a_full_one_of_the_same_tier() -> None:
+    """Weight is soft retirement. It has to reach the score to mean anything."""
+    full = [c for c in all_candidates() if c.source_id == "lab-blog"][:1]
+    halved = [replace(c, weight=0.5) for c in full]
+    assert rate(halved) < rate(full)
+
+
+def test_a_vertical_takes_everything_its_feeds_offered() -> None:
+    """Supply sets the size. There is no per-vertical cap left to reach."""
+    config = CollectConfig(max_per_source=50)
+    summary, items = plan_vertical(AI, all_candidates(), config=config, live_feeds=3, now=NOW)
+    assert len(items) == summary.considered
+    assert summary.planned == len(items)
+
+
+def test_no_single_feed_becomes_the_whole_vertical() -> None:
+    config = CollectConfig(max_per_source=1)
+    _, items = plan_vertical(AI, all_candidates(), config=config, live_feeds=3, now=NOW)
+    per_source = Counter(item.source_id for item in items)
+    assert max(per_source.values()) == 1
 
 
 def test_a_vertical_below_its_feed_floor_plans_nothing() -> None:
-    summary, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), live_feeds=2)
+    summary, items = plan_vertical(
+        AI, all_candidates(), config=CollectConfig(), live_feeds=2, now=NOW
+    )
     assert summary.below_feed_floor
     assert items == []
     assert summary.considered > 0, "it is still counted - the desk is being built in the open"
 
 
-def test_ordinals_run_from_one_in_rank_order() -> None:
-    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), live_feeds=3)
-    assert [item.item_id for item in items] == [f"ai-{n:02d}" for n in range(1, len(items) + 1)]
+def test_an_item_id_is_the_address_not_the_rank_position() -> None:
+    """Run 2 of a day must recognise the work run 1 did, so the id cannot move."""
+    every = all_candidates()
+    _, first = plan_vertical(AI, every, config=CollectConfig(), live_feeds=3, now=NOW)
+    _, later = plan_vertical(AI, every[1:], config=CollectConfig(), live_feeds=3, now=NOW)
+    by_url = {item.canonical_url: item.item_id for item in later}
+    for item in first:
+        if item.canonical_url in by_url:
+            assert by_url[item.canonical_url] == item.item_id
+
+
+def test_the_list_runs_from_the_highest_score_down() -> None:
+    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), live_feeds=3, now=NOW)
     scores = [item.rank_score for item in items]
     assert scores == sorted(scores, reverse=True)
 
 
 def test_the_same_feeds_produce_the_same_day_twice() -> None:
-    """No model, no clock, no randomness - a re-run cannot reorder the page."""
+    """No model, no randomness - a re-run at the same instant cannot reorder the page."""
     config = CollectConfig()
-    first = plan_vertical(AI, all_candidates(), config=config, live_feeds=3)[1]
-    second = plan_vertical(AI, list(reversed(all_candidates())), config=config, live_feeds=3)[1]
+    first = plan_vertical(AI, all_candidates(), config=config, live_feeds=3, now=NOW)[1]
+    second = plan_vertical(
+        AI, list(reversed(all_candidates())), config=config, live_feeds=3, now=NOW
+    )[1]
     assert [item.item_id for item in first] == [item.item_id for item in second]
     assert [item.canonical_url for item in first] == [item.canonical_url for item in second]
 
@@ -245,10 +288,13 @@ def test_tier_weights_come_from_config() -> None:
 
 
 def test_no_hash_appears_in_any_planned_item_id() -> None:
-    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), live_feeds=3)
+    """Derived from the address, but still decimal digits a reader can read aloud."""
+    _, items = plan_vertical(AI, all_candidates(), config=CollectConfig(), live_feeds=3, now=NOW)
     for item in items:
-        assert item.item_id == f"{item.vertical}-{item.item_id.rsplit('-', 1)[1]}"
-        assert len(item.item_id.rsplit("-", 1)[1]) == 2
+        digits = item.item_id.rsplit("-", 1)[1]
+        assert item.item_id == f"{item.vertical}-{digits}"
+        assert digits.isdigit()
+        assert len(digits) == ITEM_ID_DIGITS
 
 
 @pytest.mark.parametrize("path", sorted(FEEDS.glob("*")), ids=lambda p: p.name)

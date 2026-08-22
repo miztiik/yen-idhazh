@@ -4,7 +4,7 @@ Each stage takes a file and writes a file, which is the whole reason the
 pipeline can be sharded across disposable machines and re-run cheaply. A stage
 that only works as part of the whole is a stage nobody can debug.
 
-    idhazh plan       read feeds, rank, cap        -> run/<date>/plan.json
+    idhazh plan       read feeds, rank, record      -> run/<date>/plan.json
     idhazh work       fetch, extract, summarize, score -> run/<date>/items/*
     idhazh assemble   collect what finished        -> frontend/public/... + state/
 
@@ -18,18 +18,20 @@ import argparse
 import logging
 import sys
 import time
-from collections.abc import Callable, Sequence
+from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Final
 from urllib.parse import urlsplit
 
-from idhazh import assemble, config, discover, extract, fetch, rank, route, summarize
+from idhazh import assemble, config, discover, extract, fetch, rank, route, seen, summarize
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.validation_row import ValidationVerdict
@@ -45,6 +47,7 @@ LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
+STATE_ROOT: Final = config.REPO_ROOT / seen.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 
 
@@ -103,18 +106,28 @@ def stage_plan(
     date: str,
     *,
     settings: config.Settings,
-    cap_override: int | None = None,
     fetcher: Fetcher | None = None,
     now: Clock | None = None,
+    run_n: int | None = None,
+    state_dir: Path | None = None,
 ) -> RunPlan:
-    """Read every live feed, rank the pool, take each vertical's cap. No model.
+    """Read every live feed, rank the pool, and write down what it saw. No model.
 
-    `cap_override` exists for validation. The daily cap is a reader constraint -
-    how much anyone wants to read in a morning - and a measurement corpus has no
-    reason to obey it. Raising it here is not raising the reading budget.
+    Two committed ledgers bound the day. The seen store gives an article whose
+    feed carried no date a real age - first sight is the only honest one there
+    is. The published store is what stops a repeat, which a freshness rule
+    cannot do on its own: an article published at 23:00 is seven hours old at
+    06:00 the next morning.
+
+    Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
+    guard against a mis-parsed feed, not a reading budget.
     """
     read_url = fetcher or live_fetcher(settings)
     clock = now or assemble.utc_now
+    state = state_dir if state_dir is not None else STATE_ROOT
+    collect = settings.app.collect
+    generated_at = clock()
+    run_id = f"{date}-{run_n if run_n is not None else _next_run_n(date)}"
 
     candidates: list[discover.Candidate] = []
     read = failed = 0
@@ -133,34 +146,101 @@ def stage_plan(
         if result.ok:
             front_page |= discover.salience_urls(result.body)
 
+    first_seen = seen.load_seen(state, today=date, within_days=collect.seen_window_days)
+    landed = seen.append_seen(
+        state, date, _first_sights(candidates, first_seen, generated_at, run_id)
+    )
+    already_published = frozenset(seen.load_published(state))
+
     watchlist_keys: frozenset[str] = frozenset()
     verticals = []
     items: list[PlannedItem] = []
     for vertical in settings.taxonomy.verticals:
         live = discover.live(settings.sources.feeds, vertical.id)
         summary, planned = rank.plan_vertical(
-            vertical
-            if cap_override is None
-            else vertical.model_copy(update={"daily_cap": cap_override}),
+            vertical,
             [c for c in candidates if c.vertical == vertical.id],
-            config=settings.app.collect,
+            config=collect,
             live_feeds=len(live),
+            now=generated_at,
+            first_seen=first_seen,
+            already_published=already_published,
             watchlist_keys=watchlist_keys,
             front_page_keys=frozenset(front_page),
         )
         verticals.append(summary)
         items.extend(planned)
 
+    items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
+    counts = Counter(item.vertical for item in items)
+    verticals = [
+        summary.model_copy(update={"planned": counts.get(summary.id, 0)}) for summary in verticals
+    ]
+    LOG.info("first sights recorded new=%s file=%s", landed, seen.seen_relpath(date))
+
     return RunPlan(
         version=RunPlan.schema_version(),
         date=date,
-        run_id=f"{date}-1",
-        generated_at=clock(),
+        run_id=run_id,
+        generated_at=generated_at,
         feeds_read=read,
         feeds_failed=failed,
         verticals=verticals,
         items=items,
     )
+
+
+def _first_sights(
+    candidates: Iterable[discover.Candidate],
+    known: dict[str, str],
+    at: str,
+    run_id: str,
+) -> list[SeenRow]:
+    """The addresses this run met for the first time, in address order.
+
+    Recorded before anything is ranked, so an article that never made the day
+    still has an age the next run can use. `known` is updated in place, which
+    is what lets the ranking read this run's own sightings without a re-read.
+    """
+    fresh: dict[str, SeenRow] = {}
+    for candidate in candidates:
+        if candidate.url_key in known or candidate.url_key in fresh:
+            continue
+        fresh[candidate.url_key] = SeenRow(
+            version=SeenRow.schema_version(),
+            url_key=candidate.url_key,
+            canonical_url=candidate.canonical_url,
+            first_seen_at=at,
+            first_seen_run=run_id,
+        )
+    known.update({url_key: row.first_seen_at for url_key, row in fresh.items()})
+    return [fresh[url_key] for url_key in sorted(fresh)]
+
+
+def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedItem]:
+    """The crash guard. A normal day never reaches it.
+
+    It drops the lowest-scoring stories across every vertical rather than
+    truncating the list, so a mis-parsed feed costs the weakest items and not
+    whichever vertical happened to sort last.
+    """
+    if len(items) <= ceiling:
+        return items
+    ranked = sorted(items, key=lambda item: (-item.rank_score, item.item_id))[:ceiling]
+    keep = {item.item_id for item in ranked}
+    LOG.warning("safety ceiling reached planned=%s ceiling=%s", len(items), ceiling)
+    return [item for item in items if item.item_id in keep]
+
+
+def _next_run_n(date: str) -> int:
+    """Which run of the day this is, read from what the last one committed.
+
+    The schedule runs several times a day, so `-1` is no longer a safe
+    constant: two runs claiming one run id put two different work lists under
+    the same address in the manifest.
+    """
+    manifest = _load_manifest(assemble.day_dir(PUBLIC_ROOT, date) / "run.json")
+    return manifest.runs[-1].n + 1 if manifest else 1
 
 
 # --- work -------------------------------------------------------------------
@@ -582,14 +662,43 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
+    published = seen.append_published(STATE_ROOT, _published_rows(day, plan))
     LOG.info(
-        "published date=%s items=%s partial=%s eval_rows=%s",
+        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s",
         plan.date,
         len(day.items),
         day.partial,
         landed,
+        published,
     )
     return day
+
+
+def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
+    """What this digest actually carried, as addresses a later run can skip.
+
+    The digest item knows the item id and the plan knows the address, so the
+    two are joined here rather than widening the published payload with a hash
+    no reader will ever look at. Only what this run introduced is recorded: a
+    day carries yesterday's items forward, and re-recording them would move
+    their published date every morning.
+    """
+    addresses = {item.item_id: item for item in plan.items}
+    rows: list[PublishedRow] = []
+    for item in day.items:
+        planned = addresses.get(item.item_id)
+        if planned is None:
+            continue
+        rows.append(
+            PublishedRow(
+                version=PublishedRow.schema_version(),
+                url_key=planned.url_key,
+                canonical_url=planned.canonical_url,
+                published_on=day.date,
+                item_id=item.item_id,
+            )
+        )
+    return rows
 
 
 def _load_day(path: Path) -> DigestDay | None:
@@ -667,15 +776,6 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="local",
         help="Where the validation ran. A laptop number is not a gate.",
     )
-    parser.add_argument(
-        "--cap",
-        type=int,
-        default=None,
-        help=(
-            "Override each vertical's daily cap when planning. For validation only: "
-            "the daily cap is how much a reader wants, not how much a measurement needs."
-        ),
-    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -705,7 +805,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.stage in ("plan", "run"):
-        plan = stage_plan(date, settings=settings, cap_override=args.cap, fetcher=read_url)
+        plan = stage_plan(date, settings=settings, fetcher=read_url)
         assemble.write_atomic(_plan_path(date), plan.to_json())
         LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
