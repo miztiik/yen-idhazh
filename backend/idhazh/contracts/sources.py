@@ -39,12 +39,16 @@ class FeedDef(Lifecycled):
 
 
 class SalienceFeedDef(Lifecycled):
-    """A ranking signal. It adds weight to a URL already in the pool; it never discovers."""
+    """A ranking signal. It adds weight to a URL already in the pool; it never discovers.
+
+    What a vote is worth is `collect.front_page_bonus` - one number for every
+    aggregator, not one per feed. An aggregator has no subject taxonomy to be
+    graded on, so there is nothing for a per-feed weight to express.
+    """
 
     id: Slug
     title: str = Field(min_length=1)
     url: Url
-    weight: float = Field(default=0.5, ge=0.0, le=1.0)
 
 
 class Sources(Contract):
@@ -52,6 +56,15 @@ class Sources(Contract):
 
     __schema_stem__: ClassVar[str] = "sources"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-22T09:00",
+            change="Removed weight from a salience feed.",
+            why=(
+                "Nothing read it. A vote is worth collect.front_page_bonus - one number "
+                "for every aggregator - so a per-feed weight was a knob that looked "
+                "tunable and moved nothing."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21T06:00",
             change="Added kind to a feed.",
@@ -80,8 +93,3 @@ class Sources(Contract):
         if len(set(urls)) != len(urls):
             raise ValueError("feed urls must be distinct")
         return self
-
-    def live_feeds_for(self, vertical_id: str) -> list[FeedDef]:
-        return [
-            feed for feed in self.feeds if feed.vertical == vertical_id and feed.retired_on is None
-        ]

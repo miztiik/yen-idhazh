@@ -67,11 +67,6 @@ class RunConfig(Model):
 
 
 class CollectConfig(Model):
-    min_feeds_floor: int = Field(
-        default=25,
-        ge=1,
-        description="Default feed floor. A vertical may raise it; below it, nothing renders.",
-    )
     quarantine_after_failures: int = Field(default=5, ge=1)
     watchlist_max_entities: int = Field(default=30, ge=1)
     max_per_source: int = Field(
@@ -341,6 +336,15 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-22T09:00",
+            change="Removed collect.min_feeds_floor.",
+            why=(
+                "Nothing read it. The floor a vertical is actually held to is its own "
+                "min_feeds in taxonomy.json, so a second number calling itself the "
+                "default described a mechanism that does not exist."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22",
             change="Added the visuals block.",

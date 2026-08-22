@@ -1613,9 +1613,8 @@
       "retired_on": null,
       "status": "active",
       "title": "Hacker News front page",
-      "url": "https://hnrss.org/frontpage",
-      "weight": 0.4
+      "url": "https://hnrss.org/frontpage"
     }
   ],
-  "version": "2026-08-21"
+  "version": "2026-08-22T09:00"
 }
