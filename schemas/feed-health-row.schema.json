@@ -7,7 +7,8 @@
         "robots_denied",
         "blocked",
         "permanent",
-        "transient"
+        "transient",
+        "skipped"
       ],
       "title": "FetchOutcome",
       "type": "string"
@@ -17,6 +18,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "outcome gains `skipped`, for a run that held a quarantined feed back.",
+      "version": "2026-08-23T12:00",
+      "why": "A quarantine that writes nothing can never lift: the failures that caused it stay the newest thing on record forever. A skip has to be recorded for the rest to end on its own."
+    },
     {
       "change": "Initial shape: the feed, the run, the outcome and what it yielded.",
       "version": "2026-08-23",
@@ -85,7 +91,7 @@
       "title": "Status"
     },
     "version": {
-      "default": "2026-08-23",
+      "default": "2026-08-23T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -100,5 +106,5 @@
   ],
   "title": "FeedHealthRow",
   "type": "object",
-  "version": "2026-08-23"
+  "version": "2026-08-23T12:00"
 }

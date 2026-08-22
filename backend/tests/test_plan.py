@@ -20,7 +20,7 @@ import tempfile
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, fetch, ledger
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
@@ -219,7 +219,7 @@ def test_a_feed_that_answers_two_hundred_with_nothing_in_it_counts_as_read() -> 
 
     `feeds_read` counts a reply, not an article. A desk that has been silent for
     a month is indistinguishable here from a desk that is working, which is
-    exactly why item 10 records every feed's result to a file: you cannot
+    exactly why the health ledger records every feed's result: you cannot
     quarantine what you never measured.
     """
     built = plan([LAB, TRADE, QUIET])
@@ -647,6 +647,107 @@ def test_a_row_that_no_longer_parses_is_skipped_rather_than_fatal() -> None:
     with path.open("a", encoding="utf-8", newline="") as handle:
         handle.write("1999-01-01,not-a-date,,,,,,\n")
     assert len(health_after(state)) == 3
+
+
+# --- quarantine --------------------------------------------------------------
+
+
+def seed_failures(state: Path, feed_id: str, runs: int) -> None:
+    """A history of nothing but failed reads, on days before the one under test."""
+    ledger.append_health(
+        state,
+        DATE,
+        [
+            FeedHealthRow(
+                version=FeedHealthRow.schema_version(),
+                run_id=f"{DATE}-{n}",
+                date=DATE,
+                feed_id=feed_id,
+                checked_at=f"2026-08-22T0{n}:00:00Z",
+                outcome=FetchOutcome.TRANSIENT,
+                status=503,
+                items=0,
+                detail="HTTP 503",
+            )
+            for n in range(1, runs + 1)
+        ],
+    )
+
+
+def failures_to_rest() -> int:
+    """The committed threshold, so this test moves when the config does."""
+    return config.load().app.collect.quarantine_after_failures
+
+
+def test_a_feed_that_has_failed_enough_is_not_even_asked() -> None:
+    """The saving is the request. `fetcher_over` refuses an address it does not cover,
+    so asking a rested feed would fail this test by name rather than by a count."""
+    state = Path(tempfile.mkdtemp())
+    seed_failures(state, "trade-press", failures_to_rest())
+    built = plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL),
+        state=state,
+        run_n=failures_to_rest() + 1,
+    )
+    assert (built.feeds_read, built.feeds_failed, built.feeds_skipped) == (2, 0, 1)
+    assert built.items, "the run still makes a day out of the feeds that work"
+
+
+def test_a_rested_feed_still_leaves_a_row_that_run() -> None:
+    """A run that left no trace would keep the old failures newest forever."""
+    state = Path(tempfile.mkdtemp())
+    seed_failures(state, "trade-press", failures_to_rest())
+    plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL),
+        state=state,
+        run_n=failures_to_rest() + 1,
+    )
+    rows = [row for row in health_after(state) if row.feed_id == "trade-press"]
+    assert rows[-1].outcome is FetchOutcome.SKIPPED
+    assert not rows[-1].failing, "a question we did not ask is not an answer against the source"
+
+
+def test_the_rest_ends_and_the_feed_is_asked_again() -> None:
+    """Run the plan until the quarantine lifts. It must lift, or this loops forever."""
+    state = Path(tempfile.mkdtemp())
+    threshold = failures_to_rest()
+    seed_failures(state, "trade-press", threshold)
+    asked = False
+    for run_n in range(threshold + 1, threshold * 3 + 2):
+        built = plan([LAB, TRADE, COMMUNITY], state=state, run_n=run_n)
+        if built.feeds_skipped == 0:
+            asked = True
+            break
+    assert asked, "a quarantine that never lifts is a retirement no person voted for"
+
+
+def test_one_sick_feed_never_quarantines_a_healthy_one() -> None:
+    state = Path(tempfile.mkdtemp())
+    seed_failures(state, "trade-press", failures_to_rest())
+    seed_failures(state, "lab-blog", failures_to_rest() - 1)
+    built = plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL),
+        state=state,
+        run_n=failures_to_rest() + 1,
+    )
+    assert built.feeds_skipped == 1
+
+
+def test_quarantine_never_touches_the_committed_source_list() -> None:
+    """Retiring a feed is a person's decision. A run may rest one, never delete one."""
+    state = Path(tempfile.mkdtemp())
+    before = read_text(CONFIG_DIR / "sources.json")
+    seed_failures(state, "trade-press", failures_to_rest())
+    plan(
+        [LAB, TRADE, COMMUNITY],
+        fetcher=fetcher_over(LAB_URL, COMMUNITY_URL),
+        state=state,
+        run_n=failures_to_rest() + 1,
+    )
+    assert read_text(CONFIG_DIR / "sources.json") == before
 
 
 # --- sharding ----------------------------------------------------------------

@@ -28,7 +28,7 @@ from idhazh import assemble, config, discover, extract, fetch, ledger, rank, rou
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -121,7 +121,9 @@ def stage_plan(
     cannot do on its own: an article published at 23:00 is seven hours old at
     06:00 the next morning. The health store records what every feed did, so a
     source that has gone quiet can be quarantined from evidence instead of from
-    somebody's memory.
+    somebody's memory. Quarantine only ever holds a feed back for a few runs; it
+    never edits `config/sources.json`, because retiring a source is a person's
+    decision.
 
     Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
     guard against a mis-parsed feed, not a reading budget.
@@ -135,8 +137,17 @@ def stage_plan(
 
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
-    read = failed = 0
+    asleep = discover.resting(
+        ledger.load_health(state, today=date, within_days=ledger.HEALTH_WINDOW_DAYS),
+        after_failures=collect.quarantine_after_failures,
+    )
+    read = failed = skipped = 0
     for feed in settings.sources.feeds:
+        if feed.id in asleep:
+            skipped += 1
+            LOG.info("feed resting id=%s", feed.id)
+            health.append(_rest_row(feed, at=generated_at, run_id=run_id))
+            continue
         result = read_url(feed.url)
         found = discover.candidates_from_feed(feed, result.body) if result.ok else []
         health.append(_health_row(feed, result, found=len(found), at=generated_at, run_id=run_id))
@@ -193,8 +204,28 @@ def stage_plan(
         generated_at=generated_at,
         feeds_read=read,
         feeds_failed=failed,
+        feeds_skipped=skipped,
         verticals=verticals,
         items=items,
+    )
+
+
+def _rest_row(feed: FeedDef, *, at: str, run_id: str) -> FeedHealthRow:
+    """The row a quarantined feed gets. A record that we chose not to ask.
+
+    Written rather than omitted so the rest can end: a run that left no trace
+    would leave the old failures as the newest thing on record forever, and the
+    feed would never be tried again.
+    """
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=run_id,
+        date=at[:10],
+        feed_id=feed.id,
+        checked_at=at,
+        outcome=FetchOutcome.SKIPPED,
+        items=0,
+        detail="resting after repeated failures",
     )
 
 
