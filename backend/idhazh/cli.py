@@ -18,9 +18,10 @@ import argparse
 import logging
 import sys
 import time
-from collections.abc import Sequence
+from collections.abc import Callable, Sequence
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
 from idhazh import assemble, config, discover, extract, fetch, rank, route, summarize
 from idhazh.contracts.article import Article, ArticleStatus
@@ -55,21 +56,70 @@ def _today() -> str:
     return assemble.utc_now()[:10]
 
 
+# --- the two seams ------------------------------------------------------------
+
+Fetcher = Callable[[str], fetch.FetchResult]
+"""Read one address. The only edge of the pipeline that touches a socket.
+
+Every stage that reads the open web takes one of these. In a run it is
+`live_fetcher`; in a test it is a function that reads `tests/fixtures/feeds/`.
+That is not a mock - it is the same signature reading a real captured file, so
+no test needs the network (Holy Law #7) and every fetch outcome, including the
+ones a live run cannot be made to produce on demand, is reachable.
+"""
+
+Clock = Callable[[], str]
+"""Now, as an ISO-8601 UTC stamp.
+
+Injected for the same reason as the fetcher: a rule about how old an article is
+cannot be tested against a real clock without the test changing its answer at
+midnight.
+"""
+
+
+def live_fetcher(settings: config.Settings) -> Fetcher:
+    """The real thing: one robots read per host, honoured on every later read.
+
+    The cache lives in the closure rather than in a module global, so a caller
+    decides its lifetime instead of the interpreter deciding it.
+    """
+    robots: dict[str, str | None] = {}
+
+    def read(url: str) -> fetch.FetchResult:
+        host = urlsplit(url).netloc
+        if host not in robots:
+            result = fetch.fetch(fetch.robots_url(url), config=settings.app.extract, robots_txt="")
+            # An unreadable robots.txt stays a refusal.
+            robots[host] = result.body.decode("utf-8", "replace") if result.ok else None
+        return fetch.fetch(url, config=settings.app.extract, robots_txt=robots[host])
+
+    return read
+
+
 # --- plan -------------------------------------------------------------------
 
 
-def stage_plan(date: str, *, settings: config.Settings, cap_override: int | None = None) -> RunPlan:
+def stage_plan(
+    date: str,
+    *,
+    settings: config.Settings,
+    cap_override: int | None = None,
+    fetcher: Fetcher | None = None,
+    now: Clock | None = None,
+) -> RunPlan:
     """Read every live feed, rank the pool, take each vertical's cap. No model.
 
     `cap_override` exists for validation. The daily cap is a reader constraint -
     how much anyone wants to read in a morning - and a measurement corpus has no
     reason to obey it. Raising it here is not raising the reading budget.
     """
+    read_url = fetcher or live_fetcher(settings)
+    clock = now or assemble.utc_now
+
     candidates: list[discover.Candidate] = []
     read = failed = 0
     for feed in settings.sources.feeds:
-        robots = _robots_for(feed.url, settings)
-        result = fetch.fetch(feed.url, config=settings.app.extract, robots_txt=robots)
+        result = read_url(feed.url)
         if not result.ok:
             failed += 1
             LOG.warning("feed unavailable id=%s reason=%s", feed.id, result.detail)
@@ -79,8 +129,7 @@ def stage_plan(date: str, *, settings: config.Settings, cap_override: int | None
 
     front_page: set[str] = set()
     for salience in settings.sources.salience:
-        robots = _robots_for(salience.url, settings)
-        result = fetch.fetch(salience.url, config=settings.app.extract, robots_txt=robots)
+        result = read_url(salience.url)
         if result.ok:
             front_page |= discover.salience_urls(result.body)
 
@@ -106,26 +155,12 @@ def stage_plan(date: str, *, settings: config.Settings, cap_override: int | None
         version=RunPlan.schema_version(),
         date=date,
         run_id=f"{date}-1",
-        generated_at=assemble.utc_now(),
+        generated_at=clock(),
         feeds_read=read,
         feeds_failed=failed,
         verticals=verticals,
         items=items,
     )
-
-
-_ROBOTS_CACHE: dict[str, str | None] = {}
-
-
-def _robots_for(url: str, settings: config.Settings) -> str | None:
-    """One robots read per host per run. An unreadable one stays a refusal."""
-    from urllib.parse import urlsplit
-
-    host = urlsplit(url).netloc
-    if host not in _ROBOTS_CACHE:
-        result = fetch.fetch(fetch.robots_url(url), config=settings.app.extract, robots_txt="")
-        _ROBOTS_CACHE[host] = result.body.decode("utf-8", "replace") if result.ok else None
-    return _ROBOTS_CACHE[host]
 
 
 # --- work -------------------------------------------------------------------
@@ -150,8 +185,10 @@ def stage_work(
     scorer: object | None,
     shard: int = 0,
     shards: int = 1,
+    fetcher: Fetcher | None = None,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
+    read_url = fetcher or live_fetcher(settings)
     inference = settings.app.models.inference
     model = settings.app.models.summarize
     inputs = build_inputs(
@@ -180,7 +217,7 @@ def stage_work(
     LOG.info("working shard=%s/%s items=%s", shard, shards, len(mine))
     for item in mine:
         started = time.monotonic()
-        article, fetch_ms, extract_ms = _fetch_one(item, settings)
+        article, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
@@ -236,15 +273,16 @@ def stage_work(
         )
 
 
-def _fetch_one(item: PlannedItem, settings: config.Settings) -> tuple[Article, int, int]:
+def _fetch_one(
+    item: PlannedItem, settings: config.Settings, read_url: Fetcher
+) -> tuple[Article, int, int]:
     """The article plus how long the network and the extractor each took.
 
     Separated because a slow item is either a slow host or a slow extractor, and
     only one of those is ours to fix.
     """
-    robots = _robots_for(item.canonical_url, settings)
     started = time.monotonic()
-    result = fetch.fetch(item.canonical_url, config=settings.app.extract, robots_txt=robots)
+    result = read_url(item.canonical_url)
     fetch_ms = int((time.monotonic() - started) * 1000)
 
     started = time.monotonic()
@@ -348,7 +386,12 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
 
 
 def stage_validate(
-    *, settings: config.Settings, date: str, leaderboard: float, scorer: object
+    *,
+    settings: config.Settings,
+    date: str,
+    leaderboard: float,
+    scorer: object,
+    fetcher: Fetcher | None = None,
 ) -> None:
     """Score the day's own planned articles with whichever model is served.
 
@@ -364,12 +407,13 @@ def stage_validate(
     if scorer is None:
         raise SystemExit("validation without a faithfulness scorer measures nothing")
 
+    read_url = fetcher or live_fetcher(settings)
     plan = _load_plan(date)
     model_id = settings.app.models.summarize.id
     scores: list[float] = []
 
     for index, item in enumerate(plan.items, start=1):
-        article, _, _ = _fetch_one(item, settings)
+        article, _, _ = _fetch_one(item, settings, read_url)
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
@@ -641,6 +685,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         stream=sys.stderr,
     )
     date = args.date or _today()
+    # One fetcher for the whole invocation, so `idhazh run` reads each host's
+    # robots.txt once across all three stages rather than once per stage.
+    read_url = live_fetcher(settings)
 
     if args.stage == "validate":
         stage_validate(
@@ -648,6 +695,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             date=date,
             leaderboard=args.leaderboard,
             scorer=_scorer(not args.no_faithfulness),
+            fetcher=read_url,
         )
         return 0
 
@@ -657,7 +705,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.stage in ("plan", "run"):
-        plan = stage_plan(date, settings=settings, cap_override=args.cap)
+        plan = stage_plan(date, settings=settings, cap_override=args.cap, fetcher=read_url)
         assemble.write_atomic(_plan_path(date), plan.to_json())
         LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
@@ -668,6 +716,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             scorer=_scorer(not args.no_faithfulness),
             shard=args.shard,
             shards=args.shards,
+            fetcher=read_url,
         )
 
     if args.stage == "route" or (args.stage == "run" and args.visuals):
