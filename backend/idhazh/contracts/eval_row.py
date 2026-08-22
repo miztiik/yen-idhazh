@@ -149,6 +149,14 @@ class EvalRow(Contract):
         ),
     )
     scored_at: Timestamp
+    score_ms: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "How long the faithfulness scorer took on this item. It decides whether the "
+            "scorer can stay a census or has to become a sample."
+        ),
+    )
 
     @model_validator(mode="after")
     def _delta_is_rebuilt_not_trusted(self) -> Self:

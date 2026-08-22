@@ -173,27 +173,36 @@ def stage_work(
     LOG.info("working shard=%s/%s items=%s", shard, shards, len(mine))
     for item in mine:
         started = time.monotonic()
-        article = _fetch_one(item, settings)
+        article, fetch_ms, extract_ms = _fetch_one(item, settings)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
             continue
 
+        model_started = time.monotonic()
         summary = _summarize_one(article, settings, fingerprint)
+        summarize_ms = int((time.monotonic() - model_started) * 1000)
         summary = summary.model_copy(
-            update={"duration_ms": int((time.monotonic() - started) * 1000)}
+            update={
+                "duration_ms": int((time.monotonic() - started) * 1000),
+                "fetch_ms": fetch_ms,
+                "extract_ms": extract_ms,
+                "summarize_ms": summarize_ms,
+            }
         )
         assemble.write_atomic(items_dir / f"{item.item_id}.summary.json", summary.to_json())
         if summary.status is not SummaryStatus.OK or scorer is None:
             continue
 
         seen = article.text or ""
+        score_started = time.monotonic()
         hhem, hhem_full = dual_score(
             scorer,  # type: ignore[arg-type]
             seen_text=seen,
             full_text=seen,
             summary=summary.summary or "",
         )
+        score_ms = int((time.monotonic() - score_started) * 1000)
         row = score.to_eval_row(
             item=item,
             article=article,
@@ -207,16 +216,35 @@ def stage_work(
             scorer_version=scorer_version,
             scored_at=assemble.utc_now(),
         )
+        row = row.model_copy(update={"score_ms": score_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
-        LOG.info("item scored id=%s band=%s", item.item_id, row.band.value)
+        LOG.info(
+            "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
+            item.item_id,
+            row.band.value,
+            fetch_ms,
+            extract_ms,
+            summarize_ms,
+            score_ms,
+        )
 
 
-def _fetch_one(item: PlannedItem, settings: config.Settings) -> Article:
+def _fetch_one(item: PlannedItem, settings: config.Settings) -> tuple[Article, int, int]:
+    """The article plus how long the network and the extractor each took.
+
+    Separated because a slow item is either a slow host or a slow extractor, and
+    only one of those is ours to fix.
+    """
     robots = _robots_for(item.canonical_url, settings)
+    started = time.monotonic()
     result = fetch.fetch(item.canonical_url, config=settings.app.extract, robots_txt=robots)
-    return extract.to_article(
+    fetch_ms = int((time.monotonic() - started) * 1000)
+
+    started = time.monotonic()
+    article = extract.to_article(
         item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
     )
+    return article, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
 def _summarize_one(article: Article, settings: config.Settings, fingerprint: str) -> Summary:
@@ -340,7 +368,7 @@ def stage_validate(*, settings: config.Settings, leaderboard: float, scorer: obj
             rank_score=0.0,
             carried_by=1,
         )
-        article = _fetch_one(item, settings)
+        article, _, _ = _fetch_one(item, settings)
         if article.status is not ArticleStatus.OK:
             LOG.warning("golden article unavailable url=%s", entry.url)
             continue
