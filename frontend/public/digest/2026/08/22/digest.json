@@ -1,0 +1,321 @@
+{
+  "date": "2026-08-22",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-03": "/gH6/wb//AL//Pr+A/sLAQX4/Pz/BfkK+AMCBP8DAf4FCwEFAAD49/318AUG/fj//g30/gX/AwYL/v/6AO78BAIF9QP79vwDAPz7Cf/4B/v9A/MNAPkBAPwG+gUH/PgE+/QFA/4NAvX28AEE+QED+Av/Cfz4CAMM+wMG/QYBAQDz+gYCBPz9/vgC/w78DQT9+Qv9AQL8AAUEBQIJCgH9/wgE/AQB+AX//f//APUF9/8GAwT9DwL59v3oBQT8BAED/gYF/wb7/gQLAgX6AAUDA/70BPsDBAH8+QT0CvkSBgABAP4GBwP15gsG9PwG/QkBC/8E//kJ7P77BP79APkB8AT5/v4D+wIDBPn0BPwJAAP8+/4I/fr3AAkAAAkECAX/A/cL9P4BAv4DAf4A+v39Av4DCQcAAwAM/AXz/vYC+wABAgUC//4CDQYCB/rx//4FCAj+BP8F+vwHAP8MBPoC+gMABP4ECAT//wv4A/kE7wACAvz6BAYK/QD+CQQL/vwG",
+      "ai-04": "/QEACQz+AwT/Bf33AwUCAwX//vv/CggCAgMA9/4OBQMIBvgC+wX9BP/2/gcC/vYCAQbyAwQGAQEA/Pb6AfIE/g4E/gH6AvkHAAsAD/kACPr6+gsOD/0JBfwA+fwKBv0L9f8DAfUF9gQC+gX8B/8GAAoDBAD/EQkGA/0DAgcLAAADAg0BA/3y9wP+/fv1DwT7+AQE9gP0/wH/DgIHAv32/gH/+vwBAQEJAgQF/P79+AQE/ff/DPn3+vn0Av7/CQEBAQYG//0LBw0C+///AgH69f8E9gAA9/r97vn6BAED8wD0AwP+Cff49AYGCPIC/PwJ9/r2+wYD+gIABwYIA/f4/fz5/QUE+fwGCQPp/QD+/wb+/AT++wD6/Pn+AP/7AAYD+wADAQEH/gL/BAr7+AP7/AX1Bv0AAwMF/wv1A/cI8AAK/Ar/Af71CAH7B/r9/QP//Af6+QYAAP4O+fwB+wYBBgcDBP4G/Pv8+AryBgruAAAH/wH6CgQDBgH/AfYR/f79",
+      "ai-05": "+/fzBAX6/PgC+vUB+AD6+gAH+/329/kBCQsAAgX9AA0BBP0H/wL8/QgAAwAH+v4B/gT6A/gH+QEK9Qf+DPYGB/8ICwL9/wAD9v/8CgL3Bf/+AQD/CwAIAAf6AQwL/v3+AfoFCQACAwz3//8E/f0CEAD//Qj9+/8LAf8EBAQG9QD/+gr7BAP7AQEE/Br/CAT5Agj/8wH4Af33AwH7BgT9/P8F/QH++QX+9wQA6/UG/QAA+/z+BwX4AAT6Bgv0+vUB9gkHDQAM+wj/AAn+AQn6+fwBCfz9//v59/H0Aw8GAAD99wQHBvn++wb9//wBAwj6/wD7+fv+A/wDAgT2BQP5/vsGBgkA/v/5CAv6/AYGAAn+/f0IBgf+BQYC+f77/QD8//j+9vsGAQH9/vYBBfEAAwT9BQUBBgEEDQL3AgEI9gD6BPsEAfoDBPz9GfPz/fj//QP+/QAFBgP89goHDPz1+gsDAAoECwQJA/0A//4L9PsNAP37AA0BA/MCCfkC8f0A",
+      "business-economy-03": "/Pf//wT9+gUFAvr/BPkC/gP6+P8CAv/8/v0A+wD6AP8F/gcB/Pv8AQf3APwO//z8Cf379v8E/f8E+fkA/wAHARgA8wXzAQr8+/oEAQf/EP4C9vkB8wD6AA8BAPwACwIL/f/9CAYDDgL9/QMCBgIA+QT/+//8AQQC+gMD/fwF8wDwAAsA9Pz+BvUC9Qn8Cw36AAQL/wn2/vsFBQP3AAIBDf4C8gX5AP0G/QkC/gMBB/n2/fwFA/kE9vv4/P79A/sK9xQDA/wM/fj5/wMB/fUH/f4CAQYABf//AwL6//sQAAD5B/MACPn5/AMIAAAICgX0A/oC/wkA+AABBPj6/gL79wQO/QYA+AAAAfz6AfwA+gIF+gAD//7yAAgF/f/5AgIF/AUJBQDx//sACP4I/gAF/Pv7DgYA/QD8+gf1AgAE9QD9/A4J+Qb9AggKAf8DB/oQ+Ab+9QQHBvsG+/MF+g78/wT/BwIC/wMGAg77+g30+/YNAAH8/gkJ/f779gwN7P8F",
+      "energy-03": "+PsOAvn17Af6/fQJ/vcCCgT7/wILAf4B/wL2AwT9/gwA9gMD9wUHCPn2Bgr5+QT/AvoCBPUDA/z0+f4FBQX/9fv8/vj4/QIJ+/UDAwsAAPAGBgXs8vwDBgACAv7t/wgJ/v7//AwF+/oFBv8L/v4DAAL/+/74/P0A+gT+CAMLAQD//vv++Qb7/fb+/AMAAP/rAgYD+/j6+gIKAAUB7/0FAQP1BvgNAvv++Ar/Af0C/wr5/v0I+AMCBQP9Bwb+DPgGAQACCQoMBfYCBAMBBgYHCP8DA/QHA/P9CP71+f//AAADB/n/BvwICAP6/wsF+fv2+Pn4AvwC9wf9BPf+8v3/AgAB+QD8AwIEDAQK/fkBB/sHBfr8+QL+9wMD/AQBBQ7/BQX5/AkH/QL6/QQE/AD+C/z+/wMAAwT7BQT8/fT4+wD5CAMLCf4EFAP7Bf4DAQT+BP4C8gEDCQT//QAA/wAQAfkDEP33CP0I+ggEA/4F9QYF/Aj3AwAOBP4H8/39+gAA",
+      "india-01": "/v33BAgDBvz+AQz+AAABB//+CQPwAQECAP8B+/78BgX+AAAE/P4E+QX//PoI/wYF+wAEAAD+//sKBAAAAwX2AQX9AAL8BAT2A/f6/PwKCP4EAQIG/AMFAf75BAcLCAX//gr0BwQI9f36AP78/wL9/gECB/v+CvcB/QH6AQUB/AANBf74/AkA8gEHAfcF+/n1+wkCBAQH+/kGCgX+/gYDAv0EAPr59fb0BAT6A/j+Af73/v0DCv8I+gAABvcB/ez9/P/y+QT2B/b0B/oC/wr8+Pb+AvEPAAD9AAH5BQAOAQD1/PECBv79+g38/QL4DQAHBwT8/vcK+Qv6Bwnv+gED+PgBAP/8/vwS9QEF+v/7/vv+A/gDDQgCAvQIBfUKAgj4CgAE+Q7zAf39DQcC9QUHA/75+wD/9wr1APoJ/gsFCQAD9vj/BQL3+QgFCwT8/fz9/QL5+AUH/v8E+AD+/Qj7Cfz3/RQKAxEH/f0EAwL+B/v28P0IBQkGA/0E/f/8/Ab/",
+      "india-02": "BAH7+QgICBD+AQb8AAn//gT8/AIICP8E8wn5/AMDCwUG+v/99v3+B/z59AH9+P38/Q8I/wQM+/Ly//0K9v39/QAE+/YP/QMBCgT/BAL/Be0AAQ7+CQD9/wEDCQYMBwH/+Pr3Avv89wL49gf89v37DAn7+v0F+wT2/P8DAP0E/AD+BwII/wQF9wfzAPv3/QD+AQcQAP///wj8BfgMCQT8/Ab+9wT2//gFAP0DCA0H9AT3B/sF+/r8/PT8AQgIBf8A/P0C//n4/gYDAw/1CwID9wP+/gn89/0E/f0A7wAHBAD8/f79CAAA/wr+BgD99vQFAQH8AAEEAA8CBf36CwT8AvwI+vD8+vj+/wD8AvoFCPoIAPwAAfz6/wf+AgsJAfn/Af/7DA7/DfIE+v7zCv/4/gH6/QYB+QXw+Qj9APoNBwAJ+/v/AgD6+/kD/w8G/vv//AD+/vMGAAD9/wsEBAgFBPwC/Pz6Cf8H+f4DCgj+9gYFAP8FAgH8B/37//L/9w0F",
+      "india-03": "Bv0I/f0A+ff//wD+/fgH/wH18wUC//gEBwD19QP+Bw/+AP37BAcQ/v/3APsB//kEAAT3/wYEAfn7CAX/8QT6AwH9AwAJA/0IBf369gYHBPH3AAwA+/YCCPf+CQINAAkH/fwOBQEO/gYB+vwB/P4LAQkBAAH+AQYO/wD++QYHCQD59/3/+vv+Avn/BvkEAf/39gT3DPf7CPoG+w4A+gUDAfwK9/8EAAb4BQX4/v0I/vwFC/0K9vcA+f79/AQCAPsE+wIDBAf6+AH9/v4ADPkCAPn/C/0MBfj6/v4E9/wBDQACAwIEBgT6/wcM/wf1BQz9EAAHA//9+gcBBvzz/gL7+vz/B/cDA/0A/QQI/vj9+ALyAwL7AgD6+wX/Af4CAAL5AAQC9QMH+fX2/QYMBv37AQkE//X//P76/goA/AL9BQAJ7vb+/P/5CvcDFP8E+P/x9/zzBAMD/gYABAMKAO8ADP/+BAABAAYH/u0B/Qf79AUD9Pf/BwUHCf33BQIMAQL/",
+      "world-01": "Bw8GBBQCAwICDhP+Av8C/v75+wcCAgT+BwwP+/ICBff7AAIEDgL4BPMDAv4A/vv6APr9/QP0APYCAwcG/f3/AP76CvkBCRD+AP78/wEDCgUA+wL7BQAIAQED/wEHCwUBAgb2BfsB+/7/+/75+fgH+v37CP0Q//gAB/73CAL/+QAB/fj9/Pf+AAMDAvEC+gICAQH5Cgr+BQT5BQwGBf8D+AP//QEIAfj1AwD6BQT69vr6+/YHBgP4EfsFCf8L/gL7AvgH+gn2/AUIAvgC/P75Bf7+CQH9AP72+AYA/Pr/AQAJ/vj+AgD2B/4A/fQDAQYCCAv7+f8ABf7//wP78QMF+gwF9QkG//sDB//9B/z6BxAJ/QAMAPsL9QL09gb++PkMBwLo8/7/BQj7/wL5+wj5BQbx+AcA+BD+//b9+gH9/gD8Bfj//Qr7+QQF/woA8/8ABgP+Awj9AgUDAfgE+gT1+/r+/Qb7BQP++PIFAvoH9/YGA/38Bv4ABAj6/QYL//0C",
+      "world-02": "CAUDAw8A+gUGBv/y+AUF/Pv6B/399fcE/wAABwAABAQGAAEF/fr/+Qb8BQAC+/8H/wAD+gQCAwsD8wcDAfn2/fr8Bf4CAg0BBAoFC/YJDPcEAwj0BwMA8/0C/vsQCPUHAgT4AwgH+gn6BAcGAA/vBAD69gUDB/kHAP31/QXwAQAG/f0BBAsK9v73/AL+Bf8E9/gJAQT+BQoKCvf5/gXy//f8APUG+vgB9wT2BAD/Dv8D+wj9A+4IBP0E/fILAgAI9v79AwTtAv3zAvsACQAJ+AYADP73AgMF+wD5AQYKAgAC+AT2/wD6AgX8AgUFAfEEBgX5+wgF/vj5/QQC+wAFBAECCQT0B/wGAvsB+/8BCvT+Afn79gb6BfoACvoDBP38BQb3/AMEAv/4AgEK9wT9+/z7/f4C+wXxBQYI+gj1AAAE/v3+/vvx7goGAAAB/AQDAgj8CPoHAAAJ9/8D+/n8Bfz4AQv99f3zBwf5AAL4AgD8APb9/AEP//8CAgH/9wH+"
+    }
+  },
+  "generated_at": "2026-08-22T12:23:02Z",
+  "items": [
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-03",
+      "key_points": [
+        "A unified application connects retail performance analysis, planning, activation, execution, and measurement across teams and systems.",
+        "The application uses data unification, governance, and intelligence to provide a shared source of truth and coordinated decision-making.",
+        "AI and autonomous agents help translate campaign and planning decisions into store-level actions like replenishment and promotions.",
+        "The workflow supports testing potential decisions, activating audiences, and measuring campaign performance in a closed-loop system.",
+        "Retail teams need a structured approach to connect insights to actions without losing context or controls at each step."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T17:20:00Z",
+      "source_id": "databricks-blog",
+      "source_kind": "announcement",
+      "source_name": "Databricks",
+      "source_url": "https://databricks.com/blog/connecting-retail-demand-planning-campaign-and-store-execution",
+      "summary": "Retail and consumer goods teams face challenges in aligning decisions across disconnected systems and teams, leading to difficulties in turning analysis into results. A unified application, demonstrated by Databricks, connects performance reviews, demand planning, audience activation, store execution, and campaign measurement in one end-to-end process. The application is built on three foundations: data unification, governance, and intelligence. It enables stakeholders to review performance, plan demand, and measure outcomes using a shared data source, with features like natural language querying and autonomous agents. The workflow supports planning actions, marketing decisions, and store-level execution, creating a closed-loop view that connects campaign activity back to sales and operational outcomes.",
+      "title": "Connecting retail demand planning to campaign and store execution",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-04",
+      "key_points": [
+        "The Biomarker Discovery Framework is a multi-agent system that prioritizes candidate biomarkers from wearable sensor data through iterative hypothesis generation and statistical analysis.",
+        "The framework was tested across three cohorts with 9,279 participant-observations, identifying 41 mental health and 25 metabolic biomarkers.",
+        "The system combines deterministic computation for numerical analysis with generative reasoning for hypothesis formation and interpretation.",
+        "The framework outperformed other AI systems in manuscript quality assessments, receiving the highest scores and the most favorable editorial recommendations."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T17:02:24Z",
+      "source_id": "google-research-blog",
+      "source_kind": "research",
+      "source_name": "Google Research",
+      "source_url": "https://research.google/blog/an-ai-tool-for-prioritizing-candidate-biomarkers-from-wearable-sensor-data",
+      "summary": "Researchers introduced the Biomarker Discovery Framework, a multi-agent system designed to prioritize candidate biomarkers from wearable sensor data. This framework addresses the challenge of transforming continuous physiological signals into clinically meaningful biomarkers by integrating hypothesis generation, statistical analysis, and literature-based reasoning. The system was tested across three cohorts with 9,279 participant-observations, identifying 41 mental health and 25 metabolic biomarkers. The framework combines deterministic computation with generative reasoning, ensuring statistical rigor and human oversight. It was evaluated against other AI systems and received the highest scores in manuscript quality assessments.",
+      "title": "An AI tool for prioritizing candidate biomarkers from wearable sensor data",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-05",
+      "key_points": [
+        "AdaptGrow is a GPU-accelerated algorithm that clusters financial instruments using rolling correlation and tail-dependence matrices, producing hard labels, soft factor loadings, and structural-break signals.",
+        "The algorithm scales from single GPUs to multi-node infrastructure, with a memory-efficient formulation reducing peak storage from ~20n\u00b2 to ~4n\u00b2 bytes, enabling ~100,000 instruments to fit on a single NVIDIA GB200.",
+        "NVIDIA acceleration is integrated throughout the pipeline, with PyTorch, cuBLAS, cuSOLVER, and cuDF used for matrix operations, spectral probing, and data preprocessing.",
+        "The workflow evaluates 250 rolling windows, approximating daily re-clustering over a trading year, and uses synthetic data to test its effectiveness in detecting membership changes and co-crash events."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T16:21:04Z",
+      "source_id": "nvidia-technical-blog",
+      "source_kind": "announcement",
+      "source_name": "NVIDIA Technical Blog",
+      "source_url": "https://developer.nvidia.com/blog/gpu-accelerated-clustering-for-financial-instruments-at-scale",
+      "summary": "AdaptGrow, a GPU-accelerated matrix factorization algorithm, enables efficient clustering of financial instruments using rolling correlation and tail-dependence matrices. This approach addresses the challenges of grouping instruments for portfolio construction, risk aggregation, and statistical arbitrage by separating routine variation from structural changes. The algorithm produces hard labels, soft factor loadings, and structural-break signals, scaling from single GPUs to multi-node infrastructure without changing the solver interface. NVIDIA acceleration is integrated throughout the pipeline, with PyTorch, cuBLAS, cuSOLVER, and cuDF used for matrix operations, spectral probing, and data preprocessing. The workflow evaluates 250 rolling windows, approximating daily re-clustering over a trading year, and uses synthetic data to test its effectiveness in detecting membership changes and co-crash events.",
+      "title": "GPU-Accelerated Clustering for Financial Instruments at Scale",
+      "truncated": true,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "energy-03",
+      "key_points": [
+        "Operators in the Permian region are using longer horizontal wells to boost oil and gas production.",
+        "The share of short-reach wells in the Permian dropped from 43% in 2015 to 4% in 2025.",
+        "Mid-length lateral wells increased from 57% to 81% of completions between 2015 and 2025.",
+        "Super-lateral wells exceeding 15,000 feet accounted for 15% of new completions in 2025.",
+        "Production in the Permian rose 284% from 2.9 million to 11.2 million BOE/d between 2015 and 2025."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-19T14:00:00Z",
+      "source_id": "eia-today",
+      "source_kind": "government",
+      "source_name": "EIA Today in Energy",
+      "source_url": "https://eia.gov/todayinenergy/detail.php?id=67984",
+      "summary": "Well operators in the Permian region of western Texas and eastern New Mexico are increasing oil and natural gas production by drilling longer, horizontal wells, including super-lateral wells exceeding 15,000 feet. This shift allows operators to access more reservoir rock per well, boosting production while reducing the number of wells needed. In 2015, short-reach wells under 5,000 feet made up 43% of completions, but by 2025, they accounted for only 4%. Mid-length laterals, between 5,000 and 15,000 feet, increased from 57% to 81% of completions, while super-laterals, over 15,000 feet, accounted for 15% of new wells in 2025. Despite stable new well counts, production rose from 2.9 million to 11.2 million barrels of oil equivalent per day (BOE/d) between 2015 and 2025, a 284% increase. The average lateral length of new wells grew 77% over the decade, from 6,149 feet to 10,867 feet, according to Enverus data.",
+      "title": "Longer wells boost Permian crude oil and natural gas production",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "energy",
+      "visual": {
+        "alt": "Bar chart. 2015 43 %; 2025 81 %; 2025 15 %; 2015 77 %.",
+        "kind": "chart",
+        "path": "digest/2026/08/22/energy-01.svg",
+        "state": "rendered"
+      }
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "business-economy-03",
+      "key_points": [
+        "The AI economy is likened to a three-body system involving closed-source labs, open-weight models, and application companies, each influencing the others' trajectories.",
+        "Frontier labs, led by Anthropic and OpenAI, face growing competition and scrutiny over pricing and ROI, with some enterprises accused of tokenmaxxing.",
+        "Chinese open models like Zhipu\u2019s GLM 5.2 and Moonshot\u2019s Kimi K3 are gaining traction due to their competitive pricing and capabilities.",
+        "U.S. open-weight models, such as Thinking Machines\u2019 Inkling and Nvidia\u2019s Nemotron 3, are gaining credibility as domestic alternatives to Chinese models.",
+        "The article predicts that the distinction between open and closed models may diminish as both sides adapt to meet customer needs."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-22T11:30:00Z",
+      "source_id": "fortune",
+      "source_kind": "reporting",
+      "source_name": "Fortune",
+      "source_url": "https://fortune.com/2026/08/22/ais-three-body-problem-no-single-force-can-dictate-the-outcome",
+      "summary": "The AI economy in 2026 is described as a three-body system, with closed-source frontier labs, open-weight models from China, and application companies competing and influencing each other. The system is marked by instability due to factors like increased demand and revenue for frontier labs, advancements in open models, and the response from application companies. The article predicts that the discomfort with high pricing will ease as competition drives prices down and returns on AI investments become clearer. The shift toward a multi-model world will continue, and U.S. open-weight models will become viable alternatives to Chinese ones. The equilibrium of the system remains unsettled, with the key question being who captures the value from AI's success.",
+      "title": "AI\u2019s Three-Body Problem: no single force can dictate the outcome",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "business-economy",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "world-01",
+      "key_points": [
+        "A 17-year-old girl was the sole victim of a sword attack at a school in Fagersta, Sweden, which resulted in one death and three injuries.",
+        "An 18-year-old suspect was arrested after attacking the school during classes, with the case being investigated as murder and attempted murder.",
+        "The attack occurred in a region that briefly declared a state of emergency, which was lifted by Saturday.",
+        "Sweden has experienced multiple violent school attacks, including a mass shooting in \u00d6rebro last year and a knife attack in Malmo in 2022.",
+        "The suspect's motive remains unknown, and authorities are conducting an extensive investigation."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-22T11:53:02Z",
+      "source_id": "apnews-world",
+      "source_kind": "reporting",
+      "source_name": "AP News",
+      "source_url": "https://apnews.com/article/sweden-school-sword-attack-victim-girl-86147180fb6a98673c0190bc66302891",
+      "summary": "A 17-year-old girl was the victim of a deadly sword attack at Brinell School in Fagersta, Sweden, on Friday. An 18-year-old suspect, armed with a sword, attacked the school during classes, killing one person and injuring three others, two of whom were severely wounded. The suspect was arrested, and the case is being investigated as murder and attempted murder. The region declared a state of emergency, which was lifted by Saturday. Swedish Prime Minister Ulf Kristersson expressed condolences and noted the police's intensive investigation. The attack follows a series of violent school incidents in Sweden, including a mass shooting in \u00d6rebro last year and a knife attack in Malmo in 2022.",
+      "title": "Victim of sword attack at a Swedish school was a 17-year-old girl",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "world",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "world-02",
+      "key_points": [
+        "CONCACAF President Victor Montagliani asked FIFA President Gianni Infantino to skip a youth tournament in the Dominican Republic due to the FIFA governance crisis.",
+        "Infantino faces pressure from UEFA, AFC, and CONCACAF to resign over his aborted World Cup stake proposal.",
+        "Montagliani's letter warned that Infantino's attendance would draw media attention, undermining the event's technical focus.",
+        "Infantino is set to attend the CFU U-14 Series despite the request, supported by Dominican officials who see it as beneficial for football development."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-22T11:46:36Z",
+      "source_id": "cna-world",
+      "source_kind": "reporting",
+      "source_name": "CNA",
+      "source_url": "https://channelnewsasia.com/sport/concacaf-chief-asks-infantino-skip-youth-tournament-amid-fifa-governance-crisis-6334881",
+      "summary": "CONCACAF President Victor Montagliani has requested FIFA President Gianni Infantino to avoid attending a youth soccer tournament in the Dominican Republic, citing the ongoing governance crisis at FIFA. Montagliani's letter to Infantino emphasized that his presence would draw excessive media attention, overshadowing the technical aspects of the CFU U-14 Series event. Infantino, facing pressure from UEFA, AFC, and CONCACAF to resign over his failed proposal to sell a World Cup stake, is visiting the Dominican Republic. Despite the request, Infantino is expected to attend the event, which is supported by Dominican officials who appreciate his presence for the country's football development.",
+      "title": "CONCACAF chief asks Infantino to skip youth tournament amid FIFA governance crisis",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "world",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "india-01",
+      "key_points": [
+        "Pinarayi Vijayan of the CPI(M) claimed the Deputy Leader of the Opposition post would go to his party, dismissing CPI's claims.",
+        "Vijayan stated that submitting a letter to the Speaker would finalize the appointment of the Deputy Leader of the Opposition.",
+        "Binoy Viswam criticized Vijayan's remarks, calling them unbecoming and not in line with political maturity.",
+        "Viswam emphasized the CPI's demand for the post and condemned any attempt to undermine the CPI's self-respect."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-22T11:52:34Z",
+      "source_id": "the-hindu-national",
+      "source_kind": "reporting",
+      "source_name": "The Hindu - National",
+      "source_url": "https://thehindu.com/news/national/kerala/pinarayi-vijayan-binoy-viswam-lock-horns-over-deputy-leader-of-the-opposition-post/article71377432.ece",
+      "summary": "The issue of who will hold the Deputy Leader of the Opposition post in the Keralam Assembly has caused tension within the Left Democratic Front (LDF). Leader of the Opposition Pinarayi Vijayan asserted that the post would go to his party, the Communist Party of India (Marxist), and ruled out the possibility of the Communist Party of India (CPI) securing it. He stated that the only remaining task was to submit a letter to the Speaker to officially assign the position. In contrast, CPI State secretary Binoy Viswam criticized Vijayan's remarks, calling them unbecoming and lacking political maturity, while emphasizing the CPI's claim to the post.",
+      "title": "Pinarayi Vijayan, Binoy Viswam lock horns over Deputy Leader of the Opposition post",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "india",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "india-02",
+      "key_points": [
+        "The Union Health Ministry has restricted FDCs containing chlorpheniramine maleate and phenylephrine hydrochloride for children under four years of age.",
+        "The decision was based on recommendations from an expert committee and the Drugs Technical Advisory Board (DTAB).",
+        "The notification mandates clear warnings on labels, package inserts, and promotional materials for these formulations.",
+        "The move follows previous restrictions and aligns with international practices in countries like the US and Australia."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-22T11:51:44Z",
+      "source_id": "the-hindu-national",
+      "source_kind": "reporting",
+      "source_name": "The Hindu - National",
+      "source_url": "https://thehindu.com/sci-tech/health/government-restricts-fixed-dose-combinations-containing-2-chemical-compounds-for-young-children/article71376736.ece",
+      "summary": "The Union Health Ministry has imposed restrictions on the manufacture, sale, and distribution of all fixed-dose combinations (FDCs) containing chlorpheniramine maleate and phenylephrine hydrochloride, requiring a clear warning that these medicines shall not be used in children below four years of age. The decision follows recommendations from an expert committee and the Drugs Technical Advisory Board (DTAB), citing risks to young children and the availability of safer alternatives. The notification, issued under Section 26A of the Drugs and Cosmetics Act, 1940, is effective from its publication in the Official Gazette and extends previous restrictions to all formulations containing these ingredients.",
+      "title": "Government restricts FDCs with chlorpheniramine, phenylephrine for children below 4",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "india",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "india-03",
+      "key_points": [
+        "More than half of the 18th Lok Sabha bills were passed in the same session, with the pace of passage increasing significantly over the past year.",
+        "Six of the 11 bills passed during the Monsoon Session were not part of the government's original legislative agenda.",
+        "The parliamentary committee examining the VBSA Bill has not yet submitted its report, and the FCRA Amendment Bill was referred to a Joint Committee following Opposition demands for its withdrawal.",
+        "The rapid passage of legislation has raised concerns about the time available for parliamentary scrutiny and stakeholder consultation."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-22T11:34:25Z",
+      "source_id": "toi-india",
+      "source_kind": "reporting",
+      "source_name": "Times of India - India",
+      "source_url": "https://timesofindia.indiatimes.com/india/bills-on-fast-track-over-half-of-18th-lok-sabha-bills-passed-in-same-session-shows-data/articleshow/133423110.cms",
+      "summary": "Over half of the bills introduced in the 18th Lok Sabha have been passed by both Houses in the same session, according to an analysis by PRS Legislative Research. The pace of bill passage has accelerated sharply over the past year, with six of the 11 bills passed during the Monsoon Session not included in the government's original legislative agenda. Concerns have been raised about the limited time available for parliamentary scrutiny, as the short gap between introduction and passage of bills reduces opportunities for stakeholder consultation and thorough examination.",
+      "title": "Bills on fast track: Over half of 18th Lok Sabha bills passed in same session, shows data",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "india",
+      "visual": null
+    }
+  ],
+  "items_failed": 7,
+  "items_planned": 17,
+  "partial": true,
+  "retention_window_months": -1,
+  "runs": [
+    {
+      "at": "2026-08-22T12:23:02Z",
+      "items_added": 10,
+      "n": 1
+    }
+  ],
+  "version": "2026-08-22",
+  "verticals": [
+    {
+      "count": 3,
+      "display_name": "AI",
+      "id": "ai"
+    },
+    {
+      "count": 1,
+      "display_name": "Business and Economy",
+      "id": "business-economy"
+    },
+    {
+      "count": 1,
+      "display_name": "Energy",
+      "id": "energy"
+    },
+    {
+      "count": 3,
+      "display_name": "India",
+      "id": "india"
+    },
+    {
+      "count": 2,
+      "display_name": "World",
+      "id": "world"
+    }
+  ]
+}
