@@ -66,7 +66,6 @@
   "version": "2026-08-21",
   "verticals": [
     {
-      "daily_cap": 5,
       "display_name": "AI",
       "id": "ai",
       "min_feeds": 25,
@@ -74,7 +73,6 @@
       "status": "active"
     },
     {
-      "daily_cap": 3,
       "display_name": "Energy",
       "id": "energy",
       "min_feeds": 25,
@@ -82,7 +80,6 @@
       "status": "draft"
     },
     {
-      "daily_cap": 2,
       "display_name": "Legacy desk",
       "id": "legacy-desk",
       "min_feeds": 25,

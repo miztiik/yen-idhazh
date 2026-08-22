@@ -133,7 +133,7 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     """Every knob but the model refs has a default, so an empty config is usable."""
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     minimal = AppConfig.model_validate({"models": committed.models.model_dump()})
-    assert minimal.run.item_cap_per_day == committed.run.item_cap_per_day
+    assert minimal.run.safety_ceiling_per_run == committed.run.safety_ceiling_per_run
     assert minimal.retention.image_months == -1, "retention ships disabled"
     assert minimal.retention.dry_run is True
 

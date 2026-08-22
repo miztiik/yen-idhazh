@@ -72,7 +72,7 @@ def row(**overrides: object) -> EvalRow:
 
 def test_a_fresh_clone_loads_its_committed_config() -> None:
     settings = config.load(CONFIG_DIR)
-    assert settings.app.run.item_cap_per_day >= 1
+    assert settings.app.run.safety_ceiling_per_run >= 1
     assert settings.sources.feeds
     assert settings.taxonomy.verticals
 

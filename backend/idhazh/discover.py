@@ -105,6 +105,8 @@ class Candidate:
     tier: SourceTier
     title: str | None
     published_at: str | None
+    weight: float = 1.0
+    """The feed's own weight, carried so ranking never has to look a feed up again."""
 
 
 def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
@@ -135,6 +137,7 @@ def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
                 tier=feed.tier,
                 title=clean_title(getattr(entry, "title", None)),
                 published_at=_published_at(entry),
+                weight=feed.weight,
             )
         )
     return found

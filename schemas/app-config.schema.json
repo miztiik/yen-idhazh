@@ -9,6 +9,13 @@
           "title": "Front Page Bonus",
           "type": "number"
         },
+        "max_future_hours": {
+          "default": 6.0,
+          "description": "A publish date further ahead than this is not believed and the item falls back to first sight. Feeds that stamp tomorrow would otherwise take the top slot every single day.",
+          "minimum": 0.0,
+          "title": "Max Future Hours",
+          "type": "number"
+        },
         "max_per_source": {
           "default": 2,
           "description": "Most items one feed may contribute to one vertical in a day. Without it, a quiet news day is whichever blog published most.",
@@ -22,11 +29,32 @@
           "title": "Quarantine After Failures",
           "type": "integer"
         },
+        "recency_half_life_hours": {
+          "default": 18.0,
+          "description": "Hours for the recency bonus to halve. At 18 h a day-old item keeps a third.",
+          "exclusiveMinimum": 0.0,
+          "title": "Recency Half Life Hours",
+          "type": "number"
+        },
+        "recency_weight": {
+          "default": 0.6,
+          "description": "How much freshness may move a score. A bonus, never a filter: a strong older item still outranks a weak new one, which a hard age cutoff cannot do.",
+          "minimum": 0.0,
+          "title": "Recency Weight",
+          "type": "number"
+        },
         "repetition_weight": {
           "default": 1.0,
           "minimum": 0.0,
           "title": "Repetition Weight",
           "type": "number"
+        },
+        "seen_window_days": {
+          "default": 90,
+          "description": "How far back the first-sight store is consulted. Older shards stay committed and readable; they are just not evidence about today.",
+          "minimum": 1,
+          "title": "Seen Window Days",
+          "type": "integer"
         },
         "tier_weights": {
           "$ref": "#/$defs/TierWeights"
@@ -220,8 +248,8 @@
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
       "properties": {
         "max_output_tokens": {
-          "default": 500,
-          "description": "Covers the summary AND its key points. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause.",
+          "default": 900,
+          "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
           "minimum": 1,
           "title": "Max Output Tokens",
           "type": "integer"
@@ -406,16 +434,17 @@
     "RunConfig": {
       "additionalProperties": false,
       "properties": {
-        "item_cap_per_day": {
-          "default": 20,
-          "minimum": 1,
-          "title": "Item Cap Per Day",
-          "type": "integer"
-        },
         "max_parallel": {
           "default": 4,
           "minimum": 1,
           "title": "Max Parallel",
+          "type": "integer"
+        },
+        "safety_ceiling_per_run": {
+          "default": 200,
+          "description": "A crash guard, not an editorial choice. Supply and the ranking decide how big a day is; this only stops a mis-parsed feed from publishing hundreds of items in one run. A normal day never reaches it.",
+          "minimum": 1,
+          "title": "Safety Ceiling Per Run",
           "type": "integer"
         },
         "shard_size": {
@@ -625,6 +654,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Replaced run.item_cap_per_day with run.safety_ceiling_per_run. Added collect.recency_weight, collect.recency_half_life_hours, collect.max_future_hours and collect.seen_window_days. Raised inference.max_output_tokens to 900.",
+      "version": "2026-08-22T11:00",
+      "why": "A daily cap decided the size of the day; supply and the ranking should. The ceiling that remains is a crash guard against a mis-parsed feed. Recency is a bonus rather than a cutoff so a strong older item is never dropped for a weak new one. The token stop is labelled as the crash guard it always was, and sized so the prompt sets the length."
+    },
+    {
       "change": "Removed collect.min_feeds_floor.",
       "version": "2026-08-22T09:00",
       "why": "Nothing read it. The floor a vertical is actually held to is its own min_feeds in taxonomy.json, so a second number calling itself the default described a mechanism that does not exist."
@@ -685,7 +719,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-22T09:00",
+      "default": "2026-08-22T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -699,5 +733,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-22T09:00"
+  "version": "2026-08-22T11:00"
 }
