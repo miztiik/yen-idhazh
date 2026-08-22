@@ -81,7 +81,7 @@
     },
     "SalienceFeedDef": {
       "additionalProperties": false,
-      "description": "A ranking signal. It adds weight to a URL already in the pool; it never discovers.",
+      "description": "A ranking signal. It adds weight to a URL already in the pool; it never discovers.\n\nWhat a vote is worth is `collect.front_page_bonus` - one number for every\naggregator, not one per feed. An aggregator has no subject taxonomy to be\ngraded on, so there is nothing for a per-feed weight to express.",
       "properties": {
         "id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -115,13 +115,6 @@
           "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
           "title": "Url",
           "type": "string"
-        },
-        "weight": {
-          "default": 0.5,
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Weight",
-          "type": "number"
         }
       },
       "required": [
@@ -161,6 +154,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed weight from a salience feed.",
+      "version": "2026-08-22T09:00",
+      "why": "Nothing read it. A vote is worth collect.front_page_bonus - one number for every aggregator - so a per-feed weight was a knob that looked tunable and moved nothing."
+    },
+    {
       "change": "Added kind to a feed.",
       "version": "2026-08-21T06:00",
       "why": "A company announcing its own product and a reporter measuring it arrived looking identical. Reader named this as the one thing an item lacked before they would share it."
@@ -188,7 +186,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21T06:00",
+      "default": "2026-08-22T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -200,5 +198,5 @@
   ],
   "title": "Sources",
   "type": "object",
-  "version": "2026-08-21T06:00"
+  "version": "2026-08-22T09:00"
 }

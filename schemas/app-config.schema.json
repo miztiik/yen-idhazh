@@ -16,13 +16,6 @@
           "title": "Max Per Source",
           "type": "integer"
         },
-        "min_feeds_floor": {
-          "default": 25,
-          "description": "Default feed floor. A vertical may raise it; below it, nothing renders.",
-          "minimum": 1,
-          "title": "Min Feeds Floor",
-          "type": "integer"
-        },
         "quarantine_after_failures": {
           "default": 5,
           "minimum": 1,
@@ -632,6 +625,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed collect.min_feeds_floor.",
+      "version": "2026-08-22T09:00",
+      "why": "Nothing read it. The floor a vertical is actually held to is its own min_feeds in taxonomy.json, so a second number calling itself the default described a mechanism that does not exist."
+    },
+    {
       "change": "Added the visuals block.",
       "version": "2026-08-22",
       "why": "Routing needs its bounds and its enabled-kinds gate in config before the router may choose a kind. Additive - an older payload still validates."
@@ -687,7 +685,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-22",
+      "default": "2026-08-22T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -701,5 +699,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-22"
+  "version": "2026-08-22T09:00"
 }

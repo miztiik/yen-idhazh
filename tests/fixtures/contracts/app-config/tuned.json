@@ -2,7 +2,6 @@
   "collect": {
     "front_page_bonus": 0.25,
     "max_per_source": 2,
-    "min_feeds_floor": 30,
     "quarantine_after_failures": 3,
     "repetition_weight": 1.5,
     "tier_weights": {
@@ -98,7 +97,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-21T06:00",
+  "version": "2026-08-22T09:00",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
