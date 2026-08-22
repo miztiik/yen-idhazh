@@ -27,7 +27,7 @@ from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 
 # Relative and POSIX-separated, because it is quoted in logs and manifests
 # (CLAUDE.md section 2).
-LEDGER_RELPATH: Final = "evals/fingerprints.csv"
+LEDGER_RELPATH: Final = "state/fingerprints.csv"
 
 _READ_CHUNK: Final = 1024 * 1024
 

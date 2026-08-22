@@ -17,7 +17,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, EVALS_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, STATE_DIR, read_text
 
 from idhazh.contracts.app_config import InferenceConfig, ModelRef
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
@@ -171,7 +171,7 @@ def test_an_absent_ledger_reads_as_empty(tmp_path: Path) -> None:
 
 def test_the_committed_ledger_carries_the_declared_columns() -> None:
     """A hand-edited header would silently reorder every future row."""
-    committed = EVALS_DIR / "fingerprints.csv"
+    committed = STATE_DIR / "fingerprints.csv"
     with committed.open("r", encoding="utf-8", newline="") as handle:
         header = next(csv.reader(handle))
     assert tuple(header) == FingerprintRow.csv_columns()

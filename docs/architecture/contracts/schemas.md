@@ -43,8 +43,8 @@ The eleven shapes, and where each one lives once written:
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `Route` | `route` | one file per item under the run directory |
-| `EvalRow` | `eval-row` | one appended row of `evals/scores.csv` |
-| `FingerprintRow` | `fingerprint-row` | one appended row of `evals/fingerprints.csv` |
+| `EvalRow` | `eval-row` | one appended row of `state/scores.csv` |
+| `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 

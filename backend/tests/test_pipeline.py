@@ -148,7 +148,7 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
 
 
 def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
-    ledger = tmp_path / "evals" / "scores.csv"
+    ledger = tmp_path / "state" / "scores.csv"
     assert writer.append(ledger, [row()]) == 1
     assert writer.append(ledger, [row(item_id="ai-02")]) == 1
     with ledger.open(encoding="utf-8") as handle:
@@ -158,7 +158,7 @@ def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
 
 
 def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
-    ledger = tmp_path / "evals" / "scores.csv"
+    ledger = tmp_path / "state" / "scores.csv"
     assert writer.append(ledger, []) == 0
     assert not ledger.exists()
 

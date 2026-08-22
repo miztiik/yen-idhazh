@@ -16,7 +16,7 @@ from typing import Final
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.validation_row import ValidationRow
 
-LEDGER_RELPATH: Final = "evals/scores.csv"
+LEDGER_RELPATH: Final = "state/scores.csv"
 
 
 def columns() -> tuple[str, ...]:

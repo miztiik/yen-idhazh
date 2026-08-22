@@ -11,9 +11,12 @@ frontend/src/contracts/*.d.ts text eol=lf
 # change the hash the run manifest records for it.
 config/*.json text eol=lf
 
-# The eval ledger. Rows are appended by CI on Linux and read by a developer on
-# Windows; a CRLF rewrite would show every historical row as changed.
-evals/*.csv text eol=lf
+# The committed run state: the eval ledger, the fingerprints, the seen-URL
+# store and the feed-health record. Rows are appended by CI on Linux and read by
+# a developer on Windows; a CRLF rewrite would show every historical row as
+# changed.
+state/*.csv text eol=lf
+state/**/*.csv text eol=lf
 
 # Test fixtures are byte-exact inputs. A golden summary, a canary payload, or a
 # captured page is compared against a fresh pipeline run, so any end-of-line

@@ -1,4 +1,4 @@
-"""One row of the committed eval ledger (`evals/scores.csv`).
+"""One row of the committed eval ledger (`state/scores.csv`).
 
 Every field is a scalar, because the ledger is a CSV that is appended by CI and
 read by the dashboard, never recomputed at read time.

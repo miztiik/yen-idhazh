@@ -51,7 +51,7 @@ jobs:
           recent_days = int("${{ inputs.recent_days || '7' }}")
           baseline_days = int("${{ inputs.baseline_days || '28' }}")
           today = datetime.date.today()
-          ledger = pathlib.Path("evals/scores.csv")
+          ledger = pathlib.Path("state/scores.csv")
           if not ledger.exists():
               print("ledger is empty - nothing to compare")
               raise SystemExit(0)
