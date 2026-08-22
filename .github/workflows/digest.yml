@@ -327,4 +327,16 @@ jobs:
             exit 0
           fi
           git commit -m "digest: ${{ needs.plan.outputs.date }}"
-          git push
+          # The runner checked out a commit that may be minutes old, and a daily
+          # job must not lose a day's work because someone pushed while it ran.
+          # Rebase and retry; the day payload touches paths nobody edits by hand,
+          # so there is nothing here for a rebase to conflict with.
+          for attempt in 1 2 3; do
+            if git push; then
+              exit 0
+            fi
+            echo "push rejected, rebasing (attempt $attempt)"
+            git pull --rebase --autostash origin main
+          done
+          echo "could not push the day after three attempts" >&2
+          exit 1
