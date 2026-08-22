@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-22
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -23,6 +23,19 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 - **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement.
 - **Fine-tuning, GPU runners, and models that do not fit the runner.** See Holy Law #2.
 - **Accessibility framework / audit tooling** (axe-core, WCAG-level gating, automated contrast checks). Descoped at project level. Basic ARIA and keyboard navigation ARE in scope: visible focus rings, labelled controls, semantic landmarks, keyboard-reachable interactive surfaces. Design-level accessibility is encouraged; merge-gating on audit tooling is not.
+
+## 0b. Voice
+
+This is the canonical writing rule. It binds every agent, every persona under `.github/agents/`, every doc, every commit message, and every reader-facing string. Cite it as "section 0b".
+
+- Write in plain, direct language. Use short sentences with one idea each.
+- Use the active voice.
+- Do not use corporate or self-invented tech jargon.
+- Lead with the core answer. Skip all introductory fluff.
+- Keep answers short unless asked for depth.
+- Use ASD-STE100.
+
+Everywhere else restates this section rather than inventing its own style rule (Holy Law #4): [`docs/agents/guardrails.md`](docs/agents/guardrails.md) carries it for the personas that run the bootstrap ritual, and [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
 
 ## 1. Holy Laws (Read First, Every Session)
 
