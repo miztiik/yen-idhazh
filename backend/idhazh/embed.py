@@ -26,9 +26,13 @@ if TYPE_CHECKING:
 
 EMBEDDER_ID: Final = "all-minilm-l6-v2-quantized"
 
-# Relative to the repository root, and the same path the published page fetches
-# from. POSIX and digest-free, per CLAUDE.md section 2.
-MODEL_RELDIR: Final = "frontend/public/assist/models/all-MiniLM-L6-v2"
+# Relative to the repository root, and the same file the published page fetches.
+# `frontend/static/` rather than `frontend/public/`: the latter is where the
+# pipeline writes its payloads, which the site reads at BUILD time through the
+# filesystem. Only `static/` is copied into the served bundle, so a vendored
+# asset a browser fetches at runtime has to live there. POSIX and digest-free,
+# per CLAUDE.md section 2.
+MODEL_RELDIR: Final = "frontend/static/assist/models/all-MiniLM-L6-v2"
 ONNX_RELPATH: Final = f"{MODEL_RELDIR}/onnx/model_quantized.onnx"
 TOKENIZER_RELPATH: Final = f"{MODEL_RELDIR}/tokenizer.json"
 
@@ -60,7 +64,7 @@ class Embedder:
         return (self._root / ONNX_RELPATH).exists()
 
     def load(self) -> None:
-        import onnxruntime  # type: ignore[import-untyped]
+        import onnxruntime
         from tokenizers import Tokenizer
 
         self._session = onnxruntime.InferenceSession(str(self._root / ONNX_RELPATH))

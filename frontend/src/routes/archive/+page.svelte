@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import { longDate, plural } from '$lib/format';
+	import AssistSearch from '$lib/components/AssistSearch.svelte';
 
 	let { data } = $props();
 </script>
@@ -31,4 +32,6 @@
 			{/each}
 		</ul>
 	{/if}
+
+	<AssistSearch days={data.payloads} />
 </section>
