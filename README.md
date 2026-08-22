@@ -115,6 +115,7 @@ Start here, in this order:
 | Why a story gets a chart or nothing | [`docs/architecture/publishing/visuals.md`](docs/architecture/publishing/visuals.md) |
 | Real numbers from real hardware | [`docs/reference/measurements.md`](docs/reference/measurements.md) |
 | How to run it yourself | [`docs/how-to/run-the-pipeline.md`](docs/how-to/run-the-pipeline.md) |
+| **How to test the models locally** | [`docs/how-to/test-models-locally.md`](docs/how-to/test-models-locally.md) |
 
 ---
 

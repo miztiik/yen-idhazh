@@ -75,3 +75,44 @@ export function evalRows(): { rows: Record<string, string>[]; columns: string[] 
 	});
 	return { rows, columns };
 }
+
+export interface RunSummary {
+	date: string;
+	runs: number;
+	planned: number;
+	failed: number;
+	siteBytes: number;
+	siteFiles: number;
+	models: string[];
+}
+
+/** What each run manifest recorded about itself, newest first.
+ *
+ * The manifest is the only place run-level facts live. Widening a per-item row
+ * to carry them would leave every item row with columns that are blank for it.
+ */
+export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
+	const found: RunSummary[] = [];
+	for (const date of publishedDates(root)) {
+		const [year, month, day] = date.split('-');
+		const path = join(root, year, month, day, 'run.json');
+		if (!existsSync(path)) continue;
+		try {
+			const manifest = JSON.parse(readFileSync(path, 'utf8'));
+			found.push({
+				date,
+				runs: manifest.runs?.length ?? 0,
+				planned: manifest.items_planned ?? 0,
+				failed: manifest.items_failed ?? 0,
+				siteBytes: manifest.site_bytes ?? 0,
+				siteFiles: manifest.site_files ?? 0,
+				models: (manifest.models ?? []).map(
+					(use: { model_ref?: { id?: string } }) => use.model_ref?.id ?? '?'
+				)
+			});
+		} catch {
+			// A manifest that will not parse costs the console one row, never the page.
+		}
+	}
+	return found;
+}
