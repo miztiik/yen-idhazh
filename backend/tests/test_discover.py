@@ -19,6 +19,7 @@ import pytest
 from conftest import FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import CollectConfig
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
 from idhazh.discover import (
@@ -27,6 +28,7 @@ from idhazh.discover import (
     canonicalise,
     clean_title,
     live,
+    resting,
     salience_urls,
 )
 from idhazh.rank import ITEM_ID_DIGITS, merge, plan_vertical, score, tier_weight
@@ -186,6 +188,87 @@ def test_a_draft_feed_is_not_read() -> None:
         status=LifecycleStatus.DRAFT,
     )
     assert live([LAB, draft], "ai") == [LAB]
+
+
+# --- Quarantine: a rest, never a retirement ---------------------------------
+
+REST_AFTER = 3
+
+
+def health(*outcomes: str, feed_id: str = "trade-press", items: int = 3) -> list[FeedHealthRow]:
+    """A feed's history, oldest run first - the order `ledger.load_health` returns.
+
+    An outcome of "ok" carries entries; every other outcome carries none, which
+    is what a failed read actually looks like.
+    """
+    return [
+        FeedHealthRow(
+            version=FeedHealthRow.schema_version(),
+            run_id=f"2026-08-23-{n}",
+            date="2026-08-23",
+            feed_id=feed_id,
+            checked_at="2026-08-23T06:00:00Z",
+            outcome=FetchOutcome(outcome),
+            items=items if outcome == "ok" else 0,
+        )
+        for n, outcome in enumerate(outcomes, start=1)
+    ]
+
+
+def rests(*outcomes: str) -> bool:
+    return "trade-press" in resting(health(*outcomes), after_failures=REST_AFTER)
+
+
+def test_a_feed_with_no_history_is_asked() -> None:
+    """A source nobody has tried is not a source that has failed."""
+    assert resting([], after_failures=REST_AFTER) == frozenset()
+
+
+def test_a_feed_that_keeps_answering_is_never_rested() -> None:
+    assert not rests("ok", "ok", "ok", "ok", "ok")
+
+
+def test_one_good_run_clears_every_strike_behind_it() -> None:
+    """Coming back is instant. A source that works has nothing to answer for."""
+    assert not rests("transient", "transient", "transient", "ok")
+
+
+def test_fewer_failures_than_the_threshold_is_not_enough() -> None:
+    assert not rests("transient", "transient")
+
+
+def test_failing_the_threshold_in_a_row_starts_the_rest() -> None:
+    assert rests("transient", "transient", "transient")
+
+
+def test_answering_with_nothing_counts_the_same_as_not_answering() -> None:
+    """A feed that returns 200 and parses to zero entries is the quiet kind of dead."""
+    empty = [row.model_copy(update={"items": 0}) for row in health("ok", "ok", "ok")]
+    assert "trade-press" in resting(empty, after_failures=REST_AFTER)
+
+
+def test_a_robots_refusal_never_rests_a_feed() -> None:
+    """The site is working exactly as it asked to be treated. That is not a fault."""
+    assert not rests("robots_denied", "robots_denied", "robots_denied", "robots_denied")
+
+
+def test_a_rest_neither_adds_a_strike_nor_clears_one() -> None:
+    """A run we skipped is a record of our own choice, not evidence about the feed."""
+    assert rests("transient", "transient", "transient", "skipped")
+
+
+def test_the_rest_ends_on_its_own_and_the_feed_is_asked_again() -> None:
+    """Otherwise a bad afternoon is a permanent deletion nobody voted for."""
+    assert not rests("transient", "transient", "transient", "skipped", "skipped", "skipped")
+
+
+def test_a_source_that_came_back_is_live_again_immediately() -> None:
+    assert not rests("transient", "transient", "transient", "skipped", "ok")
+
+
+def test_one_sick_feed_never_rests_a_healthy_one() -> None:
+    history = health("transient", "transient", "transient") + health("ok", "ok", feed_id="lab-blog")
+    assert resting(history, after_failures=REST_AFTER) == {"trade-press"}
 
 
 # --- The day's order --------------------------------------------------------

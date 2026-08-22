@@ -41,6 +41,11 @@ SEEN_DIRNAME: Final = "seen"
 HEALTH_DIRNAME: Final = "feed-health"
 PUBLISHED_FILENAME: Final = "published.csv"
 
+#: How far back a health read looks. Not a policy - just enough history to reach
+#: into last month's shard, so a quarantine decided on the first of the month can
+#: still see the failures that caused it.
+HEALTH_WINDOW_DAYS: Final = 31
+
 
 def seen_relpath(date: str) -> str:
     """`state/seen/<YYYY-MM>.csv` - the POSIX form, for a log line or a manifest."""

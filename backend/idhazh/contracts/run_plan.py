@@ -95,6 +95,14 @@ class RunPlan(Contract):
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-23T12:00",
+            change="feeds_skipped counts the feeds a quarantine held back this run.",
+            why=(
+                "A quarantined feed is neither read nor failed, so a short day looked "
+                "like a quiet news day. The count says which it was."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-22T11:00",
             change=(
                 "item_id is derived from the address instead of the rank position, and "
@@ -124,6 +132,11 @@ class RunPlan(Contract):
     )
     feeds_read: int = Field(default=0, ge=0)
     feeds_failed: int = Field(default=0, ge=0)
+    feeds_skipped: int = Field(
+        default=0,
+        ge=0,
+        description="Held back by a quarantine. Neither read nor failed - never asked.",
+    )
     verticals: list[VerticalPlan] = Field(default_factory=list)
     items: list[PlannedItem] = Field(default_factory=list)
 

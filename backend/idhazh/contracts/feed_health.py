@@ -47,6 +47,11 @@ class FetchOutcome(StrEnum):
     BLOCKED = "blocked"
     PERMANENT = "permanent"
     TRANSIENT = "transient"
+    # We did not ask - the feed was resting out a quarantine. A record, not a
+    # measurement. It is written so a later run can tell "resting" apart from
+    # "nobody has tried this feed yet", which is what lets a quarantine lift
+    # itself instead of becoming a deletion nobody voted for.
+    SKIPPED = "skipped"
 
 
 #: Outcomes that count against a feed when quarantine is decided. A robots
@@ -62,6 +67,15 @@ class FeedHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "feed-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T12:00",
+            change="outcome gains `skipped`, for a run that held a quarantined feed back.",
+            why=(
+                "A quarantine that writes nothing can never lift: the failures that "
+                "caused it stay the newest thing on record forever. A skip has to be "
+                "recorded for the rest to end on its own."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23",
             change="Initial shape: the feed, the run, the outcome and what it yielded.",
@@ -99,13 +113,23 @@ class FeedHealthRow(Contract):
     )
 
     @property
+    def attempted(self) -> bool:
+        """Did we actually ask this run? A quarantined feed was not asked."""
+        return self.outcome is not FetchOutcome.SKIPPED
+
+    @property
     def failing(self) -> bool:
         """Did this read count against the feed?
 
-        An ok read that parsed to no entries counts. The most common way a feed
-        dies is not a 500 - it is a silent reshape that still returns 200.
+        A successful read that parsed to no entries counts. The most common way
+        a feed dies is not a 500 - it is a silent reshape that still returns 200.
+        A robots refusal never counts, and neither does a run we skipped: the
+        first is a site working as it asked to be treated, and the second is a
+        question we did not ask.
         """
-        return self.outcome in FAILING_OUTCOMES or self.items == 0
+        if self.outcome is FetchOutcome.OK:
+            return self.items == 0
+        return self.outcome in FAILING_OUTCOMES
 
     @classmethod
     def csv_columns(cls) -> tuple[str, ...]:
