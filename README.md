@@ -1,67 +1,158 @@
 # yen-idhazh
 
-**Last Updated**: 2026-08-21
+**A daily news digest that checks its own work.**
 
-*idhazh* is Tamil for a journal or magazine. **yen-idhazh** is "my journal": a daily, self-evaluating article digest that reads the open web, summarizes it with a small language model, scores every summary for faithfulness, and publishes the result as static pages.
+**Read it: <https://miztiik.github.io/yen-idhazh/>**
 
-Nothing runs at read time. The whole pipeline executes in GitHub Actions on a stock runner, commits what it produced, and the published site is plain files.
+*idhazh* is Tamil for a journal. **yen-idhazh** is "my journal".
 
-## What it does
+Every morning it reads a curated set of public sources, writes a short summary of
+what matters, and - the part that makes it different - **scores each summary
+against the article it came from** and shows you the score. Where the check went
+badly, the item says so.
 
-Once a day, in CI:
+Nothing runs when you read it. The page is plain files.
 
-1. **Collect** candidate links from configured public sources.
-2. **Extract** readable text from each page, sanitizing it at the trust boundary. The article body is never republished - only the link and our own summary.
-3. **Summarize** each article with an open-weights model running on CPU under constrained decoding, so the output shape is pinned by a schema rather than by hope.
-4. **Score** every summary twice for faithfulness - against the text the model actually saw, and against the full article - plus deterministic counterweights that faithfulness alone cannot see. Every score is appended to a committed ledger.
-5. **Illustrate** an item only where a visual earns its place: numbers become a chart specification, a process becomes a diagram, and anything else gets nothing rather than a decorative picture with invented labels.
-6. **Publish** a digest and an eval dashboard as static pages.
+---
 
-A failed item degrades and records why. It never takes down the run.
+## What you get
 
-## Why it is built this way
+| | |
+| --- | --- |
+| **Five subjects, one page** | AI, energy, business and economy, world, India. Ten to fifteen stories, not a firehose. |
+| **A confidence mark on every story** | Each summary is machine-checked against its source article. A story that scored badly is labelled, not hidden. |
+| **The link, always** | The digest gives you our summary and the address it came from. It never republishes the article. |
+| **Two minutes, then out** | It is a digest, not a feed. There is no infinite scroll and nothing to come back for. |
+| **Nothing follows you** | No accounts, no analytics, no cookies, no third-party scripts, no calls home. |
+| **A picture only when it earns one** | Numbers become a chart. A process becomes a diagram. Everything else gets nothing, because a decorative image with invented labels is worse than no image. |
+| **Search on your device** | Optional. A one-time download, then the archive is searchable without anything you type leaving your browser. |
 
-Three constraints do most of the shaping, and they are stated in full in [CLAUDE.md](CLAUDE.md):
+### Who it is for
 
-- **Static-first.** What reaches a reader is a static bundle. No backend, no runtime inference, no accounts, no telemetry, no calls home.
-- **The runner is the architecture.** 4 vCPU, no GPU, a 6 h job cap and a 10 GB cache decide which model can be used and how work is sharded. The budget is the platform, not a preference.
-- **Measured, not estimated.** Every throughput, cost and quality claim carries the hardware it was measured on, the date, and the spread. When a measurement contradicts the design, the design changes - and it already has once.
+Someone who wants to know what happened in a few subjects, in two minutes, from
+a page that tells them how much to trust it. Not a researcher, not an ML
+engineer, and not somebody who wants another feed to scroll.
 
-The evaluation loop is not a reporting afterthought. A summarizer whose faithfulness nobody measures is a machine for producing confident, plausible, wrong text; the ledger and the drift benchmark are what make the output trustworthy over months rather than on the day it was demonstrated.
+---
 
-## Layout
+## How it works
 
-| Path         | What lives there                                                                                   |
-| ------------ | -------------------------------------------------------------------------------------------------- |
-| `backend/`   | The Python producer. Runs in CI and locally, never as a service. `backend/idhazh/contracts/` holds the Pydantic models that are the source of truth for every persisted shape. |
-| `frontend/`  | The published static site - the digest and the eval dashboard - plus generated TypeScript contracts. |
-| `config/`    | Human-edited tunable knobs, schema-validated. A fresh clone runs on the defaults.                   |
-| `schemas/`   | JSON Schema generated from the Pydantic models. Never hand-edited.                                  |
-| `evals/`     | The committed eval ledger the dashboard reads.                                                      |
-| `docs/`      | Canonical knowledge, in Diataxis tiers.                                                             |
-| `TODO/`      | Active plan-docs.                                                                                   |
+```mermaid
+flowchart TD
+    subgraph build["Build time - GitHub Actions, once a day"]
+        direction TB
+        A["<b>Collect</b><br/>read ~138 public feeds<br/>rank by tier and repetition"]
+        B["<b>Extract</b><br/>pull readable text<br/>sanitise at the trust boundary"]
+        C["<b>Summarize</b><br/>Qwen3-8B on CPU<br/>output shape pinned by a schema"]
+        D["<b>Score</b><br/>faithfulness vs the source<br/>plus model-free counterweights"]
+        E["<b>Route</b><br/>chart, diagram, or nothing<br/>the model picks numbers by index"]
+        F["<b>Assemble</b><br/>write the day's payload<br/>commit it to the repository"]
+        A --> B --> C --> D --> E --> F
+    end
 
-Model weights and llama.cpp binaries are downloaded, not committed - see [docs/how-to/set-up-local-inference.md](docs/how-to/set-up-local-inference.md).
+    F -->|"committed JSON + SVG"| G
 
-## Getting started
+    subgraph read["Read time - a static page"]
+        direction TB
+        G["<b>Prerendered pages</b><br/>digest, archive, scores"]
+        H["<b>On-device search</b><br/>optional, reader-initiated"]
+        G -.->|"only if you click"| H
+    end
 
+    style build fill:#eef2ff,stroke:#4c6ef5
+    style read fill:#f0fdf4,stroke:#16a34a
 ```
+
+The line between the two boxes is the whole design: **everything expensive
+happens before you arrive.** By the time a page reaches you, the summaries are
+already in the HTML.
+
+### The one rule that shapes everything
+
+The pipeline runs on a stock GitHub runner - 4 vCPU, no GPU, a 6-hour job cap.
+That is not a budget to be raised; it is the platform. It decides which model can
+be used, how work is sharded, and which features never ship. When a measurement
+contradicts the design, the design changes - and it already has, twice.
+
+---
+
+## Where the stories come from
+
+Sources are **curated, not crawled**. Every feed is listed by hand in
+[`config/sources.json`](config/sources.json) with a subject and a tier:
+
+| Tier | What it is | Example |
+| --- | --- | --- |
+| 1 | The institution that *is* the fact | a central bank, a statistical agency, a lab's own blog |
+| 2 | Trade press that covers the beat daily | a specialist outlet, a wire's section feed |
+| 3 | Community and aggregators | a forum, a link aggregator |
+
+Ranking is arithmetic, not judgement: **tier weight, times how many independent
+sources carried the story today**, plus a bonus for a watched entity. A story
+three independent outlets carried is the day's story. No model is involved in
+choosing.
+
+Live feed counts, measured 2026-08-22: ai 38, world 27, india 27, energy 24,
+business-economy 22.
+
+A source that dies is retired in config, never deleted - deleting an id would
+break every payload that referenced it. See
+[`docs/architecture/sources/discovery.md`](docs/architecture/sources/discovery.md).
+
+---
+
+## Documentation
+
+Start here, in this order:
+
+| If you want to know | Read |
+| --- | --- |
+| What this is and is not | [`docs/concepts/vision.md`](docs/concepts/vision.md) |
+| **How the whole system fits together** | [`docs/architecture/overview.md`](docs/architecture/overview.md) |
+| What each pipeline stage owns | [`docs/concepts/pipeline-loop.md`](docs/concepts/pipeline-loop.md) |
+| How a summary is scored, and why | [`docs/concepts/evaluation.md`](docs/concepts/evaluation.md) |
+| Where stories come from | [`docs/architecture/sources/discovery.md`](docs/architecture/sources/discovery.md) |
+| Why a story gets a chart or nothing | [`docs/architecture/publishing/visuals.md`](docs/architecture/publishing/visuals.md) |
+| Real numbers from real hardware | [`docs/reference/measurements.md`](docs/reference/measurements.md) |
+| How to run it yourself | [`docs/how-to/run-the-pipeline.md`](docs/how-to/run-the-pipeline.md) |
+
+---
+
+## Running it yourself
+
+```bash
 python -m venv .venv
-.venv/bin/pip install -e ".[dev]"       # .venv/Scripts/pip on Windows
-.venv/bin/python -m pytest              # tests
-.venv/bin/python -m ruff check .        # lint
-.venv/bin/python -m mypy                # strict type check
-.venv/bin/python -m idhazh.contracts.export   # regenerate schemas/ from the models
+.venv/bin/pip install -e ".[dev]"        # .venv/Scripts/pip on Windows
+.venv/bin/python -m pytest               # tests
+.venv/bin/python -m ruff check .         # lint
+.venv/bin/python -m mypy                 # strict type check
 ```
 
-`schemas/` is generated from the Pydantic models in `backend/idhazh/contracts/` and is never hand-edited; a test regenerates it and fails on any diff. Change the model, run the export, commit both.
+One day, end to end, needs a local model server - see
+[`docs/how-to/set-up-local-inference.md`](docs/how-to/set-up-local-inference.md):
 
-The build plan is [TODO/20260815-digest-pipeline-plan.md](TODO/20260815-digest-pipeline-plan.md). Read [CLAUDE.md](CLAUDE.md) before changing anything.
+```bash
+python -m idhazh plan      --date 2026-08-22
+python -m idhazh work      --date 2026-08-22 --shard 0 --shards 1
+python -m idhazh route     --date 2026-08-22   # needs the small model served
+python -m idhazh assemble  --date 2026-08-22
+```
+
+Model weights and llama.cpp binaries are downloaded, never committed.
+
+## Repository layout
+
+| Path | What lives there |
+| --- | --- |
+| `backend/` | The Python producer. Runs in CI and locally, never as a service. `backend/idhazh/contracts/` holds the Pydantic models that are the source of truth for every persisted shape. |
+| `frontend/` | The published static site, plus generated TypeScript contracts. |
+| `config/` | Human-edited tunable knobs, schema-validated. A fresh clone runs on the defaults. |
+| `schemas/` | JSON Schema generated from the Pydantic models. Never hand-edited. |
+| `evals/` | The committed score ledger the dashboard reads. |
+| `docs/` | Canonical knowledge, in Diataxis tiers. |
 
 ## See also
 
-- [CLAUDE.md](CLAUDE.md) - the engineering contract.
-- [AGENTS.md](AGENTS.md) - the pointer coding agents start from.
-- [docs/concepts/vision.md](docs/concepts/vision.md) - what this is and what it is not.
-- [docs/concepts/pipeline-loop.md](docs/concepts/pipeline-loop.md) - the stages and what each one owns.
-- [docs/concepts/evaluation.md](docs/concepts/evaluation.md) - how a summary is scored and why.
+- [`CLAUDE.md`](CLAUDE.md) - the engineering contract every change is held to.
+- [`AGENTS.md`](AGENTS.md) - the pointer coding agents start from.
+- [`TODO/20260815-digest-pipeline-plan.md`](TODO/20260815-digest-pipeline-plan.md) - the build plan and its current state.
