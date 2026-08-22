@@ -21,9 +21,14 @@ export default defineConfig({
 	},
 	projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
 	webServer: {
-		command: 'npm run preview -- --port 4173 --strictPort',
+		// `--host 127.0.0.1` is load-bearing on a runner. Left to itself vite binds
+		// to `localhost`, which resolves to ::1 first on ubuntu-latest, so polling
+		// 127.0.0.1 times out and the whole suite fails before a test runs.
+		command: 'npm run preview -- --port 4173 --strictPort --host 127.0.0.1',
 		url: 'http://127.0.0.1:4173/',
 		reuseExistingServer: !process.env.CI,
-		timeout: 120_000
+		timeout: 120_000,
+		stdout: 'pipe',
+		stderr: 'pipe'
 	}
 });
