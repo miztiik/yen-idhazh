@@ -35,6 +35,8 @@ concurrency:
 env:
   MODEL_REPO: Qwen/Qwen3-8B-GGUF
   MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+  ROUTE_REPO: Qwen/Qwen3-4B-GGUF
+  ROUTE_FILE: Qwen3-4B-Q4_K_M.gguf
 
 jobs:
   plan:
@@ -165,8 +167,93 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
 
-  assemble:
+  # Visual routing runs on the small model, in its own job, because one
+  # llama-server serves one set of weights. It is deliberately unable to stop a
+  # publication: `continue-on-error` plus assemble's `always()` means a router
+  # that never starts costs every item its picture and costs the day nothing.
+  route:
     needs: [plan, work]
+    if: always()
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: items-*
+          merge-multiple: true
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+
+      - name: Cache the router weights and runtime
+        id: router
+        uses: actions/cache@v4
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: llm-${{ env.ROUTE_FILE }}-v1
+
+      - name: Fetch runtime and router weights
+        if: steps.router.outputs.cache-hit != 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin backend/models
+          TAG=$(curl -sS https://api.github.com/repos/ggml-org/llama.cpp/releases/latest | jq -r .tag_name)
+          curl -sSL -o llama.zip \
+            "https://github.com/ggml-org/llama.cpp/releases/download/${TAG}/llama-${TAG}-bin-ubuntu-x64.zip"
+          unzip -q llama.zip -d llama
+          find llama -type f -exec cp {} backend/bin/ \;
+          chmod +x backend/bin/llama-server
+          curl -sSL -o "backend/models/${ROUTE_FILE}" \
+            "https://huggingface.co/${ROUTE_REPO}/resolve/main/${ROUTE_FILE}?download=true"
+
+      - name: Start the router
+        run: |
+          set -euo pipefail
+          chmod +x backend/bin/llama-server
+          LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
+            --model "backend/models/${ROUTE_FILE}" \
+            --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
+            --port 8080 --no-warmup > router.log 2>&1 &
+          for _ in $(seq 1 120); do
+            curl -sf http://127.0.0.1:8080/health && break
+            sleep 5
+          done
+
+      - name: Route and render
+        run: python -m idhazh route --date "${{ needs.plan.outputs.date }}"
+
+      - name: Router log on failure
+        if: failure()
+        run: tail -50 router.log || true
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: routes
+          path: |
+            backend/var/run/${{ needs.plan.outputs.date }}/items/*.route.json
+            frontend/public/digest/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  assemble:
+    needs: [plan, work, route]
     # Always runs, even when a worker failed. A run that publishes nothing on a
     # bad day is a run whose bad days are invisible.
     if: always()
@@ -194,6 +281,15 @@ jobs:
           pattern: items-*
           merge-multiple: true
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+
+      # The routes and their rendered assets. `continue-on-error` above means
+      # this artifact may simply not exist, which is the degraded-not-failed
+      # path: every item then publishes with no picture.
+      - uses: actions/download-artifact@v4
+        continue-on-error: true
+        with:
+          name: routes
+          path: .
 
       - name: Assemble and publish
         run: |
