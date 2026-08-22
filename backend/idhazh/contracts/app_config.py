@@ -245,6 +245,27 @@ class SummarizeConfig(Model):
         ),
     )
     key_points_max: int = Field(default=5, ge=1, description="Also the decoder's ceiling.")
+    title_words_min: int = Field(
+        default=6,
+        ge=1,
+        description=(
+            "Shortest title the prompt asks for. Below this a headline stops naming "
+            "who did what, and the reader is back to guessing from the source's own "
+            "framing."
+        ),
+    )
+    title_words_max: int = Field(
+        default=14,
+        ge=1,
+        le=40,
+        description=(
+            "Longest title the prompt asks for, and the decoder's ceiling. Unlike the "
+            "summary there is no floor on the decoder: a headline does not stop early, "
+            "and a floor would only pad a good short one. Capped at 40 so the widest "
+            "decoder ceiling this can produce still fits an UntrustedLine, which is "
+            "what the payload field is."
+        ),
+    )
     max_verbatim_words: int = Field(
         default=20,
         ge=1,
@@ -266,6 +287,8 @@ class SummarizeConfig(Model):
             raise ValueError("bands must climb, and no two may start at the same length")
         if self.key_points_min > self.key_points_max:
             raise ValueError("key_points_min must not exceed key_points_max")
+        if self.title_words_min > self.title_words_max:
+            raise ValueError("title_words_min must not exceed title_words_max")
         return self
 
     def band_for(self, source_words: int) -> SummaryBand:
@@ -472,6 +495,18 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T15:00",
+            change="Added summarize.title_words_min and summarize.title_words_max.",
+            why=(
+                "The digest published the source's own headline, which is written to "
+                "win a click rather than to say what happened. The summarizer now "
+                "writes the title too, and the range it is asked for is a knob like "
+                "every other length in this block (Holy Law #6). Additive - an older "
+                "config still validates, and an item whose title misses the range "
+                "falls back to the source's."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23",
             change="Added the summarize block: length bands, key-point range and quote cap.",

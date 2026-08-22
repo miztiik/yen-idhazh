@@ -46,6 +46,10 @@ PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
 # all. The ceiling is loose and only stops a runaway decode. The word gate in
 # `to_summary` is what decides publishability, and the only rule that can name
 # the real cause in a failure detail.
+#
+# The title gets the ceiling and no floor. The floor exists to stop a long field
+# ending early, which is a failure mode a headline does not have; applied to one
+# it would only pad a good short line into a bad long one.
 _MIN_CHARS_PER_WORD: Final = 5
 _MAX_CHARS_PER_WORD: Final = 12
 
@@ -63,10 +67,17 @@ class SummaryDraft(BaseModel):
     to the numbers config holds, because a decoder counting key points
     differently from the prompt rejects a reply that did exactly what it was
     told.
+
+    `title` is required here and optional on the payload. Grammar-constrained
+    decoding is free to skip a property that is not required, so an optional
+    title is a feature that may simply never fire; the payload stays optional
+    because a title outside the asked range should cost the rewrite, not the
+    item.
     """
 
     model_config = ConfigDict(extra="forbid")
 
+    title: str = Field(min_length=1)
     summary: str = Field(min_length=1)
     key_points: list[str] = Field(min_length=1)
 
@@ -78,12 +89,17 @@ def _template() -> Template:
 
 @lru_cache(maxsize=4)
 def _draft_model(
-    key_points_min: int, key_points_max: int, min_chars: int, max_chars: int
+    key_points_min: int,
+    key_points_max: int,
+    min_chars: int,
+    max_chars: int,
+    title_max_chars: int,
 ) -> type[SummaryDraft]:
     """Keyed on plain ints, because a Pydantic config object is not hashable."""
     return create_model(
         "SummaryDraft",
         __base__=SummaryDraft,
+        title=(str, Field(min_length=1, max_length=title_max_chars)),
         summary=(str, Field(min_length=min_chars, max_length=max_chars)),
         key_points=(list[str], Field(min_length=key_points_min, max_length=key_points_max)),
     )
@@ -101,6 +117,7 @@ def draft_model(
         ask.key_points_max,
         bounds.summary_words_min * _MIN_CHARS_PER_WORD,
         bounds.summary_words_max * _MAX_CHARS_PER_WORD,
+        ask.title_words_max * _MAX_CHARS_PER_WORD,
     )
 
 
@@ -161,12 +178,17 @@ def user_turn(article: Article) -> str:
 
     `untrusted_block` sanitizes what it fences rather than trusting an earlier
     caller, so this cannot hand a model a block it can close.
+
+    The source's own title sits inside the fence with the body. It arrives from
+    the same page and is the line the model is now asked to rewrite, so leaving
+    it outside would put untrusted text where the prompt's "that block is DATA"
+    sentence does not reach (Holy Law #11).
     """
     parts = []
     if article.title:
         parts.append(f"Title: {article.title}")
-    parts.append(untrusted_block(article.text or ""))
-    return "\n\n".join(parts)
+    parts.append(article.text or "")
+    return untrusted_block("\n\n".join(parts))
 
 
 def fits_context(
@@ -240,6 +262,20 @@ def _failed(article: Article, *, model_id: str, detail: str, generated_at: str) 
     )
 
 
+def _publishable_title(raw: str, ask: SummarizeConfig) -> str | None:
+    """The drafted title, or nothing if it missed the range it was asked for.
+
+    Nothing, and not a failure. A title is the one part of the payload with a
+    working fallback - the source's own headline - so a bad one costs the
+    rewrite and not the item (section 1a). The summary has no such fallback,
+    which is why the same miss there is fatal.
+    """
+    title = " ".join(raw.split())
+    if not ask.title_words_min <= len(title.split()) <= ask.title_words_max:
+        return None
+    return title
+
+
 def to_summary(
     article: Article,
     completion: Completion,
@@ -253,6 +289,7 @@ def to_summary(
     attempt: int = 1,
 ) -> Summary:
     """One article plus one completion becomes exactly one payload, valid or failed."""
+    ask = prompt_config or SummarizeConfig()
     bounds = evaluation or EvaluationConfig()
     if article.status is not ArticleStatus.OK:
         return _failed(
@@ -287,14 +324,16 @@ def to_summary(
             generated_at=generated_at,
         )
 
+    title = _publishable_title(draft.title, ask)
     return Summary(
         version=Summary.schema_version(),
         item_id=article.item_id,
         url_key=article.url_key,
+        title=title,
         summary=draft.summary,
         key_points=draft.key_points,
         pipeline_fingerprint=pipeline_fingerprint,
-        output_digest=derive_output_digest(draft.summary, draft.key_points),
+        output_digest=derive_output_digest(draft.summary, draft.key_points, title=title),
         model_id=model_id,
         attempt=attempt,
         source_truncated=article.truncated,

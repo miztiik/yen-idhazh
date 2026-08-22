@@ -506,6 +506,21 @@
           "minimum": 1,
           "title": "Max Verbatim Words",
           "type": "integer"
+        },
+        "title_words_max": {
+          "default": 14,
+          "description": "Longest title the prompt asks for, and the decoder's ceiling. Unlike the summary there is no floor on the decoder: a headline does not stop early, and a floor would only pad a good short one. Capped at 40 so the widest decoder ceiling this can produce still fits an UntrustedLine, which is what the payload field is.",
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Title Words Max",
+          "type": "integer"
+        },
+        "title_words_min": {
+          "default": 6,
+          "description": "Shortest title the prompt asks for. Below this a headline stops naming who did what, and the reader is back to guessing from the source's own framing.",
+          "minimum": 1,
+          "title": "Title Words Min",
+          "type": "integer"
         }
       },
       "title": "SummarizeConfig",
@@ -723,6 +738,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added summarize.title_words_min and summarize.title_words_max.",
+      "version": "2026-08-23T15:00",
+      "why": "The digest published the source's own headline, which is written to win a click rather than to say what happened. The summarizer now writes the title too, and the range it is asked for is a knob like every other length in this block (Holy Law #6). Additive - an older config still validates, and an item whose title misses the range falls back to the source's."
+    },
+    {
       "change": "Added the summarize block: length bands, key-point range and quote cap.",
       "version": "2026-08-23",
       "why": "The lengths the prompt asks for were literals inside the prompt text, where no schema could see them and nothing checked them against the range the pipeline accepts (Holy Law #6). They are bands rather than one range because a release note and a long read asked for the same number of words gives a padded summary of the first and a thin one of the second. Moving them here also puts them inside the prompt string the fingerprint hashes, so changing what we ask for now re-summarizes rather than reusing a cached reply written under the old ask. Additive - an older config still validates."
@@ -796,7 +816,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-23",
+      "default": "2026-08-23T15:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -810,5 +830,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-23"
+  "version": "2026-08-23T15:00"
 }

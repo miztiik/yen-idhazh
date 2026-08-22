@@ -4,7 +4,7 @@
   "extract_ms": 0,
   "failure_detail": null,
   "fetch_ms": 0,
-  "generated_at": "2026-08-21T06:12:53Z",
+  "generated_at": "2026-08-23T15:04:11Z",
   "input_tokens": 1796,
   "item_id": "ai-01",
   "key_points": [
@@ -13,14 +13,14 @@
     "Weights are published under a permissive licence."
   ],
   "model_id": "qwen3-8b-q4-k-m",
-  "output_digest": "3469c80fe6cf09abdc1ad5e9dca09031d233386da57930506138f7f5318e98bf",
+  "output_digest": "90a6ab14b51fb2505870401a614dce0c4456ddd459ecafaccea65e92ac7ec1e1",
   "output_tokens": 214,
   "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
   "source_truncated": false,
   "status": "ok",
-  "summarize_ms": 0,
+  "summarize_ms": 302100,
   "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
-  "title": null,
+  "title": "Example Lab publishes smaller inference model under a permissive licence",
   "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
-  "version": "2026-08-21T02:00"
+  "version": "2026-08-23"
 }
