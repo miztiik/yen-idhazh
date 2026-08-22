@@ -78,3 +78,8 @@ class ValidationRow(Contract):
         ):
             raise ValueError("a switch that selects the incumbent is not a switch")
         return self
+
+    @classmethod
+    def csv_columns(cls) -> tuple[str, ...]:
+        """The ledger's column order. One definition, so a writer cannot invent its own."""
+        return tuple(cls.model_fields)

@@ -30,9 +30,10 @@ from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceKind
+from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.contracts.validation_row import ValidationVerdict
 from idhazh.embed import Embedder
-from idhazh.evals import metrics, score, writer
+from idhazh.evals import golden, metrics, score, validation, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
 from idhazh.llm.server import Completion, post
@@ -41,6 +42,7 @@ from idhazh.sanitize import SANITIZER_VERSION
 
 LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
+VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 
@@ -307,6 +309,116 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
     )
 
 
+# --- validate (Row #7) --------------------------------------------------------
+
+
+def stage_validate(*, settings: config.Settings, leaderboard: float, scorer: object) -> None:
+    """Score the golden set with whichever model is currently served.
+
+    The real path - fetch, extract, summarize, score - because the question is
+    not how good the model is, but how good it is through our prompt, our
+    extraction and our corpus.
+    """
+    if scorer is None:
+        raise SystemExit("validation without a faithfulness scorer measures nothing")
+
+    gold = golden.load_golden(config.REPO_ROOT / "config" / "golden.json")
+    model_id = settings.app.models.summarize.id
+    tiers = {feed.id: feed.tier for feed in settings.sources.feeds}
+    scores: list[float] = []
+
+    for index, entry in enumerate(gold.articles, start=1):
+        item = PlannedItem(
+            item_id=f"{entry.vertical}-{index:02d}",
+            vertical=entry.vertical,
+            source_id=entry.source_id,
+            source_url=entry.url,
+            canonical_url=entry.url,
+            url_key=text_digest(entry.url),
+            tier=tiers.get(entry.source_id) or SourceTier.TRADE_PRESS,
+            title=entry.title,
+            rank_score=0.0,
+            carried_by=1,
+        )
+        article = _fetch_one(item, settings)
+        if article.status is not ArticleStatus.OK:
+            LOG.warning("golden article unavailable url=%s", entry.url)
+            continue
+        summary = _summarize_one(article, settings, "0" * 64)
+        if summary.status is not SummaryStatus.OK:
+            LOG.warning("golden article did not summarize url=%s", entry.url)
+            continue
+        text = article.text or ""
+        hhem, _ = dual_score(
+            scorer,  # type: ignore[arg-type]
+            seen_text=text,
+            full_text=text,
+            summary=summary.summary or "",
+        )
+        scores.append(hhem)
+        LOG.info("golden scored %s/%s hhem=%.3f", index, len(gold.articles), hhem)
+
+    result = golden.GoldenResult(
+        model_id=model_id,
+        leaderboard_hhem=leaderboard,
+        scores=scores,
+        attempted=len(gold.articles),
+    )
+    VALIDATION_ROOT.mkdir(parents=True, exist_ok=True)
+    assemble.write_atomic(VALIDATION_ROOT / f"{model_id}.json", result.to_json())
+    LOG.info(
+        "validated model=%s scored=%s/%s mean_hhem=%.4f",
+        model_id,
+        result.articles,
+        result.attempted,
+        result.measured_hhem,
+    )
+
+
+def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runner: str) -> int:
+    """Apply the Row #7 rule to whatever was measured, and record it.
+
+    Returns non-zero on a switch. That verdict is an ESCALATE, and a green build
+    would let it pass unread.
+    """
+    results = golden.results_in(VALIDATION_ROOT)
+    if not results:
+        raise SystemExit("no model was validated, so there is nothing to decide")
+
+    incumbent_id = settings.app.models.summarize.id
+    measurements = [
+        validation.Measurement(
+            model_id=result.model_id,
+            leaderboard_hhem=result.leaderboard_hhem,
+            measured_hhem=result.measured_hhem,
+            articles=result.articles,
+        )
+        for result in results
+    ]
+    incumbent = next((m for m in measurements if m.model_id == incumbent_id), None)
+    if incumbent is None:
+        raise SystemExit(f"the configured model {incumbent_id} was never validated")
+    challengers = [m for m in measurements if m.model_id != incumbent_id]
+
+    decision = validation.decide(incumbent, challengers, evaluation=settings.app.evaluation)
+    rows = validation.to_rows(
+        incumbent,
+        challengers,
+        decision,
+        measured_on=date,
+        commit_sha=commit_sha,
+        runner=runner,
+    )
+    writer.append_validation(config.REPO_ROOT / golden.ledger_relpath(date), rows)
+
+    LOG.info("verdict=%s winner=%s", decision.verdict.value, decision.winner)
+    LOG.info("%s", decision.detail)
+    if decision.verdict is ValidationVerdict.SWITCH_AND_PAUSE:
+        LOG.error("ESCALATE: a model switch changes a persisted contract and needs sign-off")
+        return 2
+    return 0
+
+
 # --- assemble ----------------------------------------------------------------
 
 
@@ -453,7 +565,9 @@ def _scorer(enabled: bool) -> object | None:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
-    parser.add_argument("stage", choices=("plan", "work", "route", "assemble", "run"))
+    parser.add_argument(
+        "stage", choices=("plan", "work", "route", "assemble", "run", "validate", "decide")
+    )
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
     parser.add_argument("--commit", default="0" * 40)
@@ -469,6 +583,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Include the route stage in a full run. It needs the router model served.",
     )
+    parser.add_argument(
+        "--leaderboard",
+        type=float,
+        default=0.0,
+        help="The published faithfulness score for the model being validated. A prior only.",
+    )
+    parser.add_argument(
+        "--runner",
+        default="local",
+        help="Where the validation ran. A laptop number is not a gate.",
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -478,6 +603,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         stream=sys.stderr,
     )
     date = args.date or _today()
+
+    if args.stage == "validate":
+        stage_validate(
+            settings=settings,
+            leaderboard=args.leaderboard,
+            scorer=_scorer(not args.no_faithfulness),
+        )
+        return 0
+
+    if args.stage == "decide":
+        return stage_decide(
+            settings=settings, date=date, commit_sha=args.commit, runner=args.runner
+        )
 
     if args.stage in ("plan", "run"):
         plan = stage_plan(date, settings=settings)
