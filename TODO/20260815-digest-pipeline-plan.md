@@ -141,7 +141,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 6 | Summarize worker | 1, 2, 5, 15 | C | LANDED (determinism oracle needs a real model run - folds into row 7) | main | direct | - |
 | 11 | Pages eval dashboard | 4 | C | LANDED (operator surface, states its own denominator) | main | direct | - |
 | 19 | Build-time embeddings in the day payload | 1, 15 | C | LANDED (384-dim int8 in the day payload; one ONNX file shared by runner and browser) | main | direct | - |
-| 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | PENDING | - | - | - |
+| 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | RULE LANDED (19 tests); waiting on the runner's own scores | main | direct | - |
 | 8 | Route worker + deterministic renderers | 6, 7 | E | LANDED (chart + diagram; the model picks an index and never writes a number) | main | direct | - |
 | 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | LANDED (per-domain alerts; weekly workflow reads the ledger) | main | direct | - |
 | 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
@@ -167,7 +167,7 @@ listed here honestly, with what each one is actually waiting on.
 
 | Row | State | Waiting on |
 | --- | --- | --- |
-| 7 - Model validation gate | **BLOCKED, by design** | The weights on a real runner. Its decision rule compares candidate models end to end through our own prompt and extraction, and a laptop measurement would not be the thing it claims to measure. This is an ESCALATE row and it stays one. |
+| 7 - Model validation gate | **RULE LANDED, measurement outstanding** | The weights on a real runner. The rule that will judge the result is written, config-driven and covered by 19 tests, so nothing about the decision is still up for argument - only the numbers are missing. A laptop measurement would not be the thing this claims to measure. It stays an ESCALATE row: the verdict pauses rather than switching. |
 | 9 - Image renderer | **BLOCKED, by design** | A measurement that has never run. Row 9 is gated on whether images fit the published budget at all, and section 0.3 says the answer decides between a 4-month wall and a 5-year one. Guessing here is exactly what Holy Law #10 forbids. |
 | 23 - Browser chat SLM | **BLOCKED, by design** | Its ESCALATE trigger on any single model file over GitHub's 100 MB hard limit. Rows 20 and 21 are now clear, so this is the only remaining gate - and rows 20/21 also showed what shipping one would cost: the search encoder alone is 43 MB. |
 
