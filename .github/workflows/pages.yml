@@ -54,7 +54,12 @@ jobs:
           echo "site bytes: $(du -sb build | cut -f1)"
           echo "site files: $(find build -type f | wc -l)"
 
+      # enablement turns Pages on for a repo that has never published. Without
+      # it the first ever deploy fails with a bare "Not Found", which reads like
+      # a broken workflow rather than an unset repository switch.
       - uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: frontend/build
