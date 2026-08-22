@@ -97,6 +97,35 @@ Committing the scores rather than deriving them is what makes a claim about last
 
 **An item whose inputs did not change writes no row at all.** A re-run that changed nothing measured nothing, and a ledger padded with re-observations of the same summary makes every trend a function of how often the job ran. What counts as unchanged is the pipeline fingerprint ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)), which is stamped on every row so a trend can be attributed to the inputs that produced it.
 
+## Choosing the model is also a measurement
+
+A published leaderboard ranks models against its own prompt, its own extraction
+and its own corpus. Three variables sit between that number and ours, so the
+ranking is a better prior than a guess and it is not evidence about this
+pipeline. The pick is therefore re-derived here, against our golden set, and the
+rule that judges it carries numbers rather than adjectives.
+
+| Condition | Verdict |
+| --- | --- |
+| The incumbent measures more than `validation_drop_max` (0.10) below its leaderboard number | `rescore_candidates` - the ranking was not describing us, so score the others too |
+| A challenger beats the incumbent by at least `validation_switch_margin` (0.05) on our corpus | `switch_and_pause` |
+| Neither | `confirmed` |
+
+Three things about this are deliberate:
+
+- **A mean over three articles is not a mean.** A candidate scored on fewer than
+  `validation_articles` is ignored, on both sides: an undersampled challenger
+  cannot win and an undersampled incumbent cannot be confirmed.
+- **Better is not enough.** A model swap changes a persisted contract and
+  re-goldens every fixture, so a challenger that is merely ahead changes
+  nothing. It has to be ahead by the margin.
+- **The rule never applies a switch.** It returns `switch_and_pause` and stops.
+  That pause is the whole point of the gate.
+
+The ledger records every candidate rather than only the winner, because a ledger
+holding only the winner cannot answer the question someone asks six months
+later: was the runner-up close?
+
 ## See also
 
 - [pipeline-loop.md](pipeline-loop.md) - where the Evaluate stage sits.
