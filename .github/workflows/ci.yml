@@ -81,3 +81,25 @@ jobs:
       - name: Build the site
         working-directory: frontend
         run: npm run build
+
+      # The on-device encoder must stay behind a dynamic import. A static import
+      # would put a multi-megabyte library on every reader's first load, and
+      # nothing about that edit looks wrong in review.
+      - name: Bundle gate - no encoder on the first-load path
+        working-directory: frontend
+        run: npm run bundle-gate
+
+      # The oracle for the assist row: delete the whole model directory, build,
+      # and the digest must be untouched. If it degrades at all, the feature is
+      # on the critical path and the row has failed.
+      - name: Model-absent gate - the digest does not depend on any of it
+        working-directory: frontend
+        run: |
+          set -euo pipefail
+          mv static/assist ../assist-parked
+          npm run build
+          test -s build/archive/index.html
+          test ! -d build/assist
+          grep -q 'Archive' build/archive/index.html
+          mv ../assist-parked static/assist
+          echo "the digest renders complete with no model directory."

@@ -83,6 +83,89 @@
           "published": 0
         }
       ]
+    },
+    {
+      "commit_sha": "0000000000000000000000000000000000000000",
+      "completed_at": "2026-08-22T08:49:17Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "496511a0411d4578d4eb1f11d24560d700181eee0951417154c2edd980471043"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "84240613e0b4d2cb84eee37f55b0aa312169dabe4be564e43c0ab4befa1a74be"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "99a848ee9536552fee46831851e213df303a5f4ab278879fe414381345cb9f1f"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 1,
+      "items_planned": 5,
+      "items_skipped": 0,
+      "items_succeeded": 4,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "sha256": null
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 2,
+      "note": null,
+      "pipeline_fingerprints": [
+        "3090231ddecd1ea99f053ebdd59456210f800c6d246fa6632f157afb58321513"
+      ],
+      "run_id": "2026-08-21-2",
+      "runner": "local",
+      "site_bytes": 13595,
+      "site_files": 2,
+      "source_list_stale": false,
+      "started_at": "2026-08-21T20:09:00Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 5,
+          "published": 4
+        },
+        {
+          "below_feed_floor": true,
+          "id": "energy",
+          "planned": 0,
+          "published": 0
+        },
+        {
+          "below_feed_floor": true,
+          "id": "business-economy",
+          "planned": 0,
+          "published": 0
+        },
+        {
+          "below_feed_floor": true,
+          "id": "world",
+          "planned": 0,
+          "published": 0
+        },
+        {
+          "below_feed_floor": true,
+          "id": "india",
+          "planned": 0,
+          "published": 0
+        }
+      ]
     }
   ],
   "version": "2026-08-21T02:00"

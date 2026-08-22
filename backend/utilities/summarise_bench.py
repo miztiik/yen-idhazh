@@ -27,7 +27,7 @@ class Throughput:
     model: str
     threads: int
     prefill: dict[int, tuple[float, float]]  # n_prompt -> (tok/s, stddev)
-    decode: tuple[float, float] | None       # (tok/s, stddev)
+    decode: tuple[float, float] | None  # (tok/s, stddev)
 
 
 def load_runs(path: Path) -> list[dict[str, Any]]:
@@ -96,8 +96,7 @@ def report(tps: list[Throughput], n_urls: int, parallel: int) -> None:
         if tp.decode:
             print(f"  decode  tok/s : {tp.decode[0]:.2f} +/- {tp.decode[1]:.2f}")
         print(
-            f"  {'bucket':<8} {'in_tok':>7} {'out_tok':>8} "
-            f"{'best':>8} {'typical':>9} {'worst':>8}"
+            f"  {'bucket':<8} {'in_tok':>7} {'out_tok':>8} {'best':>8} {'typical':>9} {'worst':>8}"
         )
 
         blended = 0.0

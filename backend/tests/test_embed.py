@@ -89,11 +89,16 @@ class TestQuantisation:
 
 class TestEncoder:
     def test_the_committed_model_is_the_one_the_browser_fetches(self) -> None:
-        """One artifact, two runtimes. Two copies would drift the day one is updated."""
+        """One artifact, two runtimes. Two copies would drift the day one is updated.
+
+        It has to be under `static/`, because that is the only directory copied
+        into the served bundle. Under `public/` the runner still finds it and
+        every browser gets a 404 - which is exactly what happened.
+        """
         assert (
             (REPO_ROOT / ONNX_RELPATH)
             .as_posix()
-            .startswith((REPO_ROOT / "frontend/public").as_posix())
+            .startswith((REPO_ROOT / "frontend/static").as_posix())
         )
 
     def test_it_returns_one_unit_vector_per_input(self, embedder: Embedder) -> None:

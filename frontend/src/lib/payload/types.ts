@@ -50,6 +50,13 @@ export interface DigestVerticalRef {
 	count: number;
 }
 
+export interface DigestEmbeddings {
+	model_id: string;
+	dimensions: number;
+	dtype: 'int8';
+	vectors: Record<string, string>;
+}
+
 export interface DigestDay {
 	version: string;
 	date: string;
@@ -61,4 +68,5 @@ export interface DigestDay {
 	runs: DigestRunRef[];
 	verticals: DigestVerticalRef[];
 	items: DigestItem[];
+	embeddings: DigestEmbeddings | null;
 }
