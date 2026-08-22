@@ -150,10 +150,10 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 14 | Retention job + site-budget alarm | 13 | H | LANDED (alarm on; prune disabled, dry-run, fused) | main | direct | - |
 | 16 | Read-state, new-arrivals block and pagination | 13 | H | LANDED (reader-independence oracle asserted in a browser) | main | direct | - |
 | 17 | Icon sprite + registry allowlist | 13 | H | DESCOPED (build-time monogram; no per-publisher artwork) | main | direct | - |
-| 18 | On-device assist enabler (no feature) | 13 | H | PARTIAL (encoder committed and served same-origin; no loader, no CSP, no bundle gate yet) | main | direct | - |
+| 18 | On-device assist enabler (no feature) | 13 | H | LANDED (same-origin encoder, CSP, bundle gate, model-absent oracle) | main | direct | - |
 | 22 | Read-aloud via Web Speech API | 13 | H | LANDED (browser voice; absent where unsupported) | main | direct | - |
-| 20 | Browser semantic search | 18, 19 | I | PENDING | - | - | - |
-| 21 | Browser-runtime injection canaries | 18 | I | PENDING | - | - | - |
+| 20 | Browser semantic search | 18, 19 | I | LANDED (top-3 recall 0.80 on five hand-labelled queries, measured 2026-08-22) | main | direct | - |
+| 21 | Browser-runtime injection canaries | 18 | I | LANDED (eight canaries on the published surface, gated in CI) | main | direct | - |
 | 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | J | PENDING | - | - | - |
 
 ---
@@ -169,17 +169,22 @@ listed here honestly, with what each one is actually waiting on.
 | --- | --- | --- |
 | 7 - Model validation gate | **BLOCKED, by design** | The weights on a real runner. Its decision rule compares candidate models end to end through our own prompt and extraction, and a laptop measurement would not be the thing it claims to measure. This is an ESCALATE row and it stays one. |
 | 9 - Image renderer | **BLOCKED, by design** | A measurement that has never run. Row 9 is gated on whether images fit the published budget at all, and section 0.3 says the answer decides between a 4-month wall and a 5-year one. Guessing here is exactly what Holy Law #10 forbids. |
-| 18 - Assist enabler | **PARTIAL** | The encoder is committed and served same-origin, and the day payload carries its vectors. Still missing: the loader, the `connect-src 'self'` CSP, and the CI gate that fails the build if an assist symbol reaches the first-load bundle. |
-| 20 - Browser semantic search | **NOT BUILT** | Row 18's loader and bundle gate, plus a hand-labelled query set. Without labelled queries the row can claim to run but not to work, and shipping it on that basis is what its own acceptance gate forbids. |
-| 21 - Browser-runtime canaries | **NOT BUILT** | Row 20's surface to attack, and Playwright, which the repository does not yet have. |
-| 23 - Browser chat SLM | **BLOCKED, by design** | Rows 20 and 21 first, and its own ESCALATE trigger on any single model file over GitHub's 100 MB hard limit. |
+| 23 - Browser chat SLM | **BLOCKED, by design** | Its ESCALATE trigger on any single model file over GitHub's 100 MB hard limit. Rows 20 and 21 are now clear, so this is the only remaining gate - and rows 20/21 also showed what shipping one would cost: the search encoder alone is 43 MB. |
 
 ### What changed on 2026-08-22
 
 - **Row 8 landed.** Charts and diagrams render with no Node and no headless browser. Five defects were found by running the real 4B rather than by reading the code; they are recorded in [`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md).
-- **Row 19 landed.** The day payload carries 384-dimension int8 vectors, produced by the same ONNX file the browser will load.
+- **Row 19 landed.** The day payload carries 384-dimension int8 vectors, produced by the same ONNX file the browser loads.
+- **Rows 18, 20 and 21 landed.** On-device search, a CSP, a first-load bundle gate, the model-absent oracle, and eight injection canaries asserted on the published surface. All of it runs in CI on `ubuntu-latest`.
 - **The source list is settled.** Every configured and candidate feed was fetched and parsed. All five verticals are active: ai 38 live feeds, world 27, india 27, energy 24, business-economy 22. The feed floor is now seven times the daily cap rather than a flat 25 borrowed from prior art.
 - **Everything is pushed, and Pages is enabled.** The first deploy had failed on a repository switch nobody had set; `configure-pages` now sets it itself.
+
+### Numbers worth keeping honest
+
+| What | Measured | Where it hurts |
+| --- | --- | --- |
+| On-device search download | 43 MB (2026-08-22) | Intended 33. transformers.js v3 requests the WebGPU-capable ONNX binary by name and three redirection attempts all 404ed. The extra 10 MB was paid rather than dropping the feature. |
+| Top-3 retrieval recall | 0.80 on 5 labelled queries (2026-08-22) | Exactly at the bar. One more miss fails the build, which is the point - but five queries is a small set and the number will move when the set grows. |
 
 
 ---

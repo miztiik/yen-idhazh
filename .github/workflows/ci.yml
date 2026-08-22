@@ -142,6 +142,7 @@ jobs:
           name: playwright-traces
           path: frontend/test-results/
           retention-days: 7
+          if-no-files-found: ignore
 
       # The canary build is the last thing in the directory. Leaving it there
       # would let a later step, or a careless copy, publish hostile fixtures.
