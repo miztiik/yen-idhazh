@@ -121,11 +121,13 @@ def to_digest_visual(route: Route | None) -> DigestVisual | None:
 
 
 def source_names(sources: Sources) -> dict[str, str]:
-    return {feed.id: feed.title for feed in sources.feeds}
+    """Retired feeds included: a published id must still resolve to a name."""
+    return {feed.id: feed.title for feed in sources.known_feeds()}
 
 
 def source_kinds(sources: Sources) -> dict[str, SourceKind]:
-    return {feed.id: feed.kind for feed in sources.feeds}
+    """Retired feeds included. Missing here means published as `reporting`."""
+    return {feed.id: feed.kind for feed in sources.known_feeds()}
 
 
 def vertical_names(taxonomy: Taxonomy) -> dict[str, str]:

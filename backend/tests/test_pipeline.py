@@ -22,8 +22,9 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceKind
+from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
 from idhazh.evals.score import band, counterweight_band, to_eval_row
@@ -245,6 +246,40 @@ def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> N
 
     monkeypatch.setattr("idhazh.evals.hhem.HhemScorer.load", explode)
     assert cli._scorer(enabled=True) is None
+
+
+def test_a_retired_feed_still_labels_the_items_it_published() -> None:
+    """Splitting the feed lists must not cost an older item its name or its kind.
+
+    A published item carries a `source_id` forever, and a feed can retire
+    between the plan and the assemble of the same day - four times more often
+    once the schedule moves to every six hours. Both label maps read the union,
+    so the maps that would otherwise fall back to the raw slug and to
+    `reporting` never get the chance.
+
+    The fallback is the failure: publishing an announcement as reporting is the
+    one thing `kind` was added to prevent.
+    """
+    sources = config.load(CONFIG_DIR).sources.model_copy(
+        update={
+            "feeds": [],
+            "retired": [
+                FeedDef(
+                    id="defunct-daily",
+                    vertical="ai",
+                    title="Defunct Daily",
+                    url="https://defunct.example.com/rss",
+                    tier=SourceTier.INSTITUTION,
+                    kind=SourceKind.ANNOUNCEMENT,
+                    status=LifecycleStatus.RETIRED,
+                    retired_on="2026-07-04",
+                    weight=0.0,
+                )
+            ],
+        }
+    )
+    assert assemble.source_names(sources)["defunct-daily"] == "Defunct Daily"
+    assert assemble.source_kinds(sources)["defunct-daily"] is SourceKind.ANNOUNCEMENT
 
 
 def test_a_day_publishes_even_when_items_failed() -> None:

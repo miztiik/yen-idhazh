@@ -149,6 +149,7 @@ def settings_for(
     *,
     salience: list[SalienceFeedDef] | None = None,
     verticals: list[VerticalDef] | None = None,
+    retired: list[FeedDef] | None = None,
 ) -> config.Settings:
     """The committed config, with the source list and the verticals swapped out.
 
@@ -159,7 +160,12 @@ def settings_for(
     base = config.load()
     return dataclasses.replace(
         base,
-        sources=Sources(version=Sources.schema_version(), feeds=feeds, salience=salience or []),
+        sources=Sources(
+            version=Sources.schema_version(),
+            feeds=feeds,
+            salience=salience or [],
+            retired=retired or [],
+        ),
         taxonomy=base.taxonomy.model_copy(update={"verticals": verticals or [AI]}),
     )
 
@@ -169,11 +175,15 @@ def plan(
     *,
     salience: list[SalienceFeedDef] | None = None,
     verticals: list[VerticalDef] | None = None,
+    retired: list[FeedDef] | None = None,
     fetcher: cli.Fetcher | None = None,
     now: str = NOW,
     cap_override: int | None = None,
 ) -> RunPlan:
-    settings = settings_for(feeds, salience=salience, verticals=verticals)
+    settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
+    # A retired feed's address is deliberately left out of the fetcher's table,
+    # so reading one is an AssertionError rather than something to remember to
+    # assert against.
     urls = [feed.url for feed in feeds] + [feed.url for feed in (salience or [])]
     return cli.stage_plan(
         DATE,
@@ -254,39 +264,47 @@ def test_the_plan_stage_reads_the_feed_list_and_nothing_else() -> None:
     assert built.feeds_read == 3
 
 
-# --- retired feeds, as they behave today -------------------------------------
+# --- retired feeds -----------------------------------------------------------
 
 
-def test_a_retired_feed_is_still_fetched_and_still_planned() -> None:
-    """Today's behaviour, and the defect item 2 fixes.
+def retire(feed: FeedDef) -> FeedDef:
+    return feed.model_copy(update={"status": LifecycleStatus.RETIRED, "retired_on": "2026-08-01"})
 
-    `stage_plan` loops `sources.feeds`, which carries every entry ever added.
-    `discover.live` - the only thing that honours `retired_on` - is consulted
-    separately, and only for the feed floor. So a retired feed costs a request
-    every run AND its articles reach a reader. Item 2 moves retired entries to
-    their own key, which makes the live list lean and the filtering unnecessary.
 
-    Three live feeds keep the vertical over its floor, so what this measures is
-    the retired feed and nothing else.
+def test_a_retired_feed_is_never_fetched_and_never_reaches_a_reader() -> None:
+    """Item 2. Retirement is enforced by the shape of the config, not by a filter.
+
+    `stage_plan` loops `sources.feeds`, and a retired entry is no longer in it.
+    That is the whole mechanism: there is nothing to remember to filter, and
+    nothing that can be forgotten.
+
+    The retired feed's address is absent from the fetcher's table on purpose.
+    `fetcher_over` raises on an address no fixture covers, so "the request was
+    never made" is the harness rather than an assertion.
     """
-    retired = LAB.model_copy(update={"status": LifecycleStatus.RETIRED, "retired_on": "2026-08-01"})
-    built = plan([retired, TRADE, COMMUNITY, NOTICES])
-    assert built.feeds_read == 4, "a retired feed still costs a request"
-    assert built.verticals[0].live_feeds == 3, "but it is not one of the live three"
-    assert any(item.source_id == "lab-blog" for item in built.items), (
-        "and a retired feed's article still reaches the page"
-    )
+    built = plan([TRADE, COMMUNITY, NOTICES], retired=[retire(LAB)])
+    assert built.feeds_read == 3, "a retired feed costs no request"
+    assert built.verticals[0].live_feeds == 3
+    assert built.items, "the live feeds still made a day"
+    assert not any(item.source_id == "lab-blog" for item in built.items)
 
 
 def test_a_retired_feed_does_not_count_toward_the_feed_floor() -> None:
-    """The other half of the same split: read for its articles, ignored for the floor."""
-    retired = COMMUNITY.model_copy(
-        update={"status": LifecycleStatus.RETIRED, "retired_on": "2026-08-01"}
-    )
-    built = plan([LAB, TRADE, retired])
-    assert built.verticals[0].live_feeds == 2
-    assert built.verticals[0].below_feed_floor, "two live feeds is under the floor of three"
-    assert built.items == [], "and a vertical under its floor plans nothing"
+    """A tombstone is not a source, even when the vertical needs one.
+
+    The same feed, live, is the difference between a desk that renders and one
+    that goes dark. Retiring it is a decision with a visible cost, not a piece
+    of bookkeeping.
+    """
+    dark = plan([LAB, TRADE], retired=[retire(COMMUNITY)])
+    assert dark.verticals[0].live_feeds == 2
+    assert dark.verticals[0].below_feed_floor
+    assert dark.items == [], "a vertical under its floor plans nothing"
+
+    lit = plan([LAB, TRADE, COMMUNITY])
+    assert lit.verticals[0].live_feeds == 3
+    assert not lit.verticals[0].below_feed_floor
+    assert lit.items, "the same feed, live, is what the floor was waiting for"
 
 
 # --- the vertical floor ------------------------------------------------------

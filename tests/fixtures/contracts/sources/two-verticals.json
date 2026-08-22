@@ -32,7 +32,9 @@
       "url": "https://newsroom.example-grid.com/rss",
       "vertical": "energy",
       "weight": 1.0
-    },
+    }
+  ],
+  "retired": [
     {
       "id": "example-defunct-daily",
       "kind": "reporting",
@@ -54,5 +56,5 @@
       "url": "https://hnrss.org/frontpage"
     }
   ],
-  "version": "2026-08-22T09:00"
+  "version": "2026-08-22T10:00"
 }

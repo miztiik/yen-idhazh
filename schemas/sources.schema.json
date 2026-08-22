@@ -154,6 +154,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Split retired feeds out of feeds into their own list.",
+      "version": "2026-08-22T10:00",
+      "why": "A retired feed sat in the list Collect loops, so it cost a request every run and its articles still reached a reader - the retirement was recorded and not honoured. Two lists make the live one lean and the rule structural rather than a filter every caller has to remember."
+    },
+    {
       "change": "Removed weight from a salience feed.",
       "version": "2026-08-22T09:00",
       "why": "Nothing read it. A vote is worth collect.front_page_bonus - one number for every aggregator - so a per-feed weight was a knob that looked tunable and moved nothing."
@@ -172,10 +177,19 @@
   "description": "`config/sources.json` - what the Collect stage consults.",
   "properties": {
     "feeds": {
+      "description": "The live list. Collect loops exactly this, so nothing retired belongs here.",
       "items": {
         "$ref": "#/$defs/FeedDef"
       },
       "title": "Feeds",
+      "type": "array"
+    },
+    "retired": {
+      "description": "Tombstones. Never fetched, never ranked, still able to name an id.",
+      "items": {
+        "$ref": "#/$defs/FeedDef"
+      },
+      "title": "Retired",
       "type": "array"
     },
     "salience": {
@@ -186,7 +200,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-22T09:00",
+      "default": "2026-08-22T10:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -198,5 +212,5 @@
   ],
   "title": "Sources",
   "type": "object",
-  "version": "2026-08-22T09:00"
+  "version": "2026-08-22T10:00"
 }

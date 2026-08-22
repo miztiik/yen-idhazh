@@ -139,10 +139,11 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
 
 
 def test_every_configured_feed_names_a_declared_vertical() -> None:
+    """Retired feeds too - a tombstone still labels published items by vertical."""
     taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
     sources = Sources.from_json(read_text(CONFIG_DIR / "sources.json"))
     declared = {vertical.id for vertical in taxonomy.verticals}
-    for feed in sources.feeds:
+    for feed in sources.known_feeds():
         assert feed.vertical in declared, f"feed {feed.id} names an undeclared vertical"
 
 
@@ -262,6 +263,99 @@ def test_a_retired_entry_must_carry_its_date() -> None:
     payload["verticals"][2]["retired_on"] = None
     with pytest.raises(ValueError, match="retired_on"):
         Taxonomy.model_validate(payload)
+
+
+# --- Two feed lists, and the line between them ------------------------------
+
+
+def sources_payload() -> dict[str, Any]:
+    payload: dict[str, Any] = json.loads(
+        read_text(CONTRACT_FIXTURES_DIR / "sources" / "two-verticals.json")
+    )
+    return payload
+
+
+def test_a_retired_feed_cannot_sit_in_the_live_list() -> None:
+    """The split is only real if the shape refuses the old arrangement.
+
+    `feeds` is the list Collect loops. A retired entry there would cost a
+    request every run and reach a reader, which is the exact failure the split
+    exists to end - so it is a load error, not a filter someone remembers.
+    """
+    payload = sources_payload()
+    payload["feeds"].append(payload["retired"].pop())
+    with pytest.raises(ValueError, match="belongs in `retired`"):
+        Sources.model_validate(payload)
+
+
+def test_a_live_feed_cannot_hide_on_the_tombstone_shelf() -> None:
+    """The other direction, which is the quieter bug.
+
+    A feed parked in `retired` with an active status is never fetched, and
+    nothing says so. It just stops producing, and the config still reads as
+    though it were being consulted.
+    """
+    payload = sources_payload()
+    payload["retired"][0]["status"] = "active"
+    payload["retired"][0]["retired_on"] = None
+    with pytest.raises(ValueError, match="without a retired status"):
+        Sources.model_validate(payload)
+
+
+def test_yesterdays_sources_file_fails_loudly_and_names_the_key() -> None:
+    """The migration ruling, pinned.
+
+    `config/sources.json` is written by a person in the same commit as the
+    model, so there is no read-side migration and no silent coercion at the
+    boundary. What replaces it is a load error that names the key the entry has
+    to move to - which is only worth relying on if it is tested.
+    """
+    legacy = sources_payload()
+    legacy["feeds"].extend(legacy.pop("retired"))
+    with pytest.raises(ValueError, match="`retired`"):
+        Sources.model_validate(legacy)
+
+
+def test_an_id_is_unique_across_all_three_lists() -> None:
+    """A duplicate id is what makes a published `source_id` ambiguous.
+
+    Checking `feeds` alone would have let a tombstone shadow a live feed - two
+    titles and two kinds for one id, with the winner decided by list order.
+    """
+    payload = sources_payload()
+    payload["retired"][0]["id"] = payload["feeds"][0]["id"]
+    with pytest.raises(ValueError, match="distinct"):
+        Sources.model_validate(payload)
+
+    payload = sources_payload()
+    payload["salience"][0]["id"] = payload["retired"][0]["id"]
+    with pytest.raises(ValueError, match="distinct"):
+        Sources.model_validate(payload)
+
+
+def test_an_address_is_not_read_twice_under_two_ids() -> None:
+    """Retiring a feed and re-adding it under a new id is a real editing move.
+
+    Left unchecked it doubles every request to that host and carries the same
+    story twice, which reads as corroboration.
+    """
+    payload = sources_payload()
+    payload["retired"][0]["url"] = payload["feeds"][0]["url"]
+    with pytest.raises(ValueError, match="urls must be distinct"):
+        Sources.model_validate(payload)
+
+
+def test_a_tombstone_still_answers_for_the_items_it_published() -> None:
+    """`known_feeds` is the union both label maps read (`assemble.py`).
+
+    An item published before a feed retired keeps its `source_id` forever. If
+    the id stops resolving, the page shows the raw slug and the item is
+    republished as `reporting` - relabelling an announcement as journalism.
+    """
+    sources = Sources.from_json(read_text(CONTRACT_FIXTURES_DIR / "sources" / "two-verticals.json"))
+    known = {feed.id for feed in sources.known_feeds()}
+    assert known == {feed.id for feed in sources.feeds} | {feed.id for feed in sources.retired}
+    assert "example-defunct-daily" in known
 
 
 def test_the_lens_vocabulary_is_closed() -> None:
