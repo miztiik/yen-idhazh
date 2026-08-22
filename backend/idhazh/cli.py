@@ -24,14 +24,16 @@ from pathlib import Path
 from typing import Final
 from urllib.parse import urlsplit
 
-from idhazh import assemble, config, discover, extract, fetch, rank, route, seen, summarize
+from idhazh import assemble, config, discover, extract, fetch, ledger, rank, route, summarize
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.validation_row import ValidationVerdict
@@ -47,7 +49,7 @@ LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
-STATE_ROOT: Final = config.REPO_ROOT / seen.STATE_DIRNAME
+STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 
 
@@ -113,11 +115,13 @@ def stage_plan(
 ) -> RunPlan:
     """Read every live feed, rank the pool, and write down what it saw. No model.
 
-    Two committed ledgers bound the day. The seen store gives an article whose
+    Three committed ledgers bound the day. The seen store gives an article whose
     feed carried no date a real age - first sight is the only honest one there
     is. The published store is what stops a repeat, which a freshness rule
     cannot do on its own: an article published at 23:00 is seven hours old at
-    06:00 the next morning.
+    06:00 the next morning. The health store records what every feed did, so a
+    source that has gone quiet can be quarantined from evidence instead of from
+    somebody's memory.
 
     Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
     guard against a mis-parsed feed, not a reading budget.
@@ -130,15 +134,18 @@ def stage_plan(
     run_id = f"{date}-{run_n if run_n is not None else _next_run_n(date)}"
 
     candidates: list[discover.Candidate] = []
+    health: list[FeedHealthRow] = []
     read = failed = 0
     for feed in settings.sources.feeds:
         result = read_url(feed.url)
+        found = discover.candidates_from_feed(feed, result.body) if result.ok else []
+        health.append(_health_row(feed, result, found=len(found), at=generated_at, run_id=run_id))
         if not result.ok:
             failed += 1
             LOG.warning("feed unavailable id=%s reason=%s", feed.id, result.detail)
             continue
         read += 1
-        candidates.extend(discover.candidates_from_feed(feed, result.body))
+        candidates.extend(found)
 
     front_page: set[str] = set()
     for salience in settings.sources.salience:
@@ -146,11 +153,12 @@ def stage_plan(
         if result.ok:
             front_page |= discover.salience_urls(result.body)
 
-    first_seen = seen.load_seen(state, today=date, within_days=collect.seen_window_days)
-    landed = seen.append_seen(
+    first_seen = ledger.load_seen(state, today=date, within_days=collect.seen_window_days)
+    landed = ledger.append_seen(
         state, date, _first_sights(candidates, first_seen, generated_at, run_id)
     )
-    already_published = frozenset(seen.load_published(state))
+    ledger.append_health(state, date, health)
+    already_published = frozenset(ledger.load_published(state))
 
     watchlist_keys: frozenset[str] = frozenset()
     verticals = []
@@ -176,7 +184,7 @@ def stage_plan(
     verticals = [
         summary.model_copy(update={"planned": counts.get(summary.id, 0)}) for summary in verticals
     ]
-    LOG.info("first sights recorded new=%s file=%s", landed, seen.seen_relpath(date))
+    LOG.info("first sights recorded new=%s file=%s", landed, ledger.seen_relpath(date))
 
     return RunPlan(
         version=RunPlan.schema_version(),
@@ -187,6 +195,33 @@ def stage_plan(
         feeds_failed=failed,
         verticals=verticals,
         items=items,
+    )
+
+
+def _health_row(
+    feed: FeedDef,
+    result: fetch.FetchResult,
+    *,
+    found: int,
+    at: str,
+    run_id: str,
+) -> FeedHealthRow:
+    """This run's verdict on one feed.
+
+    `detail` is our own sentence about the failure - a status name or an
+    exception class - and never the response body. A feed is a stranger's text
+    and this row lands on a published page (Holy Law #11).
+    """
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=run_id,
+        date=at[:10],
+        feed_id=feed.id,
+        checked_at=at,
+        outcome=result.outcome,
+        status=result.status,
+        items=found,
+        detail=result.detail[:200] if result.detail else None,
     )
 
 
@@ -662,7 +697,7 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
-    published = seen.append_published(STATE_ROOT, _published_rows(day, plan))
+    published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s",
         plan.date,

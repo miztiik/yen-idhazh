@@ -17,6 +17,7 @@ from conftest import FIXTURES_DIR, read_text
 from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.extract import (
@@ -27,7 +28,6 @@ from idhazh.extract import (
     truncate_to_tokens,
 )
 from idhazh.fetch import (
-    FetchOutcome,
     FetchResult,
     address_is_dialable,
     backoff_delays,

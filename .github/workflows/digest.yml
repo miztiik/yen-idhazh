@@ -79,29 +79,29 @@ jobs:
       - name: Plan the day
         run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
 
-      # The plan job is the writer of the sight ledger, so the plan job commits
-      # it - not assemble. A run that dies in the worker still saw what it saw,
+      # The plan job writes the sight and health ledgers, so the plan job commits
+      # them - not assemble. A run that dies in the worker still saw what it saw,
       # and the next run needs that: first sight is the only age an undated
-      # article has, and a source we never recorded is a source we cannot
-      # quarantine. Waiting for a successful publish would lose exactly the
-      # records that matter on a bad day.
+      # article has, and a feed we never recorded is a feed we cannot quarantine.
+      # A bad day is exactly the day worth measuring, so waiting for a successful
+      # publish would lose the records that matter most.
       - name: Commit what the plan saw
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add state/seen
+          git add state/seen state/feed-health
           if git diff --cached --quiet; then
-            echo "no new addresses"
+            echo "nothing new to record"
             exit 0
           fi
-          git commit -m "seen: ${{ steps.decide.outputs.date }}"
+          git commit -m "plan: ${{ steps.decide.outputs.date }}"
           for attempt in 1 2 3; do
             git push && exit 0
             echo "push rejected, rebasing (attempt $attempt)"
             git pull --rebase --autostash origin main
           done
-          echo "could not push the sight ledger after three attempts" >&2
+          echo "could not push what the plan saw after three attempts" >&2
           exit 1
 
       - uses: actions/upload-artifact@v4
