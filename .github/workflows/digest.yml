@@ -130,7 +130,12 @@ jobs:
             | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
           curl -sSL -o llama.tar.gz "$URL"
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
-          find llama -type f -exec cp {} backend/bin/ \;
+          # `cp -a`, not `find -type f`. These builds ship versioned shared
+          # objects as symlinks - libllama-common.so.0 points at the real file -
+          # and `-type f` skips a symlink, so the server died at exec on a
+          # library that had been "copied".
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
           curl -sSL -o "backend/models/${MODEL_FILE}" \
             "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
@@ -147,6 +152,14 @@ jobs:
             curl -sf http://127.0.0.1:8080/health && break
             sleep 5
           done
+          # Assert it, do not hope. Without this the loop simply ends, every
+          # item fails as "model unreachable", and the run publishes an empty
+          # day that looks like a quiet news day.
+          curl -sf http://127.0.0.1:8080/health > /dev/null || {
+            echo "llama-server never became healthy" >&2
+            tail -50 llama-server.log >&2
+            exit 1
+          }
 
       - name: Work the shard
         run: |
@@ -218,7 +231,8 @@ jobs:
             | jq -r '[.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url')
           curl -sSL -o llama.tar.gz "$URL"
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
-          find llama -type f -exec cp {} backend/bin/ \;
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
           curl -sSL -o "backend/models/${ROUTE_FILE}" \
             "https://huggingface.co/${ROUTE_REPO}/resolve/main/${ROUTE_FILE}?download=true"
@@ -235,6 +249,11 @@ jobs:
             curl -sf http://127.0.0.1:8080/health && break
             sleep 5
           done
+          curl -sf http://127.0.0.1:8080/health > /dev/null || {
+            echo "the router never became healthy" >&2
+            tail -50 router.log >&2
+            exit 1
+          }
 
       - name: Route and render
         run: python -m idhazh route --date "${{ needs.plan.outputs.date }}"
