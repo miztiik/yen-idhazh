@@ -172,34 +172,63 @@ Three notes worth keeping:
 
 ## Prompt cache reuse
 
-**PENDING - awaiting the first instrumented `digest` run.**
+**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
+`32648218952`, job `work (3)`. The job log did not name the CPU model or the
+llama.cpp build. It used `Qwen3-8B-Q4_K_M.gguf` through `llama-server` with
+`--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --no-warmup`.
 
-This measures whether `llama-server` reuses the summarizer system prefix across
-items in one worker shard. The log is the instrument. `usage.prompt_tokens`
-reports the full prompt whether the prefix was cached or not, so it cannot answer
-this question.
+The run refutes the suspected context-splitting defect for this build. The log
+said:
 
-The workflow now keeps `llama-server.log` and `router.log` for two days, and
-prints the relevant lines into the job log:
-
-```sh
-grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' llama-server.log
-grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' router.log
+```text
+srv load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
 ```
 
-For three consecutive summarization items in one shard, record:
+Current llama.cpp source names the same quantity `n_ctx_seq`: when `kv_unified`
+is true, `n_ctx_seq = n_ctx`; when it is false, `n_ctx_seq = n_ctx / n_seq_max`.
+This log uses the older `n_ctx_slot` name. The value is still 8192 per slot, so
+the 4201-token worst case fits. This is not a live defect in run `32648218952`.
 
-| Field | Source line | How to read it |
-| --- | --- | --- |
-| `p0` | `kv cache rm [p0, end)` | `0` means a total miss; about `801` means the full system prompt was reused; about `315` means only the shared head was reused. |
-| `N` | `prompt eval time = X ms / N tokens` | The number of tokens actually evaluated for that request. |
-| `n_slots` | `n_slots` | More than one slot may divide the context. |
-| `n_ctx_per_seq` | `n_ctx_per_seq` | Must be at least `4201`, the measured worst-case prompt plus output budget above. |
+The run does **not** settle whether the prompt prefix was reused. The grep
+emitted no `kv cache rm [p0, end)` line. The only emitted instrument was
+`prompt eval time = X ms / N tokens`, and `N` varies with article length and
+band. Because `band_for()` changes the rendered prompt, only the roughly
+315-token head is invariant across all bands. A same-band hit could reuse more,
+but the log did not print the band or article token count beside each timing
+line.
 
-Record the run id, runner CPU, llama.cpp build if the log names it, model file,
-and the spread across the three observations. If `n_slots > 1` makes
-`n_ctx_per_seq < 4201`, report it as a defect: the measured worst case does not
-fit the slot.
+| Slot | Prompt-eval tokens, in task order |
+| --- | --- |
+| 2 | 2441, 580, 654, 781, 862, 621, 738, 1195, 1064, 1883 |
+| 3 | 2485, 2545, 1146, 2284, 1035, 1423, 1945, 850, 373, 1260, 1015, 1131, 440, 1136, 636, 888, 572, 444, 1179, 1426, 485, 1380, 2565, 1687, 607, 730 |
+
+No fixed subtraction of about 315 or 801 tokens is visible within either slot.
+That is evidence that the current log cannot prove reuse, not evidence that a
+cache miss happened. To settle it, log the slot id, item id, band id, rendered
+system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens
+and any llama.cpp reused-prefix field such as `p0` or `n_past`.
+
+| Quantity | Value |
+| --- | --- |
+| Sample | 36 `print_timing` lines from `work (3)` |
+| Prefill throughput | min 29.24 tok/s, max 37.92 tok/s, median 34.23 tok/s |
+| Spread | 8.68 tok/s |
+| 801-token re-prefill cost | 23.4 s median; observed range 21.1-27.4 s |
+| 315-token invariant-head cost | 9.2 s median; observed range 8.3-10.8 s |
+
+This supersedes the derived 66.2 s per 801-token re-prefill above for live
+`digest` runs. That older number came from `llama-bench` on an EPYC 9V74 runner
+and remains useful history. This run measured the actual `digest` path on a
+GitHub-hosted `ubuntu-latest` runner, and it was about 2.8x faster at the median.
+
+The row 9 prize changes. The old arithmetic was `13 x 66.2 s = 14.4 min` of CPU,
+or about 4.4 min wall clock across four shards. This run says `13 x 23.4 s =
+5.1 min` of CPU for a full 801-token prefix, or about 1.3 min wall clock across
+four shards. For the invariant head, the ceiling is `13 x 9.2 s = 2.0 min` of
+CPU, or about 0.5 min wall clock. Row 9 should not reorder the prompt on the old
+66.2 s premise. It should first add the instrumentation above, then run an A/B
+measurement on the runner and keep the change only if the measured wall-clock
+gain pays for the prompt risk.
 
 ## Weights on disk
 
