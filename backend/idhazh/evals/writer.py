@@ -15,6 +15,8 @@ from typing import Final
 
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.validation_row import ValidationRow
+from idhazh.ledger import read_header as _read_header
+from idhazh.ledger import require_matching_header
 
 LEDGER_RELPATH: Final = "state/scores.csv"
 
@@ -25,8 +27,7 @@ def columns() -> tuple[str, ...]:
 
 
 def read_header(path: Path) -> tuple[str, ...]:
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return tuple(next(csv.reader(handle), []))
+    return _read_header(path)
 
 
 def append(path: Path, rows: Iterable[EvalRow]) -> int:
@@ -47,12 +48,7 @@ def append(path: Path, rows: Iterable[EvalRow]) -> int:
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
     if exists:
-        header = read_header(path)
-        if header and header != columns():
-            raise ValueError(
-                f"{path.name} has {len(header)} columns and the contract has "
-                f"{len(columns())}. Migrate the ledger before appending to it."
-            )
+        require_matching_header(path, columns())
     with path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns(), lineterminator="\n")
         if not exists:
