@@ -1,0 +1,321 @@
+{
+  "date": "2026-08-23",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-03": "/wD6/wb+/AP//fn+BPsLAQT4/Pz/BPkJ+QQCA/4DAf4DCQEFAAH49/z18AUG/fcA/g31/QX+AwcL/QD7APD8AwEF9gP89fwEAfv6Cv/3CPv+BPMN//gCAPoG+gUH/PgE+vQFA/4LBPX28AED+gEC+Ar+Cvz3CQMM/AIH/QgBAQD0+QYBBPv9//gCAA37Dgb9+wv9AQH8AgUGBAIJCgH+/ggF+wUA+AUA/P8AAPYE9/4GAgP+DwL59f7pBQP7BQED/QcF/wb7/QQMAQT6/wQDAv/0BPsEBQH9+QXyCvgSBQABAP4GBwL15gwF9PwH/QkBCv8DAPkH7P78A/78APkC7wT5/f4E+wADBPn1A/sJAAP7/P4I/fr4AAr/AAkEBwb/A/cK9f0BAv4DAf4A+fz9A/8DBwYABAEM/ATyAPcB+wABAgYC//0CDAcCCPrx//8FCQn+BP8G+f0IAP8LBPsC+gIABf8ECAT/AAv6A/oE8AADAfv5AwcM/QH/CQUL/fsF",
+      "ai-04": "+wH/CQv+BAP+Bf33AgUCAwf//vv/CwgCAQMB9v4NBgIIBvgC/Ab9Bf/2/QcD//cCAgXyAgUHAAEB/ff6AfIF/g0F/gH6AfkIAQsBDfoACPr6+QkNDv4IBvwA+PwKBv4L9QAEAPUF9wYC+QT8B/8GAQoDBAD+EQkGA/0CAggN/wAEAQ0BA/zx+QP+/fz2DwX8+QQE9gT1/wL/DgEGAv32/QH/+vwBAQAKAwQG/v/9+QQE/PYADPn2+vf0A/3/CAACAAYG//4MBw0B+/7/AgD69f8F9wEB9vn97vn4BQAE8wD2AwP+Cff49QYGCPID/fwJ9vr3+QYC+gIABwUJBPf4/fz5/QcD+vwGCQPq/QH9/wb+/QT++//6/Pj/AP78/wgF+wADAAEH/wH/BAn5+QL8/QX1Bv0BBQMF/gv2BPcI7wAK+wr/Af72BwD8B/r+/QT//Ab6+AYAAP8O+PwC+gcABQcDBP0G/Pv8+AnzBgnuAAAH/wH6CgUEBgD/AvcR/P39",
+      "ai-05": "+/j0BQX6/PgC+/UB9//5+v8H+/329/oACgsAAgT8AAwBBP0IAAL8/AgAAwAG+f8B/QP6A/cH+gMJ9gj+C/gFB/8IDAL9/wAC9v78CgL4BP//AQH+Cv8IAQj6AgwK//7+APoFCQEBAgv4//8E/f0CEP///Af8+/4KAf4EAwQH9QD++gn6BAX7AgAE/Rn+CAX5AQkA8gH4APz3AwD7BQT9/f4F/QL/+AX/9gT/6/UG/QD/+/z+Bwb4AQX7BQv0+vUC9QoHDv8M+wcAAAr9AQn6+f0BCvv8//v69/D1Aw8GAQD+9wQIBvr++gb9//wAAwf6/wD8+fv+BPwEAQT2BQP5//sGBQkA/gD6CQz6/AYHAAj//f4IBQf9BQUC+P78/QH9//j99vwFAQH9/vYBBPAABAT+BQUBBwEFDQL2AgEI9gD6BPsEAfsDBPz8GvLy/fj//AL+/f8FBgP89goGDPz1+gwEAAkECwUJA/7//v4K9PwM//78AA0BBPMCCPcC8PwB",
+      "energy-03": "+PwNAvj17Af7/fMJ/vcCCQT8/wIKAf4B/wL2AwX9/gwA9wMD9wQFCPn2BQn5+gT/AvoDBPYCBPv1+P4FBQUB9fv8/fj4/AMK+/UDBAoAAfAHBgTt8/wDBgACAv7t/wcI/v7+/AsF+/oFBv8L//4DAAIA+/34/P3/+gP+BwMLAgD+/vv/+Ab7/ff9/AMAAP/rAgYE/Pj6+gMKAQQA7/wFAAP1BvcNAvv++AoAAP4C/wv5/v0I+AMDBAP9Bwb+DfgGAQACCQoNBvcBAwMBBgYHCAAEA/UHBPP8CP72+f8A/gADB/n/BfwICAP6AAsF+fv2+Pr3AvsD+Af9BPf+8v3/AgAB+gD8AwIFDAML/fkBB/wHBfn8+gL+9wMC/AQCBQ7/BAX5/AkH/QL6/QUE+wD/C/v//wP/AgP7BQT7/vT4/AD4CAQLCf4EFQP7BP8EAQT+BP4C8QEDCQP//gD//wEQAPkDEf33Cf0I+ggFA/0F9AcF/Aj3AwAOBP4G9P39+gAA",
+      "india-01": "Af4H/wQC+wn2+vr7//8H+gD+/Pj//gf8AwcGAAb//gb+BgQMAAkJ9hP0AfT+/f8A9PgI+/oAAPUNAQEA+gT9BwT/AQH98/39+v70AQIIA/oKBAgA8wP//P75AwgKDAIE+foD+gII+Pb1/Pr+Af77AwD19v74/vz48/z9+gIB/QDu+wn6+gMA8QH8/wT9AwP4/AMEAPX+BAEEDA4GB/0HB//88wT6/fcD+gD7A/4JAP34BPsL/wQI+gj5B/kBBgAKAv8G/QED/wD+AQD9AAv+/vv8BvoL9vz8/Qf7A/8ZBgAHD/oCBv0G8gj/8gcECgL9CgP5AAYC8wn4Df/8+fsHA/oE8gAEBAEG+ggD//T+D/L0//8JAvsCBAIH/v0MBAn9+P4M9gn7BAD9CP0AAgX9AAID+vwLAALuCgH2A/wCBwD2+P8FCP35Df/8CPgEAAX//Af8/PsA/v8E/gQECAYBBAQBBwUDAQD9/v8JAO4A9gMCAAP6/gMJ/vkL/wT99gAD",
+      "india-03": "BgL7BAcCCP30Avb1BfYAAwMFCgcBCwL9Afz//Pv8BwAKAfcCAwYI9wMCAP7/AQQH8gH+8wD4/vUDCwQKA/gDAgX7/wUDEA0NBv39//8OEAH5+QIH/PMA/fT9+wMHA/gB+P/9BfwN9P/59QAA9wT7///9/foE//39+gL7Aw35+AD5+/kBAwcI9gT7DPEH+gL8Av75+ggQA/8I+xEFAgf6+QL/DQICAPj7/QT/+PkH+QD4CPoBEAT9+v/7BPX+/Pn/9AQA+gUGAwj1B/EHBAH99wH7BfYE9/7+DAYA/wMB+QD3A/wLAQf8+wn9+gT7BAD+A/wB/foPB/r7/QP8//n++PT+Avr5AgkJAQD99gH8Bf4B/Pf3BAcG+AUD/vwD//n+BQL7/QgGBfn7EgAK9gf7AQ39CP4FAwT9AQf/+gb7BgD89/n9Avb5+wIHBfj9+AH8BPz39/0A+g4BBPsB+fsADv769w4DBwwF+AMHAvwIAQD4/fMOBAH/A/n++PwOAf/8",
+      "world-01": "/RIIAf79CAj+BP/+EAsD/gL8//v0DwYC9fL++/3/AAUEAPwJ+wv7+wf7BQoI//r6Agz3CAT+C/P7+v0A/gP+APv8Cv0IBQH+DAL1/f75AAL57gQE/vz+9/QMDQIG/wT+AP35CQb8/QT5/P7y//r4BgD5+Q8ABQX8/QT9+gb9CwD8/Qb59v8F+fv0BwAS+fL89gL8CgQBBAH/BAb/BQT9BwEA/gL9BwT3AAP9+vj89AH/Awr9BvUD+gME/gUJ9vkJAvX28f74BgP7BvT8+gH3BwYGA/8KA/sCAv/8AAYICwAFA/wHCv0K/wkCBgb7B/sFAP77CP4GBQf2CgT+/Pz1APsGAvz9/PoNAgn+/QIDCAMC+P0BAf3//fT3BPQC/AP38wgJ9gb0/Pj4/QYL/w75/gb/+gD9/AL6BwACAQEBAgD88/8G9//9+QYBCAgB/QED+wD8AvD8AwEAC/36/wD/BPn3/fwI9gf/AA77BgH2+wT59AD+B/wGCwP59gEIAQT6",
+      "world-02": "CQAFBAgAAvz9CwQB+wv2//rt/gD9EAMB9fj6Bv4A/f78/QX6BvsIBAcACgME/vgFCQD/+gAG/fz3+Pf+/v4D+QUB9fUIEP72///5Awb8DAIC+A7+/PkG/fr7//8I/f7/+gj+BPvpB/8BBff7CPvyEfwBBwP+/Pv7BvcF/AYJ8gAE+xIFBfgB/gAB/gAB+Pr8Bf/5/gP/A/gGA//4B/8AAwP+/fsJ/wH/B/oEBAr38//9Cgb7/v3+/QMDBgT+/AL6B/wR/fsDBQH49vkCCAgIAgADCwP0AP8ACP4LCwz3/gD4+foH+gf9BwH7AgMG/v0FAgQE9vz6/gT5DAb9//T6BwIH+v8IAvz9+wMF//oEAQMCBAX8+PjyCPr//gkCBvYAB/v++QXxAwz6AQgLA/4FDgH9+P8B+w0DCvz4BPn8/QAI/QD9AQn9BRAH+f3/9vn9+//+AfoHA/0D8wQH/fvtAPwD/wALAfwBAPz9+/cA//sA9QIAAvzyCQX8Cv7/8QMQ",
+      "world-03": "+wEMAwb2DQME+P77AgYABAkB/f3+/QT69wD9/AMNAgzwB/kKB/sN+woEDf4F/gP8+P76/AL7BQoD+AAH9wEC/QH99gUL/AQEAfb6/wMKBuoEAAkE+fj+/gsGBwf7AfsB/wL1BwgB/gPu+P36/QX8/Ab7+f78Av75Af0C/QTxBQACBAEB/wIC/P0CAfn+/vv5AQMD/AXwBwgO/QT8/wb5BQAC9hH2A/wA/gP9BAMHBP79//Py//r8+vkB/AcH/OgNAQUA/f79/QMAAPcC+wAF/PkBCgP/BP4B/wj4+wUG/wD9AwQC//wDCAj/+v4IC/r/CAP+CQH++vn4CQn1+//6+vkJAwIA+wMJ/wAG/vgH/Qr8+v4E/Pz8BgUCBvkBBAH//AQNBxD2/vbz+wT7AvQCAwUEAfoPBvwFDgH0/P36AQD++gYA+/37AwYGAf/1+vz7/wL6+Pj+Bv8M+e4IAQP9BP39BAP4+xcE/wQGC/z8AvUEBfD8CQICCf38/AkG/vj5"
+    }
+  },
+  "generated_at": "2026-08-23T11:00:23Z",
+  "items": [
+    {
+      "band": "low",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-03",
+      "key_points": [
+        "A unified application connects retail performance analysis, planning, activation, execution, and measurement across teams and systems.",
+        "The application uses data unification, governance, and intelligence to provide a shared source of truth and coordinated decision-making.",
+        "AI and autonomous agents help translate campaign and planning decisions into store-level actions like replenishment and promotions.",
+        "The workflow supports testing potential decisions, activating audiences, and measuring campaign performance in a closed-loop system.",
+        "Retail teams need a structured approach to connect insights to actions without losing context or controls at each step."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T17:20:00Z",
+      "source_id": "databricks-blog",
+      "source_kind": "announcement",
+      "source_name": "Databricks",
+      "source_url": "https://databricks.com/blog/connecting-retail-demand-planning-campaign-and-store-execution",
+      "summary": "Retail and consumer goods teams face challenges in aligning decisions across disconnected systems and teams, leading to difficulties in turning analysis into results. A unified application, demonstrated by Databricks, connects performance reviews, demand planning, audience activation, store execution, and campaign measurement in one end-to-end process. The application is built on three foundations: data unification, governance, and intelligence. It enables stakeholders to review performance, plan demand, and measure outcomes using a shared data source, with features like natural language querying and autonomous agents. The workflow supports planning actions, marketing decisions, and store-level execution, creating a closed-loop view that connects campaign activity back to sales and operational outcomes.",
+      "title": "Connecting retail demand planning to campaign and store execution",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "low",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-04",
+      "key_points": [
+        "The Biomarker Discovery Framework is a multi-agent system that prioritizes candidate biomarkers from wearable sensor data through iterative hypothesis generation and statistical analysis.",
+        "The framework was tested across three cohorts with 9,279 participant-observations, identifying 41 mental health and 25 metabolic biomarkers.",
+        "The system combines deterministic computation for numerical analysis with generative reasoning for hypothesis formation and interpretation.",
+        "The framework outperformed other AI systems in manuscript quality assessments, receiving the highest scores and the most favorable editorial recommendations."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T17:02:24Z",
+      "source_id": "google-research-blog",
+      "source_kind": "research",
+      "source_name": "Google Research",
+      "source_url": "https://research.google/blog/an-ai-tool-for-prioritizing-candidate-biomarkers-from-wearable-sensor-data",
+      "summary": "Researchers introduced the Biomarker Discovery Framework, a multi-agent system designed to prioritize candidate biomarkers from wearable sensor data. This framework addresses the challenge of transforming continuous physiological signals into clinically meaningful biomarkers by integrating hypothesis generation, statistical analysis, and literature-based reasoning. The system was tested across three cohorts with 9,279 participant-observations, identifying 41 mental health and 25 metabolic biomarkers. The framework combines deterministic computation with generative reasoning, ensuring statistical rigor and human oversight. It was evaluated against other AI systems and received the highest scores in manuscript quality assessments.",
+      "title": "An AI tool for prioritizing candidate biomarkers from wearable sensor data",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-05",
+      "key_points": [
+        "AdaptGrow is a GPU-accelerated algorithm that clusters financial instruments using rolling correlation and tail-dependence matrices, producing hard labels, soft factor loadings, and structural-break signals.",
+        "The algorithm scales from single GPUs to multi-node infrastructure, with a memory-efficient formulation reducing peak storage from ~20n\u00b2 to ~4n\u00b2 bytes, enabling ~100,000 instruments to fit on a single NVIDIA GB200.",
+        "NVIDIA acceleration is integrated throughout the pipeline, with PyTorch, cuBLAS, cuSOLVER, and cuDF used for matrix operations, spectral probing, and data preprocessing.",
+        "The workflow evaluates 250 rolling windows, approximating daily re-clustering over a trading year, and uses synthetic data to test its effectiveness in detecting membership changes and co-crash events."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T16:21:04Z",
+      "source_id": "nvidia-technical-blog",
+      "source_kind": "announcement",
+      "source_name": "NVIDIA Technical Blog",
+      "source_url": "https://developer.nvidia.com/blog/gpu-accelerated-clustering-for-financial-instruments-at-scale",
+      "summary": "AdaptGrow, a GPU-accelerated matrix factorization algorithm, enables efficient clustering of financial instruments using rolling correlation and tail-dependence matrices. This approach addresses the challenges of grouping instruments for portfolio construction, risk aggregation, and statistical arbitrage by separating routine variation from structural changes. The algorithm produces hard labels, soft factor loadings, and structural-break signals, scaling from single GPUs to multi-node infrastructure without changing the solver interface. NVIDIA acceleration is integrated throughout the pipeline, with PyTorch, cuBLAS, cuSOLVER, and cuDF used for matrix operations, spectral probing, and data preprocessing. The workflow evaluates 250 rolling windows, approximating daily re-clustering over a trading year, and uses synthetic data to test its effectiveness in detecting membership changes and co-crash events.",
+      "title": "GPU-Accelerated Clustering for Financial Instruments at Scale",
+      "truncated": true,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "energy-03",
+      "key_points": [
+        "Operators in the Permian region are using longer horizontal wells to boost oil and gas production.",
+        "The share of short-reach wells in the Permian dropped from 43% in 2015 to 4% in 2025.",
+        "Mid-length lateral wells increased from 57% to 81% of completions between 2015 and 2025.",
+        "Super-lateral wells exceeding 15,000 feet accounted for 15% of new completions in 2025.",
+        "Production in the Permian rose 284% from 2.9 million to 11.2 million BOE/d between 2015 and 2025."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-19T14:00:00Z",
+      "source_id": "eia-today",
+      "source_kind": "government",
+      "source_name": "EIA Today in Energy",
+      "source_url": "https://eia.gov/todayinenergy/detail.php?id=67984",
+      "summary": "Well operators in the Permian region of western Texas and eastern New Mexico are increasing oil and natural gas production by drilling longer, horizontal wells, including super-lateral wells exceeding 15,000 feet. This shift allows operators to access more reservoir rock per well, boosting production while reducing the number of wells needed. In 2015, short-reach wells under 5,000 feet made up 43% of completions, but by 2025, they accounted for only 4%. Mid-length laterals, between 5,000 and 15,000 feet, increased from 57% to 81% of completions, while super-laterals, over 15,000 feet, accounted for 15% of new wells in 2025. Despite stable new well counts, production rose from 2.9 million to 11.2 million barrels of oil equivalent per day (BOE/d) between 2015 and 2025, a 284% increase. The average lateral length of new wells grew 77% over the decade, from 6,149 feet to 10,867 feet, according to Enverus data.",
+      "title": "Longer wells boost Permian crude oil and natural gas production",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "energy",
+      "visual": {
+        "alt": "Bar chart. 2015 43 %; 2025 81 %; 2025 15 %; 2015 77 %.",
+        "kind": "chart",
+        "path": "digest/2026/08/23/energy-01.svg",
+        "state": "rendered"
+      }
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "world-01",
+      "key_points": [
+        "Kazakhstan's parliamentary elections are expected to strengthen President Tokayev's power by consolidating authority under a new single-chamber parliament.",
+        "The ruling Adilet party and smaller Tokayev-aligned parties are predicted to dominate the election results.",
+        "The constitutional changes, approved by 87% of voters, allow Tokayev to potentially seek another seven-year term as president.",
+        "Economic challenges, including high inflation and public dissatisfaction with tax hikes, have heightened concerns about political stability.",
+        "Independent journalists and media outlets face intensified repression, with criminal cases opened against several critics of the government."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-23T06:53:01Z",
+      "source_id": "apnews-world",
+      "source_kind": "reporting",
+      "source_name": "AP News",
+      "source_url": "https://apnews.com/article/kazakhstan-election-tokayev-ef0cb883baa7344cc89fc1e655edbd5d",
+      "summary": "Kazakhstan held parliamentary elections on Sunday, expected to consolidate President Kassym-Jomart Tokayev's power. The ruling pro-presidential Adilet party is predicted to secure an overwhelming majority, with smaller Tokayev-aligned parties also likely to enter parliament. The election follows a constitutional overhaul in March that merged the two chambers of parliament into one and granted the president authority to appoint key officials, including reestablishing the vice presidency. The changes, supported by 87% of voters in a referendum, allow Tokayev to potentially run for another seven-year term. The vote occurs amid economic challenges, including 10.2% inflation in February and public discontent over tax hikes, as well as intensified repression of independent media.",
+      "title": "Kazakhstan votes in parliamentary election expected to strengthen president\u2019s grip on power",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "world",
+      "visual": null
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "india-01",
+      "key_points": [
+        "A 2026 White House report accuses India's Pune\u2013Gujarat\u2013Chennai production belt of facilitating a transshipment scam to evade U.S. tariffs.",
+        "Industry sources suggest that many U.S. multinationals use India for cost-effective sourcing, with profits going to shareholders or reinvestment.",
+        "The report highlights that imports from countries like Canada and Mexico have increased, with U.S. firms and global players contributing significantly to the U.S. pump market.",
+        "The report proposes using AI tools to detect transshipment and enforce stricter origin rules, but industry experts warn of potential compliance costs and uncertainties for legitimate manufacturers."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-23T02:47:03Z",
+      "source_id": "the-hindu-national",
+      "source_kind": "reporting",
+      "source_name": "The Hindu - National",
+      "source_url": "https://thehindu.com/business/transshipment-scam-or-efficient-supply-chain-how-us-firms-turn-it-into-profit/article71374582.ece",
+      "summary": "A 2026 White House report accuses India's Pune\u2013Gujarat\u2013Chennai production belt of facilitating a transshipment scam, where Chinese goods are routed through India to evade U.S. tariffs. The report claims that Indian cities act as logistics hubs without significant value addition, leading to a decline in U.S. pump and compressor manufacturing. However, industry sources suggest that many U.S. multinationals with global production centers use India for cost-effective sourcing, and some Indian SMEs import parts from China, paying tariffs. The report highlights a global phenomenon where imports from countries like Canada and Mexico have increased, with U.S. firms and other global players also contributing significantly to the U.S. pump market. The report proposes using AI tools to detect transshipment and enforce stricter origin rules, but industry experts warn of potential compliance costs and uncertainties for legitimate manufacturers.",
+      "title": "Transshipment scam or efficient supply chain? How U.S. firms turn it into profit?",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "india",
+      "visual": null
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "india-02",
+      "key_points": [
+        "The U.S. accuses India of helping China evade tariffs by transshipping goods through third countries.",
+        "The White House report estimates $67 billion in goods were transshipped through India in 2025, causing $28 billion in lost tariff revenue.",
+        "India has faced previous U.S. tariffs for issues like Russian oil imports and forced labor, with potential for further penalties.",
+        "India's manufacturing strategy relies heavily on Chinese inputs, and restricting these imports could raise costs and reduce competitiveness."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-22T20:01:42Z",
+      "source_id": "the-hindu-national",
+      "source_kind": "reporting",
+      "source_name": "The Hindu - National",
+      "source_url": "https://thehindu.com/business/what-are-the-uss-latest-allegations-against-india-explained/article71378950.ece",
+      "summary": "The U.S. has accused India of aiding China in evading tariffs by transshipping goods through third countries. The White House report titled 'The Great Transhipment Scam' claims that India, along with Mexico, Canada, the European Union, Japan, and South Korea, is enabling China to bypass U.S. tariffs by modifying goods slightly before exporting them to the U.S. The report estimates that $67 billion in goods were transshipped through India in 2025, resulting in $28 billion in lost tariff revenue. The U.S. has previously imposed tariffs on India for issues like Russian oil imports and forced labor, and the latest allegations could lead to further penalties.",
+      "title": "What are the U.S.\u2019s latest allegations against India? | Explained",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "india",
+      "visual": null
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "india-03",
+      "key_points": [
+        "Prime Minister Narendra Modi met with India's space startups on National Space Day, praising their energy and ambition.",
+        "National Space Day commemorates the successful landing of Chandrayaan-3 on the Moon's south polar region in 2023.",
+        "Chandrayaan-3's Vikram lander achieved a controlled soft landing, making India the first country to do so near the Moon's south pole.",
+        "Isro Chairman V Narayanan highlighted the progress of India's space program and the scientific data obtained from Chandrayaan-3.",
+        "The celebrations aimed to inspire interest in science, technology, and innovation, with Modi encouraging public engagement in India's space journey."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-23T06:29:02Z",
+      "source_id": "toi-india",
+      "source_kind": "reporting",
+      "source_name": "Times of India - India",
+      "source_url": "https://timesofindia.indiatimes.com/india/impressed-by-their-energy-ambition-pm-modi-meets-indias-space-startups-on-national-space-day/articleshow/133435458.cms",
+      "summary": "Prime Minister Narendra Modi met with India's space startups on National Space Day, expressing admiration for their energy and ambition. He shared a video of the interaction on X, encouraging people to share their views on India's space program. Modi also greeted citizens on the occasion, emphasizing innovation and exploration. Union Home Minister Amit Shah highlighted the significance of National Space Day, commemorating the successful landing of Chandrayaan-3 on the Moon's south polar region. The celebrations marked the third National Space Day, held in Ahmedabad, with participation from key officials and industry leaders. Isro Chairman V Narayanan spoke about the progress of India's space program and the scientific data obtained from Chandrayaan-3.",
+      "title": "\u2018Impressed by their energy &amp; ambition\u2019: PM Modi meets India\u2019s space startups on National Space Day",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "india",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 2,
+      "item_id": "world-02",
+      "key_points": [
+        "Australia confirmed its first H5N1 bird flu case in a mammal, a long-nosed fur seal found in South Australia.",
+        "Federal agriculture minister Julie Collins stated that the infection is not unexpected in marine mammals with high bird flu rates.",
+        "The outbreak, which began in June, has led to mass seabird deaths and is now spreading to native species.",
+        "The seal was found dead with no signs of injury, and officials believe the infection occurred through exposure to infected wild birds or their environment.",
+        "There have been 297 positive bird flu cases in Australia, with 194 in South Australia, but no evidence of infection in poultry or agriculture systems."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-23T10:29:58Z",
+      "source_id": "independent-world",
+      "source_kind": "reporting",
+      "source_name": "The Independent - World",
+      "source_url": "https://independent.co.uk/news/world/australasia/australia-bird-flu-mammal-seal-b3037710.html",
+      "summary": "Australia has confirmed its first case of H5N1 bird flu in a mammal, a long-nosed fur seal found in South Australia. Federal agriculture minister Julie Collins stated that the infection is not unexpected, particularly in marine mammals in areas with high bird flu rates. The outbreak, which began in June, has led to mass seabird deaths and is now spreading to native species. The seal, part of an estimated 100,000 in the state's waters, was found dead with no signs of injury. Officials noted that the infection likely occurred through exposure to infected wild birds or their environment. There have been 297 positive bird flu cases in Australia, with 194 in South Australia. No evidence of infection in poultry or agriculture systems has been found yet.",
+      "title": "Australia confirms first H5N1 bird flu case in a mammal",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "world",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 2,
+      "item_id": "world-03",
+      "key_points": [
+        "National Security Advisor Ajit Doval is visiting Beijing for the 25th round of talks on the India-China boundary issue.",
+        "The visit is expected to take place ahead of a potential visit by Chinese President Xi Jinping to India in September 2026.",
+        "The discussions will focus on the broader bilateral relationship and the situation along the Line of Actual Control (LAC).",
+        "Recent talks under the Working Mechanism for Consultation and Coordination (WMCC) have reviewed border tensions and delimitation issues."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-23T10:29:44Z",
+      "source_id": "thehindu-intl",
+      "source_kind": "reporting",
+      "source_name": "The Hindu - International",
+      "source_url": "https://thehindu.com/news/international/ajit-doval-wang-yi-meeting-india-china-special-representatives-talks-august-23-2026/article71380342.ece",
+      "summary": "National Security Advisor Ajit Doval is set to visit Beijing from August 23 to 24, 2026, for the 25th round of talks between the Special Representatives on the India-China boundary issue. The visit precedes a potential visit by Chinese President Xi Jinping to India in September and aims to assess the broader bilateral relationship. The talks will also review the situation along the Line of Actual Control (LAC) and discuss border management and delimitation. The visit follows recent discussions under the Working Mechanism for Consultation and Coordination (WMCC) and comes amid ongoing tensions in various sectors of the India-China border.",
+      "title": "Eyes on Xi visit, \u2018early harvest\u2019 as Doval heads to Beijing",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "world",
+      "visual": null
+    }
+  ],
+  "items_failed": 7,
+  "items_planned": 17,
+  "partial": true,
+  "retention_window_months": -1,
+  "runs": [
+    {
+      "at": "2026-08-23T07:18:05Z",
+      "items_added": 8,
+      "n": 1
+    },
+    {
+      "at": "2026-08-23T11:00:23Z",
+      "items_added": 2,
+      "n": 2
+    }
+  ],
+  "version": "2026-08-22",
+  "verticals": [
+    {
+      "count": 3,
+      "display_name": "AI",
+      "id": "ai"
+    },
+    {
+      "count": 1,
+      "display_name": "Energy",
+      "id": "energy"
+    },
+    {
+      "count": 3,
+      "display_name": "India",
+      "id": "india"
+    },
+    {
+      "count": 3,
+      "display_name": "World",
+      "id": "world"
+    }
+  ]
+}
