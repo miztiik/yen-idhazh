@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Holy Law #10 in one page: **an unmeasured number is
