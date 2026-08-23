@@ -1,3 +1,5 @@
+import pytest
+
 from utilities.summarise_bench import Throughput, collect, report
 
 
@@ -31,7 +33,7 @@ def test_collect_keeps_thread_counts_as_separate_measurements() -> None:
 
 
 def test_report_suppresses_derived_times_without_model_specific_prompt_tokens(
-    capsys,
+    capsys: pytest.CaptureFixture[str],
 ) -> None:
     report(
         [Throughput("model.gguf", 4, {730: (12.0, 0.1)}, (7.0, 0.1))],
@@ -46,7 +48,9 @@ def test_report_suppresses_derived_times_without_model_specific_prompt_tokens(
     assert "blended/article" not in output
 
 
-def test_report_uses_the_explicit_prompt_count_and_parallelism(capsys) -> None:
+def test_report_uses_the_explicit_prompt_count_and_parallelism(
+    capsys: pytest.CaptureFixture[str],
+) -> None:
     report(
         [Throughput("model.gguf", 4, {730: (12.0, 0.1)}, (7.0, 0.1))],
         n_urls=40,
