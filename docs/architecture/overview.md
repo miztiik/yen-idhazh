@@ -1,6 +1,6 @@
 # Architecture overview
 
-**Last Updated**: 2026-08-22
+**Last Updated**: 2026-08-23
 
 How the whole system fits together, in one page. Every box here has a deeper
 document behind it; this page exists so you can find the right one.
@@ -15,7 +15,7 @@ flowchart LR
         F1["~138 curated feeds<br/>config/sources.json"]
     end
 
-    subgraph ci["backend/ - GitHub Actions, every 6 h"]
+    subgraph ci["backend/ - Content refresh, four UTC runs daily"]
         direction TB
         P["plan<br/><i>rank and dedupe</i>"]
         W["work x4 shards<br/><i>fetch, extract, summarize, score</i>"]
@@ -140,6 +140,7 @@ news day. That now fails the build loudly.
 - [`../concepts/vision.md`](../concepts/vision.md) - what this is and is not.
 - [`../concepts/pipeline-loop.md`](../concepts/pipeline-loop.md) - the stages in detail.
 - [`../concepts/evaluation.md`](../concepts/evaluation.md) - how a summary is scored.
+- [`../reference/github-actions.md`](../reference/github-actions.md) - workflow names and trigger classes.
 - [`sources/discovery.md`](sources/discovery.md) - where stories come from.
 - [`summarize/prompt.md`](summarize/prompt.md) - what the summarizer asks a model for, and where every number in that ask comes from.
 - [`publishing/visuals.md`](publishing/visuals.md) - why a story gets a chart or nothing.

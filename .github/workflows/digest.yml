@@ -1,4 +1,4 @@
-name: digest
+name: Content refresh
 
 # The run, four times a day. An orchestrator that never does the work,
 # disposable workers that do, and an assemble step that publishes whatever
@@ -10,13 +10,13 @@ name: digest
 
 on:
   schedule:
-    # Every six hours. A story that broke at 07:00 waited a full day under a
-    # daily schedule, and the digest is only worth opening if it is current.
+    # Four daytime UTC runs. A story that broke at 07:00 waited a full day under
+    # a daily schedule, and the digest is only worth opening if it is current.
     #
     # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
     # is the busiest minute on the platform; twenty past costs a reader nothing
     # and buys a run that starts closer to when it was asked for.
-    - cron: '20 */6 * * *'
+    - cron: '20 6,10,14,18 * * *'
   workflow_dispatch:
     inputs:
       date:
