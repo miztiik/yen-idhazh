@@ -5,17 +5,18 @@
     "dtype": "int8",
     "model_id": "all-minilm-l6-v2-quantized",
     "vectors": {
-      "ai-03": "/gH5/wb//AP+/fn+A/oLAAX4/f3/BfgK+QQCBP4DAf0ECgEFAAH49/327wQG/fYA/wz1/QX+BAYL/f/6APD7BAIF9QP89fsEAvv6Cv74B/z9BPMN//gD//sG+gUH/PcE+vMFA/4MA/T38AED+gED9wr+Cvz4CQML+wMG/QcAAQD0+QYCBPz9/vgCAQ78Dgb8+gv9AQH9AQQFBQIJCQH9/gcF+wQB+AX/+/8AAPUE9/8GAgT9DgL59f3oBQP9BAED/QcE/gb7/QQLAgX6AAQCA//0BPwEBAH8+gTyCvkRBgAC//4FCAP15gsF9PsH/gkACgADAPkI7P78A/39APgB8AT5/f8E+wEDBPn2A/sIAAT7/P0J/Pr3AAr//woFBwb/BPgK9f4BA/4CAf4B+v39A/8DCAcABAEM+wXz//cC+wAAAwYD//8DDAYBB/ryAP8FCAn9Bf8G+f0HAf8MBPoC+wIBBf4ECAQAAAz5A/kE7/8DAvz6AwYK/gD+CAYL/fwG",
-      "ai-04": "/AAACgz+BAX+Bfz3AwUDBAb//fv/CgcCAgMA9/4NBQIIB/gC/Ab9Bf/2/gYC//cDAQXzAgUHAQEA/Pf6AfIE/g0F/AH6AfkHAAsBD/oAB/v5+goOD/4IBfz/+fwJBv4L9f8DAPUF9wYB+AX8CP8GAAsCBAD+EgoGA/wDAggN/wADAQ0BA/vy+AP+/fz2DwT7+QME9QT1/wL/DwEGAv32/gD/+vwBAgEKAwMG/f/9+QQF/Pj/DPj2+vj2A/7+CAACAAYG//0NCA0B+//+AQH69v8E9gAA9vj87vn5BQAE8wD1BAP+Cff59QYHCPMC/fwJ9/v3+gcB+gEBBwYIBPb5/vz5/QcC+v0GCQPq/AD+/wb+/QT++//5/fn+AP/8/wgD+wEDAQAHAAH/BAr5+AP7+wT1BfwABAMF/wv2BPgJ8AAJ+wr/AP31CAD8B/n+/QP+/Qb6+QgA//8O+PwB+gcABgcDBf0G/Pr8+AnzBgnvAP8IAAL7CgUEBgH/AfcQ/P39",
-      "ai-05": "+/j0BQb5/PgC+/UB+AD6+gAH/P329/kBCgv/AgT9AAwBBP0I/wL8/AcAAwAG+v4B/gT7A/cG+gMK9Qf+C/cFBwAICwL9/gAC9v/8CgL3BP/+AgL+Cv4JAAf6AQ0L//7+APoGCAECAgv4//8E/fwBEAD//Af8+v4KAP4EAwQH9gD++gn7BAT8Af8E/Rr9CQT5AwgA8QD4Afz4AwD7BQT9/P8F/QH++AX/9gX/6/UH/AD/+v39CAX4AAX7BQv0+fUC9goHDgAM+wgAAAr9AQj5+fwBCvz9//v59/H0Aw8GAQD99wQIBvr++gb+//sBAgb7/gD7+vv+A/wEAgP2BAT5/vsGBQoA///6CAz6/AYHAAj//P4JBgf9BQUC+f77/QD8//j89vwFAQH9/vcBBfEABAT+BQUBBgEFDAH3AQIH9gD5BPsEAPsDBPz8GfLy/fj//QL+/f8EBgT89gkHDPz2+gsEAQoECwMJAv3///4K9PsN//77AA0CA/ICCfgD8f0A",
-      "energy-03": "+PsOAfj16wf6/fMJ/vcCCQP7/wEKAP0AAAP2AwX9/QwA9wMD9wUGCPn1BQr5+gX/AvoCBPYBA/v1+f0FBAUB9fv8/vn4/QIJ+/UDAwoBAfAHBgTs8vwDBgACAv7t/wcI/v7//AwG/PoFBf4K/v4DAAIA/P74/P3/+gT+CAMLAQD+/vv/+Ab7/ff8/AMAAP/rAgYE/Pj5+wMKAAYB7/wGAQP1BvgOAvv++AoAAP4CAAr4/v0I+AQDBAP8Bwb9DPkGAgECCgkOBvYCAwQBBQYGCAAEA/QHA/P9CP32+QAA/wAEB/n/BvsIBwP6/woF+fv1+Pr3AvsC9wj9BPf+8v3/AgAB+gH8AwMFDQML/foBB/sHBPr8+gL+9wMD/AQBBQ7/BAT5/AkH/gL7/QUD/AH/C/z+/wL/AgP7BQT8/fX5/AD5CAQLCv4EFAP7A/8DAgT+BP4C8QICCAT//QD//gAQAPgDEf33Cf4H+ggEA/4F9AYF/An4AwAOBP8G9P39+gAA",
-      "india-01": "9PsAAQcAAPr1+v79Bwb4AQf++/oB/vv9/vgA+vz++Av2Df0DAAAN9A/2/wH//f4C+v75A/wE/wIK9wIEAPsGAAr89wn2/wb8/g4AAAMGBfn9+wH/9QEBAQgCB/gEAgEA+wYE/AQH/fb1+QAD/wkBCPr6/P4CA//1/Ar++fsB9QD1AQD39/7+BAIC7AX+Bwj6BQAK/AfyB/4A///+CgQHBAMK/Qn1/vsF+Qb4CAEHBP7+AvgJCvUG+gr2BwH5/fkQ/AQF/PcABf4AB/0CAwcE7/IABQAF/vr+BAL9APkMBgD+CPz++vkAAw4F+QQKB//6Cgf6/QgJ9wH8Bv3+/AEJ/wIP8gIADAz9+gP5AvX6//0EAAAJA/X4B/8F//sECQf+AQMP/gb1BvnxAwH++v/7Bw72DAgH/gb8CQT3/fL8AwD3+AUL+gX6Cf7/+/X8Avj//w/4+v4HCAAA+vj9CAIABQX9/wcE/QEF+gb/AQL47v0FAQj7BAYH//f/AAcF+wr/",
-      "india-02": "8gEBBAsCCPr1Af4BCQT4BQQB//sJAv79AP4C8voB+AbtBfn9AAIN7Q34BAL4/gAD+f4AAv0G//sH+QYJ/AAJAgT9+gX7CQ0BAAT//QQIAvf8+w0D/P79/wH/CvgIBwH8/gH8/AQH9/n2AP79+gP/A/b//fQF//z0/Q/8+fj48gABAgP08wQEBAID8f8ABAj6/wEJAwj+CAP5/wL9AQQCAwEO/Af9A/oE/gb+AQUGAAP7B/gICPgCAAH7CQT/+/cE+QwF+e8AAAMHCvsEBgIB9vX9D/kAA/X8BgQC//sNAgD8B/8BAPgACggG/wQCDP79DQf7+AoI//z7BAr6BAAMAAAM+QICCgb1/AIABPv9+AcA/P4DAvr2/AAFCvYDCgb8/QQM/A37Avnu/goE+P0ABxL5Cv0F/wQACgP1+fT5CAD79AIG+QT4CAP5AvYB/Pb5Aw8B9vsDBPoE+/v+Af75AwH8/wcEAAf89AUFAQP18/4E/vn4/f4CBfv89wEG+wYE",
-      "india-03": "/vwBAAL0BPn4/P33//8EAAD8+PoDAwQECQoB+wIEBA37/AEK/PgE9v/1Cf78+wb4Cv4C+gb4CfoA9gf7AQIB/gz7/fgB9/4B/f3zAAcRBfoHBAUK+Pz6BvoF/gcG//z8+PgDCP8S9Ab3/fkE/AT+AP78+gj9CAj49fz+/QL+AQAFAgUF+gj4AAD2/voH/gf6+/X/AP8B//0M/gf7AAEH//wD+gID9/AGAQb7+PoLCgALA/4PBvgKAgP9DP/2+P4M/QwC/wMI//4A//8A+Pz3BgUADPgFAwEB+/v6/AsJ9gAAA/r+AwP6/PcLBAsKAP3/A/70BQwG+vj6BQj/+f8AAPf+BQcC+fwI9w8IA/UA+Av1/fj2Af0KBgELBPsD9woA9vgHBA0DAfT7BvsJCQgCAQIFAgAICAL8/AP8APwJBAAD+foEAf4G/Pz/C/j1/QL5Awf6AgUDA/oEBAH+Avz3AgHz8gME/Q/+/wQEA/oG//7z+/kAAQUACu8EAgAF+un8",
-      "world-01": "APsEAQMG/gP/BP0GA/oEAwH8/P//9QL9Cvz8/wH4Avny9QMFAfv6+g/4+PoAAfsBAv/7BP39A/b9Av37AQf6/wH+/PoBBwH//Pzv9PkQBwYIBgL9Bf/++/kAAgQPBP7//QAHC/kJ/PT7BPP/BQMD8g4BAP36/P8PA/0GBRUB/gAJAAYI8QgAAPIF/wL+/wn1/A0ABfkGAQMOAgEB+QQFAfUF5fr9AAIGAfkD/vwEC/0G/QEBAw74/Pz//voD+vgD/vj9/QD9Bvf9Bv39APj7AgL4DPsCAQr//vn2+f8C/wAE+/kJBwcC+wEBAfcJAgj7BAEF+fsEAQ71/QL1AAz4+PkICgH6+/sM/gEI/gL7+gIE9QYIAQ70Av0C/gf8Awb3AAD+9hEC/u/+Eg4EAwkK+/sABPAAAwf3BAEBBwICBAAK+f8H+/3/+gP9CwD++wIG/Qj6/v77APj/AvsL/Qf1/vQE/AcA/QgBAvoE//f2CfkG/PgM+f4A/fwDAv4C/QH5"
+      "ai-03": "/wD6/wb+/AP//fn+BPsLAQT4/Pz/BPkJ+QQCA/4DAf4DCQEFAAH49/z18AUG/fcA/g31/QX+AwcL/QD7APD8AwEF9gP89fwEAfv6Cv/3CPv+BPMN//gCAPoG+gUH/PgE+vQFA/4LBPX28AED+gEC+Ar+Cvz3CQMM/AIH/QgBAQD0+QYBBPv9//gCAA37Dgb9+wv9AQH8AgUGBAIJCgH+/ggF+wUA+AUA/P8AAPYE9/4GAgP+DwL59f7pBQP7BQED/QcF/wb7/QQMAQT6/wQDAv/0BPsEBQH9+QXyCvgSBQABAP4GBwL15gwF9PwH/QkBCv8DAPkH7P78A/78APkC7wT5/f4E+wADBPn1A/sJAAP7/P4I/fr4AAr/AAkEBwb/A/cK9f0BAv4DAf4A+fz9A/8DBwYABAEM/ATyAPcB+wABAgYC//0CDAcCCPrx//8FCQn+BP8G+f0IAP8LBPsC+gIABf8ECAT/AAv6A/oE8AADAfv5AwcM/QH/CQUL/fsF",
+      "ai-04": "+wH/CQv+BAP+Bf33AgUCAwf//vv/CwgCAQMB9v4NBgIIBvgC/Ab9Bf/2/QcD//cCAgXyAgUHAAEB/ff6AfIF/g0F/gH6AfkIAQsBDfoACPr6+QkNDv4IBvwA+PwKBv4L9QAEAPUF9wYC+QT8B/8GAQoDBAD+EQkGA/0CAggN/wAEAQ0BA/zx+QP+/fz2DwX8+QQE9gT1/wL/DgEGAv32/QH/+vwBAQAKAwQG/v/9+QQE/PYADPn2+vf0A/3/CAACAAYG//4MBw0B+/7/AgD69f8F9wEB9vn97vn4BQAE8wD2AwP+Cff49QYGCPID/fwJ9vr3+QYC+gIABwUJBPf4/fz5/QcD+vwGCQPq/QH9/wb+/QT++//6/Pj/AP78/wgF+wADAAEH/wH/BAn5+QL8/QX1Bv0BBQMF/gv2BPcI7wAK+wr/Af72BwD8B/r+/QT//Ab6+AYAAP8O+PwC+gcABQcDBP0G/Pv8+AnzBgnuAAAH/wH6CgUEBgD/AvcR/P39",
+      "ai-05": "+/j0BQX6/PgC+/UB9//5+v8H+/329/oACgsAAgT8AAwBBP0IAAL8/AgAAwAG+f8B/QP6A/cH+gMJ9gj+C/gFB/8IDAL9/wAC9v78CgL4BP//AQH+Cv8IAQj6AgwK//7+APoFCQEBAgv4//8E/f0CEP///Af8+/4KAf4EAwQH9QD++gn6BAX7AgAE/Rn+CAX5AQkA8gH4APz3AwD7BQT9/f4F/QL/+AX/9gT/6/UG/QD/+/z+Bwb4AQX7BQv0+vUC9QoHDv8M+wcAAAr9AQn6+f0BCvv8//v69/D1Aw8GAQD+9wQIBvr++gb9//wAAwf6/wD8+fv+BPwEAQT2BQP5//sGBQkA/gD6CQz6/AYHAAj//f4IBQf9BQUC+P78/QH9//j99vwFAQH9/vYBBPAABAT+BQUBBwEFDQL2AgEI9gD6BPsEAfsDBPz8GvLy/fj//AL+/f8FBgP89goGDPz1+gwEAAkECwUJA/7//v4K9PwM//78AA0BBPMCCPcC8PwB",
+      "energy-03": "+PwNAvj17Af7/fMJ/vcCCQT8/wIKAf4B/wL2AwX9/gwA9wMD9wQFCPn2BQn5+gT/AvoDBPYCBPv1+P4FBQUB9fv8/fj4/AMK+/UDBAoAAfAHBgTt8/wDBgACAv7t/wcI/v7+/AsF+/oFBv8L//4DAAIA+/34/P3/+gP+BwMLAgD+/vv/+Ab7/ff9/AMAAP/rAgYE/Pj6+gMKAQQA7/wFAAP1BvcNAvv++AoAAP4C/wv5/v0I+AMDBAP9Bwb+DfgGAQACCQoNBvcBAwMBBgYHCAAEA/UHBPP8CP72+f8A/gADB/n/BfwICAP6AAsF+fv2+Pr3AvsD+Af9BPf+8v3/AgAB+gD8AwIFDAML/fkBB/wHBfn8+gL+9wMC/AQCBQ7/BAX5/AkH/QL6/QUE+wD/C/v//wP/AgP7BQT7/vT4/AD4CAQLCf4EFQP7BP8EAQT+BP4C8QEDCQP//gD//wEQAPkDEf33Cf0I+ggFA/0F9AcF/Aj3AwAOBP4G9P39+gAA",
+      "india-01": "Af4H/wQC+wn2+vr7//8H+gD+/Pj//gf8AwcGAAb//gb+BgQMAAkJ9hP0AfT+/f8A9PgI+/oAAPUNAQEA+gT9BwT/AQH98/39+v70AQIIA/oKBAgA8wP//P75AwgKDAIE+foD+gII+Pb1/Pr+Af77AwD19v74/vz48/z9+gIB/QDu+wn6+gMA8QH8/wT9AwP4/AMEAPX+BAEEDA4GB/0HB//88wT6/fcD+gD7A/4JAP34BPsL/wQI+gj5B/kBBgAKAv8G/QED/wD+AQD9AAv+/vv8BvoL9vz8/Qf7A/8ZBgAHD/oCBv0G8gj/8gcECgL9CgP5AAYC8wn4Df/8+fsHA/oE8gAEBAEG+ggD//T+D/L0//8JAvsCBAIH/v0MBAn9+P4M9gn7BAD9CP0AAgX9AAID+vwLAALuCgH2A/wCBwD2+P8FCP35Df/8CPgEAAX//Af8/PsA/v8E/gQECAYBBAQBBwUDAQD9/v8JAO4A9gMCAAP6/gMJ/vkL/wT99gAD",
+      "india-03": "BgL7BAcCCP30Avb1BfYAAwMFCgcBCwL9Afz//Pv8BwAKAfcCAwYI9wMCAP7/AQQH8gH+8wD4/vUDCwQKA/gDAgX7/wUDEA0NBv39//8OEAH5+QIH/PMA/fT9+wMHA/gB+P/9BfwN9P/59QAA9wT7///9/foE//39+gL7Aw35+AD5+/kBAwcI9gT7DPEH+gL8Av75+ggQA/8I+xEFAgf6+QL/DQICAPj7/QT/+PkH+QD4CPoBEAT9+v/7BPX+/Pn/9AQA+gUGAwj1B/EHBAH99wH7BfYE9/7+DAYA/wMB+QD3A/wLAQf8+wn9+gT7BAD+A/wB/foPB/r7/QP8//n++PT+Avr5AgkJAQD99gH8Bf4B/Pf3BAcG+AUD/vwD//n+BQL7/QgGBfn7EgAK9gf7AQ39CP4FAwT9AQf/+gb7BgD89/n9Avb5+wIHBfj9+AH8BPz39/0A+g4BBPsB+fsADv769w4DBwwF+AMHAvwIAQD4/fMOBAH/A/n++PwOAf/8",
+      "world-01": "/RIIAf79CAj+BP/+EAsD/gL8//v0DwYC9fL++/3/AAUEAPwJ+wv7+wf7BQoI//r6Agz3CAT+C/P7+v0A/gP+APv8Cv0IBQH+DAL1/f75AAL57gQE/vz+9/QMDQIG/wT+AP35CQb8/QT5/P7y//r4BgD5+Q8ABQX8/QT9+gb9CwD8/Qb59v8F+fv0BwAS+fL89gL8CgQBBAH/BAb/BQT9BwEA/gL9BwT3AAP9+vj89AH/Awr9BvUD+gME/gUJ9vkJAvX28f74BgP7BvT8+gH3BwYGA/8KA/sCAv/8AAYICwAFA/wHCv0K/wkCBgb7B/sFAP77CP4GBQf2CgT+/Pz1APsGAvz9/PoNAgn+/QIDCAMC+P0BAf3//fT3BPQC/AP38wgJ9gb0/Pj4/QYL/w75/gb/+gD9/AL6BwACAQEBAgD88/8G9//9+QYBCAgB/QED+wD8AvD8AwEAC/36/wD/BPn3/fwI9gf/AA77BgH2+wT59AD+B/wGCwP59gEIAQT6",
+      "world-02": "CQAFBAgAAvz9CwQB+wv2//rt/gD9EAMB9fj6Bv4A/f78/QX6BvsIBAcACgME/vgFCQD/+gAG/fz3+Pf+/v4D+QUB9fUIEP72///5Awb8DAIC+A7+/PkG/fr7//8I/f7/+gj+BPvpB/8BBff7CPvyEfwBBwP+/Pv7BvcF/AYJ8gAE+xIFBfgB/gAB/gAB+Pr8Bf/5/gP/A/gGA//4B/8AAwP+/fsJ/wH/B/oEBAr38//9Cgb7/v3+/QMDBgT+/AL6B/wR/fsDBQH49vkCCAgIAgADCwP0AP8ACP4LCwz3/gD4+foH+gf9BwH7AgMG/v0FAgQE9vz6/gT5DAb9//T6BwIH+v8IAvz9+wMF//oEAQMCBAX8+PjyCPr//gkCBvYAB/v++QXxAwz6AQgLA/4FDgH9+P8B+w0DCvz4BPn8/QAI/QD9AQn9BRAH+f3/9vn9+//+AfoHA/0D8wQH/fvtAPwD/wALAfwBAPz9+/cA//sA9QIAAvzyCQX8Cv7/8QMQ",
+      "world-03": "+wEMAwb2DQME+P77AgYABAkB/f3+/QT69wD9/AMNAgzwB/kKB/sN+woEDf4F/gP8+P76/AL7BQoD+AAH9wEC/QH99gUL/AQEAfb6/wMKBuoEAAkE+fj+/gsGBwf7AfsB/wL1BwgB/gPu+P36/QX8/Ab7+f78Av75Af0C/QTxBQACBAEB/wIC/P0CAfn+/vv5AQMD/AXwBwgO/QT8/wb5BQAC9hH2A/wA/gP9BAMHBP79//Py//r8+vkB/AcH/OgNAQUA/f79/QMAAPcC+wAF/PkBCgP/BP4B/wj4+wUG/wD9AwQC//wDCAj/+v4IC/r/CAP+CQH++vn4CQn1+//6+vkJAwIA+wMJ/wAG/vgH/Qr8+v4E/Pz8BgUCBvkBBAH//AQNBxD2/vbz+wT7AvQCAwUEAfoPBvwFDgH0/P36AQD++gYA+/37AwYGAf/1+vz7/wL6+Pj+Bv8M+e4IAQP9BP39BAP4+xcE/wQGC/z8AvUEBfD8CQICCf38/AkG/vj5"
     }
   },
-  "generated_at": "2026-08-23T07:18:05Z",
+  "generated_at": "2026-08-23T11:00:23Z",
   "items": [
     {
       "band": "low",
@@ -225,9 +226,60 @@
       "updated_at": null,
       "vertical": "india",
       "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 2,
+      "item_id": "world-02",
+      "key_points": [
+        "Australia confirmed its first H5N1 bird flu case in a mammal, a long-nosed fur seal found in South Australia.",
+        "Federal agriculture minister Julie Collins stated that the infection is not unexpected in marine mammals with high bird flu rates.",
+        "The outbreak, which began in June, has led to mass seabird deaths and is now spreading to native species.",
+        "The seal was found dead with no signs of injury, and officials believe the infection occurred through exposure to infected wild birds or their environment.",
+        "There have been 297 positive bird flu cases in Australia, with 194 in South Australia, but no evidence of infection in poultry or agriculture systems."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-23T10:29:58Z",
+      "source_id": "independent-world",
+      "source_kind": "reporting",
+      "source_name": "The Independent - World",
+      "source_url": "https://independent.co.uk/news/world/australasia/australia-bird-flu-mammal-seal-b3037710.html",
+      "summary": "Australia has confirmed its first case of H5N1 bird flu in a mammal, a long-nosed fur seal found in South Australia. Federal agriculture minister Julie Collins stated that the infection is not unexpected, particularly in marine mammals in areas with high bird flu rates. The outbreak, which began in June, has led to mass seabird deaths and is now spreading to native species. The seal, part of an estimated 100,000 in the state's waters, was found dead with no signs of injury. Officials noted that the infection likely occurred through exposure to infected wild birds or their environment. There have been 297 positive bird flu cases in Australia, with 194 in South Australia. No evidence of infection in poultry or agriculture systems has been found yet.",
+      "title": "Australia confirms first H5N1 bird flu case in a mammal",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "world",
+      "visual": null
+    },
+    {
+      "band": "high",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 2,
+      "item_id": "world-03",
+      "key_points": [
+        "National Security Advisor Ajit Doval is visiting Beijing for the 25th round of talks on the India-China boundary issue.",
+        "The visit is expected to take place ahead of a potential visit by Chinese President Xi Jinping to India in September 2026.",
+        "The discussions will focus on the broader bilateral relationship and the situation along the Line of Actual Control (LAC).",
+        "Recent talks under the Working Mechanism for Consultation and Coordination (WMCC) have reviewed border tensions and delimitation issues."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-23T10:29:44Z",
+      "source_id": "thehindu-intl",
+      "source_kind": "reporting",
+      "source_name": "The Hindu - International",
+      "source_url": "https://thehindu.com/news/international/ajit-doval-wang-yi-meeting-india-china-special-representatives-talks-august-23-2026/article71380342.ece",
+      "summary": "National Security Advisor Ajit Doval is set to visit Beijing from August 23 to 24, 2026, for the 25th round of talks between the Special Representatives on the India-China boundary issue. The visit precedes a potential visit by Chinese President Xi Jinping to India in September and aims to assess the broader bilateral relationship. The talks will also review the situation along the Line of Actual Control (LAC) and discuss border management and delimitation. The visit follows recent discussions under the Working Mechanism for Consultation and Coordination (WMCC) and comes amid ongoing tensions in various sectors of the India-China border.",
+      "title": "Eyes on Xi visit, \u2018early harvest\u2019 as Doval heads to Beijing",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "world",
+      "visual": null
     }
   ],
-  "items_failed": 9,
+  "items_failed": 7,
   "items_planned": 17,
   "partial": true,
   "retention_window_months": -1,
@@ -236,6 +288,11 @@
       "at": "2026-08-23T07:18:05Z",
       "items_added": 8,
       "n": 1
+    },
+    {
+      "at": "2026-08-23T11:00:23Z",
+      "items_added": 2,
+      "n": 2
     }
   ],
   "version": "2026-08-22",
@@ -256,7 +313,7 @@
       "id": "india"
     },
     {
-      "count": 1,
+      "count": 3,
       "display_name": "World",
       "id": "world"
     }
