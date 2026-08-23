@@ -95,6 +95,20 @@ def test_a_lead_with_nothing_salient_is_vacuously_covered() -> None:
     assert lead_coverage("anything at all", "it happened. and then it stopped.") == 1.0
 
 
+def test_a_title_line_cannot_glue_to_a_capitalised_body_line() -> None:
+    source = (
+        "The Intrinsic Valuation of Biodiversity Loss\n"
+        "We explore the welfare costs of the loss of animal life in a utilitarian framework. "
+        "Moral philosophy and neuroscience define sentience as the capacity for experience."
+    )
+    summary = (
+        "The authors report that biodiversity loss has welfare costs because animal sentience "
+        "has intrinsic value."
+    )
+
+    assert lead_coverage(summary, source) >= EvaluationConfig().lead_coverage_min
+
+
 # --- The defect nothing else can see: a wrong number -----------------------
 
 
