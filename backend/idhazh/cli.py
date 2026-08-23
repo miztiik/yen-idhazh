@@ -747,10 +747,22 @@ def stage_assemble(
         if payload.eval_path.exists():
             row = EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8"))
             rows.append(row)
-            band = row.band
+            band = score.band(
+                row.hhem,
+                unsupported_numbers=row.unsupported_numbers,
+                lead_coverage=row.coverage,
+                hedge_dropped=row.hedge_dropped,
+                config=settings.app.evaluation,
+            )
         else:
-            band = score.counterweight_band(
-                summary.summary or "", article.text or "", settings.app.evaluation
+            text = summary.summary or ""
+            full_text = article.text or ""
+            band = score.band(
+                None,
+                unsupported_numbers=metrics.unsupported_numbers(text, full_text),
+                lead_coverage=metrics.lead_coverage(text, full_text),
+                hedge_dropped=metrics.hedge_dropped(text, full_text),
+                config=settings.app.evaluation,
             )
         digest_items.append(
             assemble.to_digest_item(

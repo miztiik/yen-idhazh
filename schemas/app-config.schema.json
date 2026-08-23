@@ -124,6 +124,14 @@
           "title": "Golden Set Size",
           "type": "integer"
         },
+        "lead_coverage_min": {
+          "default": 0.3,
+          "description": "Below this the summary missed the source lead. It caps a high band at medium rather than forcing low.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Lead Coverage Min",
+          "type": "number"
+        },
         "spot_checks_per_week": {
           "default": 10,
           "minimum": 0,
@@ -745,6 +753,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added evaluation.lead_coverage_min.",
+      "version": "2026-08-23T17:41",
+      "why": "Lead coverage now caps a high confidence band at medium. The threshold is a tunable band input, so it belongs in config rather than in score.py (Rule #6). Additive - an older config still validates through the schema default."
+    },
+    {
       "change": "Added ui.read_mark_days.",
       "version": "2026-08-23T16:00",
       "why": "Read marks were one flat list of item ids that never expired, so an id reused on a later day greyed out an article the reader had never opened, and the store grew for ever. Marks are now held per digest date and pruned to the newest days this number allows. Additive - an older config still validates, and the browser drops the old flat list on sight because there is no honest way to tell which day those ids belonged to."
@@ -828,7 +841,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-23T16:00",
+      "default": "2026-08-23T17:41",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -842,5 +855,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-23T16:00"
+  "version": "2026-08-23T17:41"
 }
