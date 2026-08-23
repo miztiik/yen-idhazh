@@ -47,6 +47,18 @@ Feed health cannot explain why a planned article failed after discovery. That
 belongs to the item-health ledger, which records one row per planned item per
 run. See [item-health.md](item-health.md).
 
+## Per-source yield is not measurable yet
+
+Feed health can say whether a source answered. It cannot yet say whether that
+source yields publishable items over time. That denominator is different: one
+source can answer cleanly and still produce planned items that fail at fetch,
+extract or summarize.
+
+Per-source item yield needs at least 30 days of `state/item-health/` rows. The
+ledger started on 2026-08-23, so the rubric is blocked until that window exists.
+Do not retire or demote a source by item-yield rule before then. Until the
+window exists, any source-yield threshold is an estimate, not a measurement.
+
 ## The run never edits the source list
 
 Retirement is a person moving a feed into the `retired` key of `config/sources.json`. Quarantine is a run declining to ask, based on rows it wrote itself.
