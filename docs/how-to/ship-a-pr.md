@@ -1,6 +1,6 @@
 # How to ship a PR
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 The end-to-end runbook for taking a worker branch from "ready to commit" to "merged + cleaned up". Procedural counterpart to [CLAUDE.md](../../CLAUDE.md) section 8 (Git Hygiene) + section 9 (Definition of Done) + section 12 (published-surface verification).
 
@@ -90,6 +90,8 @@ The gate *commands* are project-specific (build tool, test runner, type-checker,
 Record the project's actual commands under each category the first time you run them.
 
 ## Merge
+
+Merge is serialized even when work dispatch is parallel. Before each merge, confirm the branch is based on the current target branch and all required gates are green. If the target branch moved, update the PR branch, rerun the affected gates, and merge only after they are green again. Never merge a red or stale branch.
 
 ```powershell
 gh pr merge NNN --squash --delete-branch
