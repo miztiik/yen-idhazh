@@ -31,6 +31,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.contracts.route import VisualKind, VisualState
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import EventType, LensId, SourceKind
 
 
@@ -83,6 +84,14 @@ class DigestItem(Model):
     entities: list[Slug] = Field(default_factory=list)
 
     band: ConfidenceBand
+    source_form: SourceForm = Field(
+        default=SourceForm.ARTICLE,
+        description="Declared feed form, so a reader can see when an item is an abstract.",
+    )
+    reader_note: str | None = Field(
+        default=None,
+        description="Our sentence explaining a source limitation, never a badge.",
+    )
     truncated: bool = Field(
         default=False, description="The reader is told before they find out by clicking through."
     )
@@ -131,6 +140,15 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T18:51",
+            change="Added source_form and reader_note to published items.",
+            why=(
+                "Short and abstract sources can now publish, so the page needs our own "
+                "sentence that tells the reader what kind of source was summarized without "
+                "turning the limitation into a badge."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22",
             change="Added the optional embeddings block.",

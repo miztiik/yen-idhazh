@@ -11,6 +11,7 @@ Every knob ships a sane default, so a fresh clone runs unconfigured.
 
 from __future__ import annotations
 
+import math
 from enum import StrEnum
 from typing import ClassVar, Literal, Self
 
@@ -128,9 +129,13 @@ class ExtractConfig(Model):
         description="A performance lever, not only a safety cap: prefill degrades with length.",
     )
     min_source_words: int = Field(
-        default=250,
+        default=60,
         ge=1,
-        description="Below this the item publishes through the brief tier. It is not a drop.",
+        description=(
+            "Below this the item publishes through the brief tier. It is derived in "
+            "AppConfig from summarize.bands[0].target_words_min divided by "
+            "evaluation.brief_compression_ceiling."
+        ),
     )
     prose_sentence_min: int = Field(
         default=3,
@@ -141,6 +146,17 @@ class ExtractConfig(Model):
         default=8,
         ge=1,
         description="Words a sentence needs before it counts as prose for the shape signal.",
+    )
+    prose_line_count_min: int = Field(
+        default=12,
+        ge=1,
+        description="Lines needed before the line-shape guard runs.",
+    )
+    prose_line_ratio_min: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum share of lines that must look like prose on a line-heavy page.",
     )
     reject_not_prose: bool = Field(
         default=False,
@@ -289,7 +305,8 @@ def _default_bands() -> list[SummaryBand]:
     words is still publishable.
     """
     return [
-        SummaryBand(min_source_words=0, target_words_min=50, target_words_max=90),
+        SummaryBand(min_source_words=0, target_words_min=30, target_words_max=45),
+        SummaryBand(min_source_words=60, target_words_min=50, target_words_max=90),
         SummaryBand(min_source_words=700, target_words_min=70, target_words_max=150),
         SummaryBand(min_source_words=2000, target_words_min=110, target_words_max=200),
     ]
@@ -401,12 +418,21 @@ class EvaluationConfig(Model):
         description="Score gap that flags a truncation artifact rather than a hallucination.",
     )
     summary_words_min: int = Field(
-        default=40,
+        default=25,
         ge=1,
         description=(
             "Below this it is a headline, not a summary. Set under the lowest band in "
             "`summarize.bands`: the prompt is a request, and dropping an item for missing "
             "it by two words loses a story to a rounding error."
+        ),
+    )
+    brief_compression_ceiling: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Maximum summary/source ratio for a brief item. Also caps verbatim_run on "
+            "briefs and derives extract.min_source_words from the first brief ask."
         ),
     )
     summary_words_max: int = Field(
@@ -598,6 +624,19 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-23T19:50",
+            change=(
+                "Added the brief summary band, lowered evaluation.summary_words_min to 25, "
+                "lowered extract.min_source_words to its derived value, added "
+                "evaluation.brief_compression_ceiling, and added line-shape prose knobs."
+            ),
+            why=(
+                "Short sources should publish with an honest brief instead of being padded "
+                "or dropped. The old word gate forced the decoder to keep writing on a "
+                "small source, which made invention more likely."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-23T19:35",
             change="Added llama-server runtime-sweep knobs to models.inference.",
             why=(
@@ -777,4 +816,11 @@ class AppConfig(Contract):
                     f"summarize band at {band.min_source_words} words asks for a summary "
                     "longer than evaluation.summary_words_max accepts"
                 )
+        brief_target = self.summarize.bands[0].target_words_min
+        derived_floor = math.ceil(brief_target / self.evaluation.brief_compression_ceiling)
+        if self.extract.min_source_words != derived_floor:
+            raise ValueError(
+                "extract.min_source_words must equal summarize.bands[0].target_words_min "
+                "divided by evaluation.brief_compression_ceiling"
+            )
         return self

@@ -29,6 +29,7 @@ from idhazh.contracts.base import (
     UrlKey,
     derive_url_key,
 )
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 
 
@@ -47,6 +48,10 @@ class PlannedItem(Model):
     canonical_url: Url = Field(description="After canonicalisation. url_key derives from it.")
     source_id: Slug = Field(description="The feed that carried it first.")
     tier: SourceTier
+    source_form: SourceForm = Field(
+        default=SourceForm.ARTICLE,
+        description="Declared feed form, carried from config so workers never infer it.",
+    )
     vertical: Slug
     title: UntrustedLine | None = None
     published_at: Timestamp | None = None
@@ -94,6 +99,15 @@ class RunPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T18:48",
+            change="Added source_form to each planned item.",
+            why=(
+                "Workers need to know when a source is an abstract without detecting it "
+                "from page text. Carrying the curator-declared feed form keeps that fact in "
+                "the plan payload."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T12:00",
             change="feeds_skipped counts the feeds a quarantine held back this run.",

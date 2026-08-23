@@ -29,10 +29,15 @@ looks like.
 ## One ask per article length
 
 `config.summarize.bands` holds one length ask per article size, ordered by
-`min_source_words`. `band_for()` picks the longest band the article reaches.
+`min_source_words`. `band_for()` picks the longest band the article reaches,
+unless extraction recorded the item as brief. A brief item always uses band 0.
 
 A release note and a long read asked for the same number of words gives a padded
 summary of the first and a thin one of the second.
+
+Band 0 is the brief band: `{0, 30, 45}`. The former first band starts at 60
+words and asks for 50 to 90 words. The split is forced by the source floor:
+`30 / 0.5 = 60`.
 
 Two rules make band selection safe rather than approximate:
 
@@ -71,7 +76,7 @@ The decoder's character rails are **derived from the accept gate**, never pinned
 
 | Rail | Derived from | Why |
 | --- | --- | --- |
-| Summary floor | `summary_words_min x 5` | A generation control as much as a check. The decoder reads the floor and keeps writing, so a summary that stops after two sentences is prevented rather than caught. Five is below real English, so a genuine summary at the gate's floor clears it and fails on words if it fails at all. |
+| Summary floor | `summary_words_min x 5` | A generation control as much as a check. The decoder reads the floor and keeps writing, so a summary that stops after two sentences is prevented rather than caught. Five is below real English, so a genuine summary at the gate's floor clears it and fails on words if it fails at all. With the 25-word gate, this rail is 125 characters. |
 | Summary ceiling | `summary_words_max x 12` | Loose. It only stops a runaway decode. |
 | Title ceiling | `title_words_max x 12` | The same loose ceiling. |
 | Title floor | none | The floor exists to stop a long field ending early. A headline does not have that failure mode, and a floor applied to one would only pad a good short line into a bad long one. |
@@ -92,6 +97,7 @@ in a failure detail.
 | **Framing** | Names the task as epistemological, then says in plain words what that means to do: a reader must be able to tell, from the summary alone, how the article knows what it says. |
 | **Title** | A new title, written from the body and the headline together, `title_words_min` to `title_words_max` words, with the headline styles it must not adopt named. See below. |
 | **Length** | The band's word range, plus `key_points_min` to `key_points_max` key points. Each key point must add something the summary did not say. |
+| **Source form** | The trusted line before the fenced text can say `Source form: abstract`. In that case the prompt tells the model to write "The authors report that..." or equivalent, because an abstract is the authors describing their own work. |
 | **Attribution** | Who said a thing, named as the article names it. Never "sources say" when the article named the source, never a source the article did not name, and a figure an organisation reports about itself is marked as its own. |
 | **Certainty** | Hedges are protected in both directions. Dropping one turns a claim into a fact; adding one turns a fact into a rumour. A plan, a proposal, a target, a forecast and a result stay apart, because the kind of claim is the claim. |
 | **Faithfulness** | Only what the source says. Numbers exactly as given. The names the opening lines name. |

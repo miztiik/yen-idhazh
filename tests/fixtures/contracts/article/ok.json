@@ -19,6 +19,7 @@
   "published_at": "2026-08-21T05:30:00Z",
   "rank_score": 4.4,
   "sanitizer_version": "sanitizer-1",
+  "source_form": "article",
   "source_id": "example-lab-blog",
   "source_url": "https://blog.example-lab.org/2026/08/model-release",
   "status": "ok",

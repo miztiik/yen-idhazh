@@ -57,6 +57,9 @@
 	</h2>
 
 	<p class="text-[1.0625rem] leading-[1.6] text-text">{item.summary}</p>
+	{#if item.reader_note}
+		<p class="mt-2 text-[0.9375rem] leading-[1.55] text-text-secondary">{item.reader_note}</p>
+	{/if}
 
 	<ItemVisual visual={item.visual} />
 
