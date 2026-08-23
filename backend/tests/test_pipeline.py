@@ -10,24 +10,29 @@ No mocks and no network. The recorded score is a float, not a stub object.
 from __future__ import annotations
 
 import csv
+import socket
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from pytest import MonkeyPatch
 
 from idhazh import assemble, cli, config
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.sources import FeedDef
-from idhazh.contracts.summary import Summary
+from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
 from idhazh.evals.score import band, counterweight_band, to_eval_row
+from idhazh.fetch import FetchResult
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -65,6 +70,27 @@ def row(**overrides: object) -> EvalRow:
         scored_at="2026-08-21T06:18:02Z",
     )
     return built.model_copy(update=overrides) if overrides else built
+
+
+def closed_loopback_endpoint() -> str:
+    """Return a loopback port that refused a real socket before the test used it."""
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        port = int(server.getsockname()[1])
+    return f"http://127.0.0.1:{port}/v1/chat/completions"
+
+
+def captured_article_fetch(_url: str) -> FetchResult:
+    page = read_text(FIXTURES_DIR / "pages" / "article.html")
+    extra = (
+        "<p>The filing also says the utility will publish quarterly milestones, "
+        "including site work, equipment orders, safety reviews and expected fuel "
+        "delivery dates, so residents can track whether the schedule is moving. "
+        "Officials said each update will name the missed date when a milestone "
+        "slides, rather than leaving the change to be inferred from a later plan.</p>"
+    )
+    body = page.replace("</article>", f"{extra}</article>").encode("utf-8")
+    return FetchResult(FetchOutcome.OK, status=200, body=body)
 
 
 # --- Config -----------------------------------------------------------------
@@ -299,6 +325,35 @@ def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> N
 
     monkeypatch.setattr("idhazh.evals.hhem.HhemScorer.load", explode)
     assert cli._scorer(enabled=True) is None
+
+
+def test_a_dead_model_server_marks_every_item_without_parsing(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+
+    cli.stage_work(
+        run_plan,
+        settings=config.load(CONFIG_DIR),
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+
+    summaries = [
+        Summary.from_json(
+            read_text(tmp_path / "run" / run_plan.date / "items" / f"{item.item_id}.summary.json")
+        )
+        for item in run_plan.items
+    ]
+
+    assert len(summaries) == len(run_plan.items)
+    assert {summary.status for summary in summaries} == {SummaryStatus.FAILED}
+    assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_UNREACHABLE}
+    details = [summary.failure_detail or "" for summary in summaries]
+    assert all("JSONDecodeError" not in detail for detail in details)
+    assert all("shape" not in detail for detail in details)
 
 
 def test_a_retired_feed_still_labels_the_items_it_published() -> None:
