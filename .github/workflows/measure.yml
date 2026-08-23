@@ -16,12 +16,32 @@ on:
       corpus_links:
         description: 'How many real links to measure for the length distribution'
         default: '200'
+      runtime_candidate:
+        description: 'llama-server runtime candidate. none keeps the existing jobs.'
+        type: choice
+        default: none
+        options:
+          - none
+          - baseline
+          - np1
+          - batch2048
+          - no_startup_warmup
+          - flash_attention_on
+          - load_mode_mmap_mlock
+          - kv_q8
+          - prio_poll
+          - threads_batch
+          - np2_inflight
+      runtime_threads_batch:
+        description: 'Value for -tb when runtime_candidate is threads_batch'
+        default: '4'
 
 permissions:
   contents: read
 
 jobs:
   llm:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.runtime_candidate == 'none' || inputs.runtime_candidate == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
@@ -113,6 +133,7 @@ jobs:
           path: backend/var/
 
   image:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.runtime_candidate == 'none' || inputs.runtime_candidate == '' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -147,6 +168,7 @@ jobs:
           path: backend/var/
 
   corpus:
+    if: ${{ github.event_name != 'workflow_dispatch' || inputs.runtime_candidate == 'none' || inputs.runtime_candidate == '' }}
     # The length buckets every per-article cost figure multiplies by are invented
     # until this job runs. It reaches the open web, which is why it lives here and
     # never in a test (Rule #7).
@@ -175,3 +197,405 @@ jobs:
         with:
           name: bench-corpus
           path: backend/var/corpus.json
+
+  runtime:
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_candidate != 'none' && inputs.runtime_candidate != '' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      MODEL_REPO: Qwen/Qwen3-8B-GGUF
+      MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Record runner hardware
+        run: |
+          set -euo pipefail
+          mkdir -p backend/var/runtime-sweep
+          {
+            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner=${RUNNER_OS:-unknown}"
+            echo "nproc=$(nproc)"
+            free -g | sed -n '1,2p'
+            lscpu | grep -E 'Model name|MHz' | head -3
+          } | tee backend/var/runtime-sweep/hardware.txt
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Cache weights and runtime
+        id: weights
+        uses: actions/cache@v4
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: runtime-sweep-${{ env.MODEL_FILE }}-v1
+
+      - name: Fetch runtime and weights
+        if: steps.weights.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin backend/models
+          URL=$(curl -sS -H "Authorization: ******" \
+            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
+            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ]; then
+            echo "no ubuntu-x64 llama.cpp build found - rate limited, or the asset was renamed" >&2
+            exit 1
+          fi
+          curl -sSL -o llama.tar.gz "$URL"
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
+          chmod +x backend/bin/llama-server
+          curl -sSL -o "backend/models/${MODEL_FILE}" \
+            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
+
+      - name: Record weight-cache state
+        run: |
+          {
+            echo "gguf_cache_hit=${{ steps.weights.outputs.cache-hit == 'true' }}"
+            stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
+          } | tee backend/var/runtime-sweep/cache-state.txt
+
+      - name: Build fixed five-article corpus
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%F)
+          export RUNTIME_DATE="$DATE"
+          echo "RUNTIME_DATE=$DATE" >> "$GITHUB_ENV"
+          python -m idhazh plan --date "$DATE" --cap 5
+          python - <<'PY'
+          import json
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          from idhazh.contracts.run_plan import RunPlan
+
+          date = os.environ["RUNTIME_DATE"]
+          plan_path = Path("backend/var/run") / date / "plan.json"
+          payload = json.loads(plan_path.read_text(encoding="utf-8"))
+          payload["items"] = payload["items"][:5]
+          if len(payload["items"]) != 5:
+              raise SystemExit("runtime sweep needs exactly five planned articles")
+          counts = Counter(item["vertical"] for item in payload["items"])
+          for vertical in payload["verticals"]:
+              vertical["planned"] = counts.get(vertical["id"], 0)
+          text = RunPlan.model_validate(payload).to_json()
+          plan_path.write_text(text, encoding="utf-8")
+          out = Path("backend/var/runtime-sweep/plan.json")
+          out.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Measure runtime candidate
+        env:
+          RUNTIME_CANDIDATE: ${{ inputs.runtime_candidate }}
+          RUNTIME_THREADS_BATCH: ${{ inputs.runtime_threads_batch }}
+          GGUF_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import shutil
+          import statistics
+          import subprocess
+          import sys
+          import threading
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          from idhazh import config
+          from idhazh.contracts.app_config import AppConfig
+          from idhazh.llm.server import server_argv
+
+          CANDIDATE = os.environ["RUNTIME_CANDIDATE"]
+          DATE = os.environ["RUNTIME_DATE"]
+          ROOT = Path("backend/var/runtime-sweep")
+          CONFIG_ROOT = ROOT / "configs"
+          MODEL_FILE = os.environ["MODEL_FILE"]
+          THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
+          REPEATS = 3
+          SERVER_PORT = 8080
+
+          def candidate_update(name):
+              if name == "baseline":
+                  return {}, 1
+              if name == "np1":
+                  return {"n_parallel": 1}, 1
+              if name == "batch2048":
+                  return {"n_batch": 2048}, 1
+              if name == "no_startup_warmup":
+                  return {"startup_warmup": False}, 1
+              if name == "flash_attention_on":
+                  return {"flash_attention": "on"}, 1
+              if name == "load_mode_mmap_mlock":
+                  return {"load_mode": "mmap+mlock"}, 1
+              if name == "kv_q8":
+                  return {"cache_type_k": "q8_0", "cache_type_v": "q8_0"}, 1
+              if name == "prio_poll":
+                  return {"priority": 2, "poll": 100}, 1
+              if name == "threads_batch":
+                  return {"n_threads_batch": THREADS_BATCH}, 1
+              if name == "np2_inflight":
+                  return {"n_parallel": 2, "n_ctx": 16384}, 2
+              raise SystemExit(f"unknown runtime candidate: {name}")
+
+          def write_config(label, update):
+              dst = CONFIG_ROOT / label
+              if dst.exists():
+                  shutil.rmtree(dst)
+              shutil.copytree("config", dst)
+              path = dst / "idhazh.json"
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              payload["models"]["inference"].update(update)
+              path.write_text(AppConfig.model_validate(payload).to_json(), encoding="utf-8")
+              return dst
+
+          def read_status(pid):
+              status = Path("/proc") / str(pid) / "status"
+              values = {}
+              if not status.exists():
+                  return values
+              for line in status.read_text(encoding="utf-8", errors="replace").splitlines():
+                  if line.startswith(("VmRSS:", "VmHWM:")):
+                      key, value = line.split(":", 1)
+                      values[key] = value.strip()
+              return values
+
+          def cgroup_peak():
+              path = Path("/sys/fs/cgroup/memory.peak")
+              if path.exists():
+                  return path.read_text(encoding="utf-8").strip()
+              return None
+
+          def wait_for_health():
+              for _ in range(120):
+                  try:
+                      with urllib.request.urlopen(
+                          f"http://127.0.0.1:{SERVER_PORT}/health", timeout=2
+                      ) as response:
+                          if response.status < 500:
+                              return
+                  except Exception:
+                      pass
+                  time.sleep(5)
+              raise RuntimeError("llama-server never became healthy")
+
+          def parse_server_facts(log_path):
+              text = log_path.read_text(encoding="utf-8", errors="replace")
+              facts = {}
+              for key in ("n_slots", "n_ctx_slot", "n_ctx_per_seq", "kv_unified"):
+                  match = re.search(rf"{key}\s*=\s*'?([^,\\s']+)'?", text)
+                  if match:
+                      facts[key] = match.group(1)
+              return facts
+
+          def collect_digests(label, repeat):
+              items_dir = Path("backend/var/run") / DATE / "items"
+              summaries = sorted(items_dir.glob("*.summary.json"))
+              if len(summaries) != 5:
+                  raise RuntimeError(f"{label} repeat {repeat} wrote {len(summaries)} summaries, not 5")
+              digests = {}
+              per_item = []
+              for path in summaries:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+                  if data.get("status") != "ok":
+                      raise RuntimeError(f"{path.name} did not summarize: {data.get('failure_detail')}")
+                  digests[data["item_id"]] = data["output_digest"]
+                  per_item.append({
+                      "item_id": data["item_id"],
+                      "output_digest": data["output_digest"],
+                      "duration_ms": data["duration_ms"],
+                      "fetch_ms": data["fetch_ms"],
+                      "extract_ms": data["extract_ms"],
+                      "summarize_ms": data["summarize_ms"],
+                      "input_tokens": data["input_tokens"],
+                      "output_tokens": data["output_tokens"],
+                  })
+              return digests, per_item
+
+          def run_once(label, update, repeat, worker_count):
+              cfg = write_config(f"{label}-{repeat}", update)
+              settings = config.load(cfg)
+              log_path = ROOT / f"{label}-{repeat}.llama-server.log"
+              items_dir = Path("backend/var/run") / DATE / "items"
+              if items_dir.exists():
+                  shutil.rmtree(items_dir)
+              items_dir.mkdir(parents=True, exist_ok=True)
+              argv = server_argv(
+                  binary=Path("backend/bin/llama-server"),
+                  weights=Path("backend/models") / MODEL_FILE,
+                  model=settings.app.models.summarize,
+                  inference=settings.app.models.inference,
+                  port=SERVER_PORT,
+              )
+              env = os.environ.copy()
+              env["LD_LIBRARY_PATH"] = "backend/bin"
+              t0 = time.perf_counter()
+              with log_path.open("w", encoding="utf-8") as log:
+                  server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
+                  rss_samples = []
+                  stop = threading.Event()
+
+                  def sample_rss():
+                      while not stop.is_set():
+                          rss_samples.append(read_status(server.pid))
+                          time.sleep(1)
+
+                  sampler = threading.Thread(target=sample_rss, daemon=True)
+                  sampler.start()
+                  try:
+                      wait_for_health()
+                      startup_ms = int((time.perf_counter() - t0) * 1000)
+                      work_started = time.perf_counter()
+                      commands = []
+                      for shard in range(worker_count):
+                          cmd = [
+                              sys.executable,
+                              "-m",
+                              "idhazh",
+                              "work",
+                              "--config",
+                              str(cfg),
+                              "--date",
+                              DATE,
+                              "--shard",
+                              str(shard),
+                              "--shards",
+                              str(worker_count),
+                              "--no-faithfulness",
+                          ]
+                          commands.append(subprocess.Popen(cmd))
+                      failures = [proc.wait() for proc in commands]
+                      if any(failures):
+                          raise RuntimeError(f"{label} repeat {repeat} worker failures: {failures}")
+                      work_ms = int((time.perf_counter() - work_started) * 1000)
+                      total_ms = int((time.perf_counter() - t0) * 1000)
+                  finally:
+                      stop.set()
+                      server.terminate()
+                      try:
+                          server.wait(timeout=20)
+                      except subprocess.TimeoutExpired:
+                          server.kill()
+                          server.wait(timeout=20)
+                      sampler.join(timeout=5)
+              digests, per_item = collect_digests(label, repeat)
+              return {
+                  "label": label,
+                  "candidate": CANDIDATE,
+                  "repeat": repeat,
+                  "argv": argv,
+                  "worker_count": worker_count,
+                  "startup_ms": startup_ms,
+                  "work_ms": work_ms,
+                  "total_ms": total_ms,
+                  "server_rss_samples": rss_samples,
+                  "cgroup_memory_peak_bytes": cgroup_peak(),
+                  "server_facts": parse_server_facts(log_path),
+                  "digests": digests,
+                  "per_item": per_item,
+              }
+
+          ROOT.mkdir(parents=True, exist_ok=True)
+          update, workers = candidate_update(CANDIDATE)
+          labels = ["baseline"] if CANDIDATE == "baseline" else ["baseline", CANDIDATE]
+          updates = {"baseline": ({}, 1), CANDIDATE: (update, workers)}
+          results = []
+          for label in labels:
+              current_update, worker_count = updates[label]
+              for repeat in range(1, REPEATS + 1):
+                  result = run_once(label, current_update, repeat, worker_count)
+                  results.append(result)
+                  print(
+                      f"{label} repeat {repeat}: "
+                      f"startup_ms={result['startup_ms']} work_ms={result['work_ms']} "
+                      f"total_ms={result['total_ms']}"
+                  )
+
+          digest_sets = {}
+          for result in results:
+              digest_sets.setdefault(result["label"], []).append(result["digests"])
+          verdict = "passed"
+          problems = []
+          for label, maps in digest_sets.items():
+              first = maps[0]
+              for index, current in enumerate(maps[1:], start=2):
+                  if current != first:
+                      verdict = "rejected_output_drift"
+                      problems.append({"label": label, "repeat": index, "expected": first, "actual": current})
+          if CANDIDATE != "baseline":
+              if digest_sets[CANDIDATE][0] != digest_sets["baseline"][0]:
+                  verdict = "rejected_output_drift"
+                  problems.append({
+                      "label": CANDIDATE,
+                      "expected": digest_sets["baseline"][0],
+                      "actual": digest_sets[CANDIDATE][0],
+                  })
+
+          def stats(label, key):
+              values = [result[key] for result in results if result["label"] == label]
+              return {
+                  "values": values,
+                  "median": statistics.median(values),
+                  "spread": max(values) - min(values),
+              }
+
+          timing = {
+              label: {
+                  "startup_ms": stats(label, "startup_ms"),
+                  "work_ms": stats(label, "work_ms"),
+                  "total_ms": stats(label, "total_ms"),
+              }
+              for label in labels
+          }
+          if CANDIDATE != "baseline":
+              baseline = timing["baseline"]["total_ms"]
+              candidate = timing[CANDIDATE]["total_ms"]
+              faster_by_ms = baseline["median"] - candidate["median"]
+              timing["candidate_vs_baseline"] = {
+                  "faster_by_ms": faster_by_ms,
+                  "beats_baseline_outside_spread": faster_by_ms > max(
+                      baseline["spread"], candidate["spread"]
+                  ),
+              }
+
+          summary = {
+              "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "candidate": CANDIDATE,
+              "repeats": REPEATS,
+              "fixed_corpus": "backend/var/runtime-sweep/plan.json",
+              "gguf_cache_hit": os.environ["GGUF_CACHE_HIT"],
+              "verdict": verdict,
+              "problems": problems,
+              "timing": timing,
+              "results": results,
+          }
+          (ROOT / "runtime-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          if verdict != "passed":
+              raise SystemExit(verdict)
+          PY
+
+      - name: Upload runtime sweep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-sweep-${{ inputs.runtime_candidate }}
+          path: backend/var/runtime-sweep/
+          retention-days: 7
