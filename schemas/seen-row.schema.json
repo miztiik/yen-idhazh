@@ -1,0 +1,51 @@
+{
+  "$id": "seen-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the address, when we first saw it, and the run that saw it.",
+      "version": "2026-08-22T11:00",
+      "why": "An undated article has no age we can trust. First sight is the only honest one, and it has to survive the run that observed it."
+    }
+  ],
+  "description": "One row of `state/seen/<YYYY-MM>.csv`, appended the first time an address is a candidate.",
+  "properties": {
+    "canonical_url": {
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "first_seen_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "First Seen At",
+      "type": "string"
+    },
+    "first_seen_run": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "First Seen Run",
+      "type": "string"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-22T11:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "url_key",
+    "canonical_url",
+    "first_seen_at",
+    "first_seen_run"
+  ],
+  "title": "SeenRow",
+  "type": "object",
+  "version": "2026-08-22T11:00"
+}

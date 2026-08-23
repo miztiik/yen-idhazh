@@ -24,6 +24,17 @@ export const DIGEST_ROOT = process.env.DIGEST_ROOT
 	? resolve(process.env.DIGEST_ROOT)
 	: join(process.cwd(), 'public', 'digest');
 
+/** Where the committed ledgers are read from.
+ *
+ * Overridable for the same reason `DIGEST_ROOT` is: the canary suite builds a
+ * site out of fixture runs, and a fixture must never be able to reach the real
+ * ledger. Read at build time only. Nothing under `state/` is ever served - the
+ * page carries the numbers, never the file.
+ */
+export const STATE_ROOT = process.env.STATE_ROOT
+	? resolve(process.env.STATE_ROOT)
+	: join(REPO_ROOT, 'state');
+
 const DATE_PART = /^\d{2,4}$/;
 
 /** Every published date, newest first. Read from the committed tree, not an index file. */
@@ -63,17 +74,125 @@ export function latestDate(root: string = DIGEST_ROOT): string | null {
 	return publishedDates(root)[0] ?? null;
 }
 
-/** One row per scored item, read from the committed ledger and never recomputed. */
-export function evalRows(): { rows: Record<string, string>[]; columns: string[] } {
-	const path = join(REPO_ROOT, 'evals', 'scores.csv');
+/** The cells of a CSV, quoting and all.
+ *
+ * The backend writes these with `csv.DictWriter`, which quotes any field that
+ * carries a comma, a quote or a newline - and the health ledger's `detail` is
+ * free text from a host that just failed. Splitting on commas is right until it
+ * is not, and a mangled cell reads like a real value, which is worse than an
+ * empty one. Twenty lines beat a dependency for two build-time readers.
+ */
+function parseCsv(text: string): string[][] {
+	const rows: string[][] = [];
+	let row: string[] = [];
+	let cell = '';
+	let quoted = false;
+	for (let i = 0; i < text.length; i += 1) {
+		const ch = text[i];
+		if (quoted) {
+			// Two quotes inside a quoted field are one literal quote.
+			if (ch === '"' && text[i + 1] === '"') {
+				cell += '"';
+				i += 1;
+			} else if (ch === '"') {
+				quoted = false;
+			} else {
+				cell += ch;
+			}
+		} else if (ch === '"') {
+			quoted = true;
+		} else if (ch === ',') {
+			row.push(cell);
+			cell = '';
+		} else if (ch === '\n' || (ch === '\r' && text[i + 1] === '\n')) {
+			if (ch === '\r') i += 1;
+			row.push(cell);
+			rows.push(row);
+			row = [];
+			cell = '';
+		} else {
+			cell += ch;
+		}
+	}
+	// A file with no trailing newline still ends on a real row.
+	if (cell !== '' || row.length > 0) {
+		row.push(cell);
+		rows.push(row);
+	}
+	return rows;
+}
+
+/** A CSV read into named cells, with the column order it was written in. */
+export interface CsvTable {
+	rows: Record<string, string>[];
+	columns: string[];
+}
+
+/** A CSV as named cells. A missing file is empty, never an error. */
+function readCsv(path: string): CsvTable {
 	if (!existsSync(path)) return { rows: [], columns: [] };
-	const lines = readFileSync(path, 'utf8').trim().split('\n');
-	const columns = lines[0]?.split(',') ?? [];
-	const rows = lines.slice(1).map((line) => {
-		const cells = line.split(',');
-		return Object.fromEntries(columns.map((name, index) => [name, cells[index] ?? '']));
-	});
+	const parsed = parseCsv(readFileSync(path, 'utf8')).filter((row) => row.some((cell) => cell !== ''));
+	const columns = parsed[0] ?? [];
+	const rows = parsed
+		.slice(1)
+		.map((cells) => Object.fromEntries(columns.map((name, index) => [name, cells[index] ?? ''])));
 	return { rows, columns };
+}
+
+/** One row per scored item, read from the committed ledger and never recomputed. */
+export function evalRows(): CsvTable {
+	return readCsv(join(STATE_ROOT, 'scores.csv'));
+}
+
+export interface FeedResult {
+	runId: string;
+	date: string;
+	feedId: string;
+	outcome: string;
+	status: number | null;
+	items: number;
+	detail: string;
+}
+
+/** Every feed result on record, oldest shard first.
+ *
+ * Sharded by month under `state/feed-health/`, so this reads a directory rather
+ * than a file. Absent is the ordinary state of a fresh clone: no run has
+ * written a record yet, and no record is exactly what an empty list says.
+ */
+export function feedResults(): FeedResult[] {
+	const dir = join(STATE_ROOT, 'feed-health');
+	if (!existsSync(dir)) return [];
+	const found: FeedResult[] = [];
+	for (const shard of readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.sort()) {
+		for (const row of readCsv(join(dir, shard)).rows) {
+			found.push({
+				runId: row.run_id ?? '',
+				date: row.date ?? '',
+				feedId: row.feed_id ?? '',
+				outcome: row.outcome ?? '',
+				status: row.status ? Number(row.status) : null,
+				items: Number(row.items ?? 0) || 0,
+				detail: row.detail ?? ''
+			});
+		}
+	}
+	return found;
+}
+
+/** One run of one day, as the manifest recorded it. */
+export interface RunRecord {
+	runId: string;
+	n: number;
+	status: string;
+	planned: number;
+	succeeded: number;
+	failed: number;
+	skipped: number;
+	startedAt: string;
+	sourceListStale: boolean;
 }
 
 export interface RunSummary {
@@ -84,12 +203,18 @@ export interface RunSummary {
 	siteBytes: number;
 	siteFiles: number;
 	models: string[];
+	records: RunRecord[];
 }
 
 /** What each run manifest recorded about itself, newest first.
  *
  * The manifest is the only place run-level facts live. Widening a per-item row
  * to carry them would leave every item row with columns that are blank for it.
+ *
+ * Every figure here belongs to a run, not to the day: the manifest holds no
+ * top-level counts at all. The day's totals are summed across its runs, and the
+ * site size is taken from the last run rather than added up - the site is a
+ * thing that was measured four times, not four things.
  */
 export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 	const found: RunSummary[] = [];
@@ -99,16 +224,31 @@ export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 		if (!existsSync(path)) continue;
 		try {
 			const manifest = JSON.parse(readFileSync(path, 'utf8'));
+			const runs: Record<string, unknown>[] = manifest.runs ?? [];
+			const records: RunRecord[] = runs.map((run) => ({
+				runId: String(run.run_id ?? ''),
+				n: Number(run.n ?? 0) || 0,
+				status: String(run.status ?? ''),
+				planned: Number(run.items_planned ?? 0) || 0,
+				succeeded: Number(run.items_succeeded ?? 0) || 0,
+				failed: Number(run.items_failed ?? 0) || 0,
+				skipped: Number(run.items_skipped ?? 0) || 0,
+				startedAt: String(run.started_at ?? ''),
+				sourceListStale: run.source_list_stale === true
+			}));
+			const last = runs.at(-1) ?? {};
+			const models = runs.flatMap((run) =>
+				((run.models ?? []) as { model_ref?: { id?: string } }[]).map((use) => use.model_ref?.id ?? '?')
+			);
 			found.push({
 				date,
-				runs: manifest.runs?.length ?? 0,
-				planned: manifest.items_planned ?? 0,
-				failed: manifest.items_failed ?? 0,
-				siteBytes: manifest.site_bytes ?? 0,
-				siteFiles: manifest.site_files ?? 0,
-				models: (manifest.models ?? []).map(
-					(use: { model_ref?: { id?: string } }) => use.model_ref?.id ?? '?'
-				)
+				runs: records.length,
+				planned: records.reduce((total, run) => total + run.planned, 0),
+				failed: records.reduce((total, run) => total + run.failed, 0),
+				siteBytes: Number(last.site_bytes ?? 0) || 0,
+				siteFiles: Number(last.site_files ?? 0) || 0,
+				models: [...new Set(models)],
+				records
 			});
 		} catch {
 			// A manifest that will not parse costs the console one row, never the page.

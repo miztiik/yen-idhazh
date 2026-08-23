@@ -49,7 +49,15 @@ class TierWeights(Model):
 
 
 class RunConfig(Model):
-    item_cap_per_day: int = Field(default=20, ge=1)
+    safety_ceiling_per_run: int = Field(
+        default=200,
+        ge=1,
+        description=(
+            "A crash guard, not an editorial choice. Supply and the ranking decide how "
+            "big a day is; this only stops a mis-parsed feed from publishing hundreds "
+            "of items in one run. A normal day never reaches it."
+        ),
+    )
     shard_size: int = Field(
         default=5,
         ge=1,
@@ -67,11 +75,6 @@ class RunConfig(Model):
 
 
 class CollectConfig(Model):
-    min_feeds_floor: int = Field(
-        default=25,
-        ge=1,
-        description="Default feed floor. A vertical may raise it; below it, nothing renders.",
-    )
     quarantine_after_failures: int = Field(default=5, ge=1)
     watchlist_max_entities: int = Field(default=30, ge=1)
     max_per_source: int = Field(
@@ -86,6 +89,36 @@ class CollectConfig(Model):
     repetition_weight: float = Field(default=1.0, ge=0.0)
     watchlist_bonus: float = Field(default=0.5, ge=0.0)
     front_page_bonus: float = Field(default=0.4, ge=0.0)
+    recency_weight: float = Field(
+        default=0.6,
+        ge=0.0,
+        description=(
+            "How much freshness may move a score. A bonus, never a filter: a strong "
+            "older item still outranks a weak new one, which a hard age cutoff cannot do."
+        ),
+    )
+    recency_half_life_hours: float = Field(
+        default=18.0,
+        gt=0.0,
+        description=("Hours for the recency bonus to halve. At 18 h a day-old item keeps a third."),
+    )
+    max_future_hours: float = Field(
+        default=6.0,
+        ge=0.0,
+        description=(
+            "A publish date further ahead than this is not believed and the item falls "
+            "back to first sight. Feeds that stamp tomorrow would otherwise take the "
+            "top slot every single day."
+        ),
+    )
+    seen_window_days: int = Field(
+        default=90,
+        ge=1,
+        description=(
+            "How far back the first-sight store is consulted. Older shards stay "
+            "committed and readable; they are just not evidence about today."
+        ),
+    )
 
 
 class ExtractConfig(Model):
@@ -131,11 +164,13 @@ class InferenceConfig(Model):
         description="Off. Reasoning measurably increases hallucination when summarizing.",
     )
     max_output_tokens: int = Field(
-        default=500,
+        default=900,
         ge=1,
         description=(
-            "Covers the summary AND its key points. Sized at 250 the reply ran out of "
-            "budget mid-object and failed as a shape error, which named the wrong cause."
+            "A crash guard, not a length target. The prompt sets the length; this only "
+            "stops a runaway decode from burning a shard's whole timeout. Sized at 250 "
+            "the reply ran out of budget mid-object and failed as a shape error, which "
+            "named the wrong cause - so it is set well above any summary we want."
         ),
     )
 
@@ -144,6 +179,125 @@ class ModelsConfig(Model):
     summarize: ModelRef
     route: ModelRef
     inference: InferenceConfig = Field(default_factory=InferenceConfig)
+
+
+class SummaryBand(Model):
+    """How long a summary to ask for, once the article is at least this long."""
+
+    min_source_words: int = Field(
+        ge=0, description="The band applies to articles this long and longer."
+    )
+    target_words_min: int = Field(ge=1, description="The shortest summary the prompt asks for.")
+    target_words_max: int = Field(ge=1, description="The longest summary the prompt asks for.")
+
+    @model_validator(mode="after")
+    def _the_range_is_ordered(self) -> Self:
+        if self.target_words_min >= self.target_words_max:
+            raise ValueError("target_words_min must sit below target_words_max")
+        return self
+
+
+def _default_bands() -> list[SummaryBand]:
+    """Three sizes: the release note, the article, the long read.
+
+    Starting points chosen from the shape of the sources we collect, not
+    measurements - nothing here may be quoted as one (Holy Law #10). The first
+    band begins at zero so every article lands in one, and the shortest ask sits
+    above `evaluation.summary_words_min` so a summary that misses low by a few
+    words is still publishable.
+    """
+    return [
+        SummaryBand(min_source_words=0, target_words_min=50, target_words_max=90),
+        SummaryBand(min_source_words=700, target_words_min=70, target_words_max=150),
+        SummaryBand(min_source_words=2000, target_words_min=110, target_words_max=200),
+    ]
+
+
+class SummarizeConfig(Model):
+    """What the prompt asks the model for.
+
+    Separate from `evaluation`, which is what the pipeline agrees to accept. The
+    two ranges are deliberately different: a prompt is a request and a gate is a
+    rule, and asking for a tighter range than we enforce is what stops a
+    two-word miss from losing a story. `AppConfig` checks the invariant that
+    actually matters - every ask sits inside the gate - because only there are
+    both blocks visible.
+
+    Every value here is substituted into the prompt text at render time, so the
+    prompt cannot drift from the bounds the pipeline enforces (Holy Law #6).
+    """
+
+    bands: list[SummaryBand] = Field(
+        default_factory=_default_bands,
+        min_length=1,
+        description=(
+            "One length ask per article size, ordered by min_source_words. A release "
+            "note and a long read asked for the same range gives a padded summary of "
+            "the first and a thin one of the second."
+        ),
+    )
+    key_points_min: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "Also the decoder's floor. The prompt and the response schema read this same "
+            "number, or the decoder rejects a reply that did exactly what was asked."
+        ),
+    )
+    key_points_max: int = Field(default=5, ge=1, description="Also the decoder's ceiling.")
+    title_words_min: int = Field(
+        default=6,
+        ge=1,
+        description=(
+            "Shortest title the prompt asks for. Below this a headline stops naming "
+            "who did what, and the reader is back to guessing from the source's own "
+            "framing."
+        ),
+    )
+    title_words_max: int = Field(
+        default=14,
+        ge=1,
+        le=40,
+        description=(
+            "Longest title the prompt asks for, and the decoder's ceiling. Unlike the "
+            "summary there is no floor on the decoder: a headline does not stop early, "
+            "and a floor would only pad a good short one. Capped at 40 so the widest "
+            "decoder ceiling this can produce still fits an UntrustedLine, which is "
+            "what the payload field is."
+        ),
+    )
+    max_verbatim_words: int = Field(
+        default=20,
+        ge=1,
+        description=(
+            "Longest quotation the prompt allows, and it must be attributed. Long "
+            "enough to carry a real sentence somebody said, short enough that a summary "
+            "cannot become the article. The ledger measures the run that actually came "
+            "back (`verbatim_run`), so this number is the ask and that column is the "
+            "answer."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _the_bands_cover_every_article(self) -> Self:
+        if self.bands[0].min_source_words != 0:
+            raise ValueError("the first band must start at zero, or a short article has no band")
+        starts = [band.min_source_words for band in self.bands]
+        if starts != sorted(set(starts)):
+            raise ValueError("bands must climb, and no two may start at the same length")
+        if self.key_points_min > self.key_points_max:
+            raise ValueError("key_points_min must not exceed key_points_max")
+        if self.title_words_min > self.title_words_max:
+            raise ValueError("title_words_min must not exceed title_words_max")
+        return self
+
+    def band_for(self, source_words: int) -> SummaryBand:
+        """The longest band the article reaches. Total, because band one starts at zero."""
+        chosen = self.bands[0]
+        for band in self.bands:
+            if source_words >= band.min_source_words:
+                chosen = band
+        return chosen
 
 
 class EvaluationConfig(Model):
@@ -159,9 +313,9 @@ class EvaluationConfig(Model):
         default=40,
         ge=1,
         description=(
-            "Below this it is a headline, not a summary. Set under what the prompt asks "
-            "for: the prompt is a request, and dropping an item for missing it by two "
-            "words loses a story to a rounding error."
+            "Below this it is a headline, not a summary. Set under the lowest band in "
+            "`summarize.bands`: the prompt is a request, and dropping an item for missing "
+            "it by two words loses a story to a rounding error."
         ),
     )
     summary_words_max: int = Field(
@@ -334,6 +488,17 @@ class UiConfig(Model):
         default="A daily digest that checks its own work.",
         min_length=1,
     )
+    read_mark_days: int = Field(
+        default=7,
+        ge=1,
+        description=(
+            "How many digest days of read marks the browser keeps. Marks are held per "
+            "digest date, so a mark made on one day can never grey out a different "
+            "day's article. Every page load keeps the newest days up to this number "
+            "and drops the rest, which bounds the store without trusting the device "
+            "clock. One week covers a reader who comes back after a break."
+        ),
+    )
 
 
 class AppConfig(Contract):
@@ -341,6 +506,71 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T16:00",
+            change="Added ui.read_mark_days.",
+            why=(
+                "Read marks were one flat list of item ids that never expired, so an id "
+                "reused on a later day greyed out an article the reader had never "
+                "opened, and the store grew for ever. Marks are now held per digest "
+                "date and pruned to the newest days this number allows. Additive - an "
+                "older config still validates, and the browser drops the old flat list "
+                "on sight because there is no honest way to tell which day those ids "
+                "belonged to."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T15:00",
+            change="Added summarize.title_words_min and summarize.title_words_max.",
+            why=(
+                "The digest published the source's own headline, which is written to "
+                "win a click rather than to say what happened. The summarizer now "
+                "writes the title too, and the range it is asked for is a knob like "
+                "every other length in this block (Holy Law #6). Additive - an older "
+                "config still validates, and an item whose title misses the range "
+                "falls back to the source's."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23",
+            change="Added the summarize block: length bands, key-point range and quote cap.",
+            why=(
+                "The lengths the prompt asks for were literals inside the prompt text, "
+                "where no schema could see them and nothing checked them against the "
+                "range the pipeline accepts (Holy Law #6). They are bands rather than "
+                "one range because a release note and a long read asked for the same "
+                "number of words gives a padded summary of the first and a thin one of "
+                "the second. Moving them here also puts them inside the prompt string "
+                "the fingerprint hashes, so changing what we ask for now re-summarizes "
+                "rather than reusing a cached reply written under the old ask. "
+                "Additive - an older config still validates."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-22T11:00",
+            change=(
+                "Replaced run.item_cap_per_day with run.safety_ceiling_per_run. Added "
+                "collect.recency_weight, collect.recency_half_life_hours, "
+                "collect.max_future_hours and collect.seen_window_days. Raised "
+                "inference.max_output_tokens to 900."
+            ),
+            why=(
+                "A daily cap decided the size of the day; supply and the ranking should. "
+                "The ceiling that remains is a crash guard against a mis-parsed feed. "
+                "Recency is a bonus rather than a cutoff so a strong older item is never "
+                "dropped for a weak new one. The token stop is labelled as the crash "
+                "guard it always was, and sized so the prompt sets the length."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-22T09:00",
+            change="Removed collect.min_feeds_floor.",
+            why=(
+                "Nothing read it. The floor a vertical is actually held to is its own "
+                "min_feeds in taxonomy.json, so a second number calling itself the "
+                "default described a mechanism that does not exist."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22",
             change="Added the visuals block.",
@@ -385,9 +615,32 @@ class AppConfig(Contract):
     collect: CollectConfig = Field(default_factory=CollectConfig)
     extract: ExtractConfig = Field(default_factory=ExtractConfig)
     models: ModelsConfig
+    summarize: SummarizeConfig = Field(default_factory=SummarizeConfig)
     evaluation: EvaluationConfig = Field(default_factory=EvaluationConfig)
     drift: DriftConfig = Field(default_factory=DriftConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+
+    @model_validator(mode="after")
+    def _the_ask_sits_inside_the_gate(self) -> Self:
+        """The prompt may ask for less than we accept. It may never ask for more.
+
+        An operator editing one block cannot see the other, and the failure is
+        silent in the worst way: the prompt asks for 300 words, the model
+        complies, and the gate drops a correct summary every single run. So the
+        two blocks are checked together here, where both are in scope.
+        """
+        for band in self.summarize.bands:
+            if band.target_words_min < self.evaluation.summary_words_min:
+                raise ValueError(
+                    f"summarize band at {band.min_source_words} words asks for a summary "
+                    "shorter than evaluation.summary_words_min accepts"
+                )
+            if band.target_words_max > self.evaluation.summary_words_max:
+                raise ValueError(
+                    f"summarize band at {band.min_source_words} words asks for a summary "
+                    "longer than evaluation.summary_words_max accepts"
+                )
+        return self

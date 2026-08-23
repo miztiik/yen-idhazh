@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -19,6 +19,7 @@ An item is the unit a reader consumes. It carries, at minimum:
 
 | Element | Why it is there |
 | --- | --- |
+| **The title** | Ours, not the source's. A headline is written to win a click; a digest line has to say what happened. The summarizer writes it from the article body rather than from the headline, under the same attribution and certainty rules as the summary, because it is the one line every reader sees. Where the rewrite misses, the item falls back to the source's headline rather than failing ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). |
 | **The source link** | The reader's means of verification and their exit. It is a first-class element, not a footnote. Burying it is a dark pattern. |
 | **The summary** | Our own text, of a pinned shape. Never the article body - that is never committed and never served. |
 | **A confidence signal** | Where the item scored low, or where the source was truncated, the reader is told, in their words, before they find out by clicking through. |
@@ -50,13 +51,16 @@ Surfacing this without turning every item into a disclaimer is a typography and 
 
 ## The reader's budget
 
-About two minutes. Ten items a reader can skim beats forty they cannot. The daily item count is capped deliberately, and raising it is a question about source diversity and readership - never about spare compute ([vision.md](vision.md)).
+About two minutes. Ten items a reader can skim beats forty they cannot.
+
+That is a design target for the page, not a cap on the pipeline. Nothing limits how many items a day may carry - supply and the ranking decide ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation. Whether a long day needs more than ordering is a typography question, and it is open.
 
 The page must also render when its data file is absent or empty. That is a normal state, designed on purpose, not an error discovered as a white screen ([../../CLAUDE.md](../../CLAUDE.md) section 12).
 
 ## See also
 
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - where these items are written, the dated routes a reader walks, and retention.
+- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the summarizer is asked for, and why the title is ours.
 - [ui-shell.md](ui-shell.md) - the layout and chrome around these items.
 - [design-system.md](design-system.md) - the visual language.
 - [evaluation.md](evaluation.md) - where the confidence signal comes from.

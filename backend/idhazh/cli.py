@@ -4,9 +4,9 @@ Each stage takes a file and writes a file, which is the whole reason the
 pipeline can be sharded across disposable machines and re-run cheaply. A stage
 that only works as part of the whole is a stage nobody can debug.
 
-    idhazh plan       read feeds, rank, cap        -> run/<date>/plan.json
+    idhazh plan       read feeds, rank, record      -> run/<date>/plan.json
     idhazh work       fetch, extract, summarize, score -> run/<date>/items/*
-    idhazh assemble   collect what finished        -> frontend/public/... + evals/
+    idhazh assemble   collect what finished        -> frontend/public/... + state/
 
 `idhazh run` is the three in order, which is what a developer wants and what
 the daily workflow calls.
@@ -18,17 +18,22 @@ import argparse
 import logging
 import sys
 import time
-from collections.abc import Sequence
+from collections import Counter
+from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Final
+from urllib.parse import urlsplit
 
-from idhazh import assemble, config, discover, extract, fetch, rank, route, summarize
+from idhazh import assemble, config, discover, extract, fetch, ledger, rank, route, summarize
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.contracts.validation_row import ValidationVerdict
@@ -44,6 +49,7 @@ LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
+STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 
 
@@ -55,34 +61,116 @@ def _today() -> str:
     return assemble.utc_now()[:10]
 
 
+# --- the two seams ------------------------------------------------------------
+
+Fetcher = Callable[[str], fetch.FetchResult]
+"""Read one address. The only edge of the pipeline that touches a socket.
+
+Every stage that reads the open web takes one of these. In a run it is
+`live_fetcher`; in a test it is a function that reads `tests/fixtures/feeds/`.
+That is not a mock - it is the same signature reading a real captured file, so
+no test needs the network (Holy Law #7) and every fetch outcome, including the
+ones a live run cannot be made to produce on demand, is reachable.
+"""
+
+Clock = Callable[[], str]
+"""Now, as an ISO-8601 UTC stamp.
+
+Injected for the same reason as the fetcher: a rule about how old an article is
+cannot be tested against a real clock without the test changing its answer at
+midnight.
+"""
+
+
+def live_fetcher(settings: config.Settings) -> Fetcher:
+    """The real thing: one robots read per host, honoured on every later read.
+
+    The cache lives in the closure rather than in a module global, so a caller
+    decides its lifetime instead of the interpreter deciding it.
+    """
+    robots: dict[str, str | None] = {}
+
+    def read(url: str) -> fetch.FetchResult:
+        host = urlsplit(url).netloc
+        if host not in robots:
+            result = fetch.fetch(fetch.robots_url(url), config=settings.app.extract, robots_txt="")
+            # A host that answered "no such file" publishes no rules; a host
+            # that did not answer at all stays a refusal (RFC 9309 sec 2.3.1).
+            robots[host] = fetch.robots_from_result(result)
+        return fetch.fetch(url, config=settings.app.extract, robots_txt=robots[host])
+
+    return read
+
+
 # --- plan -------------------------------------------------------------------
 
 
-def stage_plan(date: str, *, settings: config.Settings, cap_override: int | None = None) -> RunPlan:
-    """Read every live feed, rank the pool, take each vertical's cap. No model.
+def stage_plan(
+    date: str,
+    *,
+    settings: config.Settings,
+    fetcher: Fetcher | None = None,
+    now: Clock | None = None,
+    run_n: int | None = None,
+    state_dir: Path | None = None,
+) -> RunPlan:
+    """Read every live feed, rank the pool, and write down what it saw. No model.
 
-    `cap_override` exists for validation. The daily cap is a reader constraint -
-    how much anyone wants to read in a morning - and a measurement corpus has no
-    reason to obey it. Raising it here is not raising the reading budget.
+    Three committed ledgers bound the day. The seen store gives an article whose
+    feed carried no date a real age - first sight is the only honest one there
+    is. The published store is what stops a repeat, which a freshness rule
+    cannot do on its own: an article published at 23:00 is seven hours old at
+    06:00 the next morning. The health store records what every feed did, so a
+    source that has gone quiet can be quarantined from evidence instead of from
+    somebody's memory. Quarantine only ever holds a feed back for a few runs; it
+    never edits `config/sources.json`, because retiring a source is a person's
+    decision.
+
+    Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
+    guard against a mis-parsed feed, not a reading budget.
     """
+    read_url = fetcher or live_fetcher(settings)
+    clock = now or assemble.utc_now
+    state = state_dir if state_dir is not None else STATE_ROOT
+    collect = settings.app.collect
+    generated_at = clock()
+    run_id = f"{date}-{run_n if run_n is not None else _next_run_n(date)}"
+
     candidates: list[discover.Candidate] = []
-    read = failed = 0
+    health: list[FeedHealthRow] = []
+    asleep = discover.resting(
+        ledger.load_health(state, today=date, within_days=ledger.HEALTH_WINDOW_DAYS),
+        after_failures=collect.quarantine_after_failures,
+    )
+    read = failed = skipped = 0
     for feed in settings.sources.feeds:
-        robots = _robots_for(feed.url, settings)
-        result = fetch.fetch(feed.url, config=settings.app.extract, robots_txt=robots)
+        if feed.id in asleep:
+            skipped += 1
+            LOG.info("feed resting id=%s", feed.id)
+            health.append(_rest_row(feed, at=generated_at, run_id=run_id))
+            continue
+        result = read_url(feed.url)
+        found = discover.candidates_from_feed(feed, result.body) if result.ok else []
+        health.append(_health_row(feed, result, found=len(found), at=generated_at, run_id=run_id))
         if not result.ok:
             failed += 1
             LOG.warning("feed unavailable id=%s reason=%s", feed.id, result.detail)
             continue
         read += 1
-        candidates.extend(discover.candidates_from_feed(feed, result.body))
+        candidates.extend(found)
 
     front_page: set[str] = set()
     for salience in settings.sources.salience:
-        robots = _robots_for(salience.url, settings)
-        result = fetch.fetch(salience.url, config=settings.app.extract, robots_txt=robots)
+        result = read_url(salience.url)
         if result.ok:
             front_page |= discover.salience_urls(result.body)
+
+    first_seen = ledger.load_seen(state, today=date, within_days=collect.seen_window_days)
+    landed = ledger.append_seen(
+        state, date, _first_sights(candidates, first_seen, generated_at, run_id)
+    )
+    ledger.append_health(state, date, health)
+    already_published = frozenset(ledger.load_published(state))
 
     watchlist_keys: frozenset[str] = frozenset()
     verticals = []
@@ -90,46 +178,136 @@ def stage_plan(date: str, *, settings: config.Settings, cap_override: int | None
     for vertical in settings.taxonomy.verticals:
         live = discover.live(settings.sources.feeds, vertical.id)
         summary, planned = rank.plan_vertical(
-            vertical
-            if cap_override is None
-            else vertical.model_copy(update={"daily_cap": cap_override}),
+            vertical,
             [c for c in candidates if c.vertical == vertical.id],
-            config=settings.app.collect,
+            config=collect,
             live_feeds=len(live),
+            now=generated_at,
+            first_seen=first_seen,
+            already_published=already_published,
             watchlist_keys=watchlist_keys,
             front_page_keys=frozenset(front_page),
         )
         verticals.append(summary)
         items.extend(planned)
 
+    items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
+    counts = Counter(item.vertical for item in items)
+    verticals = [
+        summary.model_copy(update={"planned": counts.get(summary.id, 0)}) for summary in verticals
+    ]
+    LOG.info("first sights recorded new=%s file=%s", landed, ledger.seen_relpath(date))
+
     return RunPlan(
         version=RunPlan.schema_version(),
         date=date,
-        run_id=f"{date}-1",
-        generated_at=assemble.utc_now(),
+        run_id=run_id,
+        generated_at=generated_at,
         feeds_read=read,
         feeds_failed=failed,
+        feeds_skipped=skipped,
         verticals=verticals,
         items=items,
     )
 
 
-_ROBOTS_CACHE: dict[str, str | None] = {}
+def _rest_row(feed: FeedDef, *, at: str, run_id: str) -> FeedHealthRow:
+    """The row a quarantined feed gets. A record that we chose not to ask.
 
-
-def _robots_for(url: str, settings: config.Settings) -> str | None:
-    """One robots read per host per run.
-
-    A host that answered "no such file" publishes no rules; a host that did not
-    answer at all stays a refusal (RFC 9309 sec 2.3.1).
+    Written rather than omitted so the rest can end: a run that left no trace
+    would leave the old failures as the newest thing on record forever, and the
+    feed would never be tried again.
     """
-    from urllib.parse import urlsplit
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=run_id,
+        date=at[:10],
+        feed_id=feed.id,
+        checked_at=at,
+        outcome=FetchOutcome.SKIPPED,
+        items=0,
+        detail="resting after repeated failures",
+    )
 
-    host = urlsplit(url).netloc
-    if host not in _ROBOTS_CACHE:
-        result = fetch.fetch(fetch.robots_url(url), config=settings.app.extract, robots_txt="")
-        _ROBOTS_CACHE[host] = fetch.robots_from_result(result)
-    return _ROBOTS_CACHE[host]
+
+def _health_row(
+    feed: FeedDef,
+    result: fetch.FetchResult,
+    *,
+    found: int,
+    at: str,
+    run_id: str,
+) -> FeedHealthRow:
+    """This run's verdict on one feed.
+
+    `detail` is our own sentence about the failure - a status name or an
+    exception class - and never the response body. A feed is a stranger's text
+    and this row lands on a published page (Holy Law #11).
+    """
+    return FeedHealthRow(
+        version=FeedHealthRow.schema_version(),
+        run_id=run_id,
+        date=at[:10],
+        feed_id=feed.id,
+        checked_at=at,
+        outcome=result.outcome,
+        status=result.status,
+        items=found,
+        detail=result.detail[:200] if result.detail else None,
+    )
+
+
+def _first_sights(
+    candidates: Iterable[discover.Candidate],
+    known: dict[str, str],
+    at: str,
+    run_id: str,
+) -> list[SeenRow]:
+    """The addresses this run met for the first time, in address order.
+
+    Recorded before anything is ranked, so an article that never made the day
+    still has an age the next run can use. `known` is updated in place, which
+    is what lets the ranking read this run's own sightings without a re-read.
+    """
+    fresh: dict[str, SeenRow] = {}
+    for candidate in candidates:
+        if candidate.url_key in known or candidate.url_key in fresh:
+            continue
+        fresh[candidate.url_key] = SeenRow(
+            version=SeenRow.schema_version(),
+            url_key=candidate.url_key,
+            canonical_url=candidate.canonical_url,
+            first_seen_at=at,
+            first_seen_run=run_id,
+        )
+    known.update({url_key: row.first_seen_at for url_key, row in fresh.items()})
+    return [fresh[url_key] for url_key in sorted(fresh)]
+
+
+def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedItem]:
+    """The crash guard. A normal day never reaches it.
+
+    It drops the lowest-scoring stories across every vertical rather than
+    truncating the list, so a mis-parsed feed costs the weakest items and not
+    whichever vertical happened to sort last.
+    """
+    if len(items) <= ceiling:
+        return items
+    ranked = sorted(items, key=lambda item: (-item.rank_score, item.item_id))[:ceiling]
+    keep = {item.item_id for item in ranked}
+    LOG.warning("safety ceiling reached planned=%s ceiling=%s", len(items), ceiling)
+    return [item for item in items if item.item_id in keep]
+
+
+def _next_run_n(date: str) -> int:
+    """Which run of the day this is, read from what the last one committed.
+
+    The schedule runs several times a day, so `-1` is no longer a safe
+    constant: two runs claiming one run id put two different work lists under
+    the same address in the manifest.
+    """
+    manifest = _load_manifest(assemble.day_dir(PUBLIC_ROOT, date) / "run.json")
+    return manifest.runs[-1].n + 1 if manifest else 1
 
 
 # --- work -------------------------------------------------------------------
@@ -154,8 +332,10 @@ def stage_work(
     scorer: object | None,
     shard: int = 0,
     shards: int = 1,
+    fetcher: Fetcher | None = None,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
+    read_url = fetcher or live_fetcher(settings)
     inference = settings.app.models.inference
     model = settings.app.models.summarize
     inputs = build_inputs(
@@ -165,8 +345,8 @@ def stage_work(
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build="llama-server-local",
         chat_template=model.id,
-        prompt=summarize.system_prompt(),
-        output_schema=summarize.output_schema_text(),
+        prompt=summarize.prompt_inputs(settings.app.summarize),
+        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
         runner_class="local",
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
@@ -184,7 +364,7 @@ def stage_work(
     LOG.info("working shard=%s/%s items=%s", shard, shards, len(mine))
     for item in mine:
         started = time.monotonic()
-        article, fetch_ms, extract_ms = _fetch_one(item, settings)
+        article, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
@@ -240,15 +420,16 @@ def stage_work(
         )
 
 
-def _fetch_one(item: PlannedItem, settings: config.Settings) -> tuple[Article, int, int]:
+def _fetch_one(
+    item: PlannedItem, settings: config.Settings, read_url: Fetcher
+) -> tuple[Article, int, int]:
     """The article plus how long the network and the extractor each took.
 
     Separated because a slow item is either a slow host or a slow extractor, and
     only one of those is ours to fix.
     """
-    robots = _robots_for(item.canonical_url, settings)
     started = time.monotonic()
-    result = fetch.fetch(item.canonical_url, config=settings.app.extract, robots_txt=robots)
+    result = read_url(item.canonical_url)
     fetch_ms = int((time.monotonic() - started) * 1000)
 
     started = time.monotonic()
@@ -261,7 +442,13 @@ def _fetch_one(item: PlannedItem, settings: config.Settings) -> tuple[Article, i
 def _summarize_one(article: Article, settings: config.Settings, fingerprint: str) -> Summary:
     inference = settings.app.models.inference
     model_id = settings.app.models.summarize.id
-    payload = summarize.build_request(article, model_id=model_id, inference=inference)
+    payload = summarize.build_request(
+        article,
+        model_id=model_id,
+        inference=inference,
+        prompt_config=settings.app.summarize,
+        evaluation=settings.app.evaluation,
+    )
     try:
         completion = post(payload, timeout=settings.app.run.shard_timeout_minutes * 60)
     except OSError as error:
@@ -273,6 +460,7 @@ def _summarize_one(article: Article, settings: config.Settings, fingerprint: str
         model_id=model_id,
         pipeline_fingerprint=fingerprint,
         generated_at=assemble.utc_now(),
+        prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
     )
 
@@ -352,7 +540,12 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
 
 
 def stage_validate(
-    *, settings: config.Settings, date: str, leaderboard: float, scorer: object
+    *,
+    settings: config.Settings,
+    date: str,
+    leaderboard: float,
+    scorer: object,
+    fetcher: Fetcher | None = None,
 ) -> None:
     """Score the day's own planned articles with whichever model is served.
 
@@ -368,12 +561,13 @@ def stage_validate(
     if scorer is None:
         raise SystemExit("validation without a faithfulness scorer measures nothing")
 
+    read_url = fetcher or live_fetcher(settings)
     plan = _load_plan(date)
     model_id = settings.app.models.summarize.id
     scores: list[float] = []
 
     for index, item in enumerate(plan.items, start=1):
-        article, _, _ = _fetch_one(item, settings)
+        article, _, _ = _fetch_one(item, settings, read_url)
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
@@ -544,14 +738,43 @@ def stage_assemble(
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
+    published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     LOG.info(
-        "published date=%s items=%s partial=%s eval_rows=%s",
+        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s",
         plan.date,
         len(day.items),
         day.partial,
         landed,
+        published,
     )
     return day
+
+
+def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
+    """What this digest actually carried, as addresses a later run can skip.
+
+    The digest item knows the item id and the plan knows the address, so the
+    two are joined here rather than widening the published payload with a hash
+    no reader will ever look at. Only what this run introduced is recorded: a
+    day carries yesterday's items forward, and re-recording them would move
+    their published date every morning.
+    """
+    addresses = {item.item_id: item for item in plan.items}
+    rows: list[PublishedRow] = []
+    for item in day.items:
+        planned = addresses.get(item.item_id)
+        if planned is None:
+            continue
+        rows.append(
+            PublishedRow(
+                version=PublishedRow.schema_version(),
+                url_key=planned.url_key,
+                canonical_url=planned.canonical_url,
+                published_on=day.date,
+                item_id=item.item_id,
+            )
+        )
+    return rows
 
 
 def _load_day(path: Path) -> DigestDay | None:
@@ -647,6 +870,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         stream=sys.stderr,
     )
     date = args.date or _today()
+    # One fetcher for the whole invocation, so `idhazh run` reads each host's
+    # robots.txt once across all three stages rather than once per stage.
+    read_url = live_fetcher(settings)
 
     if args.stage == "validate":
         stage_validate(
@@ -654,6 +880,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             date=date,
             leaderboard=args.leaderboard,
             scorer=_scorer(not args.no_faithfulness),
+            fetcher=read_url,
         )
         return 0
 
@@ -663,7 +890,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         )
 
     if args.stage in ("plan", "run"):
-        plan = stage_plan(date, settings=settings, cap_override=args.cap)
+        plan = stage_plan(date, settings=settings, fetcher=read_url)
         assemble.write_atomic(_plan_path(date), plan.to_json())
         LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
@@ -674,6 +901,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             scorer=_scorer(not args.no_faithfulness),
             shard=args.shard,
             shards=args.shards,
+            fetcher=read_url,
         )
 
     if args.stage == "route" or (args.stage == "run" and args.visuals):

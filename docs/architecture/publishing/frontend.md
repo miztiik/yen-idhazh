@@ -1,8 +1,8 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
-The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the eval dashboard.
+The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive, the eval dashboard and the console.
 
 Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md), [../../concepts/design-system.md](../../concepts/design-system.md) and [../../concepts/ui-shell.md](../../concepts/ui-shell.md). This page is the *shape*, and it records where the owner, Jony and Reader disagreed and how it was settled.
 
@@ -78,6 +78,23 @@ Pills rather than tabs. Tabs assert a fixed exhaustive set of panels; the vertic
 
 Each pill is a link to a prerendered route, so middle-click, share and back all work. Lenses and events are not on the pill row: thirteen mostly-zero controls above seventeen items is a control bar longer than some days.
 
+## The read mark is held per day, and it expires
+
+A reader can mark an item read. The mark lives in `localStorage` and nowhere else - never a cookie, because a cookie is sent on every request and would put a reading history into the host's access logs.
+
+**The store is keyed by digest date**: `{ "2026-08-23": ["ai-0417291083", ...] }`. It used to be one flat list of ids with no date, and that shape had two faults that are really one fault:
+
+- **It greyed out the wrong article.** An id that came round again on a later day matched a mark the reader had never made, so an unopened item arrived already read.
+- **It grew forever.** Nothing in a bare list says which day a mark belongs to, so nothing could ever decide which marks to drop.
+
+A date makes a mark answerable, and answerable is what lets an old one be dropped. `loadRead` prunes to the newest `ui.read_mark_days` (7) days on every page load, so the store is bounded by the window rather than by how long the reader has been coming.
+
+**The old shape is discarded, not migrated.** There is no honest way to decide which day an undated mark belonged to. A wrong mark costs a reader an article; a lost mark costs them a click.
+
+`forgetAll` clears one day, because the button sits on a day page and has to do what it says. Everything here is a convenience: a quota error or private mode degrades to no marks and never to a broken page.
+
+The rule this must never break is in [layout.md](layout.md): read state may change how an item **looks**, and may never change where it sits, whether it appears, or how it ranks.
+
 ## Search: overruled, and built the narrow way
 
 Jony refused a top-level search bar and Reader called it "clutter, and a lie about what is behind it" - a box implying an archive the reader cannot reach, which manufactures a failure out of a quiet morning.
@@ -109,6 +126,28 @@ Built from git - 473ba32 - deployed 2026-08-21
 
 The run is the data's provenance; the commit is the site's. They move independently, so a single line claiming both would be wrong half the time. The SHA comes from the build environment, injected at build time - never fetched, never read from a committed pointer that could go stale.
 
+## The console answers "is it working", in one screen
+
+`/console/` is the operator's surface. The digest tells a reader what happened in the world; the console tells the owner what happened to the pipeline. It is instrumentation, it earns no design budget, and its only obligation is to be correct ([../../concepts/vision.md](../../concepts/vision.md)).
+
+**The grid is one column per day and one square per run.** Four runs a day means four squares, oldest at the bottom of the column. A month of pipeline history fits above the fold, and the shape of a problem - one bad afternoon, or every run since Tuesday - is visible before any number is read.
+
+Three colours, and the boundaries are read from config rather than chosen by the page:
+
+| Colour | When |
+| --- | --- |
+| Green | The run completed, nothing failed, and the source list was current |
+| Amber | Something is worth a look: an item failed, the run did not complete, the source list was stale, or nothing was attempted |
+| Red | The run failed, or its success rate fell below `run.success_floor_pct` |
+
+**The red threshold is the same knob CI uses to decide whether a run opens an issue.** A red square and an open issue can never disagree, because there is one number and both read it.
+
+**A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
+
+Beneath the grid is **every feed that failed at least once**, worst first, with its attempt count, its last outcome and how close it is to quarantine. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
+
+**The console reads the committed ledgers at build time and computes nothing at read time.** Every number on it was measured when the run happened and written down. Nothing under `state/` is ever served - the page carries the figures, never the file ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)).
+
 ## Design rationale
 
 Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
@@ -132,10 +171,18 @@ Spending the colour at the day level rather than per item is the resolution of a
 | A visual placeholder when there is no visual | Makes "we correctly decided this needed no picture" look identical to a failed image. | Jony |
 | A chart library on the dashboard | Kilobytes of dependency to draw a stacked bar over a few hundred rows. | Jony |
 | A service worker or offline shell | It can serve a reader a stale day, which attacks the rule the whole layout rests on. | Jony |
+| A flat list of read ids with no date | An id that came round again greyed out an article the reader had never opened, and nothing in the list could decide which marks to drop. | owner |
+| Migrating undated read marks rather than discarding them | There is no honest way to say which day they belonged to, and a wrong mark costs a reader an article. | owner |
+| A read mark that hides or demotes an item by default | Two people at the same URL would see different pages, and a shared link would stop showing the recipient what the sender saw. | Reader |
+| A console listing every feed, healthy ones included | Naming all seventy sources hides the four that are broken. | owner |
+| A second threshold for the red square | CI already reads a success floor to decide whether to open an issue. Two numbers answering one question drift, and then a red square and an open issue disagree. | owner |
+| Counting skipped items against a run's health | An already-published article is skipped by design. Counting it would paint a healthy day amber for doing its job. | owner |
 
 ## See also
 
 - [layout.md](layout.md) - the routes, the dated addresses and retention.
+- [../sources/health.md](../sources/health.md) - the feed ledger the console renders, and the quarantine rule it mirrors.
+- [../sources/freshness.md](../sources/freshness.md) - the six-hour cadence that gives the grid four squares a day.
 - [../../concepts/digest.md](../../concepts/digest.md) - what an item carries and the visual rule.
 - [../../concepts/design-system.md](../../concepts/design-system.md) - typography, tokens and the colour rule.
 - [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the four states.

@@ -96,12 +96,6 @@
       "additionalProperties": false,
       "description": "A subject with its own reporters and its own feeds.",
       "properties": {
-        "daily_cap": {
-          "description": "Most items this vertical contributes to one day.",
-          "minimum": 1,
-          "title": "Daily Cap",
-          "type": "integer"
-        },
         "display_name": {
           "minLength": 1,
           "title": "Display Name",
@@ -139,7 +133,6 @@
       "required": [
         "id",
         "display_name",
-        "daily_cap",
         "min_feeds"
       ],
       "title": "VerticalDef",
@@ -150,6 +143,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Removed VerticalDef.daily_cap.",
+      "version": "2026-08-22T11:00",
+      "why": "It decided how big a vertical's day was before the ranking had a say. Supply and the score set the size now; max_per_source still stops one feed becoming the vertical."
+    },
     {
       "change": "Initial shape: verticals, lenses and events.",
       "version": "2026-08-21",
@@ -173,7 +171,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-22T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -193,5 +191,5 @@
   ],
   "title": "Taxonomy",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-22T11:00"
 }

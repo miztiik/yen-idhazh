@@ -14,12 +14,17 @@ import pytest
 
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.evals.metrics import (
+    EVIDENTIAL_TERMS,
+    HEDGE_TERMS,
     METRICS_VERSION,
+    SPECULATIVE_TERMS,
     compression,
+    evidential_density,
     extractiveness,
     hedge_dropped,
     lead_coverage,
     scorer_version,
+    speculative_density,
     unsupported_numbers,
     verbatim_run,
     word_count,
@@ -99,6 +104,72 @@ def test_a_kept_hedge_is_not_flagged() -> None:
 
 def test_an_unhedged_source_cannot_drop_a_hedge() -> None:
     assert not hedge_dropped("Northwind placed the order.", "Northwind placed the order.")
+
+
+# --- What the article itself was worth ---------------------------------------
+#
+# The only metrics here that score the input. A faithful summary of an unsourced
+# rumour scores well on everything above and is still an unsourced rumour.
+
+SOURCED = (
+    "The Ministry of Energy said the plant will close in March, according to a statement "
+    "published on Tuesday. Two officials familiar with the decision claimed the date was "
+    "set in June. A spokesperson for the operator said staff were told last week."
+)
+
+SPECULATIVE = (
+    "The plant could close as early as March, and the operator may announce a date within "
+    "weeks. Analysts expected to see a decision by June. A closure would leave the region "
+    "short of capacity, and a replacement might not be approved for years."
+)
+
+
+def test_the_two_lexicons_do_not_overlap() -> None:
+    """They mark opposite things. A term in both would count twice and mean nothing."""
+    assert not set(EVIDENTIAL_TERMS) & set(SPECULATIVE_TERMS)
+
+
+def test_splitting_the_lexicon_left_hedge_dropped_alone() -> None:
+    """The split is for the new columns. Changing an existing column was not the ask."""
+    assert HEDGE_TERMS == tuple(sorted(EVIDENTIAL_TERMS + SPECULATIVE_TERMS))
+    assert len(HEDGE_TERMS) == len(EVIDENTIAL_TERMS) + len(SPECULATIVE_TERMS)
+
+
+def test_a_sourced_article_is_dense_in_attribution_and_thin_on_speculation() -> None:
+    assert evidential_density(SOURCED) > speculative_density(SOURCED)
+
+
+def test_an_article_of_maybes_is_the_other_way_round() -> None:
+    assert speculative_density(SPECULATIVE) > evidential_density(SPECULATIVE)
+
+
+def test_the_pair_separates_two_articles_a_faithfulness_score_cannot() -> None:
+    """The whole point. Both are internally consistent; one of them knows something."""
+    assert evidential_density(SOURCED) > evidential_density(SPECULATIVE)
+    assert speculative_density(SPECULATIVE) > speculative_density(SOURCED)
+
+
+def test_a_density_is_a_share_and_not_a_count() -> None:
+    """Doubling the article must not double the number, or it measures length."""
+    once = evidential_density(SOURCED)
+    twice = evidential_density(SOURCED + " " + SOURCED)
+    assert once == pytest.approx(twice)
+
+
+def test_a_density_stays_inside_the_bounds_the_ledger_declares() -> None:
+    for text in (SOURCED, SPECULATIVE, ARTICLE, FAITHFUL):
+        assert 0.0 <= evidential_density(text) <= 1.0
+        assert 0.0 <= speculative_density(text) <= 1.0
+
+
+def test_an_empty_article_does_not_divide_by_zero() -> None:
+    assert evidential_density("") == 0.0
+    assert speculative_density("") == 0.0
+
+
+def test_a_marker_inside_a_longer_word_does_not_fire() -> None:
+    """Whole words only, or "Mayor" makes every local story speculative."""
+    assert speculative_density("The Mayor of Maybury opened the plant.") == 0.0
 
 
 # --- Copying -----------------------------------------------------------------

@@ -15,6 +15,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional title, and folded it into output_digest when present.",
+      "version": "2026-08-23",
+      "why": "The digest published the source's own headline, which is written to win a click. The summarizer now writes a title from the article's own facts and it is published words like the rest, so it belongs in the digest that detects drift. Additive both ways: the field is optional, and a null title is left out of the digested payload rather than digested as null, so every payload written before today still recomputes to the same value."
+    },
+    {
       "change": "Split duration_ms into fetch_ms, extract_ms and summarize_ms.",
       "version": "2026-08-22",
       "why": "One number covering fetch, extract and summarize could not answer the question it was there for: a slow item might be a slow host or a slow model, and only one of those is ours to fix. Additive - the blended field stays, and a payload written before this still validates."
@@ -148,13 +153,28 @@
       "default": null,
       "title": "Summary"
     },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Our own headline, written from the article's facts. Optional because a title outside the asked range degrades to the source's rather than costing the item (section 1a).",
+      "title": "Title"
+    },
     "url_key": {
       "pattern": "^[0-9a-f]{64}$",
       "title": "Url Key",
       "type": "string"
     },
     "version": {
-      "default": "2026-08-22",
+      "default": "2026-08-23",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -171,5 +191,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-22"
+  "version": "2026-08-23"
 }

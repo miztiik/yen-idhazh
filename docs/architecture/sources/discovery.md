@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -20,23 +20,23 @@ The payoff compounds. One supply agreement between a chip maker and a datacentre
 
 ## Verticals
 
-Each carries a feed list, a daily cap and a lifecycle status. **The feed floor is seven times the daily cap.** A vertical below its floor is not published.
+Each carries a feed list, a feed floor and a lifecycle status. A vertical below its floor is not published.
 
-| id | daily cap | feed floor | live feeds |
-| --- | --- | --- | --- |
-| `ai` | 5 | 35 | 38 |
-| `energy` | 3 | 21 | 24 |
-| `business-economy` | 3 | 21 | 22 |
-| `world` | 3 | 21 | 27 |
-| `india` | 3 | 21 | 27 |
+| id | feed floor | live feeds |
+| --- | --- | --- |
+| `ai` | 35 | 38 |
+| `energy` | 21 | 24 |
+| `business-economy` | 21 | 22 |
+| `world` | 21 | 27 |
+| `india` | 21 | 27 |
 
 Live counts measured 2026-08-22 by fetching and parsing every configured feed. A feed counts as live only if it resolves, parses and carries entries.
 
-The caps sum to less than the daily item ceiling on purpose, so a vertical can be added without re-opening that ruling.
+**There is no per-vertical daily cap and no daily item ceiling.** How many items a vertical publishes is decided by supply, by the score, and by `max_per_source`. See [freshness.md](freshness.md).
 
 **Lenses** are a closed vocabulary of cross-cutting tags. **Events** are a closed vocabulary of what happened to an item - a release, a deal, an acquisition, a funding round, a capital commitment, results, a regulatory action, research, an incident. Both are enums in the contract, not free-text strings, so a new value is a schema change with a changelog entry rather than a typo waiting to happen ([../contracts/schemas.md](../contracts/schemas.md)).
 
-## Sources are tiered, and the tier is the weight
+## Sources are tiered, and the tier is scaled by the feed's own weight
 
 | Tier | What it is | Examples |
 | --- | --- | --- |
@@ -44,7 +44,11 @@ The caps sum to less than the daily item ceiling on purpose, so a vertical can b
 | 2 | Trade press that covers the beat daily | a specialist outlet, a wire's section feed |
 | 3 | Community and aggregators | a forum, a link aggregator |
 
-Ranking is deterministic and loads no model: **tier weight, multiplied by how many independent sources carried the story, plus a bonus for a watched entity and a bonus for front-page salience.** A story three independent sources carried today is the day's story. This runs in the planning step, before any weights exist in memory.
+The tier sets the authority score. **Each feed also carries its own `weight`, and it multiplies that score.** The tier says what kind of source this is; the weight says how much we trust this particular one. Two feeds can be trade press and not be equally good, and the tier alone has no way to say so.
+
+Multiplying rather than adding is what makes the weight mean something: a weighted-down institution stays below a full-weight one of the same tier, which is the whole point of turning it down.
+
+The weight is also the reversible half of retirement. Drop a source to 0.5, watch what changes, then retire it - one field, no payload touched.
 
 The consequence worth stating plainly: **a link aggregator is a vote, not a source.** It contributes rank to a URL already in the pool. It never discovers, because a site with no subject taxonomy cannot be asked for a subject.
 
@@ -61,11 +65,21 @@ Identity is the digest of the canonical address, and it lives in a payload field
 
 ## Ranking is arithmetic, not judgement
 
-The day is decided before any model loads, by a score with four terms: the authority of the source, multiplied by how widely the story is carried, plus a bonus for naming a watchlist entity, plus a bonus for an aggregator vote.
+The day is decided before any model loads, by a score with five terms:
 
-Two details in that sentence carry weight:
+```
+(tier weight * feed weight) * (1 + repetition_weight * (carriers - 1))
+  + watchlist_bonus
+  + front_page_bonus
+  + recency_bonus
+```
+
+The authority of the source, scaled by that feed's own weight, multiplied by how widely the story is carried, plus a bonus for naming a watchlist entity, plus a bonus for an aggregator vote, plus a bonus for being recent. A story three independent sources carried today is the day's story.
+
+Three details in that carry weight:
 
 - **Authority is the best tier that carried the story, not the average.** One institution saying it makes it true however many aggregators repeated it, and averaging would let volume dilute provenance.
+- **Recency is a bonus, not a filter.** It decays by half every `recency_half_life_hours` and never removes anything from the pool. Why that is a decay rather than a cutoff is [freshness.md](freshness.md).
 - **Ties break on the canonical address.** Without a deterministic tie-break, two runs over identical feeds can publish different orders, and the order is part of what a shared link shows.
 
 The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
@@ -76,8 +90,9 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 
 - **An id is an immutable slug; the display name is a separate, freely mutable field.** Renaming what a reader sees must never orphan a payload that referenced the id.
 - **Retire, never delete.** A retired vertical, lens or entity keeps its entry with a retired status and the date. Deleting an id breaks every payload written under it and forces a read-side migration; a tombstone costs one object.
-- **A draft status plus a minimum-feed floor** lets a vertical be built in the open over weeks. The floor is seven times the vertical's daily cap. Below the floor it is not published, so an under-sourced desk never reaches a reader.
-- **Feed health is recorded, not configured.** Repeated failures quarantine a feed automatically and degrade its vertical. The run never fails because a source died.
+- **A retired feed moves to its own key.** `config/sources.json` has a `feeds` list and a `retired` list. A tombstone kept in the live list is a tombstone every run has to filter past, and one missed filter is a request to a source we decided to stop asking. Moving it makes the live list mean exactly what it says, and the record survives either way.
+- **A draft status plus a minimum-feed floor** lets a vertical be built in the open over weeks. Below the floor it is not published, so an under-sourced desk never reaches a reader.
+- **Feed health is recorded, not configured.** Repeated failures rest a feed automatically, and nothing in a run ever edits `config/sources.json`. See [health.md](health.md).
 - **Soft retirement before hard.** Drop a source's weight, watch what changes, then retire it. Reversible in one field.
 
 ## Design rationale
@@ -86,9 +101,11 @@ Segmenting by subject is a source-diversity problem, not a compute one. The pipe
 
 Two findings from prior art settled the shape. First, every system that publishes a multi-subject daily digest attaches a curated feed list per subject; none of them sorts a single firehose into subjects. Second, those systems enforce a floor below which a subject is not surfaced at all, because a thin list produces a thin day and the reader cannot tell the difference between a quiet day and a broken one.
 
-The floor started as a borrowed constant: twenty-five feeds for every vertical, taken from prior art. That number is wrong here, because it does not scale with how much a vertical publishes. The systems it came from surface dozens of items per subject per day. Four of our five verticals surface three. A floor that ignores the cap asks a three-item desk to carry the same source pool as a thirty-item one.
+The floor started as a borrowed constant: twenty-five feeds for every vertical, taken from prior art. That number is wrong here, because it does not scale with how much a vertical publishes. The systems it came from surface dozens of items per subject per day; ours surface a handful.
 
-The floor is now seven times the daily cap. Seven is a judgement, not a measurement: it is the point at which the candidate pool stays several times larger than the slots, so the ranking still has something to choose between on a quiet day. State the sequence honestly - the counts were measured first, then the rule was written, so the rule is fitted to what the source pool supports rather than derived from an independent finding. It is recorded here so a later reader can overturn it with a real measurement instead of re-deriving it.
+The floor was then set at seven times each vertical's daily cap, which is where 35 and 21 come from. **The daily cap has since been removed** - supply and the score decide the size of a day now ([freshness.md](freshness.md)) - and the floor numbers stayed behind. That is deliberate, and worth stating plainly rather than quietly re-deriving: the ratio was always a judgement, and the numbers it produced are the half that turned out to be useful. They describe a candidate pool several times larger than any day is likely to publish, which is what keeps the ranking with something to choose between when a day is quiet.
+
+State the sequence honestly - the live counts were measured first, then the rule was written, so the rule is fitted to what the source pool supports rather than derived from an independent finding. It is recorded here so a later reader can overturn it with a real measurement instead of re-deriving it.
 
 The floor still does its job. It is not a formality that always passes: `business-economy` clears twenty-one by one feed, and a single dead source puts it back under.
 
@@ -102,15 +119,20 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | --- | --- |
 | A single link aggregator as the only source | No subject taxonomy; one global front page whose only tags are post types. Keyword queries against it are lexical - a query for a subject catches every casual mention of the word - and it carries no world, energy or regional coverage at all. |
 | A classifier sorting one firehose into verticals | Nobody who has shipped this does it. It also puts model time into the planning step, which today loads no weights and finishes in seconds. |
-| One vertical per topic of interest | Eleven verticals is roughly 275 feeds to curate and breaks the daily ceiling. Most candidate topics turned out to be lenses or entities on inspection. |
+| One vertical per topic of interest | Eleven verticals is roughly 275 feeds to curate, for eleven desks that would each be under their floor. Most candidate topics turned out to be lenses or entities on inspection. |
 | A market-prices vertical | A once-daily, statically-committed digest is the wrong instrument for a number that moves continuously. Kept as a lens so a structural story still surfaces. |
 | Splitting a subject into two verticals by angle | The same feed list serves both, so the split doubles curation to buy one taxonomy line. The separation is recovered for free by the event vocabulary. |
 | Deleting a retired entry from config | Breaks every payload written under that id and forces a read-side migration. |
+| Leaving a retired feed in the live `feeds` list with a status flag | Every run has to filter past it, and one missed filter is a request to a source we decided to stop asking. |
+| Adding the feed weight to the tier score instead of multiplying | Addition lets a weighted-down institution overtake a full-weight one of the same tier, which is the opposite of what turning it down meant. |
+| A per-feed weight only, with no tier | The tier is the reusable half: it is a fact about a kind of source, and a new feed inherits it without anyone inventing a number. |
 | Keeping the flat floor of twenty-five and leaving two verticals unpublished | The floor would then be measuring the borrowed constant, not the health of the desk. Two verticals stay dark for a reason that does not survive being stated. |
 | Dropping the floor to whatever the thinnest vertical reached | That is tuning the target to the result with no rule behind it, and the floor stops being able to fail. |
 
 ## See also
 
+- [freshness.md](freshness.md) - the run cadence, how age is scored, and what stops an article publishing twice.
+- [health.md](health.md) - what every feed did on every run, and the quarantine that reads it.
 - [trust-boundary.md](trust-boundary.md) - what happens to the text once a discovered link is fetched.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Collect stage and the invariants that hold across all stages.
 - [../../concepts/config.md](../../concepts/config.md) - where the feed lists and caps live, and the knob-versus-identifier rule.

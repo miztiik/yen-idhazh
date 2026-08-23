@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Holy Law #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -32,7 +32,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `schemas/<name>.schema.json` | Generated. One flat file per model. |
 | `frontend/src/contracts/` | Generated TypeScript types and runtime validators. |
 
-The eleven shapes, and where each one lives once written:
+The sixteen shapes, and where each one lives once written:
 
 | Model | Schema | Persisted as |
 | --- | --- | --- |
@@ -40,13 +40,20 @@ The eleven shapes, and where each one lives once written:
 | `Sources` | `sources` | `config/sources.json` |
 | `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
 | `Watchlist` | `watchlist` | `config/watchlist.json` |
+| `RunPlan` | `run-plan` | the day's work list under the run directory |
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `Route` | `route` | one file per item under the run directory |
-| `EvalRow` | `eval-row` | one appended row of `evals/scores.csv` |
-| `FingerprintRow` | `fingerprint-row` | one appended row of `evals/fingerprints.csv` |
+| `EvalRow` | `eval-row` | one appended row of `state/scores.csv` |
+| `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
+| `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
+| `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
+| `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
+| `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
+
+Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 
@@ -119,6 +126,7 @@ The shapes this subsystem owns, from `CLAUDE.md` section 11:
 | **Stage payloads** | Each pipeline stage | The next stage, and any re-run |
 | **The eval ledger** | The evaluate stage, appended | The dashboard, and any trend query |
 | **The fingerprint ledger** | Any stage writing under a new stamp, appended | A later run deciding whether to skip, and anyone auditing drift |
+| **The source ledgers** | Plan and assemble, appended | The next run, deciding an article's age, whether it already ran, and whether a feed should rest |
 | **The run manifest** | The assemble stage | A later run, and anyone auditing what produced what |
 | **Config** | A human | Both `backend/` and, where a surface needs it, `frontend/` |
 | **Published payloads** | The assemble stage | The published site |
