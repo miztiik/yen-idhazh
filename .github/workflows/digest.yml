@@ -23,8 +23,14 @@ on:
         description: 'Digest date (YYYY-MM-DD). Defaults to today, UTC.'
         default: ''
       shards:
-        description: 'Worker jobs to fan out across'
+        description: 'Total work-shard jobs'
+        type: choice
         default: '4'
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
       faithfulness:
         description: 'Run the faithfulness scorer (slow first run - downloads weights)'
         type: boolean
@@ -71,6 +77,11 @@ jobs:
           [ -n "$DATE" ] || DATE=$(date -u +%F)
           SHARDS="${{ inputs.shards }}"
           [ -n "$SHARDS" ] || SHARDS=4
+          SHARD_PATTERN='^[1-4]$'
+          if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
+            echo "shards must be an integer from 1 through 4" >&2
+            exit 1
+          fi
           # A scheduled run has no inputs at all, so every one of these is the
           # empty string and every one needs its default here. `faithfulness`
           # is normalized to a STRING for the same reason: read as a boolean,
@@ -125,6 +136,7 @@ jobs:
     timeout-minutes: 330
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
