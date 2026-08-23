@@ -13,10 +13,12 @@ backend/idhazh/contracts/*.py        <- Pydantic models. HAND-WRITTEN. The sourc
         |
         +--> schemas/*.schema.json           <- GENERATED. Never hand-edited.
                   |
-                  +--> frontend/src/contracts/*.d.ts + validators   <- GENERATED. Never hand-edited.
+                  +--> frontend/src/lib/payload/types.ts   <- mirrors the schema. HAND-WRITTEN, for now.
 ```
 
 The direction is one-way and never reversed. To change a persisted shape you edit the Pydantic model and regenerate; editing a generated artifact is an anti-pattern (`CLAUDE.md` section 10) and the drift gate will fail it anyway.
+
+**The third arrow is not automated yet, and that is a known gap.** `frontend/src/lib/payload/types.ts` is written by hand against `schemas/digest-day.schema.json`, so nothing stops the two drifting apart except a person noticing. The generator and the gate over it land with the rest of the frontend contract work. Until then the mirror is narrow on purpose - the published payload only, not all sixteen shapes - because a hand-kept mirror is only safe while it is small enough to read in one sitting.
 
 ## Why the models, and not the schemas, are the source
 
@@ -30,7 +32,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `backend/idhazh/contracts/<name>.py` | One module per persisted shape. |
 | `backend/idhazh/contracts/export.py` | Walks the models and writes `schemas/`. Also the list of what a schema directory is allowed to contain. |
 | `schemas/<name>.schema.json` | Generated. One flat file per model. |
-| `frontend/src/contracts/` | Generated TypeScript types and runtime validators. |
+| `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `schemas/digest-day.schema.json`. Hand-written today, generated later. |
 
 The sixteen shapes, and where each one lives once written:
 
