@@ -1,6 +1,6 @@
 # yen-idhazh - static-first article digest pipeline - plan
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 **Level**: 4 (structural, new subsystem) with named Level-5 ESCALATE triggers.
 
 Execute per `docs/how-to/execute-a-plan.md`, with one owner override in force (2026-08-21, `CLAUDE.md` section 0): **one agent works this repo and commits direct to `main`** - no worktree isolation, no worker-per-row fan-out and no PRs, because there is no second agent to isolate from and nobody to review a PR. Everything else stands: personas are consulted on ambiguity, rows respect the Depends-on column, gates must be green before a row is marked DONE, parallel N = 3, and the ESCALATE triggers in section 0 are honoured. A trigger that fires mid-execution is handled per `docs/how-to/handle-scope-change.md`.
@@ -184,6 +184,32 @@ listed because the pattern matters more than the fixes: every one sat between
 A seventh was latent rather than fired: the model-server health check ended its
 wait loop whether or not the server came up, so a dead server published
 `items=0` - a page that reads exactly like a quiet news day. It now asserts.
+
+### The three faults the first SCHEDULED run found (2026-08-23)
+
+The six above came from a `workflow_dispatch`. The first `schedule` run found
+three more, and the pattern repeats: **every one shipped green.** The run
+reported success, published 8 of 17 items, and the workflow could not say
+anything was wrong because the pipeline degrades instead of failing.
+
+| # | Fault | Why it hid |
+| --- | --- | --- |
+| 7 | Every `robots.txt` failure was read as a refusal, dropping 31 feeds before the run began | The refusal was deliberate and correct-looking. RFC 9309 sec 2.3.1 splits *unavailable* (4xx: no rules published) from *unreachable* (429/5xx: rules unknown); we collapsed both to "no". Ten feeds serve no `robots.txt` at all. **Measured 19 of 26 recover.** |
+| 8 | The faithfulness scorer was off on every scheduled run | `inputs.faithfulness == false`. A scheduled run carries no inputs, so the empty string compared equal to `false`. Every automatic run installed the scorer extra and then passed `--no-faithfulness`. The ledger only ever filled on a manual dispatch. |
+| 9 | `run.json` recorded `runner: "local"` for a run on `ubuntu-latest` | `stage_assemble` pinned the label. Holy Law #10 asks what hardware produced a number; the manifest could not answer. |
+
+Fixed on `main` 2026-08-23. Fault 7 carries a trap worth remembering: two open
+branches had already refactored `_robots_for` into `live_fetcher` and taken the
+old line with them. Because the function was **renamed**, git merges both sides
+without a conflict and silently restores the bug. A rename is how a fix gets
+undone quietly.
+
+The 9 item failures were then diagnosed one by one, and the answer was not the
+expected one. No timeout, no slow source, no JavaScript shell: fetches took
+0.45-0.80 s and the extractor returned what the markup actually held. A GitHub
+release tag is a list of binaries, an NBER page is an abstract, and Japan Times
+is metered. **The 250-word floor was rejecting correctly-extracted short-form
+sources**, which is a source-selection question rather than an extraction bug.
 
 ### What remains
 
@@ -1081,6 +1107,7 @@ is what makes row 14 a single `rm -r` with no second edit.
 | 5 | Who curates the ~125 feeds, and in what order? Row 3 will not ship a vertical below its 25-feed floor, so the five cannot start together. | Row 3 | **OWNER ratifies** | **RESOLVED 2026-08-21.** The 36-feed `ai` list in section 3.2 is ratified and written to `config/sources.json`. The vertical stays `status: draft` until a feed-verification run confirms it clears the floor. Remaining verticals follow one per week under `draft`. |
 | 3 | What rots at month 6? Extraction breaking silently on a site redesign is the live risk - a faithfulness score will happily reward a summary of navigation chrome. | Row 4 | agent | **RESOLVED 2026-08-21** by the row 4 Andre consult (section 4.1): per-item floors to row 4, per-domain trend alerts to row 12. |
 | 4 | Do extremely low-bit (1-2 bit) quantisations change the model fit? Published for several open-weights families; unevaluated here. | Row 7 | agent, then ESCALATE | Research + measure. Andre on whether quality survives, Carmack on whether it fits - both measured, not assumed. See `docs/how-to/set-up-local-inference.md`. |
+| 7 | `items_failed` is a subtraction, not a diagnosis. A dead link, a paywall, a thin extraction and a rejected summary all land in one number, and the per-item `failure_detail` that would separate them is written to `backend/var/`, which is gitignored. The run throws away the only record of why it failed. | Any question of the form "why was the count low?" | **OWNER ratifies** - a persisted-contract change is section 6 level 5 | Add a cause breakdown to `RunRecord`, keyed by the `ArticleStatus` / `SummaryStatus` the run already computes, with the schema `version` stamped and a `changelog` entry (section 11). Diagnosing the 2026-08-23 run needed a downloaded artifact and 9 URLs re-fetched by hand; the run should answer this itself. |
 
 ### RESOLVED
 
