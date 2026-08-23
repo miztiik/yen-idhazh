@@ -291,7 +291,11 @@ def build_manifest(
             VerticalCount(
                 id=vertical.id,
                 planned=vertical.planned,
-                published=sum(1 for item in day.items if item.vertical == vertical.id),
+                published=sum(
+                    1
+                    for item in day.items
+                    if item.vertical == vertical.id and item.introduced_by_run == run_n
+                ),
                 below_feed_floor=vertical.below_feed_floor,
             )
             for vertical in plan.verticals
