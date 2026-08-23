@@ -1,81 +1,51 @@
-# Known defects - open
+# Known defects - one open
 
 **Last Updated**: 2026-08-23
 
 Five defects found while shipping the freshness, identity and health set on
-2026-08-22. None was in that scope. Each was re-checked against the tree on
-2026-08-23 and still holds unless noted.
+2026-08-22. None was in that scope.
+
+**Four of the five are now fixed and merged.** Defect 1 closed as row 19
+(PR #18), defect 3 as row 18 (PR #30), and defects 4 and 5 as row 20 (PR #14).
+Defect 2 stays open.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
-decision; each row is a defect with its evidence and where the fix would land.
+decision; each row is a defect with its evidence and where the fix landed.
 
-**Four of the five now have fix rows** in
-[`20260823-item-telemetry-and-brief-tier-plan.md`](20260823-item-telemetry-and-brief-tier-plan.md):
-defect 1 is its row 19, defect 3 is row 18, and defects 4 and 5 are row 20.
-
-**Defect 2 stays here and is deliberately not scheduled.** Re-cutting a
-reader-facing threshold is Level 5, and the ledger holds 19 rows. Row 19 fixes
-the half that is a bug - a summary with zero lead coverage can no longer publish
-as `high` - without touching the thresholds, which need evidence this project
-does not have yet (Rule #10).
-
-| # | Defect | Level | Where |
+| # | Defect | Level | Status |
 | --- | --- | --- | --- |
-| 1 | The published band ignores two of its own counterweights | 2 | `backend/idhazh/evals/score.py` |
-| 2 | The faithfulness bands are saturated | 5 | `config/idhazh.json`, `docs/concepts/evaluation.md` |
-| 3 | `/evals` and `/console` answer the same question twice | 3 | `frontend/src/routes/` |
-| 4 | `EmptyDay` points at a notice that is not on the page | 1 | `frontend/src/lib/components/EmptyDay.svelte` |
-| 5 | The home page bakes the build date and calls it today | 2 | `frontend/src/routes/+page.server.ts` |
+| 1 | The published band ignores two of its own counterweights | 2 | FIXED - PR #18 |
+| 2 | The faithfulness bands are saturated | 5 | **OPEN** |
+| 3 | `/evals` and `/console` answer the same question twice | 3 | FIXED - PR #30 |
+| 4 | `EmptyDay` points at a notice that is not on the page | 1 | FIXED - PR #14 |
+| 5 | The home page bakes the build date and calls it today | 2 | FIXED - PR #14 |
 
-## 1 - The published band ignores two of its own counterweights
+## 2 - The faithfulness bands are saturated (OPEN)
 
-`band()` checks `unsupported_numbers` and the two faithfulness thresholds and
-nothing else. `lead_coverage` and `hedge_dropped` are measured, written to the
-eval row, and never reach the band a reader sees. `counterweight_band()` does
-read them, but `cli.py` only calls it when no eval row exists.
-
-Evidence: `ai-03` published as `high` with lead coverage 0.00.
-
-Open question: whether a low counterweight should outvote a high faithfulness
-score, or only cap it at `medium`. Item 1 cannot be settled without item 2.
-
-## 2 - The faithfulness bands are saturated
-
-Measured 2026-08-23 on the committed ledger, `state/scores.csv`: 10 rows, **all
-ten band `high`**, observed `hhem` range 0.9225 to 0.9784 against a
+Measured 2026-08-23 on the committed ledger, `state/scores.csv`: 19 rows, **all
+nineteen band `high`**, observed `hhem` range 0.9225 to 0.9784 against a
 `band_high_min` far below it. A classifier with one class is not classifying,
 and the confidence signal on the page is currently decoration.
 
 Level 5: the thresholds are a reader-facing promise, so re-cutting them is a
-design consultation, not an edit. It also needs more rows than ten before any
-new cut is honest (Rule #10).
+design consultation, not an edit. It also needs more rows than nineteen before
+any new cut is honest (Rule #10).
 
-## 3 - `/evals` and `/console` answer the same question twice
+**Row 19 fixed the half that was a bug** without touching the thresholds. A
+summary with zero lead coverage can no longer publish as `high`: `band()`
+absorbed `counterweight_band()`, and a failed counterweight now caps the band at
+`medium` rather than forcing `low`. Re-banding the 19 committed rows moved four
+of them from `high` to `medium` (`ai-03` and `ai-04`, twice each). The
+thresholds themselves still need evidence this project does not have yet.
 
-Both routes render per-day band counts from `state/scores.csv`. Two surfaces
-reading one ledger will disagree the first time one of them changes how it
-counts. Needs a ruling on which surface owns the band trend before either is
-touched.
+## What closed, and where it went
 
-## 4 - `EmptyDay` points at a notice that is not on the page
-
-`EmptyDay.svelte` tells the reader "the run notice above says which it was". On
-the home page it is rendered with nothing above it, so the sentence points at
-empty space - the exact moment a reader is deciding whether the site is broken.
-
-## 5 - The home page bakes the build date and calls it today
-
-`+page.server.ts` computes `new Date()`, and every route is prerendered
-(`+layout.server.ts`), so the value is frozen into the HTML at build time. A day
-after a deploy with no new run, the home page reads "Nothing was published for
-*the build date*" - a date that is not today.
-
-It also passes `latest={null}`, which suppresses the one link that would rescue
-the reader. The archive link still renders.
-
-This supersedes the older form of this defect ("the home page renders the latest
-day, not today"). The code changed underneath it; the failure moved rather than
-closing.
+| # | Defect | Fix |
+| --- | --- | --- |
+| 1 | `band()` read `unsupported_numbers` and the two faithfulness thresholds and nothing else; `lead_coverage` and `hedge_dropped` never reached the band a reader sees. Evidence: `ai-03` published as `high` with lead coverage 0.00. | Row 19, PR #18. One band function. A failed counterweight caps at `medium`. `evaluation.lead_coverage_min` is a `config/` knob. The open question - cap or outvote - resolved as cap. |
+| 3 | Both routes rendered per-day band counts from `state/scores.csv`. Two surfaces reading one ledger disagree the first time one changes how it counts. | Row 18, PR #30. `/console` owns the band trend. `/evals/` stays as a prerendered page that links on, so a bookmark still works without JavaScript (`CLAUDE.md` section 3 keeps the route). |
+| 4 | `EmptyDay.svelte` told the reader "the run notice above says which it was" while rendering with nothing above it. | Row 20, PR #14. The copy now names only what a reader can see. |
+| 5 | `+page.server.ts` computed `new Date()` and every route is prerendered, so the build date was frozen into the HTML and called today. It also passed `latest={null}`, suppressing the one link that would rescue the reader. | Row 20, PR #14. The date comes from the payload the page renders. The latest-day link is restored. |
 
 ## See also
 
