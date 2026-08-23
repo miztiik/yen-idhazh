@@ -270,11 +270,13 @@
           "type": "string"
         },
         "planned": {
+          "description": "Items this run planned for this vertical.",
           "minimum": 0,
           "title": "Planned",
           "type": "integer"
         },
         "published": {
+          "description": "Items this run introduced into the day payload for this vertical.",
           "minimum": 0,
           "title": "Published",
           "type": "integer"
@@ -293,6 +295,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Pinned RunRecord vertical published counts to the run that wrote them.",
+      "version": "2026-08-24T00:30",
+      "why": "A later run appends to the day payload. Counting the accumulated day against this run's plan rejected valid second and later runs."
+    },
     {
       "change": "Added optional pipeline_fingerprints and determinism_violations to a run.",
       "version": "2026-08-21T02:00",
@@ -320,7 +327,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21T02:00",
+      "default": "2026-08-24T00:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -332,5 +339,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-21T02:00"
+  "version": "2026-08-24T00:30"
 }
