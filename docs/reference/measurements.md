@@ -170,6 +170,37 @@ Three notes worth keeping:
   395 tokens in the safe direction, and the alternative - tokenizing the prompt
   per item to save context we are not short of - buys nothing.
 
+## Prompt cache reuse
+
+**PENDING - awaiting the first instrumented `digest` run.**
+
+This measures whether `llama-server` reuses the summarizer system prefix across
+items in one worker shard. The log is the instrument. `usage.prompt_tokens`
+reports the full prompt whether the prefix was cached or not, so it cannot answer
+this question.
+
+The workflow now keeps `llama-server.log` and `router.log` for two days, and
+prints the relevant lines into the job log:
+
+```sh
+grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' llama-server.log
+grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' router.log
+```
+
+For three consecutive summarization items in one shard, record:
+
+| Field | Source line | How to read it |
+| --- | --- | --- |
+| `p0` | `kv cache rm [p0, end)` | `0` means a total miss; about `801` means the full system prompt was reused; about `315` means only the shared head was reused. |
+| `N` | `prompt eval time = X ms / N tokens` | The number of tokens actually evaluated for that request. |
+| `n_slots` | `n_slots` | More than one slot may divide the context. |
+| `n_ctx_per_seq` | `n_ctx_per_seq` | Must be at least `4201`, the measured worst-case prompt plus output budget above. |
+
+Record the run id, runner CPU, llama.cpp build if the log names it, model file,
+and the spread across the three observations. If `n_slots > 1` makes
+`n_ctx_per_seq < 4201`, report it as a defect: the measured worst case does not
+fit the slot.
+
 ## Weights on disk
 
 Hardware: local filesystem. Date: 2026-08-21. Method: `stat`.
