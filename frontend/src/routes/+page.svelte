@@ -13,5 +13,5 @@
 {#if data.day}
 	<DigestList day={data.day} latest={data.latest} ui={data.ui} />
 {:else}
-	<EmptyDay date={data.today} latest={null} />
+	<EmptyDay date={data.today} latest={data.latest} />
 {/if}
