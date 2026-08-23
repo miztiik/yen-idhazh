@@ -27,6 +27,7 @@ from idhazh.contracts.digest_day import (
     DigestVisual,
 )
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import (
     ConfigDigest,
@@ -177,6 +178,7 @@ def build_day(
     generated_at: str,
     retention_window_months: int,
     embeddings: DigestEmbeddings | None = None,
+    item_health_rows: Sequence[ItemHealthRow] | None = None,
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
 
@@ -196,14 +198,23 @@ def build_day(
     names = vertical_names(taxonomy)
     present = sorted({item.vertical for item in combined})
     published = len(combined)
-    failed = max(len(plan.items) - published, 0)
+    failed = (
+        sum(1 for row in item_health_rows if row.outcome is ItemOutcome.FAILED)
+        if item_health_rows is not None
+        else max(len(plan.items) - published, 0)
+    )
+    planned = (
+        max(len(plan.items), published + failed)
+        if item_health_rows is not None
+        else max(len(plan.items), published)
+    )
 
     return DigestDay(
         version=DigestDay.schema_version(),
         date=plan.date,
         generated_at=generated_at,
         partial=failed > 0,
-        items_planned=max(len(plan.items), published),
+        items_planned=planned,
         items_failed=failed,
         retention_window_months=retention_window_months,
         runs=runs,
@@ -236,12 +247,20 @@ def build_manifest(
     site_files: int,
     determinism_violations: int = 0,
     note: str | None = None,
+    item_health_rows: Sequence[ItemHealthRow] | None = None,
 ) -> RunManifest:
     """What ran, against which model, at which commit - appended, never rewritten."""
     run_n = (previous.runs[-1].n + 1) if previous else 1
-    succeeded = sum(1 for summary in summaries if summary.status is SummaryStatus.OK)
-    skipped = sum(1 for summary in summaries if summary.status is SummaryStatus.SKIPPED)
-    planned = max(len(plan.items), len(summaries))
+    if item_health_rows is not None:
+        succeeded = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.OK)
+        failed = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.FAILED)
+        skipped = 0
+        planned = len(item_health_rows)
+    else:
+        succeeded = sum(1 for summary in summaries if summary.status is SummaryStatus.OK)
+        skipped = sum(1 for summary in summaries if summary.status is SummaryStatus.SKIPPED)
+        planned = max(len(plan.items), len(summaries))
+        failed = planned - succeeded - skipped
     record = RunRecord(
         run_id=f"{plan.date}-{run_n}",
         n=run_n,
@@ -254,7 +273,7 @@ def build_manifest(
         models=list(models),
         items_planned=planned,
         items_succeeded=succeeded,
-        items_failed=planned - succeeded - skipped,
+        items_failed=failed,
         items_skipped=skipped,
         verticals=[
             VerticalCount(
