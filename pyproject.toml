@@ -38,6 +38,10 @@ dependencies = [
 dev = [
     "mypy>=1.14",
     "pytest>=8.3",
+    # Structured parsing for the workflow trigger contract test. Dev-only;
+    # measured 2026-08-23 on Windows 11, Python 3.12: 728341 installed bytes.
+    # One observation, so no spread. Beneficiary: workflow routing regression gate.
+    "PyYAML>=6.0",
     "ruff>=0.9",
 ]
 # Only for backend/utilities/bench_image.py, which times CPU diffusion models on

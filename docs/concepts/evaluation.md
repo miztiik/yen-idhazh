@@ -32,7 +32,7 @@ Optimising for faithfulness alone therefore drives the system toward bland copyi
 
 | Counterweight | What it catches |
 | --- | --- |
-| **Lead coverage** | Whether the names and figures in the source's opening lines survived into the summary. This is the direct instrument for *selective omission* - the thing faithfulness structurally cannot see, because omitting a fact is perfectly consistent with the source. It is anchored on the lead rather than the whole article for a reason given below. |
+| **Lead coverage** | Whether the names and figures in the source's opening lines survived into the summary. This is the direct instrument for *selective omission* - the thing faithfulness structurally cannot see, because omitting a fact is perfectly consistent with the source. It is anchored on the lead rather than the whole article for a reason given below. A line break is an entity boundary, so a title line cannot glue itself to the first capitalised word of the body. |
 | **Unsupported numbers** | A figure the summary asserts that appears nowhere in the full article. Coverage sees an *omitted* number and is structurally blind to an *invented* one, and a wrong figure is the most damaging thing a news summary can carry. |
 | **Dropped hedge** | The source said "reportedly" and the summary said it flat. A rumour became a fact. Faithfulness marks this generously, because the entity and the relation are both present - only the uncertainty went missing. |
 | **Extractiveness** | How much of the summary is lifted verbatim, as 4-gram overlap plus the longest unbroken copied run. High extractiveness *plus* high faithfulness means copying, not summarizing. |
@@ -98,7 +98,15 @@ The counterweights have different force:
 | Lead coverage below `evaluation.lead_coverage_min` | Cap `high` at `medium`. The summary missed the lead, but it may still match what it did say. |
 | Dropped hedge | Cap `high` at `medium`. The summary flattened uncertainty, but that defect does not erase every faithful sentence. |
 
-The cap is deliberate. A faithful summary that missed the lead deserves less confidence, not no confidence. Re-cutting the `high` and `medium` thresholds is a separate Level 5 decision. The current rows do not supply enough evidence for that change.
+The cap is deliberate. A faithful summary that missed the lead deserves less
+confidence, not no confidence. Re-cutting the `high` and `medium` thresholds is
+a separate Level 5 decision. The current rows have no human labels, so they do
+not supply an error rate for any cut.
+
+Historical `band` cells are a time-of-write record, not a live distribution.
+Rows written before the counterweight caps may record `high` even though today's
+`band()` would cap them at `medium`. Re-band the ledger with the current function
+before using the bands as a distribution.
 
 ## Per-item scores cannot see drift
 
@@ -117,12 +125,14 @@ A drift detector that has never fired has not been shown to work; it is tested b
 
 **Failed counterweights cap at `medium` (2026-08-23).** A low lead-coverage score or a dropped hedge reduces confidence, but it does not prove the whole summary false. Unsupported numbers still force `low`, because a wrong figure is a direct false claim. Authority: owner, resolving the known-defects open question.
 
+**Lead entities do not cross line breaks (2026-08-23).** The source's title and body can be adjacent without sentence punctuation. Treating the newline as ordinary whitespace created impossible entities such as `biodiversity loss\nwe`, which counted against the summary and could never match it. A line break now ends the entity run while spaces and tabs still join names inside one line, such as `US President Donald Trump`. Authority: Andre's metric boundary, implemented as a structural bug fix.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
 | --- | --- | --- |
 | Let lead coverage or a dropped hedge force `low` | It overcorrects. A good summary of a badly-extracted or narrow source can miss the lead and still be faithful to what it says. | owner |
-| Re-cut the faithfulness band thresholds in the same change | The current rows saturate at `high`, but nineteen rows are not enough evidence to set a new reader-facing promise. That is a Level 5 design consultation. | `CLAUDE.md` section 6, Rule #10 |
+| Re-cut the faithfulness band thresholds to reduce the `high` share | A band share is not an error rate. Choosing 0.90 over 0.80 would choose how much of the digest is called `high` and only then discover what `high` means. The decision needs human labels, not more unlabelled rows. It also changes nothing the reader sees: `high` prints no item-level copy. | Andre, Reader |
 
 ## Why this is a census and not a sample
 

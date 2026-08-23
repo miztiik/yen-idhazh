@@ -250,6 +250,69 @@ tokens, full prompt tokens, evaluated prompt tokens, and a reused-prefix field
 such as `p0` or `n_past`; the golden set's `output_digest` values must stay
 unchanged.
 
+### The prompt token counts, from the tokenizer
+
+**Measured 2026-08-23.** Method: `backend/bin/llama-tokenize` against
+`backend/models/Qwen3-8B-Q4_K_M.gguf`, over the system prompt rendered from the
+committed `config/` for every band. A token count is a property of the tokenizer
+and the text, so it does not vary with the machine that counted it.
+
+Every earlier figure for this prompt came from a word-share count, not a
+tokenizer, and every one of them was wrong:
+
+| Quantity | Earlier estimate | Measured |
+| --- | --- | --- |
+| Full system prompt | 801 tokens | **877-879 tokens** |
+| Invariant shared prefix | about 315 tokens | **381 tokens** (296 words) |
+| Distinct rendered prompts | 3 | **4** |
+
+The prefix ends exactly where `band_for()` substitutes the word range, at
+`Length:\n\n- Write one summary of `. The fourth distinct prompt is the brief
+band that row 8 added; the earlier count of three predates it.
+
+Re-running the row 9 arithmetic on the measured head and the measured prefill
+throughput of 34.23 tok/s: 381 tokens costs **11.1 s** per item, so 13
+recoverable items is **2.4 min** of CPU, or about **0.6 min** of wall clock
+across four shards. That is 21 percent more than the 315-token estimate implied,
+and it does not change the decision - the ceiling is still 1-2 percent of a run.
+**Row 9's collapse survives its own correction.**
+
+## Evaluation ledger re-band
+
+**Measured 2026-08-23** on `state/scores.csv` at commit `6c332c7`, n=156.
+Method: Python `csv.DictReader` over the committed ledger, with today's
+`EvaluationConfig` and `backend/idhazh/evals/score.py::band()`. This is
+deterministic ledger arithmetic, so hardware and spread are not applicable.
+
+The recorded `band` column predates the counterweight caps. It is the scorer's
+time-of-write output, not the current distribution.
+
+| Band | Recorded | Re-banded with today's `band()` |
+| --- | --- | --- |
+| high | 112 (71.8%) | 85 (54.5%) |
+| medium | 19 (12.2%) | 46 (29.5%) |
+| low | 25 (16.0%) | 25 (16.0%) |
+
+Twenty-seven rows, 17.3%, move from `high` to `medium`.
+
+| Move reason | Rows |
+| --- | --- |
+| Lead coverage alone | 11 |
+| Dropped hedge alone | 11 |
+| Lead coverage and dropped hedge | 5 |
+
+Only four rows have `unsupported_numbers > 0`. In the 600-1000 source-word
+stratum, n=50, two positives sit below `hhem = 0.80` and none sit above it. That
+is too few events to set a threshold.
+
+The ledger is one run, not two days. `run_id` `2026-08-23-3` owns 137 of 156
+rows. The remaining 19 rows sit under a different `pipeline_fingerprint`. Five
+source URLs appear under both fingerprints. Every one moved downward: -0.105,
+-0.595, -0.114, -0.079 and -0.034. That uniform shift points at a producer
+change in a way scattered noise would not. The largest observed item-level HHEM
+move is 0.595: the Google biomarker article moved from 0.9578 (`high`) to 0.3626
+(`low`) with no model or scorer change recorded.
+
 ## llama-server runtime sweep
 
 **Status 2026-08-23:** harness added, sweep not yet run. No runtime flag is
@@ -453,6 +516,39 @@ a short blog post. That makes the low count a **source-selection** result
 rather than an extraction defect, and it is why raising the floor's pass rate
 belongs in `config/sources.json` and not in `extract.py`.
 
+### Lead coverage newline boundary
+
+**Measured 2026-08-23** on a developer machine (Windows, Python 3.12.12), by
+extracting the 17 committed `tests/fixtures/short-sources/` HTML fixtures with
+`to_article()`, comparing the old capitalised-run expression against the fixed
+metric, and scoring five hand-written `publish_brief` summaries through
+`score.band()` at `hhem = 0.95`. Spread is not available because this is a
+deterministic string metric.
+
+| Check | Before | After |
+| --- | --- | --- |
+| Fixtures with a glued newline entity | 6 of 17 | 0 of 17 |
+| Extractable fixtures in the pass | 15 of 17 | 15 of 17 |
+| Hand-written `publish_brief` rows moved by the fixed metric | 1 of 5 | 0 remaining wrongly capped |
+
+The glued entities were: `ai2\nglenn matlin`,
+`published\nus president donald trump`, `student researcher\nwe`,
+`xcframework\nlinux`, `gender-specific parental investment\nwe`, and
+`biodiversity loss\nwe`.
+
+| Fixture | Coverage before | Band before | Coverage after | Band after |
+| --- | --- | --- | --- | --- |
+| `llama-cpp-releases-01` | 0.625000 | high | 0.636364 | high |
+| `llama-cpp-releases-02` | 0.857143 | high | 0.857143 | high |
+| `marginal-revolution-01` | 1.000000 | high | 1.000000 | high |
+| `nber-new-01` | 0.833333 | high | 1.000000 | high |
+| `nber-new-02` | 0.000000 | medium | 0.500000 | high |
+
+The committed `state/scores.csv` had 156 rows, but no source-text or summary-text
+columns. The stored `coverage` column cannot be recomputed honestly from that
+ledger alone, so this pass reports 0 computable re-bands rather than inventing a
+movement count.
+
 ## CI and publish wall-clock
 
 **Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`. Single observed run
@@ -538,6 +634,8 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
+| **Whether the prompt prefix is reused at all** | **unmeasured, and currently unobservable** | a permanent instrument, not a one-off grep. `usage.prompt_tokens` reports the full prompt whether cached or not, and llama-server emits no `kv cache rm` line at our verbosity, so the question went blind again the moment row 3 closed. Log slot id, item id, band id, rendered system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens, and `p0` or `n_past`. |
+| **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
 | Image render seconds at 512 and 768 | the job cannot complete | a smaller model, a smaller resolution, or a machine that survives it |
 | Image bytes, PNG at 768 | ~500 KB, estimate | the `image` job writes the file; measure it |

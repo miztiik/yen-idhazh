@@ -102,15 +102,34 @@ still cache their one configured model under a model-specific key.
 
 ## Serve a model
 
+The flags are not yours to choose. `server_argv` builds them from `config/`, and
+that argv is a fingerprint input, so a flag typed by hand here is a different
+server from the one CI runs. Ask for the command instead of copying one:
+
 ```bash
-LD_LIBRARY_PATH=backend/bin backend/bin/llama-server \
-  --model backend/models/Qwen3-8B-Q4_K_M.gguf \
+python backend/utilities/llama_server_argv.py \
+  --config config \
+  --binary backend/bin/llama-server \
+  --weights backend/models/Qwen3-8B-Q4_K_M.gguf \
   --alias qwen3-8b-q4-k-m \
-  --ctx-size 8192 --batch-size 512 --ubatch-size 512 \
-  --threads 4 --port 8080 --no-warmup
+  --format shell
 ```
 
-On Windows, `backend\bin\llama-server.exe` with the same flags.
+Today that prints:
+
+```bash
+backend/bin/llama-server --model backend/models/Qwen3-8B-Q4_K_M.gguf \
+  --alias qwen3-8b-q4-k-m --ctx-size 8192 --batch-size 512 \
+  --ubatch-size 512 --threads 4 --port 8080
+```
+
+Run it with `LD_LIBRARY_PATH=backend/bin` in front. On Windows, use
+`backend\bin\llama-server.exe`; the generator prints the same flags.
+
+`digest.yml` starts its server the same way, from the same generator, and a test
+fails if the two ever disagree. **`--no-warmup` is no longer passed** - the page
+fault is paid either way, so the workflow now pays it during `pip install`
+instead of inside the first request.
 
 **Use `--threads 4` when reproducing the current runner baseline.** GitHub gives
 the VM four scheduler-visible CPUs. That does not mean four physical cores plus
@@ -297,7 +316,7 @@ Run the hosted sweep after this workflow version is on the default branch:
 
 ```bash
 gh workflow run measure.yml \
-  -f suite=llm \
+  -f target=llm \
   -f models='Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf' \
   -f threads='4,8'
 ```
@@ -312,7 +331,7 @@ five-item server path before changing production:
 
 ```bash
 gh workflow run measure.yml \
-  -f suite=runtime \
+  -f target=runtime \
   -f runtime_candidate=threads \
   -f runtime_threads=8
 ```
@@ -357,8 +376,8 @@ this.
 | Every item logs `model unreachable` | The server is not up. `curl` the health endpoint before blaming the pipeline. |
 | `'HHEMv2ForSequenceClassification' has no attribute 'all_tied_weights_keys'` | transformers is too new. The pin is `<5`; check what actually resolved. |
 | The reply "did not hold its shape" | Usually the output budget, not the model. `models.inference.max_output_tokens` is 900 - a crash guard, not a length control. At 250 it ran out mid-object and failed as a shape error, which named the wrong cause. |
-| An item degrades with "page furniture is short" | Extraction found under `extract.min_source_words` (250). Release-note feeds trip this constantly, which is why it is set there. |
-| A summary is dropped for word count | `evaluation.summary_words_min/max`, currently 40 and 250. |
+| An item degrades with "page furniture is short" | Extraction found under `extract.min_source_words` (60). That floor is derived, not chosen: `brief_target_words_min / brief_compression_ceiling`, or 30 / 0.5. A short release note no longer trips it - it publishes as a brief and the census row carries `not_prose`. |
+| A summary is dropped for word count | `evaluation.summary_words_min/max`, currently 25 and 250. |
 
 ## See also
 
