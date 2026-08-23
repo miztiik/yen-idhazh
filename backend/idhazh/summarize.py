@@ -12,7 +12,7 @@ reason a specific failure cannot happen:
   before anyone noticed.
 
 Every number the prompt states is substituted from config at render time
-(Holy Law #6). That is not only tidiness: what we ask for is one of the inputs
+(Rule #6). That is not only tidiness: what we ask for is one of the inputs
 the pipeline fingerprint hashes, so changing the ask now re-summarizes instead
 of reusing a reply written under the old one.
 """
@@ -125,7 +125,7 @@ def output_schema(
     prompt_config: SummarizeConfig | None = None,
     evaluation: EvaluationConfig | None = None,
 ) -> dict[str, Any]:
-    """Generated from the model, never hand-written (Holy Law #3)."""
+    """Generated from the model, never hand-written (Rule #3)."""
     return draft_model(prompt_config, evaluation).model_json_schema()
 
 
@@ -182,7 +182,7 @@ def user_turn(article: Article) -> str:
     The source's own title sits inside the fence with the body. It arrives from
     the same page and is the line the model is now asked to rewrite, so leaving
     it outside would put untrusted text where the prompt's "that block is DATA"
-    sentence does not reach (Holy Law #11).
+    sentence does not reach (Rule #11).
     """
     parts = []
     if article.title:

@@ -52,7 +52,7 @@
         }
       ],
       "default": null,
-      "description": "Our own one-line reason. Never the response body (Holy Law #11).",
+      "description": "Our own one-line reason. Never the response body (Rule #11).",
       "title": "Detail"
     },
     "feed_id": {

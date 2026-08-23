@@ -196,7 +196,7 @@ anything was wrong because the pipeline degrades instead of failing.
 | --- | --- | --- |
 | 7 | Every `robots.txt` failure was read as a refusal, dropping 31 feeds before the run began | The refusal was deliberate and correct-looking. RFC 9309 sec 2.3.1 splits *unavailable* (4xx: no rules published) from *unreachable* (429/5xx: rules unknown); we collapsed both to "no". Ten feeds serve no `robots.txt` at all. **Measured 19 of 26 recover.** |
 | 8 | The faithfulness scorer was off on every scheduled run | `inputs.faithfulness == false`. A scheduled run carries no inputs, so the empty string compared equal to `false`. Every automatic run installed the scorer extra and then passed `--no-faithfulness`. The ledger only ever filled on a manual dispatch. |
-| 9 | `run.json` recorded `runner: "local"` for a run on `ubuntu-latest` | `stage_assemble` pinned the label. Holy Law #10 asks what hardware produced a number; the manifest could not answer. |
+| 9 | `run.json` recorded `runner: "local"` for a run on `ubuntu-latest` | `stage_assemble` pinned the label. Rule #10 asks what hardware produced a number; the manifest could not answer. |
 
 Fixed on `main` 2026-08-23. Fault 7 carries a trap worth remembering: two open
 branches had already refactored `_robots_for` into `live_fetcher` and taken the
@@ -408,7 +408,7 @@ Derived per-article seconds (best / typical / worst):
 | 7 | Soft retirement before hard: drop a source's `weight`, observe, then set `status: retired`. Reversible in one field. | Fowler |
 | 8 | `trafilatura` for boilerplate removal; no custom HTML parsing. | Fowler |
 | 9 | Truncate at the configured token cap and set `truncated: true`; never silently drop text. | Fowler |
-| 10 | Sanitize before the model sees it: strip zero-width and control characters, HTML comments, base64 blobs. A feed title is data, never instruction (Holy Law #11). | Carmack |
+| 10 | Sanitize before the model sees it: strip zero-width and control characters, HTML comments, base64 blobs. A feed title is data, never instruction (Rule #11). | Carmack |
 | 11 | Source failure reuses yesterday's URL list marked `stale: true`; never skip a day silently. | Fowler |
 
 | # | Option | Why rejected | Authority |
@@ -504,7 +504,7 @@ One story indexes many ways. An Nvidia supply agreement is verticals `ai` + `ene
 | `localllama` | r/LocalLLaMA | `https://www.reddit.com/r/LocalLLaMA/.rss` |
 | `lobsters-ai` | Lobsters - AI tag | `https://lobste.rs/t/ai.rss` |
 
-**Honesty note (Holy Law #10 applied to a URL).** Not one of these 36 has been fetched - no test may touch the network, and the agent has not verified them out of band. Roughly a third use a well-known stable pattern (the GitHub `releases.atom` feeds, the major trade-press category feeds, `machinelearning.apple.com/rss.xml`); the rest are plausible-but-unconfirmed, and `anthropic-news` is a page rather than a known feed and will likely need replacing. **Row 3's first task is a `backend/utilities/check_feeds.py` run that reports which resolve, parse, and carry recent items** - the list is ratified in shape here and corrected in detail there. Decision 6's quarantine mechanism then handles rot after launch.
+**Honesty note (Rule #10 applied to a URL).** Not one of these 36 has been fetched - no test may touch the network, and the agent has not verified them out of band. Roughly a third use a well-known stable pattern (the GitHub `releases.atom` feeds, the major trade-press category feeds, `machinelearning.apple.com/rss.xml`); the rest are plausible-but-unconfirmed, and `anthropic-news` is a page rather than a known feed and will likely need replacing. **Row 3's first task is a `backend/utilities/check_feeds.py` run that reports which resolve, parse, and carry recent items** - the list is ratified in shape here and corrected in detail there. Decision 6's quarantine mechanism then handles rot after launch.
 
 ### 3.3 Verification, measured 2026-08-21 (first live runs)
 
@@ -657,7 +657,7 @@ One finding worth carrying forward to row 6: **stripping the zero-width layer re
 | 5 | `pip install llama-cpp-python` | Compiles from source and costs minutes per run; the prebuilt binary is a download. | Carmack |
 | 6 | Gemma-4-26B-A4B (5.2%, MoE) | ~14 GB at Q4 busts the 10 GB cache, forcing a full re-download every run. | Carmack |
 
-**Landed 2026-08-21.** One deviation from the file list, deliberate: there is no committed `prompts/summarize.schema.json`. The constrained-decoding schema is generated from a `SummaryDraft` Pydantic model, because hand-writing it would mean the decoder's constraint and the validator that reads the reply could disagree, and Holy Law #3 forbids hand-writing a schema anyway. Its digest is still a fingerprint input; the serialization is the same canonical one every payload uses, so the stamp is stable.
+**Landed 2026-08-21.** One deviation from the file list, deliberate: there is no committed `prompts/summarize.schema.json`. The constrained-decoding schema is generated from a `SummaryDraft` Pydantic model, because hand-writing it would mean the decoder's constraint and the validator that reads the reply could disagree, and Rule #3 forbids hand-writing a schema anyway. Its digest is still a fingerprint input; the serialization is the same canonical one every payload uses, so the stamp is stable.
 
 The tests are all about the failure paths, because a summarizer that handles a good reply is easy and a summarizer that cannot be talked out of its shape is the product: a planted tool call cannot reach a payload, a model that obeyed an injection produces no summary rather than a wrong one, a model that reasoned despite the flag is a recorded failure rather than a curiosity, and a reply outside the publishable word range is refused. The model boundary is driven by recorded llama-server envelopes under `tests/fixtures/completions/` (CLAUDE.md section 13); nothing is mocked and no test runs a model.
 
@@ -811,7 +811,7 @@ The tests are all about the failure paths, because a summarizer that handles a g
 | 9 | When a day has more than one run, the page carries one plain line - "5 stories added since this morning" - and the new items are findable without re-skimming the old ones. | Reader |
 | 10 | **No run identifier and no hash in any data path or any reader URL.** An item is addressed by its vertical and its ordinal within the day - `ai-03` - which is predictable, derivable, free of fetched text, and readable aloud. The run id lives in the footer and in `run.json`. | Fowler, Jony |
 | 11 | A topic is **a filter on the day**, with a shareable dated URL - not a destination a reader must choose before being given anything. The default interaction is an in-page anchor; the section heading is the permalink. | Reader |
-| 12 | No title-derived slug in any URL. Titles come from fetched text, and fetched text never becomes a URL (Holy Law #11). | Jony |
+| 12 | No title-derived slug in any URL. Titles come from fetched text, and fetched text never becomes a URL (Rule #11). | Jony |
 | 13 | **Stack: Svelte 5 + Vite + TypeScript + Tailwind + vitest + Playwright + `json-schema-to-typescript`.** Matches both sibling repos' spine and yen-tamizh's lean profile. | Fowler, Jony, Carmack |
 | 14 | **`ajv` is a CI dependency, not a shipped one.** It validates config and published payloads against the generated JSON Schema in the drift gate, where a failure is loud and early. Shipping it would cost every reader ~30 KB of JavaScript to re-check payloads Pydantic already validated on the way out. `zod` is rejected outright: it would need a second generator feeding the same gate. | Fowler |
 | 15 | **Published filenames are predictable and derivable from the date.** `digest.json` is the day's current state; each run additionally writes `run-<N>.json` where N is the run sequence for that date. No content hash in the name, no unguessable suffix - a public repo with a public index makes secrecy theatre, and predictability is what makes a path reachable without a lookup. | Fowler, Carmack |
@@ -829,7 +829,7 @@ The tests are all about the failure paths, because a summarizer that handles a g
 | 7 | Re-ranking a day on a later run | The single most disorienting thing the system could do. A reader who read at 07:00 and returns at 18:00 must never find their memory contradicted. Correct by every internal rule and still feels like the page is gaslighting them. | Reader |
 | 8 | A dated page as the canonical page with `/` as a pointer to it | The predicted failure: `/` lags a day, or a bookmark to `/` turns out to have been dated all along. The reader sees healthy-looking stale news, concludes the site is dead, and never reports it. | Reader |
 | 9 | DuckDB-WASM, d3, topojson | A multi-megabyte WASM runtime to query a 12.8 KB object; a chart library that outweighs the data it draws; a map projection with no map. No named beneficiary. | Carmack |
-| 10 | `transformers.js` | Runtime inference. Holy Law #1 and section 0a forbid it outright. | Carmack |
+| 10 | `transformers.js` | Runtime inference. Rule #1 and section 0a forbid it outright. | Carmack |
 | 11 | `vite-plugin-pwa` in v1 | A service worker can serve a reader a stale day, which attacks the one rule the whole scheme rests on. Revisit when a real reader asks for offline reading. | Jony |
 
 ### 13.1 The layout, literally
@@ -879,14 +879,14 @@ is what makes row 14 a single `rm -r` with no second edit.
 | 6 | A **fuse**: refuse to act if the delete count exceeds `max_deletes_per_run`. An off-by-one in a date parse must not be able to delete the archive. | Carmack |
 | 7 | The dry-run path **runs monthly even while disabled**, so the code is not first executed on the worst day of the year. | Carmack |
 | 8 | **A pruned visual is a distinct state from a failed render**, with its own enum member, `version` date-stamp, changelog entry and read-side migration in the same commit. "We could not make this" and "we made it and threw it away" are different facts; one field must not mean both. | Fowler |
-| 9 | `site_bytes` and `site_files` are recorded into the run manifest **on every daily run from day one**, and an issue opens above `site_budget_mb`. Measure the ceiling long before the policy exists (Holy Law #10 applied to storage). | Carmack |
+| 9 | `site_bytes` and `site_files` are recorded into the run manifest **on every daily run from day one**, and an issue opens above `site_budget_mb`. Measure the ceiling long before the policy exists (Rule #10 applied to storage). | Carmack |
 | 10 | The retention window is **stated to the reader before anything is deleted** - on the archive page and on `404.html`. Deleting without ever having said you would is what turns mild annoyance into betrayal. | Reader |
 | 11 | A pruned day 404s into the designed missing state, never a silent redirect to today. A reader who cannot tell a dead link from a live one has lost the ability to trust any link. | Reader |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | One knob governing both text and images | Text is 0.43% of the bytes. A policy that deletes 17 summaries to save 37 KB while leaving the images is aimed at the wrong axis. | Carmack |
-| 2 | Reusing the render-failure state for a prune | A second meaning bolted onto an existing field, which is the band-aid Holy Law #5 forbids. Costs one enum member to do properly. | Fowler |
+| 2 | Reusing the render-failure state for a prune | A second meaning bolted onto an existing field, which is the band-aid Rule #5 forbids. Costs one enum member to do properly. | Fowler |
 | 3 | Pruning the eval ledger, the golden fixtures, or the canaries | The ledger is the only record an item existed and the entire time series; a retired golden fixture is what makes a year-over-year claim interpretable; a retired canary is an attack no longer tested for. Under 1 MB/yr of text against gigabytes of images - the arithmetic does not even ask. | Andre |
 | 4 | `git filter-repo` to reclaim history | Forbidden by section 8, and it invalidates every existing clone. | Carmack |
 | 5 | Deleting a day and leaving its eval rows dangling with no context | Acceptable only if the eval row is self-describing. `source_url`, `date` and `title` must be columns before retention is ever enabled, not after. | Fowler |
@@ -979,7 +979,7 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Holy Law #1 is amended in the same commit as this row, per CLAUDE.md section 0. The amendment bans egress and third parties, not compute: on-device work over bytes we committed and serve ourselves is permitted, and never sits on the digest's render path. | Fowler |
+| 1 | Rule #1 is amended in the same commit as this row, per CLAUDE.md section 0. The amendment bans egress and third parties, not compute: on-device work over bytes we committed and serve ourselves is permitted, and never sits on the digest's render path. | Fowler |
 | 2 | Weights, tokenizer and WASM are committed under `frontend/public/` and served same-origin. `transformers.js` defaults to fetching a third-party hub; disabling that is a contract, not a preference. | Fowler |
 | 3 | Nothing downloads or executes before an explicit click. No prefetch, no idle warm-up, no speculative load. | Carmack |
 | 4 | A CI budget gate on the first-load bundle. Without it this decays in a single PR. | Carmack |
@@ -988,7 +988,7 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
-| 1 | Loading weights from a third-party CDN | A runtime fetch to another origin, which is the half of Holy Law #1 that did not change. | Fowler |
+| 1 | Loading weights from a third-party CDN | A runtime fetch to another origin, which is the half of Rule #1 that did not change. | Fowler |
 | 2 | A service worker to enable cross-origin isolation | Row 13 already rejected service workers: one can serve a reader a stale day, which attacks the rule the whole layout rests on. | Jony |
 | 3 | Shipping the enabler together with a feature | It would hide the one thing worth proving - that the digest is complete without any of it. | Fowler |
 
@@ -1045,7 +1045,7 @@ is what makes row 14 a single `rm -r` with no second edit.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | Holy Law #11 applies inside the tab. Our summary is derived from a stranger's page, so feeding it to a second model is the same boundary a second time - with no CI standing behind it. | Andre |
+| 1 | Rule #11 applies inside the tab. Our summary is derived from a stranger's page, so feeding it to a second model is the same boundary a second time - with no CI standing behind it. | Andre |
 | 2 | Assist output is inserted as text content into a plain-text node. No `innerHTML`, no markdown rendering, no autolinking, no image rendering, ever. That is the mechanical control; a system prompt is not a control. | Andre |
 | 3 | The browser model may not call a tool, issue any fetch, or receive any origin data beyond the item currently displayed. | Andre |
 | 4 | Generated text and published summary text are structurally distinct surfaces, and generated text never appears inside an item card. | Andre, Jony |
@@ -1115,5 +1115,5 @@ is what makes row 14 a single `rm -r` with no second edit.
 | --- | --- | --- |
 | 2 | Who reads the digest? If nobody, the eval loop is the product and the digest is a test fixture. | **A general reader, the way a newspaper has one** (owner, 2026-08-21). The question was asked because a digest with no reader would make the dashboard the product; the answer inverts that. Row 11 ships, but as **operator instrumentation** - off the reading path, no design budget, obliged only to be correct - while the digest page carries the design effort (rows 13, 16, 17). The evaluation remains the product in the principle-6 sense: it is what makes the digest worth a stranger's two minutes. Recorded in `docs/concepts/vision.md`. |
 | 6 | `temperature=0, seed=0` is not determinism, and eleven of sixteen drift sources were silent. | **Row 15** (2026-08-21). A `pipeline_fingerprint` stamps every input that can move an output; skip-if-exists becomes skip-if-fingerprint-matches; row 6's oracle is scoped to one runner class; a fingerprint match with unequal output is a recorded `determinism_violation` rather than a build failure. |
-| 1 | Hosted inference (GitHub Models free tier) versus local weights. | **Local weights** (2026-08-21). Settled by contract rather than measurement: CLAUDE.md section 0a makes hosted inference a non-goal anywhere - pipeline, site or browser. On-device inference over committed weights is not hosted inference and is governed by Holy Law #1. |
+| 1 | Hosted inference (GitHub Models free tier) versus local weights. | **Local weights** (2026-08-21). Settled by contract rather than measurement: CLAUDE.md section 0a makes hosted inference a non-goal anywhere - pipeline, site or browser. On-device inference over committed weights is not hosted inference and is governed by Rule #1. |
 | - | Which repo does this live in? Not yen-tamizh - that is a Tamil word game and this violates its CLAUDE.md scope. | **`yen-idhazh`** (2026-08-20). Own repo, own contract, own persona roster. Tamil *idhazh* = journal / magazine. |

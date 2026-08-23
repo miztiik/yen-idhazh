@@ -2,7 +2,7 @@
 
 The Extract stage is the trust boundary, crossed exactly once. Everything on
 this payload that originated on someone else's server - `title`, `text`,
-`source_url` - is data and never instruction (Holy Law #11). Nothing here may
+`source_url` - is data and never instruction (Rule #11). Nothing here may
 become a system prompt, a shell argument, a file path or an outbound URL.
 
 A failure is a state of this payload, not an absence of it: a dead link, a

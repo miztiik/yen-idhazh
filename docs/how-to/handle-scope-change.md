@@ -18,7 +18,7 @@ Any one of these, on its own:
 
 - The named source, library, model, dataset or approach does not work, does not exist, or costs far more than assumed.
 - The work turns out to need a change to a persisted contract, and that was not the stated scope.
-- Delivering what was asked would break a rule in `CLAUDE.md` - most often a Holy Law or a stated non-goal.
+- Delivering what was asked would break a rule in `CLAUDE.md` - most often a Rule or a stated non-goal.
 - The correction level was assessed at 2 and the work is really a 4 (CLAUDE.md section 6).
 - Cost - time, runner minutes, bytes, dependencies - is running about 3x the estimate.
 - Two named authorities disagree and the disagreement is not resolvable from the docs.
