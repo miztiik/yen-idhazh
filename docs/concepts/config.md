@@ -24,6 +24,8 @@ Knobs, by the surface they tune:
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
 - **Logging** - the level, and which events emit ([telemetry.md](telemetry.md)).
+- **Console** - the telemetry viewport's default window, today anchor, pan step,
+  zoom factor, minimum denominator for rate bars, and chart height.
 
 These are the *surfaces*, not a field list. The field-level truth is `schemas/app-config.schema.json`, generated from the model - read it there rather than restating it here, because a list copied into prose is a list that goes stale.
 
@@ -121,6 +123,7 @@ Excluding the runner's ceilings is the less obvious half. They look exactly like
 - [pipeline-loop.md](pipeline-loop.md) - the stages these knobs tune.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the run cadence and the scoring knobs under `collect`.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - what `quarantine_after_failures` decides.
+- [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - what `console.*` tunes.
 - [evaluation.md](evaluation.md) - the bands and thresholds.
 - [telemetry.md](telemetry.md) - the logging knobs.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the schema every config file conforms to.

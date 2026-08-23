@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -55,9 +55,20 @@ There is no network in the loop, so **there is no excuse for a spinner.**
 
 Icons are **vector glyphs referenced by id** from a generated manifest, never inline SVG, never a hardcoded path, never a raster image. The manifest is a persisted surface with its own schema ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)). Keep the set tiny: an external-link mark, a confidence mark, and whatever the dashboard genuinely needs. An icon that needs a caption is a label wearing a costume.
 
-## Charts are build-time output, not a runtime library
+## Charts are static first, enhanced only when interaction earns it
 
 A chart on an item is rendered at build time from a specification and shipped as an asset ([digest.md](digest.md)). The dashboard's own chart is hand-written markup over a committed CSV. A charting library that outweighs the data it draws has not earned its bytes, and a runtime dependency on a reading page is a runtime dependency for nothing.
+
+The console is the exception because the owner requires pan and zoom over time.
+It uses `uplot`: MIT, zero dependencies, and small enough to keep the bundle gate
+meaningful. In the 2026-08-23 Windows_NT production build, the route chunk that
+carries `uplot` was 23.5 KB gzipped. It is bundled from `node_modules`, never
+fetched from a CDN.
+
+`uplot` renders to canvas, so it cannot inherit CSS custom properties inside the
+drawn pixels. Console charts read the token values with `getComputedStyle` at
+mount and after theme changes, then pass the resolved colours into the plot.
+That keeps the token file as the source of truth while naming the canvas cost.
 
 ## Design rationale
 
@@ -71,5 +82,6 @@ Keeping the motion set to three named animations is a deliberate under-build. A 
 - [digest.md](digest.md) - the item shape this vocabulary dresses.
 - [evaluation.md](evaluation.md) - where the confidence bands come from.
 - [principles.md](principles.md) - the beliefs behind the restraint.
+- [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md) - the console projection.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the payload fields the styling keys off.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 0a (accessibility scope) and section 12 (published-site verification).

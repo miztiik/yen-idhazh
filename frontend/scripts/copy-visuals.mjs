@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Stage the pipeline's rendered visuals into `static/` before the build.
+ * Stage the pipeline's rendered visuals and public telemetry into `static/`
+ * before the build.
  *
  * `frontend/public/` is where `backend/` writes, and the page reads those
  * payloads through the filesystem at build time - so the JSON never needs
@@ -18,9 +19,9 @@
  * Staging into `static/` before the build is the placement where dev, preview
  * and the deployed bundle all agree.
  *
- * Only image files are copied. The JSON payloads stay unserved on purpose:
- * publishing them would invite a runtime fetch, which is the thing the
- * prerendered design exists to avoid.
+ * Only image files are copied from digest payloads. The JSON payloads stay
+ * unserved on purpose. Telemetry is different: the console fetches a projected
+ * CSV that has already dropped URL keys, canonical URLs and free text.
  */
 
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -34,10 +35,15 @@ const source = process.env.DIGEST_ROOT
 	? resolve(process.env.DIGEST_ROOT)
 	: join('public', 'digest');
 const target = join('static', 'digest');
+const telemetrySource = process.env.TELEMETRY_ROOT
+	? resolve(process.env.TELEMETRY_ROOT)
+	: join('public', 'telemetry');
+const telemetryTarget = join('static', 'telemetry');
 
 // Generated, so it is rebuilt rather than accumulated. A stale visual from a
 // previous build would be served beside a payload that no longer names it.
 rmSync(target, { recursive: true, force: true });
+rmSync(telemetryTarget, { recursive: true, force: true });
 
 if (!existsSync(source)) {
 	console.log(`rendered visuals: no payload tree at ${source}, nothing to stage.`);
@@ -59,3 +65,17 @@ const walk = (relative) => {
 };
 walk('');
 console.log(`rendered visuals: staged ${copied} file(s) into static/digest.`);
+
+if (!existsSync(telemetrySource)) {
+	console.log(`telemetry: no projection tree at ${telemetrySource}, nothing to stage.`);
+	process.exit(0);
+}
+
+let telemetryCopied = 0;
+for (const name of readdirSync(telemetrySource)) {
+	if (!name.endsWith('.csv')) continue;
+	mkdirSync(telemetryTarget, { recursive: true });
+	cpSync(join(telemetrySource, name), join(telemetryTarget, name));
+	telemetryCopied += 1;
+}
+console.log(`telemetry: staged ${telemetryCopied} shard(s) into static/telemetry.`);

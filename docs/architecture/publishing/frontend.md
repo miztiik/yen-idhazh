@@ -154,12 +154,37 @@ Three colours, and the boundaries are read from config rather than chosen by the
 
 Beneath the grid is **every feed that failed at least once**, worst first, with its attempt count, its last outcome and how close it is to quarantine. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
 
-**The console reads the committed ledgers at build time and computes nothing at read time.** Every number on it was measured when the run happened and written down. Nothing under `state/` is ever served - the page carries the figures, never the file ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)).
+**The console reads committed records in two ways.** The run grid, feed list and
+timing medians still read the ledgers at build time. The item-health viewport
+fetches the browser-safe monthly projection under `telemetry/<YYYY-MM>.csv`.
+Nothing under `state/` is ever served - the browser reads only the narrow
+projection that drops `canonical_url`, `url_key` and `detail`
+([telemetry-series.md](telemetry-series.md)).
 
 Stage timing medians read from `state/item-health/<YYYY-MM>.csv`, not from
 `state/scores.csv`. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run. The score
 ledger still owns faithfulness and scorer time for the scored subset.
+
+The viewport is a 30-day default window, not a retention policy. The window size
+and where today sits are `console.default_window_days` and
+`console.today_anchor`. When less history exists, the first view fits the rows
+that exist instead of drawing empty calendar space. JavaScript enhances the
+server-rendered SVG with pan and zoom. Arrow keys pan, and `+` / `-` zoom, from a
+labelled focusable control with a visible focus ring. If a telemetry month is
+absent or cannot be parsed, that month is a gap in the charts. It is not
+interpolated, and it never white-screens the console.
+
+The item-health viewport has three parts:
+
+- Failure panels: fetch, extract and summarize failure rates as separate bars.
+  The label carries the raw pair. Thin denominators use outlined bars below
+  `console.min_attempts_for_rate`. Colour is spent only on a failure.
+- Failed item list: a panel chip filters this list, because after a spike the
+  operator needs rows.
+- Compression scatter: source words against summary words, with the
+  `summarize.bands` step function as the reference band and a distinct mark for
+  truncation-flagged scored items.
 
 ## Design rationale
 
@@ -192,6 +217,7 @@ Spending the colour at the day level rather than per item is the resolution of a
 | A second threshold for the red square | CI already reads a success floor to decide whether to open an issue. Two numbers answering one question drift, and then a red square and an open issue disagree. | owner |
 | Counting skipped items against a run's health | An already-published article is skipped by design. Counting it would paint a healthy day amber for doing its job. | owner |
 | Reading stage timings from `state/scores.csv` | The score ledger did not carry those columns, and it only covers scored items. Timings belong on the item-health census. | Fowler |
+| Serving `state/item-health/` directly | It carries `canonical_url`, `url_key` and untrusted `detail`. The browser gets only the published telemetry projection. | Fowler, Rule #11 |
 
 ## See also
 
