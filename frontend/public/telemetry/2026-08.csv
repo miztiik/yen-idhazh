@@ -1,0 +1,6 @@
+date,run_id,item_id,vertical,source_id,stage,outcome,code,source_words,summary_words
+2026-08-21,2026-08-21-1,ai-01,ai,lab-blog,publish,ok,,1320,35
+2026-08-21,2026-08-21-1,ai-02,ai,lab-blog,plan,failed,not_attempted,,
+2026-08-21,2026-08-21-1,ai-03,ai,lab-blog,plan,failed,not_attempted,,
+2026-08-21,2026-08-21-1,ai-04,ai,trade-press,plan,failed,not_attempted,,
+2026-08-21,2026-08-21-1,ai-05,ai,community,plan,failed,not_attempted,,
