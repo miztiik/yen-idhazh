@@ -22,6 +22,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.extract import (
     EXTRACTOR_VERSION,
@@ -76,6 +77,7 @@ def fixture_item(source_id: str, url: str, index: int = 1) -> PlannedItem:
         canonical_url=url,
         source_id=source_id,
         tier=SourceTier.INSTITUTION,
+        source_form=SourceForm.ABSTRACT if source_id == "nber-new" else SourceForm.ARTICLE,
         vertical="energy",
         title=f"{source_id} fixture",
         rank_score=1.0,

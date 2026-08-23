@@ -26,6 +26,7 @@ from idhazh import config
 from idhazh.contracts.app_config import InferenceConfig, SummarizeConfig, SummaryBand
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.server import Completion, parse_completion, request_payload, server_argv
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
@@ -113,6 +114,15 @@ def test_the_article_arrives_fenced_and_labelled() -> None:
     assert FENCE_CLOSE in turn
     assert turn.count(FENCE_OPEN) == 1
     assert turn.count(FENCE_CLOSE) == 1
+
+
+def test_declared_source_form_arrives_outside_the_untrusted_block() -> None:
+    source = article().model_copy(update={"source_form": SourceForm.ABSTRACT})
+    turn = user_turn(source)
+    before_fence, fenced = turn.split(FENCE_OPEN, 1)
+
+    assert "Source form: abstract" in before_fence
+    assert "Source form: abstract" not in fenced
 
 
 def test_the_prompt_tells_the_model_the_block_is_data() -> None:
@@ -325,6 +335,15 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
         assert "$" not in system_prompt(source_words=words)
 
 
+def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
+    source = article().model_copy(update={"brief": True, "word_count": 190})
+    payload = build_request(source, model_id="m", inference=InferenceConfig())
+    system = payload["messages"][0]["content"]
+
+    assert "30 to 45 words" in system
+    assert "50 to 90 words" not in system
+
+
 def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
     """Disagree, and the decoder rejects a reply that did exactly what was asked."""
     asked = SummarizeConfig(key_points_min=3, key_points_max=4)
@@ -347,6 +366,7 @@ def test_the_decoder_rail_never_catches_a_summary_the_word_gate_would_pass() -> 
     typical_chars_per_word = 6
     bounds = EvaluationConfig()
     rail = output_schema(None, bounds)["properties"]["summary"]
+    assert rail["minLength"] == 125
     assert rail["minLength"] < bounds.summary_words_min * typical_chars_per_word
     assert rail["maxLength"] > bounds.summary_words_max * typical_chars_per_word
 

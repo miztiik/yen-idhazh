@@ -86,7 +86,11 @@ def to_eval_row(
     unsupported = metrics.unsupported_numbers(text, full_text)
     coverage = metrics.lead_coverage(text, full_text)
     hedge = metrics.hedge_dropped(text, full_text)
+    verbatim = metrics.verbatim_run(text, full_text)
     delta = round(hhem - hhem_full, _DELTA_PLACES)
+    truncation_flagged = delta > config.truncation_gap_max or (
+        article.brief and verbatim > config.brief_compression_ceiling
+    )
 
     return EvalRow(
         version=EvalRow.schema_version(),
@@ -106,11 +110,11 @@ def to_eval_row(
         hhem=hhem,
         hhem_full=hhem_full,
         hhem_delta=delta,
-        truncation_flagged=delta > config.truncation_gap_max,
+        truncation_flagged=truncation_flagged,
         coverage=coverage,
         compression=metrics.compression(text, full_text),
         extractiveness=metrics.extractiveness(text, full_text),
-        verbatim_run=metrics.verbatim_run(text, full_text),
+        verbatim_run=verbatim,
         unsupported_numbers=unsupported,
         hedge_dropped=hedge,
         evidential_density=metrics.evidential_density(full_text),

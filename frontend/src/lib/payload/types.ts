@@ -1,6 +1,7 @@
 /** Shapes the published payload carries, mirroring `schemas/digest-day.schema.json`. */
 
 export type ConfidenceBand = 'high' | 'medium' | 'low';
+export type SourceForm = 'article' | 'abstract';
 
 export type SourceKind =
 	| 'reporting'
@@ -32,6 +33,8 @@ export interface DigestItem {
 	events: string[];
 	entities: string[];
 	band: ConfidenceBand;
+	source_form: SourceForm;
+	reader_note: string | null;
 	truncated: boolean;
 	visual: DigestVisual | null;
 	introduced_by_run: number;

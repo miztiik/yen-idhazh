@@ -24,6 +24,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.sources import SourceForm
 from idhazh.evals.metrics import _SENTENCE_SPLIT
 from idhazh.fetch import FetchResult
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
@@ -78,6 +79,7 @@ def _failed(
         canonical_url=item.canonical_url,
         source_id=item.source_id,
         tier=item.tier,
+        source_form=item.source_form,
         vertical=item.vertical,
         carried_by=item.carried_by,
         rank_score=item.rank_score,
@@ -182,10 +184,18 @@ def prose_sentence_count(text: str, *, min_words: int) -> int:
 
 
 def is_not_prose(text: str, config: ExtractConfig) -> bool:
-    return (
+    if (
         prose_sentence_count(text, min_words=config.prose_sentence_words_min)
         < config.prose_sentence_min
+    ):
+        return True
+    lines = _lines(text)
+    if len(lines) < config.prose_line_count_min:
+        return False
+    prose_lines = sum(
+        1 for line in lines if len(_WORD.findall(line)) >= config.prose_sentence_words_min
     )
+    return prose_lines / len(lines) < config.prose_line_ratio_min
 
 
 def _lines(text: str) -> list[str]:
@@ -284,7 +294,11 @@ def to_article(
         text=text,
         word_count=len(text.split()),
         token_count=approx_tokens(len(text.split())),
-        brief=total_words < config.min_source_words or signal_code is not None,
+        brief=(
+            item.source_form is SourceForm.ABSTRACT
+            or total_words < config.min_source_words
+            or signal_code is not None
+        ),
         truncated=truncated,
         truncated_at_tokens=cut_at,
         published_at=item.published_at,

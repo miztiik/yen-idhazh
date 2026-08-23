@@ -24,7 +24,7 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 | Empty | Payload exists, no items | "Nothing was published for *date*", with plain copy that does not point at a notice that may not be on the page |
 | Missing | No payload for that date | A 404 that names the date and offers the archive. **Never a redirect to today** - a reader who cannot tell a dead link from a live one has lost the ability to trust any link |
 | Invalid | Payload breaks its contract | The build fails |
-| Degraded | Low band, truncated, no visual | The common case, rendered inline. Not an error |
+| Degraded | Low band, source-limit sentence, no visual | The common case, rendered inline. Not an error |
 
 The home page uses the newest committed payload as the day it can prove. It never
 uses the build clock as "today". If the site is rebuilt after a quiet or failed
@@ -65,7 +65,10 @@ It sits **on the meta line, after the summary and beside the source link** - nev
 
 **The colour the owner asked for is spent once, at the top, as an aggregate**: a three-segment bar with the counts beside it in words. "How much of today can you trust" is a day-level question, and that is the honest place for a colourful instrument.
 
-**Truncation is a separate chip**, from a separate field: "Source was cut short". Reader wanted specific warnings they could act on rather than a grade, and that is one.
+**Source limits are sentences**, not chips. An abstract item says "This is a
+summary of the paper's abstract. The full paper is a PDF." A truncated item says
+"We could only read the first part of this page." Reader wanted specific
+warnings they could act on rather than a grade, and Jony rejected another badge.
 
 **Where Reader still wins:** if most items land low, the page will look like something is wrong, and it will be right. The fix belongs in the pipeline, not in the palette.
 

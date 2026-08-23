@@ -15,6 +15,7 @@
   "published_at": null,
   "rank_score": 1.6,
   "sanitizer_version": "sanitizer-1",
+  "source_form": "article",
   "source_id": "example-wire-world",
   "source_url": "https://www.example-wire.com/2026/08/tariff-ruling",
   "status": "fetch_failed",

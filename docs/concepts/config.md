@@ -19,7 +19,8 @@ Knobs, by the surface they tune:
 - **Sources** - which feeds or listings are consulted, and the filters a candidate link must survive.
 - **Extraction** - the truncation cap, the retry budget, backoff, what counts as an oversized body, shape-signal thresholds, shape enforcement switches, and paywall fallback markers.
 - **Model** - which model reference and quantisation, the context size, thread count, and the sampling parameters that pin determinism.
-- **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the expected compression range, and the spot-check sample size ([evaluation.md](evaluation.md)).
+- **Summarize** - the length bands, title range, key-point range and quote cap.
+- **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the brief compression ceiling, the word gate, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
 - **Logging** - the level, and which events emit ([telemetry.md](telemetry.md)).
@@ -32,7 +33,7 @@ Every knob ships a sane default. The only values with no default are the model r
 
 Extraction has three shape and access controls:
 
-- `extract.prose_sentence_min` and `extract.prose_sentence_words_min` decide when text carries `not_prose`.
+- `extract.prose_sentence_min`, `extract.prose_sentence_words_min`, `extract.prose_line_count_min` and `extract.prose_line_ratio_min` decide when text carries `not_prose`.
 - `extract.boilerplate_ratio_max` decides when sibling-shared lines carry `boilerplate`.
 - `extract.paywall_markers` is the fallback when JSON-LD does not declare a paywall.
 
@@ -40,6 +41,20 @@ Two enforcement switches default to false: `extract.reject_not_prose` and
 `extract.reject_boilerplate`. False means record the signal and publish. True
 means reject the item as a listing. `extract.min_source_words` now marks the
 brief tier. It does not reject the item.
+
+The brief floor is derived, not chosen: `extract.min_source_words` is
+`summarize.bands[0].target_words_min / evaluation.brief_compression_ceiling`.
+With the defaults, that is `30 / 0.5 = 60`. An `AppConfig` validator refuses a
+config where the three values disagree.
+
+`config.summarize.bands` starts with the brief band `{0, 30, 45}`. The next band
+starts at 60 words. `evaluation.summary_words_min` is 25, so the decoder's
+summary floor is 125 characters. That lets a brief stop naturally instead of
+padding toward the old 40-word gate.
+
+`config.sources` can declare `form: "abstract"` on a feed. That is a curator's
+fact about the feed, not a detector over page text. NBER uses it; arXiv and SSRN
+should use the same field if those feeds are added.
 
 ## What is NOT a knob
 

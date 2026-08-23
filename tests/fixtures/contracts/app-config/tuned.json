@@ -24,11 +24,12 @@
   "evaluation": {
     "band_high_min": 0.85,
     "band_medium_min": 0.55,
+    "brief_compression_ceiling": 0.5,
     "golden_set_size": 40,
     "lead_coverage_min": 0.3,
     "spot_checks_per_week": 15,
-    "summary_words_max": 180,
-    "summary_words_min": 70,
+    "summary_words_max": 250,
+    "summary_words_min": 25,
     "truncation_gap_max": 0.08,
     "validation_articles": 20,
     "validation_drop_max": 0.1,
@@ -40,13 +41,15 @@
     "boilerplate_ratio_max": 0.35,
     "max_body_bytes": 1000000,
     "max_retries": 2,
-    "min_source_words": 150,
+    "min_source_words": 60,
     "paywall_markers": [
       "isaccessibleforfree\":false",
       "isaccessibleforfree\": false",
       "subscribe to continue reading",
       "register or subscribe to continue"
     ],
+    "prose_line_count_min": 12,
+    "prose_line_ratio_min": 0.5,
     "prose_sentence_min": 3,
     "prose_sentence_words_min": 8,
     "reject_boilerplate": false,
@@ -112,17 +115,22 @@
     "bands": [
       {
         "min_source_words": 0,
-        "target_words_max": 110,
-        "target_words_min": 70
+        "target_words_max": 45,
+        "target_words_min": 30
+      },
+      {
+        "min_source_words": 60,
+        "target_words_max": 90,
+        "target_words_min": 50
       },
       {
         "min_source_words": 700,
         "target_words_max": 150,
-        "target_words_min": 90
+        "target_words_min": 70
       },
       {
         "min_source_words": 2000,
-        "target_words_max": 180,
+        "target_words_max": 200,
         "target_words_min": 110
       }
     ],
@@ -147,7 +155,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-23T19:35",
+  "version": "2026-08-23T19:50",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
