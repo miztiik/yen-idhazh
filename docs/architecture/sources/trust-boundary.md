@@ -64,7 +64,7 @@ This is Holy Law #11 applied one step earlier than it is usually read. "Fetched 
 
 `classify_status` already draws that line - 429 and 5xx are transient because they are worth asking again, and the other 4xx are permanent because they are not - so the policy is one branch over an outcome, not a second table of status codes.
 
-Treating every failure as a refusal was measured on 2026-08-23 to cost 19 of 26 refused feeds, ten of them hosts that serve no `robots.txt` at all. That is a rule we invented and the host never wrote. The genuine refusals still refuse: on the same probe two feeds were disallowed by a served file and one host reset the connection.
+Treating every failure as a refusal was measured on `ubuntu-latest` on 2026-08-23 to cost **17 feeds**, by running the same day twice against the same feed list: 115 feeds read on the old policy, 132 on the new one. Ten of the recovered hosts serve no `robots.txt` at all. That is a rule we invented and the host never wrote. The genuine refusals still refuse - 14 feeds remain refused, including two disallowed by a served file and one host that resets the connection. Numbers and method in [../../reference/measurements.md](../../reference/measurements.md).
 
 **A permanent status is recorded and skipped, never retried.** Retrying a 404 burns the budget the transient failures need, and on a shared runner that budget is wall-clock the rest of the matrix is waiting on.
 
