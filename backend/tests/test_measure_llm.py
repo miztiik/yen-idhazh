@@ -6,6 +6,7 @@ from utilities.measure_llm import (
     ModelRef,
     RemoteFile,
     bench_command,
+    display_path,
     download,
     parse_model_refs,
     parse_positive_csv,
@@ -82,6 +83,10 @@ def test_sha256_reads_the_actual_file(tmp_path: Path) -> None:
     file.write_bytes(b"exact model bytes")
 
     assert sha256(file) == "f8ee3ff497d6e851aaaf1be3c1b7013665dc4ff1288dfb04bda5ce98645d4043"
+
+
+def test_external_paths_are_reduced_before_they_leave_the_process(tmp_path: Path) -> None:
+    assert display_path(tmp_path / "model.gguf") == "model.gguf"
 
 
 def test_remote_file_uses_the_lfs_identity() -> None:

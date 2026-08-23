@@ -66,10 +66,17 @@ def parse_positive_csv(value: str, *, name: str) -> list[int]:
     return sorted(set(values))
 
 
+def display_path(path: Path) -> str:
+    try:
+        return path.resolve().relative_to(Path.cwd().resolve()).as_posix()
+    except ValueError:
+        return path.name
+
+
 def find_llama_bench(explicit: Path | None) -> Path:
     if explicit is not None:
         if not explicit.is_file():
-            raise FileNotFoundError(f"llama-bench not found: {explicit}")
+            raise FileNotFoundError(f"llama-bench not found: {display_path(explicit)}")
         return explicit
 
     names = ("llama-bench.exe", "llama-bench") if os.name == "nt" else ("llama-bench",)
@@ -95,7 +102,7 @@ def sha256(path: Path) -> str:
 def runtime_identity(binary: Path) -> str:
     # llama-bench has no version flag. Its JSON rows carry build_number and
     # build_commit; the executable hash ties those fields to the bytes invoked.
-    return f"runtime={binary.as_posix()} sha256={sha256(binary)}"
+    return f"runtime={display_path(binary)} sha256={sha256(binary)}"
 
 
 def remote_file_from_tree(ref: ModelRef, entries: list[dict[str, Any]]) -> RemoteFile:
@@ -129,7 +136,7 @@ def download(ref: ModelRef, remote: RemoteFile, models_dir: Path) -> tuple[Path,
         if destination.stat().st_size != remote.bytes or local_sha != remote.sha256:
             raise ValueError(
                 f"existing file does not match {ref.repo}:{ref.file}; "
-                f"delete {destination.as_posix()} and retry"
+                f"delete {display_path(destination)} and retry"
             )
         return destination, 0.0
 
