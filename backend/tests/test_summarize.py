@@ -698,6 +698,36 @@ def test_a_model_that_reasoned_anyway_is_a_failure_not_a_curiosity() -> None:
     assert result.failure_detail
 
 
+def test_reasoning_in_the_sibling_channel_fails_the_item() -> None:
+    """Same failure, one channel over: the runtime put thinking where `<think>` never appears.
+
+    The content is a reply that would otherwise publish, so nothing but the
+    reasoning channel stands between this item and a reader.
+    """
+    result = summarised("reasoning-channel")
+    assert result.status is SummaryStatus.FAILED
+    assert "reasoning channel" in (result.failure_detail or "")
+
+
+def test_a_reply_misfiled_into_reasoning_names_the_runtime() -> None:
+    """ggml-org/llama.cpp#27134: the whole reply lands in `reasoning_content`, `content` empty.
+
+    The trigger is a generation prompt ending in a closing think tag, which is
+    what Qwen3 renders under `enable_thinking: false`. Read only `content` and
+    this is a bare parse error blaming the model for a runtime that moved the
+    text.
+    """
+    result = summarised("misfiled-into-reasoning")
+    assert result.status is SummaryStatus.FAILED
+    assert "reasoning channel" in (result.failure_detail or "")
+
+
+def test_an_absent_reasoning_channel_is_not_a_failure() -> None:
+    """The common case: no such key, nothing to report, the item publishes."""
+    assert completion("ok").reasoned is False
+    assert summarised("ok").status is SummaryStatus.OK
+
+
 # --- What the pipeline agrees to believe ------------------------------------
 
 
