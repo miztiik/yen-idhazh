@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -59,6 +59,10 @@ Four invariants hold regardless of how the batches are sized:
   locality and not correctness.
 - **An item whose fingerprint already matches does no work and writes no eval row.** A re-run that changed nothing measured nothing. What the fingerprint covers, and what happens when it matches but the words differ, is [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
+- **Run counts stay run-scoped.** The day payload grows across runs. The run
+  manifest does not. Each `runs[]` record says what that run planned, skipped,
+  failed and introduced. Its `verticals[].published` count is the number of
+  items introduced by that run for that vertical, not the accumulated day total.
 
 ## What one run leaves for the next
 
