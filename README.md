@@ -39,7 +39,7 @@ engineer, and not somebody who wants another feed to scroll.
 
 ```mermaid
 flowchart TD
-    subgraph build["Build time - GitHub Actions, every 6 h"]
+    subgraph build["Build time - Content refresh, four UTC runs daily"]
         direction TB
         A["<b>Collect</b><br/>read ~138 public feeds<br/>rank by tier, repetition and age"]
         B["<b>Extract</b><br/>pull readable text<br/>sanitise at the trust boundary"]
@@ -115,6 +115,7 @@ Start here, in this order:
 | Where stories come from | [`docs/architecture/sources/discovery.md`](docs/architecture/sources/discovery.md) |
 | Why a story gets a chart or nothing | [`docs/architecture/publishing/visuals.md`](docs/architecture/publishing/visuals.md) |
 | Real numbers from real hardware | [`docs/reference/measurements.md`](docs/reference/measurements.md) |
+| Workflow names and triggers | [`docs/reference/github-actions.md`](docs/reference/github-actions.md) |
 | **What every top-level directory is for** | [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md) |
 | How to run it yourself | [`docs/how-to/run-the-pipeline.md`](docs/how-to/run-the-pipeline.md) |
 | **How to test the models locally** | [`docs/how-to/test-models-locally.md`](docs/how-to/test-models-locally.md) |

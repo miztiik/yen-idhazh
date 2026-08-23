@@ -46,7 +46,13 @@ In order, with what each one owns:
 
 The orchestration mirrors the same rule one level up: a planning step decides the work and divides it, a set of independent workers each does a batch on its own machine, and an assembling step collects whatever finished.
 
-**The loop turns four times a day, every six hours.** All four runs append to the same dated digest rather than replacing it, so a day grows through the day. That is only safe because an item's identity comes from its address rather than its rank - see [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+**The loop turns four times a day: 06:20, 10:20, 14:20, and 18:20 UTC.** All
+four runs append to the same dated digest rather than replacing it, so a day
+grows through the day. That is only safe because an item's identity comes from
+its address rather than its rank - see
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+The exact trigger contract is
+[../reference/github-actions.md](../reference/github-actions.md).
 
 Four invariants hold regardless of how the batches are sized:
 
@@ -107,7 +113,8 @@ Owner override O3.
 ## See also
 
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - what Collect consults, and how the source set changes over time.
-- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the six-hour cadence, how age is scored, and what stops an article publishing twice.
+- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the run cadence, how age is scored, and what stops an article publishing twice.
+- [../reference/github-actions.md](../reference/github-actions.md) - workflow names and exact triggers.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - what every feed did on every run, and the quarantine that reads it.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - what Extract does to a stranger's bytes, and the canaries that assert it.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what Summarize asks a model for, and where every number in that ask comes from.

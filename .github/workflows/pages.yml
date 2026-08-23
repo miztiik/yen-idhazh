@@ -1,4 +1,4 @@
-name: pages
+name: Pages publication
 
 # Publishes the static bundle. It builds from committed data only - nothing here
 # fetches, and nothing here runs a model (Rule #1).
@@ -15,7 +15,7 @@ on:
   # land in the repository every morning and never reach a reader - the failure
   # mode where everything is green and the site is yesterday's.
   workflow_run:
-    workflows: [digest]
+    workflows: [Content refresh]
     types: [completed]
   workflow_dispatch:
 

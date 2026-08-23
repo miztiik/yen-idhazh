@@ -1,4 +1,4 @@
-name: drift
+name: Drift review
 
 # The instrument that sees the system rather than the article. Per-item scores
 # measure variance within a day; drift is a movement across months, and the

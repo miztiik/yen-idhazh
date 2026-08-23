@@ -1,4 +1,4 @@
-name: ci
+name: CI
 
 # Every gate CLAUDE.md section 9 names, on every change. The suite includes the
 # five injection canaries (row 5), so a prompt, sanitizer or contract edit that

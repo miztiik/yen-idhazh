@@ -129,12 +129,14 @@ The rest ends on its own after five skips. Nothing here ever edits
 
 ## In CI
 
-`.github/workflows/digest.yml` runs the same three stages every six hours: a
-plan job that loads no weights, a matrix of worker jobs that each restore the
-weights once and work a shard, and an assemble job that runs **even when a
-worker failed** - a run that publishes nothing on a bad day is a run whose bad
-days are invisible. Each run appends to the day's payload rather than replacing
-it, so the day grows through the day
+`.github/workflows/digest.yml`, displayed as `Content refresh`, starts at 06:20,
+10:20, 14:20, and 18:20 UTC. A plan job loads no weights. A matrix of worker
+jobs each restores the weights once and works a shard. Route uses their output,
+and assemble runs **even when a worker failed** - a run that publishes nothing
+on a bad day is a run whose bad days are invisible. Each run appends to the
+day's payload rather than replacing it, so the day grows through the day. The
+workflow names and triggers are pinned in
+[../reference/github-actions.md](../reference/github-actions.md)
 ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 
 ## See also
@@ -147,3 +149,4 @@ it, so the day grows through the day
 - [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the item census used to read failed runs.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - what fetch and extract refuse to do.
 - [../concepts/evaluation.md](../concepts/evaluation.md) - what the scores mean.
+- [../reference/github-actions.md](../reference/github-actions.md) - workflow names and exact triggers.
