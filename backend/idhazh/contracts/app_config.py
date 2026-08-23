@@ -12,7 +12,7 @@ Every knob ships a sane default, so a fresh clone runs unconfigured.
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -185,6 +185,47 @@ class InferenceConfig(Model):
     n_threads: int = Field(default=4, ge=1)
     n_batch: int = Field(default=512, ge=1)
     n_ubatch: int = Field(default=512, ge=1)
+    n_parallel: int | None = Field(
+        default=None,
+        ge=1,
+        description="llama-server -np. None omits the flag and keeps the runtime default.",
+    )
+    n_threads_batch: int | None = Field(
+        default=None,
+        ge=1,
+        description="llama-server -tb. None omits the flag and lets it follow n_threads.",
+    )
+    startup_warmup: bool = Field(
+        default=True,
+        description="If false, emit --no-warmup. True lets llama-server warm at startup.",
+    )
+    flash_attention: Literal["on", "off"] | None = Field(
+        default=None,
+        description="llama-server -fa. None omits the flag and leaves the runtime on auto.",
+    )
+    load_mode: Literal["mmap+mlock"] | None = Field(
+        default=None,
+        description="llama-server -lm. None omits the flag and keeps the runtime default.",
+    )
+    cache_type_k: Literal["q8_0"] | None = Field(
+        default=None,
+        description="llama-server -ctk. None omits the flag and keeps full-precision KV.",
+    )
+    cache_type_v: Literal["q8_0"] | None = Field(
+        default=None,
+        description="llama-server -ctv. None omits the flag and keeps full-precision KV.",
+    )
+    priority: int | None = Field(
+        default=None,
+        ge=-1,
+        le=3,
+        description="llama-server --prio. None omits the flag and keeps normal priority.",
+    )
+    poll: int | None = Field(
+        default=None,
+        ge=0,
+        description="llama-server --poll. None omits the flag and keeps the runtime default.",
+    )
     temperature: float = Field(default=0.0, ge=0.0)
     top_p: float = Field(default=1.0, gt=0.0, le=1.0)
     seed: int = Field(
@@ -556,6 +597,16 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T19:35",
+            change="Added llama-server runtime-sweep knobs to models.inference.",
+            why=(
+                "The runtime sweep must change one measured flag at a time through config, "
+                "not through workflow literals. The startup_warmup default matches the "
+                "current digest workflow, so the fingerprint input describes the server "
+                "that actually runs."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T18:15",
             change=(

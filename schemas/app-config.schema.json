@@ -290,6 +290,65 @@
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
       "properties": {
+        "cache_type_k": {
+          "anyOf": [
+            {
+              "const": "q8_0",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -ctk. None omits the flag and keeps full-precision KV.",
+          "title": "Cache Type K"
+        },
+        "cache_type_v": {
+          "anyOf": [
+            {
+              "const": "q8_0",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -ctv. None omits the flag and keeps full-precision KV.",
+          "title": "Cache Type V"
+        },
+        "flash_attention": {
+          "anyOf": [
+            {
+              "enum": [
+                "on",
+                "off"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -fa. None omits the flag and leaves the runtime on auto.",
+          "title": "Flash Attention"
+        },
+        "load_mode": {
+          "anyOf": [
+            {
+              "const": "mmap+mlock",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -lm. None omits the flag and keeps the runtime default.",
+          "title": "Load Mode"
+        },
         "max_output_tokens": {
           "default": 900,
           "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
@@ -309,17 +368,74 @@
           "title": "N Ctx",
           "type": "integer"
         },
+        "n_parallel": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -np. None omits the flag and keeps the runtime default.",
+          "title": "N Parallel"
+        },
         "n_threads": {
           "default": 4,
           "minimum": 1,
           "title": "N Threads",
           "type": "integer"
         },
+        "n_threads_batch": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -tb. None omits the flag and lets it follow n_threads.",
+          "title": "N Threads Batch"
+        },
         "n_ubatch": {
           "default": 512,
           "minimum": 1,
           "title": "N Ubatch",
           "type": "integer"
+        },
+        "poll": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --poll. None omits the flag and keeps the runtime default.",
+          "title": "Poll"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "maximum": 3,
+              "minimum": -1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --prio. None omits the flag and keeps normal priority.",
+          "title": "Priority"
         },
         "request_timeout_minutes": {
           "default": 22.1,
@@ -333,6 +449,12 @@
           "description": "Dead code under greedy decoding. Never cited as the determinism control.",
           "title": "Seed",
           "type": "integer"
+        },
+        "startup_warmup": {
+          "default": true,
+          "description": "If false, emit --no-warmup. True lets llama-server warm at startup.",
+          "title": "Startup Warmup",
+          "type": "boolean"
         },
         "temperature": {
           "default": 0.0,
@@ -795,6 +917,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added llama-server runtime-sweep knobs to models.inference.",
+      "version": "2026-08-23T19:35",
+      "why": "The runtime sweep must change one measured flag at a time through config, not through workflow literals. The startup_warmup default matches the current digest workflow, so the fingerprint input describes the server that actually runs."
+    },
+    {
       "change": "Added extract prose-shape, enforcement and paywall-marker knobs; changed extract.min_source_words to a brief-tier threshold.",
       "version": "2026-08-23T18:15",
       "why": "Extraction now records short or list-shaped pages instead of dropping them by length, while publisher-declared paywalls still stop publication. The new thresholds and switches are tunable config values (Rule #6)."
@@ -893,7 +1020,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-23T18:15",
+      "default": "2026-08-23T19:35",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -907,5 +1034,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-23T18:15"
+  "version": "2026-08-23T19:35"
 }
