@@ -374,6 +374,9 @@ def scorer_version(
             f"{scorer_id}@{scorer_revision[:8]}",
             f"weights-{weights_sha256[:8]}",
             f"metrics-{METRICS_VERSION}",
-            f"bands={evaluation.band_high_min:.2f}/{evaluation.band_medium_min:.2f}",
+            (
+                f"bands={evaluation.band_high_min:.2f}/{evaluation.band_medium_min:.2f};"
+                f"lead={evaluation.lead_coverage_min:.2f}"
+            ),
         )
     )

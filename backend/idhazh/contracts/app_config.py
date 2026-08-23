@@ -303,6 +303,15 @@ class SummarizeConfig(Model):
 class EvaluationConfig(Model):
     band_high_min: float = Field(default=0.80, ge=0.0, le=1.0)
     band_medium_min: float = Field(default=0.50, ge=0.0, le=1.0)
+    lead_coverage_min: float = Field(
+        default=0.30,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Below this the summary missed the source lead. It caps a high band at "
+            "medium rather than forcing low."
+        ),
+    )
     truncation_gap_max: float = Field(
         default=0.10,
         ge=0.0,
@@ -506,6 +515,16 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T17:41",
+            change="Added evaluation.lead_coverage_min.",
+            why=(
+                "Lead coverage now caps a high confidence band at medium. The threshold "
+                "is a tunable band input, so it belongs in config rather than in score.py "
+                "(Rule #6). Additive - an older config still validates through the "
+                "schema default."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T16:00",
             change="Added ui.read_mark_days.",
