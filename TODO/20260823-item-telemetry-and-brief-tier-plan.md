@@ -473,6 +473,8 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
 | 3 | `shard_of()` is round-robin over plan position and its docstring claims it spreads article lengths evenly. It cannot - length is unknown until extraction. Balancing by predicted cost requires moving extraction into `plan`, which is a contract question. | `cli.py` | Recorded. Level 4-5. Not in this plan. |
 | 4 | `SummaryStatus.SKIPPED` has no writer, so `RunRecord.items_skipped` is structurally 0. | `summarize.py` | Confirm by grep, then wire or delete. Not here. |
 | 5 | `to_eval_row` never calls `counterweight_band`; faithfulness thresholds are saturated (10 of 10 items band `high`, 0.923-0.978 against a 0.80 floor). | `evals/` | Pre-existing. Andre's call, not a chart's. |
+| 6 | `EmptyDay` tells the reader "the run notice above says which it was". On the home page it renders with nothing above it, so the sentence points at empty space - at the moment a reader is deciding whether the site is broken. | `EmptyDay.svelte` | Level 1. Verified 2026-08-23. |
+| 7 | `+page.server.ts` computes `new Date()`, and every route prerenders, so the home page bakes the build date and calls it today. A day after a deploy with no run it names a date that is not today. It also passes `latest={null}`, suppressing the one link that would rescue the reader. | `routes/+page.server.ts` | Level 2. Verified 2026-08-23. |
 
 ---
 
