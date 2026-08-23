@@ -25,7 +25,18 @@ from pathlib import Path
 from typing import Final, NamedTuple
 from urllib.parse import urlsplit
 
-from idhazh import assemble, config, discover, extract, fetch, ledger, rank, route, summarize
+from idhazh import (
+    assemble,
+    config,
+    discover,
+    extract,
+    fetch,
+    ledger,
+    rank,
+    route,
+    summarize,
+    telemetry,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
@@ -728,9 +739,24 @@ def stage_assemble(
     items_dir = _run_dir(plan.date) / "items"
     names = assemble.source_names(settings.sources)
     kinds = assemble.source_kinds(settings.sources)
+    target = assemble.day_dir(PUBLIC_ROOT, plan.date)
+    previous_day = _load_day(target / "digest.json")
+    previous_manifest = _load_manifest(target / "run.json")
+    run_n = (previous_manifest.runs[-1].n + 1) if previous_manifest else 1
+    run_id = f"{plan.date}-{run_n}"
     digest_items = []
     summaries: list[Summary] = []
     rows = []
+    item_health_rows = [
+        telemetry.classify_item(
+            planned=payload.planned,
+            article=payload.article,
+            summary=payload.summary,
+            date=plan.date,
+            run_id=run_id,
+        )
+        for payload in _item_payloads(plan, items_dir)
+    ]
 
     for payload in _item_payloads(plan, items_dir, require_summary=True):
         article = payload.article
@@ -780,10 +806,6 @@ def stage_assemble(
             )
         )
 
-    target = assemble.day_dir(PUBLIC_ROOT, plan.date)
-    previous_day = _load_day(target / "digest.json")
-    previous_manifest = _load_manifest(target / "run.json")
-    run_n = (previous_manifest.runs[-1].n + 1) if previous_manifest else 1
     digest_items = [item.model_copy(update={"introduced_by_run": run_n}) for item in digest_items]
 
     generated_at = assemble.utc_now()
@@ -796,6 +818,7 @@ def stage_assemble(
         generated_at=generated_at,
         retention_window_months=settings.app.retention.image_months,
         embeddings=assemble.build_embeddings(digest_items, Embedder(config.REPO_ROOT)),
+        item_health_rows=item_health_rows,
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 
@@ -815,17 +838,20 @@ def stage_assemble(
         config_digests=settings.digests,
         site_bytes=site_bytes,
         site_files=site_files,
+        item_health_rows=item_health_rows,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
+    item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
     LOG.info(
-        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s",
+        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s",
         plan.date,
         len(day.items),
         day.partial,
         landed,
         published,
+        item_health,
     )
     return day
 

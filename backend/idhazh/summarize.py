@@ -321,6 +321,7 @@ def to_summary(
             model_id=model_id,
             detail="the reply was cut off by the output budget, so it never closed its JSON",
             generated_at=generated_at,
+            failure_code=FailureCode.OUTPUT_TRUNCATED,
         )
     try:
         draft = parse_draft(completion.content, prompt_config=prompt_config, evaluation=bounds)
@@ -330,6 +331,7 @@ def to_summary(
             model_id=model_id,
             detail=f"the reply did not hold its shape: {type(error).__name__}",
             generated_at=generated_at,
+            failure_code=FailureCode.BAD_SHAPE,
         )
 
     words = len(draft.summary.split())
@@ -339,6 +341,7 @@ def to_summary(
             model_id=model_id,
             detail=f"summary is {words} words, outside the publishable range",
             generated_at=generated_at,
+            failure_code=FailureCode.LENGTH_OUT_OF_RANGE,
         )
 
     title = _publishable_title(draft.title, ask)
