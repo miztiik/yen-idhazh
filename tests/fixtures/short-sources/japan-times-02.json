@@ -1,0 +1,10 @@
+{
+  "capture_method": "hand_built",
+  "capture_note": "hand-built",
+  "captured_on": "2026-08-23",
+  "expected_reason": "paywalled",
+  "label": "reject_paywalled",
+  "robots_outcome": "no rules HTTP 403; page fetch returned HTTP 403",
+  "source_id": "japan-times",
+  "source_url": "https://www.japantimes.co.jp/environment/2026/08/23/climate-change/tokyo-summer-climate-shock/"
+}
