@@ -89,6 +89,15 @@ See [../architecture/sources/freshness.md](../architecture/sources/freshness.md)
 
 ## Design rationale
 
+The plan step guarantees one `url_key` across the whole run before it applies
+the safety ceiling. Discovery deduplicates repeated entries inside one feed, and
+ranking deduplicates repeated entries inside one vertical. The plan step is the
+first place that can see a story carried by two verticals. It keeps the
+highest-ranked occurrence, with stable tie-breaks, then records the dropped
+duplicates in the log. A duplicate is not a bad source and not a failed item. It
+is one address seen twice, so it degrades to one planned item instead of failing
+the run or consuming a ceiling slot.
+
 The pipeline records shape. It does not judge newsworthiness. A one-line item can
 be news, and a long article can be empty. Extract therefore records `too_short`,
 `not_prose` and `boilerplate` by default, then lets the item continue. Only a

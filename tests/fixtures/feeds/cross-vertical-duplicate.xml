@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Energy Wire</title>
+    <link>https://energy.example-wire.net/</link>
+    <description>Energy coverage that carries a cross-desk story.</description>
+    <item>
+      <title>Example Lab releases a smaller model</title>
+      <link>https://www.blog.example-lab.org:443/2026/08/model-release/?utm_source=energy#top</link>
+      <pubDate>Fri, 21 Aug 2026 06:30:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

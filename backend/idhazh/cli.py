@@ -205,6 +205,7 @@ def stage_plan(
         verticals.append(summary)
         items.extend(planned)
 
+    items = _dedupe_planned_items(items)
     items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
     counts = Counter(item.vertical for item in items)
     verticals = [
@@ -311,6 +312,33 @@ def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedIt
     keep = {item.item_id for item in ranked}
     LOG.warning("safety ceiling reached planned=%s ceiling=%s", len(items), ceiling)
     return [item for item in items if item.item_id in keep]
+
+
+def _dedupe_planned_items(items: list[PlannedItem]) -> list[PlannedItem]:
+    """Keep one planned item per address before the crash guard counts slots."""
+    by_key: dict[str, list[PlannedItem]] = {}
+    for item in items:
+        by_key.setdefault(item.url_key, []).append(item)
+
+    duplicate_keys = [url_key for url_key, carried in by_key.items() if len(carried) > 1]
+    if not duplicate_keys:
+        return items
+
+    winners = {
+        url_key: min(
+            carried,
+            key=lambda item: (-item.rank_score, item.vertical, item.item_id, item.source_id),
+        )
+        for url_key, carried in by_key.items()
+    }
+    dropped = [item for item in items if winners[item.url_key] is not item]
+    LOG.info(
+        "plan duplicates dropped count=%s url_keys=%s source_ids=%s",
+        len(dropped),
+        ",".join(sorted(duplicate_keys)),
+        ",".join(sorted({item.source_id for item in dropped})),
+    )
+    return [item for item in items if winners[item.url_key] is item]
 
 
 def _next_run_n(date: str) -> int:
