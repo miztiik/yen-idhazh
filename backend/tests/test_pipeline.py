@@ -351,6 +351,20 @@ def test_a_day_publishes_even_when_items_failed() -> None:
     assert len(day.items) == 1
 
 
+def test_item_payloads_include_an_article_without_a_summary(tmp_path: Path) -> None:
+    items_dir = tmp_path / "items"
+    items_dir.mkdir()
+    (items_dir / "ai-01.article.json").write_text(article().to_json(), encoding="utf-8")
+
+    payloads = list(cli._item_payloads(plan(), items_dir))
+
+    assert [payload.planned.item_id for payload in payloads] == [
+        item.item_id for item in plan().items
+    ]
+    assert payloads[0].article == article()
+    assert payloads[0].summary is None
+
+
 def test_a_later_run_appends_and_never_reorders() -> None:
     settings = config.load(CONFIG_DIR)
     first = assemble.build_day(
