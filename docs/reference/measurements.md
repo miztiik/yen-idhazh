@@ -363,6 +363,22 @@ a short blog post. That makes the low count a **source-selection** result
 rather than an extraction defect, and it is why raising the floor's pass rate
 belongs in `config/sources.json` and not in `extract.py`.
 
+## CI and publish wall-clock
+
+**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`. Single observed run
+per gate; values are rounded wall-clock durations. Spread is not available for
+this row because each gate has one observation.
+
+| Gate | Duration | Spread |
+| --- | --- | --- |
+| `ci` | about 2 min | n=1; not available |
+| `site` | about 2 min | n=1; not available |
+| `pages` | about 50 s | n=1; not available |
+| `digest` | about 25 min | n=1; not available |
+
+The publish path is the long pole. Orchestrators should not serialize
+independent work on these gates; the merge gate still waits for green checks.
+
 ## Corpus shape
 
 **Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
