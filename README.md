@@ -39,9 +39,9 @@ engineer, and not somebody who wants another feed to scroll.
 
 ```mermaid
 flowchart TD
-    subgraph build["Build time - GitHub Actions, once a day"]
+    subgraph build["Build time - GitHub Actions, every 6 h"]
         direction TB
-        A["<b>Collect</b><br/>read ~138 public feeds<br/>rank by tier and repetition"]
+        A["<b>Collect</b><br/>read ~138 public feeds<br/>rank by tier, repetition and age"]
         B["<b>Extract</b><br/>pull readable text<br/>sanitise at the trust boundary"]
         C["<b>Summarize</b><br/>Qwen3-8B on CPU<br/>output shape pinned by a schema"]
         D["<b>Score</b><br/>faithfulness vs the source<br/>plus model-free counterweights"]

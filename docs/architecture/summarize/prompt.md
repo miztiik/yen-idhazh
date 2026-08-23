@@ -187,8 +187,8 @@ other line does:
   few-shot signal in the file.
 - **The five hedge terms** - "reportedly", "is expected to", "could", "may",
   "according to". Every one is a literal member of the lexicons in
-  `evals/metrics.py`. The prompt and the alarm share a vocabulary on purpose;
-  cutting the list decouples them.
+  `backend/idhazh/evals/metrics.py`. The prompt and the alarm share a vocabulary
+  on purpose; cutting the list decouples them.
 - **"The summary is prose."** - four words that stop a bulleted summary.
 
 **Length is not the measure of a prompt; conditioning is.** A cut is safe when
@@ -197,7 +197,7 @@ when nothing does. Both kinds are in the pass above:
 
 | Cut | If it regresses | Would a metric see it |
 | --- | --- | --- |
-| The title reframe | A topic label instead of an event | **No.** Nothing in `evals/metrics.py` scores our title. |
+| The title reframe | A topic label instead of an event | **No.** Nothing in `backend/idhazh/evals/metrics.py` scores our title. |
 | "Never turn a claim into a fact" | A hedged claim published flat | **Yes.** `hedge_dropped` fires when the source's lead hedged and the summary did not. |
 | The quoting justifications | Longer copied runs | **Yes.** `verbatim_run` and `extractiveness`. |
 | "Each key point adds something" | Key points restate the summary | **No.** Nothing compares a key point to the summary. |
@@ -277,11 +277,12 @@ clickbait, hype, the question headline, the withheld fact and the second person
 gives the model six recognisable classes instead of one abstraction. This is the
 same reason the loaded verbs in Voice are listed by name.
 
-**Why the title's blind spot is written down.** No metric in `evals/metrics.py`
-scores our title. `EvalRow.title` is the source's headline, and
-`_publishable_title` only checks a word range. The title is the one line every
-reader sees and the least measured thing the pipeline produces. Saying so here
-is what stops the next person reading the green ledger as coverage.
+**Why the title's blind spot is written down.** No metric in
+`backend/idhazh/evals/metrics.py` scores our title. `EvalRow.title` is the
+source's headline, and `_publishable_title` only checks a word range. The title
+is the one line every reader sees and the least measured thing the pipeline
+produces. Saying so here is what stops the next person reading the green ledger
+as coverage.
 
 **Why a bad title is not a failed item.** A title is the only part of the payload
 with a working fallback. The summary has none, which is why the same miss there
@@ -316,7 +317,7 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 | Keep the justifying sentences so a human reading the prompt understands the rules | The prompt is instructions to a decoder. The rules are explained on this page, which costs nothing per article; in the prompt they cost tokens on every article forever. |
 | Keep "Reply with a single JSON object and nothing else" | `response_format` is `json_schema` with `strict`, and `parse_draft` strips a fence besides. A sentence asking for JSON is a request next to a control that already holds. |
 | Cut the worked example to save 26 words | It is the only few-shot signal in the file, and it demonstrates exactly the behaviour the content-first reframe puts at risk. |
-| Cut the five hedge terms and keep only "keep the source's hedges" | Each term is a literal member of a lexicon in `evals/metrics.py`. The prompt and the alarm share a vocabulary, and cutting the list decouples them silently. |
+| Cut the five hedge terms and keep only "keep the source's hedges" | Each term is a literal member of a lexicon in `backend/idhazh/evals/metrics.py`. The prompt and the alarm share a vocabulary, and cutting the list decouples them silently. |
 | Keep cutting until the prompt is as short as it can be | Length is not the measure. A cut is safe when another line, the decoder or a metric still carries the behaviour, and a gamble when nothing does. |
 
 ## See also

@@ -20,7 +20,7 @@ The two audiences are why the two surfaces are held to different standards, and 
 
 ## The shape
 
-A run happens once a day, entirely inside GitHub Actions, and commits what it produced. A reader later opens a static page. Nothing computes at read time, so there is no server to run, nothing to scale, and nothing that can be down.
+A run happens every six hours, entirely inside GitHub Actions, and commits what it produced. All four runs of a day append to the same dated digest, so the day grows through the day. A reader later opens a static page. Nothing computes at read time, so there is no server to run, nothing to scale, and nothing that can be down.
 
 Two artifacts come out of a run, and they are equally the product:
 
@@ -58,7 +58,9 @@ Three, in the order they bite:
 
 ## What the ceiling actually is
 
-Not compute. The order in which limits bite is: how many good articles a day the sources actually supply, then how many summaries a person will read, then artifact storage, then repository growth, and only far behind all of those, concurrency. Raising the daily item count is a source-diversity and readership decision, not a capacity one.
+Not compute. The order in which limits bite is: how many good articles a day the sources actually supply, then how many summaries a person will read, then artifact storage, then repository growth, and only far behind all of those, concurrency.
+
+Note what is *not* on that list: a number we chose. There is no daily item cap. Supply and the ranking decide how big a day is, and the only ceiling in the run config is a crash guard ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is a source-diversity question, not a capacity one and not a config edit.
 
 ## See also
 
