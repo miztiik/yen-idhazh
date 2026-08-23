@@ -1,6 +1,6 @@
 # How to distill a plan-doc
 
-**Last Updated**: 2026-06-07
+**Last Updated**: 2026-08-23
 
 The procedure for lifting durable findings out of a `TODO/<date>-<slug>.md` plan-doc into the right canonical home under `docs/`. The plan-doc is the work ledger; once a row closes, anything worth keeping past the merge belongs somewhere else.
 
@@ -23,7 +23,7 @@ For each finding in the closed row's narrative, apply the routing rules in [../r
 
 | Finding shape                                                                                    | Destination                                                                                                                                                 | Example                                                                                                                  |
 | ------------------------------------------------------------------------------------------------ | ----------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
-| Current gameplay rule, UI shape, tuning invariant, or cross-subsystem vocabulary                                         | **Concept doc** under `docs/concepts/<slug>.md`                | "How does the daily board seed work?" -> `docs/concepts/`                  |
+| Current domain rule, UI shape, tuning invariant, or cross-subsystem vocabulary                                           | **Concept doc** under `docs/concepts/<slug>.md`                | "What does this status value mean, wherever it appears?" -> `docs/concepts/`                  |
 | Current shape / layout / contract of one subsystem                                                                       | **Subsystem doc** under `docs/architecture/<area>/<slug>.md`   | "How is this payload laid out on disk?" -> `docs/architecture/<area>/layout.md`          |
 | Operator runbook / step-by-step procedure                                                                                | **How-to doc** under `docs/how-to/<verb>-<slug>.md`            | "How do I re-run a failed stage?" -> `docs/how-to/`                            |
 | Architecture choice with actively explored rejected alternatives + non-trivial reversal cost + cross-system consequences | **`## Design rationale` / `## Rejected alternatives` section on the impacted subsystem / concept doc** (no ADR file, no `decisions/` dir) | "Why library X instead of library Y?" -> a rationale section on the subsystem doc that owns the choice |
