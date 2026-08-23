@@ -138,7 +138,12 @@ def output_schema_text(
     return canonical_json(output_schema(prompt_config, evaluation))
 
 
-def system_prompt(prompt_config: SummarizeConfig | None = None, *, source_words: int = 0) -> str:
+def system_prompt(
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    source_words: int = 0,
+    brief: bool = False,
+) -> str:
     """The prompt text with config's numbers substituted in.
 
     `source_words` picks the length band, so a release note and a long read are
@@ -151,7 +156,7 @@ def system_prompt(prompt_config: SummarizeConfig | None = None, *, source_words:
     model would read the placeholder as the instruction it looks like.
     """
     ask = prompt_config or SummarizeConfig()
-    band = ask.band_for(source_words)
+    band = ask.band_for(0 if brief else source_words)
     return _template().substitute({**ask.model_dump(), **band.model_dump()})
 
 
@@ -189,7 +194,10 @@ def user_turn(article: Article) -> str:
     if article.title:
         parts.append(f"Title: {article.title}")
     parts.append(article.text or "")
-    return untrusted_block("\n\n".join(parts))
+    return (
+        f"Source form: {article.source_form.value}\n\n"
+        + untrusted_block("\n\n".join(parts))
+    )
 
 
 def fits_context(
@@ -198,7 +206,8 @@ def fits_context(
     prompt_config: SummarizeConfig | None = None,
 ) -> bool:
     """Prompt plus reply has to fit, or the reply is silently cut off mid-sentence."""
-    overhead = len(system_prompt(prompt_config, source_words=article.word_count).split()) * 2
+    rendered = system_prompt(prompt_config, source_words=article.word_count, brief=article.brief)
+    overhead = len(rendered.split()) * 2
     return article.token_count + inference.max_output_tokens + overhead <= inference.n_ctx
 
 
@@ -212,7 +221,7 @@ def build_request(
 ) -> dict[str, Any]:
     return request_payload(
         model_id=model_id,
-        system=system_prompt(prompt_config, source_words=article.word_count),
+        system=system_prompt(prompt_config, source_words=article.word_count, brief=article.brief),
         user=user_turn(article),
         output_schema=output_schema(prompt_config, evaluation),
         inference=inference,

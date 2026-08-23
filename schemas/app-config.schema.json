@@ -118,6 +118,14 @@
           "title": "Band Medium Min",
           "type": "number"
         },
+        "brief_compression_ceiling": {
+          "default": 0.5,
+          "description": "Maximum summary/source ratio for a brief item. Also caps verbatim_run on briefs and derives extract.min_source_words from the first brief ask.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Brief Compression Ceiling",
+          "type": "number"
+        },
         "golden_set_size": {
           "default": 20,
           "minimum": 1,
@@ -146,7 +154,7 @@
           "type": "integer"
         },
         "summary_words_min": {
-          "default": 40,
+          "default": 25,
           "description": "Below this it is a headline, not a summary. Set under the lowest band in `summarize.bands`: the prompt is a request, and dropping an item for missing it by two words loses a story to a rounding error.",
           "minimum": 1,
           "title": "Summary Words Min",
@@ -223,8 +231,8 @@
           "type": "integer"
         },
         "min_source_words": {
-          "default": 250,
-          "description": "Below this the item publishes through the brief tier. It is not a drop.",
+          "default": 60,
+          "description": "Below this the item publishes through the brief tier. It is derived in AppConfig from summarize.bands[0].target_words_min divided by evaluation.brief_compression_ceiling.",
           "minimum": 1,
           "title": "Min Source Words",
           "type": "integer"
@@ -237,6 +245,21 @@
           "minItems": 1,
           "title": "Paywall Markers",
           "type": "array"
+        },
+        "prose_line_count_min": {
+          "default": 12,
+          "description": "Lines needed before the line-shape guard runs.",
+          "minimum": 1,
+          "title": "Prose Line Count Min",
+          "type": "integer"
+        },
+        "prose_line_ratio_min": {
+          "default": 0.5,
+          "description": "Minimum share of lines that must look like prose on a line-heavy page.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Prose Line Ratio Min",
+          "type": "number"
         },
         "prose_sentence_min": {
           "default": 3,
@@ -917,6 +940,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the brief summary band, lowered evaluation.summary_words_min to 25, lowered extract.min_source_words to its derived value, added evaluation.brief_compression_ceiling, and added line-shape prose knobs.",
+      "version": "2026-08-23T19:50",
+      "why": "Short sources should publish with an honest brief instead of being padded or dropped. The old word gate forced the decoder to keep writing on a small source, which made invention more likely."
+    },
+    {
       "change": "Added llama-server runtime-sweep knobs to models.inference.",
       "version": "2026-08-23T19:35",
       "why": "The runtime sweep must change one measured flag at a time through config, not through workflow literals. The startup_warmup default matches the current digest workflow, so the fingerprint input describes the server that actually runs."
@@ -1020,7 +1048,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-23T19:35",
+      "default": "2026-08-23T19:50",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1034,5 +1062,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-23T19:35"
+  "version": "2026-08-23T19:50"
 }

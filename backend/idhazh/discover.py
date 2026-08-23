@@ -22,7 +22,7 @@ import feedparser
 
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.sources import FeedDef
+from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier
 from idhazh.sanitize import sanitize
 
@@ -105,6 +105,7 @@ class Candidate:
     source_id: str
     vertical: str
     tier: SourceTier
+    source_form: SourceForm
     title: str | None
     published_at: str | None
     weight: float = 1.0
@@ -137,6 +138,7 @@ def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
                 source_id=feed.id,
                 vertical=feed.vertical,
                 tier=feed.tier,
+                source_form=feed.form,
                 title=clean_title(getattr(entry, "title", None)),
                 published_at=_published_at(entry),
                 weight=feed.weight,

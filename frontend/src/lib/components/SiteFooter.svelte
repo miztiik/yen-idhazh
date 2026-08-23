@@ -34,6 +34,13 @@
 		</p>
 	{/if}
 
+	{#if day && day.items_failed > 0}
+		<p class="mt-1">
+			We skipped {day.items_failed} stories today because we could not read enough of the page to
+			summarize them fairly.
+		</p>
+	{/if}
+
 	<p class="mt-1">
 		Built from git &mdash;
 		{#if commit === 'dev'}

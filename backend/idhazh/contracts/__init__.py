@@ -49,7 +49,7 @@ from idhazh.contracts.run_manifest import (
     VerticalCount,
 )
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
-from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
+from idhazh.contracts.sources import FeedDef, SalienceFeedDef, SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import (
     EventDef,
@@ -112,6 +112,7 @@ __all__ = [
     "RunRecord",
     "RunStatus",
     "SalienceFeedDef",
+    "SourceForm",
     "SourceTier",
     "Sources",
     "SpecFormat",

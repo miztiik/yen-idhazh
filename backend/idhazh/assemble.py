@@ -38,13 +38,15 @@ from idhazh.contracts.run_manifest import (
     VerticalCount,
 )
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.sources import Sources
+from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind, Taxonomy
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, text_for, to_base64
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 _UNTITLED: Final = "Untitled item"
+_ABSTRACT_NOTE: Final = "This is a summary of the paper's abstract. The full paper is a PDF."
+_TRUNCATED_NOTE: Final = "We could only read the first part of this page."
 
 
 def day_dir(root: Path, date: str) -> Path:
@@ -103,10 +105,20 @@ def to_digest_item(
         events=article.events,
         entities=article.entities,
         band=band,
+        source_form=article.source_form,
+        reader_note=reader_note(article),
         truncated=article.truncated,
         introduced_by_run=run_n,
         visual=to_digest_visual(route),
     )
+
+
+def reader_note(article: Article) -> str | None:
+    if article.source_form is SourceForm.ABSTRACT:
+        return _ABSTRACT_NOTE
+    if article.truncated:
+        return _TRUNCATED_NOTE
+    return None
 
 
 def to_digest_visual(route: Route | None) -> DigestVisual | None:

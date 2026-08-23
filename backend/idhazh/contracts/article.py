@@ -28,6 +28,7 @@ from idhazh.contracts.base import (
     derive_url_key,
 )
 from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import EventType, LensId, SourceTier
 
 # Structural bounds on untrusted text that reaches a page or a log line. Not a
@@ -47,6 +48,15 @@ class Article(Contract):
 
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T18:49",
+            change="Added source_form to the extract payload.",
+            why=(
+                "Summarize and publish need the curator-declared source form after the "
+                "plan file is no longer in hand. The field defaults to article so older "
+                "payloads still read."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T18:15",
             change="Added brief and failure_code to the extract payload.",
@@ -73,6 +83,10 @@ class Article(Contract):
     )
     source_id: Slug = Field(description="The feed that carried it.")
     tier: SourceTier
+    source_form: SourceForm = Field(
+        default=SourceForm.ARTICLE,
+        description="Declared by the feed config. Never inferred from extracted text.",
+    )
 
     vertical: Slug
     lenses: list[LensId] = Field(default_factory=list)

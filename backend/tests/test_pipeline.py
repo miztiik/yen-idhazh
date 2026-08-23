@@ -21,13 +21,14 @@ from pytest import MonkeyPatch
 from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.sources import FeedDef
+from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.evals import writer
@@ -270,6 +271,42 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
         scorer_version="v",
         scored_at="2026-08-21T06:18:02Z",
     )
+    assert built.truncation_flagged
+
+
+def test_a_copied_brief_is_flagged_as_truncation_not_confidence() -> None:
+    copied = "alpha beta gamma delta epsilon zeta eta theta"
+    source = article().model_copy(update={"brief": True})
+    brief_summary = summary().model_copy(
+        update={
+            "summary": "alpha beta gamma delta epsilon",
+            "key_points": ["short copied point"],
+        }
+    )
+    brief_summary = brief_summary.model_copy(
+        update={
+            "output_digest": derive_output_digest(
+                brief_summary.summary, brief_summary.key_points, title=brief_summary.title
+            )
+        }
+    )
+
+    built = to_eval_row(
+        item=plan().items[0],
+        article=source,
+        summary=brief_summary,
+        full_text=copied,
+        hhem=0.94,
+        hhem_full=0.93,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="v",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+    assert built.band is ConfidenceBand.HIGH
+    assert built.verbatim_run > 0.5
     assert built.truncation_flagged
 
 
@@ -556,6 +593,36 @@ def test_a_retired_feed_still_labels_the_items_it_published() -> None:
     )
     assert assemble.source_names(sources)["defunct-daily"] == "Defunct Daily"
     assert assemble.source_kinds(sources)["defunct-daily"] is SourceKind.ANNOUNCEMENT
+
+
+def test_abstract_items_publish_a_sentence_not_a_badge() -> None:
+    item = assemble.to_digest_item(
+        article=article().model_copy(update={"source_form": SourceForm.ABSTRACT}),
+        summary=summary(),
+        band=row().band,
+        source_name="NBER",
+        source_kind=SourceKind.RESEARCH,
+        run_n=1,
+    )
+
+    assert item.source_form is SourceForm.ABSTRACT
+    assert (
+        item.reader_note
+        == "This is a summary of the paper's abstract. The full paper is a PDF."
+    )
+
+
+def test_truncated_items_publish_the_partial_read_sentence() -> None:
+    item = assemble.to_digest_item(
+        article=article().model_copy(update={"truncated": True, "truncated_at_tokens": 2500}),
+        summary=summary(),
+        band=row().band,
+        source_name="Example Lab",
+        source_kind=SourceKind.REPORTING,
+        run_n=1,
+    )
+
+    assert item.reader_note == "We could only read the first part of this page."
 
 
 def test_a_day_publishes_even_when_items_failed() -> None:

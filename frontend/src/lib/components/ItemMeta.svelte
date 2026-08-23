@@ -41,10 +41,6 @@
 
 	<ConfidenceChip band={item.band} />
 
-	{#if item.truncated}
-		<span class="text-text-tertiary">Source was cut short</span>
-	{/if}
-
 	<ReadAloud title={item.title} summary={item.summary} />
 
 	<SourceLink url={item.source_url} {onRead} />
