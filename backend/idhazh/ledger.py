@@ -85,11 +85,27 @@ def _shards_in_window(today: str, within_days: int) -> list[str]:
     return stems
 
 
+def read_header(path: Path) -> tuple[str, ...]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return tuple(next(csv.reader(handle), []))
+
+
+def require_matching_header(path: Path, columns: tuple[str, ...]) -> None:
+    header = read_header(path)
+    if header and header != columns:
+        raise ValueError(
+            f"{path.name} has {len(header)} columns and the contract has "
+            f"{len(columns)}. Migrate the ledger before appending to it."
+        )
+
+
 def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]) -> int:
     if not payloads:
         return 0
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
+    if exists:
+        require_matching_header(path, columns)
     with path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
         if not exists:

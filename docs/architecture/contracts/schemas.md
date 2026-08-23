@@ -57,6 +57,8 @@ The sixteen shapes, and where each one lives once written:
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
+The eval ledger and source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values.
+
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 
 ## Every contract carries version and changelog
