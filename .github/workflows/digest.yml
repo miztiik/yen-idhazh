@@ -224,6 +224,24 @@ jobs:
         if: failure()
         run: tail -50 llama-server.log || true
 
+      - name: Prompt cache log summary
+        if: always()
+        run: |
+          if [ -f llama-server.log ]; then
+            grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' llama-server.log || true
+          else
+            echo "llama-server.log not found"
+          fi
+
+      - name: Upload runtime log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-log-${{ matrix.shard }}
+          path: llama-server.log
+          retention-days: 2
+          if-no-files-found: ignore
+
       - uses: actions/upload-artifact@v4
         with:
           name: items-${{ matrix.shard }}
@@ -319,6 +337,24 @@ jobs:
       - name: Router log on failure
         if: failure()
         run: tail -50 router.log || true
+
+      - name: Router cache log summary
+        if: always()
+        run: |
+          if [ -f router.log ]; then
+            grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' router.log || true
+          else
+            echo "router.log not found"
+          fi
+
+      - name: Upload router log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: router-log
+          path: router.log
+          retention-days: 2
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
