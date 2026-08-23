@@ -40,7 +40,12 @@ state/scores.csv                                        the ledger - one path, n
 
 ## The day is one artifact, shared by everyone
 
-The pipeline runs four times a day, every six hours ([../sources/freshness.md](../sources/freshness.md)). The rule that governs what that means starts from a fact about the medium: **there is one published payload, and every reader gets the same bytes.** Reading is private and per-device; ordering is public and global. Ordering can therefore never depend on who has read what.
+The pipeline adds to the day four times at the schedule in
+[../../reference/github-actions.md](../../reference/github-actions.md). The
+rule that governs what that means starts from a fact about the medium: **there
+is one published payload, and every reader gets the same bytes.** Reading is
+private and per-device; ordering is public and global. Ordering can therefore
+never depend on who has read what.
 
 - **The published order is global, deterministic and identical for every reader.** It is a pure function of the ranking inputs, and no reader's behaviour changes it. Two people opening the same dated URL see the same items in the same order, always.
 - **An item is never removed, demoted or hidden because someone read it.** One person having read an item says nothing about the thousands who have not. This is the behaviour of every working news front page: the story stays where its importance puts it, read or unread.
@@ -116,7 +121,8 @@ Retention was demoted to third lever after the byte arithmetic showed that encod
 - [../../concepts/digest.md](../../concepts/digest.md) - what a reader gets and the visual rule this layout serves.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Assemble stage that writes all of this.
 - [../sources/discovery.md](../sources/discovery.md) - where the day's items come from, and the same retire-never-delete discipline applied to sources.
-- [../sources/freshness.md](../sources/freshness.md) - the six-hour cadence, where an item's id comes from, and why a day has no cap.
+- [../sources/freshness.md](../sources/freshness.md) - the run cadence, where an item's id comes from, and why a day has no cap.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - workflow names and exact triggers.
 - [frontend.md](frontend.md) - the two dashboards these routes serve.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload contracts and the versioning rules a deletion has to honour.
 - [../../concepts/config.md](../../concepts/config.md) - where the retention knobs live and the build-time versus shipped-config rule.
