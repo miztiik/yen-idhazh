@@ -8,8 +8,8 @@ source-grain evidence.
 
 ## Every item, every run, one row
 
-`state/item-health/<YYYY-MM>.csv`, appended by the pipeline. One row is written
-for each planned item on each run, whether the item succeeds or fails.
+`state/item-health/<YYYY-MM>.csv`, appended by Assemble once per run. One row is
+written for each planned item on each run, whether the item succeeds or fails.
 
 The row carries:
 
@@ -41,8 +41,10 @@ degrades an item and never fails it.
 | any failed stage | `unknown` |
 
 `detail` is `str | None`, max 200 characters, and is populated only when
-`code = unknown`. It is our sanitized text, never source text. A non-empty
-`detail` means "mint a better enum member".
+`code = unknown`. It is written by the classifier, never copied from an article
+or summary payload. The write path sanitizes it, strips any spreadsheet formula
+prefix, collapses whitespace, and truncates it. A non-empty `detail` means "mint
+a better enum member".
 
 `http_status` belongs only on `fetch` rows.
 
@@ -76,6 +78,11 @@ can move between runs. `url_key` is the stable article key. Authority: Fowler.
 
 The row stores `canonical_url`. About 80 bytes buys back the URL that otherwise
 expires with a run artifact. Authority: Fowler.
+
+Assemble is the only item-health ledger writer. Worker shards already upload one
+JSON payload per item through the `items-*` artifact. A per-shard CSV append
+would turn a diagnostic row into a rebase race against the publish commit.
+Authority: Carmack.
 
 ## Rejected alternatives
 

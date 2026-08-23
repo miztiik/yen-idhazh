@@ -34,11 +34,13 @@ from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 
 STATE_DIRNAME: Final = "state"
 SEEN_DIRNAME: Final = "seen"
 HEALTH_DIRNAME: Final = "feed-health"
+ITEM_HEALTH_DIRNAME: Final = "item-health"
 PUBLISHED_FILENAME: Final = "published.csv"
 
 #: How far back a health read looks. Not a policy - just enough history to reach
@@ -64,6 +66,15 @@ def health_relpath(date: str) -> str:
 
 def health_path(state_dir: Path, date: str) -> Path:
     return state_dir / HEALTH_DIRNAME / f"{date[:7]}.csv"
+
+
+def item_health_relpath(date: str) -> str:
+    """`state/item-health/<YYYY-MM>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{ITEM_HEALTH_DIRNAME}/{date[:7]}.csv"
+
+
+def item_health_path(state_dir: Path, date: str) -> Path:
+    return state_dir / ITEM_HEALTH_DIRNAME / f"{date[:7]}.csv"
 
 
 def published_path(state_dir: Path) -> Path:
@@ -165,6 +176,12 @@ def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> 
     """Append this run's verdict on every feed it tried."""
     payloads = [row.csv_row() for row in rows]
     return _append(health_path(state_dir, date), FeedHealthRow.csv_columns(), payloads)
+
+
+def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
+    """Append this run's verdict on every planned item."""
+    payloads = [row.csv_row() for row in rows]
+    return _append(item_health_path(state_dir, date), ItemHealthRow.csv_columns(), payloads)
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:

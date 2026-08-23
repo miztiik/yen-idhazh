@@ -38,7 +38,7 @@ In order, with what each one owns:
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
 | **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. | A route decision per item. |
 | **Render** | Producing the visual the route asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
-| **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md). | One dated day payload plus its run manifest under `frontend/public/digest/`. |
+| **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. It also writes the item-health census once per run, because it is the only stage that sees every planned item and every finished payload. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md). | One dated day payload plus its run manifest under `frontend/public/digest/`, and one item-health row per planned item under `state/item-health/`. |
 
 **Collect and Assemble are the only stages that see the whole day.** Everything between them sees exactly one item, which is what allows the middle of the pipeline to run as many independent workers.
 
@@ -57,7 +57,7 @@ Four invariants hold regardless of how the batches are sized:
 
 ## What one run leaves for the next
 
-There is no database (Rule #1), so anything a later run must read has to survive as a committed file. Four append-only ledgers under `state/` are the whole of the pipeline's memory:
+There is no database (Rule #1), so anything a later run must read has to survive as a committed file. Five append-only ledgers under `state/` are the whole of the pipeline's memory:
 
 | File | Written by | Answers |
 | --- | --- | --- |
@@ -65,6 +65,7 @@ There is no database (Rule #1), so anything a later run must read has to survive
 | `state/published.csv` | Assemble | Have we already published this address? |
 | `state/feed-health/<YYYY-MM>.csv` | Collect | What did every feed do, on every run? |
 | `state/fingerprints.csv` | the workers | Did anything about this item actually change? |
+| `state/item-health/<YYYY-MM>.csv` | Assemble | What did every planned item do in this run? |
 
 Three rules hold for all of them:
 
