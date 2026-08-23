@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 How a summary is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -39,6 +39,25 @@ Optimising for faithfulness alone therefore drives the system toward bland copyi
 | **Compression** | Summary length over source length. **Recorded, never flagged** - see below. |
 
 These are deterministic and cost effectively nothing, which is why they are preferred over an additional model pass. They also run whether or not a faithfulness model is available, which makes them the floor the whole instrument rests on rather than an accessory to it.
+
+## Two columns that score the article, not the summary
+
+Every metric above compares our summary to the article. None of them asks what the article was worth. A faithful, well-covered, correctly-hedged summary of an unsourced rumour scores high on all of them and is still an unsourced rumour.
+
+Two columns measure the source itself. Both are marker counts over the article's own words, and both are recorded rather than banded:
+
+| Column | What it counts |
+| --- | --- |
+| **Evidential density** | Reportative markers - "according to", "reportedly", "sources say". How often the article says *how it knows*. These are the evidence a claim rests on, not a weakness in it. |
+| **Speculative density** | Epistemic markers - "may", "could", "expected to", "unconfirmed". The claim itself is unresolved, future, or merely possible. Nobody is being cited. |
+
+**They are read against each other, never alone.** High speculation with high attribution is a well-sourced story about something that has not happened yet, which is legitimate work. High speculation with *low* attribution is the fragile case: claims nobody has been named for.
+
+This is deliberately not a fragility score, and it is not a reader-facing signal. It is two numbers on an operator's row, and what they mean together is a calibration question that needs rows before it can be answered.
+
+**Why these are two columns and not one hedge count.** "Reportedly" and "may" are both hedges, and a summary that drops either has published a rumour as a fact - so `hedge_dropped` wants them in one bucket and still gets them in one bucket. But asked about the *article* they say opposite things. Counting them together produces one number that rises for a well-sourced report and for pure speculation alike, which is a number that means nothing.
+
+**What a lexicon cannot do.** These are surface markers. An article can attribute everything to one anonymous source, or make a firm false claim with no marker at all, and neither is visible here. What the columns catch is the article that hedges constantly and cites nobody, which is a real and common shape. Anything more requires corroboration across sources, which this pipeline does not do yet.
 
 ### Three definitions that look reasonable and are not
 
@@ -93,6 +112,8 @@ Committing the scores rather than deriving them is what makes a claim about last
 
 **The row is self-describing.** It carries the date, the source link and the title, not only the scores - so that a row still means something after the day it describes has been pruned from the published site. Those columns exist from the first row, because adding them after a prune cannot recover what was already lost.
 
+That title is the **source's** headline, not the one the summarizer wrote ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). An identity anchor has to be the thing that does not vary, and ours is rewritten every run and absent whenever the rewrite missed its range.
+
 **Run-level facts are not ledger rows.** How many items a run planned, finished and failed is a property of the run, not of any item, and it lives in the run manifest - which is committed, dated and published alongside the day. Widening the per-item row to carry a second kind of row would leave every item row with columns that are blank for it and would break the dashboard's one honest question: group the rows by band and count them.
 
 **An item whose inputs did not change writes no row at all.** A re-run that changed nothing measured nothing, and a ledger padded with re-observations of the same summary makes every trend a function of how often the job ran. What counts as unchanged is the pipeline fingerprint ([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)), which is stamped on every row so a trend can be attributed to the inputs that produced it.
@@ -132,6 +153,7 @@ later: was the runner-up close?
 - [digest.md](digest.md) - how a confidence band reaches a reader.
 - [config.md](config.md) - the band thresholds and retry budget.
 - [principles.md](principles.md) - principle 6, the belief this page implements.
+- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the prompt asks for, including the hedges these metrics check.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the eval-row contract.
 - [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the stamp every row carries, and why an unchanged item writes none.
 - [../../.github/agents/andre.agent.md](../../.github/agents/andre.agent.md) - the persona who owns metric choice.

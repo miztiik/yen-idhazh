@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -34,7 +34,7 @@ In order, with what each one owns:
 | --- | --- | --- |
 | **Collect** | Which sources are consulted and which candidate links survive the filters. Honours `robots.txt`; never touches a paywalled or login-walled source. See [../architecture/sources/discovery.md](../architecture/sources/discovery.md). | The day's candidate list. |
 | **Extract** | Turning a page into readable text, and **the trust boundary**. This is where a stranger's bytes are sanitized, exactly once. See [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md). Also where an over-long body is truncated and *flagged* as truncated - never silently dropped. | One article payload per item, including the failure cases. |
-| **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. | One summary payload per item. |
+| **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. Also writes the item's title: a headline is written to win a click, so the digest publishes its own. See [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md). | One summary payload per item. |
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
 | **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. | A route decision per item. |
 | **Render** | Producing the visual the route asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
@@ -64,6 +64,7 @@ Three invariants hold regardless of how the batches are sized:
 
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - what Collect consults, and how the source set changes over time.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - what Extract does to a stranger's bytes, and the canaries that assert it.
+- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what Summarize asks a model for, and where every number in that ask comes from.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - what Assemble writes, the reader's routes, and retention.
 - [evaluation.md](evaluation.md) - what the Evaluate stage measures and what it cannot see.
 - [digest.md](digest.md) - what Assemble publishes and what a reader gets.
