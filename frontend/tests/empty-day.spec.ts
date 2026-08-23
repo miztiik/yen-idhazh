@@ -65,3 +65,20 @@ test('the root load does not read the build clock', () => {
 	expect(source).not.toContain('new Date');
 	expect(source).toContain('loadDay(latest)?.date');
 });
+
+test('reader source limits are sentences in the page text', () => {
+	const item = readFileSync(
+		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DigestItem.svelte'),
+		'utf8'
+	);
+	const footer = readFileSync(
+		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'SiteFooter.svelte'),
+		'utf8'
+	);
+
+	expect(item).toContain('item.reader_note');
+	expect(item).not.toContain('Brief');
+	expect(footer).toContain(
+		'We skipped {day.items_failed} stories today because we could not read enough of the page to'
+	);
+});

@@ -47,6 +47,11 @@
           "title": "Rank Score",
           "type": "number"
         },
+        "source_form": {
+          "$ref": "#/$defs/SourceForm",
+          "default": "article",
+          "description": "Declared feed form, carried from config so workers never infer it."
+        },
         "source_id": {
           "description": "The feed that carried it first.",
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -106,6 +111,14 @@
       "title": "PlannedItem",
       "type": "object"
     },
+    "SourceForm": {
+      "enum": [
+        "article",
+        "abstract"
+      ],
+      "title": "SourceForm",
+      "type": "string"
+    },
     "SourceTier": {
       "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
       "enum": [
@@ -162,6 +175,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added source_form to each planned item.",
+      "version": "2026-08-23T18:48",
+      "why": "Workers need to know when a source is an abstract without detecting it from page text. Carrying the curator-declared feed form keeps that fact in the plan payload."
+    },
     {
       "change": "feeds_skipped counts the feeds a quarantine held back this run.",
       "version": "2026-08-23T12:00",
@@ -228,7 +246,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2026-08-23T12:00",
+      "default": "2026-08-23T18:48",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -248,5 +266,5 @@
   ],
   "title": "RunPlan",
   "type": "object",
-  "version": "2026-08-23T12:00"
+  "version": "2026-08-23T18:48"
 }

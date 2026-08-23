@@ -67,6 +67,11 @@ Each of these was specified one way, and the arithmetic says otherwise:
 - **A compression *band* is a length detector.** At a fixed output budget, the ratio is dominated by how long the article was. A band on it would flag every short article forever, for a reason that is never about the summary. The ratio is recorded as a diagnostic; the real failures - a headline, or a copy - are detected directly by absolute word bounds.
 - **Verbatim overlap must be contiguous.** Measured as a longest common *subsequence*, function words match in order in almost any document, which puts a floor under the score and makes it move with length instead of with copying. Contiguous n-grams and the longest unbroken run do not have that floor.
 
+For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` flags
+truncation. The default is 0.5. This is the arithmetic ceiling that makes a
+30-word ask possible at a 60-word source floor. It is not a confidence threshold.
+The confidence band stays on the faithfulness axis.
+
 ## Two rules that are easy to break by accident
 
 **1. The metric that selects can no longer alarm.** It is tempting to generate several candidate summaries and keep the one that scores best. Doing so destroys the score's value as a monitor: once it is the selector, it can no longer tell you that outputs are getting worse, because it is being optimised against by construction. This is Goodhart's law with a concrete cost. The selector and the alarm stay separate.
@@ -76,6 +81,10 @@ Each of these was specified one way, and the arithmetic says otherwise:
 ## Bands, not raw numbers
 
 Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config.md](config.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
+
+The absolute summary gate starts at `evaluation.summary_words_min = 25`. That
+lets the brief band ask for 30 to 45 words without the decoder padding a short
+source to the old floor.
 
 A low-confidence item still publishes, marked. Hiding it would make the digest look better than it is, which is the opposite of the point.
 

@@ -63,6 +63,14 @@
       "title": "LensId",
       "type": "string"
     },
+    "SourceForm": {
+      "enum": [
+        "article",
+        "abstract"
+      ],
+      "title": "SourceForm",
+      "type": "string"
+    },
     "SourceTier": {
       "description": "The tier IS the ranking weight (docs/architecture/sources/discovery.md).",
       "enum": [
@@ -78,6 +86,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added source_form to the extract payload.",
+      "version": "2026-08-23T18:49",
+      "why": "Summarize and publish need the curator-declared source form after the plan file is no longer in hand. The field defaults to article so older payloads still read."
+    },
     {
       "change": "Added brief and failure_code to the extract payload.",
       "version": "2026-08-23T18:15",
@@ -197,6 +210,11 @@
       "title": "Sanitizer Version",
       "type": "string"
     },
+    "source_form": {
+      "$ref": "#/$defs/SourceForm",
+      "default": "article",
+      "description": "Declared by the feed config. Never inferred from extracted text."
+    },
     "source_id": {
       "description": "The feed that carried it.",
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -274,7 +292,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-23T18:15",
+      "default": "2026-08-23T18:49",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -307,5 +325,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-08-23T18:15"
+  "version": "2026-08-23T18:49"
 }
