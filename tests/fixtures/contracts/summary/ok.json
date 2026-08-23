@@ -20,6 +20,7 @@
   "status": "ok",
   "summarize_ms": 0,
   "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
+  "title": null,
   "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
   "version": "2026-08-21T02:00"
 }

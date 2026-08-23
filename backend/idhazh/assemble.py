@@ -81,11 +81,16 @@ def to_digest_item(
     run_n: int,
     route: Route | None = None,
 ) -> DigestItem:
-    """One finished item as a reader consumes it. The link is a first-class element."""
+    """One finished item as a reader consumes it. The link is a first-class element.
+
+    The published title is ours when the summarizer wrote one, and the source's
+    when it did not. The fallback runs on a real item whenever a drafted title
+    missed the asked range, so it is the normal path and not the error path.
+    """
     return DigestItem(
         item_id=summary.item_id,
         vertical=article.vertical,
-        title=article.title or _UNTITLED,
+        title=summary.title or article.title or _UNTITLED,
         source_url=article.canonical_url,
         source_id=article.source_id,
         source_name=source_name,
@@ -121,11 +126,13 @@ def to_digest_visual(route: Route | None) -> DigestVisual | None:
 
 
 def source_names(sources: Sources) -> dict[str, str]:
-    return {feed.id: feed.title for feed in sources.feeds}
+    """Retired feeds included: a published id must still resolve to a name."""
+    return {feed.id: feed.title for feed in sources.known_feeds()}
 
 
 def source_kinds(sources: Sources) -> dict[str, SourceKind]:
-    return {feed.id: feed.kind for feed in sources.feeds}
+    """Retired feeds included. Missing here means published as `reporting`."""
+    return {feed.id: feed.kind for feed in sources.known_feeds()}
 
 
 def vertical_names(taxonomy: Taxonomy) -> dict[str, str]:

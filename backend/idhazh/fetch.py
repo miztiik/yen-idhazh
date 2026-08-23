@@ -17,7 +17,6 @@ from __future__ import annotations
 import ipaddress
 import socket
 from dataclasses import dataclass
-from enum import StrEnum
 from typing import Final, Protocol
 from urllib import request
 from urllib.error import HTTPError, URLError
@@ -25,6 +24,7 @@ from urllib.parse import urlsplit
 from urllib.robotparser import RobotFileParser
 
 from idhazh.contracts.app_config import ExtractConfig
+from idhazh.contracts.feed_health import FetchOutcome
 
 #: Bumped when fetch policy changes. A body that arrived under different rules
 #: is a different input, and the fingerprint has to be able to say so.
@@ -36,14 +36,6 @@ ALLOWED_SCHEMES: Final[frozenset[str]] = frozenset({"http", "https"})
 _LOOPBACK_NAMES: Final[frozenset[str]] = frozenset({"localhost", "ip6-localhost", "ip6-loopback"})
 _INTERNAL_SUFFIXES: Final[tuple[str, ...]] = (".localhost", ".local", ".internal", ".localdomain")
 _RETRYABLE_STATUS: Final[frozenset[int]] = frozenset({408, 425, 429, 500, 502, 503, 504})
-
-
-class FetchOutcome(StrEnum):
-    OK = "ok"
-    ROBOTS_DENIED = "robots_denied"
-    BLOCKED = "blocked"
-    PERMANENT = "permanent"
-    TRANSIENT = "transient"
 
 
 @dataclass(frozen=True, slots=True)

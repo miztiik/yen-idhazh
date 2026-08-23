@@ -96,7 +96,6 @@ class VerticalDef(Lifecycled):
 
     id: Slug
     display_name: str = Field(min_length=1)
-    daily_cap: int = Field(ge=1, description="Most items this vertical contributes to one day.")
     min_feeds: int = Field(
         ge=1,
         description="Feed floor below which the vertical does not render at all.",
@@ -118,6 +117,15 @@ class Taxonomy(Contract):
 
     __schema_stem__: ClassVar[str] = "taxonomy"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-22T11:00",
+            change="Removed VerticalDef.daily_cap.",
+            why=(
+                "It decided how big a vertical's day was before the ranking had a say. "
+                "Supply and the score set the size now; max_per_source still stops one "
+                "feed becoming the vertical."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: verticals, lenses and events.",

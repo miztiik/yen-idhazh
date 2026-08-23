@@ -88,12 +88,11 @@ jobs:
 
       - name: Plan the validation corpus
         # Once, before either model runs, so both score the identical list and
-        # the only difference between their numbers is the weights. `--cap 6`
-        # raises each vertical past its daily cap: that cap is how much a reader
-        # wants in a morning, not how much a measurement needs.
+        # the only difference between their numbers is the weights. The plan is
+        # whatever the feeds offered that morning - there is no cap to raise.
         run: |
           set -euo pipefail
-          python -m idhazh plan --date "$(date -u +%F)" --cap 6
+          python -m idhazh plan --date "$(date -u +%F)"
           python - <<'PY'
           import datetime, json, pathlib
           date = datetime.datetime.now(datetime.UTC).strftime("%Y-%m-%d")
@@ -153,7 +152,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add evals
+          git add state
           if git diff --cached --quiet; then
             echo "nothing changed"
             exit 0

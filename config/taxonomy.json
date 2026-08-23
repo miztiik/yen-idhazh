@@ -63,10 +63,9 @@
       "status": "active"
     }
   ],
-  "version": "2026-08-21",
+  "version": "2026-08-22T11:00",
   "verticals": [
     {
-      "daily_cap": 5,
       "display_name": "AI",
       "id": "ai",
       "min_feeds": 35,
@@ -74,7 +73,6 @@
       "status": "active"
     },
     {
-      "daily_cap": 3,
       "display_name": "Energy",
       "id": "energy",
       "min_feeds": 21,
@@ -82,7 +80,6 @@
       "status": "active"
     },
     {
-      "daily_cap": 3,
       "display_name": "Business and Economy",
       "id": "business-economy",
       "min_feeds": 21,
@@ -90,7 +87,6 @@
       "status": "active"
     },
     {
-      "daily_cap": 3,
       "display_name": "World",
       "id": "world",
       "min_feeds": 21,
@@ -98,7 +94,6 @@
       "status": "active"
     },
     {
-      "daily_cap": 3,
       "display_name": "India",
       "id": "india",
       "min_feeds": 21,

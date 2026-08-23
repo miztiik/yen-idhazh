@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -18,34 +18,35 @@ Coupling them means a change of mind about URL aesthetics rewrites every committ
 ```
 frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, every item
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
-frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.webp  optional visual
-evals/scores.csv                                        the ledger - one path, never published twice
+frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.svg    optional visual
+state/scores.csv                                        the ledger - one path, never published twice
 ```
 
 ```
 /                          the newest published day, rendered inline    moving
 /<YYYY-MM-DD>/             that day, every vertical                     canonical
 /<YYYY-MM-DD>/<vertical>/  that day, one vertical - a projection        canonical
-/<YYYY-MM-DD>/#<vertical>-<NN>   an item anchor
+/<YYYY-MM-DD>/#<item id>   an item anchor
 /archive/                  every surviving day                          moving
-/evals/                    the dashboard                                moving
+/evals/                    the score dashboard                          moving
+/console/                  the run-health dashboard                     moving
 ```
 
 **One day directory is the deletion atom.** Nothing outside it points into its interior except the append-only ledger, which is what makes pruning a single operation with no second edit.
 
-**No hash appears in any path, filename or URL.** An item is addressed by its vertical and its ordinal within the day - `ai-03` - which is predictable, derivable without a lookup, free of fetched text, and speakable. Identity for dedupe is a field on the payload, not a segment of a path: paths are for humans and for globs, identity is for the contract.
+**No hash appears in any path, filename or URL.** A rendered visual is filed by its vertical and its ordinal within the day - `ai-03.svg` - which is predictable, derivable without a lookup, free of fetched text, and speakable. The anchor a reader lands on is the item's own id, `<vertical>-<ten digits>`, which is derived from the address so that a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)). Identity for dedupe is a field on the payload, not a segment of a path: paths are for humans and for globs, identity is for the contract.
 
 **`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
 
 ## The day is one artifact, shared by everyone
 
-The pipeline may run several times in one day. The rule that governs what that means starts from a fact about the medium: **there is one published payload, and every reader gets the same bytes.** Reading is private and per-device; ordering is public and global. Ordering can therefore never depend on who has read what.
+The pipeline runs four times a day, every six hours ([../sources/freshness.md](../sources/freshness.md)). The rule that governs what that means starts from a fact about the medium: **there is one published payload, and every reader gets the same bytes.** Reading is private and per-device; ordering is public and global. Ordering can therefore never depend on who has read what.
 
 - **The published order is global, deterministic and identical for every reader.** It is a pure function of the ranking inputs, and no reader's behaviour changes it. Two people opening the same dated URL see the same items in the same order, always.
 - **An item is never removed, demoted or hidden because someone read it.** One person having read an item says nothing about the thousands who have not. This is the behaviour of every working news front page: the story stays where its importance puts it, read or unread.
 - **Read-state is a client-side mark and nothing more.** It may change how an item looks. It may never change where an item sits, whether it appears, or how it ranks. The only exception is a filter the reader switches on themselves, and it is off by default.
 - **"New" is a property of the item, not of the reader.** An item is new because a later run introduced it, which is true for everybody and needs no storage to assert. It is never a diff against a remembered last-visit time, which would be a claim that evaporates the moment a browser is cleared.
-- **Membership only grows, and the cap is a day cap.** Several runs produce one day of the configured size, not several days' worth.
+- **Membership only grows.** The four runs of a day append to one day payload rather than replacing it, so the day grows through the day. That is only safe because an item's id comes from its address: run 2 recognises what run 1 already published instead of renumbering it. There is no daily item cap - what a day carries is what supply and the ranking produced ([../sources/freshness.md](../sources/freshness.md)).
 - **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item says so. Silently improving wording under someone who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
 - **No run identifier appears in any data path or any reader URL.** It lives in the run manifest and in the page footer.
 
@@ -115,6 +116,8 @@ Retention was demoted to third lever after the byte arithmetic showed that encod
 - [../../concepts/digest.md](../../concepts/digest.md) - what a reader gets and the visual rule this layout serves.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Assemble stage that writes all of this.
 - [../sources/discovery.md](../sources/discovery.md) - where the day's items come from, and the same retire-never-delete discipline applied to sources.
+- [../sources/freshness.md](../sources/freshness.md) - the six-hour cadence, where an item's id comes from, and why a day has no cap.
+- [frontend.md](frontend.md) - the two dashboards these routes serve.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload contracts and the versioning rules a deletion has to honour.
 - [../../concepts/config.md](../../concepts/config.md) - where the retention knobs live and the build-time versus shipped-config rule.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - the engineering contract, including schema versioning (section 11) and git hygiene (section 8).

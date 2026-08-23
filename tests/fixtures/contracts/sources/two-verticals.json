@@ -32,7 +32,9 @@
       "url": "https://newsroom.example-grid.com/rss",
       "vertical": "energy",
       "weight": 1.0
-    },
+    }
+  ],
+  "retired": [
     {
       "id": "example-defunct-daily",
       "kind": "reporting",
@@ -51,9 +53,8 @@
       "retired_on": null,
       "status": "active",
       "title": "Hacker News front page",
-      "url": "https://hnrss.org/frontpage",
-      "weight": 0.4
+      "url": "https://hnrss.org/frontpage"
     }
   ],
-  "version": "2026-08-21T06:00"
+  "version": "2026-08-22T10:00"
 }

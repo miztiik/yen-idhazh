@@ -47,7 +47,7 @@ Including it would make every runner a different fingerprint, which would hide t
 
 ## The ledger
 
-`evals/fingerprints.csv` is **append-only and never pruned**, one row the first time a stamp is seen. Each row expands the digest into every component that produced it, plus the host.
+`state/fingerprints.csv` is **append-only and never pruned**, one row the first time a stamp is seen. Each row expands the digest into every component that produced it, plus the host.
 
 Without it a fingerprint is meaningless hex three years from now - it would prove two runs differed while saying nothing about how.
 

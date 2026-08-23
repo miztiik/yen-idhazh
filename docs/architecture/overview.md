@@ -15,9 +15,9 @@ flowchart LR
         F1["~138 curated feeds<br/>config/sources.json"]
     end
 
-    subgraph ci["backend/ - GitHub Actions, once a day"]
+    subgraph ci["backend/ - GitHub Actions, every 6 h"]
         direction TB
-        P["plan<br/><i>rank and cap</i>"]
+        P["plan<br/><i>rank and dedupe</i>"]
         W["work x4 shards<br/><i>fetch, extract, summarize, score</i>"]
         R["route<br/><i>chart, diagram or none</i>"]
         AS["assemble<br/><i>build the day payload</i>"]
@@ -28,7 +28,7 @@ flowchart LR
         direction TB
         D1["frontend/public/digest/&lt;Y&gt;/&lt;M&gt;/&lt;D&gt;/digest.json"]
         D2["...&lt;vertical&gt;-&lt;NN&gt;.svg"]
-        D3["evals/scores.csv"]
+        D3["state/scores.csv"]
     end
 
     subgraph fe["frontend/ - GitHub Pages"]
@@ -141,5 +141,6 @@ news day. That now fails the build loudly.
 - [`../concepts/pipeline-loop.md`](../concepts/pipeline-loop.md) - the stages in detail.
 - [`../concepts/evaluation.md`](../concepts/evaluation.md) - how a summary is scored.
 - [`sources/discovery.md`](sources/discovery.md) - where stories come from.
+- [`summarize/prompt.md`](summarize/prompt.md) - what the summarizer asks a model for, and where every number in that ask comes from.
 - [`publishing/visuals.md`](publishing/visuals.md) - why a story gets a chart or nothing.
 - [`../../CLAUDE.md`](../../CLAUDE.md) - the engineering contract.

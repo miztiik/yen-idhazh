@@ -9,18 +9,18 @@
           "title": "Front Page Bonus",
           "type": "number"
         },
+        "max_future_hours": {
+          "default": 6.0,
+          "description": "A publish date further ahead than this is not believed and the item falls back to first sight. Feeds that stamp tomorrow would otherwise take the top slot every single day.",
+          "minimum": 0.0,
+          "title": "Max Future Hours",
+          "type": "number"
+        },
         "max_per_source": {
           "default": 2,
           "description": "Most items one feed may contribute to one vertical in a day. Without it, a quiet news day is whichever blog published most.",
           "minimum": 1,
           "title": "Max Per Source",
-          "type": "integer"
-        },
-        "min_feeds_floor": {
-          "default": 25,
-          "description": "Default feed floor. A vertical may raise it; below it, nothing renders.",
-          "minimum": 1,
-          "title": "Min Feeds Floor",
           "type": "integer"
         },
         "quarantine_after_failures": {
@@ -29,11 +29,32 @@
           "title": "Quarantine After Failures",
           "type": "integer"
         },
+        "recency_half_life_hours": {
+          "default": 18.0,
+          "description": "Hours for the recency bonus to halve. At 18 h a day-old item keeps a third.",
+          "exclusiveMinimum": 0.0,
+          "title": "Recency Half Life Hours",
+          "type": "number"
+        },
+        "recency_weight": {
+          "default": 0.6,
+          "description": "How much freshness may move a score. A bonus, never a filter: a strong older item still outranks a weak new one, which a hard age cutoff cannot do.",
+          "minimum": 0.0,
+          "title": "Recency Weight",
+          "type": "number"
+        },
         "repetition_weight": {
           "default": 1.0,
           "minimum": 0.0,
           "title": "Repetition Weight",
           "type": "number"
+        },
+        "seen_window_days": {
+          "default": 90,
+          "description": "How far back the first-sight store is consulted. Older shards stay committed and readable; they are just not evidence about today.",
+          "minimum": 1,
+          "title": "Seen Window Days",
+          "type": "integer"
         },
         "tier_weights": {
           "$ref": "#/$defs/TierWeights"
@@ -118,7 +139,7 @@
         },
         "summary_words_min": {
           "default": 40,
-          "description": "Below this it is a headline, not a summary. Set under what the prompt asks for: the prompt is a request, and dropping an item for missing it by two words loses a story to a rounding error.",
+          "description": "Below this it is a headline, not a summary. Set under the lowest band in `summarize.bands`: the prompt is a request, and dropping an item for missing it by two words loses a story to a rounding error.",
           "minimum": 1,
           "title": "Summary Words Min",
           "type": "integer"
@@ -227,8 +248,8 @@
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
       "properties": {
         "max_output_tokens": {
-          "default": 500,
-          "description": "Covers the summary AND its key points. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause.",
+          "default": 900,
+          "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
           "minimum": 1,
           "title": "Max Output Tokens",
           "type": "integer"
@@ -413,16 +434,17 @@
     "RunConfig": {
       "additionalProperties": false,
       "properties": {
-        "item_cap_per_day": {
-          "default": 20,
-          "minimum": 1,
-          "title": "Item Cap Per Day",
-          "type": "integer"
-        },
         "max_parallel": {
           "default": 4,
           "minimum": 1,
           "title": "Max Parallel",
+          "type": "integer"
+        },
+        "safety_ceiling_per_run": {
+          "default": 200,
+          "description": "A crash guard, not an editorial choice. Supply and the ranking decide how big a day is; this only stops a mis-parsed feed from publishing hundreds of items in one run. A normal day never reaches it.",
+          "minimum": 1,
+          "title": "Safety Ceiling Per Run",
           "type": "integer"
         },
         "shard_size": {
@@ -449,6 +471,90 @@
         }
       },
       "title": "RunConfig",
+      "type": "object"
+    },
+    "SummarizeConfig": {
+      "additionalProperties": false,
+      "description": "What the prompt asks the model for.\n\nSeparate from `evaluation`, which is what the pipeline agrees to accept. The\ntwo ranges are deliberately different: a prompt is a request and a gate is a\nrule, and asking for a tighter range than we enforce is what stops a\ntwo-word miss from losing a story. `AppConfig` checks the invariant that\nactually matters - every ask sits inside the gate - because only there are\nboth blocks visible.\n\nEvery value here is substituted into the prompt text at render time, so the\nprompt cannot drift from the bounds the pipeline enforces (Holy Law #6).",
+      "properties": {
+        "bands": {
+          "description": "One length ask per article size, ordered by min_source_words. A release note and a long read asked for the same range gives a padded summary of the first and a thin one of the second.",
+          "items": {
+            "$ref": "#/$defs/SummaryBand"
+          },
+          "minItems": 1,
+          "title": "Bands",
+          "type": "array"
+        },
+        "key_points_max": {
+          "default": 5,
+          "description": "Also the decoder's ceiling.",
+          "minimum": 1,
+          "title": "Key Points Max",
+          "type": "integer"
+        },
+        "key_points_min": {
+          "default": 2,
+          "description": "Also the decoder's floor. The prompt and the response schema read this same number, or the decoder rejects a reply that did exactly what was asked.",
+          "minimum": 1,
+          "title": "Key Points Min",
+          "type": "integer"
+        },
+        "max_verbatim_words": {
+          "default": 20,
+          "description": "Longest quotation the prompt allows, and it must be attributed. Long enough to carry a real sentence somebody said, short enough that a summary cannot become the article. The ledger measures the run that actually came back (`verbatim_run`), so this number is the ask and that column is the answer.",
+          "minimum": 1,
+          "title": "Max Verbatim Words",
+          "type": "integer"
+        },
+        "title_words_max": {
+          "default": 14,
+          "description": "Longest title the prompt asks for, and the decoder's ceiling. Unlike the summary there is no floor on the decoder: a headline does not stop early, and a floor would only pad a good short one. Capped at 40 so the widest decoder ceiling this can produce still fits an UntrustedLine, which is what the payload field is.",
+          "maximum": 40,
+          "minimum": 1,
+          "title": "Title Words Max",
+          "type": "integer"
+        },
+        "title_words_min": {
+          "default": 6,
+          "description": "Shortest title the prompt asks for. Below this a headline stops naming who did what, and the reader is back to guessing from the source's own framing.",
+          "minimum": 1,
+          "title": "Title Words Min",
+          "type": "integer"
+        }
+      },
+      "title": "SummarizeConfig",
+      "type": "object"
+    },
+    "SummaryBand": {
+      "additionalProperties": false,
+      "description": "How long a summary to ask for, once the article is at least this long.",
+      "properties": {
+        "min_source_words": {
+          "description": "The band applies to articles this long and longer.",
+          "minimum": 0,
+          "title": "Min Source Words",
+          "type": "integer"
+        },
+        "target_words_max": {
+          "description": "The longest summary the prompt asks for.",
+          "minimum": 1,
+          "title": "Target Words Max",
+          "type": "integer"
+        },
+        "target_words_min": {
+          "description": "The shortest summary the prompt asks for.",
+          "minimum": 1,
+          "title": "Target Words Min",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "min_source_words",
+        "target_words_min",
+        "target_words_max"
+      ],
+      "title": "SummaryBand",
       "type": "object"
     },
     "ThemeChoice": {
@@ -493,6 +599,13 @@
       "additionalProperties": false,
       "description": "The published surface's knobs.\n\n`sections` is the modularity story: reordering the page is a config edit,\nnot a code change. What is deliberately absent is a per-element layout\nengine - on the surface that matters, a phone, there is no left and no\nright, and a per-reader layout would break the promise that a shared link\nshows the recipient what the sender saw.",
       "properties": {
+        "read_mark_days": {
+          "default": 7,
+          "description": "How many digest days of read marks the browser keeps. Marks are held per digest date, so a mark made on one day can never grey out a different day's article. Every page load keeps the newest days up to this number and drops the rest, which bounds the store without trusting the device clock. One week covers a reader who comes back after a break.",
+          "minimum": 1,
+          "title": "Read Mark Days",
+          "type": "integer"
+        },
         "repo_url": {
           "default": "https://github.com/miztiik/yen-idhazh",
           "minLength": 1,
@@ -632,6 +745,31 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added ui.read_mark_days.",
+      "version": "2026-08-23T16:00",
+      "why": "Read marks were one flat list of item ids that never expired, so an id reused on a later day greyed out an article the reader had never opened, and the store grew for ever. Marks are now held per digest date and pruned to the newest days this number allows. Additive - an older config still validates, and the browser drops the old flat list on sight because there is no honest way to tell which day those ids belonged to."
+    },
+    {
+      "change": "Added summarize.title_words_min and summarize.title_words_max.",
+      "version": "2026-08-23T15:00",
+      "why": "The digest published the source's own headline, which is written to win a click rather than to say what happened. The summarizer now writes the title too, and the range it is asked for is a knob like every other length in this block (Holy Law #6). Additive - an older config still validates, and an item whose title misses the range falls back to the source's."
+    },
+    {
+      "change": "Added the summarize block: length bands, key-point range and quote cap.",
+      "version": "2026-08-23",
+      "why": "The lengths the prompt asks for were literals inside the prompt text, where no schema could see them and nothing checked them against the range the pipeline accepts (Holy Law #6). They are bands rather than one range because a release note and a long read asked for the same number of words gives a padded summary of the first and a thin one of the second. Moving them here also puts them inside the prompt string the fingerprint hashes, so changing what we ask for now re-summarizes rather than reusing a cached reply written under the old ask. Additive - an older config still validates."
+    },
+    {
+      "change": "Replaced run.item_cap_per_day with run.safety_ceiling_per_run. Added collect.recency_weight, collect.recency_half_life_hours, collect.max_future_hours and collect.seen_window_days. Raised inference.max_output_tokens to 900.",
+      "version": "2026-08-22T11:00",
+      "why": "A daily cap decided the size of the day; supply and the ranking should. The ceiling that remains is a crash guard against a mis-parsed feed. Recency is a bonus rather than a cutoff so a strong older item is never dropped for a weak new one. The token stop is labelled as the crash guard it always was, and sized so the prompt sets the length."
+    },
+    {
+      "change": "Removed collect.min_feeds_floor.",
+      "version": "2026-08-22T09:00",
+      "why": "Nothing read it. The floor a vertical is actually held to is its own min_feeds in taxonomy.json, so a second number calling itself the default described a mechanism that does not exist."
+    },
+    {
       "change": "Added the visuals block.",
       "version": "2026-08-22",
       "why": "Routing needs its bounds and its enabled-kinds gate in config before the router may choose a kind. Additive - an older payload still validates."
@@ -683,11 +821,14 @@
     "run": {
       "$ref": "#/$defs/RunConfig"
     },
+    "summarize": {
+      "$ref": "#/$defs/SummarizeConfig"
+    },
     "ui": {
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-22",
+      "default": "2026-08-23T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -701,5 +842,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-22"
+  "version": "2026-08-23T16:00"
 }

@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A feed whose entries carry no date at all.
+
+  Common in practice: hand-rolled feeds, static site generators with the date
+  plugin left off, and government notice boards. Without a date the pipeline
+  cannot say how old an item is, so an age limit has to fall back on when we
+  first saw the address (item 3).
+-->
+<rss version="2.0">
+  <channel>
+    <title>Example Undated Notices</title>
+    <link>https://notices.example.gov/</link>
+    <description>Notices, filed without a publication date.</description>
+    <item>
+      <title>Grid operator opens a consultation on interconnection queues</title>
+      <link>https://notices.example.gov/2026/interconnection-consultation</link>
+    </item>
+    <item>
+      <title>Regulator publishes guidance on model disclosure</title>
+      <link>https://notices.example.gov/2026/model-disclosure-guidance</link>
+    </item>
+  </channel>
+</rss>

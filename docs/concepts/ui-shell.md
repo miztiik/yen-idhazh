@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
@@ -17,8 +17,11 @@ That means the shell's job is small and worth stating plainly: **load a payload,
 | **Digest** | The day's items, in order, and the run-level notice when a run was partial. | The published digest payload. |
 | **Archive** | Reaching a previous day. A reader who missed a day wants to catch up, not start over ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)). | The index of published days. |
 | **Dashboard** | The eval ledger rendered as a trend - band counts over time. It never recomputes a score ([evaluation.md](evaluation.md)). | The committed CSV. |
+| **Console** | Whether the pipeline itself is working: a grid of runs and the feeds that failed. An operator surface, not a reading one ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). | The committed run manifests and the feed-health ledger. |
 
-Three surfaces is the whole site. A fourth needs an argument.
+Four surfaces is the whole site, and only two of them are for a reader. A fifth needs an argument.
+
+The two operator surfaces are held to a different standard on purpose: they are instrumentation, they sit off the reading path, they earn no design budget, and their only obligation is to be correct ([vision.md](vision.md)).
 
 ## What the shell provides, once
 
@@ -26,6 +29,7 @@ Three surfaces is the whole site. A fourth needs an argument.
 - **The payload loader** - one place that fetches a same-origin committed file, validates it against the generated contract, and hands a typed value to the page. Validation at the boundary is what turns a malformed payload into a designed empty state instead of a stack trace.
 - **The empty and degraded states** - see below.
 - **The console log** - the browser console is the entire logging surface ([telemetry.md](telemetry.md)). What a page logs is what a reader would need to hand back when something looks wrong: which payload it tried to load, and what was wrong with it.
+- **Reader state, in `localStorage` and nowhere else** - the read mark and the theme choice. Never a cookie: a cookie is sent on every request and would put a reading history into the host's access logs. It is a convenience, so it degrades to nothing under a quota error or private mode, and it is bounded by a window rather than kept forever ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)).
 
 An item component never fetches. It receives a validated slice and renders it.
 
@@ -58,6 +62,8 @@ Putting payload loading and validation in exactly one place, rather than in each
 
 Keeping the site to three surfaces is a delete-first decision. Filtering, search, per-source views and tag pages are all reachable and none of them have a named reader yet; a static page that nobody asked for is rent paid forever. Authority: Jony, with Reader as the check.
 
+The console is the one surface added since, and it was added for a named person doing a named job: the owner, asking whether the pipeline is still working. That is a question the digest cannot answer - a quiet news day and a broken collector produce the same short page. It sits off the reading path, so it costs a reader nothing and costs the shell one route.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -66,6 +72,8 @@ Keeping the site to three surfaces is a delete-first decision. Filtering, search
 | Fetching the payload per component | Three inconsistent empty states and no single place to validate at the boundary. | Fowler |
 | A loading spinner while the payload parses | There is no network in the loop. A spinner would be an animation apologising for a build-time mistake. | Carmack |
 | Client-side filtering or search over the ledger | Moves computation to read time for a surface whose whole premise is that nothing computes at read time. | Carmack |
+| Run health shown on the digest page | The reader is not the operator. A grid of squares above the news answers a question they did not ask. | owner |
+| A cookie for the read mark | Sent on every request, so it would put a reading history into the host's access logs. | Reader |
 
 ## See also
 
@@ -73,5 +81,7 @@ Keeping the site to three surfaces is a delete-first decision. Filtering, search
 - [design-system.md](design-system.md) - the tokens and states the chrome uses.
 - [telemetry.md](telemetry.md) - the browser-console logging rule.
 - [evaluation.md](evaluation.md) - what the dashboard renders.
+- [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the shape of each surface, the read mark, and the console.
+- [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the routes these surfaces sit on.
 - [../how-to/ship-to-github-pages.md](../how-to/ship-to-github-pages.md) - the deployment runbook and base-path handling.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 12, the published-site verification gate.

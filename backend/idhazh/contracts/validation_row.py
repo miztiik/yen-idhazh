@@ -1,4 +1,4 @@
-"""One row of the model validation ledger (`evals/validation-<date>.csv`).
+"""One row of the model validation ledger (`state/validation-<date>.csv`).
 
 The leaderboard's ranking is a better prior than a guess. It is not evidence
 about this pipeline, because three variables sit between their number and ours:

@@ -1,6 +1,6 @@
 """The day's work list, decided before any weights load.
 
-The plan job reads feeds, deduplicates, ranks and caps - all deterministic
+The plan job reads feeds, deduplicates and ranks - all deterministic
 arithmetic, no model - then writes this. Workers read it and never re-decide
 what to work on, which is what makes a shard replayable and a re-run cheap.
 
@@ -33,7 +33,13 @@ from idhazh.contracts.taxonomy import SourceTier
 
 
 class PlannedItem(Model):
-    """One URL that survived deduplication and made its vertical's cap."""
+    """One URL that survived deduplication and was chosen for the day.
+
+    `item_id` is derived from `url_key`, so the same article carries the same
+    id on every run of every day. `published_at` is the time the run believes -
+    the feed's own date, unless it claimed a future too far ahead to be true,
+    in which case it is when we first saw the address.
+    """
 
     item_id: ItemId
     url_key: UrlKey
@@ -89,6 +95,28 @@ class RunPlan(Contract):
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-23T12:00",
+            change="feeds_skipped counts the feeds a quarantine held back this run.",
+            why=(
+                "A quarantined feed is neither read nor failed, so a short day looked "
+                "like a quiet news day. The count says which it was."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-22T11:00",
+            change=(
+                "item_id is derived from the address instead of the rank position, and "
+                "published_at now carries the time the run believes rather than the time "
+                "the feed claimed."
+            ),
+            why=(
+                "A rank position renumbers the day on every run, so on a six-hourly "
+                "schedule the same story came back under a new id and published twice. A "
+                "date a feed puts in the future is not a date, and forwarding one to a "
+                "reader repeats the feed's claim as our own."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21T04:00",
             change="Initial shape: the ranked, capped, deduplicated work list for one run.",
             why="Contracts before logic - a worker reads a fixed shape and never re-decides.",
@@ -104,6 +132,11 @@ class RunPlan(Contract):
     )
     feeds_read: int = Field(default=0, ge=0)
     feeds_failed: int = Field(default=0, ge=0)
+    feeds_skipped: int = Field(
+        default=0,
+        ge=0,
+        description="Held back by a quarantine. Neither read nor failed - never asked.",
+    )
     verticals: list[VerticalPlan] = Field(default_factory=list)
     items: list[PlannedItem] = Field(default_factory=list)
 
@@ -115,19 +148,16 @@ class RunPlan(Contract):
             raise ValueError("item ids must be distinct")
 
         seen: dict[str, float] = {}
-        ordinals: dict[str, int] = {}
+        counts: dict[str, int] = {}
         for item in self.items:
             previous = seen.get(item.vertical)
             if previous is not None and item.rank_score > previous:
                 raise ValueError("within a vertical, rank_score may never increase down the list")
             seen[item.vertical] = item.rank_score
-            expected = ordinals.get(item.vertical, 0) + 1
-            if item.item_id != f"{item.vertical}-{expected:02d}":
-                raise ValueError("item ordinals run from 01 without gaps, in rank order")
-            ordinals[item.vertical] = expected
+            counts[item.vertical] = counts.get(item.vertical, 0) + 1
 
         counted = {vertical.id: vertical.planned for vertical in self.verticals}
-        for vertical_id, total in ordinals.items():
+        for vertical_id, total in counts.items():
             if counted.get(vertical_id) != total:
                 raise ValueError(f"vertical {vertical_id} counts disagree with its items")
         return self

@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added evidential_density and speculative_density, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-08-23",
+      "why": "Every other column scores our summary against the article. These two score the article, which nothing did: a faithful summary of an unsourced rumour scores high on all of them and is still an unsourced rumour. First columns to land after the ledger had rows in it, hence appended rather than filed by meaning, and null rather than zero on the ten rows that predate them. Recorded only - no band reads them until enough rows exist to say what a normal value is (Holy Law #10)."
+    },
+    {
       "change": "Added unsupported_numbers, hedge_dropped, extraction_suspect, verbatim_run and source_seen_word_count.",
       "version": "2026-08-21T03:00",
       "why": "Faithfulness cannot see a wrong number, a rumour asserted as fact, or a summary of navigation chrome - it scores all three generously. The ledger is still empty, so these cost a changelog entry today and a migration ever after."
@@ -64,6 +69,21 @@
       "description": "Identical inputs, different words. Counted and published, never fatal.",
       "title": "Determinism Violation",
       "type": "boolean"
+    },
+    "evidential_density": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Attribution markers as a share of the ARTICLE's words. How often the story says where it got a claim. Scores the source, not our summary of it. Null on a row scored before metrics-2.",
+      "title": "Evidential Density"
     },
     "extraction_suspect": {
       "default": false,
@@ -165,6 +185,21 @@
       "title": "Source Word Count",
       "type": "integer"
     },
+    "speculative_density": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Unresolved-claim markers as a share of the ARTICLE's words. Read against evidential_density: speculation nobody is cited for is the fragile case. Null on a row scored before metrics-2.",
+      "title": "Speculative Density"
+    },
     "summary_word_count": {
       "minimum": 0,
       "title": "Summary Word Count",
@@ -201,7 +236,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-08-21T03:00",
+      "default": "2026-08-23",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -239,5 +274,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-21T03:00"
+  "version": "2026-08-23"
 }

@@ -16,7 +16,7 @@ from typing import Final
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.validation_row import ValidationRow
 
-LEDGER_RELPATH: Final = "evals/scores.csv"
+LEDGER_RELPATH: Final = "state/scores.csv"
 
 
 def columns() -> tuple[str, ...]:
@@ -34,12 +34,25 @@ def append(path: Path, rows: Iterable[EvalRow]) -> int:
 
     Returns how many landed, so a caller can log the count rather than re-read
     the file to find out.
+
+    A header that no longer matches the contract stops the run. The file is
+    append-only and its header is written once, so a new column would otherwise
+    put more cells on a row than the header names, and every reader that maps by
+    position would silently read one column under another column's name. Failing
+    here is what makes adding a column a migration instead of a corruption.
     """
     pending = list(rows)
     if not pending:
         return 0
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
+    if exists:
+        header = read_header(path)
+        if header and header != columns():
+            raise ValueError(
+                f"{path.name} has {len(header)} columns and the contract has "
+                f"{len(columns())}. Migrate the ledger before appending to it."
+            )
     with path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns(), lineterminator="\n")
         if not exists:

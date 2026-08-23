@@ -39,9 +39,9 @@ engineer, and not somebody who wants another feed to scroll.
 
 ```mermaid
 flowchart TD
-    subgraph build["Build time - GitHub Actions, once a day"]
+    subgraph build["Build time - GitHub Actions, every 6 h"]
         direction TB
-        A["<b>Collect</b><br/>read ~138 public feeds<br/>rank by tier and repetition"]
+        A["<b>Collect</b><br/>read ~138 public feeds<br/>rank by tier, repetition and age"]
         B["<b>Extract</b><br/>pull readable text<br/>sanitise at the trust boundary"]
         C["<b>Summarize</b><br/>Qwen3-8B on CPU<br/>output shape pinned by a schema"]
         D["<b>Score</b><br/>faithfulness vs the source<br/>plus model-free counterweights"]
@@ -111,6 +111,7 @@ Start here, in this order:
 | **How the whole system fits together** | [`docs/architecture/overview.md`](docs/architecture/overview.md) |
 | What each pipeline stage owns | [`docs/concepts/pipeline-loop.md`](docs/concepts/pipeline-loop.md) |
 | How a summary is scored, and why | [`docs/concepts/evaluation.md`](docs/concepts/evaluation.md) |
+| What the summarizer is asked for | [`docs/architecture/summarize/prompt.md`](docs/architecture/summarize/prompt.md) |
 | Where stories come from | [`docs/architecture/sources/discovery.md`](docs/architecture/sources/discovery.md) |
 | Why a story gets a chart or nothing | [`docs/architecture/publishing/visuals.md`](docs/architecture/publishing/visuals.md) |
 | Real numbers from real hardware | [`docs/reference/measurements.md`](docs/reference/measurements.md) |
@@ -149,8 +150,10 @@ Model weights and llama.cpp binaries are downloaded, never committed.
 | `frontend/` | The published static site, plus generated TypeScript contracts. |
 | `config/` | Human-edited tunable knobs, schema-validated. A fresh clone runs on the defaults. |
 | `schemas/` | JSON Schema generated from the Pydantic models. Never hand-edited. |
-| `evals/` | The committed score ledger the dashboard reads. |
+| `state/` | Everything one run commits for a later run to read: scores, fingerprints, seen URLs, feed health. Never served to a reader. |
+| `tests/` | Cross-cutting fixtures only - captured pages, golden summaries, injection canaries. The tests themselves live in `backend/tests/`. |
 | `docs/` | Canonical knowledge, in Diataxis tiers. |
+| `TODO/` | Active plan-docs. Working material, never the source of truth. |
 
 ## See also
 

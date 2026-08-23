@@ -28,8 +28,9 @@ DATE_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}$"
 # payload is byte-identical to the one that was read.
 TIMESTAMP_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$"
 SLUG_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
-# `<vertical>-<NN>`: the reader-facing item address. Zero-padded to at least two
-# digits and never capped, because the per-day item count is config-driven.
+# `<vertical>-<NN>`: the reader-facing item address. The digits are derived from
+# the address hash, not from a rank position, so the same article keeps the same
+# id across every run of the day. At least two, never capped.
 ITEM_ID_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$"
 # `<YYYY-MM-DD>-<N>`: the run address. Readable, sortable, and free of hashes.
 RUN_ID_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}-[0-9]+$"
@@ -77,14 +78,23 @@ def canonical_json(payload: Any) -> str:
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
 
 
-def derive_output_digest(summary: str | None, key_points: Sequence[str]) -> str:
+def derive_output_digest(
+    summary: str | None, key_points: Sequence[str], *, title: str | None = None
+) -> str:
     """What a later run compares against to detect a determinism violation.
 
     Digests the published words only. A re-run that produced the same text in a
     different wall-clock or token count did not drift, and must not read as if
     it had.
+
+    A null title is left out of the payload rather than digested as null, which
+    is what keeps this additive: every digest written before the model wrote
+    titles still recomputes to the same value, so no committed payload had to be
+    restamped (CLAUDE.md section 11).
     """
-    payload = {"key_points": list(key_points), "summary": summary}
+    payload: dict[str, Any] = {"key_points": list(key_points), "summary": summary}
+    if title is not None:
+        payload["title"] = title
     return hashlib.sha256(canonical_json(payload).encode("utf-8")).hexdigest()
 
 

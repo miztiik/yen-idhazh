@@ -69,5 +69,5 @@ def results_in(directory: Path) -> list[GoldenResult]:
 
 
 def ledger_relpath(date: str) -> str:
-    """`evals/validation-<date>.csv` - POSIX and dated, per the row's own spec."""
-    return f"evals/validation-{date}.csv"
+    """`state/validation-<date>.csv` - POSIX and dated, per the row's own spec."""
+    return f"state/validation-{date}.csv"
