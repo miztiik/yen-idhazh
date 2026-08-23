@@ -21,10 +21,15 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 | State | When | What ships |
 | --- | --- | --- |
 | Ready | Normal | Prerendered HTML with the items in it |
-| Empty | Payload exists, no items | "Nothing was published for *date*", plus the run notice saying whether it was a quiet day or a broken one |
+| Empty | Payload exists, no items | "Nothing was published for *date*", with plain copy that does not point at a notice that may not be on the page |
 | Missing | No payload for that date | A 404 that names the date and offers the archive. **Never a redirect to today** - a reader who cannot tell a dead link from a live one has lost the ability to trust any link |
 | Invalid | Payload breaks its contract | The build fails |
 | Degraded | Low band, truncated, no visual | The common case, rendered inline. Not an error |
+
+The home page uses the newest committed payload as the day it can prove. It never
+uses the build clock as "today". If the site is rebuilt after a quiet or failed
+run, the page still names the payload date it actually renders, and the empty
+state offers the archive plus the latest published day when one exists.
 
 ## Components are swapped by props, and ordered by config
 
@@ -171,6 +176,7 @@ Spending the colour at the day level rather than per item is the resolution of a
 | A visual placeholder when there is no visual | Makes "we correctly decided this needed no picture" look identical to a failed image. | Jony |
 | A chart library on the dashboard | Kilobytes of dependency to draw a stacked bar over a few hundred rows. | Jony |
 | A service worker or offline shell | It can serve a reader a stale day, which attacks the rule the whole layout rests on. | Jony |
+| Computing "today" in the browser or at build time | The browser would vary by reader timezone, and the build clock would let a stale deploy claim a date the payload does not carry. | owner |
 | A flat list of read ids with no date | An id that came round again greyed out an article the reader had never opened, and nothing in the list could decide which marks to drop. | owner |
 | Migrating undated read marks rather than discarding them | There is no honest way to say which day they belonged to, and a wrong mark costs a reader an article. | owner |
 | A read mark that hides or demotes an item by default | Two people at the same URL would see different pages, and a shared link would stop showing the recipient what the sender saw. | Reader |
