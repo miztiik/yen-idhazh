@@ -5,7 +5,7 @@ rank, and it loads no weights - the plan job finishes in seconds, which is what
 lets the expensive work be sharded across disposable machines afterwards.
 
 Everything that arrives here came from someone else's server, so a title is
-data and never instruction (Holy Law #11). Titles are sanitized on arrival and
+data and never instruction (Rule #11). Titles are sanitized on arrival and
 bounded, because they reach a log line and a page.
 """
 

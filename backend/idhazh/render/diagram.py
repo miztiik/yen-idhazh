@@ -5,7 +5,7 @@ anyone can re-render it with the real toolchain. We do not run that toolchain:
 mermaid-cli drives a headless Chromium, which is roughly 300 MB of install and
 seconds per render, and the only shape we emit is a chain of labelled boxes.
 That is a layout problem with an exact answer, so it is solved here in about a
-hundred lines and no dependency (Holy Law #8 names the cost; the cost is not
+hundred lines and no dependency (Rule #8 names the cost; the cost is not
 worth paying for this).
 
 The subset understood here is exactly the subset `route.diagram_spec` writes: a

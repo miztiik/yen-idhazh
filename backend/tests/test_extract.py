@@ -3,7 +3,7 @@
 Every fetch decision worth getting wrong is a pure function over a status code,
 a robots file or an address, so all of them are tested and none of them needs a
 socket. The one function that opens a connection is a thin wrapper and is not
-exercised here - there is no mock standing in for it (Holy Law #7).
+exercised here - there is no mock standing in for it (Rule #7).
 
 The extraction tests are about the trust boundary and about the failures that
 are supposed to degrade rather than raise.

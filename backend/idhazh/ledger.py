@@ -3,7 +3,7 @@
 Three files, all append-only, all written by CI and read by a later run. They
 exist because the pipeline has no memory of its own: every run starts on a
 fresh machine with a fresh checkout, so anything one run needs to tell the next
-has to be committed (Holy Law #1).
+has to be committed (Rule #1).
 
 `state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
 carried no date. Sharded by month, so a plan run reads a few small files rather

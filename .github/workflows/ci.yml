@@ -5,7 +5,7 @@ name: ci
 # lets an attack through fails the build rather than shipping.
 #
 # The runner here is the same stock ubuntu-latest the pipeline runs on
-# (Holy Law #2), so a gate that would not fit the pipeline's budget does not
+# (Rule #2), so a gate that would not fit the pipeline's budget does not
 # fit this one either.
 
 on:

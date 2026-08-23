@@ -69,7 +69,7 @@ Fetcher = Callable[[str], fetch.FetchResult]
 Every stage that reads the open web takes one of these. In a run it is
 `live_fetcher`; in a test it is a function that reads `tests/fixtures/feeds/`.
 That is not a mock - it is the same signature reading a real captured file, so
-no test needs the network (Holy Law #7) and every fetch outcome, including the
+no test needs the network (Rule #7) and every fetch outcome, including the
 ones a live run cannot be made to produce on demand, is reachable.
 """
 
@@ -242,7 +242,7 @@ def _health_row(
 
     `detail` is our own sentence about the failure - a status name or an
     exception class - and never the response body. A feed is a stranger's text
-    and this row lands on a published page (Holy Law #11).
+    and this row lands on a published page (Rule #11).
     """
     return FeedHealthRow(
         version=FeedHealthRow.schema_version(),

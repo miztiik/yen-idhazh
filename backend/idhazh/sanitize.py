@@ -1,6 +1,6 @@
 """The trust boundary's control, crossed exactly once.
 
-Anything the pipeline pulls from the open web is untrusted (Holy Law #11). A
+Anything the pipeline pulls from the open web is untrusted (Rule #11). A
 system prompt asking a model to ignore embedded instructions is a request, not
 a control - it is written in the same channel as the attack and loses to a
 better-worded attack. The controls are this module and the output schema.

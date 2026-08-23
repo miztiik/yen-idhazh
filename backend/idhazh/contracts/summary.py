@@ -3,7 +3,7 @@
 The article body is never committed and never served; this payload and the
 source link are the entire published output. The shape is enforced by the
 decoder rather than requested in the prompt, so an injected instruction cannot
-change it even if it changes the words (Holy Law #11).
+change it even if it changes the words (Rule #11).
 """
 
 from __future__ import annotations

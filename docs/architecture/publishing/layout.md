@@ -82,7 +82,7 @@ Svelte 5, Vite, TypeScript, Tailwind, vitest, Playwright, `json-schema-to-typesc
 
 The spine matches both sibling projects, so tooling knowledge transfers across a one-maintainer estate. The profile is deliberately the leaner of the two siblings: this site renders a small committed JSON payload and needs no query engine, no charting library and no map projection. `ajv` rather than `zod` because it validates against the committed JSON Schema that the contract drift gate already generates, where `zod` would require a second generator feeding the same gate.
 
-Runtime inference in the browser is not a stack choice to be weighed; Holy Law #1 forbids it.
+Runtime inference in the browser is not a stack choice to be weighed; Rule #1 forbids it.
 
 ## Design rationale
 
@@ -107,9 +107,9 @@ Retention was demoted to third lever after the byte arithmetic showed that encod
 | Re-ranking a day on a later run | Contradicts the memory of a reader who already read it. |
 | A run identifier in the path | One item at two addresses, so the same item is reachable two ways and neither is canonical. |
 | A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. |
-| A title-derived slug in a URL | Titles originate in fetched text, and fetched text never becomes a URL (Holy Law #11). |
+| A title-derived slug in a URL | Titles originate in fetched text, and fetched text never becomes a URL (Rule #11). |
 | Deleting text alongside images under one retention knob | Text is a fraction of a percent of the bytes. |
-| Reusing the render-failure state to mark a prune | One field carrying two different facts, which is the band-aid Holy Law #5 forbids. |
+| Reusing the render-failure state to mark a prune | One field carrying two different facts, which is the band-aid Rule #5 forbids. |
 
 ## See also
 

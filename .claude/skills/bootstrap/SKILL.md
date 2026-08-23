@@ -13,7 +13,7 @@ The wrapper exists so the `.claude/` harness can invoke the same loading behavio
 
 1. Open [`docs/agents/bootstrap.md`](../../../docs/agents/bootstrap.md).
 2. Execute the ritual it specifies, in order.
-3. In your first paragraph back to the user, name the Holy Laws and docs that are load-bearing for the answer (the final step of the ritual).
+3. In your first paragraph back to the user, name the Rules and docs that are load-bearing for the answer (the final step of the ritual).
 4. When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "section".
 
 ## See also

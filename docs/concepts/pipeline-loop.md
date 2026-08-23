@@ -22,9 +22,9 @@ This is what makes the pipeline resumable: re-running costs only the items that 
 Each stage consumes one validated payload and emits another. It never reaches into another stage's internals. Two consequences follow, and they are the reason for the rule:
 
 - **Every stage is invocable alone**, with a file in and a file out. A stage that can only run as part of the whole pipeline cannot be tested, and is a design error.
-- **Every boundary is a fixture.** Because a payload is plain serializable data, a real captured payload can be replayed in a test with no mocks and no network (Holy Law #7).
+- **Every boundary is a fixture.** Because a payload is plain serializable data, a real captured payload can be replayed in a test with no mocks and no network (Rule #7).
 
-The payload shapes are Pydantic models under `backend/idhazh/contracts/`, written before the logic that reads them (Holy Law #3). See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
+The payload shapes are Pydantic models under `backend/idhazh/contracts/`, written before the logic that reads them (Rule #3). See [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md).
 
 ## The stages
 
@@ -57,7 +57,7 @@ Four invariants hold regardless of how the batches are sized:
 
 ## What one run leaves for the next
 
-There is no database (Holy Law #1), so anything a later run must read has to survive as a committed file. Four append-only ledgers under `state/` are the whole of the pipeline's memory:
+There is no database (Rule #1), so anything a later run must read has to survive as a committed file. Four append-only ledgers under `state/` are the whole of the pipeline's memory:
 
 | File | Written by | Answers |
 | --- | --- | --- |
@@ -76,9 +76,9 @@ See [../architecture/sources/freshness.md](../architecture/sources/freshness.md)
 
 ## What never happens in the loop
 
-- No stage fetches at read time. Everything here is build time (Holy Law #1).
+- No stage fetches at read time. Everything here is build time (Rule #1).
 - No article body is committed or served. The link and our summary are the output (see [../../CLAUDE.md](../../CLAUDE.md) section 0a).
-- No fetched text becomes an instruction, a shell argument, a file path, or a URL to fetch (Holy Law #11).
+- No fetched text becomes an instruction, a shell argument, a file path, or a URL to fetch (Rule #11).
 - No stage silently drops data. Truncation, degradation and failure are all recorded on the item.
 
 ## See also

@@ -6,7 +6,7 @@ The chrome around the content: what the published site is made of, what each sur
 
 ## The shell is deliberately thin
 
-The whole site is a small number of static pages rendering committed payloads. There is no router-driven application, no session, no client state worth persisting, and nothing to fetch beyond same-origin files that shipped in the same commit (Holy Law #1).
+The whole site is a small number of static pages rendering committed payloads. There is no router-driven application, no session, no client state worth persisting, and nothing to fetch beyond same-origin files that shipped in the same commit (Rule #1).
 
 That means the shell's job is small and worth stating plainly: **load a payload, render it, and be honest when it is missing.**
 
@@ -46,7 +46,7 @@ These are designed, not discovered:
 
 ## What the shell must never do
 
-- Fetch anything cross-origin: no CDN font, no analytics snippet, no third-party widget (Holy Law #1).
+- Fetch anything cross-origin: no CDN font, no analytics snippet, no third-party widget (Rule #1).
 - Show a spinner. There is no network in the loop; if something is slow, the payload is too big and that is a build-time problem.
 - Ask the reader for anything - no cookie banner, no signup, no notification permission, no rating widget. Every interruption is a reason to close the tab.
 - Recompute a score, re-rank items, or derive anything the pipeline already decided. The page renders; it does not think.
