@@ -46,6 +46,7 @@ jobs:
       date: ${{ steps.decide.outputs.date }}
       shards: ${{ steps.decide.outputs.shards }}
       matrix: ${{ steps.decide.outputs.matrix }}
+      faithfulness: ${{ steps.decide.outputs.faithfulness }}
     steps:
       - uses: actions/checkout@v6
 
@@ -65,8 +66,16 @@ jobs:
           [ -n "$DATE" ] || DATE=$(date -u +%F)
           SHARDS="${{ inputs.shards }}"
           [ -n "$SHARDS" ] || SHARDS=4
+          # A scheduled run has no inputs at all, so every one of these is the
+          # empty string and every one needs its default here. `faithfulness`
+          # is normalized to a STRING for the same reason: read as a boolean,
+          # the empty string compares equal to `false` and silently turned the
+          # scorer off on every scheduled run - which is every automatic run.
+          FAITH="${{ inputs.faithfulness }}"
+          [ -n "$FAITH" ] || FAITH=true
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
+          echo "faithfulness=$FAITH" >> "$GITHUB_OUTPUT"
           echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
       # No weights load here. The plan job is feed reads and arithmetic, and it
@@ -99,7 +108,7 @@ jobs:
 
       - name: Install
         run: |
-          if [ "${{ inputs.faithfulness }}" = "false" ]; then
+          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
             pip install -e .
           else
             pip install -e ".[faithfulness]"
@@ -179,7 +188,7 @@ jobs:
             --date "${{ needs.plan.outputs.date }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
-            ${{ inputs.faithfulness == false && '--no-faithfulness' || '' }}
+            ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
 
       - name: Runtime log on failure
         if: failure()
@@ -333,7 +342,8 @@ jobs:
         run: |
           python -m idhazh assemble \
             --date "${{ needs.plan.outputs.date }}" \
-            --commit "${{ github.sha }}"
+            --commit "${{ github.sha }}" \
+            --runner ubuntu-latest
 
       - name: Commit the day
         run: |
