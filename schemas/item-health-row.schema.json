@@ -1,0 +1,201 @@
+{
+  "$defs": {
+    "FailureCode": {
+      "description": "Stable failure vocabulary for item-health rows.",
+      "enum": [
+        "not_attempted",
+        "robots_denied",
+        "robots_unreachable",
+        "blocked_address",
+        "http_client_error",
+        "http_rate_limited",
+        "http_server_error",
+        "network_error",
+        "no_text",
+        "too_short",
+        "model_unreachable",
+        "output_truncated",
+        "bad_shape",
+        "length_out_of_range",
+        "unknown"
+      ],
+      "title": "FailureCode",
+      "type": "string"
+    },
+    "ItemOutcome": {
+      "description": "Whether the item reached the digest.",
+      "enum": [
+        "ok",
+        "failed"
+      ],
+      "title": "ItemOutcome",
+      "type": "string"
+    },
+    "ItemStage": {
+      "description": "The terminal stage for an item.",
+      "enum": [
+        "plan",
+        "fetch",
+        "extract",
+        "summarize",
+        "publish"
+      ],
+      "title": "ItemStage",
+      "type": "string"
+    }
+  },
+  "$id": "item-health-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one census row per planned item per run.",
+      "version": "2026-08-23",
+      "why": "A run that publishes eight of seventeen items needs a durable row for all seventeen, or the next run and the console cannot explain the rate."
+    }
+  ],
+  "description": "One item, one run, one terminal outcome.",
+  "properties": {
+    "canonical_url": {
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Canonical Url",
+      "type": "string"
+    },
+    "code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureCode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "detail": {
+      "anyOf": [
+        {
+          "maxLength": 200,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Our own one-line reason, only for unknown. Never source text.",
+      "title": "Detail"
+    },
+    "http_status": {
+      "anyOf": [
+        {
+          "maximum": 599,
+          "minimum": 100,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Http Status"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "outcome": {
+      "$ref": "#/$defs/ItemOutcome"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "source_chars": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Chars"
+    },
+    "source_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Source Id",
+      "type": "string"
+    },
+    "source_words": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Source Words"
+    },
+    "stage": {
+      "$ref": "#/$defs/ItemStage"
+    },
+    "summary_words": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary Words"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-23",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Vertical",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "item_id",
+    "url_key",
+    "canonical_url",
+    "vertical",
+    "source_id",
+    "stage",
+    "outcome"
+  ],
+  "title": "ItemHealthRow",
+  "type": "object",
+  "version": "2026-08-23"
+}
