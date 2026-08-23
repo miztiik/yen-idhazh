@@ -118,6 +118,7 @@ Start here, in this order:
 | **What every top-level directory is for** | [`docs/reference/repository-layout.md`](docs/reference/repository-layout.md) |
 | How to run it yourself | [`docs/how-to/run-the-pipeline.md`](docs/how-to/run-the-pipeline.md) |
 | **How to test the models locally** | [`docs/how-to/test-models-locally.md`](docs/how-to/test-models-locally.md) |
+| How a plan is written, run, and taken apart afterwards | [`docs/how-to/author-a-plan.md`](docs/how-to/author-a-plan.md), [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md), [`docs/how-to/distill-a-plan.md`](docs/how-to/distill-a-plan.md) |
 
 ---
 
@@ -148,7 +149,7 @@ Model weights and llama.cpp binaries are downloaded, never committed.
 | Path | What lives there |
 | --- | --- |
 | `backend/` | The Python producer. Runs in CI and locally, never as a service. `backend/idhazh/contracts/` holds the Pydantic models that are the source of truth for every persisted shape. |
-| `frontend/` | The published static site, plus generated TypeScript contracts. |
+| `frontend/` | The published static site, plus the digest payloads the pipeline commits under `public/`. |
 | `config/` | Human-edited tunable knobs, schema-validated. A fresh clone runs on the defaults. |
 | `schemas/` | JSON Schema generated from the Pydantic models. Never hand-edited. |
 | `state/` | Everything one run commits for a later run to read: scores, fingerprints, seen URLs, feed health. Never served to a reader. |
