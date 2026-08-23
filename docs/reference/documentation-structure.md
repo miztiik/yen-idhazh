@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
@@ -57,6 +57,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 4. An exact value, threshold, or measurement someone will look up? -> **Reference doc.** A measurement carries its hardware and its date (CLAUDE.md Holy Law #10).
 5. "Which PRs land when"? -> **Plan-doc.** Carry pointers, not full rationale.
 6. Architecture choice with an actively explored rejected alternative, non-trivial reversal cost, and cross-system consequences? -> a `## Design rationale` / `## Rejected alternatives` section ON the living doc it impacts (concept / how-to / subsystem). No ADR file, no `decisions/` directory. If any leg is missing, just update the living doc's current-state text.
+7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
 
 ### Process docs are domain-neutral
 
@@ -76,5 +77,6 @@ The top of a plan-doc is exactly one block - title, Last Updated, and one-paragr
 ## See also
 
 - [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - the constraints every doc honours.
+- [repository-layout.md](repository-layout.md) - the companion map: where a directory belongs, as this doc is where a document belongs.
 - [how-to/ship-a-pr.md](../how-to/ship-a-pr.md) - the PR lifecycle that triggers doc updates.
 - [how-to/distill-a-plan.md](../how-to/distill-a-plan.md) - how a finding in a plan-doc gets lifted into the right canonical home.
