@@ -16,6 +16,16 @@
     "watchlist_bonus": 0.75,
     "watchlist_max_entities": 24
   },
+  "console": {
+    "chart_height": 160,
+    "default_window_days": 21,
+    "max_window_days": 180,
+    "min_attempts_for_rate": 3,
+    "min_window_days": 7,
+    "pan_days": 3,
+    "today_anchor": "centre",
+    "zoom_factor": 2.0
+  },
   "drift": {
     "month_over_month_pct": 8.0,
     "quarterly_refresh_fraction": 0.25,

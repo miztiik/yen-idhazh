@@ -34,6 +34,27 @@ export interface CollectConfig {
 	quarantine_after_failures: number;
 }
 
+export interface SummaryBand {
+	min_source_words: number;
+	target_words_min: number;
+	target_words_max: number;
+}
+
+export interface SummarizeConfig {
+	bands: SummaryBand[];
+}
+
+export interface ConsoleConfig {
+	default_window_days: number;
+	today_anchor: 'right' | 'centre';
+	pan_days: number;
+	zoom_factor: number;
+	min_window_days: number;
+	max_window_days: number;
+	min_attempts_for_rate: number;
+	chart_height: number;
+}
+
 const DEFAULTS: UiConfig = {
 	sections: ['notice', 'topics', 'items'],
 	theme_default: 'system',
@@ -48,11 +69,30 @@ const DEFAULTS: UiConfig = {
 
 const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70 };
 const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
+const SUMMARIZE_DEFAULTS: SummarizeConfig = {
+	bands: [
+		{ min_source_words: 0, target_words_min: 50, target_words_max: 90 },
+		{ min_source_words: 700, target_words_min: 70, target_words_max: 150 },
+		{ min_source_words: 2000, target_words_min: 110, target_words_max: 200 }
+	]
+};
+const CONSOLE_DEFAULTS: ConsoleConfig = {
+	default_window_days: 30,
+	today_anchor: 'right',
+	pan_days: 7,
+	zoom_factor: 1.5,
+	min_window_days: 7,
+	max_window_days: 366,
+	min_attempts_for_rate: 5,
+	chart_height: 180
+};
 
 interface RawConfig {
 	ui?: Partial<UiConfig>;
 	run?: Partial<RunConfig>;
 	collect?: Partial<CollectConfig>;
+	summarize?: Partial<SummarizeConfig>;
+	console?: Partial<ConsoleConfig>;
 }
 
 /** The file, or nothing. A fresh clone runs on the defaults (section 1a). */
@@ -72,4 +112,12 @@ export function runConfig(): RunConfig {
 
 export function collectConfig(): CollectConfig {
 	return { ...COLLECT_DEFAULTS, ...(raw().collect ?? {}) };
+}
+
+export function summarizeConfig(): SummarizeConfig {
+	return { ...SUMMARIZE_DEFAULTS, ...(raw().summarize ?? {}) };
+}
+
+export function consoleConfig(): ConsoleConfig {
+	return { ...CONSOLE_DEFAULTS, ...(raw().console ?? {}) };
 }

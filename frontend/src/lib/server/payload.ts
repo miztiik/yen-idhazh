@@ -35,6 +35,10 @@ export const STATE_ROOT = process.env.STATE_ROOT
 	? resolve(process.env.STATE_ROOT)
 	: join(REPO_ROOT, 'state');
 
+export const TELEMETRY_ROOT = process.env.TELEMETRY_ROOT
+	? resolve(process.env.TELEMETRY_ROOT)
+	: join(process.cwd(), 'public', 'telemetry');
+
 const DATE_PART = /^\d{2,4}$/;
 
 /** Every published date, newest first. Read from the committed tree, not an index file. */
@@ -129,7 +133,7 @@ export interface CsvTable {
 }
 
 /** A CSV as named cells. A missing file is empty, never an error. */
-function readCsv(path: string): CsvTable {
+export function readCsv(path: string): CsvTable {
 	if (!existsSync(path)) return { rows: [], columns: [] };
 	const parsed = parseCsv(readFileSync(path, 'utf8')).filter((row) => row.some((cell) => cell !== ''));
 	const columns = parsed[0] ?? [];
@@ -154,6 +158,27 @@ export function itemHealthRows(): CsvTable {
 		.filter((name) => name.endsWith('.csv'))
 		.sort()) {
 		const table = readCsv(join(dir, shard));
+		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
+		rows.push(...table.rows);
+	}
+	return { rows, columns };
+}
+
+/** Public monthly telemetry shards. These are safe for a browser to fetch. */
+export function telemetryMonths(root: string = TELEMETRY_ROOT): string[] {
+	if (!existsSync(root)) return [];
+	return readdirSync(root)
+		.filter((name) => /^\d{4}-\d{2}\.csv$/.test(name))
+		.map((name) => name.slice(0, 7))
+		.sort();
+}
+
+/** Initial telemetry for the SSR fallback. Runtime panning fetches the same files. */
+export function telemetryRows(root: string = TELEMETRY_ROOT): CsvTable {
+	const rows: Record<string, string>[] = [];
+	let columns: string[] = [];
+	for (const month of telemetryMonths(root)) {
+		const table = readCsv(join(root, `${month}.csv`));
 		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
 		rows.push(...table.rows);
 	}

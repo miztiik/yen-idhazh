@@ -75,6 +75,64 @@
       "title": "CollectConfig",
       "type": "object"
     },
+    "ConsoleConfig": {
+      "additionalProperties": false,
+      "description": "Knobs for the operator console's time viewport.",
+      "properties": {
+        "chart_height": {
+          "default": 180,
+          "minimum": 120,
+          "title": "Chart Height",
+          "type": "integer"
+        },
+        "default_window_days": {
+          "default": 30,
+          "description": "Initial time span for the console charts. A viewport, not a deletion.",
+          "minimum": 1,
+          "title": "Default Window Days",
+          "type": "integer"
+        },
+        "max_window_days": {
+          "default": 366,
+          "minimum": 1,
+          "title": "Max Window Days",
+          "type": "integer"
+        },
+        "min_attempts_for_rate": {
+          "default": 5,
+          "description": "Below this count a rate is outlined because the denominator is thin.",
+          "minimum": 1,
+          "title": "Min Attempts For Rate",
+          "type": "integer"
+        },
+        "min_window_days": {
+          "default": 7,
+          "minimum": 1,
+          "title": "Min Window Days",
+          "type": "integer"
+        },
+        "pan_days": {
+          "default": 7,
+          "description": "Days moved by one arrow-key pan.",
+          "minimum": 1,
+          "title": "Pan Days",
+          "type": "integer"
+        },
+        "today_anchor": {
+          "$ref": "#/$defs/TodayAnchor",
+          "default": "right",
+          "description": "Where today sits in the initial viewport when enough history exists."
+        },
+        "zoom_factor": {
+          "default": 1.5,
+          "exclusiveMinimum": 1.0,
+          "title": "Zoom Factor",
+          "type": "number"
+        }
+      },
+      "title": "ConsoleConfig",
+      "type": "object"
+    },
     "DriftConfig": {
       "additionalProperties": false,
       "properties": {
@@ -790,6 +848,14 @@
       "title": "TierWeights",
       "type": "object"
     },
+    "TodayAnchor": {
+      "enum": [
+        "right",
+        "centre"
+      ],
+      "title": "TodayAnchor",
+      "type": "string"
+    },
     "UiConfig": {
       "additionalProperties": false,
       "description": "The published surface's knobs.\n\n`sections` is the modularity story: reordering the page is a config edit,\nnot a code change. What is deliberately absent is a per-element layout\nengine - on the surface that matters, a phone, there is no left and no\nright, and a per-reader layout would break the promise that a shared link\nshows the recipient what the sender saw.",
@@ -945,6 +1011,11 @@
       "why": "Short sources should publish with an honest brief instead of being padded or dropped. The old word gate forced the decoder to keep writing on a small source, which made invention more likely."
     },
     {
+      "change": "Added the console block for the interactive telemetry viewport.",
+      "version": "2026-08-23T19:40",
+      "why": "The console now lets the operator pan and zoom over the published item-health projection, so the default window, pan step, zoom factor, minimum denominator and chart size are tunable config values (Rule #6)."
+    },
+    {
       "change": "Added llama-server runtime-sweep knobs to models.inference.",
       "version": "2026-08-23T19:35",
       "why": "The runtime sweep must change one measured flag at a time through config, not through workflow literals. The startup_warmup default matches the current digest workflow, so the fingerprint input describes the server that actually runs."
@@ -1019,6 +1090,9 @@
   "properties": {
     "collect": {
       "$ref": "#/$defs/CollectConfig"
+    },
+    "console": {
+      "$ref": "#/$defs/ConsoleConfig"
     },
     "drift": {
       "$ref": "#/$defs/DriftConfig"
