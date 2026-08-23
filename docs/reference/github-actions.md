@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -33,7 +33,11 @@ flowchart LR
 ## Content refresh
 
 The schedule and manual dispatch use the same job graph. The plan job creates
-the work list. The work matrix runs no more than the configured worker count.
+the work list. The work matrix creates one to four total worker jobs. Scheduled
+runs use four. Manual dispatch offers only 1, 2, 3, or 4 and defaults to four.
+The plan job rejects any other value before it creates the matrix. The work
+strategy also sets `max-parallel: 4`; that limits concurrency but is not the
+total-job cap.
 Route uses the worker outputs. Assemble runs even after a worker or route
 failure, then commits the digest and state.
 
@@ -41,7 +45,7 @@ failure, then commits the digest and state.
 flowchart LR
     SCHEDULE["schedule<br/>06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
     MANUAL["manual dispatch"] --> PLAN
-    PLAN --> WORK["work shards<br/>at most the configured workers"]
+    PLAN --> WORK["work shards<br/>at most four total jobs"]
     WORK --> ROUTE["route"]
     ROUTE --> ASSEMBLE["assemble"]
     ASSEMBLE --> COMMIT["commit digest and state"]
@@ -63,6 +67,19 @@ flowchart LR
     PERSON --> DRIFT["Drift review"]
     WEEKLY["Sunday 08:00 UTC"] --> DRIFT
 ```
+
+Each Measurements dispatch selects exactly one target:
+
+| Target | What runs | Inputs used by that target |
+| --- | --- | --- |
+| `llm` | GGUF download timing and `llama-bench` throughput | `models`, `threads` |
+| `image` | CPU image-model candidates | none |
+| `corpus` | Live article-length sampling | `corpus_links` |
+| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_threads_batch` for `threads_batch` |
+
+The form keeps all target-specific inputs visible. A job reads only the inputs
+for its selected target. The default target is `llm`; the default runtime
+candidate is `baseline`.
 
 Pages publication builds only committed data and uploads a static bundle. It
 does not run the producer or a model, and the published site has no runtime
