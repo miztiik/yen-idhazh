@@ -55,6 +55,7 @@
       "n_ctx": 4096,
       "n_threads": 2,
       "n_ubatch": 256,
+      "request_timeout_minutes": 22.1,
       "seed": 0,
       "temperature": 0.0,
       "thinking": false,

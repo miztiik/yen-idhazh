@@ -173,6 +173,15 @@ class InferenceConfig(Model):
             "named the wrong cause - so it is set well above any summary we want."
         ),
     )
+    request_timeout_minutes: float = Field(
+        default=22.1,
+        gt=0.0,
+        description=(
+            "One summarizer POST may wait this long. Sized from the measured worst "
+            "8B long article plus one cold prompt prefix, doubled; the shard timeout "
+            "remains the outer bound."
+        ),
+    )
 
 
 class ModelsConfig(Model):
@@ -515,6 +524,17 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T17:52",
+            change="Added models.inference.request_timeout_minutes.",
+            why=(
+                "One hung summarizer request was using the whole shard timeout, so a "
+                "single bad item could burn 150 minutes and hide the cause. The new "
+                "per-request budget is sized from the measured worst 8B long article "
+                "plus a cold prompt prefix, doubled, while run.shard_timeout_minutes "
+                "stays the outer bound. Additive - an older config still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T17:41",
             change="Added evaluation.lead_coverage_min.",
