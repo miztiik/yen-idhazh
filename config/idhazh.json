@@ -55,6 +55,7 @@
       "n_ctx": 8192,
       "n_threads": 4,
       "n_ubatch": 512,
+      "request_timeout_minutes": 22.1,
       "seed": 0,
       "temperature": 0.0,
       "thinking": false,
@@ -127,7 +128,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-23T17:41",
+  "version": "2026-08-23T17:52",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
