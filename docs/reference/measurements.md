@@ -256,6 +256,82 @@ afterwards is what costs, not deciding the day.
 observation on a laptop, recorded because it is the first real per-article
 number this project has; it is not a runner figure and may not be used as one.
 
+### What the robots policy cost
+
+#### On the runner (authoritative)
+
+**Measured 2026-08-23** on `ubuntu-latest`, by running the same day twice: run
+1 (`32624081323`) on the old policy, run 2 (`32634191910`) on the new one, same
+date, same config, same feed list. Comparing two real plan passes is a better
+check than any script, because it exercises exactly what runs daily.
+
+| Quantity | Before | After |
+| --- | --- | --- |
+| Feeds read | 115 | **132** |
+| Feeds refused | 31 | **14** |
+| Items published | 8 | 9 |
+| Eval rows written | 0 | **9** |
+
+**17 feeds recovered.** The 14 that still refuse are the check on the change:
+the policy keeps refusing when a host serves a file that says no, and keeps
+refusing when nobody answers at all.
+
+The published count moved by only one because the daily cap, not the feed
+count, decides how many items a reader gets. What a wider pool buys is
+**choice**: 17 items are now selected from a larger candidate set, so the
+ranking has more to rank. Feed count is an input to quality, not to volume.
+
+The eval-row column measures a different fault fixed in the same commit: the
+scorer had been disabled on every scheduled run, so the ledger had never once
+been written by automation. Nine rows is the first time it has.
+
+#### On a developer machine (kept for the IP contrast)
+
+**Measured 2026-08-23** (i7-1265U, Windows), n=1 per feed, against the 26 feeds
+run 1 recorded as `robots_denied`, driving the real fetcher.
+
+| Outcome after the change | Feeds |
+| --- | --- |
+| **Recovered** | **19** |
+| Still refused - a served `robots.txt` disallows the path | 2 |
+| Still refused - the article itself answered HTTP 403 | 4 |
+| Still refused - the host reset the `robots.txt` connection | 1 |
+
+Ten of the nineteen serve no `robots.txt` at all and answered 404. Reading
+"no such file" as a refusal was a rule we invented and the host never wrote,
+and it was silently costing the digest most of its `business-economy` and
+`world` candidates.
+
+This page predicted the runner would recover fewer than 19 because a developer
+IP is not a runner IP, and several of the 403s were a WAF answering a
+datacentre address. The runner recovered 17. **The laptop over-counted by two,
+in the direction predicted** - which is the reason the runner table sits above
+this one and the laptop table is kept only for the contrast.
+
+### Why the other items failed
+
+**Measured 2026-08-23** on a developer machine (i7-1265U, Windows), by
+re-fetching all 9 failures of run 1 and comparing what the extractor returned
+against the prose actually present in the markup.
+
+| Items | Source | Extracted | Cause |
+| --- | --- | --- | --- |
+| 2 | GitHub release tag | 51, 162 words | The page is a list of binary names. The largest prose block in the markup is GitHub's own "You signed in with another tab" furniture |
+| 2 | NBER paper page | 128, 178 words | The extractor returned **the abstract, correctly**. The paper is a PDF |
+| 1 | Marginal Revolution | 229 words | The post is 277 words. The extractor got 83% of it |
+| 2 | Japan Times | 86, 111 words | Metered paywall |
+| 2 | IAEA | never fetched | HTTP 403 at the WAF |
+
+Fetches took **0.45-0.80 s**, and no item failed on a timeout or a retry
+budget. Two hypotheses are ruled out by this table: the sources are not slow,
+and they are not JavaScript shells hiding their text from the extractor.
+
+**The extractor is behaving correctly.** The 250-word floor is rejecting
+short-form sources that were extracted properly - a release tag, an abstract,
+a short blog post. That makes the low count a **source-selection** result
+rather than an extraction defect, and it is why raising the floor's pass rate
+belongs in `config/sources.json` and not in `extract.py`.
+
 ## Corpus shape
 
 **Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
