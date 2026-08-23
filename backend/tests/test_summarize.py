@@ -431,8 +431,22 @@ def test_a_title_range_that_runs_backwards_is_refused() -> None:
 def test_the_prompt_refuses_the_source_headline_rather_than_repairing_it() -> None:
     """A repaired clickbait headline is still the clickbait writer's framing."""
     prompt = flattened()
-    assert "do not copy it and do not repair it" in prompt
+    assert "do not copy the source's headline and do not repair it" in prompt
     assert "name the actor and the action" in prompt
+
+
+def test_the_title_is_written_from_the_body_and_the_headline_together() -> None:
+    """The headline alone is the clickbait writer's framing; the body has the fact."""
+    prompt = flattened()
+    assert "read the article body and the source's headline" in prompt
+    assert "states the main topic" in prompt
+
+
+def test_the_prompt_names_the_headline_styles_it_will_not_accept() -> None:
+    """A title that withholds the fact is the failure the rewrite exists to stop."""
+    prompt = flattened()
+    assert "no sensationalism, no clickbait, no hype" in prompt
+    assert "asks a question, withholds the fact, or addresses the reader" in prompt
 
 
 def test_the_source_headline_arrives_inside_the_fence() -> None:
