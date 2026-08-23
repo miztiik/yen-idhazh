@@ -50,7 +50,7 @@ One developer, weekends. Every kept line is rent paid forever. Before asking how
 
 ## Design rationale
 
-These eleven are not new law - they are the concept-tier restatement of the Holy Laws in the vocabulary a digest pipeline needs, so a contributor learns the *why* from the concept tier and the *rule* from the contract. The rejected alternative was to let each concept doc re-derive the ethos in passing; that duplicates the contract and drifts (Holy Law #4, one definition). Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
+These eleven are not new law - they are the concept-tier restatement of the Rules in the vocabulary a digest pipeline needs, so a contributor learns the *why* from the concept tier and the *rule* from the contract. The rejected alternative was to let each concept doc re-derive the ethos in passing; that duplicates the contract and drifts (Rule #4, one definition). Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
 
 ## See also
 

@@ -39,7 +39,7 @@ A topic that needs deeper nesting is two topics. Split it.
 
 ## Doc-class routing contract
 
-Docs fall into the typed classes below. Each has one audience, one mutability rule, one allowed content type, and one forbidden content type. Routing is enforced at PR review time, not by tooling. A decision is NOT its own class - when a choice clears the Holy Law #4 bar, its rationale lives as a `## Design rationale` / `## Rejected alternatives` section on whichever class below it impacts; there is no ADR file and no `docs/architecture/decisions/` directory.
+Docs fall into the typed classes below. Each has one audience, one mutability rule, one allowed content type, and one forbidden content type. Routing is enforced at PR review time, not by tooling. A decision is NOT its own class - when a choice clears the Rule #4 bar, its rationale lives as a `## Design rationale` / `## Rejected alternatives` section on whichever class below it impacts; there is no ADR file and no `docs/architecture/decisions/` directory.
 
 | Class             | Path pattern                            | Audience                           | Mutability                                        | Contains                                                            | Forbidden                                         |
 | ----------------- | --------------------------------------- | ---------------------------------- | ------------------------------------------------- | ------------------------------------------------------------------- | ------------------------------------------------- |
@@ -54,7 +54,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 1. Current behaviour rule, published shape, tuning invariant, or subsystem contract? -> **Concept doc**, **how-to doc**, or **subsystem doc**. This is the default.
 2. Vocabulary term used across multiple subsystems? -> **Concept doc.** Defined once.
 3. Step-by-step procedure an operator runs? -> **How-to doc.** Cite the concept or subsystem doc for why.
-4. An exact value, threshold, or measurement someone will look up? -> **Reference doc.** A measurement carries its hardware and its date (CLAUDE.md Holy Law #10).
+4. An exact value, threshold, or measurement someone will look up? -> **Reference doc.** A measurement carries its hardware and its date (CLAUDE.md Rule #10).
 5. "Which PRs land when"? -> **Plan-doc.** Carry pointers, not full rationale.
 6. Architecture choice with an actively explored rejected alternative, non-trivial reversal cost, and cross-system consequences? -> a `## Design rationale` / `## Rejected alternatives` section ON the living doc it impacts (concept / how-to / subsystem). No ADR file, no `decisions/` directory. If any leg is missing, just update the living doc's current-state text.
 7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
@@ -72,7 +72,7 @@ Everything under `docs/how-to/` that describes *how work is done* - authoring a 
 
 ### Plan-doc single-snapshot rule
 
-The top of a plan-doc is exactly one block - title, Last Updated, and one-paragraph Status. Previous status text is **deleted** at every phase boundary. Stacked "previous header" layers are a band-aid for missing snapshot semantics and are forbidden by CLAUDE.md Holy Law #5. History lives in `git blame` and merge-commit titles.
+The top of a plan-doc is exactly one block - title, Last Updated, and one-paragraph Status. Previous status text is **deleted** at every phase boundary. Stacked "previous header" layers are a band-aid for missing snapshot semantics and are forbidden by CLAUDE.md Rule #5. History lives in `git blame` and merge-commit titles.
 
 ## See also
 

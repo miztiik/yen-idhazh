@@ -4,7 +4,7 @@ A knob is something a reasonable operator might want set differently without
 changing a fact. The runner's own ceilings - 4 vCPU, the 6 h job cap, the 10 GB
 cache, the 1 GB published site - are deliberately absent: they are properties of
 the platform, and making them editable would invite raising the budget instead
-of simplifying the feature (Holy Law #2).
+of simplifying the feature (Rule #2).
 
 Every knob ships a sane default, so a fresh clone runs unconfigured.
 """
@@ -201,7 +201,7 @@ def _default_bands() -> list[SummaryBand]:
     """Three sizes: the release note, the article, the long read.
 
     Starting points chosen from the shape of the sources we collect, not
-    measurements - nothing here may be quoted as one (Holy Law #10). The first
+    measurements - nothing here may be quoted as one (Rule #10). The first
     band begins at zero so every article lands in one, and the shortest ask sits
     above `evaluation.summary_words_min` so a summary that misses low by a few
     words is still publishable.
@@ -224,7 +224,7 @@ class SummarizeConfig(Model):
     both blocks visible.
 
     Every value here is substituted into the prompt text at render time, so the
-    prompt cannot drift from the bounds the pipeline enforces (Holy Law #6).
+    prompt cannot drift from the bounds the pipeline enforces (Rule #6).
     """
 
     bands: list[SummaryBand] = Field(
@@ -526,7 +526,7 @@ class AppConfig(Contract):
                 "The digest published the source's own headline, which is written to "
                 "win a click rather than to say what happened. The summarizer now "
                 "writes the title too, and the range it is asked for is a knob like "
-                "every other length in this block (Holy Law #6). Additive - an older "
+                "every other length in this block (Rule #6). Additive - an older "
                 "config still validates, and an item whose title misses the range "
                 "falls back to the source's."
             ),
@@ -537,7 +537,7 @@ class AppConfig(Contract):
             why=(
                 "The lengths the prompt asks for were literals inside the prompt text, "
                 "where no schema could see them and nothing checked them against the "
-                "range the pipeline accepts (Holy Law #6). They are bands rather than "
+                "range the pipeline accepts (Rule #6). They are bands rather than "
                 "one range because a release note and a long read asked for the same "
                 "number of words gives a padded summary of the first and a thin one of "
                 "the second. Moving them here also puts them inside the prompt string "

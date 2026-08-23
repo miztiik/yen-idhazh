@@ -4,14 +4,14 @@ This suite lands before the summarizer, not after, so the summarizer is written
 against a live assertion rather than audited afterwards. A prompt asking a model
 to ignore embedded instructions is a request; the controls asserted here - the
 sanitizer, the fence, and the pinned output shape - are the controls
-(Holy Law #11).
+(Rule #11).
 
 The oracle is that all five fail to inject, and a single success fails the
 build. The counter-oracle matters just as much: every canary also declares text
 that MUST survive, because a sanitizer that deletes the article passes an
 absence check trivially and produces nothing worth reading.
 
-No mocks and no network (Holy Law #7): every attack is a committed fixture.
+No mocks and no network (Rule #7): every attack is a committed fixture.
 """
 
 from __future__ import annotations
