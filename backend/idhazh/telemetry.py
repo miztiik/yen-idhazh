@@ -97,6 +97,9 @@ def classify_item(
             code=code,
             source_chars=len(article.text or ""),
             source_words=article.word_count,
+            fetch_ms=summary.fetch_ms,
+            extract_ms=summary.extract_ms,
+            summarize_ms=summary.summarize_ms,
             detail=(
                 detail_cell("summary failure was not typed")
                 if code is FailureCode.UNKNOWN
@@ -114,6 +117,9 @@ def classify_item(
         source_chars=len(article.text or ""),
         source_words=article.word_count,
         summary_words=len((summary.summary or "").split()),
+        fetch_ms=summary.fetch_ms,
+        extract_ms=summary.extract_ms,
+        summarize_ms=summary.summarize_ms,
     )
 
 
@@ -130,6 +136,9 @@ def _row(
     source_words: int | None = None,
     summary_words: int | None = None,
     detail: str | None = None,
+    fetch_ms: int | None = None,
+    extract_ms: int | None = None,
+    summarize_ms: int | None = None,
 ) -> ItemHealthRow:
     return ItemHealthRow(
         version=ItemHealthRow.schema_version(),
@@ -148,6 +157,9 @@ def _row(
         source_words=source_words,
         summary_words=summary_words,
         detail=detail,
+        fetch_ms=fetch_ms,
+        extract_ms=extract_ms,
+        summarize_ms=summarize_ms,
     )
 
 
