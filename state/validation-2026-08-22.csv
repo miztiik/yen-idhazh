@@ -1,3 +1,5 @@
 version,model_id,is_incumbent,selected,leaderboard_hhem,measured_hhem,articles,measured_on,commit_sha,runner,verdict,detail
 2026-08-22,qwen3-8b-q4-k-m,True,True,0.75,0.8872481935164508,17,2026-08-22,c79a956e22ad220513c32470afce506e2fc2e4fc,ubuntu-latest,rescore_candidates,"the incumbent was scored on 17 articles, below the 20 this gate requires"
 2026-08-22,qwen3-4b-q4-k-m,False,False,0.74,0.8905889830168556,17,2026-08-22,c79a956e22ad220513c32470afce506e2fc2e4fc,ubuntu-latest,rescore_candidates,"the incumbent was scored on 17 articles, below the 20 this gate requires"
+2026-08-22,qwen3-8b-q4-k-m,True,True,0.75,0.928283082811456,19,2026-08-22,8e4d65daf468f163183467154199d88a89bbee69,ubuntu-latest,rescore_candidates,"the incumbent was scored on 19 articles, below the 20 this gate requires"
+2026-08-22,qwen3-4b-q4-k-m,False,False,0.74,0.9187780869634528,19,2026-08-22,8e4d65daf468f163183467154199d88a89bbee69,ubuntu-latest,rescore_candidates,"the incumbent was scored on 19 articles, below the 20 this gate requires"

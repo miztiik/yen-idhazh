@@ -852,6 +852,15 @@ def main(argv: Sequence[str] | None = None) -> int:
         default="local",
         help="Where the run happened. A laptop number is not a gate.",
     )
+    parser.add_argument(
+        "--cap",
+        type=int,
+        default=None,
+        help=(
+            "Override each vertical's daily cap when planning. For validation only: "
+            "the daily cap is how much a reader wants, not how much a measurement needs."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
