@@ -56,7 +56,7 @@ The item-level names are what make a run auditable per item; the run-level names
 
 ## No network sink
 
-There is no runtime call home (Holy Law #1), and there is nowhere to send a log even if there were:
+There is no runtime call home (Rule #1), and there is nowhere to send a log even if there were:
 
 - **Backend, developer machine** - structured records to stderr through the standard library `logging` module, configured once at the entry point. A developer reads them in the terminal. Level from [config.md](config.md); default `INFO`.
 - **Backend, CI** - the same stderr stream. GitHub Actions captures and retains it with the run, and **that IS the log store.** Nothing is uploaded anywhere else. Anything a later run needs to read is a committed artifact or a ledger row, never a log line.
@@ -64,7 +64,7 @@ There is no runtime call home (Holy Law #1), and there is nowhere to send a log 
 
 **Secrets never reach a log record.** Not a token, not a signed URL, not a request header.
 
-Because every event is a plain serializable payload, a captured stream is a fixture: it can be replayed and asserted against in tests with no mocks and no network (Holy Law #7).
+Because every event is a plain serializable payload, a captured stream is a fixture: it can be replayed and asserted against in tests with no mocks and no network (Rule #7).
 
 ## Logs are not the record
 
@@ -74,16 +74,16 @@ The distinction that matters operationally: a log line is **evidence of what hap
 
 Logging the emitted envelope, rather than a separate hand-written message, exists so a log and a persisted payload can never disagree - the classic debugging failure where the log says one thing and the file on disk says another. The cost is that log lines are structured rather than chatty; the benefit is that they are greppable, replayable, and true. Authority: Fowler.
 
-Treating the Actions run log as the log store, rather than shipping logs anywhere, is what keeps Holy Law #1 intact end to end: a project with no runtime backend should not acquire one for observability. Authority: Carmack.
+Treating the Actions run log as the log store, rather than shipping logs anywhere, is what keeps Rule #1 intact end to end: a project with no runtime backend should not acquire one for observability. Authority: Carmack.
 
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
 | --- | --- | --- |
-| A hosted log sink or error-tracking SDK | Reverses Holy Law #1 and adds a dependency, a secret and a bill to a project that has none of the three. | Carmack |
+| A hosted log sink or error-tracking SDK | Reverses Rule #1 and adds a dependency, a secret and a bill to a project that has none of the three. | Carmack |
 | A separate human-readable log format alongside the structured one | Two records of one event, free to disagree, and the disagreement always surfaces at the worst moment. | Fowler |
 | Free-text log messages | Not greppable, not replayable as a fixture, and impossible to assert on in a test. | Fowler |
-| Keeping run history in logs rather than the ledger | CI logs age out. A trend you cannot query in a year is not a measurement (Holy Law #10). | Fowler |
+| Keeping run history in logs rather than the ledger | CI logs age out. A trend you cannot query in a year is not a measurement (Rule #10). | Fowler |
 
 ## See also
 

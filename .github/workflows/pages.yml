@@ -1,7 +1,7 @@
 name: pages
 
 # Publishes the static bundle. It builds from committed data only - nothing here
-# fetches, and nothing here runs a model (Holy Law #1).
+# fetches, and nothing here runs a model (Rule #1).
 
 on:
   push:

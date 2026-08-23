@@ -5,7 +5,7 @@ without it, so the tests are written against blindness rather than against
 happy paths: every declared input must move the digest, and a field that stops
 moving it is the failure this file is here to catch.
 
-No mocks and no network (Holy Law #7): the stamp under test is the committed
+No mocks and no network (Rule #7): the stamp under test is the committed
 fixture, so the test and the fixture cannot drift apart.
 """
 

@@ -66,7 +66,7 @@ The daily cap was removed because it was answering a question nobody had asked. 
 
 The age rule went the same way for the same reason. A 24-hour cutoff and a decay curve agree on every ordinary day, and disagree exactly on the days that matter: the quiet ones, where the cutoff empties a vertical and the curve publishes the best thing available. Losing a good item to a rule that was meant to protect quality is the worst outcome available.
 
-Both first-sighting and the published ledger are append-only files under `state/`, committed by CI. That is not a preference - it is the only shape available. There is no database (Holy Law #1), and anything a later run must read has to survive as a committed file.
+Both first-sighting and the published ledger are append-only files under `state/`, committed by CI. That is not a preference - it is the only shape available. There is no database (Rule #1), and anything a later run must read has to survive as a committed file.
 
 ## Rejected alternatives
 

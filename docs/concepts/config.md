@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-23
 
-Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Holy Law #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
+Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
 ## What `config/` is
 
@@ -34,7 +34,7 @@ Every knob ships a sane default. The only values with no default are the model r
 
 Not everything variable is tunable. Two categories stay out of `config/`:
 
-- **Facts, not preferences.** The runner's core count, the 6 h job cap and the 10 GB cache ceiling are properties of the platform (Holy Law #2). Making them configurable would imply they can be chosen.
+- **Facts, not preferences.** The runner's core count, the 6 h job cap and the 10 GB cache ceiling are properties of the platform (Rule #2). Making them configurable would imply they can be chosen.
 - **Identifiers.** Stage names, event names, route kinds and score-band names are schema-validated enums defined in the contracts. Code references them; they never change to match a label.
 
 The distinction matters because a value in `config/` reads as an invitation to change it.
@@ -74,7 +74,7 @@ A knob is shipped **only** when a published surface genuinely needs it - for exa
 
 Keeping tunables in schema-validated files rather than in code exists so that tuning the system never requires reading it, and so that a change of threshold is a reviewable one-line diff with a date on it rather than an archaeological dig. Treating config as a versioned contract - rather than as "just a JSON file" - is what stops a silently-renamed key from failing a run at 6 a.m. on a Sunday. Authority: Fowler ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md)).
 
-Excluding the runner's ceilings is the less obvious half. They look exactly like knobs and are not: a configurable job timeout invites someone to raise it rather than fix the batch size, which is precisely the reasoning Holy Law #2 exists to prevent. Authority: Carmack.
+Excluding the runner's ceilings is the less obvious half. They look exactly like knobs and are not: a configurable job timeout invites someone to raise it rather than fix the batch size, which is precisely the reasoning Rule #2 exists to prevent. Authority: Carmack.
 
 ## Rejected alternatives
 

@@ -18,7 +18,7 @@
     {
       "change": "Added evidential_density and speculative_density, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
       "version": "2026-08-23",
-      "why": "Every other column scores our summary against the article. These two score the article, which nothing did: a faithful summary of an unsourced rumour scores high on all of them and is still an unsourced rumour. First columns to land after the ledger had rows in it, hence appended rather than filed by meaning, and null rather than zero on the ten rows that predate them. Recorded only - no band reads them until enough rows exist to say what a normal value is (Holy Law #10)."
+      "why": "Every other column scores our summary against the article. These two score the article, which nothing did: a faithful summary of an unsourced rumour scores high on all of them and is still an unsourced rumour. First columns to land after the ledger had rows in it, hence appended rather than filed by meaning, and null rather than zero on the ten rows that predate them. Recorded only - no band reads them until enough rows exist to say what a normal value is (Rule #10)."
     },
     {
       "change": "Added unsupported_numbers, hedge_dropped, extraction_suspect, verbatim_run and source_seen_word_count.",
