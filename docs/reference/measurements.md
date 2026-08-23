@@ -242,6 +242,33 @@ tokens, full prompt tokens, evaluated prompt tokens, and a reused-prefix field
 such as `p0` or `n_past`; the golden set's `output_digest` values must stay
 unchanged.
 
+### The prompt token counts, from the tokenizer
+
+**Measured 2026-08-23.** Method: `backend/bin/llama-tokenize` against
+`backend/models/Qwen3-8B-Q4_K_M.gguf`, over the system prompt rendered from the
+committed `config/` for every band. A token count is a property of the tokenizer
+and the text, so it does not vary with the machine that counted it.
+
+Every earlier figure for this prompt came from a word-share count, not a
+tokenizer, and every one of them was wrong:
+
+| Quantity | Earlier estimate | Measured |
+| --- | --- | --- |
+| Full system prompt | 801 tokens | **877-879 tokens** |
+| Invariant shared prefix | about 315 tokens | **381 tokens** (296 words) |
+| Distinct rendered prompts | 3 | **4** |
+
+The prefix ends exactly where `band_for()` substitutes the word range, at
+`Length:\n\n- Write one summary of `. The fourth distinct prompt is the brief
+band that row 8 added; the earlier count of three predates it.
+
+Re-running the row 9 arithmetic on the measured head and the measured prefill
+throughput of 34.23 tok/s: 381 tokens costs **11.1 s** per item, so 13
+recoverable items is **2.4 min** of CPU, or about **0.6 min** of wall clock
+across four shards. That is 21 percent more than the 315-token estimate implied,
+and it does not change the decision - the ceiling is still 1-2 percent of a run.
+**Row 9's collapse survives its own correction.**
+
 ## llama-server runtime sweep
 
 **Status 2026-08-23:** harness added, sweep not yet run. No runtime flag is
@@ -529,6 +556,8 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
+| **Whether the prompt prefix is reused at all** | **unmeasured, and currently unobservable** | a permanent instrument, not a one-off grep. `usage.prompt_tokens` reports the full prompt whether cached or not, and llama-server emits no `kv cache rm` line at our verbosity, so the question went blind again the moment row 3 closed. Log slot id, item id, band id, rendered system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens, and `p0` or `n_past`. |
+| **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
 | Image render seconds at 512 and 768 | the job cannot complete | a smaller model, a smaller resolution, or a machine that survives it |
 | Image bytes, PNG at 768 | ~500 KB, estimate | the `image` job writes the file; measure it |
