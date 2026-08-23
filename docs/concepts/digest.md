@@ -51,7 +51,9 @@ Surfacing this without turning every item into a disclaimer is a typography and 
 
 ## The reader's budget
 
-About two minutes. Ten items a reader can skim beats forty they cannot. The daily item count is capped deliberately, and raising it is a question about source diversity and readership - never about spare compute ([vision.md](vision.md)).
+About two minutes. Ten items a reader can skim beats forty they cannot.
+
+That is a design target for the page, not a cap on the pipeline. Nothing limits how many items a day may carry - supply and the ranking decide ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation. Whether a long day needs more than ordering is a typography question, and it is open.
 
 The page must also render when its data file is absent or empty. That is a normal state, designed on purpose, not an error discovered as a white screen ([../../CLAUDE.md](../../CLAUDE.md) section 12).
 

@@ -15,9 +15,9 @@ flowchart LR
         F1["~138 curated feeds<br/>config/sources.json"]
     end
 
-    subgraph ci["backend/ - GitHub Actions, once a day"]
+    subgraph ci["backend/ - GitHub Actions, every 6 h"]
         direction TB
-        P["plan<br/><i>rank and cap</i>"]
+        P["plan<br/><i>rank and dedupe</i>"]
         W["work x4 shards<br/><i>fetch, extract, summarize, score</i>"]
         R["route<br/><i>chart, diagram or none</i>"]
         AS["assemble<br/><i>build the day payload</i>"]
