@@ -47,32 +47,51 @@
 
 ## Section 1 - Status Reckoner
 
-| # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
-| --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Header guard into `ledger._append` | - | A | PENDING | - | - | - |
-| 2 | `ItemHealthRow` contract + schema | - | A | PENDING | - | - | - |
-| 3 | Measure the prompt cache | - | A | PENDING | - | - | - |
-| 4 | Extract `_item_payloads()` from `stage_assemble` | 1 | B | PENDING | - | - | - |
-| 5 | Classifier + writer + `items_failed` becomes a count | 2, 4 | C | PENDING | - | - | - |
-| 6 | Stage timings onto the census row | 5 | D | PENDING | - | - | - |
-| 7 | Prose-shape gate, `boilerplate_ratio` wired, paywall discriminator | 5 | D | PENDING | - | - | - |
-| 8 | Brief tier: floor, band, gate, reader sentence | 7 | E | PENDING | - | - | - |
-| 9 | Prompt reorder for prefix reuse | 3 | D | PENDING | - | - | - |
-| 10 | Console: interactive viewport over the census | 5, 6 | E | PENDING | - | - | - |
-| 11 | Source yield rubric - recorded only, reads nothing | 5 | F (BLOCKED 30 days) | PENDING | - | - | - |
-| 12 | Docs: every page this plan moves | 5, 8, 9, 10, 13 | F | PENDING | - | - | - |
-| 13 | llama-server runtime sweep: measure every flag we do not set | 3 | D | PENDING | - | - | - |
-| 14 | Stop serialising on CI: parallel dispatch in the process docs | - | A | PENDING | - | - | - |
-| 15 | Repair the ledger header, and stop it drifting again | 1 | B | PENDING | - | - | - |
-| 16 | A dead model server says so | 2 | C | PENDING | - | - | - |
-| 17 | Per-request timeout sized from an item, not from the shard | - | A | PENDING | - | - | - |
-| 18 | Fold `/evals` into `/console` | 10 | F | PENDING | - | - | - |
-| 19 | The band reads its own counterweights | - | D | PENDING | - | - | - |
-| 20 | Two frontend defects: `EmptyDay` notice, baked build date | - | A | PENDING | - | - | - |
+**Executed 2026-08-23. Twenty of twenty-one rows are DONE. Row 11 is BLOCKED on evidence that does not exist yet.**
 
-Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally gated on 30 days of committed rows.
+| # | Row title | Depends-on | Parallel-group | Status | PR |
+| --- | --- | --- | --- | --- | --- |
+| 1 | Header guard into `ledger._append` | - | A | DONE | #11 |
+| 2 | `ItemHealthRow` contract + schema | - | A | DONE | #12 |
+| 3 | Measure the prompt cache | - | A | DONE | #10, #23 |
+| 4 | Extract `_item_payloads()` from `stage_assemble` | 1 | B | DONE | #15 |
+| 5 | Classifier + writer + `items_failed` becomes a count | 2, 4 | C | DONE | #20 |
+| 6 | Stage timings onto the census row | 5 | D | DONE | #22 |
+| 7 | Prose-shape gate, `boilerplate_ratio` wired, paywall discriminator | 5 | D | DONE | #21 |
+| 8 | Brief tier: floor, band, gate, reader sentence | 7 | E | DONE | #26 |
+| 9 | Prompt reorder for prefix reuse | 3 | D | **DONE, reorder COLLAPSED** | #24 |
+| 10 | Console: interactive viewport over the census | 5, 6 | E | DONE | #28 |
+| 11 | Source yield rubric - recorded only, reads nothing | 5 | F | **BLOCKED** | - |
+| 12 | Docs: every page this plan moves | 5, 8, 9, 10, 13 | F | DONE | #32 |
+| 13 | llama-server runtime sweep | 3 | D | **DONE, harness only** | #25 |
+| 14 | Stop serialising on CI: parallel dispatch in the process docs | - | A | DONE | #13 |
+| 15 | Repair the ledger header, and stop it drifting again | 1 | B | DONE | #16 |
+| 16 | A dead model server says so | 2 | C | DONE | #17 |
+| 17 | Per-request timeout sized from an item, not from the shard | - | A | DONE | #19 |
+| 18 | Fold `/evals` into `/console` | 10 | F | DONE | #30 |
+| 19 | The band reads its own counterweights | - | D | DONE | #18 |
+| 20 | Two frontend defects: `EmptyDay` notice, baked build date | - | A | DONE | #14 |
+| 21 | The plan stage crashes on a duplicate `url_key` | - | G | DONE | #31 |
+| - | Store every tracked text file with LF | - | G | DONE | #33 |
 
-Rows 15-20 are the defect fixes required by O5. Rows 19 and 20 come from the owner's own [`20260823-known-defects-plan.md`](20260823-known-defects-plan.md); its remaining entries (saturated bands, Level 5) stay there because they need rows before they can be re-cut.
+Rows 15-20 are the defect fixes required by O5. Rows 19 and 20 come from the owner's own [`20260823-known-defects-plan.md`](20260823-known-defects-plan.md); its remaining entry (saturated bands, Level 5) stays there because it needs rows before it can be re-cut.
+
+### Three rows did not do what the plan asked, and the reason is the same
+
+**Rule #10 - a measurement contradicted the design, so the design changed.**
+
+- **Row 9 collapsed its prompt reorder.** Fact F9 claimed prefill at 12.1 tok/s, so 801 tokens cost 66.2 s and the prize was 17% of a run. Row 3 measured the real runner: **median 34.23 tok/s over 36 observations** (range 29.24-37.92), so the prefix costs **23.4 s** and the prize is order 1-2%. The oracle was also unobservable - llama-server emits no `kv cache rm` lines at our verbosity. Reordering the prompt that writes every published summary, for an unmeasurable 1-2%, is the trade Rule #10 forbids. Row 9 landed only the two changes that never rested on F9: sorting each shard by band, and the warmup and start-order change. All 20 golden `output_digest` values are unchanged.
+- **Row 13 adopted no flag.** Nine flags x 3 repeats x a fixed shard is dozens of CI runs. The row landed the `runtime` sweep harness and the `InferenceConfig` surface, defaulting to today's exact argv. Every hypothesis in `measurements.md` reads as pending. Sweep item #1 is settled: `n_slots = 4`, `n_ctx_slot = 8192`, `kv_unified = 'true'`, so the suspected `-np` context-division defect is **refuted**.
+- **Row 11 is BLOCKED, not forgotten.** It needs 30 days of `state/item-health/` rows and the ledger started on 2026-08-23. Writing the rubric first would mean inventing the evidence. `docs/architecture/sources/health.md` records that per-source yield is not measurable yet and what unblocks it.
+
+### Two defects the execution found, which the plan did not know about
+
+- **Row 21 - the plan stage crashed on a duplicate `url_key`.** `rank.plan_vertical` deduped inside one vertical; `stage_plan` then combined verticals and could emit the same `url_key` twice, which `RunPlan` forbids. It killed two consecutive production runs (`32659302753`, `32660055986`) and published nothing. Fixed by deduplicating across verticals before the safety ceiling, highest `rank_score` winning on a deterministic tie-break. Verified: run `32661273335` planned successfully and all four shards worked.
+- **The line-ending defect.** `.gitattributes` pinned LF for `schemas/`, `config/`, `state/` and `tests/fixtures/` but said nothing about `*.py`, `*.md`, `*.ts`, `*.svelte` or `*.yml`. Forty blobs were stored with CRLF, so any `git add` rewrote a whole file and buried the real change. Three rows hit it and one correct PR was nearly rejected as the cause. PR #21 closed the gap; PR #33 renormalized the rest.
+
+### What was verified live, not just in CI
+
+Neither `ci` nor `site` exercises `.github/workflows/digest.yml`, and rows 9, 13 and 21 all changed it. Run `32661273335` on the merged `main` confirmed the new order end to end: **Start the model -> Install -> Check model health -> Work the shard**, with `Check model health` passing on all four shards against a command line generated from config by `backend/utilities/llama_server_argv.py`.
 
 ---
 
