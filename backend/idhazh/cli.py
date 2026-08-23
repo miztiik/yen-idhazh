@@ -21,7 +21,7 @@ import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 from urllib.parse import urlsplit
 
 from idhazh import assemble, config, discover, extract, fetch, ledger, rank, route, summarize
@@ -649,6 +649,41 @@ def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runne
 # --- assemble ----------------------------------------------------------------
 
 
+class _ItemPayload(NamedTuple):
+    planned: PlannedItem
+    article: Article | None
+    summary: Summary | None
+    eval_path: Path
+    route_path: Path
+
+
+def _item_payloads(
+    plan: RunPlan, items_dir: Path, *, require_summary: bool = False
+) -> Iterable[_ItemPayload]:
+    for item in plan.items:
+        article_path = items_dir / f"{item.item_id}.article.json"
+        summary_path = items_dir / f"{item.item_id}.summary.json"
+        article_exists = article_path.exists()
+        summary_exists = summary_path.exists()
+        if require_summary and not (article_exists and summary_exists):
+            continue
+        yield _ItemPayload(
+            planned=item,
+            article=(
+                Article.from_json(article_path.read_text(encoding="utf-8"))
+                if article_exists
+                else None
+            ),
+            summary=(
+                Summary.from_json(summary_path.read_text(encoding="utf-8"))
+                if summary_exists
+                else None
+            ),
+            eval_path=items_dir / f"{item.item_id}.eval.json",
+            route_path=items_dir / f"{item.item_id}.route.json",
+        )
+
+
 def stage_assemble(
     plan: RunPlan, *, settings: config.Settings, commit_sha: str, runner: str = "local"
 ) -> DigestDay:
@@ -660,15 +695,11 @@ def stage_assemble(
     summaries: list[Summary] = []
     rows = []
 
-    for item in plan.items:
-        article_path = items_dir / f"{item.item_id}.article.json"
-        summary_path = items_dir / f"{item.item_id}.summary.json"
-        eval_path = items_dir / f"{item.item_id}.eval.json"
-        route_path = items_dir / f"{item.item_id}.route.json"
-        if not (article_path.exists() and summary_path.exists()):
+    for payload in _item_payloads(plan, items_dir, require_summary=True):
+        article = payload.article
+        summary = payload.summary
+        if article is None or summary is None:
             continue
-        article = Article.from_json(article_path.read_text(encoding="utf-8"))
-        summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
         summaries.append(summary)
         if summary.status is not SummaryStatus.OK:
             continue
@@ -676,8 +707,8 @@ def stage_assemble(
         # An item publishes with a band whether or not the faithfulness scorer
         # ran. The counterweights are free and always available, and they never
         # claim the top band on their own.
-        if eval_path.exists():
-            row = EvalRow.from_json(eval_path.read_text(encoding="utf-8"))
+        if payload.eval_path.exists():
+            row = EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8"))
             rows.append(row)
             band = row.band
         else:
@@ -693,8 +724,8 @@ def stage_assemble(
                 source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
                 run_n=1,
                 route=(
-                    Route.from_json(route_path.read_text(encoding="utf-8"))
-                    if route_path.exists()
+                    Route.from_json(payload.route_path.read_text(encoding="utf-8"))
+                    if payload.route_path.exists()
                     else None
                 ),
             )
