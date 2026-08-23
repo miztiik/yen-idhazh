@@ -95,6 +95,33 @@ def robots_url(url: str) -> str:
     return f"{parts.scheme}://{parts.netloc}/robots.txt"
 
 
+def robots_from_result(result: FetchResult) -> str | None:
+    """Read what one robots.txt response means, per RFC 9309 section 2.3.1.
+
+    The standard splits the failures in two, and so do we:
+
+    - **Unavailable** (4xx other than 429). The host answered, and the answer is
+      that it publishes no rules for this path. That is a definite reply, not
+      silence, and the standard reads it as no restrictions. Ten of our feeds
+      sit on hosts that serve no robots.txt at all; refusing them was us
+      inventing a rule the host never wrote.
+    - **Unreachable** (429, 5xx, a timeout, a reset, a blocked address). Nobody
+      answered, so the rules are unknown and stay unknown. Silence remains a
+      refusal - assuming consent from silence is how a polite crawler becomes
+      an impolite one.
+
+    `classify_status` already draws that line: 429 and 5xx are TRANSIENT
+    because they are worth asking again, and the other 4xx are PERMANENT
+    because they are not. An empty robots file parses as allow-all, which is
+    exactly what "the host publishes no rules" means.
+    """
+    if result.ok:
+        return result.body.decode("utf-8", "replace")
+    if result.outcome is FetchOutcome.PERMANENT:
+        return ""
+    return None
+
+
 def backoff_delays(config: ExtractConfig) -> list[float]:
     """Exponential, and finite. A retry budget that never ends is an outage amplifier."""
     return [
@@ -131,15 +158,17 @@ def read_capped(response: Readable, limit: int) -> tuple[bytes, bool]:
 def fetch(url: str, *, config: ExtractConfig, robots_txt: str | None) -> FetchResult:
     """The one function here that opens a socket.
 
-    `robots_txt` of None means the host's robots file could not be read, which
-    is a refusal rather than a permission - assuming consent from silence is
-    how a polite crawler becomes an impolite one.
+    `robots_txt` of None means the host's robots file could not be reached at
+    all, which is a refusal rather than a permission - assuming consent from
+    silence is how a polite crawler becomes an impolite one. A host that
+    answered and simply publishes no rules is an empty string, not None; see
+    `robots_from_result` for which response is which.
     """
     dialable, why = address_is_dialable(url)
     if not dialable:
         return FetchResult(FetchOutcome.BLOCKED, detail=why)
     if robots_txt is None:
-        return FetchResult(FetchOutcome.ROBOTS_DENIED, detail="robots.txt could not be read")
+        return FetchResult(FetchOutcome.ROBOTS_DENIED, detail="robots.txt could not be reached")
     if not robots_allows(robots_txt, config.user_agent, url):
         return FetchResult(FetchOutcome.ROBOTS_DENIED, detail="robots.txt disallows this path")
     host = urlsplit(url).hostname or ""

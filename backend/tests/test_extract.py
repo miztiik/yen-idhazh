@@ -34,6 +34,7 @@ from idhazh.fetch import (
     classify_status,
     read_capped,
     robots_allows,
+    robots_from_result,
     robots_url,
 )
 
@@ -106,7 +107,7 @@ def test_a_blanket_disallow_is_refused() -> None:
     )
 
 
-def test_an_unreadable_robots_file_is_a_refusal_not_a_permission() -> None:
+def test_an_unreachable_robots_file_is_a_refusal_not_a_permission() -> None:
     """Assuming consent from silence is how a polite crawler becomes an impolite one."""
     result = fetch_without_network()
     assert result.outcome is FetchOutcome.ROBOTS_DENIED
@@ -116,6 +117,40 @@ def fetch_without_network() -> FetchResult:
     from idhazh.fetch import fetch
 
     return fetch("https://example.org/a", config=ExtractConfig(), robots_txt=None)
+
+
+# --- What one robots.txt response means (RFC 9309 section 2.3.1) ------------
+
+
+def test_a_served_robots_file_is_the_rules() -> None:
+    body = b"User-agent: *\nDisallow: /private/\n"
+    assert robots_from_result(FetchResult(FetchOutcome.OK, status=200, body=body)) == body.decode()
+
+
+@pytest.mark.parametrize("status", [401, 403, 404, 410, 451])
+def test_a_host_that_publishes_no_rules_is_allow_all(status: int) -> None:
+    """RFC 9309 sec 2.3.1.3: a 4xx other than 429 means the crawler may access anything.
+
+    Ten of our feeds sit on hosts that serve no robots.txt at all. Reading that
+    as a refusal was us inventing a rule the host never wrote.
+    """
+    rules = robots_from_result(FetchResult(classify_status(status), status=status))
+    assert rules == ""
+    assert robots_allows(rules or "", "yen-idhazh/1.0", "https://x.example/a")
+
+
+@pytest.mark.parametrize("status", [429, 500, 502, 503, 504])
+def test_a_host_that_did_not_answer_stays_a_refusal(status: int) -> None:
+    """RFC 9309 sec 2.3.1.4: unreachable means the rules are unknown, so assume disallow."""
+    assert robots_from_result(FetchResult(classify_status(status), status=status)) is None
+
+
+def test_a_network_failure_stays_a_refusal() -> None:
+    assert robots_from_result(FetchResult(FetchOutcome.TRANSIENT, detail="TimeoutError")) is None
+
+
+def test_a_blocked_address_stays_a_refusal() -> None:
+    assert robots_from_result(FetchResult(FetchOutcome.BLOCKED, detail="resolves inward")) is None
 
 
 def test_robots_is_looked_for_at_the_host_root() -> None:
