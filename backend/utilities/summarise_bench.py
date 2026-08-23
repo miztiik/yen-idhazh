@@ -24,7 +24,6 @@ BUCKETS = {
     "long": (2769, 1500, 0.25),
 }
 TOKENS_PER_WORD = 1.33
-SYSTEM_PROMPT_TOKENS = 200
 OUTPUT_TOKENS = {"short": 150, "medium": 200, "long": 250}
 
 
@@ -54,17 +53,19 @@ def load_runs(path: Path) -> list[dict[str, Any]]:
 
 
 def collect(runs: list[dict[str, Any]]) -> list[Throughput]:
-    by_model: dict[str, Throughput] = {}
+    by_model_and_threads: dict[tuple[str, int], Throughput] = {}
     for r in runs:
         name = Path(r.get("model_filename", r.get("model", "?"))).name
-        tp = by_model.setdefault(name, Throughput(name, int(r.get("n_threads", 0)), {}, None))
+        threads = int(r.get("n_threads", 0))
+        key = (name, threads)
+        tp = by_model_and_threads.setdefault(key, Throughput(name, threads, {}, None))
         ts = float(r["avg_ts"])
         sd = float(r.get("stddev_ts", 0.0))
         if int(r.get("n_prompt", 0)) > 0:
             tp.prefill[int(r["n_prompt"])] = (ts, sd)
         elif int(r.get("n_gen", 0)) > 0:
             tp.decode = (ts, sd)
-    return list(by_model.values())
+    return list(by_model_and_threads.values())
 
 
 def interpolate(prefill: dict[int, tuple[float, float]], n: int) -> tuple[float, float]:
@@ -87,30 +88,69 @@ def interpolate(prefill: dict[int, tuple[float, float]], n: int) -> tuple[float,
     )
 
 
-def seconds(tp: Throughput, bucket: str, words: float) -> float:
-    tokens_in = int(words * TOKENS_PER_WORD) + SYSTEM_PROMPT_TOKENS
+def seconds(
+    tp: Throughput,
+    bucket: str,
+    words: float,
+    *,
+    system_prompt_tokens: int,
+    truncation_cap_tokens: int,
+) -> float:
+    article_tokens = min(int(words * TOKENS_PER_WORD), truncation_cap_tokens)
+    tokens_in = article_tokens + system_prompt_tokens
     pf_ts, _ = interpolate(tp.prefill, tokens_in)
     dec_ts = tp.decode[0] if tp.decode else float("nan")
     return tokens_in / pf_ts + OUTPUT_TOKENS[bucket] / dec_ts
 
 
-def report(tps: list[Throughput], n_urls: int, parallel: int) -> None:
-    for tp in sorted(tps, key=lambda t: t.model):
+def report(
+    tps: list[Throughput],
+    n_urls: int,
+    parallel: int,
+    *,
+    system_prompt_tokens: int | None,
+    truncation_cap_tokens: int | None,
+) -> None:
+    for tp in sorted(tps, key=lambda t: (t.model, t.threads)):
         print(f"\n### {tp.model}  (threads={tp.threads})")
         pf = ", ".join(f"{n}tok={v[0]:.1f}+/-{v[1]:.1f}" for n, v in sorted(tp.prefill.items()))
         print(f"  prefill tok/s : {pf}")
         if tp.decode:
             print(f"  decode  tok/s : {tp.decode[0]:.2f} +/- {tp.decode[1]:.2f}")
+        if system_prompt_tokens is None:
+            print("  derived timings : skipped; pass the model-specific --system-prompt-tokens")
+            continue
+        if truncation_cap_tokens is None:
+            raise ValueError("derived timings require the config-specific truncation cap")
         print(
             f"  {'bucket':<8} {'in_tok':>7} {'out_tok':>8} {'best':>8} {'typical':>9} {'worst':>8}"
         )
 
         blended = 0.0
         for bucket, (words, spread, share) in BUCKETS.items():
-            lo = seconds(tp, bucket, max(50, words - spread))
-            mid = seconds(tp, bucket, words)
-            hi = seconds(tp, bucket, words + spread)
-            tokens_in = int(words * TOKENS_PER_WORD) + SYSTEM_PROMPT_TOKENS
+            lo = seconds(
+                tp,
+                bucket,
+                max(50, words - spread),
+                system_prompt_tokens=system_prompt_tokens,
+                truncation_cap_tokens=truncation_cap_tokens,
+            )
+            mid = seconds(
+                tp,
+                bucket,
+                words,
+                system_prompt_tokens=system_prompt_tokens,
+                truncation_cap_tokens=truncation_cap_tokens,
+            )
+            hi = seconds(
+                tp,
+                bucket,
+                words + spread,
+                system_prompt_tokens=system_prompt_tokens,
+                truncation_cap_tokens=truncation_cap_tokens,
+            )
+            article_tokens = min(int(words * TOKENS_PER_WORD), truncation_cap_tokens)
+            tokens_in = article_tokens + system_prompt_tokens
             print(
                 f"  {bucket:<8} {tokens_in:>7} {OUTPUT_TOKENS[bucket]:>8} "
                 f"{lo:>7.0f}s {mid:>8.0f}s {hi:>7.0f}s"
@@ -135,14 +175,38 @@ def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("bench_json", type=Path)
     ap.add_argument("--urls", type=int, default=40)
-    ap.add_argument("--parallel", type=int, default=20)
+    ap.add_argument("--parallel", type=int, default=4)
+    ap.add_argument(
+        "--system-prompt-tokens",
+        type=int,
+        help="Rendered prompt tokens for this model; omit to suppress derived timings.",
+    )
+    ap.add_argument(
+        "--truncation-cap-tokens",
+        type=int,
+        help="Configured article-token cap; required with --system-prompt-tokens.",
+    )
     args = ap.parse_args()
+    if (args.system_prompt_tokens is None) != (args.truncation_cap_tokens is None):
+        ap.error("--system-prompt-tokens and --truncation-cap-tokens must be supplied together")
+    if args.system_prompt_tokens is not None and args.system_prompt_tokens < 1:
+        ap.error("--system-prompt-tokens must be positive")
+    if args.truncation_cap_tokens is not None and args.truncation_cap_tokens < 1:
+        ap.error("--truncation-cap-tokens must be positive")
+    if args.urls < 1 or args.parallel < 1:
+        ap.error("--urls and --parallel must be positive")
 
     runs = load_runs(args.bench_json)
     if not runs:
         print("no runs parsed", file=sys.stderr)
         return 1
-    report(collect(runs), args.urls, args.parallel)
+    report(
+        collect(runs),
+        args.urls,
+        args.parallel,
+        system_prompt_tokens=args.system_prompt_tokens,
+        truncation_cap_tokens=args.truncation_cap_tokens,
+    )
     return 0
 
 
