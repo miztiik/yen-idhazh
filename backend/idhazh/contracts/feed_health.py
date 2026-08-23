@@ -109,7 +109,7 @@ class FeedHealthRow(Contract):
     detail: str | None = Field(
         default=None,
         max_length=200,
-        description="Our own one-line reason. Never the response body (Holy Law #11).",
+        description="Our own one-line reason. Never the response body (Rule #11).",
     )
 
     @property

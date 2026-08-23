@@ -1,7 +1,7 @@
 name: measure
 
 # Measures real prefill/decode throughput on a stock GitHub-hosted runner so the
-# pipeline design rests on numbers rather than estimates (CLAUDE.md Holy Law #10).
+# pipeline design rests on numbers rather than estimates (CLAUDE.md Rule #10).
 # Every figure it emits carries the hardware it ran on and the date.
 
 on:
@@ -149,7 +149,7 @@ jobs:
   corpus:
     # The length buckets every per-article cost figure multiplies by are invented
     # until this job runs. It reaches the open web, which is why it lives here and
-    # never in a test (Holy Law #7).
+    # never in a test (Rule #7).
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:

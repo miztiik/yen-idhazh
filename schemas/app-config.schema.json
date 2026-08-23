@@ -475,7 +475,7 @@
     },
     "SummarizeConfig": {
       "additionalProperties": false,
-      "description": "What the prompt asks the model for.\n\nSeparate from `evaluation`, which is what the pipeline agrees to accept. The\ntwo ranges are deliberately different: a prompt is a request and a gate is a\nrule, and asking for a tighter range than we enforce is what stops a\ntwo-word miss from losing a story. `AppConfig` checks the invariant that\nactually matters - every ask sits inside the gate - because only there are\nboth blocks visible.\n\nEvery value here is substituted into the prompt text at render time, so the\nprompt cannot drift from the bounds the pipeline enforces (Holy Law #6).",
+      "description": "What the prompt asks the model for.\n\nSeparate from `evaluation`, which is what the pipeline agrees to accept. The\ntwo ranges are deliberately different: a prompt is a request and a gate is a\nrule, and asking for a tighter range than we enforce is what stops a\ntwo-word miss from losing a story. `AppConfig` checks the invariant that\nactually matters - every ask sits inside the gate - because only there are\nboth blocks visible.\n\nEvery value here is substituted into the prompt text at render time, so the\nprompt cannot drift from the bounds the pipeline enforces (Rule #6).",
       "properties": {
         "bands": {
           "description": "One length ask per article size, ordered by min_source_words. A release note and a long read asked for the same range gives a padded summary of the first and a thin one of the second.",
@@ -752,12 +752,12 @@
     {
       "change": "Added summarize.title_words_min and summarize.title_words_max.",
       "version": "2026-08-23T15:00",
-      "why": "The digest published the source's own headline, which is written to win a click rather than to say what happened. The summarizer now writes the title too, and the range it is asked for is a knob like every other length in this block (Holy Law #6). Additive - an older config still validates, and an item whose title misses the range falls back to the source's."
+      "why": "The digest published the source's own headline, which is written to win a click rather than to say what happened. The summarizer now writes the title too, and the range it is asked for is a knob like every other length in this block (Rule #6). Additive - an older config still validates, and an item whose title misses the range falls back to the source's."
     },
     {
       "change": "Added the summarize block: length bands, key-point range and quote cap.",
       "version": "2026-08-23",
-      "why": "The lengths the prompt asks for were literals inside the prompt text, where no schema could see them and nothing checked them against the range the pipeline accepts (Holy Law #6). They are bands rather than one range because a release note and a long read asked for the same number of words gives a padded summary of the first and a thin one of the second. Moving them here also puts them inside the prompt string the fingerprint hashes, so changing what we ask for now re-summarizes rather than reusing a cached reply written under the old ask. Additive - an older config still validates."
+      "why": "The lengths the prompt asks for were literals inside the prompt text, where no schema could see them and nothing checked them against the range the pipeline accepts (Rule #6). They are bands rather than one range because a release note and a long read asked for the same number of words gives a padded summary of the first and a thin one of the second. Moving them here also puts them inside the prompt string the fingerprint hashes, so changing what we ask for now re-summarizes rather than reusing a cached reply written under the old ask. Additive - an older config still validates."
     },
     {
       "change": "Replaced run.item_cap_per_day with run.safety_ceiling_per_run. Added collect.recency_weight, collect.recency_half_life_hours, collect.max_future_hours and collect.seen_window_days. Raised inference.max_output_tokens to 900.",

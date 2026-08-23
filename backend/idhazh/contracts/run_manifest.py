@@ -7,7 +7,7 @@ and in the page footer.
 
 `site_bytes` and `site_files` are recorded on every run from the first one, long
 before any retention policy exists. Measuring the ceiling is what makes the
-policy a decision rather than a reaction (Holy Law #10 applied to storage).
+policy a decision rather than a reaction (Rule #10 applied to storage).
 """
 
 from __future__ import annotations

@@ -5,7 +5,7 @@ cannot separate a good summary from the bad one it was written for is a
 constant column - and a constant column is worse than no column, since it looks
 like a measurement.
 
-No mocks and no network (Holy Law #7). The text here is written for the test.
+No mocks and no network (Rule #7). The text here is written for the test.
 """
 
 from __future__ import annotations

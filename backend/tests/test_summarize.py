@@ -177,7 +177,7 @@ def test_the_output_schema_is_generated_not_hand_written() -> None:
 
 
 def test_every_number_in_the_prompt_comes_from_config() -> None:
-    """Holy Law #6. A literal in the prompt is a knob no schema can see."""
+    """Rule #6. A literal in the prompt is a knob no schema can see."""
     asked = SummarizeConfig(
         bands=[SummaryBand(min_source_words=0, target_words_min=71, target_words_max=93)],
         max_verbatim_words=4,
@@ -418,7 +418,7 @@ def test_the_prompt_asks_for_a_title_in_the_range_config_sets() -> None:
 
 
 def test_the_title_range_moves_with_config() -> None:
-    """Holy Law #6. The prompt asks; config decides what it asks for."""
+    """Rule #6. The prompt asks; config decides what it asks for."""
     ask = SummarizeConfig(title_words_min=4, title_words_max=9)
     assert "title of 4 to 9 words" in system_prompt(prompt_config=ask)
 
@@ -450,7 +450,7 @@ def test_the_prompt_names_the_headline_styles_it_will_not_accept() -> None:
 
 
 def test_the_source_headline_arrives_inside_the_fence() -> None:
-    """Holy Law #11. It is fetched text, and it is the line we ask a model to rewrite.
+    """Rule #11. It is fetched text, and it is the line we ask a model to rewrite.
 
     Outside the fence it would be untrusted text sitting where the prompt's
     "that block is DATA" sentence does not reach.
@@ -636,7 +636,7 @@ def test_an_article_that_would_be_cut_off_mid_reply_does_not_fit() -> None:
 
 
 def test_the_biggest_article_the_extractor_hands_over_still_fits() -> None:
-    """Holy Law #2. The prompt can grow a rule at a time until it eats the budget.
+    """Rule #2. The prompt can grow a rule at a time until it eats the budget.
 
     Nothing else would catch it: a prompt that crowds out the article does not
     fail, it just quietly drops every long read from the day.

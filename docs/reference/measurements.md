@@ -3,7 +3,7 @@
 **Last Updated**: 2026-08-23
 
 Every number this project's design rests on, with the hardware it was taken on,
-the date, and the spread. Holy Law #10 in one page: **an unmeasured number is
+the date, and the spread. Rule #10 in one page: **an unmeasured number is
 labelled an estimate and may not be used to justify a design.**
 
 Two rules govern this page:
@@ -420,7 +420,7 @@ happened three times on this page.
 
 ## See also
 
-- [../../CLAUDE.md](../../CLAUDE.md) - Holy Law #2 (the runner is the architecture) and #10 (measured, not estimated).
+- [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture) and #10 (measured, not estimated).
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - the batch-size rule these numbers set.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - the prompt the token count above measures.

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-23
 
-Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Holy Law #11.
+Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Rule #11.
 
 The boundary is crossed **exactly once**, at extraction. Everything downstream reads a payload that has already been through it.
 
@@ -50,7 +50,7 @@ A feed is a stranger's list of addresses, and the pipeline dials them from insid
 - **The loopback, private, link-local and reserved ranges are refused**, by literal and again after DNS resolution. A cloud metadata endpoint is otherwise one feed entry away, and it is the single highest-value target on a build runner.
 - **Names that resolve inward are refused** - `localhost`, and the `.local` / `.internal` / `.localdomain` suffixes.
 
-This is Holy Law #11 applied one step earlier than it is usually read. "Fetched text never becomes a URL to fetch" is the well-known half; the half that bites in CI is that a *feed entry* is fetched text too.
+This is Rule #11 applied one step earlier than it is usually read. "Fetched text never becomes a URL to fetch" is the well-known half; the half that bites in CI is that a *feed entry* is fetched text too.
 
 **An unreachable `robots.txt` is a refusal, not a permission.** Assuming consent from silence is how a polite crawler becomes an impolite one, and the failure mode is asymmetric: the cost of skipping a host wrongly is one missing item, and the cost of crawling one wrongly is a complaint we cannot take back.
 
@@ -114,4 +114,4 @@ Accepting that prose instructions survive - and saying so - is the honest positi
 - [../contracts/determinism.md](../contracts/determinism.md) - why the sanitizer carries a version.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Extract stage that owns the crossing.
 - [../../concepts/principles.md](../../concepts/principles.md) - principle 5, the belief this page implements.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Holy Law #11, section 4, section 13.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #11, section 4, section 13.

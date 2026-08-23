@@ -73,7 +73,7 @@ The self-lifting rest is there because the alternative was tested by imagination
 | Counting a robots refusal as a failure | Punishing a site for saying no, and quarantining a source that is behaving correctly. |
 | Treating a zero-item `200` as success | The most common way a feed dies would be invisible, and the ledger would only catch the failures that were already obvious. |
 | A separate knob for "skips before retry" | Two numbers answering one question. When they drift apart nobody remembers which was meant. |
-| Logging feed results instead of committing them | A log is gone with the run. The next run needs to read what the last four did (Holy Law #1). |
+| Logging feed results instead of committing them | A log is gone with the run. The next run needs to read what the last four did (Rule #1). |
 | Recording only failures | You cannot tell "failed five times out of five" from "failed five times out of two hundred" without the successes. |
 
 ## See also
