@@ -31,7 +31,7 @@ from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
-from idhazh.evals.score import band, counterweight_band, to_eval_row
+from idhazh.evals.score import band, to_eval_row
 from idhazh.fetch import FetchResult
 
 FULL_TEXT = (
@@ -125,14 +125,50 @@ def test_a_missing_config_file_fails_at_startup(tmp_path: Path) -> None:
 
 def test_the_bands_come_from_config() -> None:
     tuned = EvaluationConfig(band_high_min=0.9, band_medium_min=0.6)
-    assert band(0.95, unsupported_numbers=0, config=tuned) is ConfidenceBand.HIGH
-    assert band(0.7, unsupported_numbers=0, config=tuned) is ConfidenceBand.MEDIUM
-    assert band(0.5, unsupported_numbers=0, config=tuned) is ConfidenceBand.LOW
+    assert (
+        band(
+            0.95,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=tuned,
+        )
+        is ConfidenceBand.HIGH
+    )
+    assert (
+        band(
+            0.7,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=tuned,
+        )
+        is ConfidenceBand.MEDIUM
+    )
+    assert (
+        band(
+            0.5,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=tuned,
+        )
+        is ConfidenceBand.LOW
+    )
 
 
 def test_an_invented_number_outvotes_a_perfect_faithfulness_score() -> None:
     """Nothing else in the row can see that defect, so nothing else may outvote it."""
-    assert band(1.0, unsupported_numbers=1, config=EvaluationConfig()) is ConfidenceBand.LOW
+    assert (
+        band(
+            1.0,
+            unsupported_numbers=1,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.LOW
+    )
 
 
 # --- The row ----------------------------------------------------------------
@@ -297,21 +333,40 @@ def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
 
 def test_the_counterweights_alone_never_claim_the_top_band() -> None:
     """Without a faithfulness score there is no basis for claiming high confidence."""
-    faithful = (
-        "Example Lab released a smaller model, claiming a 34 percent lower cost per million "
-        "tokens and 2.1 times the throughput of the model it replaces."
+    assert (
+        band(
+            None,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.MEDIUM
     )
-    assert counterweight_band(faithful, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.MEDIUM
-
 
 def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
-    invented = "Example Lab claims a 91 percent lower cost per million tokens."
-    assert counterweight_band(invented, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.LOW
+    assert (
+        band(
+            None,
+            unsupported_numbers=1,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.LOW
+    )
 
-
-def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_low() -> None:
-    vague = "A company has published something about a product."
-    assert counterweight_band(vague, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.LOW
+def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_medium() -> None:
+    assert (
+        band(
+            None,
+            unsupported_numbers=0,
+            lead_coverage=0.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.MEDIUM
+    )
 
 
 def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> None:  # type: ignore[no-untyped-def]

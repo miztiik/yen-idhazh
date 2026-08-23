@@ -25,6 +25,7 @@
     "band_high_min": 0.8,
     "band_medium_min": 0.5,
     "golden_set_size": 20,
+    "lead_coverage_min": 0.3,
     "spot_checks_per_week": 10,
     "summary_words_max": 250,
     "summary_words_min": 40,
@@ -126,7 +127,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-23T16:00",
+  "version": "2026-08-23T17:41",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
