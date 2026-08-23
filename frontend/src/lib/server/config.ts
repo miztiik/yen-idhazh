@@ -17,6 +17,7 @@ export interface UiConfig {
 	repo_url: string;
 	site_title: string;
 	tagline: string;
+	read_mark_days: number;
 }
 
 const DEFAULTS: UiConfig = {
@@ -27,7 +28,8 @@ const DEFAULTS: UiConfig = {
 	show_filter: true,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
-	tagline: 'A daily digest that checks its own work.'
+	tagline: 'A daily digest that checks its own work.',
+	read_mark_days: 7
 };
 
 export function uiConfig(): UiConfig {

@@ -112,6 +112,7 @@
     "title_words_min": 5
   },
   "ui": {
+    "read_mark_days": 3,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
       "notice",
