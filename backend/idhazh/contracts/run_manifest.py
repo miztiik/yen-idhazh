@@ -51,8 +51,11 @@ class ModelUse(Model):
 
 class VerticalCount(Model):
     id: Slug
-    planned: int = Field(ge=0)
-    published: int = Field(ge=0)
+    planned: int = Field(ge=0, description="Items this run planned for this vertical.")
+    published: int = Field(
+        ge=0,
+        description="Items this run introduced into the day payload for this vertical.",
+    )
     below_feed_floor: bool = Field(
         default=False, description="A vertical under its floor is collected but not rendered."
     )
@@ -121,6 +124,14 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T00:30",
+            change="Pinned RunRecord vertical published counts to the run that wrote them.",
+            why=(
+                "A later run appends to the day payload. Counting the accumulated day "
+                "against this run's plan rejected valid second and later runs."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21T02:00",
             change="Added optional pipeline_fingerprints and determinism_violations to a run.",

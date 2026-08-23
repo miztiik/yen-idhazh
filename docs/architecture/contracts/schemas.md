@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -135,6 +135,21 @@ The shapes this subsystem owns, from `CLAUDE.md` section 11:
 | **The run manifest** | The assemble stage | A later run, and anyone auditing what produced what |
 | **Config** | A human | Both `backend/` and, where a surface needs it, `frontend/` |
 | **Published payloads** | The assemble stage | The published site |
+
+## Run manifest count windows
+
+`RunManifest.runs[]` is one record per run. All counts inside that record use
+that same window.
+
+- `items_planned`, `items_succeeded`, `items_failed` and `items_skipped` count
+  only that run.
+- `verticals[].planned` counts the items that run planned for that vertical.
+- `verticals[].published` counts the items that run introduced into the day
+  payload for that vertical.
+
+The whole-day count lives in `digest.json`: `items.length` and
+`verticals[].count`. A later run appends to the day payload, but it must not make
+an earlier run's plan look larger than it was.
 
 ## Design rationale
 

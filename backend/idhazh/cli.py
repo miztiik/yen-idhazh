@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Final, NamedTuple
 from urllib.parse import urlsplit
 
+from pydantic import ValidationError
+
 from idhazh import (
     assemble,
     config,
@@ -348,7 +350,8 @@ def _next_run_n(date: str) -> int:
     constant: two runs claiming one run id put two different work lists under
     the same address in the manifest.
     """
-    manifest = _load_manifest(assemble.day_dir(PUBLIC_ROOT, date) / "run.json")
+    target = assemble.day_dir(PUBLIC_ROOT, date)
+    manifest = _load_manifest(target / "run.json", day=_load_day(target / "digest.json"))
     return manifest.runs[-1].n + 1 if manifest else 1
 
 
@@ -803,7 +806,7 @@ def stage_assemble(
     kinds = assemble.source_kinds(settings.sources)
     target = assemble.day_dir(PUBLIC_ROOT, plan.date)
     previous_day = _load_day(target / "digest.json")
-    previous_manifest = _load_manifest(target / "run.json")
+    previous_manifest = _load_manifest(target / "run.json", day=previous_day)
     run_n = (previous_manifest.runs[-1].n + 1) if previous_manifest else 1
     run_id = f"{plan.date}-{run_n}"
     digest_items = []
@@ -950,8 +953,44 @@ def _load_day(path: Path) -> DigestDay | None:
     return DigestDay.from_json(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def _load_manifest(path: Path) -> RunManifest | None:
-    return RunManifest.from_json(path.read_text(encoding="utf-8")) if path.exists() else None
+def _load_manifest(path: Path, *, day: DigestDay | None = None) -> RunManifest | None:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
+    try:
+        manifest = RunManifest.from_json(text)
+    except ValidationError:
+        if day is None:
+            raise
+        return _manifest_with_run_vertical_counts(json.loads(text), day)
+    if day is None or manifest.version == RunManifest.schema_version():
+        return manifest
+    return _manifest_with_run_vertical_counts(json.loads(text), day)
+
+
+def _manifest_with_run_vertical_counts(payload: object, day: DigestDay) -> RunManifest:
+    if not isinstance(payload, dict):
+        return RunManifest.model_validate(payload)
+
+    counts: Counter[tuple[int, str]] = Counter(
+        (item.introduced_by_run, item.vertical) for item in day.items
+    )
+    migrated_runs = []
+    for run in payload.get("runs", []):
+        if not isinstance(run, dict):
+            migrated_runs.append(run)
+            continue
+        run_n = int(run.get("n", 0) or 0)
+        verticals = []
+        for vertical in run.get("verticals", []):
+            if not isinstance(vertical, dict):
+                verticals.append(vertical)
+                continue
+            vertical_id = str(vertical.get("id", ""))
+            verticals.append({**vertical, "published": counts[(run_n, vertical_id)]})
+        migrated_runs.append({**run, "verticals": verticals})
+    migrated = {**payload, "version": RunManifest.schema_version(), "runs": migrated_runs}
+    return RunManifest.model_validate(migrated)
 
 
 # --- entry point --------------------------------------------------------------
