@@ -59,6 +59,11 @@ planned item as `ok` or `failed`, with a closed `FailureCode` vocabulary. A log
 line is evidence that the event happened; the ledger row is the record a later
 run or dashboard reads.
 
+Assemble writes that census once per run after it has merged the worker payloads.
+It writes one row for every planned item, including a `not_attempted` row when no
+article payload arrived. That keeps the denominator in the same file as the
+failure count.
+
 ## No network sink
 
 There is no runtime call home (Rule #1), and there is nowhere to send a log even if there were:
@@ -89,6 +94,7 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | A separate human-readable log format alongside the structured one | Two records of one event, free to disagree, and the disagreement always surfaces at the worst moment. | Fowler |
 | Free-text log messages | Not greppable, not replayable as a fixture, and impossible to assert on in a test. | Fowler |
 | Keeping run history in logs rather than the ledger | CI logs age out. A trend you cannot query in a year is not a measurement (Rule #10). | Fowler |
+| Scraping item failures back out of logs | The workers already hand Assemble typed payloads. A log scraper would make evidence pretend to be the record. | Fowler |
 
 ## See also
 

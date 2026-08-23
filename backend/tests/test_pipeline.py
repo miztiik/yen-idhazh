@@ -17,13 +17,13 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config
+from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
-from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.sources import FeedDef
@@ -473,6 +473,52 @@ def test_item_payloads_include_an_article_without_a_summary(tmp_path: Path) -> N
     ]
     assert payloads[0].article == article()
     assert payloads[0].summary is None
+
+
+def test_assemble_writes_one_item_health_row_per_planned_item(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+    items_dir.mkdir(parents=True)
+    (items_dir / f"{run_plan.items[0].item_id}.article.json").write_text(
+        article().to_json(), encoding="utf-8"
+    )
+    (items_dir / f"{run_plan.items[0].item_id}.summary.json").write_text(
+        summary().to_json(), encoding="utf-8"
+    )
+
+    day = cli.stage_assemble(
+        run_plan,
+        settings=config.load(CONFIG_DIR),
+        commit_sha="a" * 40,
+        runner="fixture",
+    )
+
+    health_path = ledger.item_health_path(tmp_path / "state", run_plan.date)
+    with health_path.open(encoding="utf-8", newline="") as handle:
+        rows = [ItemHealthRow.from_csv_row(row) for row in csv.DictReader(handle)]
+    failed = sum(1 for row in rows if row.outcome is ItemOutcome.FAILED)
+    ok = sum(1 for row in rows if row.outcome is ItemOutcome.OK)
+    manifest = RunManifest.from_json(
+        read_text(tmp_path / "public" / "digest" / "2026" / "08" / "21" / "run.json")
+    )
+
+    with health_path.open(encoding="utf-8", newline="") as handle:
+        assert tuple(csv.DictReader(handle).fieldnames or ()) == ItemHealthRow.csv_columns()
+    assert len(rows) == len(run_plan.items)
+    assert ok > 0
+    assert failed > 0
+    assert {row.code for row in rows if row.outcome is ItemOutcome.FAILED} == {
+        FailureCode.NOT_ATTEMPTED
+    }
+    assert day.items_planned == ok + failed == len(run_plan.items)
+    assert manifest.runs[-1].items_planned == ok + failed
+    assert manifest.runs[-1].items_failed == failed
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:
