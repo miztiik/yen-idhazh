@@ -23,6 +23,11 @@ from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.export import CONTRACTS, expected_filenames, export
+from idhazh.contracts.item_health import (
+    SOURCE_NEUTRAL_FAILURE_CODES,
+    FailureCode,
+    ItemHealthRow,
+)
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.sources import Sources
@@ -215,6 +220,43 @@ def test_the_eval_ledger_columns_are_defined_once() -> None:
         assert required in columns, "a ledger row must still mean something after a prune"
 
 
+def test_the_item_health_ledger_columns_are_defined_once() -> None:
+    assert ItemHealthRow.csv_columns() == (
+        "version",
+        "date",
+        "run_id",
+        "item_id",
+        "url_key",
+        "canonical_url",
+        "vertical",
+        "source_id",
+        "stage",
+        "outcome",
+        "code",
+        "http_status",
+        "source_chars",
+        "source_words",
+        "summary_words",
+        "detail",
+    )
+
+
+def test_nine_item_health_codes_never_count_against_a_source() -> None:
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 9
+    assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None:
+    row = ItemHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json")
+    )
+    cells = row.csv_row()
+    assert cells["code"] == ""
+    assert cells["http_status"] == ""
+    assert ItemHealthRow.from_csv_row(cells) == row
+
+
 # --- Invariants the shape exists to carry ----------------------------------
 
 
@@ -269,6 +311,47 @@ def test_hhem_delta_is_rebuilt_not_trusted() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json", hhem_delta=0.9)
     with pytest.raises(ValueError, match="hhem_delta"):
         EvalRow.model_validate(payload)
+
+
+def test_an_ok_item_health_row_carries_no_code() -> None:
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json",
+        code=FailureCode.UNKNOWN,
+        detail="unclassified failure",
+    )
+    with pytest.raises(ValueError, match="carries no failure code"):
+        ItemHealthRow.model_validate(payload)
+
+
+def test_item_health_failure_code_must_belong_to_stage() -> None:
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json",
+        code=FailureCode.HTTP_CLIENT_ERROR,
+    )
+    with pytest.raises(ValueError, match="does not belong"):
+        ItemHealthRow.model_validate(payload)
+
+
+def test_item_health_http_status_belongs_only_to_fetch() -> None:
+    payload = mutate(CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json", http_status=200)
+    with pytest.raises(ValueError, match="http_status"):
+        ItemHealthRow.model_validate(payload)
+
+
+def test_unknown_item_health_failure_carries_the_only_detail() -> None:
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json",
+        code=FailureCode.UNKNOWN,
+        detail="source shape did not match a known bucket",
+    )
+    assert ItemHealthRow.model_validate(payload).code is FailureCode.UNKNOWN
+
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "extract-too-short.json",
+        detail="short source",
+    )
+    with pytest.raises(ValueError, match="detail belongs only"):
+        ItemHealthRow.model_validate(payload)
 
 
 def test_a_retired_entry_must_carry_its_date() -> None:
