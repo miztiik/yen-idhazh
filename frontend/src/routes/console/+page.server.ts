@@ -1,9 +1,11 @@
-import { collectConfig, runConfig } from '$lib/server/config';
+import { collectConfig, consoleConfig, runConfig, summarizeConfig } from '$lib/server/config';
 import {
 	evalRows,
 	feedResults,
 	itemHealthRows,
 	loadManifests,
+	telemetryMonths,
+	telemetryRows,
 	type FeedResult,
 	type RunRecord
 } from '$lib/server/payload';
@@ -25,6 +27,14 @@ interface ScoreStats {
 	scoreMs: number;
 	meanHhem: number;
 	bands: { high: number; medium: number; low: number };
+}
+
+interface CompressionPoint {
+	date: string;
+	item_id: string;
+	source_words: number;
+	summary_words: number;
+	truncation_flagged: boolean;
 }
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
@@ -74,6 +84,34 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
 		grouped.set(date, [...(grouped.get(date) ?? []), row]);
 	}
 	return grouped;
+}
+
+function publicTelemetry(row: Record<string, string>) {
+	return {
+		date: row.date ?? '',
+		run_id: row.run_id ?? '',
+		item_id: row.item_id ?? '',
+		vertical: row.vertical ?? '',
+		source_id: row.source_id ?? '',
+		stage: row.stage ?? '',
+		outcome: row.outcome ?? '',
+		code: row.code ?? '',
+		source_words: measured(row, 'source_words'),
+		summary_words: measured(row, 'summary_words')
+	};
+}
+
+function compressionPoint(row: Record<string, string>): CompressionPoint | null {
+	const sourceWords = Number(row.source_word_count ?? 0) || 0;
+	const summaryWords = Number(row.summary_word_count ?? 0) || 0;
+	if (sourceWords <= 0 || summaryWords <= 0) return null;
+	return {
+		date: row.date ?? '',
+		item_id: row.item_id ?? '',
+		source_words: sourceWords,
+		summary_words: summaryWords,
+		truncation_flagged: row.truncation_flagged === 'True' || row.truncation_flagged === 'true'
+	};
 }
 
 /** One square's colour, from what the run wrote down about itself.
@@ -161,6 +199,8 @@ export function load() {
 	const itemRows = itemHealthRows().rows;
 	const floorPct = runConfig().success_floor_pct;
 	const quarantineAfter = collectConfig().quarantine_after_failures;
+	const console = consoleConfig();
+	const summarize = summarizeConfig();
 
 	const scoresByDate = byDate(rows);
 	const itemHealthByDate = byDate(itemRows);
@@ -213,6 +253,11 @@ export function load() {
 	}));
 
 	const results = feedResults();
+	const publicRows = telemetryRows().rows.map(publicTelemetry);
+	const compression = rows
+		.map(compressionPoint)
+		.filter((point): point is CompressionPoint => point !== null)
+		.sort((a, b) => a.date.localeCompare(b.date));
 	return {
 		timingDays,
 		scoreDays,
@@ -224,6 +269,12 @@ export function load() {
 		quarantineAfter,
 		feeds: trouble(results, quarantineAfter),
 		feedsChecked: new Set(results.map((row) => row.feedId)).size,
-		feedRuns: new Set(results.map((row) => row.runId)).size
+		feedRuns: new Set(results.map((row) => row.runId)).size,
+		telemetryRows: publicRows,
+		telemetryMonths: telemetryMonths(),
+		console,
+		compression,
+		summarizeBands: summarize.bands,
+		today: new Date().toISOString().slice(0, 10)
 	};
 }

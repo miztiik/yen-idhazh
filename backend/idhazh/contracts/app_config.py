@@ -572,6 +572,43 @@ class VisualSide(StrEnum):
     TRAILING = "trailing"
 
 
+class TodayAnchor(StrEnum):
+    RIGHT = "right"
+    CENTRE = "centre"
+
+
+class ConsoleConfig(Model):
+    """Knobs for the operator console's time viewport."""
+
+    default_window_days: int = Field(
+        default=30,
+        ge=1,
+        description="Initial time span for the console charts. A viewport, not a deletion.",
+    )
+    today_anchor: TodayAnchor = Field(
+        default=TodayAnchor.RIGHT,
+        description="Where today sits in the initial viewport when enough history exists.",
+    )
+    pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")
+    zoom_factor: float = Field(default=1.5, gt=1.0)
+    min_window_days: int = Field(default=7, ge=1)
+    max_window_days: int = Field(default=366, ge=1)
+    min_attempts_for_rate: int = Field(
+        default=5,
+        ge=1,
+        description="Below this count a rate is outlined because the denominator is thin.",
+    )
+    chart_height: int = Field(default=180, ge=120)
+
+    @model_validator(mode="after")
+    def _window_bounds_are_ordered(self) -> Self:
+        if self.min_window_days > self.default_window_days:
+            raise ValueError("console.min_window_days must not exceed default_window_days")
+        if self.default_window_days > self.max_window_days:
+            raise ValueError("console.default_window_days must not exceed max_window_days")
+        return self
+
+
 class UiConfig(Model):
     """The published surface's knobs.
 
@@ -634,6 +671,15 @@ class AppConfig(Contract):
                 "Short sources should publish with an honest brief instead of being padded "
                 "or dropped. The old word gate forced the decoder to keep writing on a "
                 "small source, which made invention more likely."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T19:40",
+            change="Added the console block for the interactive telemetry viewport.",
+            why=(
+                "The console now lets the operator pan and zoom over the published "
+                "item-health projection, so the default window, pan step, zoom factor, "
+                "minimum denominator and chart size are tunable config values (Rule #6)."
             ),
         ),
         ChangelogEntry(
@@ -794,6 +840,7 @@ class AppConfig(Contract):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
+    console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @model_validator(mode="after")

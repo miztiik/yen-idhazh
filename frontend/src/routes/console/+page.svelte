@@ -7,10 +7,11 @@
 	 * here is derived at read time, which is what stops today's code quietly
 	 * restating yesterday's figures.
 	 *
-	 * Bars and squares are plain divs. A charting library to draw ten rectangles
-	 * would outweigh the data it draws.
+	 * The run grid stays static. The telemetry viewport is enhanced by uPlot and
+	 * still carries server-rendered SVG fallback.
 	 */
 	import { base } from '$app/paths';
+	import Viewport from '$lib/components/Viewport.svelte';
 	import type { Health } from './+page.server';
 
 	let { data } = $props();
@@ -107,6 +108,15 @@
 			{/each}
 		</ul>
 	{/if}
+
+	<Viewport
+		initialRows={data.telemetryRows}
+		availableMonths={data.telemetryMonths}
+		today={data.today}
+		config={data.console}
+		compressionPoints={data.compression}
+		bands={data.summarizeBands}
+	/>
 
 	<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Feeds that failed</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
