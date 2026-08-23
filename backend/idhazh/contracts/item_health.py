@@ -117,6 +117,15 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-23T18:40",
+            change="Added nullable fetch_ms, extract_ms and summarize_ms at the end of the row.",
+            why=(
+                "The console was charting stage timings from the scored subset, which never "
+                "carried those columns. The per-item census is the row that exists for every "
+                "planned item, so stage timings belong there."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-23T18:15",
             change=(
                 "Added not_prose, boilerplate, paywalled and unsupported_form codes; "
@@ -155,6 +164,9 @@ class ItemHealthRow(Contract):
         default=None,
         description="Our own one-line reason, only for unknown. Never source text.",
     )
+    fetch_ms: int | None = Field(default=None, ge=0)
+    extract_ms: int | None = Field(default=None, ge=0)
+    summarize_ms: int | None = Field(default=None, ge=0)
 
     @property
     def counts_against_source(self) -> bool:
@@ -200,7 +212,7 @@ class ItemHealthRow(Contract):
     @classmethod
     def from_csv_row(cls, row: dict[str, str]) -> Self:
         """The inverse. An empty cell is an absent value, never the empty string."""
-        payload: dict[str, Any] = {name: row[name] for name in cls.model_fields}
+        payload: dict[str, Any] = {name: row.get(name, "") for name in cls.model_fields}
         optional_fields = (
             "code",
             "http_status",
@@ -208,6 +220,9 @@ class ItemHealthRow(Contract):
             "source_words",
             "summary_words",
             "detail",
+            "fetch_ms",
+            "extract_ms",
+            "summarize_ms",
         )
         for name in optional_fields:
             if payload[name] == "":

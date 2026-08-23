@@ -1,14 +1,27 @@
 import { collectConfig, runConfig } from '$lib/server/config';
-import { evalRows, feedResults, loadManifests, type FeedResult, type RunRecord } from '$lib/server/payload';
+import {
+	evalRows,
+	feedResults,
+	itemHealthRows,
+	loadManifests,
+	type FeedResult,
+	type RunRecord
+} from '$lib/server/payload';
 
 export const prerender = true;
 
-interface DayStats {
+interface TimingStats {
 	date: string;
 	items: number;
 	fetchMs: number;
 	extractMs: number;
 	summarizeMs: number;
+	scoreMs: number;
+}
+
+interface ScoreStats {
+	date: string;
+	items: number;
 	scoreMs: number;
 	meanHhem: number;
 	bands: { high: number; medium: number; low: number };
@@ -44,6 +57,23 @@ function median(values: number[]): number {
 	const sorted = [...values].sort((a, b) => a - b);
 	const middle = Math.floor(sorted.length / 2);
 	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
+}
+
+function measured(row: Record<string, string>, name: string): number | null {
+	const raw = row[name];
+	if (raw === undefined || raw === '') return null;
+	const value = Number(raw);
+	return Number.isFinite(value) ? value : null;
+}
+
+function byDate(rows: Record<string, string>[]): Map<string, Record<string, string>[]> {
+	const grouped = new Map<string, Record<string, string>[]>();
+	for (const row of rows) {
+		const date = row.date ?? '';
+		if (!date) continue;
+		grouped.set(date, [...(grouped.get(date) ?? []), row]);
+	}
+	return grouped;
 }
 
 /** One square's colour, from what the run wrote down about itself.
@@ -128,17 +158,32 @@ function trouble(rows: FeedResult[], quarantineAfter: number): FeedTrouble[] {
  */
 export function load() {
 	const { rows } = evalRows();
+	const itemRows = itemHealthRows().rows;
 	const floorPct = runConfig().success_floor_pct;
 	const quarantineAfter = collectConfig().quarantine_after_failures;
 
-	const byDate = new Map<string, Record<string, string>[]>();
-	for (const row of rows) {
-		const date = row.date ?? '';
-		if (!date) continue;
-		byDate.set(date, [...(byDate.get(date) ?? []), row]);
-	}
+	const scoresByDate = byDate(rows);
+	const itemHealthByDate = byDate(itemRows);
 
-	const days: DayStats[] = [...byDate.entries()]
+	const timingDays: TimingStats[] = [...itemHealthByDate.entries()]
+		.map(([date, group]) => {
+			const nums = (name: string) =>
+				group.map((row) => measured(row, name)).filter((value) => value !== null);
+			const scoreGroup = scoresByDate.get(date) ?? [];
+			const scoreMs = scoreGroup.map((row) => Number(row.score_ms ?? 0) || 0);
+			return {
+				date,
+				items: group.length,
+				fetchMs: median(nums('fetch_ms')),
+				extractMs: median(nums('extract_ms')),
+				summarizeMs: median(nums('summarize_ms')),
+				scoreMs: median(scoreMs)
+			};
+		})
+		.filter((day) => day.fetchMs > 0 || day.extractMs > 0 || day.summarizeMs > 0 || day.scoreMs > 0)
+		.sort((a, b) => b.date.localeCompare(a.date));
+
+	const scoreDays: ScoreStats[] = [...scoresByDate.entries()]
 		.map(([date, group]) => {
 			const num = (name: string) => group.map((r) => Number(r[name] ?? 0) || 0);
 			const bands = { high: 0, medium: 0, low: 0 };
@@ -149,9 +194,6 @@ export function load() {
 			return {
 				date,
 				items: group.length,
-				fetchMs: median(num('fetch_ms')),
-				extractMs: median(num('extract_ms')),
-				summarizeMs: median(num('summarize_ms')),
 				scoreMs: median(num('score_ms')),
 				meanHhem: num('hhem').reduce((a, b) => a + b, 0) / Math.max(group.length, 1),
 				bands
@@ -172,9 +214,11 @@ export function load() {
 
 	const results = feedResults();
 	return {
-		days,
+		timingDays,
+		scoreDays,
 		manifests,
 		totalRows: rows.length,
+		itemHealthRows: itemRows.length,
 		grid,
 		floorPct,
 		quarantineAfter,

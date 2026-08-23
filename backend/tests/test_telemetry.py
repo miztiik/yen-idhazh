@@ -284,13 +284,65 @@ def test_every_failure_code_has_a_real_fixture_writer(code: FailureCode) -> None
 
 
 def test_a_finished_item_reaches_publish_ok() -> None:
+    timed_summary = summary().model_copy(
+        update={"fetch_ms": 123, "extract_ms": 45, "summarize_ms": 678}
+    )
     row = telemetry.classify_item(
-        planned=item(), article=article(), summary=summary(), date=plan().date, run_id="2026-08-21-1"
+        planned=item(),
+        article=article(),
+        summary=timed_summary,
+        date=plan().date,
+        run_id="2026-08-21-1",
     )
 
     assert row.stage is ItemStage.PUBLISH
     assert row.outcome is ItemOutcome.OK
     assert row.code is None
+    assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (123, 45, 678)
+
+
+def test_a_summarize_failure_carries_stage_timings() -> None:
+    failed = summary().model_copy(
+        update={
+            "status": "failed",
+            "summary": None,
+            "key_points": [],
+            "failure_code": FailureCode.MODEL_UNREACHABLE,
+            "fetch_ms": 321,
+            "extract_ms": 54,
+            "summarize_ms": 987,
+        }
+    )
+
+    row = telemetry.classify_item(
+        planned=item(), article=article(), summary=failed, date=plan().date, run_id="2026-08-21-1"
+    )
+
+    assert row.stage is ItemStage.SUMMARIZE
+    assert row.outcome is ItemOutcome.FAILED
+    assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (321, 54, 987)
+
+
+def test_a_sixteen_column_item_health_row_reads_as_unmeasured() -> None:
+    old = ItemHealthRow(
+        version="2026-08-23",
+        date=plan().date,
+        run_id="2026-08-21-1",
+        item_id=item().item_id,
+        url_key=item().url_key,
+        canonical_url=item().canonical_url,
+        vertical=item().vertical,
+        source_id=item().source_id,
+        stage=ItemStage.PUBLISH,
+        outcome=ItemOutcome.OK,
+    ).csv_row()
+    old.pop("fetch_ms")
+    old.pop("extract_ms")
+    old.pop("summarize_ms")
+
+    row = ItemHealthRow.from_csv_row(old)
+
+    assert (row.fetch_ms, row.extract_ms, row.summarize_ms) == (None, None, None)
 
 
 def test_unknown_detail_is_sanitized_guarded_and_truncated() -> None:
