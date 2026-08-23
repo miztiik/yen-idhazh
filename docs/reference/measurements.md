@@ -213,6 +213,32 @@ afterwards is what costs, not deciding the day.
 observation on a laptop, recorded because it is the first real per-article
 number this project has; it is not a runner figure and may not be used as one.
 
+### What the robots policy cost
+
+**Measured 2026-08-23** on a developer machine (i7-1265U, Windows), n=1 per
+feed, against the 26 feeds the `ubuntu-latest` run of 2026-08-23 recorded as
+`robots_denied`. Method: the real `live_fetcher`, before and after the RFC 9309
+change, so it exercises the shipped code path rather than a bespoke script.
+
+| Outcome after the change | Feeds |
+| --- | --- |
+| **Recovered** | **19** |
+| Still refused - a served `robots.txt` disallows the path | 2 |
+| Still refused - the article itself answered HTTP 403 | 4 |
+| Still refused - the host reset the `robots.txt` connection | 1 |
+
+Ten of the nineteen serve no `robots.txt` at all and answered 404. Reading
+"no such file" as a refusal was a rule we invented and the host never wrote,
+and it was silently costing the digest most of its `business-economy` and
+`world` candidates.
+
+The seven that stayed refused are the check on the change: the policy still
+refuses when a host actually says no, and still refuses when nobody answers.
+
+A caveat this page has to carry: a developer IP is not a runner IP. Four of the
+403s are a WAF answering a datacentre address, so the runner may recover fewer
+than 19. The 404 class is IP-independent and will recover everywhere.
+
 ## Corpus shape
 
 **Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
