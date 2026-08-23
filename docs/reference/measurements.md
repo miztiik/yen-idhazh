@@ -230,6 +230,15 @@ CPU, or about 0.5 min wall clock. Row 9 should not reorder the prompt on the old
 measurement on the runner and keep the change only if the measured wall-clock
 gain pays for the prompt risk.
 
+Row 9 collapsed the prompt reorder on this measurement. It did not move the
+band-varying numbers to the tail of the system prompt, because the live runner
+showed a 1-2% wall-clock ceiling, and the existing log cannot prove the reuse
+the change was meant to buy. Reopen the reorder only with runner A/B evidence
+that logs slot id, item id, band id, rendered system-prompt tokens, article
+tokens, full prompt tokens, evaluated prompt tokens, and a reused-prefix field
+such as `p0` or `n_past`; the golden set's `output_digest` values must stay
+unchanged.
+
 ## Weights on disk
 
 Hardware: local filesystem. Date: 2026-08-21. Method: `stat`.
