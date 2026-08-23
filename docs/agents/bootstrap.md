@@ -1,6 +1,6 @@
 # Agent Bootstrap
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 Every persona - whether invoked through Claude Code (`.claude/skills/bootstrap`) or through VS Code Copilot Chat (`.github/agents/*.agent.md`) - runs this loading ritual before answering. The duplicated "read CLAUDE.md, read docs/architecture, read the plan-doc..." preamble that used to live in every agent file has moved here so there is one place to update it.
 
@@ -38,6 +38,7 @@ When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "sec
 When a user authorises an agent to execute a plan-doc autonomously (verbatim mandates like "run autonomous", "merge the PRs to main and move onto the next step until the end of the plan"), the default stance is:
 
 - **AUTO** every row: execute the work, run the Definition of Done (`CLAUDE.md` section 9), `gh pr merge --squash --delete-branch`, advance to the next row. No DRAFT-PR-and-wait state. No mid-row CONSULT-USER pause.
+- **AUTO does not idle on checks.** A ready independent row can dispatch while sibling checks or publish/deploy jobs are still running. The merge stays green-gated and one-at-a-time.
 - **Personas** (custom agents) MAY be dispatched as subagents to gather facts; their verdicts inform the agent's action - they are not a request-for-approval surface.
 - **ESCALATE only** for genuine triggers: a new architecture-decision proposal (a `## Design rationale` that would change a contract), an unresolved persona conflict, a Level-5 trigger (`CLAUDE.md` section 6), or a 3x cost overrun. Otherwise AUTO.
 - **When the user is unavailable mid-execution**, stay in scope, progress the in-flight mandate, do not invent new scope or contract existing scope.
