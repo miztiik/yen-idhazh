@@ -1,3 +1,6 @@
+import { latestDate, loadDay } from '$lib/server/payload';
+
 export function load() {
-	return { today: new Date().toISOString().slice(0, 10) };
+	const latest = latestDate();
+	return { today: latest ? loadDay(latest)?.date ?? latest : null };
 }
