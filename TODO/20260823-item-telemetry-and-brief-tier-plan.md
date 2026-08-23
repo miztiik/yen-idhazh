@@ -9,11 +9,23 @@
 | --- | --- |
 | Why this plan exists | The run of 2026-08-23 published 8 of 17 items, recorded the cause of none of them, and destroyed the evidence in 24 hours. Diagnosing it needed an expiring artifact and 9 URLs re-fetched by hand. |
 | Hard scope - in | A per-item-per-run census ledger under `state/`; a stable failure-code enum; the extraction floor moved off length onto shape; a labelled brief tier for short sources; a paywall discriminator; the console's failure and compression views; prompt-cache measurement; the docs for all of it. |
-| Hard scope - out | Retiring or demoting any source by rule (blocked on 30 days of rows, Rule #10); PDF text extraction; a charting library; a hosted log sink; changing `EvalRow`'s meaning; the saturated faithfulness thresholds; `SummaryStatus.SKIPPED`. |
-| ESCALATE triggers | (1) Any proposal to serve `state/` to a reader. (2) Any threshold in row 11 being read by ranking before 30 days of rows exist. (3) A `determinism_violation` appearing after the prompt reorder in row 9. (4) Any move to publish a metered or paywalled source - `CLAUDE.md` section 0a forbids it and row 5 enforces it. (5) Adding a failure breakdown to `RunManifest`. |
+| Hard scope - out | Retiring or demoting any source by rule (blocked on 30 days of rows, Rule #10); PDF text extraction; a hosted log sink; changing `EvalRow`'s meaning; the saturated faithfulness thresholds; `SummaryStatus.SKIPPED`. |
+| ESCALATE triggers | (1) Any proposal to serve `state/` raw to a reader (a narrow published projection is the sanctioned path - row 10). (2) Any threshold in row 11 being read by ranking before 30 days of rows exist. (3) A `determinism_violation` appearing after the prompt reorder in row 9. (4) Any move to publish a metered or paywalled source - `CLAUDE.md` section 0a forbids it and row 7 enforces it. (5) Adding a failure breakdown to `RunManifest`. |
 | Chosen strategy | Contract, then writer, then reader, then view. The column lands before the chart; the rubric waits for the rows. Ruled jointly by Fowler (Q1, Q4) and Jony (blocking finding). |
-| **Precondition** | **PRs #1 (`freshness-identity-health`) and #2 (`summarizer-evidentiality`) must merge to `main` first.** They carry `state/`, `ledger.py`, `contracts/feed_health.py`, `contracts/seen.py`, `discover.resting()` and `docs/architecture/sources/health.md`. Rows 1, 2, 5 and 11 all read or extend those. Verified 2026-08-23: `git ls-tree origin/main -- state/` is empty; both PRs are OPEN. |
+| **Owner overrides** | Five, recorded below. They supersede the persona rulings they touch (`CLAUDE.md` section 0). |
+| **Precondition** | **SATISFIED 2026-08-23.** PRs #1 and #2 merged; `state/`, `ledger.py`, `contracts/feed_health.py`, `contracts/seen.py`, `discover.resting()` and `docs/architecture/sources/health.md` are on `main`. PR #7 landed the Rule rename and the Rule #1 amendment that O1 depends on. |
 | Execution | `autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3.` |
+
+### Owner overrides (2026-08-23)
+
+| # | Override | What it replaces | Why |
+| --- | --- | --- | --- |
+| O1 | **The console charts are interactive: client-side JS reads a published CSV, and the reader pans and zooms a time viewport. A charting library is expected.** | Jony Q1's build-time-only, no-library ruling and its premise that "Rule #1 forbids the fetch that would feed one". | The premise was wrong when written - Rule #1 always permitted fetching our own committed files - and PR #7 has since cut the rule at *a service* rather than *an origin*. A third-party library is now judged on bytes and licence under section 8, like any dependency. |
+| O2 | **The 30-day window is a viewport, never a deletion.** Today need not sit at an edge; the view may centre or right-align it, and the reader scrolls back through everything. | The plan's reading of the ask as "roll the file". | The owner never asked to delete data. Fowler's append-only ledger is unchanged and now serves the viewport instead of arguing with it. |
+| O3 | **Length is not an editorial test. News is news at one line or fifty.** | Reader's rejection of the llama.cpp release items, and any drop-on-shape rule. | Newsworthiness is the owner's judgement, not a persona's. The pipeline may **record** that a page is a listing; it may not **discard** the item for it unless the owner sets the knob. |
+| O4 | **The metered-paywall rejection stands.** | - | Upheld. Agrees with Reader and with `CLAUDE.md` section 0a. |
+| O5 | **Every defect found in this investigation gets a fix row, not a footnote.** | The original "Known defects this plan records but does not fix" table. | A defect parked in a table is a defect nobody owns. |
+
 
 ### Facts this plan rests on (all measured 2026-08-23 unless noted)
 
@@ -46,11 +58,21 @@
 | 7 | Prose-shape gate, `boilerplate_ratio` wired, paywall discriminator | 5 | D | PENDING | - | - | - |
 | 8 | Brief tier: floor, band, gate, reader sentence | 7 | E | PENDING | - | - | - |
 | 9 | Prompt reorder for prefix reuse | 3 | D | PENDING | - | - | - |
-| 10 | Console: `scale.ts`, failure panels, failure list, compression scatter | 5, 6 | E | PENDING | - | - | - |
+| 10 | Console: interactive viewport over the census | 5, 6 | E | PENDING | - | - | - |
 | 11 | Source yield rubric - recorded only, reads nothing | 5 | F (BLOCKED 30 days) | PENDING | - | - | - |
-| 12 | Docs: every page this plan moves | 5, 8, 9, 10 | F | PENDING | - | - | - |
+| 12 | Docs: every page this plan moves | 5, 8, 9, 10, 13 | F | PENDING | - | - | - |
+| 13 | llama-server runtime sweep: measure every flag we do not set | 3 | D | PENDING | - | - | - |
+| 14 | Stop serialising on CI: parallel dispatch in the process docs | - | A | PENDING | - | - | - |
+| 15 | Repair the ledger header, and stop it drifting again | 1 | B | PENDING | - | - | - |
+| 16 | A dead model server says so | 2 | C | PENDING | - | - | - |
+| 17 | Per-request timeout sized from an item, not from the shard | - | A | PENDING | - | - | - |
+| 18 | Fold `/evals` into `/console` | 10 | F | PENDING | - | - | - |
+| 19 | The band reads its own counterweights | - | D | PENDING | - | - | - |
+| 20 | Two frontend defects: `EmptyDay` notice, baked build date | - | A | PENDING | - | - | - |
 
 Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally gated on 30 days of committed rows.
+
+Rows 15-20 are the defect fixes required by O5. Rows 19 and 20 come from the owner's own [`20260823-known-defects-plan.md`](20260823-known-defects-plan.md); its remaining entries (saturated bands, Level 5) stay there because they need rows before they can be re-cut.
 
 ---
 
@@ -245,7 +267,8 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Prose-shape check: require >= 3 sentences of >= 8 words. Below that the page is a listing -> `not_prose`. This catches the GitHub release page at 51 words AND at 500. `_SENTENCE_SPLIT` already exists in `evals/metrics.py`. | Andre |
+  | 1 | Prose-shape check: require >= 3 sentences of >= 8 words. Below that the page is a listing -> `not_prose`. This catches the GitHub release page at 51 words AND at 500. `_SENTENCE_SPLIT` already exists in `evals/metrics.py`. **RECORDED, NOT ENFORCED** - see decision 7. | Andre, amended by O3 |
+| 7 | **`not_prose` and `boilerplate` are recorded signals, never a drop.** `extract.reject_not_prose` and `extract.reject_boilerplate` are `config/` knobs defaulting to **false**: the item publishes, the row carries the code, the console shows it. Length and shape are evidence for the editor, not a verdict by the pipeline. Only `paywalled` and a genuine `no_text` drop an item. | **Owner override O3**, above Reader and Andre |
   | 2 | Wire `boilerplate_ratio` to `extraction_suspect` -> `boilerplate`. It is built, configured, tested and has no caller (F7). v1 compares same-run siblings only. | Andre |
   | 3 | Paywall discriminator ships in the SAME commit as the floor change in row 8, or the floor change is a regression that publishes paywalled content. | Andre; `CLAUDE.md` section 0a |
   | 4 | Paywall detection is publisher-declared and deterministic: `isAccessibleForFree: false` in JSON-LD, plus the `hasPart`/`cssSelector` paywall block. **Whether the Japan Times captures carry it is UNMEASURED - check the fixtures first.** Fall back to a `paywall_markers` lexicon in `config/` only if the markup is absent. | Andre |
@@ -274,7 +297,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   - `frontend/src/lib/components/*`, `schemas/*`
   - `backend/tests/`, `frontend/tests/`
 - **Acceptance gates:** `pytest`, `ruff`, `mypy --strict`, drift gate, `npm run check`, `npm run build`, browser smoke per section 12.
-- **Oracle:** The 7 fixtures reach their ruled disposition: NBER x2 and Marginal Revolution publish as brief; GitHub x2 reject as `not_prose`; Japan Times x2 reject as `paywalled`. AND `verbatim_run <= 0.5` on every brief item.
+- **Oracle:** The 7 fixtures reach their ruled disposition: NBER x2, Marginal Revolution **and both llama.cpp release items** publish (llama.cpp carries `not_prose` in the ledger and publishes anyway, per O3); Japan Times x2 reject as `paywalled`. AND `verbatim_run <= 0.5` on every brief item.
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -298,7 +321,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
   | 1 | Publish the Japan Times items with a paywall warning | Hard no. The reader hits a wall and feels had; a metered wall works for some readers and not others so the rule cannot be learned; and `CLAUDE.md` section 0a already forbids paywalled sources. | Reader, Andre |
-  | 2 | Publish the llama.cpp release items | The page is a list of file names. The best honest summary is "a new version came out", which is a calendar entry, not a story. Two on one day reads as padding. | Reader |
+  | 2 | Publish the llama.cpp release items | The page is a list of file names. The best honest summary is "a new version came out", which is a calendar entry, not a story. | Reader - **OVERRULED by O3.** Newsworthiness is the owner's call. The signal is recorded; the item publishes. |
   | 3 | Fetch and summarize the PDF | Reverses Rule #11 - the PDF address is discovered inside a stranger's page and the sanitizer deliberately strips it. Plus a new dependency, a multi-MB download, and a 6,000-word paper truncated to its first third anyway. | Andre, Carmack |
   | 4 | A `pdf_url` payload field populated from the page body | The field IS the vulnerability. Do not mint it. If a PDF link is ever wanted it is derived by a per-source rule in config, so the address is ours. | Andre |
   | 5 | Republish the abstract as the summary | The abstract is the article body. Republishing a body is a project non-goal. It is summarized like any other source under the same verbatim cap. | Andre |
@@ -342,50 +365,57 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
 
 ---
 
-## Row #10 - Console: `scale.ts`, failure panels, failure list, compression scatter
+## Row #10 - Console: an interactive time viewport over the census
 
-- **Scope:** Three new views over the census ledger, plus the one shared scale module they all use.
+- **Scope:** A published telemetry series the browser fetches, and a console that lets the reader pan and zoom a time window over it. Failure panels, failure list, compression scatter.
 - **Files touched:**
-  - `frontend/src/lib/server/scale.ts`
-  - `frontend/src/lib/server/payload.ts`
+  - `frontend/package.json`, `frontend/package-lock.json`
+  - `frontend/src/lib/charts/{series,viewport}.ts`
+  - `frontend/src/lib/components/{FailurePanels,FailureList,CompressionScatter,Viewport}.svelte`
   - `frontend/src/routes/console/+page.server.ts`, `+page.svelte`
-  - `config/idhazh.json` (`console.min_attempts_for_rate`)
+  - `backend/idhazh/publish_telemetry.py`
+  - `frontend/public/telemetry/<YYYY-MM>.csv`
+  - `config/idhazh.json` (`console.*`)
   - `frontend/tests/console.spec.ts`
-- **Acceptance gates:** `npm run check`, `npm run build`, `pytest` for any config contract change, drift gate, browser smoke per section 12 including **the page renders with the ledger absent**.
-- **Oracle:** Every view renders its frame, axis and an honest empty line with zero committed rows. No view white-screens on missing data.
+- **Acceptance gates:** `npm run check`, `npm run build`, `pytest`, drift gate, the existing bundle gate, browser smoke per section 12 including **the page renders with the series absent** and **zero new console `[error]` or `404`**.
+- **Oracle:** With the published series deleted the console still renders every frame, axis and an honest empty line. With it present, panning to a month with no runs shows a gap rather than interpolated data. Keyboard alone can pan and zoom.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | **No charting library.** Hand-authored SVG plus one shared `scale.ts` (`linear`, `log`, `niceTicks`, `bars`), computed in `+page.server.ts` which is never bundled for a client. 0 bytes to the browser, 0 install seconds. | Jony |
-  | 2 | The current charts are poor because they have no axis, no zero, no ticks and a moving-target scale - not because there is no library. A library fixes that only by accident. | Jony |
-  | 3 | **Small multiples**, not three lines on one chart. Three stacked panels, one shared x axis, each scaled to its own series with its peak printed. A vertical scan still answers "did they move together". | Jony |
-  | 4 | **Bars, not lines.** A line interpolates across a day with no run and invents data. A line lies across a gap; a bar leaves a hole. Runs fail entirely, so gaps are real. | Jony |
-  | 5 | **Rate is primary**, denominator `attempted = succeeded + failed`, skipped excluded. Axis label reads "share of attempted items that failed" - not "rate", not a bare "%". | Jony |
-  | 6 | Every bar's label carries the raw pair, "3 of 41 attempted". A day below `console.min_attempts_for_rate` draws as an OUTLINED bar - a shape difference, not a tint. | Jony |
-  | 7 | One ink for every bar. Position encodes the category, so colour has nothing left to say. When a new code joins the vocabulary the view gains a panel, not a colour negotiation. | Jony |
-  | 8 | Colour appears once: a bar crossing the `100 - run.success_floor_pct` line takes `--band-low` AND a printed number. Colour is never the only signal. | Jony |
-  | 9 | The compression view is a **scatter**: one dot per item, x = source words on a log axis, y = summary words linear. The reference band is drawn from `config.summarize.bands` as a step function - so **a dot outside the band is an item that missed the ask the config made of it**. | Jony |
-  | 10 | `truncation_flagged` is a shape (hollow ring), not a colour. Today's items filled and larger; history faint. No trend line, ever. | Jony |
-  | 11 | The failure LIST replaces drill-down charts. After a spike an operator wants which items failed and why - that is rows, not a bigger chart. | Jony |
-  | 12 | Build-time aggregation to a ~30-point series baked into the page. Never serve the CSV - at 30 days it is ~510 KB, five times the entire day payload. | Carmack, Jony |
+  | 1 | **The chart is interactive and client-side.** JS fetches the published series and the reader pans and zooms. Rule #1 permits this on two counts after PR #7: fetching our own committed files was always allowed, and every computation still happens in the reader's browser. | **Owner override O1** |
+  | 2 | **The window is a viewport, not a deletion.** Default 30 days; the reader scrolls back through everything published. The ledger stays append-only. | **Owner override O2** |
+  | 3 | **Today is not pinned to an edge.** `console.default_window_days` and `console.today_anchor` (`right` \| `centre`) are `config/` knobs. With less than a window of history the view fits what exists instead of drawing empty space. | Owner, O2 |
+  | 4 | **Library: `uplot`.** ~47 KB minified / ~18 KB gzipped, MIT, zero dependencies, purpose-built for time series, with pan and zoom in the box. It is the smallest thing that clears the bar O1 sets. | Owner O1 + section 8 |
+  | 5 | **The library is self-hosted from `node_modules`, not a CDN.** Rule #1 now permits either, and section 8 decides: at ~18 KB gzipped a third-party request costs more in DNS, TLS and a privacy question than the bytes are worth. Bundling also keeps the existing bundle gate meaningful. | Section 8 |
+  | 6 | **uPlot renders to canvas, so the theme must be passed in, not inherited.** Read `tokens.css` custom properties via `getComputedStyle` at mount and on a theme change, and hand uPlot the resolved colours. This is the one real cost of the canvas choice and it is named here so nobody rediscovers it. | Jony's theming objection, carried forward |
+  | 7 | **The 30-day default view is also server-rendered as static SVG**, so the page is correct before JS runs and correct if it never does. Pan and zoom are the enhancement. Section 12 requires the page to render with its data absent; this is how both survive. | Jony, preserved under O1 |
+  | 8 | **The browser reads a PUBLISHED projection, never `state/` raw.** `publish_telemetry.py` writes `frontend/public/telemetry/<YYYY-MM>.csv` carrying `date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words`. It drops `canonical_url`, `url_key` and `detail` - roughly halving the bytes and keeping untrusted free text off the published surface entirely. | Fowler, Rule #11 |
+  | 9 | **Monthly shards, fetched on demand.** ~15.6 KB/month at 4 runs a day. The page loads the current month and fetches an older one only when the reader pans into it. A year of history is 12 small requests, never one large one. Yearly shards are rejected: ~190 KB in one blob to draw 30 days. | Carmack's sizing, owner's sharding ask |
+  | 10 | A month that 404s or fails to parse degrades to a gap and logs to the browser console. It never white-screens the page. | Section 12, degrade-do-not-fail |
+  | 11 | Bars not lines; small multiples for the three categories; rate primary with the raw pair in the label; outlined bars below `console.min_attempts_for_rate`; one ink, colour only for a floor breach. Jony's Q2/Q3 rulings survive - they were about honesty, not about where the geometry runs. | Jony |
+  | 12 | The compression view keeps its form: x = source words (log), y = summary words, the `config.summarize.bands` step function as a reference band, `truncation_flagged` as a shape. Zoom now applies to it too. | Jony |
+  | 13 | Keyboard and touch are first-class: arrow keys pan, `+`/`-` zoom, the viewport control is a labelled focusable element with a visible focus ring. Basic ARIA and keyboard nav are in scope (`CLAUDE.md` section 0a). | Jony, section 0a |
+  | 14 | The failure LIST is what a panel click filters. After a spike an operator wants which items failed and why - rows, not a bigger chart. | Jony |
 
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
-  | 1 | LayerChart / Chart.js / ECharts / Highcharts | All are interaction engines. Nothing on this page is interactive and nothing can be - Rule #1 forbids the fetch that would feed one. Chart.js also needs a canvas: a bitmap, not selectable, not themable. | Jony |
-  | 2 | d3-scale + d3-shape | Closest call. Rejected because the two things needed are a scale and a polyline - about thirty lines. `payload.ts` set this precedent in this exact situation: "Twenty lines beat a dependency for two build-time readers." | Jony |
-  | 3 | vl-convert / Vega-Lite (already owned, used for digest visuals) | Would compute the rollups a second time in Python at a different moment, so the table and the picture beside it could disagree. Also bakes hex fills - a white chart on a dark console. | Jony |
-  | 4 | Dual y axes | The crossing point becomes an artifact of the ranges the author picked. | Jony |
-  | 5 | Log scale for failures | `log(0)` is undefined, and a zero-failure day is the good day and the most common one. **A chart that cannot draw a perfect day is the wrong chart for failures.** | Jony |
-  | 6 | Stacked area | Only the bottom band has a flat baseline; a steady series riding a swinging one looks like it is swinging. | Jony |
-  | 7 | Normalized share of total failures | A day with 1 failure and a day with 30 both read as 100%. Deletes the only thing the operator came for. | Jony |
-  | 8 | Per-category drill-down charts | Each category holds at most thirty numbers. A page showing the same thirty numbers larger is a click that returns nothing. | Jony |
-  | 9 | Box or violin per day | A day carries 4-12 items. A box plot over six points is a box drawn around six points you should have just drawn. | Jony |
-  | 10 | Histogram of `compression` as primary | Discards source length, the variable that explains the ratio. 0.08 means one thing at 5000 words and another at 100. | Jony |
-  | 11 | A pie of failure composition, a site-size chart, cumulative all-time totals, a mean-faithfulness trend | Three numbers already said with time attached; a line flat at zero for years; a number with no decision attached; a saturated metric that draws a flat line. | Jony |
-  | 12 | A third dashboard route | `/evals` and `/console` already render per-day band counts from the same ledger. Fold one into the other before adding anything. | Jony |
+  | 1 | Build-time only, no interaction | The owner requires pan and zoom, and the amended Rule #1 permits it. | O1 |
+  | 2 | Hand-authored SVG with a bespoke pan/zoom | This was Jony's ruling and it was right for a static chart. Interaction is where hand-rolling stops paying: pointer capture, wheel semantics, touch pinch, hit-testing and axis re-ticking are the library's actual value. | O1, section 8 |
+  | 3 | **Chart.js + zoom plugin** | ~70 KB plus a plugin for the same job uPlot does in 18 KB, and its time-series performance is worse at every point count. | Section 8 |
+  | 4 | **ECharts / Highcharts** | ECharts is several hundred KB. Highcharts is not free for commercial use. | Section 8 |
+  | 5 | **LayerChart / LayerCake** | Svelte-native and SVG, so it would theme from `tokens.css` directly - the one place it beats uPlot. Rejected on weight and on churn: it is a composition kit whose interaction story we would still assemble ourselves. Reconsider only if the `getComputedStyle` theming in decision 6 proves fragile. | Section 8 |
+  | 6 | **Observable Plot** | No built-in pan or zoom; we would write the interaction anyway, on top of a heavier base. | Section 8 |
+  | 7 | **d3 (scale + shape + zoom)** | The closest technical fit and roughly uPlot's size once `d3-zoom` is in. Rejected because it is a toolkit, not a chart: we would write and maintain the renderer, which is the part uPlot has already debugged. | Section 8 |
+  | 8 | A CDN copy of the library | Rule #1 now permits it, section 8 does not: 18 KB does not justify a third-party request and its privacy question, and it would blind the bundle gate. | Section 8 |
+  | 9 | Serve `state/item-health/` directly | It carries `canonical_url` and untrusted `detail`. Publish a narrow projection instead. | Fowler, Rule #11 |
+  | 10 | One file for all history | Grows without bound in a single request. | Carmack |
+  | 11 | One file per day | 30 requests to draw the default view. | Carmack |
+  | 12 | Client-side rendering only, no SSR fallback | A page blank until JS runs fails section 12. | Jony |
+  | 13 | Dual y axes, log scale, stacked area, normalized share | Each distorts: an axis-dependent crossing point; `log(0)` undefined on the most common day; a false baseline; and a view where 1 failure and 30 both read as 100%. | Jony |
+  | 14 | Deleting rows outside the window | Never asked for, and it deletes the answer to next year's question. | O2, Fowler |
 
 ---
 
@@ -441,9 +471,13 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   | `docs/concepts/evaluation.md` | `verbatim_run > 0.5` fails a brief item; compression stays recorded and unbanded; the gate floor moves to 25. |
   | `docs/concepts/config.md` | Every new knob: `min_source_words` derivation, brief band, `console.min_attempts_for_rate`, `sources.*`. |
   | `docs/concepts/design-system.md` | Amend line 60 in place: hand-written markup still holds, and now says why an axis does not need a library. |
-  | `docs/architecture/publishing/frontend.md` | The three console views and the build-time aggregation rule. |
-  | `docs/reference/measurements.md` | Row 3's cache numbers; row 7's disposition baseline (4/7 and 0/7) and result; row 9's before/after. All with hardware, date, spread. |
+  | `docs/architecture/publishing/frontend.md` | The console's views, the published telemetry projection, the viewport, and the client-side data path. |
+  | `docs/concepts/design-system.md` | Amend the "hand-written markup" line in place: it held for a static chart and stops holding once the view is interactive. Record `uplot` and why canvas forces the theme to be passed in. |
+  | `docs/architecture/publishing/telemetry-series.md` (NEW) | The published projection: which columns cross to the browser, which never do, and the monthly shard. |
+  | `docs/reference/measurements.md` | Row 3's cache numbers; row 7's disposition baseline (4/7 and 0/7) and result; row 9's before/after; row 13's flag sweep; the row 15 header-drift evidence. All with hardware, date, spread. |
   | `docs/how-to/run-the-pipeline.md` | How to read a failure from the census instead of a 24-hour artifact. |
+  | `docs/how-to/execute-a-plan.md`, `docs/how-to/ship-a-pr.md` | Row 14: dispatch does not wait on CI; only the merge serialises. |
+  | `docs/concepts/evaluation.md` | Row 19: a failed counterweight caps the band at `medium`. Plus `verbatim_run > 0.5` fails a brief item; compression stays recorded and unbanded; the gate floor moves to 25. |
 
 - **Acceptance gates:** ASCII-only; every doc has H1, `Last Updated`, and "See also"; depth <= 3; no concept defined twice.
 - **Oracle:** Every decision in rows 1-11 is discoverable from `docs/` alone, without reading this plan. A decision that exists only here has not landed.
@@ -463,18 +497,256 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   | 2 | Defer docs to a follow-up | Section 9 makes canonical docs part of Definition of Done. | `CLAUDE.md` |
 
 ---
+## Row #13 - llama-server runtime sweep
 
-## Known defects this plan records but does not fix
+- **Scope:** Measure every llama-server flag we do not set, on the runner, and adopt the ones that pay. The goal is wall-clock.
+- **Files touched:**
+  - `.github/workflows/measure.yml` (a `runtime` job)
+  - `backend/idhazh/llm/server.py` (`server_argv`)
+  - `backend/idhazh/contracts/app_config.py` (`InferenceConfig`)
+  - `config/idhazh.json`
+  - `docs/reference/measurements.md`
+- **Acceptance gates:** `pytest`, `ruff`, `mypy --strict`, drift gate. Every adopted flag lands in `measurements.md` with hardware, date and spread.
+- **Oracle:** Wall-clock of a fixed 5-article shard, 3 repeats, one flag changed at a time from a pinned baseline. A flag is adopted only if it beats the baseline outside the spread **and** the golden set's `output_digest` values are unchanged.
+- **Current argv (verified 2026-08-23):** `--model --alias --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --port 8080 --no-warmup`
+- **The sweep, in priority order:**
 
-| # | Defect | Where | Disposition |
+  | # | Flag | Hypothesis | Risk |
+  | --- | --- | --- | --- |
+  | 1 | `-np 1` | Pin one slot. Default `-1` is auto, and llama.cpp **divides `n_ctx` across slots** - auto may be giving each sequence 4096 or 2048 against a measured 4201-token worst case. Also guarantees every request lands in the slot that holds the prefix. | **Possibly a live truncation bug, not an optimization.** Row 3 reads `n_ctx_per_seq` first. |
+  | 2 | `-b 2048` | We set `--batch-size 512`; the llama.cpp default is **2048**. A smaller logical batch can throttle prefill, and prefill is where the 801-token prompt and the 2500-token article are paid. We may be hand-braking the phase we are trying to speed up. | Peak memory. Measure RSS. |
+  | 3 | drop `--no-warmup` | Faults 4.68 GiB in at startup instead of inside the first request. Pairs with row 9's step reorder so it happens behind `pip install`. | None. The cost is paid either way. |
+  | 4 | `-fa on` | Flash attention is `auto` today. Assert it and measure; if the CPU build declines it, the log says so and the row records that. | A different attention path - check `output_digest`. |
+  | 5 | `-lm mmap+mlock` | Keeps weights resident on a 16 GB runner also holding the scorer. Prevents a page-out that shows up as one mysteriously slow item. `--mlock` and `--no-mmap` are deprecated in favour of `--load-mode`. | 4.68 GiB pinned; measure against the scorer's footprint. |
+  | 6 | `-ctk q8_0 -ctv q8_0` | Halves KV memory, which is what buys headroom for #7. | **Quantised KV changes the numbers.** Digest-identical on the golden set or it is rejected outright. |
+  | 7 | `-np 2` with two in-flight requests | Continuous batching is already on. Two concurrent requests may raise aggregate throughput if one cannot saturate 4 threads. Needs `-c 16384` to keep 8192 per sequence, hence #6. | Changes batch composition -> the determinism alarm. Raises peak RSS. |
+  | 8 | `--prio 2`, `--poll 100` | Priority and busy-polling once `pip install` is done competing. | Burns CPU during any overlap; measure with the row 9 reorder in place. |
+  | 9 | `-tb N` | Separate thread count for prefill; defaults to `--threads`. Only interesting if #2 shows prefill is the bottleneck. | None. |
+
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | One flag at a time against a pinned baseline, 3 repeats, wall-clock of a fixed shard. A sweep that changes two things measures neither. | Carmack, Rule #10 |
+  | 2 | Every flag becomes an `InferenceConfig` field, never a literal in the workflow. `server_argv` already builds the process from config **and is a fingerprint input** - a flag added outside it silently breaks the determinism stamp. | Rule #6; `llm/server.py` docstring |
+  | 3 | Adoption requires the golden set's `output_digest` unchanged. A faster run that quietly changed the summaries is a regression. | Andre |
+  | 4 | `-np 1` is investigated as a **suspected defect first**, an optimization second. | Carmack |
+  | 5 | A warm request is permitted as a measured candidate, but it must carry the **exact rendered system prompt** of the first item's band with `max_tokens: 1` - never a joke, never real output. Andre and Carmack both showed arbitrary text shares zero token prefix and warms nothing that matters. | Andre, Carmack, owner's speed goal |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Adopt the flags without measuring | An unmeasured number may not justify a design, and several interact: `-np` with `-c`, `-ctk` with RSS. | Rule #10 |
+  | 2 | `--numa distribute` | A 4 vCPU cloud runner is one NUMA node, and the flag's own docs want a page-cache drop to mean anything. | Carmack |
+  | 3 | A joke or arbitrary-text warm request | Zero shared token prefix with the system prompt. It warms weights, which dropping `--no-warmup` does for free. | Andre, Carmack |
+  | 4 | Raising `--ctx-size` | Worst case is 4201 of 8192. No pressure, and a larger context costs KV on every request. | Carmack |
+  | 5 | Speculative decoding (`--spec-*`) | Needs a second model resident beside a 4.68 GiB model and the scorer, in 16 GB. Out until #1-#9 are exhausted. | Carmack |
+
+---
+
+## Row #14 - Stop serialising on CI
+
+- **Scope:** The process docs stop telling an orchestrator to idle on a green tick. Parallel dispatch becomes the documented default.
+- **Files touched:**
+  - `docs/how-to/execute-a-plan.md`
+  - `docs/how-to/ship-a-pr.md`
+  - `docs/agents/bootstrap.md`
+  - `AGENTS.md`
+- **Acceptance gates:** ASCII-only; the docs stay domain-neutral per section 5; no rule restated that `CLAUDE.md` already owns.
+- **Oracle:** An orchestrator following the doc dispatches the next independent row while the previous row's checks are still running, and still never merges a red or stale branch.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | **Waiting on CI is not a dependency.** A row whose `Depends-on` is satisfied dispatches immediately, even with a sibling's checks in flight. Measured 2026-08-23: `ci` about 2 min, `site` about 2 min, `pages` about 50 s, a `digest` run 25 min. Serialising on a tick spends more wall-clock idle than working. | Owner |
+  | 2 | **Parallelise the work, serialise only the merge.** `execute-a-plan.md` already says this for the merge; the amendment makes explicit that the *dispatch* of the next row does not wait either. The merge queue stays one-at-a-time and still re-checks each branch against the advanced `main`. | Owner |
+  | 3 | Green gates remain mandatory **before merge**. This changes when an agent waits, never whether the gate is honoured. | Section 9 |
+  | 4 | Worktree isolation is what makes it safe: two rows in flight never share a checkout. Already the documented topology. | Fowler |
+  | 5 | The publish stage is named as the long pole so nobody re-introduces a wait on it. | Owner |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Merge without waiting for checks | Section 9 requires green gates at merge. Stop idling, not checking. | `CLAUDE.md` |
+  | 2 | Restate the rule in `AGENTS.md` in full | `AGENTS.md` is derived, not authoritative. It gets a pointer. | Section 5 |
+  | 3 | Skip `pages` on every PR | It is the deploy gate; a docs PR that breaks the build must fail somewhere. | Owner |
+
+---
+
+## Row #15 - Repair the ledger header, and stop it drifting again
+
+- **Scope:** Fix the committed `state/scores.csv` header and give `ledger._append` the guard `evals/writer.append` already has. **This defect is live, not theoretical.**
+- **Files touched:**
+  - `state/scores.csv`
+  - `backend/idhazh/ledger.py`, `backend/idhazh/evals/writer.py`
+  - `backend/tests/test_ledger.py`
+- **Acceptance gates:** `pytest`, `ruff`, `mypy --strict`; a parse of every committed `state/*.csv` asserting header width equals row width.
+- **Oracle:** Every row in every committed `state/` CSV has exactly as many cells as its header names. A contract with a new column must **raise** on append against a stale header, not write a wider row.
+- **Evidence (measured 2026-08-23, during the PR #1 merge):**
+
+  | Stage | Header cols | Row widths |
+  | --- | --- | --- |
+  | `main` before the merge | 30 | **30 x 10, 31 x 9** |
+
+  The 9 wide rows carry `score_ms` (values 2057-18656 ms). The contract gained the field, the committed header was never migrated, and nothing refused the write. `payload.ts:readCsv` maps by header position, so every cell after the insertion point reads under the wrong name. Repaired by hand during the merge; the guard is what stops it recurring.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | One guard, shared by both writers - Move Function, not a second implementation. | Fowler |
+  | 2 | The repair migrates the header and pads historical rows with the contract's own defaults: `0` for `score_ms`, null for both densities. **Null, not zero** - a row written before a column existed measured nothing, and that is different from measuring zero. | Fowler, `eval_row.py`'s own changelog |
+  | 3 | A CI check parses every committed `state/` CSV and asserts header width equals row width. The guard protects the writer; this protects the file. | Fowler |
+  | 4 | This row supersedes row 1's scope where they overlap; row 1 stays as the pure Move Function so the repair is reviewable on its own. | Fowler |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Drop the 9 wide rows | They are good data - the first eval rows automation ever wrote. The header was wrong, not the rows. | Fowler |
+  | 2 | Widen the header and leave the older rows short | A short row and a wide row under one header is the same defect from the other end. | Fowler |
+  | 3 | Tolerate a mismatch and pad on read | `payload.ts` maps by position. Padding on read writes wrong data under right names. | Fowler |
+
+---
+
+## Row #16 - A dead model server says so
+
+- **Scope:** Stop reporting infrastructure failure as a model failure.
+- **Files touched:**
+  - `backend/idhazh/cli.py`, `backend/idhazh/summarize.py`
+  - `backend/idhazh/contracts/item_health.py`
+  - `backend/tests/test_pipeline.py`
+- **Acceptance gates:** `pytest`, `ruff`, `mypy --strict`, drift gate.
+- **Oracle:** With no llama-server listening, every item's row carries `model_unreachable` - never `bad_shape`, never a `JSONDecodeError` detail.
+- **Evidence:** `cli.py` catches `OSError` from the model server, substitutes `Completion(content="")`, and lets it fall through to `parse_draft`, which fails with `JSONDecodeError`. The recorded reason blames the model for a server that was never up.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Mark the transport failure where it happens rather than inferring it downstream. An empty completion is not a model output. | Fowler |
+  | 2 | `model_unreachable` never counts against a source (row 11's countable set). Charging a publisher for our dead server is how a good source gets retired. | Fowler |
+  | 3 | Blocks row 5's oracle: the classifier cannot reach every `FailureCode` from a fixture until this path is marked. | Fowler |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Fail the shard when the server is down | A run that publishes nothing on a bad day makes its bad days invisible. Degrade and record. | `pipeline-loop.md` |
+  | 2 | Infer it from the detail string | Free text is not a signal. That is the whole argument of row 2. | Fowler |
+
+---
+
+## Row #17 - Per-request timeout sized from an item
+
+- **Scope:** `_summarize_one` currently passes the whole shard budget as one request's timeout.
+- **Files touched:**
+  - `backend/idhazh/cli.py`
+  - `backend/idhazh/contracts/app_config.py`
+  - `config/idhazh.json`
+  - `backend/tests/test_pipeline.py`
+- **Acceptance gates:** `pytest`, `ruff`, `mypy --strict`, drift gate.
+- **Oracle:** One hung request costs one item, not the shard. A fixture whose request never returns yields a `model_unreachable` row and the shard finishes its remaining items.
+- **Evidence:** `timeout=shard_timeout_minutes * 60` - 150 minutes for a single POST.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | Size it from the worst measured item: 597 s of decode plus a 66 s cold prefix, doubled - about 22 minutes. `inference.request_timeout_minutes`, a `config/` knob. | Carmack |
+  | 2 | A per-request budget is not a shard budget. The shard timeout stays as the outer bound. | Carmack |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Leave it | One hung request silently eats the whole shard and the day loses 4-5 items with no recorded cause. | Carmack |
+  | 2 | A tight timeout from the median | The corpus standard deviation is roughly its mean. A median-sized budget kills the long articles that most need summarizing. | Carmack |
+
+---
+
+## Row #18 - Fold `/evals` into `/console`
+
+- **Scope:** One route answers "how is the pipeline doing", not two.
+- **Files touched:**
+  - `frontend/src/routes/evals/`, `frontend/src/routes/console/`
+  - `frontend/tests/`
+- **Acceptance gates:** `npm run check`, `npm run build`, browser smoke, and the old path still resolves.
+- **Oracle:** `/evals` continues to resolve for anyone who bookmarked it; the per-day band counts appear exactly once in the codebase.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | `/evals` redirects to `/console`. The published dashboard keeps the route per `CLAUDE.md` section 3; the duplicate rendering goes. | Jony, owner's defect 3 |
+  | 2 | Fold before adding. Row 10 adds three views; doing it while two routes render the same counts would triple the duplication. | Jony |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Delete `/evals` outright | Section 3 says the dashboard keeps the route. A redirect honours that and still removes the duplicate. | `CLAUDE.md` section 3 |
+  | 2 | Keep both and diverge them | Two surfaces answering one question is how they come to disagree. | Jony |
+
+---
+
+## Row #19 - The band reads its own counterweights
+
+- **Scope:** `lead_coverage` and `hedge_dropped` are measured, written to the eval row, and never reach the band a reader sees.
+- **Files touched:**
+  - `backend/idhazh/evals/score.py`, `backend/idhazh/cli.py`
+  - `docs/concepts/evaluation.md`
+  - `backend/tests/test_evals.py`
+- **Acceptance gates:** `pytest`, `ruff`, `mypy --strict`; re-band the 19 committed rows and record what moves.
+- **Oracle:** An item with `lead_coverage = 0.00` cannot publish as `high`. Evidence: `ai-03` did.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | `band()` and `counterweight_band()` collapse into one function. Two band functions where only one is called is how the counterweights got orphaned. | Fowler |
+  | 2 | **A failed counterweight caps the band at `medium`; it does not force `low`.** A faithful summary that missed the lead is worth less confidence, not no confidence. | Owner's known-defects open question, resolved |
+  | 3 | The threshold re-cut this exposes (all 19 rows band `high`) stays in the owner's known-defects doc as Level 5. Capping is a bug fix; re-cutting the bands is a design consultation. | `CLAUDE.md` section 6 |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Let a counterweight force `low` | Overcorrects: it would band a good summary of a badly-extracted page as untrustworthy, when the extraction is what failed. | Owner |
+  | 2 | Fix the saturated thresholds in the same row | Level 5, and it needs more than 19 rows. Different decision, different clock. | Rule #10 |
+
+---
+
+## Row #20 - Two frontend defects
+
+- **Scope:** `EmptyDay` points at a notice that is not on the page; the home page bakes the build date and calls it today.
+- **Files touched:**
+  - `frontend/src/lib/components/EmptyDay.svelte`
+  - `frontend/src/routes/+page.server.ts`
+  - `frontend/tests/`
+- **Acceptance gates:** `npm run check`, `npm run build`, browser smoke.
+- **Oracle:** `EmptyDay` names only things a reader can see. The home page's "today" comes from the payload's own date, so a stale deploy cannot claim to be current.
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The date a reader sees is the date the payload carries, never the build's clock. A site rebuilt on Tuesday must not tell a reader that Monday's digest is Tuesday's. | Owner's known-defects 5 |
+  | 2 | Both are Level 1-2 and land together because they are the same class: a surface asserting something it cannot know. | Fowler |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Compute "today" in the browser | Then the page differs by the reader's timezone and disagrees with the payload it is rendering. | Owner |
+
+---
+
+## Defects recorded but deliberately not fixed here
+
+| # | Defect | Where | Why not here |
 | --- | --- | --- | --- |
-| 1 | `_summarize_one` passes `shard_timeout_minutes * 60` as a PER-REQUEST timeout. One hung request eats the whole shard. Size from the worst measured item (~22 min), not 150. | `cli.py` | Own row, after row 5. Carmack. |
-| 2 | `--parallel` defaults to auto; llama.cpp divides `n_ctx` across slots. If auto opens 2+ slots, `n_ctx_per_seq` is 4096 or 2048 and the measured 4201-token worst case does not fit. | `digest.yml` | Row 3 measures it. If confirmed, own row immediately. Carmack. |
-| 3 | `shard_of()` is round-robin over plan position and its docstring claims it spreads article lengths evenly. It cannot - length is unknown until extraction. Balancing by predicted cost requires moving extraction into `plan`, which is a contract question. | `cli.py` | Recorded. Level 4-5. Not in this plan. |
-| 4 | `SummaryStatus.SKIPPED` has no writer, so `RunRecord.items_skipped` is structurally 0. | `summarize.py` | Confirm by grep, then wire or delete. Not here. |
-| 5 | `to_eval_row` never calls `counterweight_band`; faithfulness thresholds are saturated (10 of 10 items band `high`, 0.923-0.978 against a 0.80 floor). | `evals/` | Pre-existing. Andre's call, not a chart's. |
-| 6 | `EmptyDay` tells the reader "the run notice above says which it was". On the home page it renders with nothing above it, so the sentence points at empty space - at the moment a reader is deciding whether the site is broken. | `EmptyDay.svelte` | Level 1. Verified 2026-08-23. |
-| 7 | `+page.server.ts` computes `new Date()`, and every route prerenders, so the home page bakes the build date and calls it today. A day after a deploy with no run it names a date that is not today. It also passes `latest={null}`, suppressing the one link that would rescue the reader. | `routes/+page.server.ts` | Level 2. Verified 2026-08-23. |
+| 1 | shard_of() is round-robin over plan position, and its docstring claims it spreads article lengths evenly. It cannot - length is unknown until extraction. Balancing by predicted cost means moving extraction into the `plan` job. | `cli.py` | That is a contract change to where the trust boundary is crossed. Level 4-5, its own consultation. |
+| 2 | `SummaryStatus.SKIPPED` has no writer, so `RunRecord.items_skipped` is structurally 0. | `summarize.py` | Either wire it or delete the member. A one-line grep decides, and it is not this plan's question. |
+| 3 | The faithfulness bands are saturated - all 19 committed rows band `high`, observed 0.923-0.978 against a 0.80 floor. | `config/idhazh.json` | Level 5: the thresholds are a reader-facing promise. It also needs more rows. Tracked in the owner's [20260823-known-defects-plan.md](20260823-known-defects-plan.md). |
+
+Row 19 fixes the counterweight half of #3 - a summary with zero lead coverage can no longer publish as `high` - without touching the thresholds.
 
 ---
 
