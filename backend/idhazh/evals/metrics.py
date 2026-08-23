@@ -33,7 +33,7 @@ from idhazh.contracts.app_config import EvaluationConfig
 
 #: Bumped whenever any definition below changes. Part of the derived
 #: `scorer_version`, so a ledger row keeps meaning what it meant when written.
-METRICS_VERSION: Final = "2"
+METRICS_VERSION: Final = "3"
 
 LEAD_SENTENCES: Final = 3
 _NGRAM: Final = 4
@@ -43,7 +43,7 @@ _SENTENCE_SPLIT = re.compile(r"(?<=[.!?])[\s\n]+")
 # Only numbers a summary could plausibly get wrong. Single digits are usually
 # spelled out or trivially present, and checking them manufactures false alarms.
 _NUMBER = re.compile(r"\d[\d,]*(?:\.\d+)?")
-_CAPITALISED_RUN = re.compile(r"\b[A-Z][\w.&'-]*(?:\s+[A-Z][\w.&'-]*)*")
+_CAPITALISED_RUN = re.compile(r"\b[A-Z][\w.&'-]*(?:[ \t]+[A-Z][\w.&'-]*)*")
 
 # Words that start an English sentence far more often than they name anything,
 # plus the calendar - a summary that dropped the day of the week dropped nothing.
@@ -280,14 +280,17 @@ def _entities(text: str) -> set[str]:
     """
     named: set[str] = set()
     for sentence in _SENTENCE_SPLIT.split(text.strip()):
-        stripped = sentence.strip()
-        for match in _CAPITALISED_RUN.finditer(stripped):
-            run = match.group().strip(" .,").lower()
-            if not run or run in _NOT_AN_ENTITY:
+        for line in sentence.splitlines():
+            stripped = line.strip()
+            if not stripped:
                 continue
-            if match.start() == 0 and " " not in run:
-                continue
-            named.add(run)
+            for match in _CAPITALISED_RUN.finditer(stripped):
+                run = match.group().strip(" .,").lower()
+                if not run or run in _NOT_AN_ENTITY:
+                    continue
+                if match.start() == 0 and " " not in run:
+                    continue
+                named.add(run)
     return named
 
 

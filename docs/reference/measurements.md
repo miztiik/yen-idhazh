@@ -471,6 +471,39 @@ a short blog post. That makes the low count a **source-selection** result
 rather than an extraction defect, and it is why raising the floor's pass rate
 belongs in `config/sources.json` and not in `extract.py`.
 
+### Lead coverage newline boundary
+
+**Measured 2026-08-23** on a developer machine (Windows, Python 3.12.12), by
+extracting the 17 committed `tests/fixtures/short-sources/` HTML fixtures with
+`to_article()`, comparing the old capitalised-run expression against the fixed
+metric, and scoring five hand-written `publish_brief` summaries through
+`score.band()` at `hhem = 0.95`. Spread is not available because this is a
+deterministic string metric.
+
+| Check | Before | After |
+| --- | --- | --- |
+| Fixtures with a glued newline entity | 6 of 17 | 0 of 17 |
+| Extractable fixtures in the pass | 15 of 17 | 15 of 17 |
+| Hand-written `publish_brief` rows moved by the fixed metric | 1 of 5 | 0 remaining wrongly capped |
+
+The glued entities were: `ai2\nglenn matlin`,
+`published\nus president donald trump`, `student researcher\nwe`,
+`xcframework\nlinux`, `gender-specific parental investment\nwe`, and
+`biodiversity loss\nwe`.
+
+| Fixture | Coverage before | Band before | Coverage after | Band after |
+| --- | --- | --- | --- | --- |
+| `llama-cpp-releases-01` | 0.625000 | high | 0.636364 | high |
+| `llama-cpp-releases-02` | 0.857143 | high | 0.857143 | high |
+| `marginal-revolution-01` | 1.000000 | high | 1.000000 | high |
+| `nber-new-01` | 0.833333 | high | 1.000000 | high |
+| `nber-new-02` | 0.000000 | medium | 0.500000 | high |
+
+The committed `state/scores.csv` had 156 rows, but no source-text or summary-text
+columns. The stored `coverage` column cannot be recomputed honestly from that
+ledger alone, so this pass reports 0 computable re-bands rather than inventing a
+movement count.
+
 ## CI and publish wall-clock
 
 **Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`. Single observed run
