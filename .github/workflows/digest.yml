@@ -136,14 +136,6 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      - name: Install
-        run: |
-          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
-            pip install -e .
-          else
-            pip install -e ".[faithfulness]"
-          fi
-
       - uses: actions/download-artifact@v4
         with:
           name: plan
@@ -198,7 +190,26 @@ jobs:
           LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
             --model "backend/models/${MODEL_FILE}" \
             --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
-            --port 8080 --no-warmup > llama-server.log 2>&1 &
+            --port 8080 > llama-server.log 2>&1 &
+          echo "$!" > llama-server.pid
+          sleep 2
+          kill -0 "$(cat llama-server.pid)" || {
+            echo "llama-server exited before install" >&2
+            tail -50 llama-server.log >&2
+            exit 1
+          }
+
+      - name: Install
+        run: |
+          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
+            pip install -e .
+          else
+            pip install -e ".[faithfulness]"
+          fi
+
+      - name: Check model health
+        run: |
+          set -euo pipefail
           for _ in $(seq 1 120); do
             curl -sf http://127.0.0.1:8080/health && break
             sleep 5
@@ -268,20 +279,6 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
-      - name: Install
-        run: pip install -e .
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: plan
-          path: backend/var/run/${{ needs.plan.outputs.date }}/
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: items-*
-          merge-multiple: true
-          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
-
       - name: Cache the router weights and runtime
         id: router
         uses: actions/cache@v4
@@ -320,7 +317,32 @@ jobs:
           LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
             --model "backend/models/${ROUTE_FILE}" \
             --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
-            --port 8080 --no-warmup > router.log 2>&1 &
+            --port 8080 > router.log 2>&1 &
+          echo "$!" > router.pid
+          sleep 2
+          kill -0 "$(cat router.pid)" || {
+            echo "the router exited before install" >&2
+            tail -50 router.log >&2
+            exit 1
+          }
+
+      - name: Install
+        run: pip install -e .
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: items-*
+          merge-multiple: true
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+
+      - name: Check router health
+        run: |
+          set -euo pipefail
           for _ in $(seq 1 120); do
             curl -sf http://127.0.0.1:8080/health && break
             sleep 5

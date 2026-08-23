@@ -52,6 +52,11 @@ Four invariants hold regardless of how the batches are sized:
 
 - **A worker failure is contained to its batch**, and does not cancel its siblings.
 - **The batch size is a measured decision, not a preference.** It is set by how long loading the model takes relative to how long an item takes - if loading dominates, the batch is too small. Per-item atomicity survives inside a batch through the temp-then-rename write plus a fingerprint comparison against the run index.
+- **A worker may change the processing order inside its shard.** It currently
+  fetches and extracts its assigned items, then sorts the items that can be
+  summarized by prompt band before the model loop. The files are addressed by
+  item id, not by processing order, so grouping same-band prompts changes cache
+  locality and not correctness.
 - **An item whose fingerprint already matches does no work and writes no eval row.** A re-run that changed nothing measured nothing. What the fingerprint covers, and what happens when it matches but the words differ, is [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
 

@@ -338,6 +338,22 @@ def shard_of(plan: RunPlan, *, shard: int, shards: int) -> list[PlannedItem]:
     return [item for index, item in enumerate(plan.items) if index % shards == shard]
 
 
+class _FetchedWorkItem(NamedTuple):
+    item: PlannedItem
+    article: Article
+    fetch_ms: int
+    extract_ms: int
+    started: float
+    original_index: int
+
+
+def _summarize_band_sort_key(
+    work: _FetchedWorkItem, settings: config.Settings
+) -> tuple[int, int]:
+    band = settings.app.summarize.band_for(work.article.word_count)
+    return band.min_source_words, work.original_index
+
+
 def stage_work(
     plan: RunPlan,
     *,
@@ -376,14 +392,28 @@ def stage_work(
     items_dir = _run_dir(plan.date) / "items"
     mine = shard_of(plan, shard=shard, shards=shards)
     LOG.info("working shard=%s/%s items=%s", shard, shards, len(mine))
-    for item in mine:
+    ready: list[_FetchedWorkItem] = []
+    for original_index, item in enumerate(mine):
         started = time.monotonic()
         article, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
             continue
+        ready.append(
+            _FetchedWorkItem(
+                item=item,
+                article=article,
+                fetch_ms=fetch_ms,
+                extract_ms=extract_ms,
+                started=started,
+                original_index=original_index,
+            )
+        )
 
+    for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
+        item = work.item
+        article = work.article
         model_started = time.monotonic()
         summary = _summarize_one(
             article, settings, fingerprint, endpoint=model_endpoint, run_id=plan.run_id
@@ -391,9 +421,9 @@ def stage_work(
         summarize_ms = int((time.monotonic() - model_started) * 1000)
         summary = summary.model_copy(
             update={
-                "duration_ms": int((time.monotonic() - started) * 1000),
-                "fetch_ms": fetch_ms,
-                "extract_ms": extract_ms,
+                "duration_ms": int((time.monotonic() - work.started) * 1000),
+                "fetch_ms": work.fetch_ms,
+                "extract_ms": work.extract_ms,
                 "summarize_ms": summarize_ms,
             }
         )
@@ -429,8 +459,8 @@ def stage_work(
             "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
             item.item_id,
             row.band.value,
-            fetch_ms,
-            extract_ms,
+            work.fetch_ms,
+            work.extract_ms,
             summarize_ms,
             score_ms,
         )
