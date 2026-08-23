@@ -94,8 +94,9 @@ def live_fetcher(settings: config.Settings) -> Fetcher:
         host = urlsplit(url).netloc
         if host not in robots:
             result = fetch.fetch(fetch.robots_url(url), config=settings.app.extract, robots_txt="")
-            # An unreadable robots.txt stays a refusal.
-            robots[host] = result.body.decode("utf-8", "replace") if result.ok else None
+            # A host that answered "no such file" publishes no rules; a host
+            # that did not answer at all stays a refusal (RFC 9309 sec 2.3.1).
+            robots[host] = fetch.robots_from_result(result)
         return fetch.fetch(url, config=settings.app.extract, robots_txt=robots[host])
 
     return read
@@ -648,7 +649,9 @@ def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runne
 # --- assemble ----------------------------------------------------------------
 
 
-def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str) -> DigestDay:
+def stage_assemble(
+    plan: RunPlan, *, settings: config.Settings, commit_sha: str, runner: str = "local"
+) -> DigestDay:
     """Collect whatever finished, publish it, and append the ledger."""
     items_dir = _run_dir(plan.date) / "items"
     names = assemble.source_names(settings.sources)
@@ -726,7 +729,7 @@ def stage_assemble(plan: RunPlan, *, settings: config.Settings, commit_sha: str)
             ModelUse(role=ModelRole.SUMMARIZE, model_ref=settings.app.models.summarize),
         ],
         commit_sha=commit_sha,
-        runner="local",
+        runner=runner,
         started_at=plan.generated_at,
         completed_at=generated_at,
         config_digests=settings.digests,
@@ -847,7 +850,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument(
         "--runner",
         default="local",
-        help="Where the validation ran. A laptop number is not a gate.",
+        help="Where the run happened. A laptop number is not a gate.",
     )
     args = parser.parse_args(argv)
 
@@ -896,7 +899,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         stage_route(_load_plan(date), settings=settings)
 
     if args.stage in ("assemble", "run"):
-        stage_assemble(_load_plan(date), settings=settings, commit_sha=args.commit)
+        stage_assemble(
+            _load_plan(date), settings=settings, commit_sha=args.commit, runner=args.runner
+        )
 
     return 0
 

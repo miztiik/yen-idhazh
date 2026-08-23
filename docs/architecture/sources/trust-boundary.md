@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Holy Law #11.
 
@@ -52,7 +52,19 @@ A feed is a stranger's list of addresses, and the pipeline dials them from insid
 
 This is Holy Law #11 applied one step earlier than it is usually read. "Fetched text never becomes a URL to fetch" is the well-known half; the half that bites in CI is that a *feed entry* is fetched text too.
 
-**An unreadable `robots.txt` is a refusal, not a permission.** Assuming consent from silence is how a polite crawler becomes an impolite one, and the failure mode is asymmetric: the cost of skipping a host wrongly is one missing item, and the cost of crawling one wrongly is a complaint we cannot take back.
+**An unreachable `robots.txt` is a refusal, not a permission.** Assuming consent from silence is how a polite crawler becomes an impolite one, and the failure mode is asymmetric: the cost of skipping a host wrongly is one missing item, and the cost of crawling one wrongly is a complaint we cannot take back.
+
+**A host that answers "no such file" is not silent, though.** RFC 9309 section 2.3.1 splits the failures in two, and so does `robots_from_result`:
+
+| The host said | We read it as | Why |
+| --- | --- | --- |
+| 2xx | the rules it published | It answered with a file. |
+| 4xx other than 429 | no restrictions | Section 2.3.1.3. A definite answer that it publishes no rules for this path. |
+| 429, 5xx, timeout, reset, blocked address | unknown, so refuse | Section 2.3.1.4. Nobody answered, so the rules stay unknown. |
+
+`classify_status` already draws that line - 429 and 5xx are transient because they are worth asking again, and the other 4xx are permanent because they are not - so the policy is one branch over an outcome, not a second table of status codes.
+
+Treating every failure as a refusal was measured on `ubuntu-latest` on 2026-08-23 to cost **17 feeds**, by running the same day twice against the same feed list: 115 feeds read on the old policy, 132 on the new one. Ten of the recovered hosts serve no `robots.txt` at all. That is a rule we invented and the host never wrote. The genuine refusals still refuse - 14 feeds remain refused, including two disallowed by a served file and one host that resets the connection. Numbers and method in [../../reference/measurements.md](../../reference/measurements.md).
 
 **A permanent status is recorded and skipped, never retried.** Retrying a 404 burns the budget the transient failures need, and on a shared runner that budget is wall-clock the rest of the matrix is waiting on.
 
