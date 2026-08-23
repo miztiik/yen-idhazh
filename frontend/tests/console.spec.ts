@@ -5,10 +5,11 @@ import { join, resolve } from 'node:path';
 /**
  * The console says whether the runs worked and which feeds are broken.
  *
- * It runs against the canary build, whose fixtures are authored to carry one
- * run of each colour and one feed of each kind the page has to tell apart. The
- * fixture also has no score ledger at all, which is what proves the page still
- * renders when a data source it draws from is missing.
+ * It runs against the canary build, whose fixtures carry one run of each colour
+ * and one feed of each kind the page has to tell apart. The canary build writes
+ * the item-health ledger because the console reads timing medians from it. The
+ * fixture still has no score ledger, which proves the page keeps rendering when
+ * one data source is missing.
  *
  * See `backend/utilities/build_canary_day.py` for the fixture.
  */
@@ -105,6 +106,15 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 	expect(named).toEqual(['canary-flaky', 'canary-empty', 'canary-gone']);
 });
 
+test('stage medians come from item health, not the score ledger', async ({ page }) => {
+	await page.goto('/console/');
+
+	await expect(page.getByText('Median seconds per item, by stage')).toBeVisible();
+	await expect(page.getByText('200 ms')).toBeVisible();
+	await expect(page.getByText('30 ms')).toBeVisible();
+	await expect(page.getByText('700 ms')).toBeVisible();
+});
+
 test('a missing ledger costs the page a section, never the page', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -113,8 +123,9 @@ test('a missing ledger costs the page a section, never the page', async ({ page 
 	await page.goto('/console/');
 
 	// The canary build has no score ledger. The page says so and carries on:
-	// the run grid above it and the feed table below it both still draw.
+	// the timing chart, run grid and feed table still draw.
 	await expect(page.getByText('Nothing has been scored yet.')).toBeVisible();
+	await expect(page.getByText('Median seconds per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 

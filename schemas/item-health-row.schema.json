@@ -53,6 +53,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added nullable fetch_ms, extract_ms and summarize_ms at the end of the row.",
+      "version": "2026-08-23T18:40",
+      "why": "The console was charting stage timings from the scored subset, which never carried those columns. The per-item census is the row that exists for every planned item, so stage timings belong there."
+    },
+    {
       "change": "Added not_prose, boilerplate, paywalled and unsupported_form codes; allowed too_short, not_prose and boilerplate as ok-row extract signals.",
       "version": "2026-08-23T18:15",
       "why": "Extract now records shape signals separately from paywall and unsupported form drops, so the item-health ledger can group each cause without free text."
@@ -101,6 +106,32 @@
       "default": null,
       "description": "Our own one-line reason, only for unknown. Never source text.",
       "title": "Detail"
+    },
+    "extract_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Extract Ms"
+    },
+    "fetch_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Fetch Ms"
     },
     "http_status": {
       "anyOf": [
@@ -163,6 +194,19 @@
     "stage": {
       "$ref": "#/$defs/ItemStage"
     },
+    "summarize_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summarize Ms"
+    },
     "summary_words": {
       "anyOf": [
         {
@@ -182,7 +226,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-23T18:15",
+      "default": "2026-08-23T18:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -206,5 +250,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-08-23T18:15"
+  "version": "2026-08-23T18:40"
 }
