@@ -59,6 +59,21 @@ def classify_item(
         )
 
     if summary is None:
+        if article.failure_code in {
+            FailureCode.TOO_SHORT,
+            FailureCode.NOT_PROSE,
+            FailureCode.BOILERPLATE,
+        }:
+            return _row(
+                planned=planned,
+                date=date,
+                run_id=run_id,
+                stage=ItemStage.PUBLISH,
+                outcome=ItemOutcome.OK,
+                code=article.failure_code,
+                source_chars=len(article.text or ""),
+                source_words=article.word_count,
+            )
         return _row(
             planned=planned,
             date=date,
@@ -95,6 +110,7 @@ def classify_item(
         run_id=run_id,
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
+        code=article.failure_code,
         source_chars=len(article.text or ""),
         source_words=article.word_count,
         summary_words=len((summary.summary or "").split()),
@@ -138,6 +154,8 @@ def _row(
 def _classify_article(article: Article) -> tuple[FailureCode, ItemStage, int | None, str | None]:
     detail = article.failure_detail or ""
     if article.status is ArticleStatus.EXTRACT_FAILED:
+        if article.failure_code is not None:
+            return article.failure_code, ItemStage.EXTRACT, None, None
         if detail == "extractor found no article text":
             return FailureCode.NO_TEXT, ItemStage.EXTRACT, None, None
         if detail.startswith("only ") and detail.endswith(

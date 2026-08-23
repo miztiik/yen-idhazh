@@ -58,6 +58,10 @@ class FailureCode(StrEnum):
     NETWORK_ERROR = "network_error"
     NO_TEXT = "no_text"
     TOO_SHORT = "too_short"
+    NOT_PROSE = "not_prose"
+    BOILERPLATE = "boilerplate"
+    PAYWALLED = "paywalled"
+    UNSUPPORTED_FORM = "unsupported_form"
     MODEL_UNREACHABLE = "model_unreachable"
     OUTPUT_TRUNCATED = "output_truncated"
     BAD_SHAPE = "bad_shape"
@@ -76,7 +80,11 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.HTTP_SERVER_ERROR: frozenset({ItemStage.FETCH}),
         FailureCode.NETWORK_ERROR: frozenset({ItemStage.FETCH}),
         FailureCode.NO_TEXT: frozenset({ItemStage.EXTRACT}),
-        FailureCode.TOO_SHORT: frozenset({ItemStage.EXTRACT}),
+        FailureCode.TOO_SHORT: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
+        FailureCode.NOT_PROSE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
+        FailureCode.BOILERPLATE: frozenset({ItemStage.EXTRACT, ItemStage.PUBLISH}),
+        FailureCode.PAYWALLED: frozenset({ItemStage.EXTRACT}),
+        FailureCode.UNSUPPORTED_FORM: frozenset({ItemStage.EXTRACT}),
         FailureCode.MODEL_UNREACHABLE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.OUTPUT_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.BAD_SHAPE: frozenset({ItemStage.SUMMARIZE}),
@@ -92,7 +100,10 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.ROBOTS_UNREACHABLE,
         FailureCode.BLOCKED_ADDRESS,
         FailureCode.HTTP_RATE_LIMITED,
+        FailureCode.TOO_SHORT,
         FailureCode.MODEL_UNREACHABLE,
+        FailureCode.NOT_PROSE,
+        FailureCode.BOILERPLATE,
         FailureCode.OUTPUT_TRUNCATED,
         FailureCode.BAD_SHAPE,
         FailureCode.LENGTH_OUT_OF_RANGE,
@@ -105,6 +116,17 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T18:15",
+            change=(
+                "Added not_prose, boilerplate, paywalled and unsupported_form codes; "
+                "allowed too_short, not_prose and boilerplate as ok-row extract signals."
+            ),
+            why=(
+                "Extract now records shape signals separately from paywall and unsupported "
+                "form drops, so the item-health ledger can group each cause without free text."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23",
             change="Initial shape: one census row per planned item per run.",
@@ -142,8 +164,13 @@ class ItemHealthRow(Contract):
     @model_validator(mode="after")
     def _state_is_complete(self) -> Self:
         if self.outcome is ItemOutcome.OK:
-            if self.code is not None:
-                raise ValueError("an ok item-health row carries no failure code")
+            if self.code not in {
+                None,
+                FailureCode.TOO_SHORT,
+                FailureCode.NOT_PROSE,
+                FailureCode.BOILERPLATE,
+            }:
+                raise ValueError("an ok item-health row carries only a recorded extract signal")
             if self.detail is not None:
                 raise ValueError("an ok item-health row carries no detail")
         elif self.code is None:
