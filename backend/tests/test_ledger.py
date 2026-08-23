@@ -12,6 +12,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.seen import PublishedRow, SeenRow
 
+REPO_ROOT = Path(__file__).resolve().parents[2]
 DATE = "2026-08-23"
 RUN_ID = "2026-08-23-1"
 STAMP = "2026-08-23T06:00:00Z"
@@ -83,3 +84,21 @@ def test_feed_health_ledger_rejects_stale_committed_header(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
         ledger.append_health(state, DATE, [health_row()])
+
+
+def test_committed_state_csv_rows_match_their_headers() -> None:
+    mismatches: list[str] = []
+    for path in sorted((REPO_ROOT / "state").rglob("*.csv")):
+        with path.open("r", encoding="utf-8", newline="") as handle:
+            rows = [row for row in csv.reader(handle) if row]
+        if not rows:
+            continue
+        header_width = len(rows[0])
+        relpath = path.relative_to(REPO_ROOT).as_posix()
+        for line_number, row in enumerate(rows[1:], start=2):
+            if len(row) != header_width:
+                mismatches.append(
+                    f"{relpath}:{line_number} has {len(row)} cells; header has {header_width}"
+                )
+
+    assert mismatches == []
