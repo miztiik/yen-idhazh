@@ -13,7 +13,7 @@ written for each planned item on each run, whether the item succeeds or fails.
 
 The row carries:
 
-`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail`
+`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms`
 
 The file is append-only and never pruned. The 30-day window is a read-side
 parameter. Monthly shards follow `state/seen/` and `state/feed-health/`.
@@ -48,6 +48,10 @@ prefix, collapses whitespace, and truncates it. A non-empty `detail` means "mint
 a better enum member".
 
 `http_status` belongs only on `fetch` rows.
+
+`fetch_ms`, `extract_ms`, and `summarize_ms` are nullable. Null means the stage
+did not run, or the row predates timing capture. It is not zero. A zero would be
+a measurement.
 
 ## What counts against a source
 
@@ -98,6 +102,7 @@ Authority: Carmack.
 | Two files, one for failures and one for word counts | Two schemas and two parses for one row's facts. |
 | Store `compression` | It is derived from `summary_words / source_words`. The chart can divide. |
 | Reuse `state/scores.csv` | It holds items the scorer measured, not all planned items. |
+| Put stage timings on `EvalRow` | `EvalRow` is written only for the scored subset. Slow or failed items would disappear from the operator's timing view. |
 | Persist free-text failure detail as the signal | A chart cannot group free text. |
 | A `skipped` code | A skip is not one cause. The row records the typed cause instead. |
 | Add `attempt`, `recorded_at`, `title`, or `source_url` | No query needs them. `date` and `run_id` already address the row. |

@@ -144,6 +144,22 @@ export function evalRows(): CsvTable {
 	return readCsv(join(STATE_ROOT, 'scores.csv'));
 }
 
+/** One row per planned item per run, read from month shards. */
+export function itemHealthRows(): CsvTable {
+	const dir = join(STATE_ROOT, 'item-health');
+	if (!existsSync(dir)) return { rows: [], columns: [] };
+	const rows: Record<string, string>[] = [];
+	let columns: string[] = [];
+	for (const shard of readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.sort()) {
+		const table = readCsv(join(dir, shard));
+		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
+		rows.push(...table.rows);
+	}
+	return { rows, columns };
+}
+
 export interface FeedResult {
 	runId: string;
 	date: string;

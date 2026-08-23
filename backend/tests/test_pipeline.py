@@ -602,7 +602,10 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
         article().to_json(), encoding="utf-8"
     )
     (items_dir / f"{run_plan.items[0].item_id}.summary.json").write_text(
-        summary().to_json(), encoding="utf-8"
+        summary()
+        .model_copy(update={"fetch_ms": 111, "extract_ms": 22, "summarize_ms": 333})
+        .to_json(),
+        encoding="utf-8",
     )
 
     day = cli.stage_assemble(
@@ -626,6 +629,9 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     assert len(rows) == len(run_plan.items)
     assert ok > 0
     assert failed > 0
+    assert rows[0].fetch_ms == 111
+    assert rows[0].extract_ms == 22
+    assert rows[0].summarize_ms == 333
     assert {row.code for row in rows if row.outcome is ItemOutcome.FAILED} == {
         FailureCode.NOT_ATTEMPTED
     }

@@ -153,6 +153,11 @@ Beneath the grid is **every feed that failed at least once**, worst first, with 
 
 **The console reads the committed ledgers at build time and computes nothing at read time.** Every number on it was measured when the run happened and written down. Nothing under `state/` is ever served - the page carries the figures, never the file ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)).
 
+Stage timing medians read from `state/item-health/<YYYY-MM>.csv`, not from
+`state/scores.csv`. The item-health ledger has one row per planned item, so it
+can answer "is it getting slower" even when the scorer did not run. The score
+ledger still owns faithfulness and scorer time for the scored subset.
+
 ## Design rationale
 
 Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
@@ -183,6 +188,7 @@ Spending the colour at the day level rather than per item is the resolution of a
 | A console listing every feed, healthy ones included | Naming all seventy sources hides the four that are broken. | owner |
 | A second threshold for the red square | CI already reads a success floor to decide whether to open an issue. Two numbers answering one question drift, and then a red square and an open issue disagree. | owner |
 | Counting skipped items against a run's health | An already-published article is skipped by design. Counting it would paint a healthy day amber for doing its job. | owner |
+| Reading stage timings from `state/scores.csv` | The score ledger did not carry those columns, and it only covers scored items. Timings belong on the item-health census. | Fowler |
 
 ## See also
 

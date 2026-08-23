@@ -238,6 +238,9 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "source_words",
         "summary_words",
         "detail",
+        "fetch_ms",
+        "extract_ms",
+        "summarize_ms",
     )
 
 
