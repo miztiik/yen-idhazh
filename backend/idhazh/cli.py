@@ -496,8 +496,11 @@ def _summarize_one(
         evaluation=settings.app.evaluation,
     )
     try:
+        request_timeout_seconds = settings.app.models.inference.request_timeout_minutes * 60
         completion = post(
-            payload, endpoint=endpoint, timeout=settings.app.run.shard_timeout_minutes * 60
+            payload,
+            endpoint=endpoint,
+            timeout=request_timeout_seconds,
         )
     except OSError as error:
         completion = None

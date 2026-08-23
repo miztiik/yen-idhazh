@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import csv
 import socket
+import threading
 from pathlib import Path
 
 import pytest
@@ -78,6 +79,55 @@ def closed_loopback_endpoint() -> str:
         server.bind(("127.0.0.1", 0))
         port = int(server.getsockname()[1])
     return f"http://127.0.0.1:{port}/v1/chat/completions"
+
+
+class HangingLoopbackEndpoint:
+    """A real local socket that accepts requests and never writes a response."""
+
+    def __init__(self) -> None:
+        self._stop = threading.Event()
+        self._server = socket.socket()
+        self._server.bind(("127.0.0.1", 0))
+        self._server.listen()
+        self._server.settimeout(0.05)
+        self._connections: list[socket.socket] = []
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+
+    @property
+    def endpoint(self) -> str:
+        port = int(self._server.getsockname()[1])
+        return f"http://127.0.0.1:{port}/v1/chat/completions"
+
+    @property
+    def accepted(self) -> int:
+        return len(self._connections)
+
+    def __enter__(self) -> HangingLoopbackEndpoint:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._stop.set()
+        self._server.close()
+        for connection in self._connections:
+            connection.close()
+        self._thread.join(timeout=1.0)
+
+    def _serve(self) -> None:
+        while not self._stop.is_set():
+            try:
+                connection, _ = self._server.accept()
+            except OSError:
+                continue
+            self._connections.append(connection)
+            threading.Thread(target=self._hold, args=(connection,), daemon=True).start()
+
+    def _hold(self, connection: socket.socket) -> None:
+        try:
+            while not self._stop.wait(0.05):
+                pass
+        finally:
+            connection.close()
 
 
 def captured_article_fetch(_url: str) -> FetchResult:
@@ -409,6 +459,52 @@ def test_a_dead_model_server_marks_every_item_without_parsing(
     details = [summary.failure_detail or "" for summary in summaries]
     assert all("JSONDecodeError" not in detail for detail in details)
     assert all("shape" not in detail for detail in details)
+
+
+def test_a_hung_model_request_costs_one_item_not_the_shard(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    fast_settings = config.Settings(
+        app=settings.app.model_copy(
+            update={
+                "models": settings.app.models.model_copy(
+                    update={
+                        "inference": settings.app.models.inference.model_copy(
+                            update={"request_timeout_minutes": 0.01}
+                        )
+                    }
+                )
+            }
+        ),
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        watchlist=settings.watchlist,
+        digests=settings.digests,
+    )
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+
+    with HangingLoopbackEndpoint() as server:
+        cli.stage_work(
+            run_plan,
+            settings=fast_settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
+
+    summaries = [
+        Summary.from_json(
+            read_text(tmp_path / "run" / run_plan.date / "items" / f"{item.item_id}.summary.json")
+        )
+        for item in run_plan.items
+    ]
+
+    assert server.accepted == len(run_plan.items)
+    assert len(summaries) == len(run_plan.items)
+    assert {summary.status for summary in summaries} == {SummaryStatus.FAILED}
+    assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_UNREACHABLE}
 
 
 def test_a_retired_feed_still_labels_the_items_it_published() -> None:
