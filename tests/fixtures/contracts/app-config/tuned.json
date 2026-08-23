@@ -25,6 +25,7 @@
     "band_high_min": 0.85,
     "band_medium_min": 0.55,
     "golden_set_size": 40,
+    "lead_coverage_min": 0.3,
     "spot_checks_per_week": 15,
     "summary_words_max": 180,
     "summary_words_min": 70,

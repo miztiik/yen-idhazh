@@ -79,6 +79,18 @@ Scores are bucketed into a small number of confidence bands, and the band - not 
 
 A low-confidence item still publishes, marked. Hiding it would make the digest look better than it is, which is the opposite of the point.
 
+There is one band function. It reads the faithfulness score when one exists, plus the deterministic counterweights that are written to the eval row. A row with no faithfulness score can never claim `high`; it starts at `medium` unless it asserts an unsupported number.
+
+The counterweights have different force:
+
+| Counterweight | Band effect |
+| --- | --- |
+| Unsupported numbers | Force `low`. A wrong figure is a direct false claim. |
+| Lead coverage below `evaluation.lead_coverage_min` | Cap `high` at `medium`. The summary missed the lead, but it may still match what it did say. |
+| Dropped hedge | Cap `high` at `medium`. The summary flattened uncertainty, but that defect does not erase every faithful sentence. |
+
+The cap is deliberate. A faithful summary that missed the lead deserves less confidence, not no confidence. Re-cutting the `high` and `medium` thresholds is a separate Level 5 decision. The current rows do not supply enough evidence for that change.
+
 ## Per-item scores cannot see drift
 
 Per-item scores measure variance *within a day*. Drift is a movement *across months*: the model runtime changed, a source redesigned its pages, a prompt was edited. Those are invisible in single-item scores and require a second instrument - a fixed set re-run on a schedule, producing a dated row, with alert thresholds on the aggregate.
@@ -89,6 +101,19 @@ Two design consequences:
 - **The fixed set is refreshed on a schedule.** A frozen golden set stops representing the live corpus and quietly becomes a museum.
 
 A drift detector that has never fired has not been shown to work; it is tested by replaying the set against a deliberately degraded input and confirming the alert fires.
+
+## Design rationale
+
+**The band is one function (2026-08-23).** The old code had one function for rows with a faithfulness score and another function for rows without one. Only the first path wrote the eval row, so `lead_coverage` and `hedge_dropped` were measured and then ignored by the reader-facing band. One function removes that split. Authority: Fowler.
+
+**Failed counterweights cap at `medium` (2026-08-23).** A low lead-coverage score or a dropped hedge reduces confidence, but it does not prove the whole summary false. Unsupported numbers still force `low`, because a wrong figure is a direct false claim. Authority: owner, resolving the known-defects open question.
+
+## Rejected alternatives
+
+| Option | Why rejected | Authority |
+| --- | --- | --- |
+| Let lead coverage or a dropped hedge force `low` | It overcorrects. A good summary of a badly-extracted or narrow source can miss the lead and still be faithful to what it says. | owner |
+| Re-cut the faithfulness band thresholds in the same change | The current rows saturate at `high`, but nineteen rows are not enough evidence to set a new reader-facing promise. That is a Level 5 design consultation. | `CLAUDE.md` section 6, Rule #10 |
 
 ## Why this is a census and not a sample
 
