@@ -33,11 +33,15 @@ The knobs are spread across four files rather than one, along the line of who ed
 
 Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing.
 
-Extraction has three shape and access controls:
+Extraction has three shape and access control groups:
 
-- `extract.prose_sentence_min`, `extract.prose_sentence_words_min`, `extract.prose_line_count_min` and `extract.prose_line_ratio_min` decide when text carries `not_prose`.
-- `extract.boilerplate_ratio_max` decides when sibling-shared lines carry `boilerplate`.
-- `extract.paywall_markers` is the fallback when JSON-LD does not declare a paywall.
+- `extract.prose_sentence_min`, `extract.prose_sentence_words_min`,
+  `extract.prose_line_count_min` and `extract.prose_line_ratio_min` decide when
+  text carries `not_prose`.
+- `extract.boilerplate_ratio_max` decides when sibling-shared lines carry
+  `boilerplate`.
+- `extract.paywall_markers` is the fallback when JSON-LD does not declare a
+  paywall.
 
 Two enforcement switches default to false: `extract.reject_not_prose` and
 `extract.reject_boilerplate`. False means record the signal and publish. True
@@ -51,12 +55,49 @@ config where the three values disagree.
 
 `config.summarize.bands` starts with the brief band `{0, 30, 45}`. The next band
 starts at 60 words. `evaluation.summary_words_min` is 25, so the decoder's
-summary floor is 125 characters. That lets a brief stop naturally instead of
-padding toward the old 40-word gate.
+summary floor is 125 characters. `evaluation.brief_compression_ceiling` is 0.5;
+it caps `verbatim_run` for brief items and derives the floor above.
+`evaluation.lead_coverage_min` is 0.30; a miss below it caps `high` at `medium`.
+That lets a brief stop naturally instead of padding toward the old 40-word gate.
 
 `config.sources` can declare `form: "abstract"` on a feed. That is a curator's
 fact about the feed, not a detector over page text. NBER uses it; arXiv and SSRN
 should use the same field if those feeds are added.
+
+## Runtime sweep surface
+
+`models.inference` holds both the ordinary deterministic decode knobs and the
+flag-sweep knobs. The sweep surface is explicit so a measurement changes one
+thing at a time through config, not through workflow literals:
+
+- `n_ctx`, `n_threads`, `n_batch`, `n_ubatch`
+- `n_parallel`, `n_threads_batch`
+- `startup_warmup`
+- `flash_attention`
+- `load_mode`
+- `cache_type_k`, `cache_type_v`
+- `priority`, `poll`
+- `temperature`, `top_p`, `seed`, `thinking`, `max_output_tokens`
+- `request_timeout_minutes`
+
+No sweep flag is adopted merely because the knob exists. A candidate becomes the
+runtime only after a runner measurement records hardware, date and spread in
+[../reference/measurements.md](../reference/measurements.md).
+
+## Console surface
+
+The console knobs are:
+
+- `console.default_window_days`
+- `console.today_anchor`
+- `console.pan_days`
+- `console.zoom_factor`
+- `console.min_window_days`
+- `console.max_window_days`
+- `console.min_attempts_for_rate`
+- `console.chart_height`
+
+The 30-day setting is a viewport. It never deletes rows.
 
 ## What is NOT a knob
 

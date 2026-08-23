@@ -42,8 +42,9 @@ Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Sc
 2. Implements the row end-to-end: code + tests at the tier that matches the surface (CLAUDE.md section 13) + the docs update.
 3. Resolves ambiguity by consulting personas (below), baking the ruling into the code.
 4. Runs the row's Oracle and every acceptance gate locally; iterates until green.
-5. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state.
-6. Does NOT merge, does NOT edit the Status Reckoner, does NOT start another row. Merge and closure are the orchestrator's.
+5. Turns every defect discovered during execution into explicit work: fix it in the row if it is in scope, or record a follow-up row / scope-change item. Do not bury defects in a footnote.
+6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state.
+7. Does NOT merge, does NOT edit the Status Reckoner, does NOT start another row. Merge and closure are the orchestrator's.
 
 ### Persona custom agents resolve ambiguity (they are not an approval gate)
 When a row is genuinely ambiguous - a design fork, a contested decision, a fact-finding sweep - the worker dispatches the relevant persona custom agent(s) **by their exact name as listed in CLAUDE.md section 14** (plus "Explore" for read-only breadth) via `runSubagent`. A persona returns a WRITTEN ruling the worker bakes into the row; it is an input to the worker's action, never a request-for-approval surface (bootstrap's AUTO policy). A contested decision runs the relevant personas in DEBATE to ONE ruling (author-a-plan.md step 3).

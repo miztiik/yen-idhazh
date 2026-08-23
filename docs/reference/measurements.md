@@ -24,8 +24,10 @@ lengths a short, medium and long article actually produce.
 ### On the runner (authoritative)
 
 **Measured 2026-08-22** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4 threads,
-llama.cpp `b10580`, 3 repeats. This is the hardware the pipeline runs on, so
-these are the numbers a design decision may cite. The laptop tables below are
+llama.cpp `b10580`, 3 repeats. These are the `llama-bench` numbers a design
+decision may cite for article-length prefill and decode. They are not the
+prompt-cache cost in the live digest path; use
+[Prompt cache reuse](#prompt-cache-reuse) for that. The laptop tables below are
 kept only to show how far a laptop misleads.
 
 | Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
@@ -161,10 +163,11 @@ Three notes worth keeping:
   difference from nothing but a file write. Python's default text mode
   translates on Windows, so a measurement taken that way overstates the prompt
   by a tenth.
-- **The prompt is the cheap half.** *Derived*, not measured: 801 tokens of
-  prefill at the runner's measured 12.1 tok/s is roughly 66 s, paid once per
-  article regardless of the article's length. A rule that earns its place costs
-  a few seconds; a rule that crowds out the article costs the whole long bucket.
+- **The prompt-cost estimate is superseded for live digest runs.** The old
+  derived value used 801 tokens at the `llama-bench` 730-token rate of 12.1
+  tok/s, or 66.2 s. Run `32648218952` measured the live digest path at 34.23
+  tok/s median, so the same 801 tokens cost 23.4 s median. Use the prompt-cache
+  table below for prompt-reorder decisions.
 - **`fits_context` over-reserves and does so on purpose.** It approximates the
   prompt as `words x 2`, which is 1196 against the measured 801. It errs by
   395 tokens in the safe direction, and the alternative - tokenizing the prompt
