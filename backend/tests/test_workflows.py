@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Final, cast
 
@@ -96,6 +97,59 @@ def _step(
     return matches[0]
 
 
+def _evaluate_shard_matrix(script: str, requested_shards: str) -> list[int] | None:
+    lines = [line.strip() for line in script.splitlines()]
+    default_line = '[ -n "$SHARDS" ] || SHARDS=4'
+    pattern_line = "SHARD_PATTERN='^[1-4]$'"
+    guard_block = [
+        'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then',
+        'echo "shards must be an integer from 1 through 4" >&2',
+        "exit 1",
+        "fi",
+    ]
+    matrix_line = (
+        'echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" '
+        '>> "$GITHUB_OUTPUT"'
+    )
+
+    assert lines.count(default_line) == 1
+    assert [line for line in lines if line.startswith("SHARD_PATTERN=")] == [pattern_line]
+    assert [line for line in lines if line.startswith('echo "matrix=')] == [matrix_line]
+    guard_index = lines.index(guard_block[0])
+    assert lines[guard_index : guard_index + len(guard_block)] == guard_block
+    assert lines.index(default_line) < lines.index(pattern_line) < guard_index < lines.index(matrix_line)
+
+    default_match = re.fullmatch(r'\[ -n "\$SHARDS" \] \|\| SHARDS=(\d+)', default_line)
+    pattern_match = re.fullmatch(r"SHARD_PATTERN='([^']+)'", pattern_line)
+    assert default_match is not None
+    assert pattern_match is not None
+    shards = requested_shards or default_match.group(1)
+    if re.fullmatch(pattern_match.group(1), shards) is None:
+        return None
+    return list(range(int(shards)))
+
+
+def _normalize_condition(value: object, description: str) -> str:
+    assert isinstance(value, str), f"{description} must be a string"
+    condition = value.strip()
+    wrapper = re.fullmatch(r"\$\{\{\s*(.*?)\s*\}\}", condition, flags=re.DOTALL)
+    if wrapper is not None:
+        condition = wrapper.group(1)
+    return " ".join(condition.split())
+
+
+def _evaluate_models_hash(script: str, models: str) -> str:
+    lines = [line.strip() for line in script.splitlines()]
+    assignment = (
+        "MODELS_SHA256=$(printf '%s' \"$MODELS\" | sha256sum | cut -d ' ' -f 1)"
+    )
+    output = 'echo "models_sha256=$MODELS_SHA256" >> "$GITHUB_OUTPUT"'
+
+    assert [line for line in lines if line.startswith("MODELS_SHA256=")] == [assignment]
+    assert [line for line in lines if "models_sha256=" in line] == [output]
+    return hashlib.sha256(models.encode()).hexdigest()
+
+
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
     workflows = _load_workflows()
 
@@ -153,27 +207,23 @@ def test_content_refresh_has_four_total_work_shards_at_most() -> None:
     assert strategy.get("max-parallel") == "4"
 
 
-def test_content_refresh_decide_step_rejects_invalid_shard_counts_before_matrix() -> None:
+def test_content_refresh_decide_step_caps_total_jobs_by_behavior() -> None:
     workflow = _load_workflows()["digest.yml"]
     decide = _step(workflow, "plan", "id", "decide")
     script = decide.get("run")
     assert isinstance(script, str)
 
-    pattern_match = re.search(r"(?m)^\s*SHARD_PATTERN='([^']+)'\s*$", script)
-    assert pattern_match is not None, "decide must declare its accepted shard pattern"
-    shard_pattern = pattern_match.group(1)
-    for value in CONTENT_REFRESH_SHARDS:
-        assert re.fullmatch(shard_pattern, value)
-    for value in ("0", "-1", "5", "10", "1.5", "two"):
-        assert re.fullmatch(shard_pattern, value) is None
-
-    scheduled_default = '[ -n "$SHARDS" ] || SHARDS=4'
-    runtime_guard = 'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then'
-    matrix_output = 'echo "matrix='
-    assert scheduled_default in script
-    assert runtime_guard in script
-    assert matrix_output in script
-    assert script.index(scheduled_default) < script.index(runtime_guard) < script.index(matrix_output)
+    expected = {
+        "": [0, 1, 2, 3],
+        "1": [0],
+        "2": [0, 1],
+        "3": [0, 1, 2],
+        "4": [0, 1, 2, 3],
+    }
+    for requested_shards, matrix in expected.items():
+        assert _evaluate_shard_matrix(script, requested_shards) == matrix
+    for invalid_shards in ("0", "5", "10", "-1", "1.5", "text"):
+        assert _evaluate_shard_matrix(script, invalid_shards) is None
 
 
 def test_measurements_dispatch_selects_exactly_one_target() -> None:
@@ -187,8 +237,13 @@ def test_measurements_dispatch_selects_exactly_one_target() -> None:
     assert len(options) == len(MEASUREMENT_TARGETS)
     assert frozenset(options) == MEASUREMENT_TARGETS
 
-    for job_name in MEASUREMENT_TARGETS:
-        assert _job(workflow, job_name).get("if") == f"${{{{ inputs.target == '{job_name}' }}}}"
+    actual_conditions = {
+        job_name: _normalize_condition(_job(workflow, job_name).get("if"), f"job {job_name} if")
+        for job_name in MEASUREMENT_TARGETS
+    }
+    assert actual_conditions == {
+        job_name: f"inputs.target == '{job_name}'" for job_name in MEASUREMENT_TARGETS
+    }
 
 
 def test_runtime_candidate_has_a_valid_default() -> None:
@@ -213,8 +268,18 @@ def test_llm_cache_key_uses_the_requested_models_hash() -> None:
     hash_script = hash_step.get("run")
     assert isinstance(hash_script, str)
     assert hash_step.get("env") == {"MODELS": "${{ inputs.models }}"}
-    assert "printf '%s' \"$MODELS\" | sha256sum" in hash_script
-    assert 'echo "models_sha256=$MODELS_SHA256" >> "$GITHUB_OUTPUT"' in hash_script
+
+    expected_hashes = {
+        "Qwen/Qwen3-4B-GGUF:Qwen3-4B-Q4_K_M.gguf": (
+            "e44a2225f6f322a8e8dbddd8579eb18e22d02fcb55ff67dcf67796f646f9c54d"
+        ),
+        "org/a:model-a.gguf,org/b:model-b.gguf": (
+            "f545e92d7d4b908ed7670f2dc641c82c87759a997888b2716f8bd35462f53765"
+        ),
+    }
+    for models, expected_hash in expected_hashes.items():
+        assert _evaluate_models_hash(hash_script, models) == expected_hash
+        assert hashlib.sha256(f"{models}\n".encode()).hexdigest() != expected_hash
 
     cache_with = _mapping(cache_step.get("with"), "GGUF cache inputs")
     cache_key = cache_with.get("key")
