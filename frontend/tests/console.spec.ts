@@ -133,6 +133,23 @@ test('the telemetry viewport renders the published projection', async ({ page })
 	await expect(page.locator('[data-viewport-control]')).toContainText('3 rows in view');
 });
 
+test('the old evals route moves bookmarks to the console', async ({ page }) => {
+	await page.goto('/evals/');
+
+	await expect(page).toHaveURL(/\/console\/$/);
+	await expect(page.getByRole('heading', { name: 'Console' })).toBeVisible();
+});
+
+test('the evals entry point keeps a no-JS link to the console', () => {
+	const page = readFileSync(resolve(process.cwd(), 'src', 'routes', 'evals', '+page.svelte'), 'utf8');
+
+	expect(page).toContain('http-equiv="refresh"');
+	expect(page).toContain('<link rel="canonical" href={consoleHref} />');
+	expect(page).toContain('<a href={consoleHref}');
+	expect(page).not.toContain('evalRows');
+	expect(page).not.toContain('BAND_ORDER');
+});
+
 test('keyboard alone pans and zooms the telemetry viewport', async ({ page }) => {
 	await page.goto('/console/');
 

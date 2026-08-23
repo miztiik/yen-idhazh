@@ -61,7 +61,6 @@
 
 	<nav class="mt-4 flex flex-wrap gap-4" aria-label="Site">
 		<a href="{base}/archive/" class="text-accent hover:underline">Archive</a>
-		<a href="{base}/evals/" class="text-accent hover:underline">Scores</a>
 		<a href="{base}/console/" class="text-accent hover:underline">Console</a>
 		<a href={repoUrl} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">
 			Source code

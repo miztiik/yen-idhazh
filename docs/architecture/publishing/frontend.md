@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-23
 
-The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive, the eval dashboard and the console.
+The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
 Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md), [../../concepts/design-system.md](../../concepts/design-system.md) and [../../concepts/ui-shell.md](../../concepts/ui-shell.md). This page is the *shape*, and it records where the owner, Jony and Reader disagreed and how it was settled.
 
@@ -138,6 +138,12 @@ The run is the data's provenance; the commit is the site's. They move independen
 
 `/console/` is the operator's surface. The digest tells a reader what happened in the world; the console tells the owner what happened to the pipeline. It is instrumentation, it earns no design budget, and its only obligation is to be correct ([../../concepts/vision.md](../../concepts/vision.md)).
 
+`/evals/` remains a published entry point for old bookmarks. It carries a
+prerendered meta refresh, a canonical link and a plain link to `/console/`.
+GitHub Pages cannot serve a SvelteKit server redirect, so the redirect must be
+static HTML. A reader with JavaScript disabled still receives a page and can use
+the link.
+
 **The grid is one column per day and one square per run.** Four runs a day means four squares, oldest at the bottom of the column. A month of pipeline history fits above the fold, and the shape of a problem - one bad afternoon, or every run since Tuesday - is visible before any number is read.
 
 Three colours, and the boundaries are read from config rather than chosen by the page:
@@ -191,6 +197,13 @@ The item-health viewport has three parts:
 Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
 
 Spending the colour at the day level rather than per item is the resolution of a genuine conflict between an owner instruction and a persona's ruling. The owner asked for a colourful confidence signal; Reader argued that per-item confidence badges are the project talking to itself. Both are satisfied by putting the aggregate where it is a real instrument and the per-item signal where it is proportionate. Authority: owner (section 0), designed by Jony, constrained by Reader.
+
+Folding `/evals/` into `/console/` keeps one route answering "how is the
+pipeline doing". Both old routes read `state/scores.csv` and counted per-day
+bands. Two surfaces reading one ledger would disagree as soon as one count
+changed. `/evals/` stays as a static entry point because `CLAUDE.md` section 3
+says the published dashboard keeps the route. Authority: Jony and owner defect
+3.
 
 ## Rejected alternatives
 
