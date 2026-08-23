@@ -74,10 +74,12 @@ def test_ci_and_pages_keep_their_push_boundaries() -> None:
 
     assert _triggers(workflows["ci.yml"])["push"] == {"branches": ["main"]}
     pages = _triggers(workflows["pages.yml"])
-    assert pages["push"] == {
-        "branches": ["main"],
-        "paths": ["frontend/**", "config/idhazh.json", "state/**"],
-    }
+    pages_push = cast(dict[str, object], pages["push"])
+    assert set(pages_push) == {"branches", "paths"}
+    assert pages_push["branches"] == ["main"]
+    assert frozenset(cast(list[str], pages_push["paths"])) == frozenset(
+        {"frontend/**", "config/idhazh.json", "state/**"}
+    )
     assert pages["workflow_run"] == {
         "workflows": ["Content refresh"],
         "types": ["completed"],
