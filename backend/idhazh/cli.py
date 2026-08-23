@@ -15,6 +15,7 @@ the daily workflow calls.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
@@ -29,6 +30,7 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -41,7 +43,7 @@ from idhazh.embed import Embedder
 from idhazh.evals import golden, metrics, score, validation, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
-from idhazh.llm.server import Completion, post
+from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, post
 from idhazh.render import asset_relpath, render_route
 from idhazh.sanitize import SANITIZER_VERSION
 
@@ -333,6 +335,7 @@ def stage_work(
     shard: int = 0,
     shards: int = 1,
     fetcher: Fetcher | None = None,
+    model_endpoint: str = DEFAULT_ENDPOINT,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
     read_url = fetcher or live_fetcher(settings)
@@ -371,7 +374,9 @@ def stage_work(
             continue
 
         model_started = time.monotonic()
-        summary = _summarize_one(article, settings, fingerprint)
+        summary = _summarize_one(
+            article, settings, fingerprint, endpoint=model_endpoint, run_id=plan.run_id
+        )
         summarize_ms = int((time.monotonic() - model_started) * 1000)
         summary = summary.model_copy(
             update={
@@ -439,7 +444,37 @@ def _fetch_one(
     return article, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
-def _summarize_one(article: Article, settings: config.Settings, fingerprint: str) -> Summary:
+def _log_model_unreachable(
+    article: Article, *, model_id: str, error: OSError, run_id: str | None
+) -> None:
+    event = {
+        "ts": assemble.utc_now(),
+        "src": "summarize",
+        "v": "1",
+        "run": run_id,
+        "name": "item.summarize.failed",
+        "level": "warning",
+        "ctx": {
+            "item_id": article.item_id,
+            "source_id": article.source_id,
+            "model_id": model_id,
+        },
+        "data": {
+            "failure_code": FailureCode.MODEL_UNREACHABLE.value,
+            "error_type": type(error).__name__,
+        },
+    }
+    LOG.warning("%s", json.dumps(event, sort_keys=True, separators=(",", ":")))
+
+
+def _summarize_one(
+    article: Article,
+    settings: config.Settings,
+    fingerprint: str,
+    *,
+    endpoint: str = DEFAULT_ENDPOINT,
+    run_id: str | None = None,
+) -> Summary:
     inference = settings.app.models.inference
     model_id = settings.app.models.summarize.id
     payload = summarize.build_request(
@@ -450,10 +485,12 @@ def _summarize_one(article: Article, settings: config.Settings, fingerprint: str
         evaluation=settings.app.evaluation,
     )
     try:
-        completion = post(payload, timeout=settings.app.run.shard_timeout_minutes * 60)
+        completion = post(
+            payload, endpoint=endpoint, timeout=settings.app.run.shard_timeout_minutes * 60
+        )
     except OSError as error:
-        completion = Completion(content="")
-        LOG.warning("model unreachable id=%s reason=%s", article.item_id, type(error).__name__)
+        completion = None
+        _log_model_unreachable(article, model_id=model_id, error=error, run_id=run_id)
     return summarize.to_summary(
         article,
         completion,

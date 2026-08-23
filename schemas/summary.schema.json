@@ -1,5 +1,27 @@
 {
   "$defs": {
+    "FailureCode": {
+      "description": "Stable failure vocabulary for item-health rows.",
+      "enum": [
+        "not_attempted",
+        "robots_denied",
+        "robots_unreachable",
+        "blocked_address",
+        "http_client_error",
+        "http_rate_limited",
+        "http_server_error",
+        "network_error",
+        "no_text",
+        "too_short",
+        "model_unreachable",
+        "output_truncated",
+        "bad_shape",
+        "length_out_of_range",
+        "unknown"
+      ],
+      "title": "FailureCode",
+      "type": "string"
+    },
     "SummaryStatus": {
       "enum": [
         "ok",
@@ -14,6 +36,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added optional failure_code for typed summarize failures.",
+      "version": "2026-08-23T17:36",
+      "why": "A dead local model server is infrastructure failure, not a malformed model reply. The failure payload now carries model_unreachable as a typed value so the item-health classifier can read it without pattern-matching failure_detail."
+    },
     {
       "change": "Added optional title, and folded it into output_digest when present.",
       "version": "2026-08-23",
@@ -57,6 +84,18 @@
       "minimum": 0,
       "title": "Extract Ms",
       "type": "integer"
+    },
+    "failure_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureCode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Typed summarize-stage failure, when the cause is already known. Older payloads omit it and still validate."
     },
     "failure_detail": {
       "anyOf": [
@@ -174,7 +213,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-23",
+      "default": "2026-08-23T17:36",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -191,5 +230,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-23"
+  "version": "2026-08-23T17:36"
 }

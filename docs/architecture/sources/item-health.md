@@ -62,6 +62,9 @@ The remaining six can count against the source:
 The contract carries this as data on the enum side, not as prose only, because a
 later source-health reader uses it.
 
+`model_unreachable` records our local model server being down. It is
+infrastructure failure. It never counts against a source.
+
 ## Design rationale
 
 A failure-only file cannot produce a rate. The ledger writes successes and

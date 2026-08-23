@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, SummarizeConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import untrusted_block
@@ -247,7 +248,14 @@ def parse_draft(
     return draft_model(prompt_config, evaluation).model_validate_json(content)
 
 
-def _failed(article: Article, *, model_id: str, detail: str, generated_at: str) -> Summary:
+def _failed(
+    article: Article,
+    *,
+    model_id: str,
+    detail: str,
+    generated_at: str,
+    failure_code: FailureCode | None = None,
+) -> Summary:
     return Summary(
         version=Summary.schema_version(),
         item_id=article.item_id,
@@ -258,6 +266,7 @@ def _failed(article: Article, *, model_id: str, detail: str, generated_at: str) 
         source_truncated=article.truncated,
         generated_at=generated_at,
         status=SummaryStatus.FAILED,
+        failure_code=failure_code,
         failure_detail=detail[:500],
     )
 
@@ -278,7 +287,7 @@ def _publishable_title(raw: str, ask: SummarizeConfig) -> str | None:
 
 def to_summary(
     article: Article,
-    completion: Completion,
+    completion: Completion | None,
     *,
     model_id: str,
     pipeline_fingerprint: str,
@@ -297,6 +306,14 @@ def to_summary(
             model_id=model_id,
             detail="the article did not extract, so there was nothing to summarize",
             generated_at=generated_at,
+        )
+    if completion is None:
+        return _failed(
+            article,
+            model_id=model_id,
+            detail="the model server was unreachable, so there was no reply to parse",
+            generated_at=generated_at,
+            failure_code=FailureCode.MODEL_UNREACHABLE,
         )
     if completion.hit_the_budget:
         return _failed(

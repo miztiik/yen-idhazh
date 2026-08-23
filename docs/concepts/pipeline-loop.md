@@ -13,7 +13,7 @@ An **item** is one source URL and everything derived from it. It is the atom of 
 - It is fetched, extracted, summarized, scored and routed independently of every other item.
 - It lands as one file per item under a predictable path - the day, the vertical, and the item's ordinal within that vertical. Identity for dedupe is a field on the payload, never a path segment, so a re-run skips work by comparing the payload's fingerprint rather than by probing the filesystem.
 - It is written **temp-then-rename**, so a file either exists complete or does not exist. There is no half-written item.
-- Its failure is its own. A dead link, a paywall, a failed extraction, a visual that would not render - each degrades that item and records why, and the run continues.
+- Its failure is its own. A dead link, a paywall, a failed extraction, a dead model server, or a visual that would not render - each degrades that item and records why, and the run continues.
 
 This is what makes the pipeline resumable: re-running costs only the items that did not finish.
 
@@ -34,7 +34,7 @@ In order, with what each one owns:
 | --- | --- | --- |
 | **Collect** | Which sources are consulted and which candidate links survive the filters. Honours `robots.txt`; never touches a paywalled or login-walled source. See [../architecture/sources/discovery.md](../architecture/sources/discovery.md). | The day's candidate list. |
 | **Extract** | Turning a page into readable text, and **the trust boundary**. This is where a stranger's bytes are sanitized, exactly once. See [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md). Also where an over-long body is truncated and *flagged* as truncated - never silently dropped. | One article payload per item, including the failure cases. |
-| **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. Also writes the item's title: a headline is written to win a click, so the digest publishes its own. See [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md). | One summary payload per item. |
+| **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. Also writes the item's title: a headline is written to win a click, so the digest publishes its own. If the local model server is down, Summarize records `model_unreachable` on the item rather than blaming the source or the model reply. See [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md). | One summary payload per item. |
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
 | **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. | A route decision per item. |
 | **Render** | Producing the visual the route asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
