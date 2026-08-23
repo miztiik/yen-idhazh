@@ -269,6 +269,42 @@ across four shards. That is 21 percent more than the 315-token estimate implied,
 and it does not change the decision - the ceiling is still 1-2 percent of a run.
 **Row 9's collapse survives its own correction.**
 
+## Evaluation ledger re-band
+
+**Measured 2026-08-23** on `state/scores.csv` at commit `6c332c7`, n=156.
+Method: Python `csv.DictReader` over the committed ledger, with today's
+`EvaluationConfig` and `backend/idhazh/evals/score.py::band()`. This is
+deterministic ledger arithmetic, so hardware and spread are not applicable.
+
+The recorded `band` column predates the counterweight caps. It is the scorer's
+time-of-write output, not the current distribution.
+
+| Band | Recorded | Re-banded with today's `band()` |
+| --- | --- | --- |
+| high | 112 (71.8%) | 85 (54.5%) |
+| medium | 19 (12.2%) | 46 (29.5%) |
+| low | 25 (16.0%) | 25 (16.0%) |
+
+Twenty-seven rows, 17.3%, move from `high` to `medium`.
+
+| Move reason | Rows |
+| --- | --- |
+| Lead coverage alone | 11 |
+| Dropped hedge alone | 11 |
+| Lead coverage and dropped hedge | 5 |
+
+Only four rows have `unsupported_numbers > 0`. In the 600-1000 source-word
+stratum, n=50, two positives sit below `hhem = 0.80` and none sit above it. That
+is too few events to set a threshold.
+
+The ledger is one run, not two days. `run_id` `2026-08-23-3` owns 137 of 156
+rows. The remaining 19 rows sit under a different `pipeline_fingerprint`. Five
+source URLs appear under both fingerprints. Every one moved downward: -0.105,
+-0.595, -0.114, -0.079 and -0.034. That uniform shift points at a producer
+change in a way scattered noise would not. The largest observed item-level HHEM
+move is 0.595: the Google biomarker article moved from 0.9578 (`high`) to 0.3626
+(`low`) with no model or scorer change recorded.
+
 ## llama-server runtime sweep
 
 **Status 2026-08-23:** harness added, sweep not yet run. No runtime flag is
