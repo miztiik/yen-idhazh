@@ -13,11 +13,16 @@ is easy; a summarizer that cannot be talked out of its shape is the product.
 from __future__ import annotations
 
 import json
+import shlex
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
+from idhazh import config
 from idhazh.contracts.app_config import InferenceConfig, SummarizeConfig, SummaryBand
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
@@ -154,18 +159,135 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 
 
 def test_the_server_is_started_from_config_not_by_hand() -> None:
-    from pathlib import Path
+    from idhazh.contracts.app_config import ModelRef
 
+    binary = Path("bin/llama-server")
+    weights = Path("models/w.gguf")
+    argv = server_argv(
+        binary=binary,
+        weights=weights,
+        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
+        inference=InferenceConfig(),
+    )
+    assert argv == [
+        str(binary),
+        "--model",
+        str(weights),
+        "--alias",
+        "m",
+        "--ctx-size",
+        "8192",
+        "--batch-size",
+        "512",
+        "--ubatch-size",
+        "512",
+        "--threads",
+        "4",
+        "--port",
+        "8080",
+    ]
+
+
+def test_server_argv_matches_the_digest_workflow_command() -> None:
+    from idhazh.contracts.app_config import ModelRef
+
+    workflow = (REPO_ROOT / ".github/workflows/digest.yml").read_text(encoding="utf-8")
+    assert workflow.count("backend/utilities/llama_server_argv.py") == 4
+    for literal in (
+        "--ctx-size 8192",
+        "--batch-size 512",
+        "--ubatch-size 512",
+        "--threads 4",
+        "--no-warmup",
+    ):
+        assert literal not in workflow
+
+    settings = config.load(CONFIG_DIR)
+    cases = (
+        (
+            "Qwen3-8B-Q4_K_M.gguf",
+            settings.app.models.summarize.id,
+            settings.app.models.summarize,
+        ),
+        (
+            "Qwen3-4B-Q4_K_M.gguf",
+            settings.app.models.route.id,
+            settings.app.models.route,
+        ),
+    )
+    for file_name, alias, model in cases:
+        expected = server_argv(
+            binary=Path("backend/bin/llama-server"),
+            weights=Path("backend/models") / file_name,
+            model=ModelRef(
+                id=alias,
+                repo=model.repo,
+                file=model.file,
+                quantisation=model.quantisation,
+                sha256=model.sha256,
+            ),
+            inference=settings.app.models.inference,
+        )
+        actual = subprocess.check_output(
+            [
+                sys.executable,
+                "backend/utilities/llama_server_argv.py",
+                "--config",
+                "config",
+                "--binary",
+                "backend/bin/llama-server",
+                "--weights",
+                f"backend/models/{file_name}",
+                "--alias",
+                alias,
+                "--format",
+                "shell",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+        ).strip()
+        assert shlex.split(actual) == expected
+
+
+def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
     from idhazh.contracts.app_config import ModelRef
 
     argv = server_argv(
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        inference=InferenceConfig(
+            n_parallel=1,
+            flash_attention="on",
+            load_mode="mmap+mlock",
+            cache_type_k="q8_0",
+            cache_type_v="q8_0",
+            priority=2,
+            poll=100,
+            n_threads_batch=4,
+            startup_warmup=True,
+        ),
     )
-    assert "--ctx-size" in argv and "8192" in argv
-    assert "--threads" in argv and "4" in argv
+
+    assert argv[-16:] == [
+        "-np",
+        "1",
+        "-fa",
+        "on",
+        "-lm",
+        "mmap+mlock",
+        "-ctk",
+        "q8_0",
+        "-ctv",
+        "q8_0",
+        "--prio",
+        "2",
+        "--poll",
+        "100",
+        "-tb",
+        "4",
+    ]
+    assert "--no-warmup" not in argv
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:

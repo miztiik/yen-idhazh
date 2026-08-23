@@ -48,7 +48,7 @@ def server_argv(
     be a change to the stamp - which is why it is built from config rather than
     written out by hand at the call site.
     """
-    return [
+    argv = [
         str(binary),
         "--model",
         str(weights),
@@ -64,8 +64,26 @@ def server_argv(
         str(inference.n_threads),
         "--port",
         str(port),
-        "--no-warmup",
     ]
+    if inference.n_parallel is not None:
+        argv.extend(("-np", str(inference.n_parallel)))
+    if inference.flash_attention is not None:
+        argv.extend(("-fa", inference.flash_attention))
+    if inference.load_mode is not None:
+        argv.extend(("-lm", inference.load_mode))
+    if inference.cache_type_k is not None:
+        argv.extend(("-ctk", inference.cache_type_k))
+    if inference.cache_type_v is not None:
+        argv.extend(("-ctv", inference.cache_type_v))
+    if inference.priority is not None:
+        argv.extend(("--prio", str(inference.priority)))
+    if inference.poll is not None:
+        argv.extend(("--poll", str(inference.poll)))
+    if inference.n_threads_batch is not None:
+        argv.extend(("-tb", str(inference.n_threads_batch)))
+    if not inference.startup_warmup:
+        argv.append("--no-warmup")
+    return argv
 
 
 def request_payload(

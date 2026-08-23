@@ -41,32 +41,41 @@
     "max_body_bytes": 2000000,
     "max_retries": 3,
     "min_source_words": 250,
-    "request_timeout_seconds": 20.0,
-    "truncation_cap_tokens": 2500,
-    "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)",
-    "prose_sentence_min": 3,
-    "prose_sentence_words_min": 8,
-    "reject_not_prose": false,
-    "reject_boilerplate": false,
     "paywall_markers": [
       "isaccessibleforfree\":false",
       "isaccessibleforfree\": false",
       "subscribe to continue reading",
       "register or subscribe to continue"
-    ]
+    ],
+    "prose_sentence_min": 3,
+    "prose_sentence_words_min": 8,
+    "reject_boilerplate": false,
+    "reject_not_prose": false,
+    "request_timeout_seconds": 20.0,
+    "truncation_cap_tokens": 2500,
+    "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
   },
   "logging": {
     "level": "INFO"
   },
   "models": {
     "inference": {
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "flash_attention": null,
+      "load_mode": null,
       "max_output_tokens": 900,
       "n_batch": 512,
       "n_ctx": 8192,
+      "n_parallel": null,
       "n_threads": 4,
+      "n_threads_batch": null,
       "n_ubatch": 512,
+      "poll": null,
+      "priority": null,
       "request_timeout_minutes": 22.1,
       "seed": 0,
+      "startup_warmup": true,
       "temperature": 0.0,
       "thinking": false,
       "top_p": 1.0
@@ -138,7 +147,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-23T18:15",
+  "version": "2026-08-23T19:35",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
