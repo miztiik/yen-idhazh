@@ -84,6 +84,10 @@ def to_eval_row(
     `full_text` is the whole article, not the truncated text the model saw. The
     gap between the two faithfulness scores is the cost of truncation, and it is
     invisible unless both are measured.
+
+    The two densities take `full_text` alone. They are the only columns that
+    score the article rather than the summary, and they are recorded and not
+    banded: nothing here knows yet what a normal value looks like.
     """
     text = summary.summary or ""
     unsupported = metrics.unsupported_numbers(text, full_text)
@@ -96,6 +100,10 @@ def to_eval_row(
         item_id=item.item_id,
         url_key=item.url_key,
         source_url=item.canonical_url,
+        # The source's headline, not ours. This column exists so a row still
+        # identifies its article after the day is pruned from the site, and
+        # identity has to be the thing that does not vary: our title is
+        # rewritten per run and is absent whenever the rewrite missed its range.
         title=(item.title or article.title or _UNTITLED),
         vertical=item.vertical,
         model_id=summary.model_id,
@@ -110,6 +118,8 @@ def to_eval_row(
         verbatim_run=metrics.verbatim_run(text, full_text),
         unsupported_numbers=unsupported,
         hedge_dropped=metrics.hedge_dropped(text, full_text),
+        evidential_density=metrics.evidential_density(full_text),
+        speculative_density=metrics.speculative_density(full_text),
         extraction_suspect=extraction_suspect,
         band=band(hhem, unsupported_numbers=unsupported, config=config),
         source_word_count=metrics.word_count(full_text),

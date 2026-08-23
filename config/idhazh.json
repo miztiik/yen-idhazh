@@ -1,10 +1,13 @@
 {
   "collect": {
     "front_page_bonus": 0.4,
+    "max_future_hours": 6.0,
     "max_per_source": 2,
-    "min_feeds_floor": 25,
     "quarantine_after_failures": 5,
+    "recency_half_life_hours": 18.0,
+    "recency_weight": 0.6,
     "repetition_weight": 1.0,
+    "seen_window_days": 90,
     "tier_weights": {
       "community": 0.3,
       "institution": 1.0,
@@ -46,7 +49,7 @@
   },
   "models": {
     "inference": {
-      "max_output_tokens": 500,
+      "max_output_tokens": 900,
       "n_batch": 512,
       "n_ctx": 8192,
       "n_threads": 4,
@@ -78,13 +81,38 @@
     "site_budget_mb": 800
   },
   "run": {
-    "item_cap_per_day": 20,
     "max_parallel": 4,
+    "safety_ceiling_per_run": 200,
     "shard_size": 5,
     "shard_timeout_minutes": 150,
     "success_floor_pct": 70
   },
+  "summarize": {
+    "bands": [
+      {
+        "min_source_words": 0,
+        "target_words_max": 90,
+        "target_words_min": 50
+      },
+      {
+        "min_source_words": 700,
+        "target_words_max": 150,
+        "target_words_min": 70
+      },
+      {
+        "min_source_words": 2000,
+        "target_words_max": 200,
+        "target_words_min": 110
+      }
+    ],
+    "key_points_max": 5,
+    "key_points_min": 2,
+    "max_verbatim_words": 20,
+    "title_words_max": 14,
+    "title_words_min": 6
+  },
   "ui": {
+    "read_mark_days": 7,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
       "notice",
@@ -98,7 +126,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-21",
+  "version": "2026-08-23T16:00",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

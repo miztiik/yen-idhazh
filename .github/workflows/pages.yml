@@ -9,7 +9,7 @@ on:
     paths:
       - 'frontend/**'
       - 'config/idhazh.json'
-      - 'evals/**'
+      - 'state/**'
   # The daily run commits the day with GITHUB_TOKEN, and GitHub deliberately does
   # not let one workflow's push trigger another. Without this the digest would
   # land in the repository every morning and never reach a reader - the failure

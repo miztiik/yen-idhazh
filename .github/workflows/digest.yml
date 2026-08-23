@@ -1,7 +1,8 @@
 name: digest
 
-# The daily run. An orchestrator that never does the work, disposable workers
-# that do, and an assemble step that publishes whatever finished.
+# The run, four times a day. An orchestrator that never does the work,
+# disposable workers that do, and an assemble step that publishes whatever
+# finished.
 #
 # The shape mirrors the runner's own economics (Holy Law #2): weights are
 # restored once per JOB rather than once per run, so a worker handles a shard of
@@ -9,9 +10,13 @@ name: digest
 
 on:
   schedule:
-    # 06:00 UTC. Daily matters more than the hour: a cache entry unread for
-    # seven days is deleted, and a paused schedule costs a full re-download.
-    - cron: '0 6 * * *'
+    # Every six hours. A story that broke at 07:00 waited a full day under a
+    # daily schedule, and the digest is only worth opening if it is current.
+    #
+    # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
+    # is the busiest minute on the platform; twenty past costs a reader nothing
+    # and buys a run that starts closer to when it was asked for.
+    - cron: '20 */6 * * *'
   workflow_dispatch:
     inputs:
       date:
@@ -82,6 +87,31 @@ jobs:
       # finishes in seconds - which is what makes fanning out afterwards cheap.
       - name: Plan the day
         run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
+
+      # The plan job writes the sight and health ledgers, so the plan job commits
+      # them - not assemble. A run that dies in the worker still saw what it saw,
+      # and the next run needs that: first sight is the only age an undated
+      # article has, and a feed we never recorded is a feed we cannot quarantine.
+      # A bad day is exactly the day worth measuring, so waiting for a successful
+      # publish would lose the records that matter most.
+      - name: Commit what the plan saw
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add state/seen state/feed-health
+          if git diff --cached --quiet; then
+            echo "nothing new to record"
+            exit 0
+          fi
+          git commit -m "plan: ${{ steps.decide.outputs.date }}"
+          for attempt in 1 2 3; do
+            git push && exit 0
+            echo "push rejected, rebasing (attempt $attempt)"
+            git pull --rebase --autostash origin main
+          done
+          echo "could not push what the plan saw after three attempts" >&2
+          exit 1
 
       - uses: actions/upload-artifact@v4
         with:
@@ -350,7 +380,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/public/digest evals
+          git add frontend/public/digest state
           if git diff --cached --quiet; then
             echo "nothing changed"
             exit 0

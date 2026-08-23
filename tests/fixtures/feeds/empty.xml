@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A feed that is alive, well-formed, and carries nothing.
+
+  This is the failure HTTP cannot see. The server answers 200, the parser is
+  happy, and the pipeline counts the feed as read - so a source that has been
+  silent for a month looks identical to a source that is working. Eight real
+  feeds sat in exactly this state before anything measured it.
+-->
+<rss version="2.0">
+  <channel>
+    <title>Example Quiet Desk</title>
+    <link>https://quiet.example.org/</link>
+    <description>Nothing has been filed here for some time.</description>
+    <lastBuildDate>Sat, 22 Aug 2026 04:00:00 GMT</lastBuildDate>
+  </channel>
+</rss>

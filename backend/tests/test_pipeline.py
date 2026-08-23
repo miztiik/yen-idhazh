@@ -13,7 +13,7 @@ import csv
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
 from idhazh import assemble, cli, config
 from idhazh.contracts.app_config import EvaluationConfig
@@ -22,8 +22,9 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.summary import Summary
-from idhazh.contracts.taxonomy import SourceKind
+from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
 from idhazh.evals.score import band, counterweight_band, to_eval_row
@@ -71,7 +72,7 @@ def row(**overrides: object) -> EvalRow:
 
 def test_a_fresh_clone_loads_its_committed_config() -> None:
     settings = config.load(CONFIG_DIR)
-    assert settings.app.run.item_cap_per_day >= 1
+    assert settings.app.run.safety_ceiling_per_run >= 1
     assert settings.sources.feeds
     assert settings.taxonomy.verticals
 
@@ -143,11 +144,40 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
     assert built.truncation_flagged
 
 
+def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
+    """The two densities are the only columns that measure the input.
+
+    Checked with a source the summary does not quote, so a value that came from
+    the summary instead would read as zero and fail here.
+    """
+    sourced = (
+        "The Ministry of Energy said the plant will close in March, according to a "
+        "statement on Tuesday. Officials familiar with the decision claimed the date "
+        "was set in June."
+    )
+    built = to_eval_row(
+        item=plan().items[0],
+        article=article(),
+        summary=summary(),
+        full_text=sourced,
+        hhem=0.91,
+        hhem_full=0.89,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="v",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+    assert built.evidential_density is not None
+    assert built.evidential_density > 0.0
+    assert built.speculative_density == 0.0, "measured, and measured as none"
+
+
 # --- The ledger --------------------------------------------------------------
 
 
 def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
-    ledger = tmp_path / "evals" / "scores.csv"
+    ledger = tmp_path / "state" / "scores.csv"
     assert writer.append(ledger, [row()]) == 1
     assert writer.append(ledger, [row(item_id="ai-02")]) == 1
     with ledger.open(encoding="utf-8") as handle:
@@ -157,13 +187,37 @@ def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
 
 
 def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
-    ledger = tmp_path / "evals" / "scores.csv"
+    ledger = tmp_path / "state" / "scores.csv"
     assert writer.append(ledger, []) == 0
     assert not ledger.exists()
 
 
 def test_the_ledger_columns_match_the_contract() -> None:
     assert writer.columns() == EvalRow.csv_columns()
+
+
+def test_the_committed_ledger_carries_todays_columns() -> None:
+    """The header is written once, and the file is appended to forever.
+
+    A contract that grew a column while the committed header did not would put
+    more cells on tomorrow's row than the header names, and the dashboard reads
+    cells by position.
+    """
+    ledger = REPO_ROOT / writer.LEDGER_RELPATH
+    if not ledger.exists():
+        pytest.skip("no ledger committed yet")
+    assert writer.read_header(ledger) == writer.columns()
+
+
+def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
+    """Silent corruption is the alternative, and it is unrecoverable once shipped."""
+    ledger = tmp_path / "state" / "scores.csv"
+    writer.append(ledger, [row()])
+    kept = ledger.read_text(encoding="utf-8").split("\n")
+    kept[0] = ",".join(writer.columns()[:-1])
+    ledger.write_text("\n".join(kept), encoding="utf-8")
+    with pytest.raises(ValueError, match="Migrate the ledger"):
+        writer.append(ledger, [row(item_id="ai-02")])
 
 
 # --- Chunking ----------------------------------------------------------------
@@ -245,6 +299,40 @@ def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> N
 
     monkeypatch.setattr("idhazh.evals.hhem.HhemScorer.load", explode)
     assert cli._scorer(enabled=True) is None
+
+
+def test_a_retired_feed_still_labels_the_items_it_published() -> None:
+    """Splitting the feed lists must not cost an older item its name or its kind.
+
+    A published item carries a `source_id` forever, and a feed can retire
+    between the plan and the assemble of the same day - four times more often
+    once the schedule moves to every six hours. Both label maps read the union,
+    so the maps that would otherwise fall back to the raw slug and to
+    `reporting` never get the chance.
+
+    The fallback is the failure: publishing an announcement as reporting is the
+    one thing `kind` was added to prevent.
+    """
+    sources = config.load(CONFIG_DIR).sources.model_copy(
+        update={
+            "feeds": [],
+            "retired": [
+                FeedDef(
+                    id="defunct-daily",
+                    vertical="ai",
+                    title="Defunct Daily",
+                    url="https://defunct.example.com/rss",
+                    tier=SourceTier.INSTITUTION,
+                    kind=SourceKind.ANNOUNCEMENT,
+                    status=LifecycleStatus.RETIRED,
+                    retired_on="2026-07-04",
+                    weight=0.0,
+                )
+            ],
+        }
+    )
+    assert assemble.source_names(sources)["defunct-daily"] == "Defunct Daily"
+    assert assemble.source_kinds(sources)["defunct-daily"] is SourceKind.ANNOUNCEMENT
 
 
 def test_a_day_publishes_even_when_items_failed() -> None:
