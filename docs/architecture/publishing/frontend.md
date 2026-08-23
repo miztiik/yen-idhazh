@@ -236,7 +236,7 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 
 - [layout.md](layout.md) - the routes, the dated addresses and retention.
 - [../sources/health.md](../sources/health.md) - the feed ledger the console renders, and the quarantine rule it mirrors.
-- [../sources/freshness.md](../sources/freshness.md) - the six-hour cadence that gives the grid four squares a day.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - the four-run cadence that gives the grid four squares a day.
 - [../../concepts/digest.md](../../concepts/digest.md) - what an item carries and the visual rule.
 - [../../concepts/design-system.md](../../concepts/design-system.md) - typography, tokens and the colour rule.
 - [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the four states.

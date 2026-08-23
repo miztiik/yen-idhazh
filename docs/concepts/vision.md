@@ -1,6 +1,6 @@
 # Vision
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 What yen-idhazh is, what it is not, and the one-sentence product idea every other concept doc serves. This is the top of the concept tier; if a later doc contradicts this page, this page is wrong and gets fixed.
 
@@ -20,7 +20,13 @@ The two audiences are why the two surfaces are held to different standards, and 
 
 ## The shape
 
-A run happens every six hours, entirely inside GitHub Actions, and commits what it produced. All four runs of a day append to the same dated digest, so the day grows through the day. A reader later opens a static page. Nothing computes at read time, so there is no server to run, nothing to scale, and nothing that can be down.
+A run starts at 06:20, 10:20, 14:20, and 18:20 UTC inside GitHub Actions,
+and commits what it produced. All four runs of a day append to the same dated
+digest, so the day grows through the day. A reader later opens a static page.
+Nothing computes at read time, so there is no server to run, nothing to scale,
+and nothing that can be down. See
+[../reference/github-actions.md](../reference/github-actions.md) for the exact
+trigger contract.
 
 Two artifacts come out of a run, and they are equally the product:
 
@@ -69,5 +75,6 @@ Note what is *not* on that list: a number we chose. There is no daily item cap. 
 - [evaluation.md](evaluation.md) - how a summary is scored, and what each metric cannot see.
 - [digest.md](digest.md) - what a reader actually gets.
 - [config.md](config.md) - the tunable surface.
+- [../reference/github-actions.md](../reference/github-actions.md) - workflow names and exact triggers.
 - [../../CLAUDE.md](../../CLAUDE.md) - the engineering contract, including the full non-goals.
 - [../../README.md](../../README.md) - the short entry point.
