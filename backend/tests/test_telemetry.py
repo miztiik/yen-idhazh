@@ -13,6 +13,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh import config, extract, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -117,6 +118,81 @@ def row_for(code: FailureCode) -> ItemHealthRow:
             failed = failed_article(
                 ArticleStatus.EXTRACT_FAILED, "only 12 words extracted; page furniture is short"
             )
+        case FailureCode.NOT_PROSE:
+            signalled = extract.to_article(
+                item(),
+                FetchResult(
+                    FetchOutcome.OK,
+                    status=200,
+                    body=b"<html><body><article><p>Two words.</p></article></body></html>",
+                ),
+                config=settings.app.extract,
+                fetched_at="2026-08-21T06:00:00Z",
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=signalled,
+                summary=summary(),
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
+        case FailureCode.BOILERPLATE:
+            signalled = extract.to_article(
+                item(),
+                FetchResult(
+                    FetchOutcome.OK,
+                    status=200,
+                    body=(
+                        b"<html><body><article><p>Shared navigation</p>"
+                        b"<p>This sentence has enough words to count as article prose today.</p>"
+                        b"<p>Another sentence has enough words to count as article prose today.</p>"
+                        b"<p>A third sentence has enough words to count as article prose today.</p>"
+                        b"</article></body></html>"
+                    ),
+                ),
+                config=settings.app.extract,
+                fetched_at="2026-08-21T06:00:00Z",
+                seen_elsewhere={
+                    "Shared navigation",
+                    "This sentence has enough words to count as article prose today.",
+                    "Another sentence has enough words to count as article prose today.",
+                },
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=signalled,
+                summary=summary(),
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
+        case FailureCode.PAYWALLED:
+            failed = extract.to_article(
+                item(),
+                FetchResult(
+                    FetchOutcome.OK,
+                    status=200,
+                    body=(
+                        b"<html><head><script type=\"application/ld+json\">"
+                        b"{\"isAccessibleForFree\": false, \"hasPart\": {"
+                        b"\"cssSelector\": \".paywall\", \"isAccessibleForFree\": false}}"
+                        b"</script></head><body><p>Subscriber text.</p></body></html>"
+                    ),
+                ),
+                config=settings.app.extract,
+                fetched_at="2026-08-21T06:00:00Z",
+            )
+        case FailureCode.UNSUPPORTED_FORM:
+            payload = item().model_dump(mode="json")
+            payload["canonical_url"] = "https://newsroom.example-grid.com/paper.pdf"
+            payload["source_url"] = payload["canonical_url"]
+            payload["url_key"] = derive_url_key(payload["canonical_url"])
+            pdf_item = item().model_validate(payload)
+            failed = extract.to_article(
+                pdf_item,
+                FetchResult(FetchOutcome.OK, status=200, body=b"%PDF-1.7"),
+                config=settings.app.extract,
+                fetched_at="2026-08-21T06:00:00Z",
+            )
         case FailureCode.MODEL_UNREACHABLE:
             failed_summary = summarize.to_summary(
                 ok_article,
@@ -200,7 +276,10 @@ def row_for(code: FailureCode) -> ItemHealthRow:
 def test_every_failure_code_has_a_real_fixture_writer(code: FailureCode) -> None:
     row = row_for(code)
 
-    assert row.outcome is ItemOutcome.FAILED
+    if code in {FailureCode.NOT_PROSE, FailureCode.BOILERPLATE}:
+        assert row.outcome is ItemOutcome.OK
+    else:
+        assert row.outcome is ItemOutcome.FAILED
     assert row.code is code
 
 

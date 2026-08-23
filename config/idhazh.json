@@ -43,7 +43,17 @@
     "min_source_words": 250,
     "request_timeout_seconds": 20.0,
     "truncation_cap_tokens": 2500,
-    "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
+    "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)",
+    "prose_sentence_min": 3,
+    "prose_sentence_words_min": 8,
+    "reject_not_prose": false,
+    "reject_boilerplate": false,
+    "paywall_markers": [
+      "isaccessibleforfree\":false",
+      "isaccessibleforfree\": false",
+      "subscribe to continue reading",
+      "register or subscribe to continue"
+    ]
   },
   "logging": {
     "level": "INFO"
@@ -128,7 +138,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-23T17:52",
+  "version": "2026-08-23T18:15",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

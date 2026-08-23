@@ -41,6 +41,16 @@
     "max_body_bytes": 1000000,
     "max_retries": 2,
     "min_source_words": 150,
+    "paywall_markers": [
+      "isaccessibleforfree\":false",
+      "isaccessibleforfree\": false",
+      "subscribe to continue reading",
+      "register or subscribe to continue"
+    ],
+    "prose_sentence_min": 3,
+    "prose_sentence_words_min": 8,
+    "reject_boilerplate": false,
+    "reject_not_prose": false,
     "request_timeout_seconds": 15.0,
     "truncation_cap_tokens": 4000,
     "user_agent": "yen-idhazh-test/1.0 (+https://example.org/contact)"

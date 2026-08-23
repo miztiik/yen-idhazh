@@ -17,7 +17,7 @@ The test is simple: **would a reasonable operator ever want a different value wi
 Knobs, by the surface they tune:
 
 - **Sources** - which feeds or listings are consulted, and the filters a candidate link must survive.
-- **Extraction** - the truncation cap, the retry budget, backoff, and what counts as an oversized body.
+- **Extraction** - the truncation cap, the retry budget, backoff, what counts as an oversized body, shape-signal thresholds, shape enforcement switches, and paywall fallback markers.
 - **Model** - which model reference and quantisation, the context size, thread count, and the sampling parameters that pin determinism.
 - **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the expected compression range, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
@@ -29,6 +29,17 @@ These are the *surfaces*, not a field list. The field-level truth is `schemas/ap
 The knobs are spread across four files rather than one, along the line of who edits them and how often: `config/idhazh.json` for behaviour, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
 
 Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing.
+
+Extraction has three shape and access controls:
+
+- `extract.prose_sentence_min` and `extract.prose_sentence_words_min` decide when text carries `not_prose`.
+- `extract.boilerplate_ratio_max` decides when sibling-shared lines carry `boilerplate`.
+- `extract.paywall_markers` is the fallback when JSON-LD does not declare a paywall.
+
+Two enforcement switches default to false: `extract.reject_not_prose` and
+`extract.reject_boilerplate`. False means record the signal and publish. True
+means reject the item as a listing. `extract.min_source_words` now marks the
+brief tier. It does not reject the item.
 
 ## What is NOT a knob
 
