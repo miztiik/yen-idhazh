@@ -24,6 +24,7 @@ from idhazh.contracts.base import (
     UrlKey,
     derive_output_digest,
 )
+from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
 
 
 class SummaryStatus(StrEnum):
@@ -37,6 +38,16 @@ class Summary(Contract):
 
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T17:36",
+            change="Added optional failure_code for typed summarize failures.",
+            why=(
+                "A dead local model server is infrastructure failure, not a malformed "
+                "model reply. The failure payload now carries model_unreachable as a "
+                "typed value so the item-health classifier can read it without "
+                "pattern-matching failure_detail."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23",
             change="Added optional title, and folded it into output_digest when present.",
@@ -118,6 +129,13 @@ class Summary(Contract):
 
     generated_at: Timestamp
     status: SummaryStatus
+    failure_code: FailureCode | None = Field(
+        default=None,
+        description=(
+            "Typed summarize-stage failure, when the cause is already known. "
+            "Older payloads omit it and still validate."
+        ),
+    )
     failure_detail: UntrustedLine | None = None
 
     @model_validator(mode="after")
@@ -134,9 +152,16 @@ class Summary(Contract):
                 raise ValueError("an ok summary carries summary text and at least one key point")
             if self.failure_detail is not None:
                 raise ValueError("an ok summary carries no failure_detail")
+            if self.failure_code is not None:
+                raise ValueError("an ok summary carries no failure_code")
         else:
             if self.failure_detail is None:
                 raise ValueError("a summary that did not land must record why")
             if self.title is not None:
                 raise ValueError("a summary that did not land publishes no title")
+            if (
+                self.failure_code is not None
+                and ItemStage.SUMMARIZE not in FAILURE_CODE_STAGES[self.failure_code]
+            ):
+                raise ValueError("summary failure_code must belong to summarize")
         return self
