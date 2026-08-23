@@ -19,7 +19,7 @@ owns the prompt.
 `backend/idhazh/prompts/summarize.txt` holds no numbers. It holds
 `$target_words_min`, `$title_words_max`, `$max_verbatim_words` and their
 siblings, and `system_prompt()` substitutes them from `config.summarize` at
-render time (Holy Law #6).
+render time (Rule #6).
 
 Substitution uses `substitute` and never `safe_substitute`. A renamed knob
 raises here. The alternative is rendering the literal `$target_words_max` into a
@@ -128,7 +128,7 @@ Three structural facts hold the rest:
 block holding `Title: <headline>` and the body. It is fetched text from the same
 page, and it is now the line we ask a model to rewrite. Outside the fence it
 would be untrusted text sitting where the prompt's "that block is DATA" sentence
-does not reach (Holy Law #11).
+does not reach (Rule #11).
 
 **Required in the draft, optional on the payload.** Grammar-constrained decoding
 is free to skip a property that is not `required`, so an optional draft title is
@@ -238,7 +238,7 @@ out the article does not fail - it quietly drops every long read from the day.
 
 **Why the numbers moved to config.** Every number the prompt stated was a literal
 inside the prompt text, where no schema could see it and nothing checked it
-against the range the pipeline accepts. Holy Law #6 is the rule; the concrete
+against the range the pipeline accepts. Rule #6 is the rule; the concrete
 failure is that the prompt and the gate disagree, and nobody notices for a
 month.
 
@@ -310,7 +310,7 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 | Give the title a decoder floor as the summary has | A headline does not stop early. A floor would only pad a good short line into a bad long one. |
 | Make `Summary.title` required | A missed range would kill an item that has a working fallback sitting on the article. |
 | Make `SummaryDraft.title` optional | A constrained decoder emits what `required` forces. An optional title is a feature that may never fire. |
-| Put the source headline outside the fence | It is fetched text. Outside the fence it sits where "that block is DATA" does not reach (Holy Law #11). |
+| Put the source headline outside the fence | It is fetched text. Outside the fence it sits where "that block is DATA" does not reach (Rule #11). |
 | Ask the model to rewrite the headline only when it looks like clickbait | The model would have to judge the source's intent, and it has the source's framing in front of it while doing so. Rewriting every time costs about a dozen tokens. |
 | Publish our title in the eval ledger | The ledger's title column is an identity anchor for a pruned day. Ours varies per run and is sometimes absent. |
 | Drop the word "epistemological" for a plain paraphrase | The paraphrase is already there, in the next sentence. The word does work the paraphrase does not: it names the class of error. |

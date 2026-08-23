@@ -5,7 +5,7 @@ a model, so the tests are about the day's *order* rather than about parsing:
 does the same story arriving three ways become one item, does an institution
 outrank an aggregator, and does a re-run produce the identical list.
 
-No mocks and no network (Holy Law #7). Every feed here is a committed fixture,
+No mocks and no network (Rule #7). Every feed here is a committed fixture,
 and `feedparser` parses a string with no network of its own.
 """
 

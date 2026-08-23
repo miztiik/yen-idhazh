@@ -1,7 +1,7 @@
 /** The published surface's knobs, read from `config/idhazh.json` at build time.
  *
  * Nothing in a component is hardcoded that an operator might reasonably want
- * different (Holy Law #6).
+ * different (Rule #6).
  *
  * Each reader mirrors one block of the file and is named after it. A single
  * reader returning a mixture would hide which knob came from where, and the

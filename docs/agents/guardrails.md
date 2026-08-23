@@ -37,9 +37,9 @@ Binds every persona and every default-agent answer, plus docs, commit messages a
 
 A persona's own worldview shapes what it says, never how plainly it says it.
 
-## Holy Laws (cite by number when relevant)
+## Rules (cite by number when relevant)
 
-1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no runtime fetches beyond same-origin published files, no runtime inference, no runtime compute, no telemetry SDK, no accounts, no push notifications.
+1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no server we run, no runtime call to a model provider, no telemetry SDK, no accounts, no push notifications. Every computation happens in the reader's browser or in CI. Fetching static assets is allowed, third-party ones included - a font, a stylesheet, a charting library - and so is fetching our own committed files at runtime. What is forbidden is a *service*: logic executing off the reader's device, anything reporting a reader's behaviour, and any third-party script that phones home.
 2. **The runner is the architecture.** Every pipeline decision is measured against a stock `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage, and a **1 GB hard cap on the published Pages site**. Minutes are free (public repo), so wall-clock is the constraint. A model that does not fit is a design error, not a budget request.
 3. **Contracts before logic.** Every persisted shape is a Pydantic model in `backend/idhazh/contracts/` before logic reads or writes it; `schemas/` is generated from it.
 4. **docs/ = agent memory; a decision lives on the page it impacts.** No ADR file, no `docs/architecture/decisions/` directory.
@@ -102,7 +102,7 @@ In-memory `Path` objects for local I/O may stay platform-native; the rule applie
 ## Identifier and config discipline
 
 - Stable IDs (stage names, event names, route kinds, score bands) are schema-validated enums defined in `backend/idhazh/contracts/`. Never invent or reformat an ID in code.
-- Source lists, model refs, thresholds, caps and retry budgets live in `config/`, never in code (Holy Law #6). Every knob has a sane default so a fresh clone runs unconfigured.
+- Source lists, model refs, thresholds, caps and retry budgets live in `config/`, never in code (Rule #6). Every knob has a sane default so a fresh clone runs unconfigured.
 - A derived key is rebuilt from its value fields, never trusted from the incoming payload - a content-addressed filename is recomputed from the URL on read.
 - Reader-facing text is copy, never an identifier.
 
@@ -117,7 +117,7 @@ In-memory `Path` objects for local I/O may stay platform-native; the rule applie
 
 ## Schema versioning (rules only - see `CLAUDE.md` section 11 for full spec)
 
-The persisted surfaces: **stage payloads**, the **eval ledger**, the **run manifest**, **config**, and **published payloads**. Each is a Pydantic model before logic is written (Holy Law #3).
+The persisted surfaces: **stage payloads**, the **eval ledger**, the **run manifest**, **config**, and **published payloads**. Each is a Pydantic model before logic is written (Rule #3).
 
 - Each schema carries a `version` date-stamp (`YYYY-MM-DD`, or `YYYY-MM-DDTHH:MM[:SS]` for same-day revisions) - never an integer, never an epoch timestamp - and a `changelog` array; every change appends one `changelog` entry (`{version, change, why}`) in the same commit.
 - Additive + backwards-compatible change: append the entry, set `version` to today (older payloads still validate).

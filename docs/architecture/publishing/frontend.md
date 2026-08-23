@@ -187,4 +187,4 @@ Spending the colour at the day level rather than per item is the resolution of a
 - [../../concepts/design-system.md](../../concepts/design-system.md) - typography, tokens and the colour rule.
 - [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the four states.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload this renders.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Holy Law #1, section 0 and section 12.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #1, section 0 and section 12.

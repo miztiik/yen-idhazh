@@ -99,4 +99,4 @@ Digesting the model's own serialization rather than a hand-written concatenation
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the skip rule in the context of the run.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what an eval row measures, and why an empty re-run must not write one.
 - [../../reference/measurements.md](../../reference/measurements.md) - where a measured number carries its hardware and date.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Holy Law #10, section 11.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #10, section 11.

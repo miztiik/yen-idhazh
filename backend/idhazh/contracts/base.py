@@ -156,7 +156,7 @@ class Contract(Model):
 
     @classmethod
     def json_schema(cls) -> dict[str, Any]:
-        """The generated schema document. Never hand-edited (Holy Law #3)."""
+        """The generated schema document. Never hand-edited (Rule #3)."""
         schema = cls.model_json_schema()
         # A document that omits `version` is stamped with the current one on
         # read, so the schema says optional-with-a-default rather than required.

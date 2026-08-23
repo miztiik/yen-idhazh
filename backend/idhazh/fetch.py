@@ -3,13 +3,13 @@
 Every decision here is a pure function over a status code, a robots file or an
 address, and only the last few lines touch a socket. That split is deliberate:
 the policy is what can be wrong, so the policy is what the tests drive, and no
-test needs the network (Holy Law #7).
+test needs the network (Rule #7).
 
 A feed is a stranger's list of addresses, which makes every URL here an
 instruction from an untrusted source about where to send a request from inside
 CI. So an address is validated before it is dialled, and the loopback, private
 and link-local ranges are refused - a cloud metadata endpoint is one feed entry
-away otherwise (Holy Law #11).
+away otherwise (Rule #11).
 """
 
 from __future__ import annotations

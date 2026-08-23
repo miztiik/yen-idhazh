@@ -1,7 +1,7 @@
 """Contract-tier tests: the generated schemas against the models that produced
 them, and the models against real committed payloads.
 
-No mocks and no network (Holy Law #7): every input here is a file in
+No mocks and no network (Rule #7): every input here is a file in
 `tests/fixtures/` or `config/`.
 """
 
