@@ -95,6 +95,22 @@ Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 2.
 | 4850 | 6.30 | 0.30 | 2.0x slower |
 | decode (250) | 1.84 | 0.17 | **3.3x slower** |
 
+### Local 4-vs-8 thread screen
+
+**Measured 2026-08-23** on Windows 11, Intel Core i7-1265U (10 physical cores,
+12 logical processors), Qwen3-8B-Q4_K_M, llama.cpp `b10444` (`5f754ea0e`), 3
+repeats. The bounded screen used 730 prompt tokens and 64 decode tokens.
+
+| Threads | Prefill tok/s | Decode tok/s | Combined benchmark wall-clock |
+| --- | --- | --- | --- |
+| 4 | 9.44 +/- 0.44 | 3.44 +/- 0.31 | 375.06 s |
+| 8 | 11.17 +/- 0.13 | 3.91 +/- 0.19 | 318.67 s |
+
+Eight threads improved this laptop's prefill by 18% and decode by 14%; combined
+wall-clock fell 15%. The laptop exposes 12 logical processors, so this does not
+answer whether eight software workers help a four-vCPU VM. That answer must come
+from the hosted sweep on the same model and runtime build.
+
 ### Derived seconds per article, on the laptop
 
 Superseded by the runner table above. Kept because the gap between the two is
