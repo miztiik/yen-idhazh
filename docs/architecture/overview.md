@@ -141,5 +141,6 @@ news day. That now fails the build loudly.
 - [`../concepts/pipeline-loop.md`](../concepts/pipeline-loop.md) - the stages in detail.
 - [`../concepts/evaluation.md`](../concepts/evaluation.md) - how a summary is scored.
 - [`sources/discovery.md`](sources/discovery.md) - where stories come from.
+- [`summarize/prompt.md`](summarize/prompt.md) - what the summarizer asks a model for, and where every number in that ask comes from.
 - [`publishing/visuals.md`](publishing/visuals.md) - why a story gets a chart or nothing.
 - [`../../CLAUDE.md`](../../CLAUDE.md) - the engineering contract.

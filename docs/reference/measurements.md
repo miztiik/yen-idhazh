@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-23
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Holy Law #10 in one page: **an unmeasured number is
@@ -126,6 +126,49 @@ estimate:
 The stddev is ~25% of the mean at 1800 and 4850 tokens, which is thermal
 throttling on a laptop. A shared-host runner may be better or worse; the CI run
 must report its own spread rather than inherit this one.
+
+## The summarizer prompt in tokens
+
+**Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` on a
+developer machine, on the rendered prompt with LF line endings. Tokenization is
+deterministic, so the spread is zero and the hardware does not matter - the
+tokenizer does. A different model file gives a different count.
+
+| Prompt | Words | Tokens |
+| --- | --- | --- |
+| Before the Title section | 653 | 864 |
+| With the Title section | 781 | 1033 |
+| **After the terseness pass** | **598** | **801** |
+
+The terseness pass removed 183 words and **232 tokens, 22.5%**, without removing
+a rule. What went was justification, restatement, and one line the decoder
+already enforced. See
+[../architecture/summarize/prompt.md](../architecture/summarize/prompt.md).
+
+Against the 8192 `n_ctx` the pipeline runs at:
+
+| Component | Tokens |
+| --- | --- |
+| System prompt | 801 |
+| Article, at the 2500-token truncation cap | 2500 |
+| Output budget | 900 |
+| **Worst case** | **4201 of 8192** |
+
+Three notes worth keeping:
+
+- **Measure the prompt with the line endings the model is sent.** The same
+  rendered prompt tokenizes at 801 with LF and 880 with CRLF - a 79-token, 10%
+  difference from nothing but a file write. Python's default text mode
+  translates on Windows, so a measurement taken that way overstates the prompt
+  by a tenth.
+- **The prompt is the cheap half.** *Derived*, not measured: 801 tokens of
+  prefill at the runner's measured 12.1 tok/s is roughly 66 s, paid once per
+  article regardless of the article's length. A rule that earns its place costs
+  a few seconds; a rule that crowds out the article costs the whole long bucket.
+- **`fits_context` over-reserves and does so on purpose.** It approximates the
+  prompt as `words x 2`, which is 1196 against the measured 801. It errs by
+  395 tokens in the safe direction, and the alternative - tokenizing the prompt
+  per item to save context we are not short of - buys nothing.
 
 ## Weights on disk
 
@@ -304,4 +347,5 @@ happened three times on this page.
 - [../../CLAUDE.md](../../CLAUDE.md) - Holy Law #2 (the runner is the architecture) and #10 (measured, not estimated).
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - the batch-size rule these numbers set.
+- [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - the prompt the token count above measures.
 - [../how-to/set-up-local-inference.md](../how-to/set-up-local-inference.md) - reproducing the local runs.
