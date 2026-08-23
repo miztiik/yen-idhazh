@@ -37,6 +37,7 @@ COMMUNITY_URL = "https://community.example.org/feed"
 QUIET_URL = "https://quiet.example.org/feed"
 NOTICES_URL = "https://notices.example.gov/feed"
 FORWARD_URL = "https://forward.example-press.net/feed"
+DUPLICATE_URL = "https://energy.example-wire.net/feed"
 FRONT_PAGE_URL = "https://salience.example.org/feed"
 
 MODEL_RELEASE = "https://blog.example-lab.org/2026/08/model-release"
@@ -83,6 +84,13 @@ FORWARD = FeedDef(
     url=FORWARD_URL,
     tier=SourceTier.TRADE_PRESS,
 )
+DUPLICATE = FeedDef(
+    id="energy-wire",
+    vertical="energy",
+    title="Example Energy Wire",
+    url=DUPLICATE_URL,
+    tier=SourceTier.INSTITUTION,
+)
 FRONT_PAGE = SalienceFeedDef(
     id="front-page",
     title="Example Front Page",
@@ -102,6 +110,7 @@ BODIES = {
     QUIET_URL: "empty.xml",
     NOTICES_URL: "undated.xml",
     FORWARD_URL: "future-dated.xml",
+    DUPLICATE_URL: "cross-vertical-duplicate.xml",
     FRONT_PAGE_URL: "front-page.xml",
 }
 
@@ -181,8 +190,20 @@ def plan(
     now: str = NOW,
     run_n: int = 1,
     state: Path | None = None,
+    safety_ceiling: int | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
+    if safety_ceiling is not None:
+        settings = dataclasses.replace(
+            settings,
+            app=settings.app.model_copy(
+                update={
+                    "run": settings.app.run.model_copy(
+                        update={"safety_ceiling_per_run": safety_ceiling}
+                    )
+                }
+            ),
+        )
     # A retired feed's address is deliberately left out of the fetcher's table,
     # so reading one is an AssertionError rather than something to remember to
     # assert against.
@@ -365,6 +386,29 @@ def test_the_safety_ceiling_is_a_crash_guard_not_a_reading_budget() -> None:
     weakest = min(every, key=lambda item: item.rank_score)
     assert weakest not in trimmed
     assert cli._within_ceiling(every, ceiling=len(every) + 1) == every
+
+
+def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(caplog: pytest.LogCaptureFixture) -> None:
+    """One address may arrive through two desks. It still gets one planned item."""
+    energy = VerticalDef(id="energy", display_name="Energy", min_feeds=1)
+    caplog.set_level("INFO", logger="idhazh")
+
+    built = plan(
+        [LAB, TRADE, COMMUNITY, DUPLICATE],
+        verticals=[AI, energy],
+        safety_ceiling=2,
+    )
+
+    matching = [item for item in built.items if item.canonical_url == MODEL_RELEASE]
+    assert len(matching) == 1
+    assert matching[0].source_id == "lab-blog", "the highest-ranked duplicate wins"
+    assert len(built.items) == 2, "dedupe happens before the ceiling, so a duplicate does not eat a slot"
+    assert len({item.url_key for item in built.items}) == len(built.items)
+    assert built.verticals[0].planned == 2
+    assert built.verticals[1].planned == 0
+
+    key = matching[0].url_key
+    assert f"plan duplicates dropped count=1 url_keys={key} source_ids=energy-wire" in caplog.text
 
 
 def test_the_committed_ceiling_is_far_above_any_real_day() -> None:
