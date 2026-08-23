@@ -13,7 +13,7 @@ page is the reference form of it, with the reasoning.
 
 **Who writes it, and does it have to survive a fresh checkout?**
 
-There is no database and nothing running at read time (Holy Law #1). So anything
+There is no database and nothing running at read time (Rule #1). So anything
 a later run must read has to be a committed file, and anything a reader must see
 has to be a published file. Every directory below is one answer to that
 question, and the four answers do not mix.
@@ -127,4 +127,4 @@ was an implementation detail and the URL was a promise to a reader.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - what generates `schemas/` and the drift gate over it.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the shape inside `frontend/public/digest/`.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - which of these paths a local run touches.
-- [../../CLAUDE.md](../../CLAUDE.md) - section 3 (topology), section 4 (dependency rules), Holy Law #1.
+- [../../CLAUDE.md](../../CLAUDE.md) - section 3 (topology), section 4 (dependency rules), Rule #1.
