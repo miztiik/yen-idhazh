@@ -60,13 +60,22 @@
   },
   "models": {
     "inference": {
+      "cache_type_k": null,
+      "cache_type_v": null,
+      "flash_attention": null,
+      "load_mode": null,
       "max_output_tokens": 320,
       "n_batch": 256,
       "n_ctx": 4096,
+      "n_parallel": null,
       "n_threads": 2,
+      "n_threads_batch": null,
       "n_ubatch": 256,
+      "poll": null,
+      "priority": null,
       "request_timeout_minutes": 22.1,
       "seed": 0,
+      "startup_warmup": true,
       "temperature": 0.0,
       "thinking": false,
       "top_p": 1.0
@@ -138,7 +147,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-22T09:00",
+  "version": "2026-08-23T19:35",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

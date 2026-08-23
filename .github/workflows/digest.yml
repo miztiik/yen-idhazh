@@ -187,10 +187,17 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
-          LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
-            --model "backend/models/${MODEL_FILE}" \
-            --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
-            --port 8080 > llama-server.log 2>&1 &
+          MODEL_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["id"])')
+          MODEL_ARGV=$(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${MODEL_FILE}" \
+            --alias "$MODEL_ALIAS" \
+            --format shell)
+          mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${MODEL_FILE}" \
+            --alias "$MODEL_ALIAS" \
+            --format nul)
+          echo "starting: $MODEL_ARGV"
+          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
           echo "$!" > llama-server.pid
           sleep 2
           kill -0 "$(cat llama-server.pid)" || {
@@ -314,10 +321,17 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
-          LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
-            --model "backend/models/${ROUTE_FILE}" \
-            --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
-            --port 8080 > router.log 2>&1 &
+          ROUTE_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["route"]["id"])')
+          ROUTE_ARGV=$(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${ROUTE_FILE}" \
+            --alias "$ROUTE_ALIAS" \
+            --format shell)
+          mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${ROUTE_FILE}" \
+            --alias "$ROUTE_ALIAS" \
+            --format nul)
+          echo "starting: $ROUTE_ARGV"
+          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > router.log 2>&1 &
           echo "$!" > router.pid
           sleep 2
           kill -0 "$(cat router.pid)" || {
