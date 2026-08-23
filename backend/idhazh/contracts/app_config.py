@@ -488,6 +488,17 @@ class UiConfig(Model):
         default="A daily digest that checks its own work.",
         min_length=1,
     )
+    read_mark_days: int = Field(
+        default=7,
+        ge=1,
+        description=(
+            "How many digest days of read marks the browser keeps. Marks are held per "
+            "digest date, so a mark made on one day can never grey out a different "
+            "day's article. Every page load keeps the newest days up to this number "
+            "and drops the rest, which bounds the store without trusting the device "
+            "clock. One week covers a reader who comes back after a break."
+        ),
+    )
 
 
 class AppConfig(Contract):
@@ -495,6 +506,19 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T16:00",
+            change="Added ui.read_mark_days.",
+            why=(
+                "Read marks were one flat list of item ids that never expired, so an id "
+                "reused on a later day greyed out an article the reader had never "
+                "opened, and the store grew for ever. Marks are now held per digest "
+                "date and pruned to the newest days this number allows. Additive - an "
+                "older config still validates, and the browser drops the old flat list "
+                "on sight because there is no honest way to tell which day those ids "
+                "belonged to."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T15:00",
             change="Added summarize.title_words_min and summarize.title_words_max.",

@@ -37,8 +37,14 @@
 	const PAGE = 12;
 
 	onMount(() => {
-		read = loadRead();
 		hideRead = loadHideRead();
+	});
+
+	// Marks are per digest date, and this component is reused when a reader moves
+	// from one date to another on the same route. An effect re-reads on the way
+	// in; `onMount` would leave the previous day's marks on the new day's page.
+	$effect(() => {
+		read = loadRead(day.date, ui.read_mark_days);
 	});
 
 	// The published order, decided before read-state is consulted.
@@ -114,7 +120,7 @@
 						verticalName={verticalNames[item.vertical] ?? item.vertical}
 						showMark={ui.source_mark}
 						read={read.has(item.item_id)}
-						onRead={() => (read = markRead(item.item_id, read))}
+						onRead={() => (read = markRead(item.item_id, read, day.date))}
 					/>
 				{/each}
 
@@ -131,7 +137,11 @@
 
 			{#if read.size > 0}
 				<p class="pt-6 text-[0.8125rem] text-text-tertiary">
-					<button type="button" onclick={() => (read = forgetAll())} class="hover:text-accent">
+					<button
+						type="button"
+						onclick={() => (read = forgetAll(day.date))}
+						class="hover:text-accent"
+					>
 						Forget what I have read
 					</button>
 				</p>

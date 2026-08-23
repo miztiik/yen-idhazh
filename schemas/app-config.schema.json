@@ -599,6 +599,13 @@
       "additionalProperties": false,
       "description": "The published surface's knobs.\n\n`sections` is the modularity story: reordering the page is a config edit,\nnot a code change. What is deliberately absent is a per-element layout\nengine - on the surface that matters, a phone, there is no left and no\nright, and a per-reader layout would break the promise that a shared link\nshows the recipient what the sender saw.",
       "properties": {
+        "read_mark_days": {
+          "default": 7,
+          "description": "How many digest days of read marks the browser keeps. Marks are held per digest date, so a mark made on one day can never grey out a different day's article. Every page load keeps the newest days up to this number and drops the rest, which bounds the store without trusting the device clock. One week covers a reader who comes back after a break.",
+          "minimum": 1,
+          "title": "Read Mark Days",
+          "type": "integer"
+        },
         "repo_url": {
           "default": "https://github.com/miztiik/yen-idhazh",
           "minLength": 1,
@@ -738,6 +745,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added ui.read_mark_days.",
+      "version": "2026-08-23T16:00",
+      "why": "Read marks were one flat list of item ids that never expired, so an id reused on a later day greyed out an article the reader had never opened, and the store grew for ever. Marks are now held per digest date and pruned to the newest days this number allows. Additive - an older config still validates, and the browser drops the old flat list on sight because there is no honest way to tell which day those ids belonged to."
+    },
+    {
       "change": "Added summarize.title_words_min and summarize.title_words_max.",
       "version": "2026-08-23T15:00",
       "why": "The digest published the source's own headline, which is written to win a click rather than to say what happened. The summarizer now writes the title too, and the range it is asked for is a knob like every other length in this block (Holy Law #6). Additive - an older config still validates, and an item whose title misses the range falls back to the source's."
@@ -816,7 +828,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-23T15:00",
+      "default": "2026-08-23T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -830,5 +842,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-23T15:00"
+  "version": "2026-08-23T16:00"
 }
