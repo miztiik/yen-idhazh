@@ -128,7 +128,7 @@ def summarise(items: list[dict[str, Any]], edges: tuple[int, int]) -> dict[str, 
 
 
 def hardware() -> dict[str, Any]:
-    """Holy Law #10: a number without its hardware and date is not a measurement."""
+    """Rule #10: a number without its hardware and date is not a measurement."""
     return {
         "measured_at": datetime.now(UTC).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "platform": platform.platform(),

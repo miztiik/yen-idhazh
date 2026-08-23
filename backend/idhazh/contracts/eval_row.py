@@ -60,7 +60,7 @@ class EvalRow(Contract):
                 "rumour. First columns to land after the ledger had rows in it, hence "
                 "appended rather than filed by meaning, and null rather than zero on "
                 "the ten rows that predate them. Recorded only - no band reads them "
-                "until enough rows exist to say what a normal value is (Holy Law #10)."
+                "until enough rows exist to say what a normal value is (Rule #10)."
             ),
         ),
         ChangelogEntry(

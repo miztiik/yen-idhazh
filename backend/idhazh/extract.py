@@ -2,7 +2,7 @@
 
 This is the trust boundary, and it is crossed here exactly once. Everything
 below this line has already been sanitized; nothing above it may be trusted
-(Holy Law #11).
+(Rule #11).
 
 A failure is a state of the payload rather than an absence of it. A dead link,
 a paywall, a robots refusal or an extractor that found nothing degrades its own

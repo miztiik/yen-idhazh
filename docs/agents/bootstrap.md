@@ -10,13 +10,13 @@ When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "sec
 
 ## The ritual (in order)
 
-1. **Read [`CLAUDE.md`](../../CLAUDE.md) end-to-end.** It is the engineering contract. Identify which Holy Laws (#1-#11) are load-bearing for the current task and be ready to cite them by number. Sections 1a (architecture principles) and 1b (logging) constrain almost every design answer.
-2. **Read [`guardrails.md`](guardrails.md).** Holy Laws restated, project-level non-goals, git hygiene and stop conditions, escalation rules. These constrain every recommendation you make.
+1. **Read [`CLAUDE.md`](../../CLAUDE.md) end-to-end.** It is the engineering contract. Identify which Rules (#1-#11) are load-bearing for the current task and be ready to cite them by number. Sections 1a (architecture principles) and 1b (logging) constrain almost every design answer.
+2. **Read [`guardrails.md`](guardrails.md).** Rules restated, project-level non-goals, git hygiene and stop conditions, escalation rules. These constrain every recommendation you make.
 3. **Read the relevant subsystem doc(s) under `docs/architecture/<area>/`.** Pick the area that matches the task surface - e.g. `docs/architecture/contracts/` for a schema or persisted-payload change, `docs/architecture/pipeline/` for a stage, `docs/architecture/site/` for the published surface. Do not critique what you have not read.
 4. **Read the relevant concept doc(s) under `docs/concepts/`.** [`vision.md`](../concepts/vision.md) for what this project is and is not, [`pipeline-loop.md`](../concepts/pipeline-loop.md) for the stages and what each owns, [`evaluation.md`](../concepts/evaluation.md) for how quality is measured, [`config.md`](../concepts/config.md) for the tunable surface, [`digest.md`](../concepts/digest.md) for the published shape, [`telemetry.md`](../concepts/telemetry.md) for the event envelope and logging doctrine, [`design-system.md`](../concepts/design-system.md) for the visual language. Design rationale and rejected alternatives live on these pages as `## Design rationale` / `## Rejected alternatives` sections.
 5. **Read the active plan-doc under `TODO/`** if the task touches work it covers, for in-flight scope and open questions.
 6. **Skim recent git history** (`git log --oneline -20`) for in-flight work that overlaps the task.
-7. **State, in your first paragraph back to the user, which Holy Laws and which docs are load-bearing for this answer.** This makes the load explicit and easy to challenge.
+7. **State, in your first paragraph back to the user, which Rules and which docs are load-bearing for this answer.** This makes the load explicit and easy to challenge.
 
 ## When bootstrap is mandatory
 
@@ -31,7 +31,7 @@ When editing agent/customization Markdown, use ASCII only: "-", "->", ">=", "sec
 
 ## Why this exists as a doc, not duplicated in every agent file
 
-`CLAUDE.md` and `docs/` are agent memory, and duplication is forbidden (Holy Law #4). An agent file carries its own worldview; the loading ritual is shared, so it lives once, here.
+`CLAUDE.md` and `docs/` are agent memory, and duplication is forbidden (Rule #4). An agent file carries its own worldview; the loading ritual is shared, so it lives once, here.
 
 ## Autonomous plan execution - AUTO is the default
 

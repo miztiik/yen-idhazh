@@ -4,7 +4,7 @@ name: digest
 # disposable workers that do, and an assemble step that publishes whatever
 # finished.
 #
-# The shape mirrors the runner's own economics (Holy Law #2): weights are
+# The shape mirrors the runner's own economics (Rule #2): weights are
 # restored once per JOB rather than once per run, so a worker handles a shard of
 # several items to amortize the restore rather than one item per machine.
 

@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-23
 
-The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Holy Law #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
+The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
 Concept-level *why* lives in [../../concepts/principles.md](../../concepts/principles.md) (principle 4). This page is the *shape*.
 
@@ -156,4 +156,4 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, one of these shapes.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger row.
-- [../../../CLAUDE.md](../../../CLAUDE.md) - Holy Law #3, section 1a, section 4, section 11.
+- [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3, section 1a, section 4, section 11.

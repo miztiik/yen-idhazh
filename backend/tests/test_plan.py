@@ -6,7 +6,7 @@ so it keeps a safety net around all of them.
 
 The three seams `cli` exposes are what make this possible. The fetcher is a
 callable, so a test drives it from `tests/fixtures/feeds/` - a real function
-reading a real captured file, not a mock (Holy Law #7). The clock is a callable,
+reading a real captured file, not a mock (Rule #7). The clock is a callable,
 so a rule about how old an article is has a fixed `now` and cannot change its
 answer at midnight. The state directory is a path, so a test appends its sight
 ledgers to a temp directory rather than to the repository's own.
@@ -261,7 +261,7 @@ def test_the_plan_stage_reads_the_feed_list_and_nothing_else() -> None:
     """Every outbound address comes from committed config, never from fetched text.
 
     `fetcher_over` refuses an uncovered address, so a feed body that talked the
-    stage into a request would fail this test by name (Holy Law #11).
+    stage into a request would fail this test by name (Rule #11).
     """
     built = plan([LAB, TRADE, COMMUNITY], salience=[FRONT_PAGE])
     assert built.feeds_read == 3
@@ -605,7 +605,7 @@ def test_a_working_feed_records_what_it_yielded() -> None:
 
 
 def test_the_record_never_carries_the_response_body() -> None:
-    """A feed is a stranger's text and this row lands on a published page (Holy Law #11)."""
+    """A feed is a stranger's text and this row lands on a published page (Rule #11)."""
     state = Path(tempfile.mkdtemp())
     hostile = "<script>alert(1)</script>" * 40
     plan(

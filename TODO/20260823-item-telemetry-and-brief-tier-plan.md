@@ -9,7 +9,7 @@
 | --- | --- |
 | Why this plan exists | The run of 2026-08-23 published 8 of 17 items, recorded the cause of none of them, and destroyed the evidence in 24 hours. Diagnosing it needed an expiring artifact and 9 URLs re-fetched by hand. |
 | Hard scope - in | A per-item-per-run census ledger under `state/`; a stable failure-code enum; the extraction floor moved off length onto shape; a labelled brief tier for short sources; a paywall discriminator; the console's failure and compression views; prompt-cache measurement; the docs for all of it. |
-| Hard scope - out | Retiring or demoting any source by rule (blocked on 30 days of rows, Holy Law #10); PDF text extraction; a charting library; a hosted log sink; changing `EvalRow`'s meaning; the saturated faithfulness thresholds; `SummaryStatus.SKIPPED`. |
+| Hard scope - out | Retiring or demoting any source by rule (blocked on 30 days of rows, Rule #10); PDF text extraction; a charting library; a hosted log sink; changing `EvalRow`'s meaning; the saturated faithfulness thresholds; `SummaryStatus.SKIPPED`. |
 | ESCALATE triggers | (1) Any proposal to serve `state/` to a reader. (2) Any threshold in row 11 being read by ranking before 30 days of rows exist. (3) A `determinism_violation` appearing after the prompt reorder in row 9. (4) Any move to publish a metered or paywalled source - `CLAUDE.md` section 0a forbids it and row 5 enforces it. (5) Adding a failure breakdown to `RunManifest`. |
 | Chosen strategy | Contract, then writer, then reader, then view. The column lands before the chart; the rubric waits for the rows. Ruled jointly by Fowler (Q1, Q4) and Jony (blocking finding). |
 | **Precondition** | **PRs #1 (`freshness-identity-health`) and #2 (`summarizer-evidentiality`) must merge to `main` first.** They carry `state/`, `ledger.py`, `contracts/feed_health.py`, `contracts/seen.py`, `discover.resting()` and `docs/architecture/sources/health.md`. Rows 1, 2, 5 and 11 all read or extend those. Verified 2026-08-23: `git ls-tree origin/main -- state/` is empty; both PRs are OPEN. |
@@ -133,7 +133,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Measure before building. If the prefix is already reused, rows 3 and 9 close with a recorded number and no code. | Carmack, Holy Law #10 |
+  | 1 | Measure before building. If the prefix is already reused, rows 3 and 9 close with a recorded number and no code. | Carmack, Rule #10 |
   | 2 | The log is the instrument. `usage.prompt_tokens` reports the full prompt whether cached or not, which is exactly why this is invisible today. | Carmack |
   | 3 | Check `n_ctx_per_seq` in the same pass. `--parallel` defaults to auto; llama.cpp divides `n_ctx` across slots, and the measured worst case is 4201 tokens. If auto opens 2+ slots the worst case does not fit. **Report as a defect if confirmed.** | Carmack |
   | 4 | `cache_prompt` is sent explicitly rather than inherited from a server default the code never asserted. | Andre |
@@ -288,7 +288,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   | 7 | The reader label is a **sentence in the summary's voice, never a badge or a coloured pill**. A badge is learned and ignored in one day; a sentence is read because it is in the text. | Reader, Jony |
   | 8 | The wording: for an abstract, "This is a summary of the paper's abstract. The full paper is a PDF." For a partial read, "We could only read the first part of this page." | Reader |
   | 9 | A note appears ONLY where a reader would be surprised without it. If most items carry a tag, every tag becomes wallpaper and the one that mattered disappears. No label on the Marginal Revolution post. | Reader |
-  | 10 | The label is built from a count WE computed, never from source text. A label echoing a page's own words is a new unlabelled channel for a stranger's bytes (Holy Law #11). | Andre |
+  | 10 | The label is built from a count WE computed, never from source text. A label echoing a page's own words is a new unlabelled channel for a stranger's bytes (Rule #11). | Andre |
   | 11 | `form: abstract` is DECLARED per feed in `config/sources.json`, never detected. NBER, arXiv and SSRN are whole-feed properties a curator knows for certain. | Andre |
   | 12 | Page-level footer: "We skipped N stories today because we could not read enough of the page to summarize them fairly." Invisible restraint earns nothing; this is the only evidence a reader gets that somebody is saying no on their behalf. | Reader |
   | 13 | An abstract is the authors describing their own work. The summary says "The authors report that...", never states it as fact of the world. | Reader |
@@ -299,7 +299,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   | --- | --- | --- | --- |
   | 1 | Publish the Japan Times items with a paywall warning | Hard no. The reader hits a wall and feels had; a metered wall works for some readers and not others so the rule cannot be learned; and `CLAUDE.md` section 0a already forbids paywalled sources. | Reader, Andre |
   | 2 | Publish the llama.cpp release items | The page is a list of file names. The best honest summary is "a new version came out", which is a calendar entry, not a story. Two on one day reads as padding. | Reader |
-  | 3 | Fetch and summarize the PDF | Reverses Holy Law #11 - the PDF address is discovered inside a stranger's page and the sanitizer deliberately strips it. Plus a new dependency, a multi-MB download, and a 6,000-word paper truncated to its first third anyway. | Andre, Carmack |
+  | 3 | Fetch and summarize the PDF | Reverses Rule #11 - the PDF address is discovered inside a stranger's page and the sanitizer deliberately strips it. Plus a new dependency, a multi-MB download, and a 6,000-word paper truncated to its first third anyway. | Andre, Carmack |
   | 4 | A `pdf_url` payload field populated from the page body | The field IS the vulnerability. Do not mint it. If a PDF link is ever wanted it is derived by a per-source rule in config, so the address is ours. | Andre |
   | 5 | Republish the abstract as the summary | The abstract is the article body. Republishing a body is a project non-goal. It is summarized like any other source under the same verbatim cap. | Andre |
   | 6 | Labels "Short source", "Brief", "Limited source text" | "Brief" is the worst - it promises a fast read and hides what is missing. The others are jargon or an apology about our pipeline printed on the reader's page. | Reader |
@@ -321,7 +321,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Do nothing until row 3 reports. If the prefix is already reused, this row closes as COLLAPSED with a recorded number. | Carmack, Holy Law #10 |
+  | 1 | Do nothing until row 3 reports. If the prefix is already reused, this row closes as COLLAPSED with a recorded number. | Carmack, Rule #10 |
   | 2 | The prize, if it is being re-prefilled: 801 tok / 12.1 tok/s = 66.2 s per item; 13 recoverable items = 14.4 min of CPU, ~4.4 min of wall clock per shard, ~17% off a 25-minute run. | Carmack, from F9 |
   | 3 | Sort each shard's items by band before the loop. Free, no config, no runtime cost, and independent of the reorder. Items are content-addressed and independent, so ordering changes nothing about correctness. | Carmack |
   | 4 | Drop `--no-warmup` AND start llama-server before `pip install`, so the 4.68 GiB faults in behind a network-bound step. Poll `/health` immediately before the work step instead of immediately after start. | Carmack |
@@ -374,7 +374,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
-  | 1 | LayerChart / Chart.js / ECharts / Highcharts | All are interaction engines. Nothing on this page is interactive and nothing can be - Holy Law #1 forbids the fetch that would feed one. Chart.js also needs a canvas: a bitmap, not selectable, not themable. | Jony |
+  | 1 | LayerChart / Chart.js / ECharts / Highcharts | All are interaction engines. Nothing on this page is interactive and nothing can be - Rule #1 forbids the fetch that would feed one. Chart.js also needs a canvas: a bitmap, not selectable, not themable. | Jony |
   | 2 | d3-scale + d3-shape | Closest call. Rejected because the two things needed are a scale and a polyline - about thirty lines. `payload.ts` set this precedent in this exact situation: "Twenty lines beat a dependency for two build-time readers." | Jony |
   | 3 | vl-convert / Vega-Lite (already owned, used for digest visuals) | Would compute the rollups a second time in Python at a different moment, so the table and the picture beside it could disagree. Also bakes hex fills - a white chart on a dark console. | Jony |
   | 4 | Dual y axes | The crossing point becomes an artifact of the ranges the author picked. | Jony |
@@ -408,7 +408,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   | 2 | The gap it cannot see: a feed can answer 200 with 20 entries every run while every article fails to extract. `FeedHealthRow` reports healthy - correctly. The feed works; the site is not extractable. That is the 2026-08-23 shape. | Fowler |
   | 3 | Nine of fifteen codes are excluded from BOTH numerator and denominator. Robots codes leave the fraction entirely - in it as a failure we demote a site for behaving correctly; in it as a success we inflate a broken one. | Fowler |
   | 4 | Our own failures (`not_attempted`, `model_unreachable`, `output_truncated`, `bad_shape`, `length_out_of_range`, `blocked_address`, `http_rate_limited`) never count against a publisher. Charging a source for our runner dying is the fastest way to retire a good source. | Fowler |
-  | 5 | **Thresholds ship as ESTIMATES labelled as such in the field description, and nothing reads them for 30 days.** Holy Law #10 forbids naming a threshold off ten rows. Precedent: `evidential_density` shipped recorded-only for the same reason. | Fowler |
+  | 5 | **Thresholds ship as ESTIMATES labelled as such in the field description, and nothing reads them for 30 days.** Rule #10 forbids naming a threshold off ten rows. Precedent: `evidential_density` shipped recorded-only for the same reason. | Fowler |
   | 6 | The rule that makes a bad afternoon survivable: **a source is not measurable until it has `min_attempts` countable rows.** Three attempts and three failures is not a broken source; it is three attempts. | Fowler |
   | 7 | The rule against retrying a dead source forever: **retirement escalates to a human on a clock, never happens by itself.** Quarantined `retire_after_days` with zero successes -> a console line and ONE CI issue naming the set. | Fowler |
   | 8 | `degraded` lowers the ranking weight and nothing else. It does not skip the feed and never touches `config/sources.json`. A health multiplier applies at read time on top of the curator's weight. | Fowler |
@@ -419,7 +419,7 @@ Parallel groups run in order A -> B -> C -> D -> E -> F. Row 11 is additionally 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
   | 1 | A run that edits `config/sources.json` | A robot deleting sources a person curated, in a commit nobody reviewed. | Fowler, existing `health.md` |
-  | 2 | Naming thresholds now | Ten rows in the ledger. Any number is an estimate, and an unmeasured number may not justify a design. | Fowler, Holy Law #10 |
+  | 2 | Naming thresholds now | Ten rows in the ledger. Any number is an estimate, and an unmeasured number may not justify a design. | Fowler, Rule #10 |
   | 3 | Replacing the self-lifting rest with permanent deletion | The rest already caps cost at one request per cycle. What is missing is visibility, not a stronger deletion. | Fowler |
   | 4 | Counting robots refusals in the yield fraction | Demotes a site for behaving exactly as it asked to be treated. | Fowler |
 
