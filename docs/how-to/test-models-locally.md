@@ -119,7 +119,7 @@ three variables between that number and yours.
 
 ```bash
 # plan the corpus once, so both models score the identical list
-python -m idhazh plan --date 2026-08-22 --cap 6
+python -m idhazh plan --date 2026-08-22
 
 # with the 8B served
 python -m idhazh validate --date 2026-08-22 --leaderboard 0.75
@@ -132,9 +132,13 @@ python -m idhazh decide --runner local
 
 The corpus is the day's own run plan, not a curated list of addresses. A
 hand-picked set decays immediately - the first one this project had lost three
-of twenty within hours. `--cap 6` raises each vertical past its daily cap,
-because that cap is how much a reader wants in a morning, not how much a
-measurement needs.
+of twenty within hours.
+
+Plan takes no size flag. There is no daily cap to raise: the plan is whatever
+the day's sources supplied, ranked
+([../architecture/sources/freshness.md](../architecture/sources/freshness.md)).
+A quiet day gives you a small corpus, and a small corpus is a weak comparison -
+plan a busier date rather than tuning a number.
 
 `validate` writes one result file per model under `backend/var/validation/`.
 `decide` applies the rule and writes `state/validation-<date>.csv`.
@@ -220,13 +224,13 @@ this.
 | `error while loading shared libraries: libllama-common.so.0` | You copied `llama-server` alone. Copy the whole `bin` directory - some of those files are symlinks. |
 | Every item logs `model unreachable` | The server is not up. `curl` the health endpoint before blaming the pipeline. |
 | `'HHEMv2ForSequenceClassification' has no attribute 'all_tied_weights_keys'` | transformers is too new. The pin is `<5`; check what actually resolved. |
-| The reply "did not hold its shape" | Usually the output budget, not the model. `models.inference.max_output_tokens` is 500; at 250 it ran out mid-object and failed as a shape error. |
+| The reply "did not hold its shape" | Usually the output budget, not the model. `models.inference.max_output_tokens` is 900 - a crash guard, not a length control. At 250 it ran out mid-object and failed as a shape error, which named the wrong cause. |
 | An item degrades with "page furniture is short" | Extraction found under `extract.min_source_words` (250). Release-note feeds trip this constantly, which is why it is set there. |
 | A summary is dropped for word count | `evaluation.summary_words_min/max`, currently 40 and 250. |
 
 ## See also
 
-- [`run-the-pipeline.md`](run-the-pipeline.md) - the daily run and its stages.
+- [`run-the-pipeline.md`](run-the-pipeline.md) - the run and its stages.
 - [`set-up-local-inference.md`](set-up-local-inference.md) - llama.cpp in more detail.
 - [`../reference/measurements.md`](../reference/measurements.md) - every measured number, with hardware and date.
 - [`../concepts/evaluation.md`](../concepts/evaluation.md) - what the scores mean.

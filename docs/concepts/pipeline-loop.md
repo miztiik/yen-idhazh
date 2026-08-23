@@ -46,12 +46,33 @@ In order, with what each one owns:
 
 The orchestration mirrors the same rule one level up: a planning step decides the work and divides it, a set of independent workers each does a batch on its own machine, and an assembling step collects whatever finished.
 
-Three invariants hold regardless of how the batches are sized:
+**The loop turns four times a day, every six hours.** All four runs append to the same dated digest rather than replacing it, so a day grows through the day. That is only safe because an item's identity comes from its address rather than its rank - see [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+
+Four invariants hold regardless of how the batches are sized:
 
 - **A worker failure is contained to its batch**, and does not cancel its siblings.
 - **The batch size is a measured decision, not a preference.** It is set by how long loading the model takes relative to how long an item takes - if loading dominates, the batch is too small. Per-item atomicity survives inside a batch through the temp-then-rename write plus a fingerprint comparison against the run index.
 - **An item whose fingerprint already matches does no work and writes no eval row.** A re-run that changed nothing measured nothing. What the fingerprint covers, and what happens when it matches but the words differ, is [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
+
+## What one run leaves for the next
+
+There is no database (Holy Law #1), so anything a later run must read has to survive as a committed file. Four append-only ledgers under `state/` are the whole of the pipeline's memory:
+
+| File | Written by | Answers |
+| --- | --- | --- |
+| `state/seen/<YYYY-MM>.csv` | Collect | How old is this article, when its feed gave no date? |
+| `state/published.csv` | Assemble | Have we already published this address? |
+| `state/feed-health/<YYYY-MM>.csv` | Collect | What did every feed do, on every run? |
+| `state/fingerprints.csv` | the workers | Did anything about this item actually change? |
+
+Three rules hold for all of them:
+
+- **Append, never rewrite.** A mutable flag would turn an append into a read-modify-write over the whole history, and two runs racing on that lose rows.
+- **The stage that can honestly answer is the stage that writes.** Assemble writes the published ledger, not Collect - until a digest is committed, nothing was published, and a run that dies mid-way must not leave a claim that it finished.
+- **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
+
+See [../architecture/sources/freshness.md](../architecture/sources/freshness.md) for the first two and [../architecture/sources/health.md](../architecture/sources/health.md) for the third.
 
 ## What never happens in the loop
 
@@ -63,6 +84,8 @@ Three invariants hold regardless of how the batches are sized:
 ## See also
 
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - what Collect consults, and how the source set changes over time.
+- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the six-hour cadence, how age is scored, and what stops an article publishing twice.
+- [../architecture/sources/health.md](../architecture/sources/health.md) - what every feed did on every run, and the quarantine that reads it.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - what Extract does to a stranger's bytes, and the canaries that assert it.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what Summarize asks a model for, and where every number in that ask comes from.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - what Assemble writes, the reader's routes, and retention.
