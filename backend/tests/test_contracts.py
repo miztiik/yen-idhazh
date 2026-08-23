@@ -244,6 +244,7 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
 def test_nine_item_health_codes_never_count_against_a_source() -> None:
     assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 9
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
 
 
