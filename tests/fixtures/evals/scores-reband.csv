@@ -1,0 +1,8 @@
+band,hhem,unsupported_numbers,coverage,hedge_dropped
+high,0.91,0,1.0,False
+high,0.91,0,0.2,False
+high,0.91,0,1.0,True
+high,0.91,0,0.2,True
+medium,0.74,0,1.0,False
+high,0.99,1,1.0,False
+low,0.40,0,1.0,False
