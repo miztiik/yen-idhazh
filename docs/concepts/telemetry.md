@@ -78,7 +78,7 @@ Because every event is a plain serializable payload, a captured stream is a fixt
 
 ## Logs are not the record
 
-The distinction that matters operationally: a log line is **evidence of what happened**, while a committed artifact or ledger row is **the record of what happened**. CI logs age out. If a later run, a dashboard or a human needs a fact, that fact belongs in the eval ledger or the run manifest - not in a log line somebody would have to go find.
+The distinction that matters operationally: a log line is **evidence of what happened**, while a committed artifact or ledger row is **the record of what happened**. CI logs age out. If a later run, a dashboard or a human needs a fact, that fact belongs in the item-health ledger, the eval ledger or the run manifest - not in a log line somebody would have to go find.
 
 ## Design rationale
 
