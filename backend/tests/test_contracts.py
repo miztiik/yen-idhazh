@@ -241,10 +241,12 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
     )
 
 
-def test_nine_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 9
+def test_recorded_item_health_codes_never_count_against_a_source() -> None:
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 12
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
 
 
@@ -314,14 +316,20 @@ def test_hhem_delta_is_rebuilt_not_trusted() -> None:
         EvalRow.model_validate(payload)
 
 
-def test_an_ok_item_health_row_carries_no_code() -> None:
+def test_an_ok_item_health_row_carries_only_recorded_extract_signals() -> None:
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json",
         code=FailureCode.UNKNOWN,
         detail="unclassified failure",
     )
-    with pytest.raises(ValueError, match="carries no failure code"):
+    with pytest.raises(ValueError, match="recorded extract signal"):
         ItemHealthRow.model_validate(payload)
+
+    signalled = mutate(
+        CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json",
+        code=FailureCode.NOT_PROSE,
+    )
+    assert ItemHealthRow.model_validate(signalled).code is FailureCode.NOT_PROSE
 
 
 def test_item_health_failure_code_must_belong_to_stage() -> None:

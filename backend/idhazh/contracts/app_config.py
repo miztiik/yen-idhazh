@@ -128,15 +128,47 @@ class ExtractConfig(Model):
         description="A performance lever, not only a safety cap: prefill degrades with length.",
     )
     min_source_words: int = Field(
-        default=120,
+        default=250,
         ge=1,
-        description="Below this the item is not summarized at all. Page furniture is short.",
+        description="Below this the item publishes through the brief tier. It is not a drop.",
+    )
+    prose_sentence_min: int = Field(
+        default=3,
+        ge=1,
+        description="Sentences of prose needed before a page stops carrying the not_prose signal.",
+    )
+    prose_sentence_words_min: int = Field(
+        default=8,
+        ge=1,
+        description="Words a sentence needs before it counts as prose for the shape signal.",
+    )
+    reject_not_prose: bool = Field(
+        default=False,
+        description="If true, a not_prose signal rejects the item. Default records and publishes.",
+    )
+    reject_boilerplate: bool = Field(
+        default=False,
+        description=(
+            "If true, a boilerplate signal rejects the item. Default records and publishes."
+        ),
     )
     boilerplate_ratio_max: float = Field(
         default=0.4,
         gt=0.0,
         le=1.0,
         description="Share of an item's lines also seen on sibling items from the same host.",
+    )
+    paywall_markers: list[str] = Field(
+        default_factory=lambda: [
+            "isaccessibleforfree\":false",
+            "isaccessibleforfree\": false",
+            "subscribe to continue reading",
+            "register or subscribe to continue",
+        ],
+        min_length=1,
+        description=(
+            "Fallback markers used only when publisher JSON-LD does not declare the paywall."
+        ),
     )
     max_body_bytes: int = Field(default=2_000_000, ge=1024)
     max_retries: int = Field(default=3, ge=0)
@@ -524,6 +556,18 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T18:15",
+            change=(
+                "Added extract prose-shape, enforcement and paywall-marker knobs; changed "
+                "extract.min_source_words to a brief-tier threshold."
+            ),
+            why=(
+                "Extraction now records short or list-shaped pages instead of dropping "
+                "them by length, while publisher-declared paywalls still stop publication. "
+                "The new thresholds and switches are tunable config values (Rule #6)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T17:52",
             change="Added models.inference.request_timeout_minutes.",

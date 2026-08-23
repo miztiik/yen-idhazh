@@ -24,6 +24,17 @@ state/**/*.csv text eol=lf
 # core.autocrlf setting.
 tests/fixtures/** text eol=lf
 
+# Source files are edited on Windows and Linux. Keep diffs about code, not line
+# endings.
+*.py text eol=lf
+*.ts text eol=lf
+*.svelte text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Prose is reviewed line by line. A checkout must not rewrite the document.
+*.md text eol=lf
+
 # Published digest payloads. Their sha256 is recorded in the run manifest and
 # re-verified, so the stored bytes and the checked-out bytes must agree.
 frontend/public/**/*.json text eol=lf
