@@ -116,10 +116,23 @@ jobs:
             exit 0
           fi
           git commit -m "plan: ${{ steps.decide.outputs.date }}"
+          # The ledgers are in a commit by this point, so anything still in the
+          # working tree is runner noise. A rebase refuses to start while it is
+          # there, and refusing loses the sight and health records this step
+          # exists to keep. Discard the noise, and print it so the run log names
+          # whatever produced it.
           for attempt in 1 2 3; do
-            git push && exit 0
+            if git push; then
+              exit 0
+            fi
             echo "push rejected, rebasing (attempt $attempt)"
-            git pull --rebase --autostash origin main
+            NOISE=$(git status --porcelain --untracked-files=no)
+            if [ -n "$NOISE" ]; then
+              echo "discarding working-tree noise before the rebase:"
+              echo "$NOISE"
+              git checkout -- .
+            fi
+            git pull --rebase origin main
           done
           echo "could not push what the plan saw after three attempts" >&2
           exit 1
@@ -472,14 +485,28 @@ jobs:
           git commit -m "digest: ${{ needs.plan.outputs.date }}"
           # The runner checked out a commit that may be minutes old, and a daily
           # job must not lose a day's work because someone pushed while it ran.
-          # Rebase and retry; the day payload touches paths nobody edits by hand,
-          # so there is nothing here for a rebase to conflict with.
+          #
+          # The day is in a commit by this point, so every remaining working-tree
+          # change is runner noise - a line ending, a build artifact, a file some
+          # step left behind. A rebase refuses to start while any of it is there,
+          # and refusing costs the reader a day that plan, four shards and
+          # assemble all finished (section 1a: degrade, do not fail). Discard the
+          # noise, and print it so the run log names whatever produced it.
+          #
+          # Untracked files are left alone: they cannot block a rebase, and a
+          # later step may still want them.
           for attempt in 1 2 3; do
             if git push; then
               exit 0
             fi
             echo "push rejected, rebasing (attempt $attempt)"
-            git pull --rebase --autostash origin main
+            NOISE=$(git status --porcelain --untracked-files=no)
+            if [ -n "$NOISE" ]; then
+              echo "discarding working-tree noise before the rebase:"
+              echo "$NOISE"
+              git checkout -- .
+            fi
+            git pull --rebase origin main
           done
           echo "could not push the day after three attempts" >&2
           exit 1

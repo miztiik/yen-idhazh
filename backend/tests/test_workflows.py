@@ -214,6 +214,39 @@ def test_content_refresh_decide_step_caps_total_jobs_by_behavior() -> None:
         assert _evaluate_shard_matrix(script, invalid_shards) is None
 
 
+def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
+    """A rebase that refuses to start throws away a day the run already computed.
+
+    Run `32671663130` died exactly this way: one tracked file was modified in the
+    checkout before any step ran, and the retry loop lost plan, four shards and
+    assemble with it. The work is committed before the loop begins, so the fix is
+    to drop what is left rather than to carry it into the rebase.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    jobs = _mapping(workflow.get("jobs"), "jobs")
+
+    scripts = [
+        (job_name, step.get("name"), script)
+        for job_name in jobs
+        for step in _steps(workflow, job_name)
+        if isinstance(script := step.get("run"), str) and "git pull --rebase" in script
+    ]
+    assert scripts, "digest.yml must still push through a rebase-and-retry loop"
+
+    for job_name, step_name, script in scripts:
+        where = f"{job_name}/{step_name}"
+        lines = [line.strip() for line in script.splitlines()]
+        # `--autostash` looks like the answer and is not: it stashes the noise,
+        # then fails the step when the stash will not reapply.
+        assert "--autostash" not in script, f"{where} must not stash before rebasing"
+        discard = lines.index("git checkout -- .")
+        rebase = lines.index("git pull --rebase origin main")
+        assert discard < rebase, f"{where} must clear the tree before it rebases"
+        assert any(
+            "--untracked-files=no" in line for line in lines
+        ), f"{where} must leave untracked files alone - they cannot block a rebase"
+
+
 def test_measurements_dispatch_selects_exactly_one_target() -> None:
     workflow = _load_workflows()["measure.yml"]
     target = _mapping(_dispatch_inputs(workflow).get("target"), "target input")
