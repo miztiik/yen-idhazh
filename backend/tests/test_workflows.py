@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import hashlib
 import re
 from typing import Final, cast
 
@@ -37,6 +36,7 @@ RUNTIME_CANDIDATES: Final = frozenset(
         "load_mode_mmap_mlock",
         "kv_q8",
         "prio_poll",
+        "threads",
         "threads_batch",
         "np2_inflight",
     }
@@ -136,18 +136,6 @@ def _normalize_condition(value: object, description: str) -> str:
     if wrapper is not None:
         condition = wrapper.group(1)
     return " ".join(condition.split())
-
-
-def _evaluate_models_hash(script: str, models: str) -> str:
-    lines = [line.strip() for line in script.splitlines()]
-    assignment = (
-        "MODELS_SHA256=$(printf '%s' \"$MODELS\" | sha256sum | cut -d ' ' -f 1)"
-    )
-    output = 'echo "models_sha256=$MODELS_SHA256" >> "$GITHUB_OUTPUT"'
-
-    assert [line for line in lines if line.startswith("MODELS_SHA256=")] == [assignment]
-    assert [line for line in lines if "models_sha256=" in line] == [output]
-    return hashlib.sha256(models.encode()).hexdigest()
 
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
@@ -260,32 +248,19 @@ def test_runtime_candidate_has_a_valid_default() -> None:
     assert candidate.get("default") in options
 
 
-def test_llm_cache_key_uses_the_requested_models_hash() -> None:
+def test_llm_measurement_does_not_cache_or_glob_candidate_weights() -> None:
     workflow = _load_workflows()["measure.yml"]
     steps = _steps(workflow, "llm")
-    hash_step = _step(workflow, "llm", "id", "models_hash")
-    cache_step = _step(workflow, "llm", "id", "gguf")
-    hash_script = hash_step.get("run")
-    assert isinstance(hash_script, str)
-    assert hash_step.get("env") == {"MODELS": "${{ inputs.models }}"}
-
-    expected_hashes = {
-        "Qwen/Qwen3-4B-GGUF:Qwen3-4B-Q4_K_M.gguf": (
-            "e44a2225f6f322a8e8dbddd8579eb18e22d02fcb55ff67dcf67796f646f9c54d"
-        ),
-        "org/a:model-a.gguf,org/b:model-b.gguf": (
-            "f545e92d7d4b908ed7670f2dc641c82c87759a997888b2716f8bd35462f53765"
-        ),
+    assert not any(step.get("uses") == "actions/cache@v4" for step in steps)
+    benchmark = _step(workflow, "llm", "name", "Download and benchmark exact models")
+    script = benchmark.get("run")
+    assert isinstance(script, str)
+    assert benchmark.get("env") == {
+        "MODEL_REFS": "${{ inputs.models }}",
+        "THREAD_COUNTS": "${{ inputs.threads }}",
     }
-    for models, expected_hash in expected_hashes.items():
-        assert _evaluate_models_hash(hash_script, models) == expected_hash
-        assert hashlib.sha256(f"{models}\n".encode()).hexdigest() != expected_hash
-
-    cache_with = _mapping(cache_step.get("with"), "GGUF cache inputs")
-    cache_key = cache_with.get("key")
-    assert cache_key == "gguf-${{ runner.os }}-${{ steps.models_hash.outputs.models_sha256 }}"
-    assert "hashFiles(" not in cache_key
-    assert steps.index(hash_step) < steps.index(cache_step)
+    assert "backend/utilities/measure_llm.py" in script
+    assert "backend/models/*.gguf" not in script
 
 
 def test_runtime_download_uses_the_existing_github_token() -> None:

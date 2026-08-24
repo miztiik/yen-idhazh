@@ -46,6 +46,31 @@ half that, and the 8B fits comfortably.
 **Weight download, cache miss:** 4B 2.4 GB in 32s, 8B 4.7 GB in 180s. Both are
 one-off per cache key; the 10 GB cache holds both.
 
+### Runner thread scaling
+
+**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, run `32672629352`:
+AMD EPYC 7763, 2 physical cores, 2 threads per core, 4 online logical CPUs,
+cpuset `0-3`, llama.cpp `b10598` (`56db501e7`), Qwen3-8B-Q4_K_M, 3 repeats.
+Both thread counts ran in the same job against the same 5,027,783,488-byte GGUF
+(`d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785`).
+
+| Threads | 730 tok | 1800 tok | 4850 tok | decode (250) | Full bench wall |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 12.48 +/- 0.01 | 12.06 +/- 0.01 | 10.83 +/- 0.04 | **7.21 +/- 0.02** | **2727.13 s** |
+| 8 | 12.31 +/- 0.02 | 11.88 +/- 0.01 | 10.77 +/- 0.02 | **6.06 +/- 0.01** | **2771.53 s** |
+
+Eight software workers did not expose four more hardware threads. The guest had
+four logical CPUs already: CPUs 0-1 were siblings on core 0, and CPUs 2-3 were
+siblings on core 1. Eight threads made prefill 0.6-1.5% slower, decode 16% slower
+and the complete benchmark 1.6% slower. Cgroup CPU use averaged 3.99 CPUs at four
+threads and 3.92 at eight; throttled time stayed zero. CPU pressure `some` rose
+from roughly 39% after the four-thread point to roughly 75% after the
+eight-thread point.
+
+**Decision: keep `n_threads = 4`.** The raw screen rejected eight threads at
+every measured workload, so the five-article server A/B would spend runner time
+on a candidate that already failed its prerequisite.
+
 ### Derived seconds per article
 
 Derived from the runner table by `backend/utilities/summarise_bench.py`, using
@@ -54,18 +79,21 @@ measured: they inherit both the throughput spread and the bucket error.
 
 | Model | short | medium | long | blended | worst long |
 | --- | --- | --- | --- | --- | --- |
-| Qwen3-4B-Q4_K_M | 45s | 127s | 232s | **112s** | 363s |
-| Qwen3-8B-Q4_K_M | 82s | 225s | 393s | **196s** | 597s |
+| Qwen3-4B-Q4_K_M | 79s | 166s | 198s | **130s** | 198s |
+| Qwen3-8B-Q4_K_M | 142s | 291s | 342s | **229s** | 342s |
 
 The blended figures were first published as 128s and 196s -> corrected to 112s
-and 196s when the bucket shares were replaced by the measured ones. A blended
-number is a statement about a corpus; blending against a corpus that was
-disproved the same day is arithmetic on a fiction.
+and 196s when the bucket shares were replaced by the measured ones -> corrected
+again to 130s and 229s when the tool's hardcoded 200-token prompt was removed
+and article tokens were clamped at the production 2500-token cap. The prompt
+measured 801 tokens at the time and now measures at most 879. The table uses the
+current maximum. A derived time now requires an explicit model-specific prompt
+count and truncation cap; without them the tool prints raw throughput only.
 
 **The shard timeout stays worst-case.** A 5-item shard drawing five long
-articles on the 8B is 5 x 597s = 50 minutes. `digest.yml` sets 330 minutes,
+articles on the 8B is 5 x 342s = 29 minutes. `digest.yml` sets 330 minutes,
 which is generous - and a timeout should be. It must never be re-derived from
-the 196s blend, which would set it at 17 minutes and kill healthy shards that
+the 229s blend, which would set it at 20 minutes and kill healthy shards that
 happened to draw long articles.
 
 ### On a laptop (kept only as a warning)
@@ -91,6 +119,22 @@ Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 2.
 | 1800 | 8.40 | 2.00 | 2.2x slower |
 | 4850 | 6.30 | 0.30 | 2.0x slower |
 | decode (250) | 1.84 | 0.17 | **3.3x slower** |
+
+### Local 4-vs-8 thread screen
+
+**Measured 2026-08-23** on Windows 11, Intel Core i7-1265U (10 physical cores,
+12 logical processors), Qwen3-8B-Q4_K_M, llama.cpp `b10444` (`5f754ea0e`), 3
+repeats. The bounded screen used 730 prompt tokens and 64 decode tokens.
+
+| Threads | Prefill tok/s | Decode tok/s | Combined benchmark wall-clock |
+| --- | --- | --- | --- |
+| 4 | 9.44 +/- 0.44 | 3.44 +/- 0.31 | 375.06 s |
+| 8 | 11.17 +/- 0.13 | 3.91 +/- 0.19 | 318.67 s |
+
+Eight threads improved this laptop's prefill by 18% and decode by 14%; combined
+wall-clock fell 15%. The laptop exposes 12 logical processors, so this does not
+answer whether eight software workers help a four-vCPU VM. That answer must come
+from the hosted sweep on the same model and runtime build.
 
 ### Derived seconds per article, on the laptop
 
@@ -141,20 +185,23 @@ tokenizer does. A different model file gives a different count.
 | Before the Title section | 653 | 864 |
 | With the Title section | 781 | 1033 |
 | **After the terseness pass** | **598** | **801** |
+| **Current four-band prompt, including the brief tier** | **658** | **877-879** |
 
 The terseness pass removed 183 words and **232 tokens, 22.5%**, without removing
-a rule. What went was justification, restatement, and one line the decoder
-already enforced. See
+a rule. The later brief tier and fourth output band brought the current prompt
+to 658 words. Its four variants measure 877, 877, 878 and 879 tokens, so the
+spread is two tokens. What went in the terseness pass was justification,
+restatement, and one line the decoder already enforced. See
 [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md).
 
 Against the 8192 `n_ctx` the pipeline runs at:
 
 | Component | Tokens |
 | --- | --- |
-| System prompt | 801 |
+| System prompt | 879 |
 | Article, at the 2500-token truncation cap | 2500 |
 | Output budget | 900 |
-| **Worst case** | **4201 of 8192** |
+| **Worst case** | **4279 of 8192** |
 
 Three notes worth keeping:
 
@@ -169,8 +216,9 @@ Three notes worth keeping:
   tok/s median, so the same 801 tokens cost 23.4 s median. Use the prompt-cache
   table below for prompt-reorder decisions.
 - **`fits_context` over-reserves and does so on purpose.** It approximates the
-  prompt as `words x 2`, which is 1196 against the measured 801. It errs by
-  395 tokens in the safe direction, and the alternative - tokenizing the prompt
+  current 658-word prompt as `words x 2`, which is 1316 against the measured
+  maximum of 879. It errs by 437 tokens in the safe direction, and the
+  alternative - tokenizing the prompt
   per item to save context we are not short of - buys nothing.
 
 ## Prompt cache reuse
@@ -190,7 +238,8 @@ srv load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true
 Current llama.cpp source names the same quantity `n_ctx_seq`: when `kv_unified`
 is true, `n_ctx_seq = n_ctx`; when it is false, `n_ctx_seq = n_ctx / n_seq_max`.
 This log uses the older `n_ctx_slot` name. The value is still 8192 per slot, so
-the 4201-token worst case fits. This is not a live defect in run `32648218952`.
+the run's then-current 4201-token worst case fit, and today's 4279-token worst
+case also fits. This is not a live defect in run `32648218952`.
 
 The run does **not** settle whether the prompt prefix was reused. The grep
 emitted no `kv cache rm [p0, end)` line. The only emitted instrument was
@@ -331,7 +380,7 @@ date and spread:
 
 | Candidate | Flag under test | Status |
 | --- | --- | --- |
-| `np1` | `-np 1` | Defect half settled by PR #23: run `32648218952` logged `n_slots = 4`, `n_ctx_slot = 8192`, `kv_unified = 'true'`, so the measured 4201-token worst case still fits. Optimization value pending. |
+| `np1` | `-np 1` | Defect half settled by PR #23: run `32648218952` logged `n_slots = 4`, `n_ctx_slot = 8192`, `kv_unified = 'true'`, so the current 4279-token worst case still fits. Optimization value pending. |
 | `batch2048` | `-b 2048` | Pending. Hypothesis: the current `--batch-size 512` may throttle prefill. Use the measured live-digest prefill median of 34.23 tok/s, range 29.24-37.92, spread 8.68 from run `32648218952`, not the older derived 12.1 tok/s figure. |
 | `no_startup_warmup` | restore `--no-warmup` | Pending reversal check. PR #24 already made startup warmup the digest default after a golden-set check. The harness records server startup and shard wall-clock separately. |
 | `flash_attention_on` | `-fa on` | Pending. Different attention math is allowed only if every golden `output_digest` is unchanged. |
@@ -339,6 +388,7 @@ date and spread:
 | `kv_q8` | `-ctk q8_0 -ctv q8_0` | Pending. Quantised KV changes numeric paths. It is rejected outright if the digest map changes. |
 | `np2_inflight` | `-np 2` plus two in-flight workers and `-c 16384` | Pending composite scenario. It is labelled composite because it is not a pure one-flag test. |
 | `prio_poll` | `--prio 2 --poll 100` | Pending. Hypothesis: higher priority and polling may help after install work stops competing for CPU. |
+| `threads` | `--threads N` | Rejected at the screen. Run `32672629352`: the VM exposed 2 cores x 2 SMT threads = 4 logical CPUs. Eight workers were slower at every prompt length and 16% slower at decode, so production stays at 4 and the server A/B does not run. |
 | `threads_batch` | `-tb N` | Pending. Only worth interpreting if `batch2048` shows prefill is the bottleneck. |
 
 The current llama-server verbosity emits no `kv cache rm` lines, so this harness
