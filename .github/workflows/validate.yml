@@ -44,7 +44,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -55,7 +55,7 @@ jobs:
 
       - name: Cache weights and runtime
         id: weights
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             backend/models
@@ -164,7 +164,7 @@ jobs:
           done
           exit 1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: validation
           path: backend/var/validation/
