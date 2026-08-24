@@ -46,6 +46,31 @@ half that, and the 8B fits comfortably.
 **Weight download, cache miss:** 4B 2.4 GB in 32s, 8B 4.7 GB in 180s. Both are
 one-off per cache key; the 10 GB cache holds both.
 
+### Runner thread scaling
+
+**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, run `32672629352`:
+AMD EPYC 7763, 2 physical cores, 2 threads per core, 4 online logical CPUs,
+cpuset `0-3`, llama.cpp `b10598` (`56db501e7`), Qwen3-8B-Q4_K_M, 3 repeats.
+Both thread counts ran in the same job against the same 5,027,783,488-byte GGUF
+(`d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785`).
+
+| Threads | 730 tok | 1800 tok | 4850 tok | decode (250) | Full bench wall |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 12.48 +/- 0.01 | 12.06 +/- 0.01 | 10.83 +/- 0.04 | **7.21 +/- 0.02** | **2727.13 s** |
+| 8 | 12.31 +/- 0.02 | 11.88 +/- 0.01 | 10.77 +/- 0.02 | **6.06 +/- 0.01** | **2771.53 s** |
+
+Eight software workers did not expose four more hardware threads. The guest had
+four logical CPUs already: CPUs 0-1 were siblings on core 0, and CPUs 2-3 were
+siblings on core 1. Eight threads made prefill 0.6-1.5% slower, decode 16% slower
+and the complete benchmark 1.6% slower. Cgroup CPU use averaged 3.99 CPUs at four
+threads and 3.92 at eight; throttled time stayed zero. CPU pressure `some` rose
+from roughly 39% after the four-thread point to roughly 75% after the
+eight-thread point.
+
+**Decision: keep `n_threads = 4`.** The raw screen rejected eight threads at
+every measured workload, so the five-article server A/B would spend runner time
+on a candidate that already failed its prerequisite.
+
 ### Derived seconds per article
 
 Derived from the runner table by `backend/utilities/summarise_bench.py`, using
@@ -363,7 +388,7 @@ date and spread:
 | `kv_q8` | `-ctk q8_0 -ctv q8_0` | Pending. Quantised KV changes numeric paths. It is rejected outright if the digest map changes. |
 | `np2_inflight` | `-np 2` plus two in-flight workers and `-c 16384` | Pending composite scenario. It is labelled composite because it is not a pure one-flag test. |
 | `prio_poll` | `--prio 2 --poll 100` | Pending. Hypothesis: higher priority and polling may help after install work stops competing for CPU. |
-| `threads` | `--threads N` | Pending. Screen `1,2,nproc,2*nproc` with `llama-bench`, then run the best challenger through the fixed five-article shard. Four vCPU means four guest-visible logical processors, not four physical cores plus eight free threads. |
+| `threads` | `--threads N` | Rejected at the screen. Run `32672629352`: the VM exposed 2 cores x 2 SMT threads = 4 logical CPUs. Eight workers were slower at every prompt length and 16% slower at decode, so production stays at 4 and the server A/B does not run. |
 | `threads_batch` | `-tb N` | Pending. Only worth interpreting if `batch2048` shows prefill is the bottleneck. |
 
 The current llama-server verbosity emits no `kv cache rm` lines, so this harness
