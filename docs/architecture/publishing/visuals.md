@@ -64,7 +64,20 @@ described a chart that no longer exists.
 | --- | --- | --- |
 | `chart` | Vega-Lite JSON | `vl-convert`, the Vega toolchain compiled as a Rust extension |
 | `diagram` | Mermaid source | ours, about a hundred lines of SVG layout |
-| `image` | - | not built; unreachable until `visuals.enabled_kinds` names it |
+| `image` | - | **descoped 2026-08-23 on measurement.** Unreachable: `visuals.enabled_kinds` does not name it. |
+
+**Why there is no image renderer.** Measured on `ubuntu-latest` (4 vCPU, 16 GB),
+2026-08-23, run `32654562728`: `Tongyi-MAI/Z-Image-Turbo` at bfloat16 loads in
+159.2 s at 9.2 GB resident, then spends **527 s per denoising step** at 512x512.
+Nine steps is about **79 minutes for one image** - longer than the whole `route`
+job's 60-minute bound, and about 196 hours for a 149-item day against a 6-hour
+job limit. The job was cancelled at step 7 of 9 and never reached 768px or a byte
+count. The plan's second candidate, `alpha-vllm/Anima-2.9B`, answers 401
+Repository Not Found: it does not exist. Reducing steps does not rescue it -
+three steps is still 26 minutes, and one step is noise. Rule #2 says the budget
+is the platform, so the feature goes rather than the budget. The `image` member
+stays in the enum because a payload must be able to say it; the config gate is
+what makes it unreachable.
 
 Both write SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.svg`, beside the
 payload that references them. A render failure records why and the item publishes without a

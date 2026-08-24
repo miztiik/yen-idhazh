@@ -614,15 +614,18 @@ the first pipeline run, not before it.
 
 ### Days to the 1 GB Pages ceiling
 
-Derived from the above plus the image estimates below, which are the weak link -
-see [Still unmeasured](#still-unmeasured).
+The image rows below are historical. They were the arithmetic that made Row #9's
+retention question urgent, and they are kept because the ordering they revealed
+still holds for any raster we ever add. **Since 2026-08-23 the live scenario is
+the last row**: images do not fit the runner, so no run produces one
+([Images do not fit the runner](#images-do-not-fit-the-runner)).
 
 | Scenario | KB/day | days to 1 GB |
 | --- | --- | --- |
 | PNG, an image on every item | 8,537 | 123 (4 months) |
 | WebP, an image on every item | 1,567 | 669 (22 months) |
 | WebP, an image on one item in three | 547 | 1,917 (5.25 years) |
-| no images | 37 | 28,340 |
+| **no images - what actually ships** | **37** | **28,340** |
 
 The ordering of the levers falls straight out of this: encoding buys 5.6x,
 honouring the visual rule buys another 2.9x, and retention is what remains
@@ -825,7 +828,7 @@ the old buckets were wrong. It does not settle what the right ones are.
 ## The image measurement killed the runner
 
 **Attempted 2026-08-22**, `ubuntu-latest`, the `image` job timing Z-Image-Turbo
-on CPU. It ran for 48 minutes inside a 120-minute budget and then:
+on CPU at float32. It ran for 48 minutes inside a 120-minute budget and then:
 
 ```
 ##[error]The runner has received a shutdown signal.
@@ -836,14 +839,47 @@ on the clock is the runner agent being taken down underneath the job, which on a
 16 GB machine running CPU diffusion is what memory exhaustion looks like from
 the inside.
 
-**This is itself evidence for Row #9.** The question that row asks is whether
-generated images fit the published budget. Before reaching the byte count, the
-measurement could not survive the machine. A feature whose *benchmark* cannot
-complete in a job is not a feature that belongs on a 4 vCPU runner without
-something changing first.
+It settled that float32 does not run, and nothing else. The bfloat16 re-run the
+next day is the measurement, and it is in
+[Images do not fit the runner](#images-do-not-fit-the-runner) below.
 
-It does not settle the byte question, and it must not be cited as if it did. It
-settles that the current approach to answering it does not run.
+## Images do not fit the runner
+
+**Measured 2026-08-23 on `ubuntu-latest` (4 vCPU, 16 GB), run `32654562728`,
+`Tongyi-MAI/Z-Image-Turbo` at bfloat16, 512x512, 9 steps, 4 threads.**
+
+| Quantity | Value |
+| --- | --- |
+| Model load | 159.2 s |
+| Resident memory after load | **9.2 GB** of 16 |
+| Denoising step | **527 s**, steps 1-7, spread 528.4 down to 525.9 |
+| One 512px image | **~79 min** extrapolated from 7 of 9 steps |
+| 768px | never reached |
+| PNG bytes, WebP bytes | never reached |
+
+The job was cancelled at step 7 of 9 after 61 min 26 s. A single image at the
+smallest useful resolution costs more than the whole `route` job's 60-minute
+bound. A day of 149 items would cost about 196 hours, against a 6-hour job limit.
+
+The second candidate is not a candidate. `alpha-vllm/Anima-2.9B` answers
+**401 Repository Not Found** from the Hugging Face API - it does not exist. Row
+#9's "measure both, choose on cost" gate had one leg from the start.
+
+The earlier float32 attempt on 2026-08-22 (`32565677038`) was killed by a runner
+shutdown signal with 72 minutes still on its clock, which on a 16 GB machine is
+what memory exhaustion looks like from inside a job. That attempt settled nothing
+except that float32 does not run. This one settles the question.
+
+**Consequence: Row #9's ESCALATE trigger fired and the image renderer is
+descoped.** Rule #2 says the budget is the platform, not a preference. No step
+count or resolution reduction reaches a usable number from 527 s per step: at one
+step the image is noise, and at three it is still 26 minutes. Narrative items
+publish without a visual, which the pipeline already handles - `none` is the
+common and correct answer for nine items in ten.
+
+The harness now prints each step as it lands. Both earlier attempts died before
+the image completed and left no number behind them, which is a defect in the
+instrument rather than in the model.
 
 ## Still unmeasured
 
@@ -856,9 +892,6 @@ to justify a design decision.
 | **Whether the prompt prefix is reused at all** | **unmeasured, and currently unobservable** | a permanent instrument, not a one-off grep. `usage.prompt_tokens` reports the full prompt whether cached or not, and llama-server emits no `kv cache rm` line at our verbosity, so the question went blind again the moment row 3 closed. Log slot id, item id, band id, rendered system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens, and `p0` or `n_past`. |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
-| Image render seconds at 512 and 768 | the job cannot complete | a smaller model, a smaller resolution, or a machine that survives it |
-| Image bytes, PNG at 768 | ~500 KB, estimate | the `image` job writes the file; measure it |
-| Image bytes, WebP q80 at 768 | ~90 KB, estimate | re-encode the same file and measure |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | unmeasured | lands with the eval harness |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |

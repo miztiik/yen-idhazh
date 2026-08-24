@@ -144,7 +144,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 7 | Model validation gate (ESCALATE) | 3, 4, 6 | D | LANDED (20-article golden set, `validate` + `decide` stages, `validate.yml` runs both models) | main | direct | - |
 | 8 | Route worker + deterministic renderers | 6, 7 | E | LANDED (chart + diagram; the model picks an index and never writes a number) | main | direct | - |
 | 12 | Drift benchmark: weekly golden re-run + quarterly refresh | 4, 7 | E | LANDED (per-domain alerts; weekly workflow reads the ledger) | main | direct | - |
-| 9 | Image model measurement gate + renderer | 2, 5, 8 | F | PENDING | - | - | - |
+| 9 | Image model measurement gate + renderer | 2, 5, 8 | F | DESCOPED (measured 2026-08-23: 527 s per step, ~79 min for one 512px image, 9.2 GB resident; the other candidate does not exist) | main | direct | - |
 | 10 | Pipeline orchestrator workflow | 3, 6, 8 | F | LANDED (plan -> sharded workers -> route -> assemble) | main | direct | - |
 | 13 | Published layout, date routing and the frontend shell | 1, 10 | G | LANDED (prerendered, themed, browser-verified) | main | direct | - |
 | 14 | Retention job + site-budget alarm | 13 | H | LANDED (alarm on; prune disabled, dry-run, fused) | main | direct | - |
@@ -154,7 +154,7 @@ Both levels use the same rule: the orchestrator never does the work, and a worke
 | 22 | Read-aloud via Web Speech API | 13 | H | LANDED (browser voice; absent where unsupported) | main | direct | - |
 | 20 | Browser semantic search | 18, 19 | I | LANDED (top-3 recall 0.80 on five hand-labelled queries, measured 2026-08-22) | main | direct | - |
 | 21 | Browser-runtime injection canaries | 18 | I | LANDED (eight canaries on the published surface, gated in CI) | main | direct | - |
-| 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | J | ESCALATED - PAUSED FOR SIGN-OFF (every candidate's smallest weight file is over the 100 MB limit; smallest measured 347.7 MB) | main | direct | - |
+| 23 | Browser chat SLM (ESCALATE-gated) | 20, 21 | J | DESCOPED (every candidate's smallest weight file is over the 100 MB limit; smallest measured 347.7 MB) | main | direct | - |
 
 ---
 
@@ -215,8 +215,8 @@ sources**, which is a source-selection question rather than an extraction bug.
 
 | Row | State | Waiting on |
 | --- | --- | --- |
-| 9 - Image renderer | **MEASUREMENT RE-DISPATCHED** | The first attempt loaded float32 - about 24 GB for a 6B model on a 16 GB runner - and the agent was killed under it with 72 minutes still on its own clock. Now bfloat16, one size, the smaller candidate first, reporting resident memory and both PNG and WebP byte counts so a success answers the retention question in the same pass and a failure leaves a number behind it. |
-| 23 - Browser chat SLM | **ESCALATED. Paused for sign-off.** | Nothing technical. Its trigger fired on a measured fact, so the contract says stop (`CLAUDE.md` section 6, level 5). See below. |
+| 9 - Image renderer | **DESCOPED on measurement** | Nothing. Measured 2026-08-23 on `ubuntu-latest`, run `32654562728`: Z-Image-Turbo at bfloat16 loads in 159.2 s at 9.2 GB resident and spends 527 s per denoising step at 512x512 - about 79 minutes for one image, against a 60-minute `route` bound. Cancelled at step 7 of 9; 768px and the byte counts were never reached. The plan's second candidate, `alpha-vllm/Anima-2.9B`, answers 401 Repository Not Found and does not exist. ESCALATE trigger #3 fired and the row closes. Recorded in [`../docs/reference/measurements.md`](../docs/reference/measurements.md) and [`../docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md). |
+| 23 - Browser chat SLM | **DESCOPED on measurement** | Nothing. Every candidate's smallest single weight file exceeds GitHub's 100 MB hard limit, the smallest by 3.5x. Splitting a file evades the limit rather than meeting it, and fetching weights from a third-party origin makes a stranger's server part of the reading experience. Recorded in [`../docs/architecture/overview.md`](../docs/architecture/overview.md). |
 
 ### Row #23: the ESCALATE fired
 
@@ -245,6 +245,14 @@ owner should weigh together with that:
 
 This row is not blocked on effort. It is blocked because shipping it is a
 decision about what the product is, and that decision is not mine.
+
+**Closed 2026-08-24: descoped.** Nothing in the measurement moved and nothing
+was going to. The two ways past the limit are splitting a weight file, which
+evades the limit rather than meeting it, and fetching weights from somebody
+else's origin, which puts a stranger's server on the reading path. Both are worse
+than not having the feature. On-device **search** ships and stays; on-device
+**chat** does not. Recorded in
+[`../docs/architecture/overview.md`](../docs/architecture/overview.md).
 
 ### What changed on 2026-08-22
 
