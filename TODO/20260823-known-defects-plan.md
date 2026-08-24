@@ -124,24 +124,33 @@ needs its own consideration rather than a quiet edit.
 
 ## 10 - The `route` job hits its 60-minute timeout every run (OPEN)
 
-`digest.yml` gives `route` `timeout-minutes: 60`. Two consecutive runs were
-cancelled at exactly that bound:
+`digest.yml` gives `route` `timeout-minutes: 60`. It sits close to that bound and
+has crossed it twice:
 
-| Run | `route` started | Outcome |
+| Run | `route` | Outcome |
 | --- | --- | --- |
 | `32661273335` | 2026-08-23 | cancelled at the timeout |
 | `32671663130` | 2026-08-24T00:26:36Z | cancelled after 60 min |
+| `32701966659` | 2026-08-24T09:24:36Z -> 10:15:50Z | **succeeded in 51 min** |
+
+The third run corrects the first reading of this defect. It is not "the timeout
+fires every run"; it is "the job finishes at 51 to 60+ minutes against a 60
+minute bound", so whether a day gets its visuals depends on which side of the
+line that run lands. Three observations, one model, no controlled variable -
+this is a symptom, not yet a measurement.
 
 `route` carries `continue-on-error` and `assemble` runs on `always()`, so the
-day still publishes - by design, a dead router must not stop publication. But a
-timeout that fires every run is not a degradation any more; it is the normal
-path, and it means routing and rendering never finish. Items publish without the
-visuals the router would have chosen.
+day publishes either way - by design, a dead router must not stop publication.
+The cost of a crossing is silent: items publish without the visuals the router
+would have chosen, and nothing on the page says so.
 
-Two questions, and they are different: whether the 4B router is too slow for the
-item count at this budget, and whether 60 minutes is the right budget. Neither
-should be answered by raising the number until it stops going red (Rule #2: the
-budget is the platform, not a preference).
+Three questions, and they are different: what actually drives the spread (item
+count? article length? a slow first load?), whether the 4B router is too slow
+for the item count at this budget, and whether 60 minutes is the right budget.
+None should be answered by raising the number until it stops going red (Rule #2:
+the budget is the platform, not a preference). Start by recording `route`
+wall-clock per run against item count, which is a measurement nothing currently
+keeps.
 
 ## What closed, and where it went
 
