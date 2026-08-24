@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -53,7 +53,7 @@ section 0a).
 | --- | --- |
 | `--date YYYY-MM-DD` | Re-run a specific day. Defaults to today, UTC. |
 | `--shard N --shards M` | Take one worker's share. Round-robin, so lengths spread evenly. |
-| `--no-faithfulness` | Skip the scorer. The digest still publishes; **the ledger stays empty.** |
+| `--no-faithfulness` | Skip the scorer. The digest still publishes; **the score ledger stays empty.** |
 | `--config PATH` | Point at a different `config/` directory. |
 
 ## Where things land
@@ -68,14 +68,17 @@ section 0a).
 | `state/seen/<YYYY-MM>.csv` | First sight of every address, so an undated article still has an age | **yes** |
 | `state/published.csv` | Every address that reached a digest, so nothing runs twice | **yes** |
 | `state/feed-health/<YYYY-MM>.csv` | What every feed did on every run | **yes** |
+| `state/item-health/<YYYY-MM>.csv` | What every planned item did on every run | **yes** |
 
-**The four ledgers under `state/` are the pipeline's whole memory.** Plan reads
-them at the start of a run and appends to them before it ranks anything, so a
-local run that is never committed forgets everything the moment it ends - the
-second run will re-publish what the first one did. `state/` is read at build
-time and never served to a reader
+**The ledgers under `state/` are the pipeline's whole memory.** Plan reads them
+at the start of a run and appends to them before it ranks anything, and Assemble
+appends item health after it has seen every worker payload. A local run that is
+never committed forgets everything the moment it ends - the second run will
+re-publish what the first one did. `state/` is read at build time and never
+served to a reader
 ([../architecture/sources/freshness.md](../architecture/sources/freshness.md),
-[../architecture/sources/health.md](../architecture/sources/health.md)).
+[../architecture/sources/health.md](../architecture/sources/health.md),
+[../architecture/sources/item-health.md](../architecture/sources/item-health.md)).
 
 **No article body is ever committed.** The extracted text lives under
 `backend/var/`, which is gitignored, and is what the model reads. What ships is
@@ -83,20 +86,27 @@ the link, the title and our own summary.
 
 ## Reading a run that went wrong
 
-Every failure is a state of the payload, not an absence of it, so the answer is
-always in a file:
+Every planned item has a census row in `state/item-health/<YYYY-MM>.csv`. Start
+there, because that ledger is committed and keeps the denominator next to the
+failure count:
 
-- An item that never reached the model has a `.article.json` with a `status`
-  other than `ok` and a `failure_detail` saying why - a dead link, a robots
-  refusal, a blocked address, or an extraction below the word floor.
-- An item that reached the model and came back wrong has a `.summary.json` with
-  `status: failed`, naming what it failed - a reply that lost its shape, a model
-  that reasoned despite the flag, or a summary outside the publishable range.
-- A run that published fewer items than it planned says so on the digest:
-  `partial` is exactly whether anything failed.
+1. Open the current month shard.
+2. Filter by `date` and `run_id`.
+3. Read `stage`, `outcome`, `code`, `http_status`, `source_words`,
+   `summary_words`, `fetch_ms`, `extract_ms` and `summarize_ms`.
+4. Treat `detail` as a bug report for the classifier. It appears only when
+   `code = unknown`, and it means the enum needs a better member.
+
+Use the gitignored payloads under `backend/var/run/<date>/items/` only for the
+next layer of evidence while the local run still exists:
+
+- `.article.json` explains fetch and extract failures.
+- `.summary.json` explains summarizer failures.
+- The digest says whether the run was partial, but not why. The census says why.
 
 Logs go to stderr and nowhere else. There is no log service and no runtime call
-home ([../../CLAUDE.md](../../CLAUDE.md) section 1b).
+home ([../../CLAUDE.md](../../CLAUDE.md) section 1b). A log is evidence; the
+census row is the record.
 
 ## Three things that will bite
 
@@ -119,12 +129,16 @@ The rest ends on its own after five skips. Nothing here ever edits
 
 ## In CI
 
-`.github/workflows/digest.yml` runs the same three stages every six hours: a
-plan job that loads no weights, a matrix of worker jobs that each restore the
-weights once and work a shard, and an assemble job that runs **even when a
-worker failed** - a run that publishes nothing on a bad day is a run whose bad
-days are invisible. Each run appends to the day's payload rather than replacing
-it, so the day grows through the day
+`.github/workflows/digest.yml`, displayed as `Content refresh`, starts at 06:20,
+10:20, 14:20, and 18:20 UTC. A plan job loads no weights. A matrix of worker
+jobs each restores the weights once and works a shard. Scheduled runs create
+four total worker jobs. Manual runs accept one to four and default to four; the
+plan rejects any other value before it creates the matrix. Route uses their
+output, and assemble runs **even when a worker failed** - a run that publishes nothing
+on a bad day is a run whose bad days are invisible. Each run appends to the
+day's payload rather than replacing it, so the day grows through the day. The
+workflow names and triggers are pinned in
+[../reference/github-actions.md](../reference/github-actions.md)
 ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 
 ## See also
@@ -134,5 +148,7 @@ it, so the day grows through the day
 - [../concepts/config.md](../concepts/config.md) - the knobs these stages read.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the cadence, the seen store, item ids, and why a day has no cap.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - the feed ledger and the quarantine rule.
+- [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the item census used to read failed runs.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - what fetch and extract refuse to do.
 - [../concepts/evaluation.md](../concepts/evaluation.md) - what the scores mean.
+- [../reference/github-actions.md](../reference/github-actions.md) - workflow names and exact triggers.

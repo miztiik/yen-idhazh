@@ -34,11 +34,13 @@ from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.feed_health import FeedHealthRow
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 
 STATE_DIRNAME: Final = "state"
 SEEN_DIRNAME: Final = "seen"
 HEALTH_DIRNAME: Final = "feed-health"
+ITEM_HEALTH_DIRNAME: Final = "item-health"
 PUBLISHED_FILENAME: Final = "published.csv"
 
 #: How far back a health read looks. Not a policy - just enough history to reach
@@ -66,6 +68,15 @@ def health_path(state_dir: Path, date: str) -> Path:
     return state_dir / HEALTH_DIRNAME / f"{date[:7]}.csv"
 
 
+def item_health_relpath(date: str) -> str:
+    """`state/item-health/<YYYY-MM>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{ITEM_HEALTH_DIRNAME}/{date[:7]}.csv"
+
+
+def item_health_path(state_dir: Path, date: str) -> Path:
+    return state_dir / ITEM_HEALTH_DIRNAME / f"{date[:7]}.csv"
+
+
 def published_path(state_dir: Path) -> Path:
     return state_dir / PUBLISHED_FILENAME
 
@@ -85,11 +96,27 @@ def _shards_in_window(today: str, within_days: int) -> list[str]:
     return stems
 
 
+def read_header(path: Path) -> tuple[str, ...]:
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        return tuple(next(csv.reader(handle), []))
+
+
+def require_matching_header(path: Path, columns: tuple[str, ...]) -> None:
+    header = read_header(path)
+    if header and header != columns:
+        raise ValueError(
+            f"{path.name} has {len(header)} columns and the contract has "
+            f"{len(columns)}. Migrate the ledger before appending to it."
+        )
+
+
 def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]) -> int:
     if not payloads:
         return 0
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
+    if exists:
+        require_matching_header(path, columns)
     with path.open("a", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
         if not exists:
@@ -149,6 +176,12 @@ def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> 
     """Append this run's verdict on every feed it tried."""
     payloads = [row.csv_row() for row in rows]
     return _append(health_path(state_dir, date), FeedHealthRow.csv_columns(), payloads)
+
+
+def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
+    """Append this run's verdict on every planned item."""
+    payloads = [row.csv_row() for row in rows]
+    return _append(item_health_path(state_dir, date), ItemHealthRow.csv_columns(), payloads)
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:

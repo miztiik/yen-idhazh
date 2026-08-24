@@ -11,8 +11,9 @@ Every knob ships a sane default, so a fresh clone runs unconfigured.
 
 from __future__ import annotations
 
+import math
 from enum import StrEnum
-from typing import ClassVar, Self
+from typing import ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
@@ -128,15 +129,62 @@ class ExtractConfig(Model):
         description="A performance lever, not only a safety cap: prefill degrades with length.",
     )
     min_source_words: int = Field(
-        default=120,
+        default=60,
         ge=1,
-        description="Below this the item is not summarized at all. Page furniture is short.",
+        description=(
+            "Below this the item publishes through the brief tier. It is derived in "
+            "AppConfig from summarize.bands[0].target_words_min divided by "
+            "evaluation.brief_compression_ceiling."
+        ),
+    )
+    prose_sentence_min: int = Field(
+        default=3,
+        ge=1,
+        description="Sentences of prose needed before a page stops carrying the not_prose signal.",
+    )
+    prose_sentence_words_min: int = Field(
+        default=8,
+        ge=1,
+        description="Words a sentence needs before it counts as prose for the shape signal.",
+    )
+    prose_line_count_min: int = Field(
+        default=12,
+        ge=1,
+        description="Lines needed before the line-shape guard runs.",
+    )
+    prose_line_ratio_min: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description="Minimum share of lines that must look like prose on a line-heavy page.",
+    )
+    reject_not_prose: bool = Field(
+        default=False,
+        description="If true, a not_prose signal rejects the item. Default records and publishes.",
+    )
+    reject_boilerplate: bool = Field(
+        default=False,
+        description=(
+            "If true, a boilerplate signal rejects the item. Default records and publishes."
+        ),
     )
     boilerplate_ratio_max: float = Field(
         default=0.4,
         gt=0.0,
         le=1.0,
         description="Share of an item's lines also seen on sibling items from the same host.",
+    )
+    paywall_markers: list[str] = Field(
+        default_factory=lambda: [
+            "isaccessibleforfree\":false",
+            "isaccessibleforfree\": false",
+            "subscribe to continue reading",
+            "register or subscribe to continue",
+        ],
+        min_length=1,
+        description=(
+            "Fallback markers used only when publisher JSON-LD does not declare the paywall."
+        ),
     )
     max_body_bytes: int = Field(default=2_000_000, ge=1024)
     max_retries: int = Field(default=3, ge=0)
@@ -153,6 +201,47 @@ class InferenceConfig(Model):
     n_threads: int = Field(default=4, ge=1)
     n_batch: int = Field(default=512, ge=1)
     n_ubatch: int = Field(default=512, ge=1)
+    n_parallel: int | None = Field(
+        default=None,
+        ge=1,
+        description="llama-server -np. None omits the flag and keeps the runtime default.",
+    )
+    n_threads_batch: int | None = Field(
+        default=None,
+        ge=1,
+        description="llama-server -tb. None omits the flag and lets it follow n_threads.",
+    )
+    startup_warmup: bool = Field(
+        default=True,
+        description="If false, emit --no-warmup. True lets llama-server warm at startup.",
+    )
+    flash_attention: Literal["on", "off"] | None = Field(
+        default=None,
+        description="llama-server -fa. None omits the flag and leaves the runtime on auto.",
+    )
+    load_mode: Literal["mmap+mlock"] | None = Field(
+        default=None,
+        description="llama-server -lm. None omits the flag and keeps the runtime default.",
+    )
+    cache_type_k: Literal["q8_0"] | None = Field(
+        default=None,
+        description="llama-server -ctk. None omits the flag and keeps full-precision KV.",
+    )
+    cache_type_v: Literal["q8_0"] | None = Field(
+        default=None,
+        description="llama-server -ctv. None omits the flag and keeps full-precision KV.",
+    )
+    priority: int | None = Field(
+        default=None,
+        ge=-1,
+        le=3,
+        description="llama-server --prio. None omits the flag and keeps normal priority.",
+    )
+    poll: int | None = Field(
+        default=None,
+        ge=0,
+        description="llama-server --poll. None omits the flag and keeps the runtime default.",
+    )
     temperature: float = Field(default=0.0, ge=0.0)
     top_p: float = Field(default=1.0, gt=0.0, le=1.0)
     seed: int = Field(
@@ -171,6 +260,15 @@ class InferenceConfig(Model):
             "stops a runaway decode from burning a shard's whole timeout. Sized at 250 "
             "the reply ran out of budget mid-object and failed as a shape error, which "
             "named the wrong cause - so it is set well above any summary we want."
+        ),
+    )
+    request_timeout_minutes: float = Field(
+        default=22.1,
+        gt=0.0,
+        description=(
+            "One summarizer POST may wait this long. Sized from the measured worst "
+            "8B long article plus one cold prompt prefix, doubled; the shard timeout "
+            "remains the outer bound."
         ),
     )
 
@@ -207,7 +305,8 @@ def _default_bands() -> list[SummaryBand]:
     words is still publishable.
     """
     return [
-        SummaryBand(min_source_words=0, target_words_min=50, target_words_max=90),
+        SummaryBand(min_source_words=0, target_words_min=30, target_words_max=45),
+        SummaryBand(min_source_words=60, target_words_min=50, target_words_max=90),
         SummaryBand(min_source_words=700, target_words_min=70, target_words_max=150),
         SummaryBand(min_source_words=2000, target_words_min=110, target_words_max=200),
     ]
@@ -303,6 +402,15 @@ class SummarizeConfig(Model):
 class EvaluationConfig(Model):
     band_high_min: float = Field(default=0.80, ge=0.0, le=1.0)
     band_medium_min: float = Field(default=0.50, ge=0.0, le=1.0)
+    lead_coverage_min: float = Field(
+        default=0.30,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Below this the summary missed the source lead. It caps a high band at "
+            "medium rather than forcing low."
+        ),
+    )
     truncation_gap_max: float = Field(
         default=0.10,
         ge=0.0,
@@ -310,12 +418,21 @@ class EvaluationConfig(Model):
         description="Score gap that flags a truncation artifact rather than a hallucination.",
     )
     summary_words_min: int = Field(
-        default=40,
+        default=25,
         ge=1,
         description=(
             "Below this it is a headline, not a summary. Set under the lowest band in "
             "`summarize.bands`: the prompt is a request, and dropping an item for missing "
             "it by two words loses a story to a rounding error."
+        ),
+    )
+    brief_compression_ceiling: float = Field(
+        default=0.5,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Maximum summary/source ratio for a brief item. Also caps verbatim_run on "
+            "briefs and derives extract.min_source_words from the first brief ask."
         ),
     )
     summary_words_max: int = Field(
@@ -455,6 +572,43 @@ class VisualSide(StrEnum):
     TRAILING = "trailing"
 
 
+class TodayAnchor(StrEnum):
+    RIGHT = "right"
+    CENTRE = "centre"
+
+
+class ConsoleConfig(Model):
+    """Knobs for the operator console's time viewport."""
+
+    default_window_days: int = Field(
+        default=30,
+        ge=1,
+        description="Initial time span for the console charts. A viewport, not a deletion.",
+    )
+    today_anchor: TodayAnchor = Field(
+        default=TodayAnchor.RIGHT,
+        description="Where today sits in the initial viewport when enough history exists.",
+    )
+    pan_days: int = Field(default=7, ge=1, description="Days moved by one arrow-key pan.")
+    zoom_factor: float = Field(default=1.5, gt=1.0)
+    min_window_days: int = Field(default=7, ge=1)
+    max_window_days: int = Field(default=366, ge=1)
+    min_attempts_for_rate: int = Field(
+        default=5,
+        ge=1,
+        description="Below this count a rate is outlined because the denominator is thin.",
+    )
+    chart_height: int = Field(default=180, ge=120)
+
+    @model_validator(mode="after")
+    def _window_bounds_are_ordered(self) -> Self:
+        if self.min_window_days > self.default_window_days:
+            raise ValueError("console.min_window_days must not exceed default_window_days")
+        if self.default_window_days > self.max_window_days:
+            raise ValueError("console.default_window_days must not exceed max_window_days")
+        return self
+
+
 class UiConfig(Model):
     """The published surface's knobs.
 
@@ -506,6 +660,71 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T19:50",
+            change=(
+                "Added the brief summary band, lowered evaluation.summary_words_min to 25, "
+                "lowered extract.min_source_words to its derived value, added "
+                "evaluation.brief_compression_ceiling, and added line-shape prose knobs."
+            ),
+            why=(
+                "Short sources should publish with an honest brief instead of being padded "
+                "or dropped. The old word gate forced the decoder to keep writing on a "
+                "small source, which made invention more likely."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T19:40",
+            change="Added the console block for the interactive telemetry viewport.",
+            why=(
+                "The console now lets the operator pan and zoom over the published "
+                "item-health projection, so the default window, pan step, zoom factor, "
+                "minimum denominator and chart size are tunable config values (Rule #6)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T19:35",
+            change="Added llama-server runtime-sweep knobs to models.inference.",
+            why=(
+                "The runtime sweep must change one measured flag at a time through config, "
+                "not through workflow literals. The startup_warmup default matches the "
+                "current digest workflow, so the fingerprint input describes the server "
+                "that actually runs."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T18:15",
+            change=(
+                "Added extract prose-shape, enforcement and paywall-marker knobs; changed "
+                "extract.min_source_words to a brief-tier threshold."
+            ),
+            why=(
+                "Extraction now records short or list-shaped pages instead of dropping "
+                "them by length, while publisher-declared paywalls still stop publication. "
+                "The new thresholds and switches are tunable config values (Rule #6)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T17:52",
+            change="Added models.inference.request_timeout_minutes.",
+            why=(
+                "One hung summarizer request was using the whole shard timeout, so a "
+                "single bad item could burn 150 minutes and hide the cause. The new "
+                "per-request budget is sized from the measured worst 8B long article "
+                "plus a cold prompt prefix, doubled, while run.shard_timeout_minutes "
+                "stays the outer bound. Additive - an older config still validates."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T17:41",
+            change="Added evaluation.lead_coverage_min.",
+            why=(
+                "Lead coverage now caps a high confidence band at medium. The threshold "
+                "is a tunable band input, so it belongs in config rather than in score.py "
+                "(Rule #6). Additive - an older config still validates through the "
+                "schema default."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T16:00",
             change="Added ui.read_mark_days.",
@@ -621,6 +840,7 @@ class AppConfig(Contract):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
+    console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @model_validator(mode="after")
@@ -643,4 +863,11 @@ class AppConfig(Contract):
                     f"summarize band at {band.min_source_words} words asks for a summary "
                     "longer than evaluation.summary_words_max accepts"
                 )
+        brief_target = self.summarize.bands[0].target_words_min
+        derived_floor = math.ceil(brief_target / self.evaluation.brief_compression_ceiling)
+        if self.extract.min_source_words != derived_floor:
+            raise ValueError(
+                "extract.min_source_words must equal summarize.bands[0].target_words_min "
+                "divided by evaluation.brief_compression_ceiling"
+            )
         return self

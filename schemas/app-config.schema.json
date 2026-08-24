@@ -75,6 +75,64 @@
       "title": "CollectConfig",
       "type": "object"
     },
+    "ConsoleConfig": {
+      "additionalProperties": false,
+      "description": "Knobs for the operator console's time viewport.",
+      "properties": {
+        "chart_height": {
+          "default": 180,
+          "minimum": 120,
+          "title": "Chart Height",
+          "type": "integer"
+        },
+        "default_window_days": {
+          "default": 30,
+          "description": "Initial time span for the console charts. A viewport, not a deletion.",
+          "minimum": 1,
+          "title": "Default Window Days",
+          "type": "integer"
+        },
+        "max_window_days": {
+          "default": 366,
+          "minimum": 1,
+          "title": "Max Window Days",
+          "type": "integer"
+        },
+        "min_attempts_for_rate": {
+          "default": 5,
+          "description": "Below this count a rate is outlined because the denominator is thin.",
+          "minimum": 1,
+          "title": "Min Attempts For Rate",
+          "type": "integer"
+        },
+        "min_window_days": {
+          "default": 7,
+          "minimum": 1,
+          "title": "Min Window Days",
+          "type": "integer"
+        },
+        "pan_days": {
+          "default": 7,
+          "description": "Days moved by one arrow-key pan.",
+          "minimum": 1,
+          "title": "Pan Days",
+          "type": "integer"
+        },
+        "today_anchor": {
+          "$ref": "#/$defs/TodayAnchor",
+          "default": "right",
+          "description": "Where today sits in the initial viewport when enough history exists."
+        },
+        "zoom_factor": {
+          "default": 1.5,
+          "exclusiveMinimum": 1.0,
+          "title": "Zoom Factor",
+          "type": "number"
+        }
+      },
+      "title": "ConsoleConfig",
+      "type": "object"
+    },
     "DriftConfig": {
       "additionalProperties": false,
       "properties": {
@@ -118,11 +176,27 @@
           "title": "Band Medium Min",
           "type": "number"
         },
+        "brief_compression_ceiling": {
+          "default": 0.5,
+          "description": "Maximum summary/source ratio for a brief item. Also caps verbatim_run on briefs and derives extract.min_source_words from the first brief ask.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Brief Compression Ceiling",
+          "type": "number"
+        },
         "golden_set_size": {
           "default": 20,
           "minimum": 1,
           "title": "Golden Set Size",
           "type": "integer"
+        },
+        "lead_coverage_min": {
+          "default": 0.3,
+          "description": "Below this the summary missed the source lead. It caps a high band at medium rather than forcing low.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Lead Coverage Min",
+          "type": "number"
         },
         "spot_checks_per_week": {
           "default": 10,
@@ -138,7 +212,7 @@
           "type": "integer"
         },
         "summary_words_min": {
-          "default": 40,
+          "default": 25,
           "description": "Below this it is a headline, not a summary. Set under the lowest band in `summarize.bands`: the prompt is a request, and dropping an item for missing it by two words loses a story to a rounding error.",
           "minimum": 1,
           "title": "Summary Words Min",
@@ -215,11 +289,61 @@
           "type": "integer"
         },
         "min_source_words": {
-          "default": 120,
-          "description": "Below this the item is not summarized at all. Page furniture is short.",
+          "default": 60,
+          "description": "Below this the item publishes through the brief tier. It is derived in AppConfig from summarize.bands[0].target_words_min divided by evaluation.brief_compression_ceiling.",
           "minimum": 1,
           "title": "Min Source Words",
           "type": "integer"
+        },
+        "paywall_markers": {
+          "description": "Fallback markers used only when publisher JSON-LD does not declare the paywall.",
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Paywall Markers",
+          "type": "array"
+        },
+        "prose_line_count_min": {
+          "default": 12,
+          "description": "Lines needed before the line-shape guard runs.",
+          "minimum": 1,
+          "title": "Prose Line Count Min",
+          "type": "integer"
+        },
+        "prose_line_ratio_min": {
+          "default": 0.5,
+          "description": "Minimum share of lines that must look like prose on a line-heavy page.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Prose Line Ratio Min",
+          "type": "number"
+        },
+        "prose_sentence_min": {
+          "default": 3,
+          "description": "Sentences of prose needed before a page stops carrying the not_prose signal.",
+          "minimum": 1,
+          "title": "Prose Sentence Min",
+          "type": "integer"
+        },
+        "prose_sentence_words_min": {
+          "default": 8,
+          "description": "Words a sentence needs before it counts as prose for the shape signal.",
+          "minimum": 1,
+          "title": "Prose Sentence Words Min",
+          "type": "integer"
+        },
+        "reject_boilerplate": {
+          "default": false,
+          "description": "If true, a boilerplate signal rejects the item. Default records and publishes.",
+          "title": "Reject Boilerplate",
+          "type": "boolean"
+        },
+        "reject_not_prose": {
+          "default": false,
+          "description": "If true, a not_prose signal rejects the item. Default records and publishes.",
+          "title": "Reject Not Prose",
+          "type": "boolean"
         },
         "request_timeout_seconds": {
           "default": 20.0,
@@ -247,6 +371,65 @@
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
       "properties": {
+        "cache_type_k": {
+          "anyOf": [
+            {
+              "const": "q8_0",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -ctk. None omits the flag and keeps full-precision KV.",
+          "title": "Cache Type K"
+        },
+        "cache_type_v": {
+          "anyOf": [
+            {
+              "const": "q8_0",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -ctv. None omits the flag and keeps full-precision KV.",
+          "title": "Cache Type V"
+        },
+        "flash_attention": {
+          "anyOf": [
+            {
+              "enum": [
+                "on",
+                "off"
+              ],
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -fa. None omits the flag and leaves the runtime on auto.",
+          "title": "Flash Attention"
+        },
+        "load_mode": {
+          "anyOf": [
+            {
+              "const": "mmap+mlock",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -lm. None omits the flag and keeps the runtime default.",
+          "title": "Load Mode"
+        },
         "max_output_tokens": {
           "default": 900,
           "description": "A crash guard, not a length target. The prompt sets the length; this only stops a runaway decode from burning a shard's whole timeout. Sized at 250 the reply ran out of budget mid-object and failed as a shape error, which named the wrong cause - so it is set well above any summary we want.",
@@ -266,11 +449,39 @@
           "title": "N Ctx",
           "type": "integer"
         },
+        "n_parallel": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -np. None omits the flag and keeps the runtime default.",
+          "title": "N Parallel"
+        },
         "n_threads": {
           "default": 4,
           "minimum": 1,
           "title": "N Threads",
           "type": "integer"
+        },
+        "n_threads_batch": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server -tb. None omits the flag and lets it follow n_threads.",
+          "title": "N Threads Batch"
         },
         "n_ubatch": {
           "default": 512,
@@ -278,11 +489,53 @@
           "title": "N Ubatch",
           "type": "integer"
         },
+        "poll": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --poll. None omits the flag and keeps the runtime default.",
+          "title": "Poll"
+        },
+        "priority": {
+          "anyOf": [
+            {
+              "maximum": 3,
+              "minimum": -1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "llama-server --prio. None omits the flag and keeps normal priority.",
+          "title": "Priority"
+        },
+        "request_timeout_minutes": {
+          "default": 22.1,
+          "description": "One summarizer POST may wait this long. Sized from the measured worst 8B long article plus one cold prompt prefix, doubled; the shard timeout remains the outer bound.",
+          "exclusiveMinimum": 0.0,
+          "title": "Request Timeout Minutes",
+          "type": "number"
+        },
         "seed": {
           "default": 0,
           "description": "Dead code under greedy decoding. Never cited as the determinism control.",
           "title": "Seed",
           "type": "integer"
+        },
+        "startup_warmup": {
+          "default": true,
+          "description": "If false, emit --no-warmup. True lets llama-server warm at startup.",
+          "title": "Startup Warmup",
+          "type": "boolean"
         },
         "temperature": {
           "default": 0.0,
@@ -595,6 +848,14 @@
       "title": "TierWeights",
       "type": "object"
     },
+    "TodayAnchor": {
+      "enum": [
+        "right",
+        "centre"
+      ],
+      "title": "TodayAnchor",
+      "type": "string"
+    },
     "UiConfig": {
       "additionalProperties": false,
       "description": "The published surface's knobs.\n\n`sections` is the modularity story: reordering the page is a config edit,\nnot a code change. What is deliberately absent is a per-element layout\nengine - on the surface that matters, a phone, there is no left and no\nright, and a per-reader layout would break the promise that a shared link\nshows the recipient what the sender saw.",
@@ -745,6 +1006,36 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the brief summary band, lowered evaluation.summary_words_min to 25, lowered extract.min_source_words to its derived value, added evaluation.brief_compression_ceiling, and added line-shape prose knobs.",
+      "version": "2026-08-23T19:50",
+      "why": "Short sources should publish with an honest brief instead of being padded or dropped. The old word gate forced the decoder to keep writing on a small source, which made invention more likely."
+    },
+    {
+      "change": "Added the console block for the interactive telemetry viewport.",
+      "version": "2026-08-23T19:40",
+      "why": "The console now lets the operator pan and zoom over the published item-health projection, so the default window, pan step, zoom factor, minimum denominator and chart size are tunable config values (Rule #6)."
+    },
+    {
+      "change": "Added llama-server runtime-sweep knobs to models.inference.",
+      "version": "2026-08-23T19:35",
+      "why": "The runtime sweep must change one measured flag at a time through config, not through workflow literals. The startup_warmup default matches the current digest workflow, so the fingerprint input describes the server that actually runs."
+    },
+    {
+      "change": "Added extract prose-shape, enforcement and paywall-marker knobs; changed extract.min_source_words to a brief-tier threshold.",
+      "version": "2026-08-23T18:15",
+      "why": "Extraction now records short or list-shaped pages instead of dropping them by length, while publisher-declared paywalls still stop publication. The new thresholds and switches are tunable config values (Rule #6)."
+    },
+    {
+      "change": "Added models.inference.request_timeout_minutes.",
+      "version": "2026-08-23T17:52",
+      "why": "One hung summarizer request was using the whole shard timeout, so a single bad item could burn 150 minutes and hide the cause. The new per-request budget is sized from the measured worst 8B long article plus a cold prompt prefix, doubled, while run.shard_timeout_minutes stays the outer bound. Additive - an older config still validates."
+    },
+    {
+      "change": "Added evaluation.lead_coverage_min.",
+      "version": "2026-08-23T17:41",
+      "why": "Lead coverage now caps a high confidence band at medium. The threshold is a tunable band input, so it belongs in config rather than in score.py (Rule #6). Additive - an older config still validates through the schema default."
+    },
+    {
       "change": "Added ui.read_mark_days.",
       "version": "2026-08-23T16:00",
       "why": "Read marks were one flat list of item ids that never expired, so an id reused on a later day greyed out an article the reader had never opened, and the store grew for ever. Marks are now held per digest date and pruned to the newest days this number allows. Additive - an older config still validates, and the browser drops the old flat list on sight because there is no honest way to tell which day those ids belonged to."
@@ -800,6 +1091,9 @@
     "collect": {
       "$ref": "#/$defs/CollectConfig"
     },
+    "console": {
+      "$ref": "#/$defs/ConsoleConfig"
+    },
     "drift": {
       "$ref": "#/$defs/DriftConfig"
     },
@@ -828,7 +1122,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-23T16:00",
+      "default": "2026-08-23T19:50",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -842,5 +1136,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-23T16:00"
+  "version": "2026-08-23T19:50"
 }

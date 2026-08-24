@@ -15,20 +15,36 @@ the daily workflow calls.
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 from urllib.parse import urlsplit
 
-from idhazh import assemble, config, discover, extract, fetch, ledger, rank, route, summarize
+from pydantic import ValidationError
+
+from idhazh import (
+    assemble,
+    config,
+    discover,
+    extract,
+    fetch,
+    ledger,
+    publish_telemetry,
+    rank,
+    route,
+    summarize,
+    telemetry,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
@@ -41,7 +57,7 @@ from idhazh.embed import Embedder
 from idhazh.evals import golden, metrics, score, validation, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
-from idhazh.llm.server import Completion, post
+from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, post
 from idhazh.render import asset_relpath, render_route
 from idhazh.sanitize import SANITIZER_VERSION
 
@@ -191,6 +207,7 @@ def stage_plan(
         verticals.append(summary)
         items.extend(planned)
 
+    items = _dedupe_planned_items(items)
     items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
     counts = Counter(item.vertical for item in items)
     verticals = [
@@ -299,6 +316,33 @@ def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedIt
     return [item for item in items if item.item_id in keep]
 
 
+def _dedupe_planned_items(items: list[PlannedItem]) -> list[PlannedItem]:
+    """Keep one planned item per address before the crash guard counts slots."""
+    by_key: dict[str, list[PlannedItem]] = {}
+    for item in items:
+        by_key.setdefault(item.url_key, []).append(item)
+
+    duplicate_keys = [url_key for url_key, carried in by_key.items() if len(carried) > 1]
+    if not duplicate_keys:
+        return items
+
+    winners = {
+        url_key: min(
+            carried,
+            key=lambda item: (-item.rank_score, item.vertical, item.item_id, item.source_id),
+        )
+        for url_key, carried in by_key.items()
+    }
+    dropped = [item for item in items if winners[item.url_key] is not item]
+    LOG.info(
+        "plan duplicates dropped count=%s url_keys=%s source_ids=%s",
+        len(dropped),
+        ",".join(sorted(duplicate_keys)),
+        ",".join(sorted({item.source_id for item in dropped})),
+    )
+    return [item for item in items if winners[item.url_key] is item]
+
+
 def _next_run_n(date: str) -> int:
     """Which run of the day this is, read from what the last one committed.
 
@@ -306,7 +350,8 @@ def _next_run_n(date: str) -> int:
     constant: two runs claiming one run id put two different work lists under
     the same address in the manifest.
     """
-    manifest = _load_manifest(assemble.day_dir(PUBLIC_ROOT, date) / "run.json")
+    target = assemble.day_dir(PUBLIC_ROOT, date)
+    manifest = _load_manifest(target / "run.json", day=_load_day(target / "digest.json"))
     return manifest.runs[-1].n + 1 if manifest else 1
 
 
@@ -325,6 +370,22 @@ def shard_of(plan: RunPlan, *, shard: int, shards: int) -> list[PlannedItem]:
     return [item for index, item in enumerate(plan.items) if index % shards == shard]
 
 
+class _FetchedWorkItem(NamedTuple):
+    item: PlannedItem
+    article: Article
+    fetch_ms: int
+    extract_ms: int
+    started: float
+    original_index: int
+
+
+def _summarize_band_sort_key(
+    work: _FetchedWorkItem, settings: config.Settings
+) -> tuple[int, int]:
+    band = settings.app.summarize.band_for(work.article.word_count)
+    return band.min_source_words, work.original_index
+
+
 def stage_work(
     plan: RunPlan,
     *,
@@ -333,6 +394,7 @@ def stage_work(
     shard: int = 0,
     shards: int = 1,
     fetcher: Fetcher | None = None,
+    model_endpoint: str = DEFAULT_ENDPOINT,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
     read_url = fetcher or live_fetcher(settings)
@@ -362,22 +424,38 @@ def stage_work(
     items_dir = _run_dir(plan.date) / "items"
     mine = shard_of(plan, shard=shard, shards=shards)
     LOG.info("working shard=%s/%s items=%s", shard, shards, len(mine))
-    for item in mine:
+    ready: list[_FetchedWorkItem] = []
+    for original_index, item in enumerate(mine):
         started = time.monotonic()
         article, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
             continue
+        ready.append(
+            _FetchedWorkItem(
+                item=item,
+                article=article,
+                fetch_ms=fetch_ms,
+                extract_ms=extract_ms,
+                started=started,
+                original_index=original_index,
+            )
+        )
 
+    for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
+        item = work.item
+        article = work.article
         model_started = time.monotonic()
-        summary = _summarize_one(article, settings, fingerprint)
+        summary = _summarize_one(
+            article, settings, fingerprint, endpoint=model_endpoint, run_id=plan.run_id
+        )
         summarize_ms = int((time.monotonic() - model_started) * 1000)
         summary = summary.model_copy(
             update={
-                "duration_ms": int((time.monotonic() - started) * 1000),
-                "fetch_ms": fetch_ms,
-                "extract_ms": extract_ms,
+                "duration_ms": int((time.monotonic() - work.started) * 1000),
+                "fetch_ms": work.fetch_ms,
+                "extract_ms": work.extract_ms,
                 "summarize_ms": summarize_ms,
             }
         )
@@ -413,8 +491,8 @@ def stage_work(
             "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
             item.item_id,
             row.band.value,
-            fetch_ms,
-            extract_ms,
+            work.fetch_ms,
+            work.extract_ms,
             summarize_ms,
             score_ms,
         )
@@ -439,7 +517,37 @@ def _fetch_one(
     return article, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
-def _summarize_one(article: Article, settings: config.Settings, fingerprint: str) -> Summary:
+def _log_model_unreachable(
+    article: Article, *, model_id: str, error: OSError, run_id: str | None
+) -> None:
+    event = {
+        "ts": assemble.utc_now(),
+        "src": "summarize",
+        "v": "1",
+        "run": run_id,
+        "name": "item.summarize.failed",
+        "level": "warning",
+        "ctx": {
+            "item_id": article.item_id,
+            "source_id": article.source_id,
+            "model_id": model_id,
+        },
+        "data": {
+            "failure_code": FailureCode.MODEL_UNREACHABLE.value,
+            "error_type": type(error).__name__,
+        },
+    }
+    LOG.warning("%s", json.dumps(event, sort_keys=True, separators=(",", ":")))
+
+
+def _summarize_one(
+    article: Article,
+    settings: config.Settings,
+    fingerprint: str,
+    *,
+    endpoint: str = DEFAULT_ENDPOINT,
+    run_id: str | None = None,
+) -> Summary:
     inference = settings.app.models.inference
     model_id = settings.app.models.summarize.id
     payload = summarize.build_request(
@@ -450,10 +558,15 @@ def _summarize_one(article: Article, settings: config.Settings, fingerprint: str
         evaluation=settings.app.evaluation,
     )
     try:
-        completion = post(payload, timeout=settings.app.run.shard_timeout_minutes * 60)
+        request_timeout_seconds = settings.app.models.inference.request_timeout_minutes * 60
+        completion = post(
+            payload,
+            endpoint=endpoint,
+            timeout=request_timeout_seconds,
+        )
     except OSError as error:
-        completion = Completion(content="")
-        LOG.warning("model unreachable id=%s reason=%s", article.item_id, type(error).__name__)
+        completion = None
+        _log_model_unreachable(article, model_id=model_id, error=error, run_id=run_id)
     return summarize.to_summary(
         article,
         completion,
@@ -649,6 +762,41 @@ def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runne
 # --- assemble ----------------------------------------------------------------
 
 
+class _ItemPayload(NamedTuple):
+    planned: PlannedItem
+    article: Article | None
+    summary: Summary | None
+    eval_path: Path
+    route_path: Path
+
+
+def _item_payloads(
+    plan: RunPlan, items_dir: Path, *, require_summary: bool = False
+) -> Iterable[_ItemPayload]:
+    for item in plan.items:
+        article_path = items_dir / f"{item.item_id}.article.json"
+        summary_path = items_dir / f"{item.item_id}.summary.json"
+        article_exists = article_path.exists()
+        summary_exists = summary_path.exists()
+        if require_summary and not (article_exists and summary_exists):
+            continue
+        yield _ItemPayload(
+            planned=item,
+            article=(
+                Article.from_json(article_path.read_text(encoding="utf-8"))
+                if article_exists
+                else None
+            ),
+            summary=(
+                Summary.from_json(summary_path.read_text(encoding="utf-8"))
+                if summary_exists
+                else None
+            ),
+            eval_path=items_dir / f"{item.item_id}.eval.json",
+            route_path=items_dir / f"{item.item_id}.route.json",
+        )
+
+
 def stage_assemble(
     plan: RunPlan, *, settings: config.Settings, commit_sha: str, runner: str = "local"
 ) -> DigestDay:
@@ -656,19 +804,30 @@ def stage_assemble(
     items_dir = _run_dir(plan.date) / "items"
     names = assemble.source_names(settings.sources)
     kinds = assemble.source_kinds(settings.sources)
+    target = assemble.day_dir(PUBLIC_ROOT, plan.date)
+    previous_day = _load_day(target / "digest.json")
+    previous_manifest = _load_manifest(target / "run.json", day=previous_day)
+    run_n = (previous_manifest.runs[-1].n + 1) if previous_manifest else 1
+    run_id = f"{plan.date}-{run_n}"
     digest_items = []
     summaries: list[Summary] = []
     rows = []
+    item_health_rows = [
+        telemetry.classify_item(
+            planned=payload.planned,
+            article=payload.article,
+            summary=payload.summary,
+            date=plan.date,
+            run_id=run_id,
+        )
+        for payload in _item_payloads(plan, items_dir)
+    ]
 
-    for item in plan.items:
-        article_path = items_dir / f"{item.item_id}.article.json"
-        summary_path = items_dir / f"{item.item_id}.summary.json"
-        eval_path = items_dir / f"{item.item_id}.eval.json"
-        route_path = items_dir / f"{item.item_id}.route.json"
-        if not (article_path.exists() and summary_path.exists()):
+    for payload in _item_payloads(plan, items_dir, require_summary=True):
+        article = payload.article
+        summary = payload.summary
+        if article is None or summary is None:
             continue
-        article = Article.from_json(article_path.read_text(encoding="utf-8"))
-        summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
         summaries.append(summary)
         if summary.status is not SummaryStatus.OK:
             continue
@@ -676,13 +835,25 @@ def stage_assemble(
         # An item publishes with a band whether or not the faithfulness scorer
         # ran. The counterweights are free and always available, and they never
         # claim the top band on their own.
-        if eval_path.exists():
-            row = EvalRow.from_json(eval_path.read_text(encoding="utf-8"))
+        if payload.eval_path.exists():
+            row = EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8"))
             rows.append(row)
-            band = row.band
+            band = score.band(
+                row.hhem,
+                unsupported_numbers=row.unsupported_numbers,
+                lead_coverage=row.coverage,
+                hedge_dropped=row.hedge_dropped,
+                config=settings.app.evaluation,
+            )
         else:
-            band = score.counterweight_band(
-                summary.summary or "", article.text or "", settings.app.evaluation
+            text = summary.summary or ""
+            full_text = article.text or ""
+            band = score.band(
+                None,
+                unsupported_numbers=metrics.unsupported_numbers(text, full_text),
+                lead_coverage=metrics.lead_coverage(text, full_text),
+                hedge_dropped=metrics.hedge_dropped(text, full_text),
+                config=settings.app.evaluation,
             )
         digest_items.append(
             assemble.to_digest_item(
@@ -693,17 +864,13 @@ def stage_assemble(
                 source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
                 run_n=1,
                 route=(
-                    Route.from_json(route_path.read_text(encoding="utf-8"))
-                    if route_path.exists()
+                    Route.from_json(payload.route_path.read_text(encoding="utf-8"))
+                    if payload.route_path.exists()
                     else None
                 ),
             )
         )
 
-    target = assemble.day_dir(PUBLIC_ROOT, plan.date)
-    previous_day = _load_day(target / "digest.json")
-    previous_manifest = _load_manifest(target / "run.json")
-    run_n = (previous_manifest.runs[-1].n + 1) if previous_manifest else 1
     digest_items = [item.model_copy(update={"introduced_by_run": run_n}) for item in digest_items]
 
     generated_at = assemble.utc_now()
@@ -716,6 +883,7 @@ def stage_assemble(
         generated_at=generated_at,
         retention_window_months=settings.app.retention.image_months,
         embeddings=assemble.build_embeddings(digest_items, Embedder(config.REPO_ROOT)),
+        item_health_rows=item_health_rows,
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 
@@ -735,17 +903,23 @@ def stage_assemble(
         config_digests=settings.digests,
         site_bytes=site_bytes,
         site_files=site_files,
+        item_health_rows=item_health_rows,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
+    item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
+    publish_telemetry.publish(
+        state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry"
+    )
     LOG.info(
-        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s",
+        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s",
         plan.date,
         len(day.items),
         day.partial,
         landed,
         published,
+        item_health,
     )
     return day
 
@@ -781,8 +955,44 @@ def _load_day(path: Path) -> DigestDay | None:
     return DigestDay.from_json(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def _load_manifest(path: Path) -> RunManifest | None:
-    return RunManifest.from_json(path.read_text(encoding="utf-8")) if path.exists() else None
+def _load_manifest(path: Path, *, day: DigestDay | None = None) -> RunManifest | None:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
+    try:
+        manifest = RunManifest.from_json(text)
+    except ValidationError:
+        if day is None:
+            raise
+        return _manifest_with_run_vertical_counts(json.loads(text), day)
+    if day is None or manifest.version == RunManifest.schema_version():
+        return manifest
+    return _manifest_with_run_vertical_counts(json.loads(text), day)
+
+
+def _manifest_with_run_vertical_counts(payload: object, day: DigestDay) -> RunManifest:
+    if not isinstance(payload, dict):
+        return RunManifest.model_validate(payload)
+
+    counts: Counter[tuple[int, str]] = Counter(
+        (item.introduced_by_run, item.vertical) for item in day.items
+    )
+    migrated_runs = []
+    for run in payload.get("runs", []):
+        if not isinstance(run, dict):
+            migrated_runs.append(run)
+            continue
+        run_n = int(run.get("n", 0) or 0)
+        verticals = []
+        for vertical in run.get("verticals", []):
+            if not isinstance(vertical, dict):
+                verticals.append(vertical)
+                continue
+            vertical_id = str(vertical.get("id", ""))
+            verticals.append({**vertical, "published": counts[(run_n, vertical_id)]})
+        migrated_runs.append({**run, "verticals": verticals})
+    migrated = {**payload, "version": RunManifest.schema_version(), "runs": migrated_runs}
+    return RunManifest.model_validate(migrated)
 
 
 # --- entry point --------------------------------------------------------------

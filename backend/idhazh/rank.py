@@ -295,6 +295,7 @@ def plan_vertical(
             canonical_url=item.candidate.canonical_url,
             source_id=item.candidate.source_id,
             tier=item.candidate.tier,
+            source_form=item.candidate.source_form,
             vertical=vertical.id,
             title=item.candidate.title,
             published_at=item.appeared_at,

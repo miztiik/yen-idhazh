@@ -26,6 +26,32 @@
       "title": "EventType",
       "type": "string"
     },
+    "FailureCode": {
+      "description": "Stable failure vocabulary for item-health rows.",
+      "enum": [
+        "not_attempted",
+        "robots_denied",
+        "robots_unreachable",
+        "blocked_address",
+        "http_client_error",
+        "http_rate_limited",
+        "http_server_error",
+        "network_error",
+        "no_text",
+        "too_short",
+        "not_prose",
+        "boilerplate",
+        "paywalled",
+        "unsupported_form",
+        "model_unreachable",
+        "output_truncated",
+        "bad_shape",
+        "length_out_of_range",
+        "unknown"
+      ],
+      "title": "FailureCode",
+      "type": "string"
+    },
     "LensId": {
       "description": "A question asked of items already collected. Costs no extra request.",
       "enum": [
@@ -35,6 +61,14 @@
         "cyber"
       ],
       "title": "LensId",
+      "type": "string"
+    },
+    "SourceForm": {
+      "enum": [
+        "article",
+        "abstract"
+      ],
+      "title": "SourceForm",
       "type": "string"
     },
     "SourceTier": {
@@ -53,6 +87,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added source_form to the extract payload.",
+      "version": "2026-08-23T18:49",
+      "why": "Summarize and publish need the curator-declared source form after the plan file is no longer in hand. The field defaults to article so older payloads still read."
+    },
+    {
+      "change": "Added brief and failure_code to the extract payload.",
+      "version": "2026-08-23T18:15",
+      "why": "Extract now publishes short or list-shaped pages by default while recording the shape signal, and it rejects paywalled or unsupported forms with typed codes that the item-health classifier can carry."
+    },
+    {
       "change": "Initial shape: identity, provenance, text, truncation and failure states.",
       "version": "2026-08-21",
       "why": "Contracts before logic - Extract is written against a fixed payload."
@@ -60,6 +104,12 @@
   ],
   "description": "The Extract stage's output payload, one per item.",
   "properties": {
+    "brief": {
+      "default": false,
+      "description": "True when the source is short enough that summarize uses the brief tier.",
+      "title": "Brief",
+      "type": "boolean"
+    },
     "canonical_url": {
       "description": "The address after canonicalisation. url_key derives from it.",
       "maxLength": 2048,
@@ -93,6 +143,18 @@
       "minLength": 1,
       "title": "Extractor Version",
       "type": "string"
+    },
+    "failure_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureCode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Typed extract failure, or a recorded extract signal on an ok article."
     },
     "failure_detail": {
       "anyOf": [
@@ -147,6 +209,11 @@
       "minLength": 1,
       "title": "Sanitizer Version",
       "type": "string"
+    },
+    "source_form": {
+      "$ref": "#/$defs/SourceForm",
+      "default": "article",
+      "description": "Declared by the feed config. Never inferred from extracted text."
     },
     "source_id": {
       "description": "The feed that carried it.",
@@ -225,7 +292,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-23T18:49",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -258,5 +325,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-23T18:49"
 }

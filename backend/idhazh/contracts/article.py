@@ -27,6 +27,8 @@ from idhazh.contracts.base import (
     UrlKey,
     derive_url_key,
 )
+from idhazh.contracts.item_health import FAILURE_CODE_STAGES, FailureCode, ItemStage
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import EventType, LensId, SourceTier
 
 # Structural bounds on untrusted text that reaches a page or a log line. Not a
@@ -47,6 +49,24 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-23T18:49",
+            change="Added source_form to the extract payload.",
+            why=(
+                "Summarize and publish need the curator-declared source form after the "
+                "plan file is no longer in hand. The field defaults to article so older "
+                "payloads still read."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-23T18:15",
+            change="Added brief and failure_code to the extract payload.",
+            why=(
+                "Extract now publishes short or list-shaped pages by default while recording "
+                "the shape signal, and it rejects paywalled or unsupported forms with typed "
+                "codes that the item-health classifier can carry."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: identity, provenance, text, truncation and failure states.",
             why="Contracts before logic - Extract is written against a fixed payload.",
@@ -63,6 +83,10 @@ class Article(Contract):
     )
     source_id: Slug = Field(description="The feed that carried it.")
     tier: SourceTier
+    source_form: SourceForm = Field(
+        default=SourceForm.ARTICLE,
+        description="Declared by the feed config. Never inferred from extracted text.",
+    )
 
     vertical: Slug
     lenses: list[LensId] = Field(default_factory=list)
@@ -77,12 +101,20 @@ class Article(Contract):
     text: str | None = Field(default=None, description="Sanitized text. Never republished.")
     word_count: int = Field(default=0, ge=0)
     token_count: int = Field(default=0, ge=0)
+    brief: bool = Field(
+        default=False,
+        description="True when the source is short enough that summarize uses the brief tier.",
+    )
     truncated: bool = False
     truncated_at_tokens: int | None = Field(default=None, ge=1)
 
     published_at: Timestamp | None = None
     fetched_at: Timestamp
     status: ArticleStatus
+    failure_code: FailureCode | None = Field(
+        default=None,
+        description="Typed extract failure, or a recorded extract signal on an ok article.",
+    )
     failure_detail: UntrustedLine | None = None
 
     extractor_version: str = Field(min_length=1)
@@ -103,8 +135,21 @@ class Article(Contract):
                 raise ValueError("an ok article carries title and text")
             if self.failure_detail is not None:
                 raise ValueError("an ok article carries no failure_detail")
+            if self.failure_code not in {
+                None,
+                FailureCode.TOO_SHORT,
+                FailureCode.NOT_PROSE,
+                FailureCode.BOILERPLATE,
+            }:
+                raise ValueError("an ok article carries only a recorded extract signal")
         elif self.failure_detail is None:
             raise ValueError("a failed article must record why")
+        if (
+            self.failure_code is not None
+            and ItemStage.EXTRACT not in FAILURE_CODE_STAGES[self.failure_code]
+            and ItemStage.FETCH not in FAILURE_CODE_STAGES[self.failure_code]
+        ):
+            raise ValueError("article failure_code must belong to fetch or extract")
         if self.truncated != (self.truncated_at_tokens is not None):
             raise ValueError("truncated and truncated_at_tokens must agree")
         if len(set(self.lenses)) != len(self.lenses):

@@ -7,10 +7,11 @@
 	 * here is derived at read time, which is what stops today's code quietly
 	 * restating yesterday's figures.
 	 *
-	 * Bars and squares are plain divs. A charting library to draw ten rectangles
-	 * would outweigh the data it draws.
+	 * The run grid stays static. The telemetry viewport is enhanced by uPlot and
+	 * still carries server-rendered SVG fallback.
 	 */
 	import { base } from '$app/paths';
+	import Viewport from '$lib/components/Viewport.svelte';
 	import type { Health } from './+page.server';
 
 	let { data } = $props();
@@ -37,7 +38,7 @@
 	]);
 
 	const worst = $derived(
-		Math.max(1, ...data.days.flatMap((day) => stages.map((stage) => day[stage.key] as number)))
+		Math.max(1, ...data.timingDays.flatMap((day) => stages.map((stage) => day[stage.key] as number)))
 	);
 
 	const totalRuns = $derived(data.grid.reduce((count, day) => count + day.squares.length, 0));
@@ -61,6 +62,7 @@
 	<p class="mt-1 text-[0.9375rem] text-text-secondary">
 		What the pipeline cost and how well it did, per day, from the committed ledger.
 		{data.totalRows} scored {data.totalRows === 1 ? 'item' : 'items'} on record.
+		{data.itemHealthRows} item-health {data.itemHealthRows === 1 ? 'row' : 'rows'} on record.
 	</p>
 
 	<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">Run health</h2>
@@ -106,6 +108,15 @@
 			{/each}
 		</ul>
 	{/if}
+
+	<Viewport
+		initialRows={data.telemetryRows}
+		availableMonths={data.telemetryMonths}
+		today={data.today}
+		config={data.console}
+		compressionPoints={data.compression}
+		bands={data.summarizeBands}
+	/>
 
 	<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Feeds that failed</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
@@ -158,9 +169,9 @@
 		</div>
 	{/if}
 
-	{#if data.days.length === 0}
+	{#if data.timingDays.length === 0}
 		<p class="mt-10 text-[0.9375rem] text-text-secondary">
-			Nothing has been scored yet. The ledger fills as days publish.
+			No item timing has been recorded yet. The item-health ledger fills as runs publish.
 		</p>
 	{:else}
 		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Median seconds per item, by stage</h2>
@@ -169,8 +180,8 @@
 			<em>summarize</em> moves when the model changes - the rest is the open web and our own extractor.
 		</p>
 
-		<div class="mt-4 space-y-5">
-			{#each data.days as day (day.date)}
+		<div class="mt-4 space-y-5" data-timing="chart">
+			{#each data.timingDays as day (day.date)}
 				<div>
 					<div class="flex items-baseline justify-between text-[0.8125rem]">
 						<a href="{base}/{day.date}/" class="text-accent hover:underline">{day.date}</a>
@@ -200,6 +211,13 @@
 			{/each}
 		</div>
 
+	{/if}
+
+	{#if data.scoreDays.length === 0}
+		<p class="mt-10 text-[0.9375rem] text-text-secondary">
+			Nothing has been scored yet. The score ledger fills as days publish.
+		</p>
+	{:else}
 		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Confidence and size</h2>
 		<div class="mt-3 overflow-x-auto">
 			<table class="w-full text-[0.8125rem]">
@@ -213,7 +231,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each data.days as day (day.date)}
+					{#each data.scoreDays as day (day.date)}
 						<tr class="border-b border-rule">
 							<td class="py-2">{day.date}</td>
 							<td class="py-2 text-end tabular-nums">{day.meanHhem.toFixed(3)}</td>

@@ -29,6 +29,7 @@ class Completion:
     """What came back, before anything has been believed about it."""
 
     content: str
+    reasoning: str = ""
     prompt_tokens: int = 0
     completion_tokens: int = 0
     finish_reason: str = "stop"
@@ -37,6 +38,20 @@ class Completion:
     def hit_the_budget(self) -> bool:
         """The reply stopped because it ran out of tokens, not because it was done."""
         return self.finish_reason == "length"
+
+    @property
+    def reasoned(self) -> bool:
+        """The runtime split a reasoning channel out of the content channel.
+
+        Newer llama.cpp builds move thinking into `message.reasoning_content`
+        rather than leaving `<think>` inline, so reading only `content` makes a
+        reasoning model look compliant. On the build in ggml-org/llama.cpp issue
+        27134 it empties `content` outright for any template whose generation
+        prompt ends in a closing think tag - which is exactly what Qwen3 renders
+        under `enable_thinking: false`. No workflow pins a llama.cpp build, so
+        this arrives without a commit of ours.
+        """
+        return bool(self.reasoning.strip())
 
 
 def server_argv(
@@ -48,7 +63,7 @@ def server_argv(
     be a change to the stamp - which is why it is built from config rather than
     written out by hand at the call site.
     """
-    return [
+    argv = [
         str(binary),
         "--model",
         str(weights),
@@ -64,8 +79,26 @@ def server_argv(
         str(inference.n_threads),
         "--port",
         str(port),
-        "--no-warmup",
     ]
+    if inference.n_parallel is not None:
+        argv.extend(("-np", str(inference.n_parallel)))
+    if inference.flash_attention is not None:
+        argv.extend(("-fa", inference.flash_attention))
+    if inference.load_mode is not None:
+        argv.extend(("-lm", inference.load_mode))
+    if inference.cache_type_k is not None:
+        argv.extend(("-ctk", inference.cache_type_k))
+    if inference.cache_type_v is not None:
+        argv.extend(("-ctv", inference.cache_type_v))
+    if inference.priority is not None:
+        argv.extend(("--prio", str(inference.priority)))
+    if inference.poll is not None:
+        argv.extend(("--poll", str(inference.poll)))
+    if inference.n_threads_batch is not None:
+        argv.extend(("-tb", str(inference.n_threads_batch)))
+    if not inference.startup_warmup:
+        argv.append("--no-warmup")
+    return argv
 
 
 def request_payload(
@@ -111,8 +144,10 @@ def parse_completion(body: str) -> Completion:
     if not choices:
         raise ValueError("the runtime returned no choices")
     usage = payload.get("usage") or {}
+    message = choices[0].get("message", {})
     return Completion(
-        content=choices[0].get("message", {}).get("content") or "",
+        content=message.get("content") or "",
+        reasoning=message.get("reasoning_content") or "",
         prompt_tokens=int(usage.get("prompt_tokens", 0)),
         completion_tokens=int(usage.get("completion_tokens", 0)),
         finish_reason=choices[0].get("finish_reason") or "stop",

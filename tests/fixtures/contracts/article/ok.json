@@ -1,4 +1,5 @@
 {
+  "brief": false,
   "canonical_url": "https://blog.example-lab.org/2026/08/model-release",
   "carried_by": 3,
   "entities": [
@@ -8,6 +9,7 @@
     "release"
   ],
   "extractor_version": "trafilatura-1.12.2",
+  "failure_code": null,
   "failure_detail": null,
   "fetched_at": "2026-08-21T06:04:11Z",
   "item_id": "ai-01",
@@ -17,6 +19,7 @@
   "published_at": "2026-08-21T05:30:00Z",
   "rank_score": 4.4,
   "sanitizer_version": "sanitizer-1",
+  "source_form": "article",
   "source_id": "example-lab-blog",
   "source_url": "https://blog.example-lab.org/2026/08/model-release",
   "status": "ok",

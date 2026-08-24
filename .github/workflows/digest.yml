@@ -1,4 +1,4 @@
-name: digest
+name: Content refresh
 
 # The run, four times a day. An orchestrator that never does the work,
 # disposable workers that do, and an assemble step that publishes whatever
@@ -10,21 +10,27 @@ name: digest
 
 on:
   schedule:
-    # Every six hours. A story that broke at 07:00 waited a full day under a
-    # daily schedule, and the digest is only worth opening if it is current.
+    # Four daytime UTC runs. A story that broke at 07:00 waited a full day under
+    # a daily schedule, and the digest is only worth opening if it is current.
     #
     # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
     # is the busiest minute on the platform; twenty past costs a reader nothing
     # and buys a run that starts closer to when it was asked for.
-    - cron: '20 */6 * * *'
+    - cron: '20 6,10,14,18 * * *'
   workflow_dispatch:
     inputs:
       date:
         description: 'Digest date (YYYY-MM-DD). Defaults to today, UTC.'
         default: ''
       shards:
-        description: 'Worker jobs to fan out across'
+        description: 'Total work-shard jobs'
+        type: choice
         default: '4'
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
       faithfulness:
         description: 'Run the faithfulness scorer (slow first run - downloads weights)'
         type: boolean
@@ -71,6 +77,11 @@ jobs:
           [ -n "$DATE" ] || DATE=$(date -u +%F)
           SHARDS="${{ inputs.shards }}"
           [ -n "$SHARDS" ] || SHARDS=4
+          SHARD_PATTERN='^[1-4]$'
+          if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
+            echo "shards must be an integer from 1 through 4" >&2
+            exit 1
+          fi
           # A scheduled run has no inputs at all, so every one of these is the
           # empty string and every one needs its default here. `faithfulness`
           # is normalized to a STRING for the same reason: read as a boolean,
@@ -125,6 +136,7 @@ jobs:
     timeout-minutes: 330
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
@@ -135,14 +147,6 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
-
-      - name: Install
-        run: |
-          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
-            pip install -e .
-          else
-            pip install -e ".[faithfulness]"
-          fi
 
       - uses: actions/download-artifact@v4
         with:
@@ -195,10 +199,36 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
-          LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
-            --model "backend/models/${MODEL_FILE}" \
-            --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
-            --port 8080 --no-warmup > llama-server.log 2>&1 &
+          MODEL_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["id"])')
+          MODEL_ARGV=$(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${MODEL_FILE}" \
+            --alias "$MODEL_ALIAS" \
+            --format shell)
+          mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${MODEL_FILE}" \
+            --alias "$MODEL_ALIAS" \
+            --format nul)
+          echo "starting: $MODEL_ARGV"
+          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
+          echo "$!" > llama-server.pid
+          sleep 2
+          kill -0 "$(cat llama-server.pid)" || {
+            echo "llama-server exited before install" >&2
+            tail -50 llama-server.log >&2
+            exit 1
+          }
+
+      - name: Install
+        run: |
+          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
+            pip install -e .
+          else
+            pip install -e ".[faithfulness]"
+          fi
+
+      - name: Check model health
+        run: |
+          set -euo pipefail
           for _ in $(seq 1 120); do
             curl -sf http://127.0.0.1:8080/health && break
             sleep 5
@@ -223,6 +253,24 @@ jobs:
       - name: Runtime log on failure
         if: failure()
         run: tail -50 llama-server.log || true
+
+      - name: Prompt cache log summary
+        if: always()
+        run: |
+          if [ -f llama-server.log ]; then
+            grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' llama-server.log || true
+          else
+            echo "llama-server.log not found"
+          fi
+
+      - name: Upload runtime log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-log-${{ matrix.shard }}
+          path: llama-server.log
+          retention-days: 2
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
@@ -249,20 +297,6 @@ jobs:
           python-version: '3.12'
           cache: pip
           cache-dependency-path: pyproject.toml
-
-      - name: Install
-        run: pip install -e .
-
-      - uses: actions/download-artifact@v4
-        with:
-          name: plan
-          path: backend/var/run/${{ needs.plan.outputs.date }}/
-
-      - uses: actions/download-artifact@v4
-        with:
-          pattern: items-*
-          merge-multiple: true
-          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
 
       - name: Cache the router weights and runtime
         id: router
@@ -299,10 +333,42 @@ jobs:
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
-          LD_LIBRARY_PATH=backend/bin nohup backend/bin/llama-server \
-            --model "backend/models/${ROUTE_FILE}" \
-            --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 \
-            --port 8080 --no-warmup > router.log 2>&1 &
+          ROUTE_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["route"]["id"])')
+          ROUTE_ARGV=$(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${ROUTE_FILE}" \
+            --alias "$ROUTE_ALIAS" \
+            --format shell)
+          mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py --config config \
+            --binary backend/bin/llama-server --weights "backend/models/${ROUTE_FILE}" \
+            --alias "$ROUTE_ALIAS" \
+            --format nul)
+          echo "starting: $ROUTE_ARGV"
+          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > router.log 2>&1 &
+          echo "$!" > router.pid
+          sleep 2
+          kill -0 "$(cat router.pid)" || {
+            echo "the router exited before install" >&2
+            tail -50 router.log >&2
+            exit 1
+          }
+
+      - name: Install
+        run: pip install -e .
+
+      - uses: actions/download-artifact@v4
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: items-*
+          merge-multiple: true
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+
+      - name: Check router health
+        run: |
+          set -euo pipefail
           for _ in $(seq 1 120); do
             curl -sf http://127.0.0.1:8080/health && break
             sleep 5
@@ -319,6 +385,24 @@ jobs:
       - name: Router log on failure
         if: failure()
         run: tail -50 router.log || true
+
+      - name: Router cache log summary
+        if: always()
+        run: |
+          if [ -f router.log ]; then
+            grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' router.log || true
+          else
+            echo "router.log not found"
+          fi
+
+      - name: Upload router log
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: router-log
+          path: router.log
+          retention-days: 2
+          if-no-files-found: ignore
 
       - uses: actions/upload-artifact@v4
         with:
@@ -380,7 +464,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/public/digest state
+          git add frontend/public/digest frontend/public/telemetry state
           if git diff --cached --quiet; then
             echo "nothing changed"
             exit 0

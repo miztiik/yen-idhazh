@@ -13,14 +13,20 @@ is easy; a summarizer that cannot be talked out of its shape is the product.
 from __future__ import annotations
 
 import json
+import shlex
+import subprocess
+import sys
+from pathlib import Path
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
+from idhazh import config
 from idhazh.contracts.app_config import InferenceConfig, SummarizeConfig, SummaryBand
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.server import Completion, parse_completion, request_payload, server_argv
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
@@ -110,6 +116,15 @@ def test_the_article_arrives_fenced_and_labelled() -> None:
     assert turn.count(FENCE_CLOSE) == 1
 
 
+def test_declared_source_form_arrives_outside_the_untrusted_block() -> None:
+    source = article().model_copy(update={"source_form": SourceForm.ABSTRACT})
+    turn = user_turn(source)
+    before_fence, fenced = turn.split(FENCE_OPEN, 1)
+
+    assert "Source form: abstract" in before_fence
+    assert "Source form: abstract" not in fenced
+
+
 def test_the_prompt_tells_the_model_the_block_is_data() -> None:
     prompt = " ".join(system_prompt().lower().split())
     assert "untrusted" in prompt
@@ -154,18 +169,135 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 
 
 def test_the_server_is_started_from_config_not_by_hand() -> None:
-    from pathlib import Path
+    from idhazh.contracts.app_config import ModelRef
 
+    binary = Path("bin/llama-server")
+    weights = Path("models/w.gguf")
+    argv = server_argv(
+        binary=binary,
+        weights=weights,
+        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
+        inference=InferenceConfig(),
+    )
+    assert argv == [
+        str(binary),
+        "--model",
+        str(weights),
+        "--alias",
+        "m",
+        "--ctx-size",
+        "8192",
+        "--batch-size",
+        "512",
+        "--ubatch-size",
+        "512",
+        "--threads",
+        "4",
+        "--port",
+        "8080",
+    ]
+
+
+def test_server_argv_matches_the_digest_workflow_command() -> None:
+    from idhazh.contracts.app_config import ModelRef
+
+    workflow = (REPO_ROOT / ".github/workflows/digest.yml").read_text(encoding="utf-8")
+    assert workflow.count("backend/utilities/llama_server_argv.py") == 4
+    for literal in (
+        "--ctx-size 8192",
+        "--batch-size 512",
+        "--ubatch-size 512",
+        "--threads 4",
+        "--no-warmup",
+    ):
+        assert literal not in workflow
+
+    settings = config.load(CONFIG_DIR)
+    cases = (
+        (
+            "Qwen3-8B-Q4_K_M.gguf",
+            settings.app.models.summarize.id,
+            settings.app.models.summarize,
+        ),
+        (
+            "Qwen3-4B-Q4_K_M.gguf",
+            settings.app.models.route.id,
+            settings.app.models.route,
+        ),
+    )
+    for file_name, alias, model in cases:
+        expected = server_argv(
+            binary=Path("backend/bin/llama-server"),
+            weights=Path("backend/models") / file_name,
+            model=ModelRef(
+                id=alias,
+                repo=model.repo,
+                file=model.file,
+                quantisation=model.quantisation,
+                sha256=model.sha256,
+            ),
+            inference=settings.app.models.inference,
+        )
+        actual = subprocess.check_output(
+            [
+                sys.executable,
+                "backend/utilities/llama_server_argv.py",
+                "--config",
+                "config",
+                "--binary",
+                "backend/bin/llama-server",
+                "--weights",
+                f"backend/models/{file_name}",
+                "--alias",
+                alias,
+                "--format",
+                "shell",
+            ],
+            cwd=REPO_ROOT,
+            text=True,
+        ).strip()
+        assert shlex.split(actual) == expected
+
+
+def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
     from idhazh.contracts.app_config import ModelRef
 
     argv = server_argv(
         binary=Path("bin/llama-server"),
         weights=Path("models/w.gguf"),
         model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
-        inference=InferenceConfig(),
+        inference=InferenceConfig(
+            n_parallel=1,
+            flash_attention="on",
+            load_mode="mmap+mlock",
+            cache_type_k="q8_0",
+            cache_type_v="q8_0",
+            priority=2,
+            poll=100,
+            n_threads_batch=4,
+            startup_warmup=True,
+        ),
     )
-    assert "--ctx-size" in argv and "8192" in argv
-    assert "--threads" in argv and "4" in argv
+
+    assert argv[-16:] == [
+        "-np",
+        "1",
+        "-fa",
+        "on",
+        "-lm",
+        "mmap+mlock",
+        "-ctk",
+        "q8_0",
+        "-ctv",
+        "q8_0",
+        "--prio",
+        "2",
+        "--poll",
+        "100",
+        "-tb",
+        "4",
+    ]
+    assert "--no-warmup" not in argv
 
 
 def test_the_output_schema_is_generated_not_hand_written() -> None:
@@ -203,6 +335,15 @@ def test_no_placeholder_survives_into_a_rendered_prompt() -> None:
         assert "$" not in system_prompt(source_words=words)
 
 
+def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -> None:
+    source = article().model_copy(update={"brief": True, "word_count": 190})
+    payload = build_request(source, model_id="m", inference=InferenceConfig())
+    system = payload["messages"][0]["content"]
+
+    assert "30 to 45 words" in system
+    assert "50 to 90 words" not in system
+
+
 def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
     """Disagree, and the decoder rejects a reply that did exactly what was asked."""
     asked = SummarizeConfig(key_points_min=3, key_points_max=4)
@@ -225,6 +366,7 @@ def test_the_decoder_rail_never_catches_a_summary_the_word_gate_would_pass() -> 
     typical_chars_per_word = 6
     bounds = EvaluationConfig()
     rail = output_schema(None, bounds)["properties"]["summary"]
+    assert rail["minLength"] == 125
     assert rail["minLength"] < bounds.summary_words_min * typical_chars_per_word
     assert rail["maxLength"] > bounds.summary_words_max * typical_chars_per_word
 
@@ -554,6 +696,36 @@ def test_a_model_that_reasoned_anyway_is_a_failure_not_a_curiosity() -> None:
     result = summarised("reasoned-anyway")
     assert result.status is SummaryStatus.FAILED
     assert result.failure_detail
+
+
+def test_reasoning_in_the_sibling_channel_fails_the_item() -> None:
+    """Same failure, one channel over: the runtime put thinking where `<think>` never appears.
+
+    The content is a reply that would otherwise publish, so nothing but the
+    reasoning channel stands between this item and a reader.
+    """
+    result = summarised("reasoning-channel")
+    assert result.status is SummaryStatus.FAILED
+    assert "reasoning channel" in (result.failure_detail or "")
+
+
+def test_a_reply_misfiled_into_reasoning_names_the_runtime() -> None:
+    """ggml-org/llama.cpp#27134: the whole reply lands in `reasoning_content`, `content` empty.
+
+    The trigger is a generation prompt ending in a closing think tag, which is
+    what Qwen3 renders under `enable_thinking: false`. Read only `content` and
+    this is a bare parse error blaming the model for a runtime that moved the
+    text.
+    """
+    result = summarised("misfiled-into-reasoning")
+    assert result.status is SummaryStatus.FAILED
+    assert "reasoning channel" in (result.failure_detail or "")
+
+
+def test_an_absent_reasoning_channel_is_not_a_failure() -> None:
+    """The common case: no such key, nothing to report, the item publishes."""
+    assert completion("ok").reasoned is False
+    assert summarised("ok").status is SummaryStatus.OK
 
 
 # --- What the pipeline agrees to believe ------------------------------------

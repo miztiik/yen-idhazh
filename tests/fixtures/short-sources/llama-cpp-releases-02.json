@@ -1,0 +1,9 @@
+{
+  "capture_method": "captured",
+  "captured_on": "2026-08-23",
+  "expected_reason": "not_prose",
+  "label": "publish_brief",
+  "robots_outcome": "allowed",
+  "source_id": "llama-cpp-releases",
+  "source_url": "https://github.com/ggml-org/llama.cpp/releases/tag/b10594"
+}

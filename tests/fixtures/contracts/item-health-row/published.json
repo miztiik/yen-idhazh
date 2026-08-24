@@ -1,0 +1,21 @@
+{
+  "canonical_url": "https://blog.example-lab.org/2026/08/model-release",
+  "code": null,
+  "date": "2026-08-23",
+  "detail": null,
+  "extract_ms": null,
+  "fetch_ms": null,
+  "http_status": null,
+  "item_id": "ai-01",
+  "outcome": "ok",
+  "run_id": "2026-08-23-1",
+  "source_chars": 7420,
+  "source_id": "example-lab-blog",
+  "source_words": 1320,
+  "stage": "publish",
+  "summarize_ms": null,
+  "summary_words": 92,
+  "url_key": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da",
+  "version": "2026-08-23T18:15",
+  "vertical": "ai"
+}

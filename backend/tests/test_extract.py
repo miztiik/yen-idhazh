@@ -11,6 +11,8 @@ are supposed to degrade rather than raise.
 
 from __future__ import annotations
 
+import json
+
 import pytest
 from conftest import FIXTURES_DIR, read_text
 
@@ -18,11 +20,14 @@ from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.article import ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.extract import (
     EXTRACTOR_VERSION,
     boilerplate_ratio,
+    declares_paywall,
     extract_text,
     to_article,
     truncate_to_tokens,
@@ -39,6 +44,7 @@ from idhazh.fetch import (
 )
 
 PAGES = FIXTURES_DIR / "pages"
+SHORT_SOURCES = FIXTURES_DIR / "short-sources"
 FETCHED_AT = "2026-08-21T06:03:11Z"
 CANONICAL = "https://newsroom.example-grid.com/2026/08/reactor-order"
 
@@ -61,6 +67,31 @@ def page(name: str) -> str:
 
 def ok(name: str) -> FetchResult:
     return FetchResult(FetchOutcome.OK, status=200, body=page(name).encode("utf-8"))
+
+
+def fixture_item(source_id: str, url: str, index: int = 1) -> PlannedItem:
+    return PlannedItem(
+        item_id=f"energy-{index:02d}",
+        url_key=derive_url_key(url),
+        source_url=url,
+        canonical_url=url,
+        source_id=source_id,
+        tier=SourceTier.INSTITUTION,
+        source_form=SourceForm.ABSTRACT if source_id == "nber-new" else SourceForm.ARTICLE,
+        vertical="energy",
+        title=f"{source_id} fixture",
+        rank_score=1.0,
+    )
+
+
+def disposition(article_status: ArticleStatus, brief: bool, code: FailureCode | None) -> str:
+    if article_status is ArticleStatus.OK:
+        return "publish_brief" if brief else "publish_full"
+    if code is FailureCode.PAYWALLED:
+        return "reject_paywalled"
+    if code in {FailureCode.NOT_PROSE, FailureCode.BOILERPLATE}:
+        return "reject_listing"
+    return "reject_listing"
 
 
 # --- Where a request may be sent --------------------------------------------
@@ -231,8 +262,9 @@ def test_a_hostile_page_crosses_the_boundary_sanitized() -> None:
 
 
 def test_a_page_with_no_article_extracts_to_nothing() -> None:
+    empty = FetchResult(FetchOutcome.OK, status=200, body=b"<html><body></body></html>")
     article = to_article(
-        ITEM, ok("chrome-only.html"), config=ExtractConfig(), fetched_at=FETCHED_AT
+        ITEM, empty, config=ExtractConfig(), fetched_at=FETCHED_AT
     )
     assert article.status is ArticleStatus.EXTRACT_FAILED
     assert article.failure_detail
@@ -271,13 +303,57 @@ def test_every_failure_is_a_state_of_the_payload(
     assert article.failure_detail == "recorded reason"
 
 
-def test_a_short_extraction_is_refused_before_the_model_sees_it() -> None:
-    """Page furniture is short, and 400 seconds spent summarizing it is wasted."""
+def test_a_short_extraction_publishes_as_brief() -> None:
+    """Length is not an editorial test."""
     thin = FetchResult(
         FetchOutcome.OK, status=200, body=b"<html><body><p>Two words.</p></body></html>"
     )
     article = to_article(ITEM, thin, config=ExtractConfig(), fetched_at=FETCHED_AT)
+    assert article.status is ArticleStatus.OK
+    assert article.brief
+    assert article.failure_code in {FailureCode.TOO_SHORT, FailureCode.NOT_PROSE}
+
+
+def test_not_prose_can_be_rejected_when_the_operator_sets_the_knob() -> None:
+    thin = FetchResult(
+        FetchOutcome.OK, status=200, body=b"<html><body><p>Two words.</p></body></html>"
+    )
+    article = to_article(
+        ITEM,
+        thin,
+        config=ExtractConfig(reject_not_prose=True),
+        fetched_at=FETCHED_AT,
+    )
     assert article.status is ArticleStatus.EXTRACT_FAILED
+    assert article.failure_code is FailureCode.NOT_PROSE
+
+
+def test_a_declared_paywall_is_rejected_before_extraction() -> None:
+    html = read_text(SHORT_SOURCES / "japan-times-01.html")
+    article = to_article(
+        fixture_item("japan-times", "https://www.japantimes.co.jp/news/example/", 1),
+        FetchResult(FetchOutcome.OK, status=200, body=html.encode("utf-8")),
+        config=ExtractConfig(),
+        fetched_at=FETCHED_AT,
+    )
+
+    assert declares_paywall(html)
+    assert article.status is ArticleStatus.EXTRACT_FAILED
+    assert article.failure_code is FailureCode.PAYWALLED
+
+
+def test_a_pdf_feed_item_has_a_typed_unsupported_form() -> None:
+    pdf_url = "https://example.org/research/paper.pdf"
+    item = fixture_item("example", pdf_url, 1)
+    article = to_article(
+        item,
+        FetchResult(FetchOutcome.OK, status=200, body=b"%PDF-1.7"),
+        config=ExtractConfig(),
+        fetched_at=FETCHED_AT,
+    )
+
+    assert article.status is ArticleStatus.EXTRACT_FAILED
+    assert article.failure_code is FailureCode.UNSUPPORTED_FORM
 
 
 # --- Truncation is flagged, never silent -------------------------------------
@@ -329,3 +405,56 @@ def test_an_article_is_not_mostly_chrome() -> None:
 
 def test_an_empty_page_is_not_reported_as_chrome() -> None:
     assert boilerplate_ratio([], {"Subscribe"}) == 0.0
+
+
+def test_boilerplate_signal_publishes_by_default_and_can_reject() -> None:
+    html = (
+        "<html><body><article>"
+        "<p>Shared navigation</p>"
+        "<p>This sentence has enough words to count as article prose today.</p>"
+        "<p>Another sentence has enough words to count as article prose today.</p>"
+        "<p>A third sentence has enough words to count as article prose today.</p>"
+        "</article></body></html>"
+    )
+    seen = {
+        "Shared navigation",
+        "This sentence has enough words to count as article prose today.",
+        "Another sentence has enough words to count as article prose today.",
+    }
+    article = to_article(
+        ITEM,
+        FetchResult(FetchOutcome.OK, status=200, body=html.encode("utf-8")),
+        config=ExtractConfig(boilerplate_ratio_max=0.4),
+        fetched_at=FETCHED_AT,
+        seen_elsewhere=seen,
+    )
+    rejected = to_article(
+        ITEM,
+        FetchResult(FetchOutcome.OK, status=200, body=html.encode("utf-8")),
+        config=ExtractConfig(boilerplate_ratio_max=0.4, reject_boilerplate=True),
+        fetched_at=FETCHED_AT,
+        seen_elsewhere=seen,
+    )
+
+    assert article.status is ArticleStatus.OK
+    assert article.failure_code is FailureCode.BOILERPLATE
+    assert rejected.status is ArticleStatus.EXTRACT_FAILED
+    assert rejected.failure_code is FailureCode.BOILERPLATE
+
+
+def test_the_labelled_short_source_oracle_matches_disposition_and_reason() -> None:
+    for meta_path in sorted(SHORT_SOURCES.glob("*.json")):
+        meta = json.loads(read_text(meta_path))
+        html_path = meta_path.with_suffix(".html")
+        item = fixture_item(meta["source_id"], meta["source_url"], 1)
+        article = to_article(
+            item,
+            FetchResult(FetchOutcome.OK, status=200, body=html_path.read_bytes()),
+            config=ExtractConfig(),
+            fetched_at=FETCHED_AT,
+        )
+        expected_reason = meta["expected_reason"]
+        observed_reason = article.failure_code.value if article.failure_code is not None else None
+
+        assert disposition(article.status, article.brief, article.failure_code) == meta["label"]
+        assert observed_reason == expected_reason

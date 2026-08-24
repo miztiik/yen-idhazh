@@ -107,6 +107,24 @@
           "default": null,
           "title": "Published At"
         },
+        "reader_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Our sentence explaining a source limitation, never a badge.",
+          "title": "Reader Note"
+        },
+        "source_form": {
+          "$ref": "#/$defs/SourceForm",
+          "default": "article",
+          "description": "Declared feed form, so a reader can see when an item is an abstract."
+        },
         "source_id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Source Id",
@@ -318,6 +336,14 @@
       "title": "LensId",
       "type": "string"
     },
+    "SourceForm": {
+      "enum": [
+        "article",
+        "abstract"
+      ],
+      "title": "SourceForm",
+      "type": "string"
+    },
     "SourceKind": {
       "description": "What kind of speaker this is - the thing a reader uses to decide belief.\n\n\"A company said its product is faster\" and \"a reporter measured it\" are not\nthe same claim, and without this they arrive looking identical. The\ndangerous case is `announcement`: forwarding a vendor's own copy without\nknowing it was the vendor is how a reader ends up carrying an ad.",
       "enum": [
@@ -356,6 +382,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added source_form and reader_note to published items.",
+      "version": "2026-08-23T18:51",
+      "why": "Short and abstract sources can now publish, so the page needs our own sentence that tells the reader what kind of source was summarized without turning the limitation into a badge."
+    },
     {
       "change": "Added the optional embeddings block.",
       "version": "2026-08-22",
@@ -433,7 +464,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-22",
+      "default": "2026-08-23T18:51",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -458,5 +489,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-22"
+  "version": "2026-08-23T18:51"
 }

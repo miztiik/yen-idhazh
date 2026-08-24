@@ -10,24 +10,32 @@ No mocks and no network. The recorded score is a float, not a stub object.
 from __future__ import annotations
 
 import csv
+import json
+import socket
+import threading
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config
+from idhazh import assemble, cli, config, ledger
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
-from idhazh.contracts.sources import FeedDef
-from idhazh.contracts.summary import Summary
+from idhazh.contracts.sources import FeedDef, SourceForm
+from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
-from idhazh.evals.score import band, counterweight_band, to_eval_row
+from idhazh.evals.score import band, to_eval_row
+from idhazh.fetch import FetchResult
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -67,6 +75,93 @@ def row(**overrides: object) -> EvalRow:
     return built.model_copy(update=overrides) if overrides else built
 
 
+def closed_loopback_endpoint() -> str:
+    """Return a loopback port that refused a real socket before the test used it."""
+    with socket.socket() as server:
+        server.bind(("127.0.0.1", 0))
+        port = int(server.getsockname()[1])
+    return f"http://127.0.0.1:{port}/v1/chat/completions"
+
+
+def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
+    """Band order groups identical system prompts without changing item identity."""
+    settings = config.load(CONFIG_DIR)
+    items = plan().items
+    base = article()
+    candidates = [
+        cli._FetchedWorkItem(items[0], base.model_copy(update={"word_count": 2000}), 0, 0, 0.0, 0),
+        cli._FetchedWorkItem(items[1], base.model_copy(update={"word_count": 10}), 0, 0, 0.0, 1),
+        cli._FetchedWorkItem(items[2], base.model_copy(update={"word_count": 800}), 0, 0, 0.0, 2),
+        cli._FetchedWorkItem(items[3], base.model_copy(update={"word_count": 100}), 0, 0, 0.0, 3),
+    ]
+
+    ordered = sorted(candidates, key=lambda candidate: cli._summarize_band_sort_key(candidate, settings))
+
+    assert [candidate.item.item_id for candidate in ordered] == ["ai-02", "ai-04", "ai-03", "ai-01"]
+
+
+class HangingLoopbackEndpoint:
+    """A real local socket that accepts requests and never writes a response."""
+
+    def __init__(self) -> None:
+        self._stop = threading.Event()
+        self._server = socket.socket()
+        self._server.bind(("127.0.0.1", 0))
+        self._server.listen()
+        self._server.settimeout(0.05)
+        self._connections: list[socket.socket] = []
+        self._thread = threading.Thread(target=self._serve, daemon=True)
+
+    @property
+    def endpoint(self) -> str:
+        port = int(self._server.getsockname()[1])
+        return f"http://127.0.0.1:{port}/v1/chat/completions"
+
+    @property
+    def accepted(self) -> int:
+        return len(self._connections)
+
+    def __enter__(self) -> HangingLoopbackEndpoint:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._stop.set()
+        self._server.close()
+        for connection in self._connections:
+            connection.close()
+        self._thread.join(timeout=1.0)
+
+    def _serve(self) -> None:
+        while not self._stop.is_set():
+            try:
+                connection, _ = self._server.accept()
+            except OSError:
+                continue
+            self._connections.append(connection)
+            threading.Thread(target=self._hold, args=(connection,), daemon=True).start()
+
+    def _hold(self, connection: socket.socket) -> None:
+        try:
+            while not self._stop.wait(0.05):
+                pass
+        finally:
+            connection.close()
+
+
+def captured_article_fetch(_url: str) -> FetchResult:
+    page = read_text(FIXTURES_DIR / "pages" / "article.html")
+    extra = (
+        "<p>The filing also says the utility will publish quarterly milestones, "
+        "including site work, equipment orders, safety reviews and expected fuel "
+        "delivery dates, so residents can track whether the schedule is moving. "
+        "Officials said each update will name the missed date when a milestone "
+        "slides, rather than leaving the change to be inferred from a later plan.</p>"
+    )
+    body = page.replace("</article>", f"{extra}</article>").encode("utf-8")
+    return FetchResult(FetchOutcome.OK, status=200, body=body)
+
+
 # --- Config -----------------------------------------------------------------
 
 
@@ -99,14 +194,50 @@ def test_a_missing_config_file_fails_at_startup(tmp_path: Path) -> None:
 
 def test_the_bands_come_from_config() -> None:
     tuned = EvaluationConfig(band_high_min=0.9, band_medium_min=0.6)
-    assert band(0.95, unsupported_numbers=0, config=tuned) is ConfidenceBand.HIGH
-    assert band(0.7, unsupported_numbers=0, config=tuned) is ConfidenceBand.MEDIUM
-    assert band(0.5, unsupported_numbers=0, config=tuned) is ConfidenceBand.LOW
+    assert (
+        band(
+            0.95,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=tuned,
+        )
+        is ConfidenceBand.HIGH
+    )
+    assert (
+        band(
+            0.7,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=tuned,
+        )
+        is ConfidenceBand.MEDIUM
+    )
+    assert (
+        band(
+            0.5,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=tuned,
+        )
+        is ConfidenceBand.LOW
+    )
 
 
 def test_an_invented_number_outvotes_a_perfect_faithfulness_score() -> None:
     """Nothing else in the row can see that defect, so nothing else may outvote it."""
-    assert band(1.0, unsupported_numbers=1, config=EvaluationConfig()) is ConfidenceBand.LOW
+    assert (
+        band(
+            1.0,
+            unsupported_numbers=1,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.LOW
+    )
 
 
 # --- The row ----------------------------------------------------------------
@@ -141,6 +272,42 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
         scorer_version="v",
         scored_at="2026-08-21T06:18:02Z",
     )
+    assert built.truncation_flagged
+
+
+def test_a_copied_brief_is_flagged_as_truncation_not_confidence() -> None:
+    copied = "alpha beta gamma delta epsilon zeta eta theta"
+    source = article().model_copy(update={"brief": True})
+    brief_summary = summary().model_copy(
+        update={
+            "summary": "alpha beta gamma delta epsilon",
+            "key_points": ["short copied point"],
+        }
+    )
+    brief_summary = brief_summary.model_copy(
+        update={
+            "output_digest": derive_output_digest(
+                brief_summary.summary, brief_summary.key_points, title=brief_summary.title
+            )
+        }
+    )
+
+    built = to_eval_row(
+        item=plan().items[0],
+        article=source,
+        summary=brief_summary,
+        full_text=copied,
+        hhem=0.94,
+        hhem_full=0.93,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="v",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+    assert built.band is ConfidenceBand.HIGH
+    assert built.verbatim_run > 0.5
     assert built.truncation_flagged
 
 
@@ -271,21 +438,40 @@ def digest_item(run_n: int = 1):  # type: ignore[no-untyped-def]
 
 def test_the_counterweights_alone_never_claim_the_top_band() -> None:
     """Without a faithfulness score there is no basis for claiming high confidence."""
-    faithful = (
-        "Example Lab released a smaller model, claiming a 34 percent lower cost per million "
-        "tokens and 2.1 times the throughput of the model it replaces."
+    assert (
+        band(
+            None,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.MEDIUM
     )
-    assert counterweight_band(faithful, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.MEDIUM
-
 
 def test_an_invented_number_still_reaches_the_reader_as_low() -> None:
-    invented = "Example Lab claims a 91 percent lower cost per million tokens."
-    assert counterweight_band(invented, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.LOW
+    assert (
+        band(
+            None,
+            unsupported_numbers=1,
+            lead_coverage=1.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.LOW
+    )
 
-
-def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_low() -> None:
-    vague = "A company has published something about a product."
-    assert counterweight_band(vague, FULL_TEXT, EvaluationConfig()) is ConfidenceBand.LOW
+def test_a_summary_that_dropped_the_lead_reaches_the_reader_as_medium() -> None:
+    assert (
+        band(
+            None,
+            unsupported_numbers=0,
+            lead_coverage=0.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.MEDIUM
+    )
 
 
 def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -299,6 +485,81 @@ def test_a_scorer_that_will_not_load_costs_rows_not_the_digest(monkeypatch) -> N
 
     monkeypatch.setattr("idhazh.evals.hhem.HhemScorer.load", explode)
     assert cli._scorer(enabled=True) is None
+
+
+def test_a_dead_model_server_marks_every_item_without_parsing(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+
+    cli.stage_work(
+        run_plan,
+        settings=config.load(CONFIG_DIR),
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+
+    summaries = [
+        Summary.from_json(
+            read_text(tmp_path / "run" / run_plan.date / "items" / f"{item.item_id}.summary.json")
+        )
+        for item in run_plan.items
+    ]
+
+    assert len(summaries) == len(run_plan.items)
+    assert {summary.status for summary in summaries} == {SummaryStatus.FAILED}
+    assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_UNREACHABLE}
+    details = [summary.failure_detail or "" for summary in summaries]
+    assert all("JSONDecodeError" not in detail for detail in details)
+    assert all("shape" not in detail for detail in details)
+
+
+def test_a_hung_model_request_costs_one_item_not_the_shard(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    fast_settings = config.Settings(
+        app=settings.app.model_copy(
+            update={
+                "models": settings.app.models.model_copy(
+                    update={
+                        "inference": settings.app.models.inference.model_copy(
+                            update={"request_timeout_minutes": 0.01}
+                        )
+                    }
+                )
+            }
+        ),
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        watchlist=settings.watchlist,
+        digests=settings.digests,
+    )
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+
+    with HangingLoopbackEndpoint() as server:
+        cli.stage_work(
+            run_plan,
+            settings=fast_settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            model_endpoint=server.endpoint,
+        )
+
+    summaries = [
+        Summary.from_json(
+            read_text(tmp_path / "run" / run_plan.date / "items" / f"{item.item_id}.summary.json")
+        )
+        for item in run_plan.items
+    ]
+
+    assert server.accepted == len(run_plan.items)
+    assert len(summaries) == len(run_plan.items)
+    assert {summary.status for summary in summaries} == {SummaryStatus.FAILED}
+    assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_UNREACHABLE}
 
 
 def test_a_retired_feed_still_labels_the_items_it_published() -> None:
@@ -335,6 +596,36 @@ def test_a_retired_feed_still_labels_the_items_it_published() -> None:
     assert assemble.source_kinds(sources)["defunct-daily"] is SourceKind.ANNOUNCEMENT
 
 
+def test_abstract_items_publish_a_sentence_not_a_badge() -> None:
+    item = assemble.to_digest_item(
+        article=article().model_copy(update={"source_form": SourceForm.ABSTRACT}),
+        summary=summary(),
+        band=row().band,
+        source_name="NBER",
+        source_kind=SourceKind.RESEARCH,
+        run_n=1,
+    )
+
+    assert item.source_form is SourceForm.ABSTRACT
+    assert (
+        item.reader_note
+        == "This is a summary of the paper's abstract. The full paper is a PDF."
+    )
+
+
+def test_truncated_items_publish_the_partial_read_sentence() -> None:
+    item = assemble.to_digest_item(
+        article=article().model_copy(update={"truncated": True, "truncated_at_tokens": 2500}),
+        summary=summary(),
+        band=row().band,
+        source_name="Example Lab",
+        source_kind=SourceKind.REPORTING,
+        run_n=1,
+    )
+
+    assert item.reader_note == "We could only read the first part of this page."
+
+
 def test_a_day_publishes_even_when_items_failed() -> None:
     """A run that publishes nothing on a bad day is a run whose bad days are invisible."""
     day = assemble.build_day(
@@ -349,6 +640,72 @@ def test_a_day_publishes_even_when_items_failed() -> None:
     assert day.partial
     assert day.items_failed > 0
     assert len(day.items) == 1
+
+
+def test_item_payloads_include_an_article_without_a_summary(tmp_path: Path) -> None:
+    items_dir = tmp_path / "items"
+    items_dir.mkdir()
+    (items_dir / "ai-01.article.json").write_text(article().to_json(), encoding="utf-8")
+
+    payloads = list(cli._item_payloads(plan(), items_dir))
+
+    assert [payload.planned.item_id for payload in payloads] == [
+        item.item_id for item in plan().items
+    ]
+    assert payloads[0].article == article()
+    assert payloads[0].summary is None
+
+
+def test_assemble_writes_one_item_health_row_per_planned_item(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+    items_dir.mkdir(parents=True)
+    (items_dir / f"{run_plan.items[0].item_id}.article.json").write_text(
+        article().to_json(), encoding="utf-8"
+    )
+    (items_dir / f"{run_plan.items[0].item_id}.summary.json").write_text(
+        summary()
+        .model_copy(update={"fetch_ms": 111, "extract_ms": 22, "summarize_ms": 333})
+        .to_json(),
+        encoding="utf-8",
+    )
+
+    day = cli.stage_assemble(
+        run_plan,
+        settings=config.load(CONFIG_DIR),
+        commit_sha="a" * 40,
+        runner="fixture",
+    )
+
+    health_path = ledger.item_health_path(tmp_path / "state", run_plan.date)
+    with health_path.open(encoding="utf-8", newline="") as handle:
+        rows = [ItemHealthRow.from_csv_row(row) for row in csv.DictReader(handle)]
+    failed = sum(1 for row in rows if row.outcome is ItemOutcome.FAILED)
+    ok = sum(1 for row in rows if row.outcome is ItemOutcome.OK)
+    manifest = RunManifest.from_json(
+        read_text(tmp_path / "public" / "digest" / "2026" / "08" / "21" / "run.json")
+    )
+
+    with health_path.open(encoding="utf-8", newline="") as handle:
+        assert tuple(csv.DictReader(handle).fieldnames or ()) == ItemHealthRow.csv_columns()
+    assert len(rows) == len(run_plan.items)
+    assert ok > 0
+    assert failed > 0
+    assert rows[0].fetch_ms == 111
+    assert rows[0].extract_ms == 22
+    assert rows[0].summarize_ms == 333
+    assert {row.code for row in rows if row.outcome is ItemOutcome.FAILED} == {
+        FailureCode.NOT_ATTEMPTED
+    }
+    assert day.items_planned == ok + failed == len(run_plan.items)
+    assert manifest.runs[-1].items_planned == ok + failed
+    assert manifest.runs[-1].items_failed == failed
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:
@@ -416,6 +773,94 @@ def test_the_manifest_records_what_ran_against_what() -> None:
     assert manifest.runs[-1].run_id == "2026-08-21-1"
     assert manifest.runs[-1].config_digests
     assert manifest.runs[-1].pipeline_fingerprints
+
+
+def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> None:
+    settings = config.load(CONFIG_DIR)
+    base_plan = plan()
+    first_item = base_plan.items[0]
+    second_item = base_plan.items[1]
+    first_plan = base_plan.model_copy(
+        update={
+            "items": [first_item],
+            "verticals": [base_plan.verticals[0].model_copy(update={"planned": 1})],
+        }
+    )
+    second_plan = base_plan.model_copy(
+        update={
+            "items": [second_item],
+            "run_id": f"{base_plan.date}-2",
+            "verticals": [base_plan.verticals[0].model_copy(update={"planned": 1})],
+        }
+    )
+    first_summary = summary().model_copy(
+        update={"item_id": first_item.item_id, "url_key": first_item.url_key}
+    )
+    second_summary = summary().model_copy(
+        update={"item_id": second_item.item_id, "url_key": second_item.url_key}
+    )
+    first_day = assemble.build_day(
+        plan=first_plan,
+        items=[digest_item(run_n=1).model_copy(update={"item_id": first_item.item_id})],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    first_manifest = assemble.build_manifest(
+        plan=first_plan,
+        day=first_day,
+        previous=None,
+        summaries=[first_summary],
+        models=[],
+        commit_sha="a" * 40,
+        runner="local",
+        started_at="2026-08-21T06:00:00Z",
+        completed_at="2026-08-21T07:00:00Z",
+        config_digests=settings.digests,
+        site_bytes=1024,
+        site_files=2,
+    )
+    second_day = assemble.build_day(
+        plan=second_plan,
+        items=[digest_item(run_n=2).model_copy(update={"item_id": second_item.item_id})],
+        previous=first_day,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T13:00:00Z",
+        retention_window_months=-1,
+    )
+    second_manifest = assemble.build_manifest(
+        plan=second_plan,
+        day=second_day,
+        previous=first_manifest,
+        summaries=[second_summary],
+        models=[],
+        commit_sha="b" * 40,
+        runner="local",
+        started_at="2026-08-21T12:00:00Z",
+        completed_at="2026-08-21T13:00:00Z",
+        config_digests=settings.digests,
+        site_bytes=2048,
+        site_files=3,
+    )
+
+    assert len(second_day.items) == 2
+    assert second_manifest.runs[-1].verticals[0].planned == 1
+    assert second_manifest.runs[-1].verticals[0].published == 1
+
+    old_payload = second_manifest.model_dump(mode="json")
+    old_payload["version"] = "2026-08-21T02:00"
+    old_payload["runs"][1]["verticals"][0]["published"] = 2
+    old_path = tmp_path / "run.json"
+    old_path.write_text(json.dumps(old_payload), encoding="utf-8")
+
+    migrated = cli._load_manifest(old_path, day=second_day)
+
+    assert migrated is not None
+    assert migrated.version == RunManifest.schema_version()
+    assert migrated.runs[-1].verticals[0].published == 1
 
 
 def test_the_committed_day_fixture_still_loads() -> None:

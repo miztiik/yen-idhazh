@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the orchestrator contract)
 
-**Last Updated**: 2026-07-29
+**Last Updated**: 2026-08-23
 
 The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
 
@@ -27,10 +27,10 @@ orchestrator (main thread)                 worker subagent (one per row)        
 
 ### The orchestrator (main thread) does exactly this, and only this
 1. Bootstrap; read the plan-doc Section 0 (operating contract) + Section 1 (Status Reckoner).
-2. Select the next dispatchable row(s): every `Depends-on` is `DONE`; rows sharing a `Parallel-group` dispatch together, up to `Parallel N`.
+2. Select the next dispatchable row(s): every `Depends-on` is `DONE`; rows sharing a `Parallel-group` dispatch together, up to `Parallel N`. Waiting for checks is not a dependency.
 3. Create an isolated git worktree off `origin/main` + a named branch per row. Never share a worktree between rows or with a parallel agent (worktree contamination silently sweeps one row's edits into another's PR). Fill the Status Reckoner `Worktree`.
 4. Dispatch one worker subagent per row (`runSubagent`, default agent) with a self-contained brief (below). Set `Status = IN-FLIGHT`; fill `Subagent`.
-5. Receive the worker's report. Run the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md); on green gates, AUTO-merge (`gh pr merge --squash --delete-branch`).
+5. Receive the worker's report. Run the Definition of Done (CLAUDE.md section 9) and [ship-a-pr.md](ship-a-pr.md); on green gates, AUTO-merge (`gh pr merge --squash --delete-branch`). If checks or publish/deploy jobs are still running for one independent row, keep dispatching other ready rows instead of idling.
 6. Flip `Status = DONE #<pr>`; unblock dependents; [distill](distill-a-plan.md) the closed row.
 7. Repeat until every row is `DONE` or `COLLAPSED`; then close the plan.
 
@@ -42,8 +42,9 @@ Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Sc
 2. Implements the row end-to-end: code + tests at the tier that matches the surface (CLAUDE.md section 13) + the docs update.
 3. Resolves ambiguity by consulting personas (below), baking the ruling into the code.
 4. Runs the row's Oracle and every acceptance gate locally; iterates until green.
-5. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state.
-6. Does NOT merge, does NOT edit the Status Reckoner, does NOT start another row. Merge and closure are the orchestrator's.
+5. Turns every defect discovered during execution into explicit work: fix it in the row if it is in scope, or record a follow-up row / scope-change item. Do not bury defects in a footnote.
+6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state.
+7. Does NOT merge, does NOT edit the Status Reckoner, does NOT start another row. Merge and closure are the orchestrator's.
 
 ### Persona custom agents resolve ambiguity (they are not an approval gate)
 When a row is genuinely ambiguous - a design fork, a contested decision, a fact-finding sweep - the worker dispatches the relevant persona custom agent(s) **by their exact name as listed in CLAUDE.md section 14** (plus "Explore" for read-only breadth) via `runSubagent`. A persona returns a WRITTEN ruling the worker bakes into the row; it is an input to the worker's action, never a request-for-approval surface (bootstrap's AUTO policy). A contested decision runs the relevant personas in DEBATE to ONE ruling (author-a-plan.md step 3).
@@ -62,7 +63,7 @@ Drop the `AUTHOR-AND-STOP ...` clause once the user authorizes execution.
 
 ## Parallel fan-out
 
-Rows in the same `Parallel-group` are mutually independent and dispatched concurrently, up to `Parallel N` workers, each in its own worktree. The orchestrator parallelizes the WORK but serializes the MERGE - one PR at a time, re-checking the next worker's branch against the advanced `main` before its merge - so a green worker never lands on a stale base.
+Rows in the same `Parallel-group` are mutually independent and dispatched concurrently, up to `Parallel N` workers, each in its own worktree. A ready row dispatches as soon as its `Depends-on` entries are `DONE`; it does not wait for sibling checks, nor for a long publish or deploy gate on another PR. The orchestrator parallelizes the WORK but serializes the MERGE - one PR at a time, re-checking the next worker's branch against the advanced `main` before its merge - so a green worker never lands on a stale base.
 
 ## Escalation (when to pause for the user)
 

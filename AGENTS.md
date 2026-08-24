@@ -1,6 +1,6 @@
 # AGENTS.md
 
-**Last Updated**: 2026-08-22
+**Last Updated**: 2026-08-23
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
 
@@ -15,6 +15,7 @@ Before any non-trivial work in this repo:
 1. Read [`CLAUDE.md`](CLAUDE.md) - the engineering contract (Rules, architecture principles, logging doctrine, correction levels, schema versioning, test tiers).
 2. Run the load ritual in [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md); honour the rules digest in [`docs/agents/guardrails.md`](docs/agents/guardrails.md).
 3. Route new documentation by [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md).
+4. For plan execution, follow [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md); it owns the parallel-dispatch mechanics.
 
 Five persona advisors live in [`.github/agents/`](.github/agents/), each at a distinct altitude: Reader, Jony (UI/UX), Andre (AI/LLM), Fowler (Architecture & Engineering), Carmack (Engine & Runtime).
 

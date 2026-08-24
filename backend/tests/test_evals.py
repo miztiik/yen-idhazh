@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.eval_row import ConfidenceBand
 from idhazh.evals.metrics import (
     EVIDENTIAL_TERMS,
     HEDGE_TERMS,
@@ -29,6 +30,7 @@ from idhazh.evals.metrics import (
     verbatim_run,
     word_count,
 )
+from idhazh.evals.score import band
 
 ARTICLE = (
     "Example Grid ordered four small modular reactors from Northwind Atomics on Tuesday, "
@@ -57,6 +59,32 @@ def test_a_summary_that_dropped_the_story_scores_low() -> None:
     assert lead_coverage(vague, ARTICLE) < 0.3
 
 
+def test_a_summary_with_no_lead_coverage_cannot_band_high() -> None:
+    assert (
+        band(
+            0.99,
+            unsupported_numbers=0,
+            lead_coverage=0.0,
+            hedge_dropped=False,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.MEDIUM
+    )
+
+
+def test_a_dropped_hedge_caps_high_at_medium() -> None:
+    assert (
+        band(
+            0.99,
+            unsupported_numbers=0,
+            lead_coverage=1.0,
+            hedge_dropped=True,
+            config=EvaluationConfig(),
+        )
+        is ConfidenceBand.MEDIUM
+    )
+
+
 def test_lead_coverage_separates_the_two() -> None:
     """A metric with no dynamic range is a constant dressed as a measurement."""
     vague = "A utility has placed an order with a reactor supplier."
@@ -65,6 +93,20 @@ def test_lead_coverage_separates_the_two() -> None:
 
 def test_a_lead_with_nothing_salient_is_vacuously_covered() -> None:
     assert lead_coverage("anything at all", "it happened. and then it stopped.") == 1.0
+
+
+def test_a_title_line_cannot_glue_to_a_capitalised_body_line() -> None:
+    source = (
+        "The Intrinsic Valuation of Biodiversity Loss\n"
+        "We explore the welfare costs of the loss of animal life in a utilitarian framework. "
+        "Moral philosophy and neuroscience define sentience as the capacity for experience."
+    )
+    summary = (
+        "The authors report that biodiversity loss has welfare costs because animal sentience "
+        "has intrinsic value."
+    )
+
+    assert lead_coverage(summary, source) >= EvaluationConfig().lead_coverage_min
 
 
 # --- The defect nothing else can see: a wrong number -----------------------
@@ -228,7 +270,8 @@ def test_scorer_version_spells_its_components() -> None:
     )
     assert (
         version
-        == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};bands=0.80/0.50"
+        == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};"
+        "bands=0.80/0.50;lead=0.30"
     )
 
 
@@ -241,4 +284,16 @@ def test_a_moved_band_moves_the_scorer_version() -> None:
     }
     assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
         evaluation=EvaluationConfig(band_high_min=0.85), **args
+    )
+
+
+def test_a_moved_lead_floor_moves_the_scorer_version() -> None:
+    """A counterweight threshold change makes a derived column mean something else."""
+    args = {
+        "scorer_id": "hhem-2.1-open",
+        "scorer_revision": "a1b2c3d4e5f6",
+        "weights_sha256": "9f8e7d6c" + "0" * 56,
+    }
+    assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
+        evaluation=EvaluationConfig(lead_coverage_min=0.40), **args
     )

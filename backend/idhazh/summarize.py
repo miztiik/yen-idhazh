@@ -31,6 +31,7 @@ from pydantic import BaseModel, ConfigDict, Field, ValidationError, create_model
 from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, SummarizeConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import untrusted_block
@@ -137,7 +138,12 @@ def output_schema_text(
     return canonical_json(output_schema(prompt_config, evaluation))
 
 
-def system_prompt(prompt_config: SummarizeConfig | None = None, *, source_words: int = 0) -> str:
+def system_prompt(
+    prompt_config: SummarizeConfig | None = None,
+    *,
+    source_words: int = 0,
+    brief: bool = False,
+) -> str:
     """The prompt text with config's numbers substituted in.
 
     `source_words` picks the length band, so a release note and a long read are
@@ -150,7 +156,7 @@ def system_prompt(prompt_config: SummarizeConfig | None = None, *, source_words:
     model would read the placeholder as the instruction it looks like.
     """
     ask = prompt_config or SummarizeConfig()
-    band = ask.band_for(source_words)
+    band = ask.band_for(0 if brief else source_words)
     return _template().substitute({**ask.model_dump(), **band.model_dump()})
 
 
@@ -188,7 +194,10 @@ def user_turn(article: Article) -> str:
     if article.title:
         parts.append(f"Title: {article.title}")
     parts.append(article.text or "")
-    return untrusted_block("\n\n".join(parts))
+    return (
+        f"Source form: {article.source_form.value}\n\n"
+        + untrusted_block("\n\n".join(parts))
+    )
 
 
 def fits_context(
@@ -197,7 +206,8 @@ def fits_context(
     prompt_config: SummarizeConfig | None = None,
 ) -> bool:
     """Prompt plus reply has to fit, or the reply is silently cut off mid-sentence."""
-    overhead = len(system_prompt(prompt_config, source_words=article.word_count).split()) * 2
+    rendered = system_prompt(prompt_config, source_words=article.word_count, brief=article.brief)
+    overhead = len(rendered.split()) * 2
     return article.token_count + inference.max_output_tokens + overhead <= inference.n_ctx
 
 
@@ -211,7 +221,7 @@ def build_request(
 ) -> dict[str, Any]:
     return request_payload(
         model_id=model_id,
-        system=system_prompt(prompt_config, source_words=article.word_count),
+        system=system_prompt(prompt_config, source_words=article.word_count, brief=article.brief),
         user=user_turn(article),
         output_schema=output_schema(prompt_config, evaluation),
         inference=inference,
@@ -247,7 +257,14 @@ def parse_draft(
     return draft_model(prompt_config, evaluation).model_validate_json(content)
 
 
-def _failed(article: Article, *, model_id: str, detail: str, generated_at: str) -> Summary:
+def _failed(
+    article: Article,
+    *,
+    model_id: str,
+    detail: str,
+    generated_at: str,
+    failure_code: FailureCode | None = None,
+) -> Summary:
     return Summary(
         version=Summary.schema_version(),
         item_id=article.item_id,
@@ -258,6 +275,7 @@ def _failed(article: Article, *, model_id: str, detail: str, generated_at: str) 
         source_truncated=article.truncated,
         generated_at=generated_at,
         status=SummaryStatus.FAILED,
+        failure_code=failure_code,
         failure_detail=detail[:500],
     )
 
@@ -278,7 +296,7 @@ def _publishable_title(raw: str, ask: SummarizeConfig) -> str | None:
 
 def to_summary(
     article: Article,
-    completion: Completion,
+    completion: Completion | None,
     *,
     model_id: str,
     pipeline_fingerprint: str,
@@ -298,12 +316,32 @@ def to_summary(
             detail="the article did not extract, so there was nothing to summarize",
             generated_at=generated_at,
         )
+    if completion is None:
+        return _failed(
+            article,
+            model_id=model_id,
+            detail="the model server was unreachable, so there was no reply to parse",
+            generated_at=generated_at,
+            failure_code=FailureCode.MODEL_UNREACHABLE,
+        )
     if completion.hit_the_budget:
         return _failed(
             article,
             model_id=model_id,
             detail="the reply was cut off by the output budget, so it never closed its JSON",
             generated_at=generated_at,
+            failure_code=FailureCode.OUTPUT_TRUNCATED,
+        )
+    if completion.reasoned:
+        return _failed(
+            article,
+            model_id=model_id,
+            detail=(
+                "the runtime returned a reasoning channel and thinking was disabled; "
+                "the flag did not take, or this build splits reasoning off the content"
+            ),
+            generated_at=generated_at,
+            failure_code=FailureCode.BAD_SHAPE,
         )
     try:
         draft = parse_draft(completion.content, prompt_config=prompt_config, evaluation=bounds)
@@ -313,6 +351,7 @@ def to_summary(
             model_id=model_id,
             detail=f"the reply did not hold its shape: {type(error).__name__}",
             generated_at=generated_at,
+            failure_code=FailureCode.BAD_SHAPE,
         )
 
     words = len(draft.summary.split())
@@ -322,6 +361,7 @@ def to_summary(
             model_id=model_id,
             detail=f"summary is {words} words, outside the publishable range",
             generated_at=generated_at,
+            failure_code=FailureCode.LENGTH_OUT_OF_RANGE,
         )
 
     title = _publishable_title(draft.title, ask)

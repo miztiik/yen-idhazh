@@ -1,4 +1,4 @@
-name: measure
+name: Measurements
 
 # Measures real prefill/decode throughput on a stock GitHub-hosted runner so the
 # pipeline design rests on numbers rather than estimates (CLAUDE.md Rule #10).
@@ -7,51 +7,116 @@ name: measure
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: 'Measurement target'
+        type: choice
+        required: true
+        default: llm
+        options:
+          - llm
+          - image
+          - corpus
+          - runtime
       models:
         description: 'Comma-separated HF GGUF refs (repo:file)'
         default: 'Qwen/Qwen3-4B-GGUF:Qwen3-4B-Q4_K_M.gguf,Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf'
       threads:
-        description: 'Threads for llama-bench (runner has 4 vCPU)'
+        description: 'Comma-separated llama-bench thread counts, for example 4,8'
         default: '4'
       corpus_links:
         description: 'How many real links to measure for the length distribution'
         default: '200'
+      runtime_candidate:
+        description: 'llama-server runtime candidate'
+        type: choice
+        default: baseline
+        options:
+          - baseline
+          - np1
+          - batch2048
+          - no_startup_warmup
+          - flash_attention_on
+          - load_mode_mmap_mlock
+          - kv_q8
+          - prio_poll
+          - threads
+          - threads_batch
+          - np2_inflight
+      runtime_threads:
+        description: 'Value for --threads when runtime_candidate is threads'
+        default: '8'
+      runtime_threads_batch:
+        description: 'Value for -tb when runtime_candidate is threads_batch'
+        default: '4'
 
 permissions:
   contents: read
 
+env:
+  LLAMA_CPP_BUILD: b10598
+  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
+  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+
 jobs:
   llm:
+    if: ${{ inputs.target == 'llm' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v6
 
       - name: Record runner hardware
         run: |
-          echo "nproc=$(nproc)"
-          free -g | sed -n '1,2p'
-          lscpu | grep -E 'Model name|MHz|Flags' | head -3
-          df -h / /mnt 2>/dev/null | sed -n '1,4p'
+          set -euo pipefail
+          mkdir -p backend/var
+          {
+            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "nproc=$(nproc)"
+            echo "nproc_all=$(nproc --all)"
+            echo "getconf_online=$(getconf _NPROCESSORS_ONLN)"
+            echo "getconf_configured=$(getconf _NPROCESSORS_CONF)"
+            echo "runner_image_os=${ImageOS:-unknown}"
+            echo "runner_image_version=${ImageVersion:-unknown}"
+            if [ -r /sys/fs/cgroup/cpu.max ]; then
+              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
+            fi
+            if [ -r /sys/fs/cgroup/cpuset.cpus.effective ]; then
+              echo "cgroup_cpuset=$(cat /sys/fs/cgroup/cpuset.cpus.effective)"
+            fi
+            grep '^Cpus_allowed_list:' /proc/self/status
+            cat /proc/self/cgroup
+            free -g | sed -n '1,2p'
+            lscpu
+            echo "cpu_core_map:"
+            lscpu -p=CPU,CORE,SOCKET,NODE
+            echo "thread_siblings:"
+            for topology in /sys/devices/system/cpu/cpu*/topology/thread_siblings_list; do
+              printf '%s=%s\n' \
+                "$(basename "$(dirname "$(dirname "$topology")")")" \
+                "$(cat "$topology")"
+            done
+            df -h / /mnt 2>/dev/null | sed -n '1,4p'
+          } | tee backend/var/hardware.txt
 
-      # Search recent releases for the Linux binary rather than building a URL
-      # from `releases/latest`. On 2026-08-22 that endpoint returned a tag with
-      # no binaries at all, so the constructed URL 404ed and the whole
-      # measurement failed on a step that had nothing to do with measuring.
-      - name: Install llama.cpp
+      # The measurement runtime is immutable even while production still
+      # follows the latest compatible release. A candidate and an incumbent
+      # measured on different builds are not a controlled comparison.
+      - name: Install pinned llama.cpp
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           URL=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
-            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
           if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "no plain ubuntu-x64 build in the last 30 llama.cpp releases" >&2
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
             exit 1
           fi
           echo "llama.cpp from $URL"
-          curl -sSL -o llama.tar.gz "$URL"
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           # The whole directory, not one binary. These builds are dynamically
           # linked, so copying llama-bench alone leaves libllama-bench-impl.so
@@ -61,58 +126,43 @@ jobs:
           echo "LLAMA_BIN=$BIN" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$BIN" >> "$GITHUB_ENV"
           chmod +x "$BIN"/llama-* || true
-          LD_LIBRARY_PATH="$BIN" "$BIN/llama-bench" --help >/dev/null && echo "llama-bench ok"
+          {
+            echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
+            echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
+            sha256sum "$BIN/llama-bench"
+          } | tee -a backend/var/hardware.txt
 
-      - name: Cache GGUF weights
-        id: gguf
-        uses: actions/cache@v4
-        with:
-          path: backend/models
-          key: gguf-${{ hashFiles('.github/workflows/measure.yml') }}
-
-      - name: Record weight-cache state
-        run: |
-          mkdir -p backend/var
-          # A cache-hit run and a cache-miss run are different measurements. The
-          # artifact has to say which one it was, or the wall-clock is unreadable.
-          echo "gguf_cache_hit=${{ steps.gguf.outputs.cache-hit == 'true' }}" \
-            | tee backend/var/cache-state.txt
-
-      - name: Download weights (timed)
-        if: steps.gguf.outputs.cache-hit != 'true'
+      - name: Download and benchmark exact models
+        env:
+          MODEL_REFS: ${{ inputs.models }}
+          THREAD_COUNTS: ${{ inputs.threads }}
         run: |
           set -euo pipefail
-          mkdir -p backend/models
-          IFS=',' read -ra REFS <<< "${{ inputs.models }}"
-          for ref in "${REFS[@]}"; do
-            repo="${ref%%:*}"; file="${ref##*:}"
-            start=$(date +%s)
-            curl -sSL --retry 3 -o "backend/models/${file}" \
-              "https://huggingface.co/${repo}/resolve/main/${file}"
-            echo "download ${file} $(( $(date +%s) - start ))s $(du -h "backend/models/${file}" | cut -f1)" \
-              | tee -a backend/var/cache-state.txt
+          max_threads=$(( $(nproc) * 2 ))
+          IFS=',' read -ra THREADS <<< "$THREAD_COUNTS"
+          for threads in "${THREADS[@]}"; do
+            if [[ ! "$threads" =~ ^[1-9][0-9]*$ ]]; then
+              echo "threads must be comma-separated positive integers" >&2
+              exit 2
+            fi
+            if [ "$threads" -gt "$max_threads" ]; then
+              echo "thread count ${threads} exceeds 2 x nproc (${max_threads})" >&2
+              exit 2
+            fi
           done
-
-      - name: Benchmark at real article lengths
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var
-          # 730 / 1800 / 4850 input tokens = short / medium / long article buckets
-          for m in backend/models/*.gguf; do
-            echo "=== $m"
-            "$LLAMA_BIN/llama-bench" -m "$m" -p 730,1800,4850 -n 250 \
-              -t ${{ inputs.threads }} -r 3 -o json >> backend/var/llm.json
-          done
-
-      - name: Summarise
-        run: python3 backend/utilities/summarise_bench.py backend/var/llm.json
+          python3 backend/utilities/measure_llm.py \
+            --models "$MODEL_REFS" \
+            --threads "$THREAD_COUNTS" \
+            --binary "$LLAMA_BIN/llama-bench"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: bench-llm
           path: backend/var/
 
   image:
+    if: ${{ inputs.target == 'image' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -147,6 +197,7 @@ jobs:
           path: backend/var/
 
   corpus:
+    if: ${{ inputs.target == 'corpus' }}
     # The length buckets every per-article cost figure multiplies by are invented
     # until this job runs. It reaches the open web, which is why it lives here and
     # never in a test (Rule #7).
@@ -175,3 +226,456 @@ jobs:
         with:
           name: bench-corpus
           path: backend/var/corpus.json
+
+  runtime:
+    if: ${{ inputs.target == 'runtime' }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 330
+    env:
+      MODEL_REPO: Qwen/Qwen3-8B-GGUF
+      MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Record runner hardware
+        run: |
+          set -euo pipefail
+          mkdir -p backend/var/runtime-sweep
+          {
+            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner=${RUNNER_OS:-unknown}"
+            echo "nproc=$(nproc)"
+            echo "nproc_all=$(nproc --all)"
+            echo "getconf_online=$(getconf _NPROCESSORS_ONLN)"
+            if [ -r /sys/fs/cgroup/cpu.max ]; then
+              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
+            fi
+            grep '^Cpus_allowed_list:' /proc/self/status
+            free -g | sed -n '1,2p'
+            lscpu
+            echo "cpu_core_map:"
+            lscpu -p=CPU,CORE,SOCKET,NODE
+          } | tee backend/var/runtime-sweep/hardware.txt
+
+      - name: Install
+        run: pip install -e .
+
+      - name: Fetch runtime and weights
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin backend/models
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
+            exit 1
+          fi
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
+          chmod +x backend/bin/llama-server
+          curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${MODEL_FILE}" \
+            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
+
+      - name: Record input identity
+        run: |
+          {
+            echo "gguf_cache_hit=false"
+            echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
+            echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
+            sha256sum backend/bin/llama-server
+            stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
+            sha256sum "backend/models/${MODEL_FILE}"
+          } | tee backend/var/runtime-sweep/cache-state.txt
+
+      - name: Build fixed five-article corpus
+        run: |
+          set -euo pipefail
+          DATE=$(date -u +%F)
+          export RUNTIME_DATE="$DATE"
+          echo "RUNTIME_DATE=$DATE" >> "$GITHUB_ENV"
+          python -m idhazh plan --date "$DATE" --cap 5
+          python - <<'PY'
+          import json
+          import hashlib
+          import os
+          from collections import Counter
+          from pathlib import Path
+
+          from idhazh.contracts.run_plan import RunPlan
+
+          date = os.environ["RUNTIME_DATE"]
+          plan_path = Path("backend/var/run") / date / "plan.json"
+          payload = json.loads(plan_path.read_text(encoding="utf-8"))
+          payload["items"] = payload["items"][:5]
+          if len(payload["items"]) != 5:
+              raise SystemExit("runtime sweep needs exactly five planned articles")
+          counts = Counter(item["vertical"] for item in payload["items"])
+          for vertical in payload["verticals"]:
+              vertical["planned"] = counts.get(vertical["id"], 0)
+          text = RunPlan.model_validate(payload).to_json()
+          plan_path.write_text(text, encoding="utf-8")
+          out = Path("backend/var/runtime-sweep/plan.json")
+          out.write_text(text, encoding="utf-8")
+          PY
+
+      - name: Measure runtime candidate
+        env:
+          RUNTIME_CANDIDATE: ${{ inputs.runtime_candidate }}
+          RUNTIME_THREADS: ${{ inputs.runtime_threads }}
+          RUNTIME_THREADS_BATCH: ${{ inputs.runtime_threads_batch }}
+          GGUF_CACHE_HIT: 'false'
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import shutil
+          import statistics
+          import subprocess
+          import sys
+          import threading
+          import time
+          import urllib.request
+          from pathlib import Path
+
+          from idhazh import config
+          from idhazh.contracts.app_config import AppConfig
+          from idhazh.llm.server import server_argv
+
+          CANDIDATE = os.environ["RUNTIME_CANDIDATE"]
+          DATE = os.environ["RUNTIME_DATE"]
+          ROOT = Path("backend/var/runtime-sweep")
+          CONFIG_ROOT = ROOT / "configs"
+          MODEL_FILE = os.environ["MODEL_FILE"]
+          THREADS = int(os.environ["RUNTIME_THREADS"])
+          THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
+          MAX_THREADS = 2 * (os.cpu_count() or 1)
+          REPEATS = 3
+          SERVER_PORT = 8080
+
+          if not 1 <= THREADS <= MAX_THREADS:
+              raise SystemExit(f"runtime_threads must be in 1..{MAX_THREADS}")
+          if not 1 <= THREADS_BATCH <= MAX_THREADS:
+              raise SystemExit(f"runtime_threads_batch must be in 1..{MAX_THREADS}")
+
+          def candidate_update(name):
+              if name == "baseline":
+                  return {}, 1
+              if name == "np1":
+                  return {"n_parallel": 1}, 1
+              if name == "batch2048":
+                  return {"n_batch": 2048}, 1
+              if name == "no_startup_warmup":
+                  return {"startup_warmup": False}, 1
+              if name == "flash_attention_on":
+                  return {"flash_attention": "on"}, 1
+              if name == "load_mode_mmap_mlock":
+                  return {"load_mode": "mmap+mlock"}, 1
+              if name == "kv_q8":
+                  return {"cache_type_k": "q8_0", "cache_type_v": "q8_0"}, 1
+              if name == "prio_poll":
+                  return {"priority": 2, "poll": 100}, 1
+              if name == "threads":
+                  return {"n_threads": THREADS}, 1
+              if name == "threads_batch":
+                  return {"n_threads_batch": THREADS_BATCH}, 1
+              if name == "np2_inflight":
+                  return {"n_parallel": 2, "n_ctx": 16384}, 2
+              raise SystemExit(f"unknown runtime candidate: {name}")
+
+          def write_config(label, update):
+              dst = CONFIG_ROOT / label
+              if dst.exists():
+                  shutil.rmtree(dst)
+              shutil.copytree("config", dst)
+              path = dst / "idhazh.json"
+              payload = json.loads(path.read_text(encoding="utf-8"))
+              payload["models"]["inference"].update(update)
+              path.write_text(AppConfig.model_validate(payload).to_json(), encoding="utf-8")
+              return dst
+
+          def read_status(pid):
+              status = Path("/proc") / str(pid) / "status"
+              values = {}
+              if not status.exists():
+                  return values
+              for line in status.read_text(encoding="utf-8", errors="replace").splitlines():
+                  if line.startswith(("VmRSS:", "VmHWM:")):
+                      key, value = line.split(":", 1)
+                      values[key] = value.strip()
+              return values
+
+          def cgroup_peak():
+              path = Path("/sys/fs/cgroup/memory.peak")
+              if path.exists():
+                  return path.read_text(encoding="utf-8").strip()
+              return None
+
+          def wait_for_health():
+              for _ in range(120):
+                  try:
+                      with urllib.request.urlopen(
+                          f"http://127.0.0.1:{SERVER_PORT}/health", timeout=2
+                      ) as response:
+                          if response.status < 500:
+                              return
+                  except Exception:
+                      pass
+                  time.sleep(5)
+              raise RuntimeError("llama-server never became healthy")
+
+          def parse_server_facts(log_path):
+              text = log_path.read_text(encoding="utf-8", errors="replace")
+              facts = {}
+              for key in ("n_slots", "n_ctx_slot", "n_ctx_per_seq", "kv_unified"):
+                  match = re.search(rf"{key}\s*=\s*'?([^,\\s']+)'?", text)
+                  if match:
+                      facts[key] = match.group(1)
+              return facts
+
+          def collect_digests(label, repeat):
+              items_dir = Path("backend/var/run") / DATE / "items"
+              articles = sorted(items_dir.glob("*.article.json"))
+              summaries = sorted(items_dir.glob("*.summary.json"))
+              if len(articles) != 5:
+                  raise RuntimeError(f"{label} repeat {repeat} wrote {len(articles)} articles, not 5")
+              if len(summaries) != 5:
+                  raise RuntimeError(f"{label} repeat {repeat} wrote {len(summaries)} summaries, not 5")
+              sources = {}
+              for path in articles:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+                  source = {
+                      key: data.get(key)
+                      for key in ("title", "text", "source_form", "truncated", "brief")
+                  }
+                  canonical = json.dumps(
+                      source, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+                  )
+                  sources[data["item_id"]] = hashlib.sha256(
+                      canonical.encode("utf-8")
+                  ).hexdigest()
+              digests = {}
+              per_item = []
+              for path in summaries:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+                  if data.get("status") != "ok":
+                      raise RuntimeError(f"{path.name} did not summarize: {data.get('failure_detail')}")
+                  digests[data["item_id"]] = data["output_digest"]
+                  per_item.append({
+                      "item_id": data["item_id"],
+                      "output_digest": data["output_digest"],
+                      "duration_ms": data["duration_ms"],
+                      "fetch_ms": data["fetch_ms"],
+                      "extract_ms": data["extract_ms"],
+                      "summarize_ms": data["summarize_ms"],
+                      "input_tokens": data["input_tokens"],
+                      "output_tokens": data["output_tokens"],
+                  })
+              return sources, digests, per_item
+
+          def run_once(label, update, repeat, worker_count):
+              cfg = write_config(f"{label}-{repeat}", update)
+              settings = config.load(cfg)
+              log_path = ROOT / f"{label}-{repeat}.llama-server.log"
+              items_dir = Path("backend/var/run") / DATE / "items"
+              if items_dir.exists():
+                  shutil.rmtree(items_dir)
+              items_dir.mkdir(parents=True, exist_ok=True)
+              argv = server_argv(
+                  binary=Path("backend/bin/llama-server"),
+                  weights=Path("backend/models") / MODEL_FILE,
+                  model=settings.app.models.summarize,
+                  inference=settings.app.models.inference,
+                  port=SERVER_PORT,
+              )
+              env = os.environ.copy()
+              env["LD_LIBRARY_PATH"] = "backend/bin"
+              t0 = time.perf_counter()
+              with log_path.open("w", encoding="utf-8") as log:
+                  server = subprocess.Popen(argv, stdout=log, stderr=subprocess.STDOUT, env=env)
+                  rss_samples = []
+                  stop = threading.Event()
+
+                  def sample_rss():
+                      while not stop.is_set():
+                          rss_samples.append(read_status(server.pid))
+                          time.sleep(1)
+
+                  sampler = threading.Thread(target=sample_rss, daemon=True)
+                  sampler.start()
+                  try:
+                      wait_for_health()
+                      startup_ms = int((time.perf_counter() - t0) * 1000)
+                      work_started = time.perf_counter()
+                      commands = []
+                      for shard in range(worker_count):
+                          cmd = [
+                              sys.executable,
+                              "-m",
+                              "idhazh",
+                              "work",
+                              "--config",
+                              str(cfg),
+                              "--date",
+                              DATE,
+                              "--shard",
+                              str(shard),
+                              "--shards",
+                              str(worker_count),
+                              "--no-faithfulness",
+                          ]
+                          commands.append(subprocess.Popen(cmd))
+                      failures = [proc.wait() for proc in commands]
+                      if any(failures):
+                          raise RuntimeError(f"{label} repeat {repeat} worker failures: {failures}")
+                      work_ms = int((time.perf_counter() - work_started) * 1000)
+                      total_ms = int((time.perf_counter() - t0) * 1000)
+                  finally:
+                      stop.set()
+                      server.terminate()
+                      try:
+                          server.wait(timeout=20)
+                      except subprocess.TimeoutExpired:
+                          server.kill()
+                          server.wait(timeout=20)
+                      sampler.join(timeout=5)
+              sources, digests, per_item = collect_digests(label, repeat)
+              summarize_total_ms = sum(item["summarize_ms"] for item in per_item)
+              return {
+                  "label": label,
+                  "candidate": CANDIDATE,
+                  "repeat": repeat,
+                  "argv": argv,
+                  "worker_count": worker_count,
+                  "startup_ms": startup_ms,
+                  "work_ms": work_ms,
+                  "total_ms": total_ms,
+                  "model_path_ms": startup_ms + summarize_total_ms,
+                  "server_rss_samples": rss_samples,
+                  "cgroup_memory_peak_bytes": cgroup_peak(),
+                  "server_facts": parse_server_facts(log_path),
+                  "sources": sources,
+                  "digests": digests,
+                  "per_item": per_item,
+              }
+
+          ROOT.mkdir(parents=True, exist_ok=True)
+          update, workers = candidate_update(CANDIDATE)
+          labels = ["baseline"] if CANDIDATE == "baseline" else ["baseline", CANDIDATE]
+          updates = {"baseline": ({}, 1), CANDIDATE: (update, workers)}
+          results = []
+          for repeat in range(1, REPEATS + 1):
+              for label in labels:
+                  current_update, worker_count = updates[label]
+                  result = run_once(label, current_update, repeat, worker_count)
+                  results.append(result)
+                  print(
+                      f"{label} repeat {repeat}: "
+                      f"startup_ms={result['startup_ms']} work_ms={result['work_ms']} "
+                      f"total_ms={result['total_ms']}"
+                  )
+
+          digest_sets = {}
+          for result in results:
+              digest_sets.setdefault(result["label"], []).append(result["digests"])
+          verdict = "passed"
+          problems = []
+          expected_sources = results[0]["sources"]
+          for result in results[1:]:
+              if result["sources"] != expected_sources:
+                  verdict = "rejected_input_drift"
+                  problems.append({
+                      "label": result["label"],
+                      "repeat": result["repeat"],
+                      "expected_sources": expected_sources,
+                      "actual_sources": result["sources"],
+                  })
+          for label, maps in digest_sets.items():
+              first = maps[0]
+              for index, current in enumerate(maps[1:], start=2):
+                  if current != first:
+                      if verdict == "passed":
+                          verdict = "rejected_output_drift"
+                      problems.append({"label": label, "repeat": index, "expected": first, "actual": current})
+          if CANDIDATE != "baseline":
+              if digest_sets[CANDIDATE][0] != digest_sets["baseline"][0]:
+                  if verdict == "passed":
+                      verdict = "rejected_output_drift"
+                  problems.append({
+                      "label": CANDIDATE,
+                      "expected": digest_sets["baseline"][0],
+                      "actual": digest_sets[CANDIDATE][0],
+                  })
+
+          def stats(label, key):
+              values = [result[key] for result in results if result["label"] == label]
+              return {
+                  "values": values,
+                  "median": statistics.median(values),
+                  "spread": max(values) - min(values),
+              }
+
+          timing = {
+              label: {
+                  "startup_ms": stats(label, "startup_ms"),
+                  "work_ms": stats(label, "work_ms"),
+                  "total_ms": stats(label, "total_ms"),
+                  "model_path_ms": stats(label, "model_path_ms"),
+              }
+              for label in labels
+          }
+          if CANDIDATE != "baseline":
+              comparison_key = (
+                  "total_ms" if CANDIDATE == "np2_inflight" else "model_path_ms"
+              )
+              baseline = timing["baseline"][comparison_key]
+              candidate = timing[CANDIDATE][comparison_key]
+              faster_by_ms = baseline["median"] - candidate["median"]
+              timing["candidate_vs_baseline"] = {
+                  "comparison_key": comparison_key,
+                  "faster_by_ms": faster_by_ms,
+                  "beats_baseline_outside_spread": faster_by_ms > max(
+                      baseline["spread"], candidate["spread"]
+                  ),
+              }
+
+          summary = {
+              "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "candidate": CANDIDATE,
+              "repeats": REPEATS,
+              "fixed_corpus": "backend/var/runtime-sweep/plan.json",
+              "gguf_cache_hit": os.environ["GGUF_CACHE_HIT"],
+              "verdict": verdict,
+              "problems": problems,
+              "timing": timing,
+              "results": results,
+          }
+          (ROOT / "runtime-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n",
+              encoding="utf-8",
+          )
+          if verdict != "passed":
+              raise SystemExit(verdict)
+          PY
+
+      - name: Upload runtime sweep
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: runtime-sweep-${{ inputs.runtime_candidate }}
+          path: backend/var/runtime-sweep/
+          retention-days: 7

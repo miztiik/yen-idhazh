@@ -1,0 +1,21 @@
+{
+  "canonical_url": "https://dispatch.example.net/2026/08/short-note",
+  "code": "too_short",
+  "date": "2026-08-23",
+  "detail": null,
+  "extract_ms": null,
+  "fetch_ms": null,
+  "http_status": null,
+  "item_id": "policy-04",
+  "outcome": "failed",
+  "run_id": "2026-08-23-1",
+  "source_chars": 410,
+  "source_id": "example-dispatch",
+  "source_words": 48,
+  "stage": "extract",
+  "summarize_ms": null,
+  "summary_words": null,
+  "url_key": "6e0f8a691257f0e0e909fd6e380bc42528e82ee35b4123e44225982c3726eb06",
+  "version": "2026-08-23T18:15",
+  "vertical": "policy"
+}

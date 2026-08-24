@@ -4,6 +4,11 @@
       "additionalProperties": false,
       "description": "One RSS/Atom feed, attached to exactly one vertical.",
       "properties": {
+        "form": {
+          "$ref": "#/$defs/SourceForm",
+          "default": "article",
+          "description": "What the feed publishes. Abstract feeds are declared by a curator, never detected from source text."
+        },
         "id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Id",
@@ -125,6 +130,14 @@
       "title": "SalienceFeedDef",
       "type": "object"
     },
+    "SourceForm": {
+      "enum": [
+        "article",
+        "abstract"
+      ],
+      "title": "SourceForm",
+      "type": "string"
+    },
     "SourceKind": {
       "description": "What kind of speaker this is - the thing a reader uses to decide belief.\n\n\"A company said its product is faster\" and \"a reporter measured it\" are not\nthe same claim, and without this they arrive looking identical. The\ndangerous case is `announcement`: forwarding a vendor's own copy without\nknowing it was the vendor is how a reader ends up carrying an ad.",
       "enum": [
@@ -153,6 +166,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added feed form with an abstract value.",
+      "version": "2026-08-23T18:47",
+      "why": "A reader must be told when the summary is of an abstract, but detecting that from page text would turn a stranger's words into control data. The form is declared per feed instead."
+    },
     {
       "change": "Split retired feeds out of feeds into their own list.",
       "version": "2026-08-22T10:00",
@@ -200,7 +218,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-22T10:00",
+      "default": "2026-08-23T18:47",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -212,5 +230,5 @@
   ],
   "title": "Sources",
   "type": "object",
-  "version": "2026-08-22T10:00"
+  "version": "2026-08-23T18:47"
 }

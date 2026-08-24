@@ -5,10 +5,11 @@ import { join, resolve } from 'node:path';
 /**
  * The console says whether the runs worked and which feeds are broken.
  *
- * It runs against the canary build, whose fixtures are authored to carry one
- * run of each colour and one feed of each kind the page has to tell apart. The
- * fixture also has no score ledger at all, which is what proves the page still
- * renders when a data source it draws from is missing.
+ * It runs against the canary build, whose fixtures carry one run of each colour
+ * and one feed of each kind the page has to tell apart. The canary build writes
+ * the item-health ledger because the console reads timing medians from it. The
+ * fixture still has no score ledger, which proves the page keeps rendering when
+ * one data source is missing.
  *
  * See `backend/utilities/build_canary_day.py` for the fixture.
  */
@@ -33,6 +34,15 @@ function publishedDay(): string {
 }
 
 const DAY = publishedDay();
+
+function span(start: string | null, end: string | null): number {
+	if (!start || !end) return 0;
+	return (
+		(new Date(`${end}T00:00:00Z`).getTime() - new Date(`${start}T00:00:00Z`).getTime()) /
+			86_400_000 +
+		1
+	);
+}
 
 /** How many runs the fixture manifest records for that day. */
 function runCount(): number {
@@ -105,6 +115,82 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 	expect(named).toEqual(['canary-flaky', 'canary-empty', 'canary-gone']);
 });
 
+test('stage medians come from item health, not the score ledger', async ({ page }) => {
+	await page.goto('/console/');
+
+	await expect(page.getByText('Median seconds per item, by stage')).toBeVisible();
+	await expect(page.getByText('200 ms')).toBeVisible();
+	await expect(page.getByText('30 ms')).toBeVisible();
+	await expect(page.getByText('700 ms')).toBeVisible();
+});
+
+test('the telemetry viewport renders the published projection', async ({ page }) => {
+	await page.goto('/console/');
+
+	await expect(page.locator('[data-viewport-control]')).toBeVisible();
+	await expect(page.locator('[data-failure-panels]')).toBeVisible();
+	await expect(page.locator('[data-compression]')).toBeVisible();
+	await expect(page.locator('[data-viewport-control]')).toContainText('3 rows in view');
+});
+
+test('the old evals route moves bookmarks to the console', async ({ page }) => {
+	await page.goto('/evals/');
+
+	await expect(page).toHaveURL(/\/console\/$/);
+	await expect(page.getByRole('heading', { name: 'Console' })).toBeVisible();
+});
+
+test('the evals entry point keeps a no-JS link to the console', () => {
+	const page = readFileSync(resolve(process.cwd(), 'src', 'routes', 'evals', '+page.svelte'), 'utf8');
+
+	expect(page).toContain('http-equiv="refresh"');
+	expect(page).toContain('<link rel="canonical" href={consoleHref} />');
+	expect(page).toContain('<a href={consoleHref}');
+	expect(page).not.toContain('evalRows');
+	expect(page).not.toContain('BAND_ORDER');
+});
+
+test('keyboard alone pans and zooms the telemetry viewport', async ({ page }) => {
+	await page.goto('/console/');
+
+	const viewport = page.locator('[data-viewport-control]');
+	await viewport.focus();
+	await expect(viewport).toBeFocused();
+	const start = await viewport.getAttribute('data-window-start');
+	const end = await viewport.getAttribute('data-window-end');
+
+	await page.keyboard.press('ArrowLeft');
+	await expect(viewport).not.toHaveAttribute('data-window-start', start ?? '');
+
+	const pannedStart = await viewport.getAttribute('data-window-start');
+	const pannedEnd = await viewport.getAttribute('data-window-end');
+	await page.keyboard.press('-');
+	const widenedStart = await viewport.getAttribute('data-window-start');
+	const widenedEnd = await viewport.getAttribute('data-window-end');
+	expect(span(widenedStart, widenedEnd)).toBeGreaterThan(span(pannedStart, pannedEnd));
+	await page.keyboard.press('-');
+	const widerStart = await viewport.getAttribute('data-window-start');
+	const widerEnd = await viewport.getAttribute('data-window-end');
+	await page.keyboard.press('+');
+	const zoomedStart = await viewport.getAttribute('data-window-start');
+	const zoomedEnd = await viewport.getAttribute('data-window-end');
+	expect(span(zoomedStart, zoomedEnd)).toBeLessThan(span(widerStart, widerEnd));
+	expect(span(start, end)).toBeGreaterThan(0);
+});
+
+test('panning to a month with no rows leaves a visible gap', async ({ page }) => {
+	await page.goto('/console/');
+
+	const viewport = page.locator('[data-viewport-control]');
+	await viewport.focus();
+	for (let index = 0; index < 8; index += 1) {
+		await page.keyboard.press('ArrowLeft');
+	}
+
+	await expect(page.getByText('No rows in this window').first()).toBeVisible();
+	await expect(viewport).toContainText('0 rows in view');
+});
+
 test('a missing ledger costs the page a section, never the page', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
@@ -113,8 +199,9 @@ test('a missing ledger costs the page a section, never the page', async ({ page 
 	await page.goto('/console/');
 
 	// The canary build has no score ledger. The page says so and carries on:
-	// the run grid above it and the feed table below it both still draw.
+	// the timing chart, run grid and feed table still draw.
 	await expect(page.getByText('Nothing has been scored yet.')).toBeVisible();
+	await expect(page.getByText('Median seconds per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 

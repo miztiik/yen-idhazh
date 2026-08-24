@@ -21,46 +21,39 @@ from idhazh.evals import metrics
 
 _DELTA_PLACES: Final = 6
 _UNTITLED: Final = "Untitled item"
-#: Below this the summary dropped the story's own opening facts.
-_LEAD_COVERAGE_FLOOR: Final = 0.3
 
 
 def band(
-    faithfulness: float, *, unsupported_numbers: int, config: EvaluationConfig
+    faithfulness: float | None,
+    *,
+    unsupported_numbers: int,
+    lead_coverage: float,
+    hedge_dropped: bool,
+    config: EvaluationConfig,
 ) -> ConfidenceBand:
     """The band, not the number, is what drives behaviour and what a reader sees.
 
     An unsupported figure forces the bottom band. Nothing else in the row can
-    see that defect, so nothing else may outvote it.
+    see that defect, so nothing else may outvote it. Missing lead facts and
+    dropped hedges cap confidence at medium rather than forcing low.
     """
     if unsupported_numbers:
         return ConfidenceBand.LOW
-    if faithfulness >= config.band_high_min:
-        return ConfidenceBand.HIGH
-    if faithfulness >= config.band_medium_min:
+    if faithfulness is None:
+        scored = ConfidenceBand.MEDIUM
+    elif faithfulness >= config.band_high_min:
+        scored = ConfidenceBand.HIGH
+    elif faithfulness >= config.band_medium_min:
+        scored = ConfidenceBand.MEDIUM
+    else:
+        scored = ConfidenceBand.LOW
+
+    if (
+        scored is ConfidenceBand.HIGH
+        and (lead_coverage < config.lead_coverage_min or hedge_dropped)
+    ):
         return ConfidenceBand.MEDIUM
-    return ConfidenceBand.LOW
-
-
-def counterweight_band(summary: str, full_text: str, config: EvaluationConfig) -> ConfidenceBand:
-    """The band a reader sees when no faithfulness score exists.
-
-    The counterweights are free and run on every item, so this is always
-    available - which is what keeps a reader-facing promise off the most
-    expensive metric in the system.
-
-    It never returns `high`. Without a faithfulness score there is no basis for
-    claiming one, and inventing the top band from cheap checks would be exactly
-    the false confidence the second artifact exists to prevent.
-    """
-    if metrics.unsupported_numbers(summary, full_text):
-        return ConfidenceBand.LOW
-    if metrics.lead_coverage(summary, full_text) < _LEAD_COVERAGE_FLOOR:
-        return ConfidenceBand.LOW
-    if metrics.hedge_dropped(summary, full_text):
-        return ConfidenceBand.LOW
-    del config
-    return ConfidenceBand.MEDIUM
+    return scored
 
 
 def to_eval_row(
@@ -91,7 +84,13 @@ def to_eval_row(
     """
     text = summary.summary or ""
     unsupported = metrics.unsupported_numbers(text, full_text)
+    coverage = metrics.lead_coverage(text, full_text)
+    hedge = metrics.hedge_dropped(text, full_text)
+    verbatim = metrics.verbatim_run(text, full_text)
     delta = round(hhem - hhem_full, _DELTA_PLACES)
+    truncation_flagged = delta > config.truncation_gap_max or (
+        article.brief and verbatim > config.brief_compression_ceiling
+    )
 
     return EvalRow(
         version=EvalRow.schema_version(),
@@ -111,17 +110,23 @@ def to_eval_row(
         hhem=hhem,
         hhem_full=hhem_full,
         hhem_delta=delta,
-        truncation_flagged=delta > config.truncation_gap_max,
-        coverage=metrics.lead_coverage(text, full_text),
+        truncation_flagged=truncation_flagged,
+        coverage=coverage,
         compression=metrics.compression(text, full_text),
         extractiveness=metrics.extractiveness(text, full_text),
-        verbatim_run=metrics.verbatim_run(text, full_text),
+        verbatim_run=verbatim,
         unsupported_numbers=unsupported,
-        hedge_dropped=metrics.hedge_dropped(text, full_text),
+        hedge_dropped=hedge,
         evidential_density=metrics.evidential_density(full_text),
         speculative_density=metrics.speculative_density(full_text),
         extraction_suspect=extraction_suspect,
-        band=band(hhem, unsupported_numbers=unsupported, config=config),
+        band=band(
+            hhem,
+            unsupported_numbers=unsupported,
+            lead_coverage=coverage,
+            hedge_dropped=hedge,
+            config=config,
+        ),
         source_word_count=metrics.word_count(full_text),
         source_seen_word_count=article.word_count,
         summary_word_count=metrics.word_count(text),

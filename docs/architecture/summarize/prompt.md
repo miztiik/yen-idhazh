@@ -29,10 +29,15 @@ looks like.
 ## One ask per article length
 
 `config.summarize.bands` holds one length ask per article size, ordered by
-`min_source_words`. `band_for()` picks the longest band the article reaches.
+`min_source_words`. `band_for()` picks the longest band the article reaches,
+unless extraction recorded the item as brief. A brief item always uses band 0.
 
 A release note and a long read asked for the same number of words gives a padded
 summary of the first and a thin one of the second.
+
+Band 0 is the brief band: `{0, 30, 45}`. The former first band starts at 60
+words and asks for 50 to 90 words. The split is forced by the source floor:
+`30 / 0.5 = 60`.
 
 Two rules make band selection safe rather than approximate:
 
@@ -71,7 +76,7 @@ The decoder's character rails are **derived from the accept gate**, never pinned
 
 | Rail | Derived from | Why |
 | --- | --- | --- |
-| Summary floor | `summary_words_min x 5` | A generation control as much as a check. The decoder reads the floor and keeps writing, so a summary that stops after two sentences is prevented rather than caught. Five is below real English, so a genuine summary at the gate's floor clears it and fails on words if it fails at all. |
+| Summary floor | `summary_words_min x 5` | A generation control as much as a check. The decoder reads the floor and keeps writing, so a summary that stops after two sentences is prevented rather than caught. Five is below real English, so a genuine summary at the gate's floor clears it and fails on words if it fails at all. With the 25-word gate, this rail is 125 characters. |
 | Summary ceiling | `summary_words_max x 12` | Loose. It only stops a runaway decode. |
 | Title ceiling | `title_words_max x 12` | The same loose ceiling. |
 | Title floor | none | The floor exists to stop a long field ending early. A headline does not have that failure mode, and a floor applied to one would only pad a good short line into a bad long one. |
@@ -92,6 +97,7 @@ in a failure detail.
 | **Framing** | Names the task as epistemological, then says in plain words what that means to do: a reader must be able to tell, from the summary alone, how the article knows what it says. |
 | **Title** | A new title, written from the body and the headline together, `title_words_min` to `title_words_max` words, with the headline styles it must not adopt named. See below. |
 | **Length** | The band's word range, plus `key_points_min` to `key_points_max` key points. Each key point must add something the summary did not say. |
+| **Source form** | The trusted line before the fenced text can say `Source form: abstract`. In that case the prompt tells the model to write "The authors report that..." or equivalent, because an abstract is the authors describing their own work. |
 | **Attribution** | Who said a thing, named as the article names it. Never "sources say" when the article named the source, never a source the article did not name, and a figure an organisation reports about itself is marked as its own. |
 | **Certainty** | Hedges are protected in both directions. Dropping one turns a claim into a fact; adding one turns a fact into a rumour. A plan, a proposal, a target, a forecast and a result stay apart, because the kind of claim is the claim. |
 | **Faithfulness** | Only what the source says. Numbers exactly as given. The names the opening lines name. |
@@ -219,10 +225,11 @@ endings. Tokenization is deterministic, so the spread is zero. Recorded in
 | Before the Title section | 653 words / 864 tokens |
 | With the Title section | 781 words / 1033 tokens |
 | After the terseness pass | **598 words / 801 tokens** |
-| Worst case: prompt + 2500 truncation cap + 900 output | **4201 of 8192 `n_ctx`** |
+| Current four-band prompt, including the brief tier | **658 words / 877-879 tokens** |
+| Worst case: prompt + 2500 truncation cap + 900 output | **4279 of 8192 `n_ctx`** |
 
-`fits_context` approximates the prompt as `words x 2`, which reserves 1196
-against the measured 801. It over-reserves by 395 tokens, in the safe
+`fits_context` approximates the current prompt as `words x 2`, which reserves
+1316 against the measured maximum of 879. It over-reserves by 437 tokens, in the safe
 direction, and tokenizing the prompt per item to reclaim context we are not
 short of would buy nothing.
 
@@ -288,6 +295,14 @@ as coverage.
 with a working fallback. The summary has none, which is why the same miss there
 is fatal (section 1a, degrade do not fail).
 
+**Why the band-varying numbers were not moved to the prompt tail.** The proposed
+reorder depended on a 66.2 s per-item re-prefill estimate. Run `32648218952`
+measured the live digest path at 34.23 tok/s median, so the same 801-token
+re-prefill costs 23.4 s median. The whole prize fell to a 1-2% wall-clock ceiling
+and the current logs cannot prove prefix reuse because they emit no `kv cache rm`
+lines. The prompt stays ordered for clarity until a runner A/B measurement proves
+a real gain without changing the golden `output_digest` values.
+
 **Why `title_words_max` is capped at 40.** The decoder ceiling is
 `title_words_max x 12` characters, and the payload field is an `UntrustedLine`
 capped at 500. Uncapped, a knob nobody read as dangerous would hand `to_summary` a
@@ -319,6 +334,7 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 | Cut the worked example to save 26 words | It is the only few-shot signal in the file, and it demonstrates exactly the behaviour the content-first reframe puts at risk. |
 | Cut the five hedge terms and keep only "keep the source's hedges" | Each term is a literal member of a lexicon in `backend/idhazh/evals/metrics.py`. The prompt and the alarm share a vocabulary, and cutting the list decouples them silently. |
 | Keep cutting until the prompt is as short as it can be | Length is not the measure. A cut is safe when another line, the decoder or a metric still carries the behaviour, and a gamble when nothing does. |
+| Move band-varying numbers to the tail before measuring | The live runner measurement collapsed the prize. The current server log cannot prove reuse, so the change would risk output drift for an unproved gain. |
 
 ## See also
 

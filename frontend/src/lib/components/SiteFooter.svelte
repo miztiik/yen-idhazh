@@ -34,6 +34,13 @@
 		</p>
 	{/if}
 
+	{#if day && day.items_failed > 0}
+		<p class="mt-1">
+			We skipped {day.items_failed} stories today because we could not read enough of the page to
+			summarize them fairly.
+		</p>
+	{/if}
+
 	<p class="mt-1">
 		Built from git &mdash;
 		{#if commit === 'dev'}
@@ -54,7 +61,6 @@
 
 	<nav class="mt-4 flex flex-wrap gap-4" aria-label="Site">
 		<a href="{base}/archive/" class="text-accent hover:underline">Archive</a>
-		<a href="{base}/evals/" class="text-accent hover:underline">Scores</a>
 		<a href="{base}/console/" class="text-accent hover:underline">Console</a>
 		<a href={repoUrl} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">
 			Source code

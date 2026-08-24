@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 The structured-event vocabulary: the envelope every event carries, the standard event names, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -54,6 +54,16 @@ A stage is observable the moment it emits these; there is no central switch stat
 
 The item-level names are what make a run auditable per item; the run-level names are what make a partial day a fact with a date rather than something a human notices later.
 
+The item-health ledger is the durable item-level census. It records every
+planned item as `ok` or `failed`, with a closed `FailureCode` vocabulary. A log
+line is evidence that the event happened; the ledger row is the record a later
+run or dashboard reads.
+
+Assemble writes that census once per run after it has merged the worker payloads.
+It writes one row for every planned item, including a `not_attempted` row when no
+article payload arrived. That keeps the denominator in the same file as the
+failure count.
+
 ## No network sink
 
 There is no runtime call home (Rule #1), and there is nowhere to send a log even if there were:
@@ -68,7 +78,7 @@ Because every event is a plain serializable payload, a captured stream is a fixt
 
 ## Logs are not the record
 
-The distinction that matters operationally: a log line is **evidence of what happened**, while a committed artifact or ledger row is **the record of what happened**. CI logs age out. If a later run, a dashboard or a human needs a fact, that fact belongs in the eval ledger or the run manifest - not in a log line somebody would have to go find.
+The distinction that matters operationally: a log line is **evidence of what happened**, while a committed artifact or ledger row is **the record of what happened**. CI logs age out. If a later run, a dashboard or a human needs a fact, that fact belongs in the item-health ledger, the eval ledger or the run manifest - not in a log line somebody would have to go find.
 
 ## Design rationale
 
@@ -84,12 +94,14 @@ Treating the Actions run log as the log store, rather than shipping logs anywher
 | A separate human-readable log format alongside the structured one | Two records of one event, free to disagree, and the disagreement always surfaces at the worst moment. | Fowler |
 | Free-text log messages | Not greppable, not replayable as a fixture, and impossible to assert on in a test. | Fowler |
 | Keeping run history in logs rather than the ledger | CI logs age out. A trend you cannot query in a year is not a measurement (Rule #10). | Fowler |
+| Scraping item failures back out of logs | The workers already hand Assemble typed payloads. A log scraper would make evidence pretend to be the record. | Fowler |
 
 ## See also
 
 - [pipeline-loop.md](pipeline-loop.md) - the stages that emit these events.
 - [config.md](config.md) - the level and emit knobs.
 - [evaluation.md](evaluation.md) - the ledger that IS the record, as distinct from the log.
+- [../architecture/sources/item-health.md](../architecture/sources/item-health.md) - the item-level census ledger.
 - [principles.md](principles.md) - principle 9, logging is local by construction.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the event-envelope schema.
 - [../../CLAUDE.md](../../CLAUDE.md) - section 1b (logging) and the no-telemetry-SDK non-goal (section 0a).

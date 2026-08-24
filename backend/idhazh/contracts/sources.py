@@ -15,12 +15,18 @@ everybody who has to put a name on an id.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Slug, Url
 from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceKind, SourceTier
+
+
+class SourceForm(StrEnum):
+    ARTICLE = "article"
+    ABSTRACT = "abstract"
 
 
 class FeedDef(Lifecycled):
@@ -34,6 +40,13 @@ class FeedDef(Lifecycled):
     kind: SourceKind = Field(
         default=SourceKind.REPORTING,
         description="Who is speaking. A reader needs this before they will share an item.",
+    )
+    form: SourceForm = Field(
+        default=SourceForm.ARTICLE,
+        description=(
+            "What the feed publishes. Abstract feeds are declared by a curator, never "
+            "detected from source text."
+        ),
     )
     weight: float = Field(
         default=1.0,
@@ -61,6 +74,15 @@ class Sources(Contract):
 
     __schema_stem__: ClassVar[str] = "sources"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-23T18:47",
+            change="Added feed form with an abstract value.",
+            why=(
+                "A reader must be told when the summary is of an abstract, but detecting "
+                "that from page text would turn a stranger's words into control data. The "
+                "form is declared per feed instead."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22T10:00",
             change="Split retired feeds out of feeds into their own list.",

@@ -43,6 +43,22 @@ Both counters read the same knob because there is only one question here - how m
 
 The `skipped` row exists for one reason: a quarantine that writes nothing can never lift, because the failures that caused it stay the newest thing on record forever. The skip has to be recorded for the rest to end.
 
+Feed health cannot explain why a planned article failed after discovery. That
+belongs to the item-health ledger, which records one row per planned item per
+run. See [item-health.md](item-health.md).
+
+## Per-source yield is not measurable yet
+
+Feed health can say whether a source answered. It cannot yet say whether that
+source yields publishable items over time. That denominator is different: one
+source can answer cleanly and still produce planned items that fail at fetch,
+extract or summarize.
+
+Per-source item yield needs at least 30 days of `state/item-health/` rows. The
+ledger started on 2026-08-23, so the rubric is blocked until that window exists.
+Do not retire or demote a source by item-yield rule before then. Until the
+window exists, any source-yield threshold is an estimate, not a measurement.
+
 ## The run never edits the source list
 
 Retirement is a person moving a feed into the `retired` key of `config/sources.json`. Quarantine is a run declining to ask, based on rows it wrote itself.
@@ -80,6 +96,7 @@ The self-lifting rest is there because the alternative was tested by imagination
 
 - [discovery.md](discovery.md) - the source list this measures, and its lifecycle rules.
 - [freshness.md](freshness.md) - the other two ledgers under `state/`, and what they answer.
+- [item-health.md](item-health.md) - the item-grain ledger that records planned item outcomes.
 - [trust-boundary.md](trust-boundary.md) - what happens to the bytes a healthy feed returns.
 - [../publishing/frontend.md](../publishing/frontend.md) - the console that renders this record.
 - [../../concepts/config.md](../../concepts/config.md) - where `quarantine_after_failures` lives.

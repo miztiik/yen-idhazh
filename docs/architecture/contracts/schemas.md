@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -18,7 +18,7 @@ backend/idhazh/contracts/*.py        <- Pydantic models. HAND-WRITTEN. The sourc
 
 The direction is one-way and never reversed. To change a persisted shape you edit the Pydantic model and regenerate; editing a generated artifact is an anti-pattern (`CLAUDE.md` section 10) and the drift gate will fail it anyway.
 
-**The third arrow is not automated yet, and that is a known gap.** `frontend/src/lib/payload/types.ts` is written by hand against `schemas/digest-day.schema.json`, so nothing stops the two drifting apart except a person noticing. The generator and the gate over it land with the rest of the frontend contract work. Until then the mirror is narrow on purpose - the published payload only, not all sixteen shapes - because a hand-kept mirror is only safe while it is small enough to read in one sitting.
+**The third arrow is not automated yet, and that is a known gap.** `frontend/src/lib/payload/types.ts` is written by hand against `schemas/digest-day.schema.json`, so nothing stops the two drifting apart except a person noticing. The generator and the gate over it land with the rest of the frontend contract work. Until then the mirror is narrow on purpose - the published payload only, not all seventeen shapes - because a hand-kept mirror is only safe while it is small enough to read in one sitting.
 
 ## Why the models, and not the schemas, are the source
 
@@ -34,7 +34,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `schemas/<name>.schema.json` | Generated. One flat file per model. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `schemas/digest-day.schema.json`. Hand-written today, generated later. |
 
-The sixteen shapes, and where each one lives once written:
+The seventeen shapes, and where each one lives once written:
 
 | Model | Schema | Persisted as |
 | --- | --- | --- |
@@ -51,11 +51,14 @@ The sixteen shapes, and where each one lives once written:
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
+| `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
+
+The eval ledger and source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values.
 
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 
@@ -132,6 +135,21 @@ The shapes this subsystem owns, from `CLAUDE.md` section 11:
 | **The run manifest** | The assemble stage | A later run, and anyone auditing what produced what |
 | **Config** | A human | Both `backend/` and, where a surface needs it, `frontend/` |
 | **Published payloads** | The assemble stage | The published site |
+
+## Run manifest count windows
+
+`RunManifest.runs[]` is one record per run. All counts inside that record use
+that same window.
+
+- `items_planned`, `items_succeeded`, `items_failed` and `items_skipped` count
+  only that run.
+- `verticals[].planned` counts the items that run planned for that vertical.
+- `verticals[].published` counts the items that run introduced into the day
+  payload for that vertical.
+
+The whole-day count lives in `digest.json`: `items.length` and
+`verticals[].count`. A later run appends to the day payload, but it must not make
+an earlier run's plan look larger than it was.
 
 ## Design rationale
 

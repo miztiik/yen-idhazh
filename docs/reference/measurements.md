@@ -24,8 +24,10 @@ lengths a short, medium and long article actually produce.
 ### On the runner (authoritative)
 
 **Measured 2026-08-22** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4 threads,
-llama.cpp `b10580`, 3 repeats. This is the hardware the pipeline runs on, so
-these are the numbers a design decision may cite. The laptop tables below are
+llama.cpp `b10580`, 3 repeats. These are the `llama-bench` numbers a design
+decision may cite for article-length prefill and decode. They are not the
+prompt-cache cost in the live digest path; use
+[Prompt cache reuse](#prompt-cache-reuse) for that. The laptop tables below are
 kept only to show how far a laptop misleads.
 
 | Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
@@ -44,6 +46,31 @@ half that, and the 8B fits comfortably.
 **Weight download, cache miss:** 4B 2.4 GB in 32s, 8B 4.7 GB in 180s. Both are
 one-off per cache key; the 10 GB cache holds both.
 
+### Runner thread scaling
+
+**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, run `32672629352`:
+AMD EPYC 7763, 2 physical cores, 2 threads per core, 4 online logical CPUs,
+cpuset `0-3`, llama.cpp `b10598` (`56db501e7`), Qwen3-8B-Q4_K_M, 3 repeats.
+Both thread counts ran in the same job against the same 5,027,783,488-byte GGUF
+(`d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785`).
+
+| Threads | 730 tok | 1800 tok | 4850 tok | decode (250) | Full bench wall |
+| --- | --- | --- | --- | --- | --- |
+| 4 | 12.48 +/- 0.01 | 12.06 +/- 0.01 | 10.83 +/- 0.04 | **7.21 +/- 0.02** | **2727.13 s** |
+| 8 | 12.31 +/- 0.02 | 11.88 +/- 0.01 | 10.77 +/- 0.02 | **6.06 +/- 0.01** | **2771.53 s** |
+
+Eight software workers did not expose four more hardware threads. The guest had
+four logical CPUs already: CPUs 0-1 were siblings on core 0, and CPUs 2-3 were
+siblings on core 1. Eight threads made prefill 0.6-1.5% slower, decode 16% slower
+and the complete benchmark 1.6% slower. Cgroup CPU use averaged 3.99 CPUs at four
+threads and 3.92 at eight; throttled time stayed zero. CPU pressure `some` rose
+from roughly 39% after the four-thread point to roughly 75% after the
+eight-thread point.
+
+**Decision: keep `n_threads = 4`.** The raw screen rejected eight threads at
+every measured workload, so the five-article server A/B would spend runner time
+on a candidate that already failed its prerequisite.
+
 ### Derived seconds per article
 
 Derived from the runner table by `backend/utilities/summarise_bench.py`, using
@@ -52,18 +79,21 @@ measured: they inherit both the throughput spread and the bucket error.
 
 | Model | short | medium | long | blended | worst long |
 | --- | --- | --- | --- | --- | --- |
-| Qwen3-4B-Q4_K_M | 45s | 127s | 232s | **112s** | 363s |
-| Qwen3-8B-Q4_K_M | 82s | 225s | 393s | **196s** | 597s |
+| Qwen3-4B-Q4_K_M | 79s | 166s | 198s | **130s** | 198s |
+| Qwen3-8B-Q4_K_M | 142s | 291s | 342s | **229s** | 342s |
 
 The blended figures were first published as 128s and 196s -> corrected to 112s
-and 196s when the bucket shares were replaced by the measured ones. A blended
-number is a statement about a corpus; blending against a corpus that was
-disproved the same day is arithmetic on a fiction.
+and 196s when the bucket shares were replaced by the measured ones -> corrected
+again to 130s and 229s when the tool's hardcoded 200-token prompt was removed
+and article tokens were clamped at the production 2500-token cap. The prompt
+measured 801 tokens at the time and now measures at most 879. The table uses the
+current maximum. A derived time now requires an explicit model-specific prompt
+count and truncation cap; without them the tool prints raw throughput only.
 
 **The shard timeout stays worst-case.** A 5-item shard drawing five long
-articles on the 8B is 5 x 597s = 50 minutes. `digest.yml` sets 330 minutes,
+articles on the 8B is 5 x 342s = 29 minutes. `digest.yml` sets 330 minutes,
 which is generous - and a timeout should be. It must never be re-derived from
-the 196s blend, which would set it at 17 minutes and kill healthy shards that
+the 229s blend, which would set it at 20 minutes and kill healthy shards that
 happened to draw long articles.
 
 ### Candidate: Qwen3.5-9B-Q4_K_M (measured, not adopted)
@@ -136,6 +166,22 @@ Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 2.
 | 4850 | 6.30 | 0.30 | 2.0x slower |
 | decode (250) | 1.84 | 0.17 | **3.3x slower** |
 
+### Local 4-vs-8 thread screen
+
+**Measured 2026-08-23** on Windows 11, Intel Core i7-1265U (10 physical cores,
+12 logical processors), Qwen3-8B-Q4_K_M, llama.cpp `b10444` (`5f754ea0e`), 3
+repeats. The bounded screen used 730 prompt tokens and 64 decode tokens.
+
+| Threads | Prefill tok/s | Decode tok/s | Combined benchmark wall-clock |
+| --- | --- | --- | --- |
+| 4 | 9.44 +/- 0.44 | 3.44 +/- 0.31 | 375.06 s |
+| 8 | 11.17 +/- 0.13 | 3.91 +/- 0.19 | 318.67 s |
+
+Eight threads improved this laptop's prefill by 18% and decode by 14%; combined
+wall-clock fell 15%. The laptop exposes 12 logical processors, so this does not
+answer whether eight software workers help a four-vCPU VM. That answer must come
+from the hosted sweep on the same model and runtime build.
+
 ### Derived seconds per article, on the laptop
 
 Superseded by the runner table above. Kept because the gap between the two is
@@ -185,20 +231,23 @@ tokenizer does. A different model file gives a different count.
 | Before the Title section | 653 | 864 |
 | With the Title section | 781 | 1033 |
 | **After the terseness pass** | **598** | **801** |
+| **Current four-band prompt, including the brief tier** | **658** | **877-879** |
 
 The terseness pass removed 183 words and **232 tokens, 22.5%**, without removing
-a rule. What went was justification, restatement, and one line the decoder
-already enforced. See
+a rule. The later brief tier and fourth output band brought the current prompt
+to 658 words. Its four variants measure 877, 877, 878 and 879 tokens, so the
+spread is two tokens. What went in the terseness pass was justification,
+restatement, and one line the decoder already enforced. See
 [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md).
 
 Against the 8192 `n_ctx` the pipeline runs at:
 
 | Component | Tokens |
 | --- | --- |
-| System prompt | 801 |
+| System prompt | 879 |
 | Article, at the 2500-token truncation cap | 2500 |
 | Output budget | 900 |
-| **Worst case** | **4201 of 8192** |
+| **Worst case** | **4279 of 8192** |
 
 Three notes worth keeping:
 
@@ -207,14 +256,190 @@ Three notes worth keeping:
   difference from nothing but a file write. Python's default text mode
   translates on Windows, so a measurement taken that way overstates the prompt
   by a tenth.
-- **The prompt is the cheap half.** *Derived*, not measured: 801 tokens of
-  prefill at the runner's measured 12.1 tok/s is roughly 66 s, paid once per
-  article regardless of the article's length. A rule that earns its place costs
-  a few seconds; a rule that crowds out the article costs the whole long bucket.
+- **The prompt-cost estimate is superseded for live digest runs.** The old
+  derived value used 801 tokens at the `llama-bench` 730-token rate of 12.1
+  tok/s, or 66.2 s. Run `32648218952` measured the live digest path at 34.23
+  tok/s median, so the same 801 tokens cost 23.4 s median. Use the prompt-cache
+  table below for prompt-reorder decisions.
 - **`fits_context` over-reserves and does so on purpose.** It approximates the
-  prompt as `words x 2`, which is 1196 against the measured 801. It errs by
-  395 tokens in the safe direction, and the alternative - tokenizing the prompt
+  current 658-word prompt as `words x 2`, which is 1316 against the measured
+  maximum of 879. It errs by 437 tokens in the safe direction, and the
+  alternative - tokenizing the prompt
   per item to save context we are not short of - buys nothing.
+
+## Prompt cache reuse
+
+**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
+`32648218952`, job `work (3)`. The job log did not name the CPU model or the
+llama.cpp build. It used `Qwen3-8B-Q4_K_M.gguf` through `llama-server` with
+`--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --no-warmup`.
+
+The run refutes the suspected context-splitting defect for this build. The log
+said:
+
+```text
+srv load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true'
+```
+
+Current llama.cpp source names the same quantity `n_ctx_seq`: when `kv_unified`
+is true, `n_ctx_seq = n_ctx`; when it is false, `n_ctx_seq = n_ctx / n_seq_max`.
+This log uses the older `n_ctx_slot` name. The value is still 8192 per slot, so
+the run's then-current 4201-token worst case fit, and today's 4279-token worst
+case also fits. This is not a live defect in run `32648218952`.
+
+The run does **not** settle whether the prompt prefix was reused. The grep
+emitted no `kv cache rm [p0, end)` line. The only emitted instrument was
+`prompt eval time = X ms / N tokens`, and `N` varies with article length and
+band. Because `band_for()` changes the rendered prompt, only the roughly
+315-token head is invariant across all bands. A same-band hit could reuse more,
+but the log did not print the band or article token count beside each timing
+line.
+
+| Slot | Prompt-eval tokens, in task order |
+| --- | --- |
+| 2 | 2441, 580, 654, 781, 862, 621, 738, 1195, 1064, 1883 |
+| 3 | 2485, 2545, 1146, 2284, 1035, 1423, 1945, 850, 373, 1260, 1015, 1131, 440, 1136, 636, 888, 572, 444, 1179, 1426, 485, 1380, 2565, 1687, 607, 730 |
+
+No fixed subtraction of about 315 or 801 tokens is visible within either slot.
+That is evidence that the current log cannot prove reuse, not evidence that a
+cache miss happened. To settle it, log the slot id, item id, band id, rendered
+system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens
+and any llama.cpp reused-prefix field such as `p0` or `n_past`.
+
+| Quantity | Value |
+| --- | --- |
+| Sample | 36 `print_timing` lines from `work (3)` |
+| Prefill throughput | min 29.24 tok/s, max 37.92 tok/s, median 34.23 tok/s |
+| Spread | 8.68 tok/s |
+| 801-token re-prefill cost | 23.4 s median; observed range 21.1-27.4 s |
+| 315-token invariant-head cost | 9.2 s median; observed range 8.3-10.8 s |
+
+This supersedes the derived 66.2 s per 801-token re-prefill above for live
+`digest` runs. That older number came from `llama-bench` on an EPYC 9V74 runner
+and remains useful history. This run measured the actual `digest` path on a
+GitHub-hosted `ubuntu-latest` runner, and it was about 2.8x faster at the median.
+
+The row 9 prize changes. The old arithmetic was `13 x 66.2 s = 14.4 min` of CPU,
+or about 4.4 min wall clock across four shards. This run says `13 x 23.4 s =
+5.1 min` of CPU for a full 801-token prefix, or about 1.3 min wall clock across
+four shards. For the invariant head, the ceiling is `13 x 9.2 s = 2.0 min` of
+CPU, or about 0.5 min wall clock. Row 9 should not reorder the prompt on the old
+66.2 s premise. It should first add the instrumentation above, then run an A/B
+measurement on the runner and keep the change only if the measured wall-clock
+gain pays for the prompt risk.
+
+Row 9 collapsed the prompt reorder on this measurement. It did not move the
+band-varying numbers to the tail of the system prompt, because the live runner
+showed a 1-2% wall-clock ceiling, and the existing log cannot prove the reuse
+the change was meant to buy. Reopen the reorder only with runner A/B evidence
+that logs slot id, item id, band id, rendered system-prompt tokens, article
+tokens, full prompt tokens, evaluated prompt tokens, and a reused-prefix field
+such as `p0` or `n_past`; the golden set's `output_digest` values must stay
+unchanged.
+
+### The prompt token counts, from the tokenizer
+
+**Measured 2026-08-23.** Method: `backend/bin/llama-tokenize` against
+`backend/models/Qwen3-8B-Q4_K_M.gguf`, over the system prompt rendered from the
+committed `config/` for every band. A token count is a property of the tokenizer
+and the text, so it does not vary with the machine that counted it.
+
+Every earlier figure for this prompt came from a word-share count, not a
+tokenizer, and every one of them was wrong:
+
+| Quantity | Earlier estimate | Measured |
+| --- | --- | --- |
+| Full system prompt | 801 tokens | **877-879 tokens** |
+| Invariant shared prefix | about 315 tokens | **381 tokens** (296 words) |
+| Distinct rendered prompts | 3 | **4** |
+
+The prefix ends exactly where `band_for()` substitutes the word range, at
+`Length:\n\n- Write one summary of `. The fourth distinct prompt is the brief
+band that row 8 added; the earlier count of three predates it.
+
+Re-running the row 9 arithmetic on the measured head and the measured prefill
+throughput of 34.23 tok/s: 381 tokens costs **11.1 s** per item, so 13
+recoverable items is **2.4 min** of CPU, or about **0.6 min** of wall clock
+across four shards. That is 21 percent more than the 315-token estimate implied,
+and it does not change the decision - the ceiling is still 1-2 percent of a run.
+**Row 9's collapse survives its own correction.**
+
+## Evaluation ledger re-band
+
+**Measured 2026-08-23** on `state/scores.csv` at commit `6c332c7`, n=156.
+Method: Python `csv.DictReader` over the committed ledger, with today's
+`EvaluationConfig` and `backend/idhazh/evals/score.py::band()`. This is
+deterministic ledger arithmetic, so hardware and spread are not applicable.
+
+The recorded `band` column predates the counterweight caps. It is the scorer's
+time-of-write output, not the current distribution.
+
+| Band | Recorded | Re-banded with today's `band()` |
+| --- | --- | --- |
+| high | 112 (71.8%) | 85 (54.5%) |
+| medium | 19 (12.2%) | 46 (29.5%) |
+| low | 25 (16.0%) | 25 (16.0%) |
+
+Twenty-seven rows, 17.3%, move from `high` to `medium`.
+
+| Move reason | Rows |
+| --- | --- |
+| Lead coverage alone | 11 |
+| Dropped hedge alone | 11 |
+| Lead coverage and dropped hedge | 5 |
+
+Only four rows have `unsupported_numbers > 0`. In the 600-1000 source-word
+stratum, n=50, two positives sit below `hhem = 0.80` and none sit above it. That
+is too few events to set a threshold.
+
+The ledger is one run, not two days. `run_id` `2026-08-23-3` owns 137 of 156
+rows. The remaining 19 rows sit under a different `pipeline_fingerprint`. Five
+source URLs appear under both fingerprints. Every one moved downward: -0.105,
+-0.595, -0.114, -0.079 and -0.034. That uniform shift points at a producer
+change in a way scattered noise would not. The largest observed item-level HHEM
+move is 0.595: the Google biomarker article moved from 0.9578 (`high`) to 0.3626
+(`low`) with no model or scorer change recorded.
+
+## llama-server runtime sweep
+
+**Status 2026-08-23:** harness added, sweep not yet run. No runtime flag is
+adopted by this change. `startup_warmup = true` records the behaviour that PR
+#24 already put in `digest.yml`; it is not a new adoption here.
+
+The `runtime` job in `.github/workflows/measure.yml` runs one dispatch per
+candidate flag. It creates a fixed five-article run plan for that dispatch, then
+runs a same-dispatch baseline three times and the selected candidate three
+times. It records wall-clock, startup time, per-item timings, server RSS samples,
+cgroup memory peak, the full `server_argv`, and parsed server facts such as
+`n_slots`, `n_ctx_slot` and `kv_unified`. It reports medians, spreads, and
+whether the candidate beat the baseline outside the measured spread. It rejects a
+candidate when any `output_digest` differs between repeats or from the baseline.
+
+The baseline remains:
+
+```text
+--model --alias --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --port 8080
+```
+
+Each candidate is still pending unless a later runner artifact records hardware,
+date and spread:
+
+| Candidate | Flag under test | Status |
+| --- | --- | --- |
+| `np1` | `-np 1` | Defect half settled by PR #23: run `32648218952` logged `n_slots = 4`, `n_ctx_slot = 8192`, `kv_unified = 'true'`, so the current 4279-token worst case still fits. Optimization value pending. |
+| `batch2048` | `-b 2048` | Pending. Hypothesis: the current `--batch-size 512` may throttle prefill. Use the measured live-digest prefill median of 34.23 tok/s, range 29.24-37.92, spread 8.68 from run `32648218952`, not the older derived 12.1 tok/s figure. |
+| `no_startup_warmup` | restore `--no-warmup` | Pending reversal check. PR #24 already made startup warmup the digest default after a golden-set check. The harness records server startup and shard wall-clock separately. |
+| `flash_attention_on` | `-fa on` | Pending. Different attention math is allowed only if every golden `output_digest` is unchanged. |
+| `load_mode_mmap_mlock` | `-lm mmap+mlock` | Pending. Hypothesis: pinning the 4.68 GiB weights may avoid page-out. The harness records RSS and cgroup memory peak. |
+| `kv_q8` | `-ctk q8_0 -ctv q8_0` | Pending. Quantised KV changes numeric paths. It is rejected outright if the digest map changes. |
+| `np2_inflight` | `-np 2` plus two in-flight workers and `-c 16384` | Pending composite scenario. It is labelled composite because it is not a pure one-flag test. |
+| `prio_poll` | `--prio 2 --poll 100` | Pending. Hypothesis: higher priority and polling may help after install work stops competing for CPU. |
+| `threads` | `--threads N` | Rejected at the screen. Run `32672629352`: the VM exposed 2 cores x 2 SMT threads = 4 logical CPUs. Eight workers were slower at every prompt length and 16% slower at decode, so production stays at 4 and the server A/B does not run. |
+| `threads_batch` | `-tb N` | Pending. Only worth interpreting if `batch2048` shows prefill is the bottleneck. |
+
+The current llama-server verbosity emits no `kv cache rm` lines, so this harness
+does not claim to observe prompt-cache reuse directly. Absence of that line is a
+logging limit, not evidence that reuse did or did not happen.
 
 ## Weights on disk
 
@@ -378,6 +603,55 @@ a short blog post. That makes the low count a **source-selection** result
 rather than an extraction defect, and it is why raising the floor's pass rate
 belongs in `config/sources.json` and not in `extract.py`.
 
+### Lead coverage newline boundary
+
+**Measured 2026-08-23** on a developer machine (Windows, Python 3.12.12), by
+extracting the 17 committed `tests/fixtures/short-sources/` HTML fixtures with
+`to_article()`, comparing the old capitalised-run expression against the fixed
+metric, and scoring five hand-written `publish_brief` summaries through
+`score.band()` at `hhem = 0.95`. Spread is not available because this is a
+deterministic string metric.
+
+| Check | Before | After |
+| --- | --- | --- |
+| Fixtures with a glued newline entity | 6 of 17 | 0 of 17 |
+| Extractable fixtures in the pass | 15 of 17 | 15 of 17 |
+| Hand-written `publish_brief` rows moved by the fixed metric | 1 of 5 | 0 remaining wrongly capped |
+
+The glued entities were: `ai2\nglenn matlin`,
+`published\nus president donald trump`, `student researcher\nwe`,
+`xcframework\nlinux`, `gender-specific parental investment\nwe`, and
+`biodiversity loss\nwe`.
+
+| Fixture | Coverage before | Band before | Coverage after | Band after |
+| --- | --- | --- | --- | --- |
+| `llama-cpp-releases-01` | 0.625000 | high | 0.636364 | high |
+| `llama-cpp-releases-02` | 0.857143 | high | 0.857143 | high |
+| `marginal-revolution-01` | 1.000000 | high | 1.000000 | high |
+| `nber-new-01` | 0.833333 | high | 1.000000 | high |
+| `nber-new-02` | 0.000000 | medium | 0.500000 | high |
+
+The committed `state/scores.csv` had 156 rows, but no source-text or summary-text
+columns. The stored `coverage` column cannot be recomputed honestly from that
+ledger alone, so this pass reports 0 computable re-bands rather than inventing a
+movement count.
+
+## CI and publish wall-clock
+
+**Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`. Single observed run
+per gate; values are rounded wall-clock durations. Spread is not available for
+this row because each gate has one observation.
+
+| Gate | Duration | Spread |
+| --- | --- | --- |
+| `ci` | about 2 min | n=1; not available |
+| `site` | about 2 min | n=1; not available |
+| `pages` | about 50 s | n=1; not available |
+| `digest` | about 25 min | n=1; not available |
+
+The publish path is the long pole. Orchestrators should not serialize
+independent work on these gates; the merge gate still waits for green checks.
+
 ## Corpus shape
 
 **Measured 2026-08-22**, `ubuntu-latest` (4 vCPU), the `corpus` job in
@@ -447,6 +721,8 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
+| **Whether the prompt prefix is reused at all** | **unmeasured, and currently unobservable** | a permanent instrument, not a one-off grep. `usage.prompt_tokens` reports the full prompt whether cached or not, and llama-server emits no `kv cache rm` line at our verbosity, so the question went blind again the moment row 3 closed. Log slot id, item id, band id, rendered system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens, and `p0` or `n_past`. |
+| **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
 | Image render seconds at 512 and 768 | the job cannot complete | a smaller model, a smaller resolution, or a machine that survives it |
 | Image bytes, PNG at 768 | ~500 KB, estimate | the `image` job writes the file; measure it |
