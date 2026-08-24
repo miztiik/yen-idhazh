@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -40,7 +40,7 @@ state/scores.csv                                        the ledger - one path, n
 
 ## The day is one artifact, shared by everyone
 
-The pipeline adds to the day four times at the schedule in
+The pipeline adds to the day five times at the schedule in
 [../../reference/github-actions.md](../../reference/github-actions.md). The
 rule that governs what that means starts from a fact about the medium: **there
 is one published payload, and every reader gets the same bytes.** Reading is
@@ -51,7 +51,7 @@ never depend on who has read what.
 - **An item is never removed, demoted or hidden because someone read it.** One person having read an item says nothing about the thousands who have not. This is the behaviour of every working news front page: the story stays where its importance puts it, read or unread.
 - **Read-state is a client-side mark and nothing more.** It may change how an item looks. It may never change where an item sits, whether it appears, or how it ranks. The only exception is a filter the reader switches on themselves, and it is off by default.
 - **"New" is a property of the item, not of the reader.** An item is new because a later run introduced it, which is true for everybody and needs no storage to assert. It is never a diff against a remembered last-visit time, which would be a claim that evaporates the moment a browser is cleared.
-- **Membership only grows.** The four runs of a day append to one day payload rather than replacing it, so the day grows through the day. That is only safe because an item's id comes from its address: run 2 recognises what run 1 already published instead of renumbering it. There is no daily item cap - what a day carries is what supply and the ranking produced ([../sources/freshness.md](../sources/freshness.md)).
+- **Membership only grows.** The runs of a day append to one day payload rather than replacing it, so the day grows through the day. That is only safe because an item's id comes from its address: run 2 recognises what run 1 already published instead of renumbering it. There is no daily item cap - what a day carries is what supply and the ranking produced ([../sources/freshness.md](../sources/freshness.md)).
 - **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item says so. Silently improving wording under someone who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
 - **No run identifier appears in any data path or any reader URL.** It lives in the run manifest and in the page footer.
 

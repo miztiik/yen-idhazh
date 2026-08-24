@@ -1,20 +1,32 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
-## The run happens four times each day
+## The run happens five times each day
 
-The runs start at 06:20, 10:20, 14:20, and 18:20 UTC, expressed as
-`20 6,10,14,18 * * *`. The digest is a thing you open in the morning and again
+The runs start at 02:20, 06:20, 10:20, 14:20, and 18:20 UTC, expressed as
+`20 2,6,10,14,18 * * *`. The digest is a thing you open in the morning and again
 after lunch, and a once-a-day run makes the afternoon read stale by
 construction. The exact workflow trigger contract is
 [../../reference/github-actions.md](../../reference/github-actions.md).
 
+**The 02:20 slot exists so the morning read is not waiting on the pipeline.** A
+scheduled run starts 40 to 70 minutes after its cron minute, then takes 164 to
+184 minutes end to end (`ubuntu-latest`, 2026-08-23/24, n=3). A first slot at
+06:20 therefore did not publish until about 10:30. At 02:20 it publishes before
+06:30. The slot also closes the gap after 18:20, so a story that broke late in
+the evening is read at the top of the next day rather than eight hours into it.
+
 Twenty past the hour, not the top of it. GitHub queues scheduled jobs by load, and the top of every hour is when everyone else asks.
 
-Four runs share one day. They append to the same dated digest rather than replacing it, so the day grows through the day. That is only safe because an item's identity does not depend on its rank - see below.
+The slots are four hours apart and a run takes under three, so two runs do not
+overlap. If one ever did, the `digest` concurrency group queues the next rather
+than cancelling it, because a run that is halfway through the day's items has
+already paid for its weights.
+
+Five runs share one day. They append to the same dated digest rather than replacing it, so the day grows through the day. That is only safe because an item's identity does not depend on its rank - see below.
 
 ## Age is a weight, never a gate
 
@@ -65,6 +77,13 @@ There is no daily item cap and no per-vertical cap. What a day publishes is what
 `run.safety_ceiling_per_run` (200) exists and is not a cap. It is a crash guard: if a feed change or a canonicalisation bug ever produces thousands of candidates, the run stops rather than spending six hours discovering it. A normal day is nowhere near it. If a run ever hits it, the answer is to find the bug, not to raise the number.
 
 ## Design rationale
+
+The fifth slot was added at 02:20 rather than 22:20. Both are one more attempt
+and both cost the same runner time. A 22:20 slot would add to a UTC day that is
+about to end, so its work is visible for under two hours before the date rolls.
+02:20 puts the same work at the front of the day a reader is about to open, and
+the articles it would have caught at 22:20 are still in the pool the next
+morning because age is a weight and not a gate.
 
 The daily cap was removed because it was answering a question nobody had asked. It decided in advance that twenty articles was the right number of good articles for a day, which is not a thing that can be known in advance - some days have thirty worth reading and some have six. The score already orders them; a cap only truncates the order at an arbitrary point. Supply and the score are the honest answer, and the ceiling catches the failure mode a cap was accidentally also catching.
 

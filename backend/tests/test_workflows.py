@@ -22,8 +22,8 @@ EXPECTED_WORKFLOWS: Final = {
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
 
-CONTENT_REFRESH_CRON: Final = "20 6,10,14,18 * * *"
-CONTENT_REFRESH_UTC_HOURS: Final = (6, 10, 14, 18)
+CONTENT_REFRESH_CRON: Final = "20 2,6,10,14,18 * * *"
+CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
 CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4"})
 
 # Every major below was read from its own `action.yml` on 2026-08-24 and declares
@@ -174,7 +174,7 @@ def test_workflow_names_and_trigger_classes_are_pinned() -> None:
         assert set(_triggers(workflow)) == trigger_classes
 
 
-def test_content_refresh_runs_at_the_four_approved_utc_hours() -> None:
+def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
     workflows = _load_workflows()
     schedule = _triggers(workflows["digest.yml"])["schedule"]
 

@@ -10,7 +10,7 @@ times are UTC.
 | File | Display name | Automatic trigger | Manual dispatch |
 | --- | --- | --- | --- |
 | `ci.yml` | `CI` | Pull request; push to `main` | yes |
-| `digest.yml` | `Content refresh` | `20 6,10,14,18 * * *` | yes |
+| `digest.yml` | `Content refresh` | `20 2,6,10,14,18 * * *` | yes |
 | `pages.yml` | `Pages publication` | Push to `main` when `frontend/**`, `config/idhazh.json`, or `state/**` changes; completed `Content refresh` run | yes |
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
@@ -43,7 +43,7 @@ failure, then commits the digest and state.
 
 ```mermaid
 flowchart LR
-    SCHEDULE["schedule<br/>06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
+    SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
     MANUAL["manual dispatch"] --> PLAN
     PLAN --> WORK["work shards<br/>at most four total jobs"]
     WORK --> ROUTE["route"]
@@ -141,10 +141,51 @@ on an old major, fails CI.
 `setup-node` still selects Node 22 for the frontend commands. That is the
 application runtime and is unrelated to the runtime an action itself declares.
 
+## Repository settings these workflows depend on
+
+Read from the repository API on 2026-08-24.
+
+| Setting | Value | Why |
+| --- | --- | --- |
+| `allow_squash_merge` | true | The default. One entry on `main` per PR. |
+| `allow_merge_commit` | true | For a PR carrying several independent intents, so each stays revertible. |
+| `allow_rebase_merge` | true | Same reason. History looks squash-only, but rebase is available. |
+| `allow_update_branch` | true | A PR can be brought up to date from `main` without a local push. |
+| `delete_branch_on_merge` | true | The remote branch goes away on merge. |
+| `allow_auto_merge` | **false** | Deliberate. See below. |
+
+**`main` is not a protected branch, and protecting it would break
+publication.** `digest.yml` and `validate.yml` push their state commits straight
+to `main` - the eval ledger, the seen-URL store, feed health, the digest
+payload. A branch-protection rule makes those pushes fail, and a scheduled run
+that cannot commit has done its work for nothing. GitHub's built-in auto-merge
+requires branch protection, which is why `allow_auto_merge` is off rather than
+merely unused. Protecting `main` is possible, but only after the direct pushes
+in those two workflows are redesigned or explicitly exempted.
+
+## Platform limits that shape the workflows
+
+The ceilings themselves are stated once, in `CLAUDE.md` Rule #2. What follows is
+the behaviour behind them, which is what actually decides a workflow's shape.
+Verified 2026-08-20.
+
+- **Actions minutes are free and unmetered**, because this repository is public.
+  The widely quoted 2,000 minutes per month is a private-repository figure and
+  does not apply. Wall-clock is the constraint, not a monthly balance.
+- **A cache entry unread for 7 days is deleted**, and a restore is paid once per
+  *job* rather than once per run. That is why `digest.yml` gives a worker a
+  shard of several items instead of fanning out one job per item: the weights
+  restore is the largest fixed cost, and every extra job pays it again.
+- **`GITHUB_TOKEN` allows 1,000 API requests per hour per repository**, shared
+  across every job of every concurrently running workflow. A step that polls in
+  a loop spends a budget the scheduled pipeline also needs.
+- **The Pages deploy itself times out at 10 minutes**, separately from the job
+  timeout, and separately from the 1 GB site cap.
+
 ## See also
 
 - [../architecture/overview.md](../architecture/overview.md) - how CI, committed payloads, and the static site fit together.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each pipeline stage owns.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - how to run the same stages locally.
-- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - what four runs add to one day.
+- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - what five runs add to one day.
 - [../../CLAUDE.md](../../CLAUDE.md) - Rules #1, #2, #9, and #10.

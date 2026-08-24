@@ -107,6 +107,13 @@ The shapes carry rules a JSON Schema cannot express, and each one is a defect cl
 - A run manifest's runs are numbered from one without gaps, and its counts reconcile.
 - **In a day payload, `introduced_by_run` may never decrease down the item list.** A later run appends; it never reorders what a reader already read. That is the published-layout rule made mechanical rather than trusted to the assemble stage.
 
+## Four things that bite when you change a model
+
+- **Adding a field - even an optional one with a default - breaks every fixture of that model.** The serializer emits the new key, so the byte-identical round-trip test fails on every committed fixture at once. Update them in the same commit, respecting sorted key order. A run of fixture failures right after an additive change is the expected signal, not a regression to hunt.
+- **A same-day second revision stamps `version` to the minute**, `YYYY-MM-DDTHH:MM`. That string sorts *after* the bare `YYYY-MM-DD` of the same day, which is exactly what the newest-first `changelog` needs - the revision lands at the top rather than under the entry it supersedes.
+- **pydantic-core's regex engine has no look-around.** It is the Rust engine, not Python's `re`. A `StringConstraints(pattern=...)` containing `(?!` or `(?<=` raises `SchemaError` when the class is built, so the failure arrives at import time rather than at validation. Spell an explicit segment grammar instead of a negative lookahead.
+- **Generate the schema in validation mode, not serialization mode.** `model_json_schema(mode="serialization")` marks every field required, which would make "a config file may omit a knob" a lie in the published schema. The exporter uses validation mode and post-processes only `version`.
+
 ## `$id` is relative, on purpose
 
 Each generated schema's `$id` is its own filename, not a URL. An editor's JSON Schema plugin then resolves it offline, with no network call and nothing to 404 - which matters because a schema that only validates when the internet is up is a schema nobody runs.

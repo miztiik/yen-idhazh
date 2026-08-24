@@ -9,8 +9,8 @@
 	 * not finish and the page does not say so, a reader who works it out later
 	 * has spent the trust the digest was saving.
 	 *
-	 * One paragraph, one sentence per fact. Four runs used to print four
-	 * near-identical paragraphs stating one thing.
+	 * One paragraph, one sentence per fact. Every run used to print its own
+	 * near-identical paragraph stating one thing.
 	 */
 	import { longDate } from '$lib/format';
 	import type { DigestDay } from '$lib/payload/types';
