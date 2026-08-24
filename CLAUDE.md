@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-08-22
+**Last Updated**: 2026-08-24
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -42,7 +42,7 @@ Everywhere else restates this section rather than inventing its own style rule (
 1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no server we run, no runtime call to a model provider, no runtime telemetry, analytics, error-tracking SDKs, ads, accounts, or push notifications. The pipeline runs in CI and commits its output; the site only renders what is already committed. **Every computation happens in the reader's browser or in CI - never on a server we operate.** Fetching static assets is allowed, including from a third party: a font, a stylesheet, an icon set, a charting library. Fetching our own committed files at runtime is likewise allowed and is how an interactive view reads its data. What is forbidden is a *service* - anything that executes our logic off the reader's device, anything that reports a reader's behaviour anywhere, and any third-party script that phones home. A third-party asset is judged on its bytes, its licence and its privacy behaviour (section 8), not on its hostname; prefer self-hosting when the asset is small enough that a request is the larger cost.
 2. **The runner is the architecture.** Every pipeline decision is measured against a stock GitHub-hosted `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage, and a **1 GB hard cap on the published Pages site**. Actions minutes are free and unmetered because this repository is public - wall-clock is the constraint, not a monthly budget. A model that does not fit, a step that does not finish, a cache that does not hold, or a site that outgrows 1 GB is a design error, not a budget request.
 3. **Contracts before logic.** Every persisted shape - article, summary, route, eval row, run manifest, config, digest payload - is a Pydantic model in `backend/idhazh/contracts/` before any logic reads or writes it. The exported JSON Schema in `schemas/` is generated from it, never hand-written.
-4. **docs/ = agent memory; a decision lives on the page it impacts.** Pipeline rules, published shapes, tuning knobs, and current subsystem contracts live in `docs/concepts/`, `docs/how-to/`, or the relevant `docs/architecture/<area>/` living doc. A choice that clears the bar (a real rejected alternative, cross-system consequences, non-trivial reversal cost) is recorded IN the living doc it impacts, as a `## Design rationale` / `## Rejected alternatives` section on that page - never as a standalone record. There is no ADR file and no `docs/architecture/decisions/` directory.
+4. **docs/ = the memory; a decision lives on the page it impacts.** Pipeline rules, published shapes, tuning knobs, and current subsystem contracts live in `docs/concepts/`, `docs/how-to/`, or the relevant `docs/architecture/<area>/` living doc. A choice that clears the bar (a real rejected alternative, cross-system consequences, non-trivial reversal cost) is recorded IN the living doc it impacts, as a `## Design rationale` / `## Rejected alternatives` section on that page - never as a standalone record. There is no ADR file and no `docs/architecture/decisions/` directory. An agent's private note store is a **cache** of `docs/`, never the only copy of anything.
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. Escalate the correction level instead.
 6. **No hardcoding.** Tunable knobs (article cap, truncation cap, score bands, retry budget, shard size, model refs, source lists) live in `config/`; schema-validated.
 7. **No mocks unless asked.** Real implementations and real fixtures. No test touches the network - captured pages, golden summaries and canary payloads live in `tests/fixtures/`. Mocks only on explicit user request or for a genuinely untestable external boundary.
@@ -131,10 +131,10 @@ Folders are created only when real code is about to land. Do not pre-create empt
 - One concept defined once; everywhere else links to it.
 - **Process docs stay domain-neutral.** Everything under `docs/how-to/` that describes *how work is done* (authoring a plan, executing a plan, distilling a plan, shipping a PR, deploying to Pages) and `docs/reference/documentation-structure.md` are written to be copied between projects unchanged. They cite `CLAUDE.md` by section number rather than restating a project-specific rule, and they use neutral examples. A process doc that cannot be stated neutrally says so explicitly and names why.
 - ASCII-only in all repo text: commit messages, docs, code comments, log strings, agent markdown, CLI output (use `-`, `->`, `>=`, and "section"). No curly quotes, em-dashes, or non-ASCII symbols.
-- Agent memory (`AGENTS.md`, `/memories/repo/`) is derived, not authoritative; if it disagrees with `docs/`, docs win.
+- **`docs/` is the memory.** `AGENTS.md`, `/memories/`, and any other private agent note store are derived caches, not authoritative; if one disagrees with `docs/`, docs win. A note store can be cleared at any moment and is invisible to a person reading the repository, so a durable fact learned during a session is written into `docs/` in that same session. That includes execution craft - a tool quirk, an environment trap, a command whose result cannot be trusted at face value - which lives in [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md).
 - Architecture decisions are recorded IN the living doc they impact, never as standalone records under a `decisions/` directory. Git history is the immutable record of when it changed.
 - Open questions live in the active plan-doc under `TODO/`, not in this file.
-- Docs-only PRs are a code smell.
+- Docs-only PRs are a code smell - unless the change **is** to the documentation system itself (this section, the placement reference, or a page that exists only to be read).
 
 ## 6. Correction Levels
 
@@ -175,6 +175,8 @@ Commit messages describe the change. **No AI co-author / attribution tags.**
 
 ## 9. Definition of Done
 
+The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
+
 - [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Rule #7.
 - [ ] Full suite green locally before commit.
 - [ ] Lint (`ruff`), type-check (`mypy --strict`), tests all pass.
@@ -209,7 +211,7 @@ Commit messages describe the change. **No AI co-author / attribution tags.**
 - Justify a design with an estimate when a measurement is cheap to take.
 - Mint a new persisted field without stamping the schema `version` date, appending a `changelog` entry, and writing the read-side migration in the same commit.
 - Raise the runner budget to fit a feature. The budget is the platform, not a preference - if the feature cannot run inside it, the feature is simplified.
-- Let `TODO/`, chat logs, `AGENTS.md`, or `/memories/` become the source of truth for architecture.
+- Let `TODO/`, chat logs, `AGENTS.md`, or a private agent note store become the source of truth for anything. They are caches of `docs/`.
 - Make a domain-neutral process doc project-specific (section 5).
 - Pre-create empty modules "for later".
 - Skip the docs update.
@@ -248,7 +250,7 @@ A payload written by yesterday's run that today's build cannot read is a contrac
 
 ## 12. Published-Site Verification (Browser Smoke)
 
-Any change to the published site MUST be verified by the agent using integrated browser tools, not deferred to the human.
+Any change to the published site MUST be verified by the agent using integrated browser tools, not deferred to the human. The commands, and the three traps that make this check lie, are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
 Minimum loop:
 
@@ -291,5 +293,7 @@ Rule: adding a new agent requires justifying a distinct altitude not already cov
 - [`README.md`](README.md) - what yen-idhazh is.
 - [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md) - the load ritual every persona runs before answering.
 - [`docs/agents/guardrails.md`](docs/agents/guardrails.md) - the rules-only digest of this contract.
+- [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md) - the environment and the commands behind sections 9 and 12.
+- [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) - environment and tool quirks that make a command lie.
 - [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md) - where each kind of doc lives.
 - [`docs/concepts/vision.md`](docs/concepts/vision.md) - what this project is and is not.
