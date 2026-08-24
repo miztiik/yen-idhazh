@@ -926,6 +926,21 @@ def test_the_manifest_records_what_the_router_cost() -> None:
     assert unclocked.runs[-1].items_routed == 1
     assert unclocked.runs[-1].route_ms is None
 
+    # The gate changes every denominator: the same charts sit over a smaller
+    # routed set. Counting the skips keeps a chart rate from climbing on its own.
+    gated = manifest_for(
+        [
+            routed.model_copy(update={"route_ms": 4000}),
+            routed.model_copy(update={"route_ms": 1, "asked_the_model": False}),
+            routed.model_copy(update={"route_ms": 1, "asked_the_model": False}),
+        ]
+    )
+    assert gated.runs[-1].items_routed == 3
+    assert gated.runs[-1].items_prefiltered == 2
+
+    # A payload written before the gate existed was always asked.
+    assert timed.runs[-1].items_prefiltered == 0
+
 
 def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> None:
     settings = config.load(CONFIG_DIR)

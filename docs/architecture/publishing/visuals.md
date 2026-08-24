@@ -49,11 +49,46 @@ shape rather than a hope about the prompt, and the test asserts it directly.
 The menu is capped at `visuals.max_facts` (default 16). A long indexed list is lost-in-the-middle
 for a small model choosing an integer.
 
+## The model is not asked a question already answered
+
+A published bar is `facts[i]` for some `i`. Every bar in a chart shares one unit, one quantity may
+fill only one bar, and a chart needs at least `visuals.min_chart_points` of them. So the widest
+chart an article can carry is the size of the largest unit group in its own numbers. Below that
+threshold the answer is `none` whatever the model replies.
+
+`reachable_kinds()` computes that before the request is built. When no enabled kind survives it,
+the router writes a `Route` with `kind: none`, `asked_the_model: false`, and a rationale that says
+the model never ran. The run manifest counts those separately as `items_prefiltered`.
+
+Three properties of how it is written, and each one is load-bearing:
+
+- **It is a predicate over every enabled kind, not a chart special case.** A diagram's steps come
+  from prose, so nothing about a diagram is decidable in advance and it is always reachable while
+  enabled. With `diagram` in `visuals.enabled_kinds` no item is ever skipped. That is deliberate:
+  turning the arm off stays a config edit somebody makes on purpose, and can never be a silent
+  consequence of adding this gate.
+- **It reads the facts only - never the article's words.** A predicate that branched on fetched
+  prose would let a stranger's page steer our control flow, which is Rule #11 with no prompt in
+  sight. There is no keyword rescue for the diagram arm for the same reason.
+- **The empty string is a unit group.** `numeric_facts` writes `""` when nothing after the number
+  reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
+  that publish today.
+
+The denominator moves when this is on: the same charts sit over a smaller routed set, so a chart
+rate quoted against `items_routed` alone climbs without a single extra chart existing. Quote it
+against `items_routed + items_prefiltered`, or state which one you meant.
+
 ## Two controls that run after the model has answered
 
 **Bars must measure the same thing.** The largest group of chosen bars that share a unit is kept
 and the rest are dropped. This never invents a bar and never mixes units; it only ever removes. If
 what remains is below `visuals.min_chart_points`, the item routes to nothing.
+
+**One quantity may fill one bar.** A draft that names the same `fact_index` twice routes to
+nothing. Without this the model can name index 3 three times, `same_unit_bars` groups all three
+under one unit, the width check passes, and a chart of one number under three invented labels
+publishes - every value true and the comparison fabricated. It is also what makes the reachability
+predicate above exact rather than approximate.
 
 **A caption written about dropped bars is discarded.** If any bar was removed, the model's caption
 described a chart that no longer exists.
@@ -111,11 +146,41 @@ not chart quantities that measure different things" were requests. A request is 
 4B reading an article that mentions years. Both are now enforced - the first in the extractor, the
 second after the model answers - and the prompt is shorter for it.
 
+**Why the router skips a call rather than running faster.** Measured 2026-08-24 on `ubuntu-latest`
+(run `32742672105`): 47 s of fixed cost, a 3155 s stage, 149 items at a mean of 21.0 s each, and 15
+charts out of 149. Nine calls in ten produced nothing. Removing a call whose outcome is decided is
+not an optimisation of the model; it is deleting work that could not have mattered. Everything else
+on the table either hid the cost or raised the budget.
+
+**Why a skipped item still writes a payload.** Silence is what turns a skip into a quiet descope.
+`asked_the_model: false` plus a rationale naming the reason means a later reader of the payload does
+not have to infer why an item has no picture, and `items_prefiltered` keeps the day's chart rate
+from climbing on arithmetic alone.
+
+**The gate is proved by exhaustion, not by sampling.** `test_the_gate_never_rejects_a_chart_the_model_path_would_publish`
+enumerates every distinct index subset a draft could name over a fact list the gate calls
+unreachable, and asserts `to_route` lands on `none` for all of them. One survivor would mean the
+gate drops a chart a reader would have seen. That test is what makes "provable" a true word here,
+and it only became true once one quantity was limited to one bar.
+
+**The diagram arm has produced nothing, and that is recorded rather than acted on.** 0 diagrams in
+149 routed items and 0 in the 586 published on 2026-08-24. Three explanations fit - the prompt
+carries no diagram exemplar, `min_diagram_steps` blocks short answers, or news items genuinely are
+not flowcharts - and nothing committed can tell them apart, because `to_route` folds a rejected
+diagram into `none`. The router now logs the draft kind beside the final kind, so one run separates
+them. Until it does, the arm stays enabled and the gate yields nothing on a default config. That is
+the honest order: measure, then descope, never the reverse.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
 | --- | --- |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
+| Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). The job was doing work whose outcome was already decided; the fix is to remove the work. |
+| Shard the `route` job across a matrix | The arithmetic works - 4 shards cost `4 x 47 s` of fixed cost and divide 3155 s - but asset filenames come from a per-process counter, so two shards would both write `energy-01.svg` and `merge-multiple: true` would pick a winner at random. Sharding as the code stands corrupts the day's assets. Gate first, measure again, shard only if still needed. |
+| A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
+| A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Rule #11 in spirit, with no prompt involved. |
+| A second, smaller model to triage items first | Two calls where the point was zero. |
 | Diffusion for charts | Produces a beautiful picture of a chart with hallucinated axis labels. |
 | A charting library in the renderer | `vl-convert` takes a spec to PNG or SVG with no browser and no runtime JavaScript. |
 | `mermaid-cli` for diagrams | A headless Chromium to lay out a linear chain of boxes. |

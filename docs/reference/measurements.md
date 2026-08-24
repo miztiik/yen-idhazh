@@ -515,20 +515,53 @@ than a rate that grows. It is 6.0% of the ledger now and shrinks with every run.
 
 ## The route job's budget
 
-**Status 2026-08-24: instrumented, not yet measured.** `route` carries
-`timeout-minutes: 60` and has been observed at three points: cancelled at the
-timeout on `32661273335` and `32671663130`, and 51 minutes on `32701966659`.
-Three observations, one model, no controlled variable. That is a symptom, not a
-measurement, and Rule #2 forbids raising the number until there is one.
+**Measured 2026-08-24 on `ubuntu-latest` (4 vCPU, 16 GB), run `32742672105`.**
+Per-item inference owns the time. Model load, cache and orchestration do not.
 
-What was missing is now recorded. Every run manifest carries `items_routed` and
-`route_ms`, the stage total summed over the items the router reached. `route_ms`
-is null when the router never ran, which is not the same as zero. The stage total
-read against the job's own wall-clock is the discriminating measurement: a stage
-far below the job says the fixed cost - checkout, weights, install, model start -
-is what sits near the bound, not the model.
+| What | Value |
+| --- | --- |
+| Fixed cost: set-up, checkout, Python, cache restore, llama-server start, pip install, artifact download | **47 s** (17:01:24 -> 17:02:11) |
+| `Route and render` step | **3155 s** (52.6 min) |
+| Items routed | 149 |
+| Per-item wall-clock | mean **21.0 s**, min 8.1 s, max 56.0 s, n=148 gaps |
+| Kinds chosen | 15 chart (10.1%), 134 none (89.9%), **0 diagram** |
 
-The row stays open until several days of manifests exist.
+The fixed cost is 1.5% of the job. That settles the first of the three questions
+this row opened: it is not model loading.
+
+The derived ceiling: `(3600 - 47) / 21.0` = **169 routable items** inside the
+60-minute bound. `run.safety_ceiling_per_run` is 200. The two numbers have never
+been consistent, and the runs that fit did so because roughly a quarter of the
+plan had no `OK` summary and was skipped. **Improving the summarizer breaks the
+router.** That coupling is the defect, not the bound.
+
+Job wall-clock across the eight real runs since the daily size moved from 17
+items to 200 on 2026-08-23:
+
+| Run | `route` minutes | Outcome |
+| --- | --- | --- |
+| `32634191910` | 8.0 | success, 17 items planned |
+| `32648218952` | 60.3 | cancelled at the bound |
+| `32661273335` | 60.3 | cancelled |
+| `32671663130` | 60.3 | cancelled |
+| `32680268454` | 60.3 | cancelled |
+| `32701966659` | 51.2 | success |
+| `32719349248` | 60.4 | cancelled |
+| `32742672105` | 53.5 | success |
+
+Read the five cancellations as killed, not as measured: they all report 60.3 to
+60.4 because that is where the runner stopped them. Only 8.0, 51.2 and 53.5 are
+observations.
+
+What changed on the back of this: the router now skips the model for an item no
+enabled visual kind could serve, and the stage has its own request timeout. It
+had been borrowing `run.shard_timeout_minutes` - 150 minutes against a 60-minute
+job, so it could never fire. See
+[../architecture/publishing/visuals.md](../architecture/publishing/visuals.md).
+
+**Still unmeasured on this row:** what fraction of a real day the gate removes.
+It is free to measure - `numeric_facts` needs no model, no network and no runner -
+and it stays out of this page until it has been.
 
 ## llama-server runtime sweep
 
