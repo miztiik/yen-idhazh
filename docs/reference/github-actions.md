@@ -56,6 +56,26 @@ flowchart LR
 The plan job also commits first-sighting and feed-health state before it starts
 the workers. This keeps observations from a failed refresh.
 
+### Both commit steps push through a rebase, and neither rebases on a dirty tree
+
+The plan job and the assemble job each commit, then push in a loop of three
+attempts. A push that loses a race rebases and tries again.
+
+A rebase refuses to start while a tracked file is modified. Run `32671663130`
+died that way: one file was CRLF against a `text eol=lf` attribute, so every
+Linux checkout saw it modified before any step ran, and the retry loop threw away
+a day that plan, four shards and assemble had all finished.
+
+The work is already in a commit when the loop begins, so anything left in the
+working tree is runner noise. Each loop now prints what is dirty and discards it
+before the rebase. Untracked files are left alone: they cannot block a rebase,
+and a later step may still want them. `--autostash` was removed - it stashes the
+noise and then fails the step when the stash will not reapply, which is the
+failure it looks like it prevents.
+
+A workflow contract test pins this shape. CI never runs `digest.yml`, so a change
+to either loop needs a dispatched run to verify.
+
 Model validation and measurements never run on a pull request, push, or
 schedule. A person dispatches them. Drift review is a separate weekly or manual
 workflow; it does not run inside Content refresh.
