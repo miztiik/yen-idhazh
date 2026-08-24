@@ -225,10 +225,11 @@ endings. Tokenization is deterministic, so the spread is zero. Recorded in
 | Before the Title section | 653 words / 864 tokens |
 | With the Title section | 781 words / 1033 tokens |
 | After the terseness pass | **598 words / 801 tokens** |
-| Worst case: prompt + 2500 truncation cap + 900 output | **4201 of 8192 `n_ctx`** |
+| Current four-band prompt, including the brief tier | **658 words / 877-879 tokens** |
+| Worst case: prompt + 2500 truncation cap + 900 output | **4279 of 8192 `n_ctx`** |
 
-`fits_context` approximates the prompt as `words x 2`, which reserves 1196
-against the measured 801. It over-reserves by 395 tokens, in the safe
+`fits_context` approximates the current prompt as `words x 2`, which reserves
+1316 against the measured maximum of 879. It over-reserves by 437 tokens, in the safe
 direction, and tokenizing the prompt per item to reclaim context we are not
 short of would buy nothing.
 
