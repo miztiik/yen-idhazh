@@ -1,6 +1,6 @@
 # How to set up local inference
 
-**Last Updated**: 2026-08-20
+**Last Updated**: 2026-08-23
 
 How to get a working local model runtime on a developer machine, so `backend/` can be run end-to-end without CI. The weights and the runtime binaries are **downloaded, not committed** - `backend/models/` and `backend/bin/` are gitignored - so a fresh clone needs this once.
 
@@ -17,17 +17,17 @@ Both are inputs the pipeline consumes, not work this project authored, so commit
 
 | Path | What goes there | Where it comes from |
 | --- | --- | --- |
-| `backend/bin/` | The inference runtime binaries for your platform. | The upstream project's release page, matching the version pinned in `config/`. |
+| `backend/bin/` | The inference runtime binaries for your platform. | The upstream project's release page; record the build because it is not pinned yet. |
 | `backend/models/` | The quantised weight files. | Hugging Face, at the model reference and quantisation pinned in `config/`. |
 
 Both directories are created by you, are gitignored, and are safe to delete and re-fetch at any time.
 
 ## Steps
 
-1. **Read the pinned references from `config/`.** The model reference, the quantisation and the runtime version are configuration, never hardcoded (Rule #6). Do not fetch "the latest" - fetch what is pinned, or the run will not reproduce.
-2. **Download the runtime build for your platform** into `backend/bin/`. Prefer a prebuilt release over compiling from source: building the runtime costs minutes and produces the same thing as a download.
+1. **Read the model references from `config/`.** The model reference and quantisation are configuration, never hardcoded (Rule #6).
+2. **Download the runtime build for your platform** into `backend/bin/`. Prefer a prebuilt release over compiling from source: building the runtime costs minutes and produces the same thing as a download. The measurement workflow pins its benchmark build; production workflows still resolve the newest compatible release. Record the executable SHA-256 and the `build_number` / `build_commit` fields from `llama-bench` JSON with every local measurement. The binary has no `--version` flag.
 3. **Download the weight files** into `backend/models/`. These are large; expect the first fetch to take a while and to be the slowest part of setup.
-4. **Verify the runtime starts** and reports the expected version.
+4. **Verify the runtime starts** and the benchmark JSON reports the expected build.
 5. **Verify a model loads** and produces output for a trivial prompt.
 6. **Confirm neither directory shows up in `git status`.** If either does, the ignore rules are wrong - fix them before committing anything else.
 
@@ -59,6 +59,7 @@ Extremely low-bit quantisations (1-2 bit) have been published for several open-w
 
 ## See also
 
-- [../concepts/config.md](../concepts/config.md) - where the model reference, quantisation and runtime version are pinned.
+- [`test-models-locally.md`](test-models-locally.md) - compare two GGUF files and sweep thread counts.
+- [../concepts/config.md](../concepts/config.md) - where model references, quantisation and inference knobs live.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what the Summarize stage does with the model.
 - [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture), Rule #10 (measured, not estimated).
