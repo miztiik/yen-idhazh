@@ -66,6 +66,15 @@ of the other candidates fails on one of those three:
 | `config/` | Human-edited. A machine appending to a file a person owns invites a merge conflict every run |
 | `backend/` | Source. A ledger is not code, and a Python package is not a database |
 
+**One file under `state/` is written by a person, not a machine.**
+`state/labels.csv` holds human faithfulness labels, appended one keystroke at a
+time by `backend/utilities/label_queue.py`. It sits with the other ledgers
+because it is read the same way - joined to `state/scores.csv` on
+`output_digest`, never served, and it must survive a fresh checkout. It is the
+one exception to "written by a machine", and it is deliberate: the point of the
+file is that no machine wrote it (`CLAUDE.md` section 0a). See
+[../concepts/evaluation.md](../concepts/evaluation.md).
+
 The Pages workflow uploads `frontend/build` and nothing else, so `state/` cannot
 reach a reader even by accident. The console reads it at build time and bakes
 the numbers into the page ([../concepts/pipeline-loop.md](../concepts/pipeline-loop.md)).

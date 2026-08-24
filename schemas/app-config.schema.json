@@ -205,6 +205,29 @@
           "title": "Golden Set Size",
           "type": "integer"
         },
+        "label_draw_per_decile": {
+          "default": 6,
+          "description": "Labels drawn from each hhem decile. Uniform, not weighted to the cuts: the first question is what `high` means at all, and a boundary-weighted draw cannot answer that.",
+          "minimum": 1,
+          "title": "Label Draw Per Decile",
+          "type": "integer"
+        },
+        "label_min_run_days": {
+          "default": 10,
+          "description": "Distinct run-days at one scorer version and one pipeline fingerprint before a draw is worth finalising. A draw over one day is a draw over one day's sources.",
+          "minimum": 1,
+          "title": "Label Min Run Days",
+          "type": "integer"
+        },
+        "labellers": {
+          "description": "Who may write a faithfulness label. Empty by default, so a fresh clone can draw the queue and read it but cannot record a verdict. The list is what keeps a machine out of the label ledger: there is no author field a model could fill, and adding one would be a schema change with a written reason (CLAUDE.md section 0a).",
+          "items": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "title": "Labellers",
+          "type": "array"
+        },
         "lead_coverage_min": {
           "default": 0.3,
           "description": "Below this the summary missed the source lead. It caps a high band at medium rather than forcing low.",
@@ -1049,6 +1072,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added evaluation.labellers, evaluation.label_draw_per_decile and evaluation.label_min_run_days.",
+      "version": "2026-08-24T23:40",
+      "why": "The faithfulness cuts are a reader-facing promise with no measured error rate behind them, and the missing instrument was labels rather than more rows. The draw size and the collection floor are tuning decisions, not literals (Rule #6). `labellers` is empty by default, so a fresh clone can draw the queue and read it but cannot record a verdict - and because the row has no author field a model could fill, that list is a structural control rather than a discouragement. Additive with defaults."
+    },
+    {
       "change": "Added visuals.request_timeout_minutes, visuals.lead_words and run.route_budget_minutes.",
       "version": "2026-08-24T23:10",
       "why": "The route stage crossed its 60-minute job bound on five of the last eight runs. Measured on ubuntu-latest 2026-08-24 (run 32742672105): fixed cost 47 s, stage 3155 s, 149 items at a mean of 21.0 s. So per-item inference owns the time, not model load. The router had no request budget of its own and borrowed run.shard_timeout_minutes - 150 minutes against a 60-minute job, which can never fire. lead_words was a literal on the hot path and is most of each request's prefill. The route budget warns before the bound instead of after it. All three are additive with defaults, so an older config still validates."
@@ -1180,7 +1208,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-24T23:10",
+      "default": "2026-08-24T23:40",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1194,5 +1222,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-24T23:10"
+  "version": "2026-08-24T23:40"
 }
