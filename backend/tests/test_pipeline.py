@@ -24,9 +24,10 @@ from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.digest_day import DigestDay
-from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
+from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.sources import FeedDef, SourceForm
@@ -34,7 +35,7 @@ from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
 from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
-from idhazh.evals.score import band, to_eval_row
+from idhazh.evals.score import band, to_eval_row, verdict
 from idhazh.fetch import FetchResult
 
 FULL_TEXT = (
@@ -240,6 +241,67 @@ def test_an_invented_number_outvotes_a_perfect_faithfulness_score() -> None:
     )
 
 
+def test_a_band_below_the_top_says_what_is_missing() -> None:
+    """A grade tells a reader an item is worse. A reason tells them what to check.
+
+    Both counterweights were already computed and neither reached the page.
+    """
+    tuned = EvaluationConfig()
+
+    def reason_for(
+        faithfulness: float | None,
+        *,
+        unsupported_numbers: int = 0,
+        lead_coverage: float = 1.0,
+        hedge_dropped: bool = False,
+    ) -> tuple[ConfidenceBand, BandReason | None]:
+        return verdict(
+            faithfulness,
+            unsupported_numbers=unsupported_numbers,
+            lead_coverage=lead_coverage,
+            hedge_dropped=hedge_dropped,
+            config=tuned,
+        )
+
+    assert reason_for(0.95) == (ConfidenceBand.HIGH, None), "nothing to explain"
+    assert reason_for(0.95, lead_coverage=0.0) == (ConfidenceBand.MEDIUM, BandReason.LEAD_MISSING)
+    assert reason_for(0.95, hedge_dropped=True) == (ConfidenceBand.MEDIUM, BandReason.HEDGE_DROPPED)
+    assert reason_for(0.6) == (ConfidenceBand.MEDIUM, BandReason.FAITHFULNESS)
+    assert reason_for(0.2) == (ConfidenceBand.LOW, BandReason.FAITHFULNESS)
+    assert reason_for(None) == (ConfidenceBand.MEDIUM, BandReason.NOT_SCORED)
+    assert reason_for(1.0, unsupported_numbers=1) == (
+        ConfidenceBand.LOW,
+        BandReason.UNSUPPORTED_NUMBER,
+    )
+
+    # Both counterweights fail together on real rows. The reader gets one
+    # sentence, and dropped facts are the larger loss.
+    assert reason_for(0.95, lead_coverage=0.0, hedge_dropped=True) == (
+        ConfidenceBand.MEDIUM,
+        BandReason.LEAD_MISSING,
+    )
+
+
+def test_the_band_and_its_reason_are_decided_once() -> None:
+    """Two code paths would eventually print a reason that is not why."""
+    for faithfulness in (None, 0.2, 0.6, 0.95):
+        for coverage in (0.0, 1.0):
+            for hedged in (False, True):
+                assert band(
+                    faithfulness,
+                    unsupported_numbers=0,
+                    lead_coverage=coverage,
+                    hedge_dropped=hedged,
+                    config=EvaluationConfig(),
+                ) is verdict(
+                    faithfulness,
+                    unsupported_numbers=0,
+                    lead_coverage=coverage,
+                    hedge_dropped=hedged,
+                    config=EvaluationConfig(),
+                ).band
+
+
 # --- The row ----------------------------------------------------------------
 
 
@@ -346,11 +408,46 @@ def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
 def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
     ledger = tmp_path / "state" / "scores.csv"
     assert writer.append(ledger, [row()]) == 1
-    assert writer.append(ledger, [row(item_id="ai-02")]) == 1
+    assert writer.append(ledger, [row(item_id="ai-02", output_digest="b" * 64)]) == 1
     with ledger.open(encoding="utf-8") as handle:
         lines = list(csv.reader(handle))
     assert len(lines) == 3
     assert tuple(lines[0]) == writer.columns()
+
+
+def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) -> None:
+    """The doc's promise: an item whose inputs did not change writes no row at all.
+
+    A later day can re-plan an address the published ledger has no record of. The
+    summary comes back word for word, the scorer reads it with the same
+    instrument, and the second row would only inflate the denominator.
+    """
+    ledger = tmp_path / "state" / "scores.csv"
+    assert writer.append(ledger, [row()]) == 1
+    again = row(date="2026-08-22", run_id="2026-08-22-1", item_id="ai-07")
+    assert writer.append(ledger, [again]) == 0
+    with ledger.open(encoding="utf-8") as handle:
+        assert len(list(csv.reader(handle))) == 2
+
+
+def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:
+    """The guard reads the batch as well as the file, or a fresh ledger dodges it."""
+    ledger = tmp_path / "state" / "scores.csv"
+    assert writer.append(ledger, [row(), row(item_id="ai-09")]) == 1
+
+
+def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:
+    """Identical inputs and different words is the defect the ledger exists to catch."""
+    ledger = tmp_path / "state" / "scores.csv"
+    writer.append(ledger, [row()])
+    assert writer.append(ledger, [row(output_digest="c" * 64)]) == 1
+
+
+def test_a_changed_scorer_is_a_new_measurement(tmp_path: Path) -> None:
+    """Same words read by a different instrument is a reading worth keeping."""
+    ledger = tmp_path / "state" / "scores.csv"
+    writer.append(ledger, [row()])
+    assert writer.append(ledger, [row(scorer_version="hhem-2.2-open@cccccccc")]) == 1
 
 
 def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
@@ -773,6 +870,61 @@ def test_the_manifest_records_what_ran_against_what() -> None:
     assert manifest.runs[-1].run_id == "2026-08-21-1"
     assert manifest.runs[-1].config_digests
     assert manifest.runs[-1].pipeline_fingerprints
+
+
+def test_the_manifest_records_what_the_router_cost() -> None:
+    """The route job runs against a 60-minute bound and nothing recorded its cost.
+
+    The stage total and the item count are committed together, because either
+    one alone answers no question about the budget (Rule #10).
+    """
+    settings = config.load(CONFIG_DIR)
+    routed = Route.from_json(read_text(CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json"))
+    day = assemble.build_day(
+        plan=plan(),
+        items=[digest_item()],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+
+    def manifest_for(routes: list[Route]) -> RunManifest:
+        return assemble.build_manifest(
+            plan=plan(),
+            day=day,
+            previous=None,
+            summaries=[summary()],
+            models=[],
+            commit_sha="a" * 40,
+            runner="local",
+            started_at="2026-08-21T06:00:00Z",
+            completed_at="2026-08-21T07:00:00Z",
+            config_digests=settings.digests,
+            site_bytes=1024,
+            site_files=2,
+            routes=routes,
+        )
+
+    timed = manifest_for(
+        [
+            routed.model_copy(update={"route_ms": 4000}),
+            routed.model_copy(update={"route_ms": 11000}),
+        ]
+    )
+    assert timed.runs[-1].items_routed == 2
+    assert timed.runs[-1].route_ms == 15000
+
+    # A router that never started is not a router that took no time.
+    absent = manifest_for([])
+    assert absent.runs[-1].items_routed == 0
+    assert absent.runs[-1].route_ms is None
+
+    # Neither is a payload written before the clock existed.
+    unclocked = manifest_for([routed.model_copy(update={"route_ms": None})])
+    assert unclocked.runs[-1].items_routed == 1
+    assert unclocked.runs[-1].route_ms is None
 
 
 def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> None:

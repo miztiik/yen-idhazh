@@ -26,7 +26,7 @@ from idhazh.contracts.digest_day import (
     DigestVerticalRef,
     DigestVisual,
 )
-from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import (
@@ -83,6 +83,7 @@ def to_digest_item(
     source_kind: SourceKind,
     run_n: int,
     route: Route | None = None,
+    band_reason: BandReason | None = None,
 ) -> DigestItem:
     """One finished item as a reader consumes it. The link is a first-class element.
 
@@ -105,6 +106,7 @@ def to_digest_item(
         events=article.events,
         entities=article.entities,
         band=band,
+        band_reason=band_reason,
         source_form=article.source_form,
         reader_note=reader_note(article),
         truncated=article.truncated,
@@ -260,6 +262,7 @@ def build_manifest(
     determinism_violations: int = 0,
     note: str | None = None,
     item_health_rows: Sequence[ItemHealthRow] | None = None,
+    routes: Sequence[Route] | None = None,
 ) -> RunManifest:
     """What ran, against which model, at which commit - appended, never rewritten."""
     run_n = (previous.runs[-1].n + 1) if previous else 1
@@ -273,6 +276,10 @@ def build_manifest(
         skipped = sum(1 for summary in summaries if summary.status is SummaryStatus.SKIPPED)
         planned = max(len(plan.items), len(summaries))
         failed = planned - succeeded - skipped
+    # A router that never ran leaves no payloads, and a payload written before
+    # the clock existed carries no number. Both are "nothing was measured", which
+    # is null - not a zero that would read as "it took no time".
+    timed = [route.route_ms for route in (routes or []) if route.route_ms is not None]
     record = RunRecord(
         run_id=f"{plan.date}-{run_n}",
         n=run_n,
@@ -287,6 +294,8 @@ def build_manifest(
         items_succeeded=succeeded,
         items_failed=failed,
         items_skipped=skipped,
+        items_routed=len(routes or []),
+        route_ms=sum(timed) if timed else None,
         verticals=[
             VerticalCount(
                 id=vertical.id,
