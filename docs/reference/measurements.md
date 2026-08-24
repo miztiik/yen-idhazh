@@ -376,8 +376,12 @@ crosses a prompt band, which is the reorder question above seen from the other
 side: the band-varying numbers sit early in the system prompt, so a band change
 truncates the shared prefix. That is now a measured cost, not a suspicion.
 
-Only one of the four slots was ever used. The workflow passes no `-np`, so
+Only one of the four slots was ever used. That run passed no `-np`, so
 llama.cpp built its default four, and the worker sends one request at a time.
+`n_parallel` is 1 from 2026-08-24, so later runs stand up one slot and the
+`selected slot by LRU` line no longer has a choice to make. Prefix reuse is
+unaffected: it is a property of the slot's retained prompt, not of how many
+slots exist.
 
 Correction to record: only the workflow's summary step was blind. Nothing about
 the earlier `32648218952` throughput figures changes.
