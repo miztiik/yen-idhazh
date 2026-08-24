@@ -12,7 +12,7 @@ from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
 from idhazh.render.diagram import RenderError as DiagramError
 from idhazh.render.diagram import parse_mermaid, render_diagram, wrap
-from idhazh.render.write import asset_relpath, render_route
+from idhazh.render.write import asset_relpath, highest_ordinal, render_route
 
 SPEC = {
     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
@@ -105,6 +105,43 @@ class TestAssetPaths:
 
     def test_the_path_holds_no_backslash(self) -> None:
         assert "\\" not in asset_relpath("2026-08-22", "ai", 1)
+
+    def test_a_day_with_no_assets_starts_at_one(self, tmp_path: Path) -> None:
+        assert highest_ordinal(tmp_path, "2026-08-22", "ai") == 0
+
+    def test_numbering_continues_past_what_the_day_already_holds(self, tmp_path: Path) -> None:
+        """A second run must not overwrite the first run's charts.
+
+        Observed live on 2026-08-24: the day ran four times, each run numbered
+        from one, and fourteen asset paths ended up referenced by two different
+        items. `india-01.svg` was claimed by both "Indian stock markets open
+        higher" and "Defence Stocks Rise", so one of them displayed a chart built
+        from the other article's numbers, under alt text describing figures that
+        were not in the picture. Every value was true and the picture belonged to
+        another story.
+        """
+        folder = tmp_path / "digest" / "2026" / "08" / "22"
+        folder.mkdir(parents=True)
+        for name in ("india-01.svg", "india-02.svg", "ai-01.svg"):
+            (folder / name).write_bytes(b"<svg/>")
+        assert highest_ordinal(tmp_path, "2026-08-22", "india") == 2
+        assert highest_ordinal(tmp_path, "2026-08-22", "ai") == 1
+        assert highest_ordinal(tmp_path, "2026-08-22", "world") == 0
+
+    def test_a_vertical_is_not_confused_with_a_longer_one_that_starts_the_same(
+        self, tmp_path: Path
+    ) -> None:
+        folder = tmp_path / "digest" / "2026" / "08" / "22"
+        folder.mkdir(parents=True)
+        (folder / "business-economy-07.svg").write_bytes(b"<svg/>")
+        assert highest_ordinal(tmp_path, "2026-08-22", "business") == 0
+        assert highest_ordinal(tmp_path, "2026-08-22", "business-economy") == 7
+
+    def test_a_file_that_is_not_numbered_is_ignored(self, tmp_path: Path) -> None:
+        folder = tmp_path / "digest" / "2026" / "08" / "22"
+        folder.mkdir(parents=True)
+        (folder / "ai-draft.svg").write_bytes(b"<svg/>")
+        assert highest_ordinal(tmp_path, "2026-08-22", "ai") == 0
 
 
 class TestRenderRoute:

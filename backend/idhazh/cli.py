@@ -58,7 +58,7 @@ from idhazh.evals import golden, metrics, score, validation, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
 from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, post
-from idhazh.render import asset_relpath, render_route
+from idhazh.render import asset_relpath, highest_ordinal, render_route
 from idhazh.sanitize import SANITIZER_VERSION
 
 LOG: Final = logging.getLogger("idhazh")
@@ -604,7 +604,6 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
     ordinals: dict[str, int] = {}
     spent: list[int] = []
     skipped = 0
-
     for item in plan.items:
         article_path = items_dir / f"{item.item_id}.article.json"
         summary_path = items_dir / f"{item.item_id}.summary.json"
@@ -620,7 +619,14 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
         if not asked:
             skipped += 1
         if decision.kind is not VisualKind.NONE:
-            ordinals[article.vertical] = ordinals.get(article.vertical, 0) + 1
+            # Numbering continues from what this day already holds. A day runs
+            # several times, and starting from one in each process overwrote the
+            # earlier run's file while the digest still referenced both items.
+            if article.vertical not in ordinals:
+                ordinals[article.vertical] = highest_ordinal(
+                    PUBLIC_ROOT.parent, plan.date, article.vertical
+                )
+            ordinals[article.vertical] += 1
             decision = render_route(
                 decision,
                 public_root=PUBLIC_ROOT.parent,
