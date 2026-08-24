@@ -26,6 +26,7 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+import shutil
 from datetime import date as calendar_date
 from datetime import timedelta
 from pathlib import Path
@@ -348,6 +349,17 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("backend/var/canary/digest"))
     parser.add_argument("--state", type=Path, default=Path("backend/var/canary/state"))
     args = parser.parse_args()
+    # The health ledgers are append-only, so a second local run stacks another
+    # copy of every row on the first. `canary-gone` is written once on purpose -
+    # one permanent failure, well under the quarantine count - and by the fifth
+    # run it has five and the console marks it rested. The browser suite then
+    # fails against a fixture nobody edited, on a developer machine, while CI
+    # stays green because its `backend/var/` is empty every time. Clearing here
+    # makes the canary day a function of this file rather than of how many times
+    # somebody has run it.
+    if args.state.exists():
+        shutil.rmtree(args.state)
+
     quiet = earlier_days()
     for date in quiet:
         quiet_day(args.out, date)
