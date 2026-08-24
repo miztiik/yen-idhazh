@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-08-22
+**Last Updated**: 2026-08-24
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -42,7 +42,7 @@ A persona's own worldview shapes what it says, never how plainly it says it.
 1. **Static-first publication.** What ships to a reader is a static bundle on GitHub Pages. No production backend, no server we run, no runtime call to a model provider, no telemetry SDK, no accounts, no push notifications. Every computation happens in the reader's browser or in CI. Fetching static assets is allowed, third-party ones included - a font, a stylesheet, a charting library - and so is fetching our own committed files at runtime. What is forbidden is a *service*: logic executing off the reader's device, anything reporting a reader's behaviour, and any third-party script that phones home.
 2. **The runner is the architecture.** Every pipeline decision is measured against a stock `ubuntu-latest`: 4 vCPU, 16 GB RAM, no GPU, 6 h per job, 20 concurrent jobs, 10 GB cache per repo, 500 MB artifact storage, and a **1 GB hard cap on the published Pages site**. Minutes are free (public repo), so wall-clock is the constraint. A model that does not fit is a design error, not a budget request.
 3. **Contracts before logic.** Every persisted shape is a Pydantic model in `backend/idhazh/contracts/` before logic reads or writes it; `schemas/` is generated from it.
-4. **docs/ = agent memory; a decision lives on the page it impacts.** No ADR file, no `docs/architecture/decisions/` directory.
+4. **docs/ = the memory; a decision lives on the page it impacts.** No ADR file, no `docs/architecture/decisions/` directory. A private note store is a cache of `docs/`, never the only copy - see [`../reference/agent-notes.md`](../reference/agent-notes.md).
 5. **Structural fixes only.** No band-aids, no monkey patches, no "temporary" hacks. Escalate the correction level instead.
 6. **No hardcoding.** Tunable knobs live in `config/`, schema-validated.
 7. **No mocks unless asked.** Real implementations, real fixtures, and no test touches the network.
@@ -157,7 +157,7 @@ When in doubt, choose the higher level (`CLAUDE.md` section 6). Level 2 and abov
 - Raise the runner budget to fit a feature. The budget is the platform, not a preference.
 - Edit a manifest without updating and staging its lockfile in the same commit.
 - Use broad, lossy, or history-rewriting git commands instead of the `CLAUDE.md` section 8 workflow.
-- Let `TODO/`, chat logs, `AGENTS.md`, or `/memories/` become the source of truth for architecture.
+- Let `TODO/`, chat logs, `AGENTS.md`, or a private agent note store become the source of truth for anything. They are caches of `docs/`.
 - Make a domain-neutral process doc project-specific (`CLAUDE.md` section 5).
 - Pre-create empty modules "for later".
 - Skip the docs update.

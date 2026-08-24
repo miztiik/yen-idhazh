@@ -1,6 +1,6 @@
 # Documentation Structure
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 How `docs/` is organised, and where a new statement of project knowledge belongs. Companion to [CLAUDE.md](../../CLAUDE.md) section 5 (Documentation Discipline) - this doc defines the _placement rules_; CLAUDE.md section 5 defines the _constraints_ (ASCII, single source of truth, no duplicate definitions).
 
@@ -47,6 +47,7 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 | **Concept doc**   | `docs/concepts/*.md`                    | Anyone learning project vocabulary | Living, terse                                     | One term, defined once, with cross-links                            | Duplication of any term defined elsewhere         |
 | **How-to doc**    | `docs/how-to/<verb>-<slug>.md`          | Operator running a procedure       | Living runbook                                    | Ordered steps, inputs, validation, failure modes                    | Rationale prose; concept definitions              |
 | **Reference doc** | `docs/reference/*.md`                   | Someone needing an exact value     | Living table                                      | Exact options, values, contracts, measurements with hardware + date | Narrative; procedure                              |
+| **Agent notes**   | `docs/reference/agent-notes.md`         | Anyone running commands in the repo | Living list                                      | Environment and tool quirks that make a command lie about its result | Project behaviour, design rationale, product rules |
 | **Plan-doc**      | `TODO/<YYYYMMDD>-<slug>-plan.md`        | Next person picking up work        | Single-snapshot; DELETED once distilled (git history is the ledger) | Phase status, active PR breakdown, TBD list, pointers               | Rationale prose; decisions; rejected alternatives |
 
 ### Routing rules (decide a new statement's home)
@@ -58,6 +59,21 @@ Docs fall into the typed classes below. Each has one audience, one mutability ru
 5. "Which PRs land when"? -> **Plan-doc.** Carry pointers, not full rationale.
 6. Architecture choice with an actively explored rejected alternative, non-trivial reversal cost, and cross-system consequences? -> a `## Design rationale` / `## Rejected alternatives` section ON the living doc it impacts (concept / how-to / subsystem). No ADR file, no `decisions/` directory. If any leg is missing, just update the living doc's current-state text.
 7. Where a file or a whole directory belongs in the tree? -> the **repository-layout reference doc.** One page maps every top-level directory to what it holds, who writes it, and whether it is committed - so a new directory has to state its reason before it exists.
+8. A tool quirk, an environment trap, or a command whose result cannot be trusted at face value? -> the **agent-notes reference.** Not a private memory file - see below.
+
+### `docs/` is the memory
+
+Everything a future contributor or agent needs is written here, in a file that
+is reviewed in a PR and versioned in git. An agent tool may keep a private note
+store; that store is a **cache of what `docs/` already says**, never the only
+copy of anything.
+
+The test is simple: if a fact would be lost when the note store is cleared, or
+invisible to a person reading the repository, it is in the wrong place. Move it
+to the living doc that owns it, or - when it is execution craft rather than
+project knowledge - to the agent-notes reference. `AGENTS.md` and any private
+memory are derived; if either disagrees with `docs/`, `docs/` wins (CLAUDE.md
+section 5).
 
 ### Process docs are domain-neutral
 

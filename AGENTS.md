@@ -1,8 +1,12 @@
 # AGENTS.md
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 Derived pointer for coding agents. Not authoritative - if this disagrees with `docs/`, docs win (CLAUDE.md section 5).
+
+## `docs/` is the memory
+
+Everything durable is written in [`docs/`](docs/), reviewed in a PR and versioned in git. This file and any private note store your tooling keeps are **caches** of it. A note store can be cleared at any moment and a person reading the repository cannot see it, so a fact worth remembering is written into `docs/` in the same session it was learned - the living doc that owns it, or [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) when it is a tool quirk rather than project knowledge.
 
 ## Voice (CLAUDE.md section 0b)
 
@@ -16,6 +20,7 @@ Before any non-trivial work in this repo:
 2. Run the load ritual in [`docs/agents/bootstrap.md`](docs/agents/bootstrap.md); honour the rules digest in [`docs/agents/guardrails.md`](docs/agents/guardrails.md).
 3. Route new documentation by [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md).
 4. For plan execution, follow [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md); it owns the parallel-dispatch mechanics.
+5. Before claiming a change is done, run [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
 Five persona advisors live in [`.github/agents/`](.github/agents/), each at a distinct altitude: Reader, Jony (UI/UX), Andre (AI/LLM), Fowler (Architecture & Engineering), Carmack (Engine & Runtime).
 
@@ -26,4 +31,6 @@ Three things bite first if you forget them: the runner budget (4 vCPU, 6 h, 10 G
 ## See also
 
 - [`README.md`](README.md) - what yen-idhazh is.
+- [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md) - the environment, every gate command, and the browser smoke.
+- [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md) - environment and tool quirks that make a command lie.
 - [`TODO/20260815-digest-pipeline-plan.md`](TODO/20260815-digest-pipeline-plan.md) - the active build plan.

@@ -1,0 +1,157 @@
+# Run the Gates
+
+**Last Updated**: 2026-08-24
+
+Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
+merge. This page owns the project's actual gate commands; the neutral PR
+lifecycle that calls for them is
+[ship-a-pr.md](ship-a-pr.md).
+
+Counts and file numbers below were taken on 2026-08-24 and move as the repo
+grows. Treat them as a "did the command do roughly what I expected" check, not
+as a target.
+
+## Set up the backend environment
+
+```powershell
+python -m venv .venv
+.\.venv\Scripts\python.exe -m ensurepip --upgrade
+.\.venv\Scripts\python.exe -m pip install -e ".[dev]"
+```
+
+**`uv pip install` does not work here.** It fails with a `HandshakeFailure`
+against `files.pythonhosted.org` (observed 2026-08-21). `ensurepip` then `pip`
+is the path that works. If `uv` starts working, nothing in the repo depends on
+which installer produced the environment.
+
+Four extras are declared. Install only what you need:
+
+| Extra | Pulls | When |
+| --- | --- | --- |
+| `dev` | `ruff`, `mypy`, `pytest` | always - this is the gate set |
+| `measure` | `feedparser`, `trafilatura` | live source sampling; hits the network |
+| `bench-image` | `torch`, `diffusers` | image-model benchmarking; multi-gigabyte |
+
+`measure` and `bench-image` are heavy and reach the network. No test imports
+either one.
+
+## The backend gates
+
+Run all four from the repository root. Each must be clean.
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy
+.\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\python.exe -m idhazh.contracts.export
+git diff --exit-code -- schemas/
+```
+
+On 2026-08-24 that is 739 tests and 83 files type-checked. The last two lines
+are the contract drift gate: the export regenerates `schemas/` from the Pydantic
+models, and a non-empty diff means a generated artifact was hand-edited or a
+model changed without regenerating ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
+
+**`ruff format` is not a gate.** `ruff format --check .` reports 14 files it
+would rewrite (2026-08-24), all of them pre-existing. Running it across the repo
+produces a large diff that has nothing to do with your change. Format only the
+files you author, or leave formatting alone.
+
+## The frontend gates
+
+Run from `frontend/`.
+
+```powershell
+npm run check
+npm run build
+npm run bundle-gate
+```
+
+`check` is `svelte-check`. `bundle-gate` asserts no encoder lands on the
+first-load path. `build` is the strongest of the three: every route is
+prerendered, so a contract-invalid payload fails the build rather than the page.
+
+## The browser suite
+
+The browser gate runs against the **canary day**, not the real digest, so it
+does not change meaning when the pipeline publishes.
+
+```powershell
+.\.venv\Scripts\python.exe backend\utilities\build_canary_day.py
+cd frontend
+npm run build:canary
+npm run test:browser
+```
+
+58 tests in 6 files (2026-08-24).
+
+Three traps make this suite lie to you:
+
+- **`frontend/build` is one shared directory.** `npm run build` and
+  `npm run build:canary` both write it. If anything rebuilds the real site
+  between your `build:canary` and your `test:browser`, the suite runs against
+  real published dates and fails for reasons that are not your change. Confirm
+  `frontend/build/console/index.html` still carries a canary date before and
+  after the run.
+- **A leftover `vite preview` on port 4173 is adopted, not replaced.**
+  `playwright.config.ts` sets `reuseExistingServer` outside CI, so a server left
+  running by an earlier run serves stale bytes and most of the suite fails at
+  once. The tell is that everything fails together while the pure-function tests
+  still pass. Clear it, then re-run - do not start debugging the code:
+
+  ```powershell
+  Get-NetTCPConnection -LocalPort 4173 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+  ```
+
+- **The canary day has one vertical** (`ai`, 8 items). Any rule that only shows
+  up with several topics cannot be tested here. Put that rule in a pure module
+  and unit-test it there - `frontend/src/lib/day-shape.ts` exists for exactly
+  this reason.
+
+## Smoke-test a published-site change by hand
+
+`CLAUDE.md` section 12 requires an agent to drive the affected pages in a
+browser rather than hand the check to a person. Serve the **production build**,
+not the dev server:
+
+```powershell
+npm run build
+npx vite preview --outDir build --port 4174 --strictPort --host 127.0.0.1
+```
+
+- **The dev server cannot be used for this.** On `vite dev` a `script-src` CSP
+  violation blocks SvelteKit's bootstrap, so the page never hydrates and every
+  control - the theme toggle, `Show N more` - is dead. It is a Vite artifact
+  rather than a regression, and the production build logs zero console errors.
+- **`vite preview` serves `index.html` as an SPA fallback**, so a route that
+  does not exist returns HTTP 200 with a page full of asset 404s. Preview cannot
+  answer "does this URL exist"; the dev server and GitHub Pages both render the
+  real 404 page.
+- Confirm the page still renders with its data file absent or empty. A page that
+  white-screens on missing data is a failure (section 12, step 5).
+
+## Dependencies
+
+Any dependency change goes through `npm`. CI runs `npm ci` against
+`package-lock.json`.
+
+```powershell
+# edit frontend/package.json, then:
+npm install
+```
+
+**Do not use `bun remove` or `bun add` here.** They re-sort every key in
+`package.json`, strip its trailing newline, and write an untracked `bun.lock`
+that CI ignores. `bun --cwd=<absolute path> run <script>` is fine for *running*
+a script; it is only the dependency commands that are destructive.
+
+Every new dependency names a beneficiary feature and its cost, per `CLAUDE.md`
+section 8.
+
+## See also
+
+- [ship-a-pr.md](ship-a-pr.md) - the neutral PR lifecycle these commands serve.
+- [run-the-pipeline.md](run-the-pipeline.md) - running the producer itself, which these gates do not do.
+- [../reference/agent-notes.md](../reference/agent-notes.md) - environment quirks that make a command lie about its result.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - what the drift gate compares.
+- [../../CLAUDE.md](../../CLAUDE.md) - sections 9, 12, and 13.

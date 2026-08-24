@@ -1,6 +1,6 @@
 # How to distill a plan-doc
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The procedure for lifting durable findings out of a `TODO/<date>-<slug>.md` plan-doc into the right canonical home under `docs/`. The plan-doc is the work ledger; once a row closes, anything worth keeping past the merge belongs somewhere else.
 
@@ -27,7 +27,7 @@ For each finding in the closed row's narrative, apply the routing rules in [../r
 | Current shape / layout / contract of one subsystem                                                                       | **Subsystem doc** under `docs/architecture/<area>/<slug>.md`   | "How is this payload laid out on disk?" -> `docs/architecture/<area>/layout.md`          |
 | Operator runbook / step-by-step procedure                                                                                | **How-to doc** under `docs/how-to/<verb>-<slug>.md`            | "How do I re-run a failed stage?" -> `docs/how-to/`                            |
 | Architecture choice with actively explored rejected alternatives + non-trivial reversal cost + cross-system consequences | **`## Design rationale` / `## Rejected alternatives` section on the impacted subsystem / concept doc** (no ADR file, no `decisions/` dir) | "Why library X instead of library Y?" -> a rationale section on the subsystem doc that owns the choice |
-| Agent-only execution lesson (gotcha, recurring trap, tool quirk)                                                         | **`/memories/lessons.md`** (memory tool)                       | "the cosmetic gh-merge confirmation pattern"; "PowerShell BOM bites `git commit -F`"            |
+| Agent-only execution lesson (gotcha, recurring trap, tool quirk)                                                         | **Agent-notes reference** at `docs/reference/agent-notes.md`   | "the cosmetic gh-merge confirmation pattern"; "PowerShell BOM bites `git commit -F`"            |
 | Per-PR audit trail                                                                                                       | **Stays in the plan-doc `CLOSED` sub-section**                 | Diff stat, gate results, discoveries specific to this PR's execution                              |
 
 If a finding fits two destinations, pick the living doc that a future maintainer would search first. Do not create a new architecture decision unless the rejected alternative and reversal cost are both concrete. If it fits none, it probably is not durable - leave it in the plan-doc `CLOSED` sub-section and move on.
@@ -74,9 +74,18 @@ In the plan-doc `CLOSED` sub-section, replace the finding's full text with a one
 
 This preserves the audit trail (someone reading the plan-doc later sees what was discovered + where it lives now) without duplicating the content.
 
-### Step 4 - agent-only lessons go to `/memories/lessons.md`
+### Step 4 - execution lessons go to the agent-notes reference
 
-Use the memory tool. Findings that are about _how to do agent work_ (PR-shipping gotchas, command-line quirks, parallelisation traps, recurring failure modes) belong in user memory, not in `docs/`. The line is: `docs/` is for project knowledge a developer would read; `/memories/lessons.md` is for agent execution craft.
+A finding about _how to do the work_ - a PR-shipping gotcha, a command-line
+quirk, a parallelisation trap, a recurring failure mode - goes to
+`docs/reference/agent-notes.md`. It is still a doc, reviewed in a PR like any
+other.
+
+The line between the two homes is audience, not importance: a living doc answers
+"how does this project behave", and the agent-notes reference answers "why did
+that command lie to me". Both are in `docs/`, because a lesson kept in an
+agent's private memory is invisible to the next person and to the next agent.
+Private memory is a cache of what `docs/` already says (CLAUDE.md section 5).
 
 ### Step 5 - delete the plan-doc
 
