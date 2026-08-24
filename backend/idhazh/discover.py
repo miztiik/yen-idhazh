@@ -12,7 +12,7 @@ bounded, because they reach a log line and a page.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Final
@@ -145,6 +145,31 @@ def candidates_from_feed(feed: FeedDef, body: str | bytes) -> list[Candidate]:
             )
         )
     return found
+
+
+def split_blocked(
+    candidates: Iterable[Candidate], *, markers: Sequence[str]
+) -> tuple[list[Candidate], list[Candidate]]:
+    """Split a feed's offering into what may enter the pool and what may not.
+
+    A healthy feed syndicates promotional pages. An affiliate product review is
+    short declarative prose, so it summarizes faithfully and bands high, and no
+    faithfulness threshold detects it at any cut - raising the bar rewards it.
+    The address is the only honest signal available before anything is spent, so
+    the control sits here rather than at the score.
+
+    Split rather than filtered: the feed offered what it offered, and a run that
+    silently narrowed its own input cannot say later that it did.
+    """
+    if not markers:
+        return (list(candidates), [])
+    lowered = [marker.lower() for marker in markers if marker]
+    kept: list[Candidate] = []
+    blocked: list[Candidate] = []
+    for candidate in candidates:
+        address = candidate.canonical_url.lower()
+        (blocked if any(marker in address for marker in lowered) else kept).append(candidate)
+    return (kept, blocked)
 
 
 def salience_urls(body: str | bytes) -> set[str]:

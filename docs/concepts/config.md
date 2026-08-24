@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -63,6 +63,13 @@ That lets a brief stop naturally instead of padding toward the old 40-word gate.
 `config.sources` can declare `form: "abstract"` on a feed. That is a curator's
 fact about the feed, not a detector over page text. NBER uses it; arXiv and SSRN
 should use the same field if those feeds are added.
+
+`collect.blocked_url_markers` is a list of case-insensitive substrings that keep
+an address out of the candidate pool. It defaults to empty, because the entries
+are a source-curation decision and belong in `config/` rather than in the
+contract (Rule #6). What it is for, and why the control cannot live at the
+faithfulness score, is
+[../architecture/sources/discovery.md](../architecture/sources/discovery.md).
 
 ## Runtime sweep surface
 
