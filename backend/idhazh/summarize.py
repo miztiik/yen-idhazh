@@ -332,6 +332,17 @@ def to_summary(
             generated_at=generated_at,
             failure_code=FailureCode.OUTPUT_TRUNCATED,
         )
+    if completion.reasoned:
+        return _failed(
+            article,
+            model_id=model_id,
+            detail=(
+                "the runtime returned a reasoning channel and thinking was disabled; "
+                "the flag did not take, or this build splits reasoning off the content"
+            ),
+            generated_at=generated_at,
+            failure_code=FailureCode.BAD_SHAPE,
+        )
     try:
         draft = parse_draft(completion.content, prompt_config=prompt_config, evaluation=bounds)
     except (ValidationError, ValueError, json.JSONDecodeError) as error:
