@@ -10,6 +10,7 @@ No mocks and no network. The recorded score is a float, not a stub object.
 from __future__ import annotations
 
 import csv
+import json
 import socket
 import threading
 from pathlib import Path
@@ -772,6 +773,94 @@ def test_the_manifest_records_what_ran_against_what() -> None:
     assert manifest.runs[-1].run_id == "2026-08-21-1"
     assert manifest.runs[-1].config_digests
     assert manifest.runs[-1].pipeline_fingerprints
+
+
+def test_a_later_manifest_counts_verticals_for_its_own_run(tmp_path: Path) -> None:
+    settings = config.load(CONFIG_DIR)
+    base_plan = plan()
+    first_item = base_plan.items[0]
+    second_item = base_plan.items[1]
+    first_plan = base_plan.model_copy(
+        update={
+            "items": [first_item],
+            "verticals": [base_plan.verticals[0].model_copy(update={"planned": 1})],
+        }
+    )
+    second_plan = base_plan.model_copy(
+        update={
+            "items": [second_item],
+            "run_id": f"{base_plan.date}-2",
+            "verticals": [base_plan.verticals[0].model_copy(update={"planned": 1})],
+        }
+    )
+    first_summary = summary().model_copy(
+        update={"item_id": first_item.item_id, "url_key": first_item.url_key}
+    )
+    second_summary = summary().model_copy(
+        update={"item_id": second_item.item_id, "url_key": second_item.url_key}
+    )
+    first_day = assemble.build_day(
+        plan=first_plan,
+        items=[digest_item(run_n=1).model_copy(update={"item_id": first_item.item_id})],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    first_manifest = assemble.build_manifest(
+        plan=first_plan,
+        day=first_day,
+        previous=None,
+        summaries=[first_summary],
+        models=[],
+        commit_sha="a" * 40,
+        runner="local",
+        started_at="2026-08-21T06:00:00Z",
+        completed_at="2026-08-21T07:00:00Z",
+        config_digests=settings.digests,
+        site_bytes=1024,
+        site_files=2,
+    )
+    second_day = assemble.build_day(
+        plan=second_plan,
+        items=[digest_item(run_n=2).model_copy(update={"item_id": second_item.item_id})],
+        previous=first_day,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T13:00:00Z",
+        retention_window_months=-1,
+    )
+    second_manifest = assemble.build_manifest(
+        plan=second_plan,
+        day=second_day,
+        previous=first_manifest,
+        summaries=[second_summary],
+        models=[],
+        commit_sha="b" * 40,
+        runner="local",
+        started_at="2026-08-21T12:00:00Z",
+        completed_at="2026-08-21T13:00:00Z",
+        config_digests=settings.digests,
+        site_bytes=2048,
+        site_files=3,
+    )
+
+    assert len(second_day.items) == 2
+    assert second_manifest.runs[-1].verticals[0].planned == 1
+    assert second_manifest.runs[-1].verticals[0].published == 1
+
+    old_payload = second_manifest.model_dump(mode="json")
+    old_payload["version"] = "2026-08-21T02:00"
+    old_payload["runs"][1]["verticals"][0]["published"] = 2
+    old_path = tmp_path / "run.json"
+    old_path.write_text(json.dumps(old_payload), encoding="utf-8")
+
+    migrated = cli._load_manifest(old_path, day=second_day)
+
+    assert migrated is not None
+    assert migrated.version == RunManifest.schema_version()
+    assert migrated.runs[-1].verticals[0].published == 1
 
 
 def test_the_committed_day_fixture_still_loads() -> None:

@@ -35,6 +35,28 @@ tests/fixtures/** text eol=lf
 # Prose is reviewed line by line. A checkout must not rewrite the document.
 *.md text eol=lf
 
+# The prompts are fingerprint inputs: `fingerprint.build_inputs` hashes the
+# prompt string, so their bytes are part of the determinism stamp. Python's
+# `read_text` folds CRLF to LF before that hash, which is why a CRLF copy has
+# never broken a fingerprint - but an unpinned file still shows as modified on
+# a fresh Linux checkout, and a dirty tree is what aborts the publish push.
+*.txt text eol=lf
+
+# The rest of the authored surface. Every one of these was unpinned until a
+# CRLF blob in a single doc aborted a rebase and discarded a whole day's
+# digest; pinning the file type is cheaper than finding the next one.
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.toml text eol=lf
+*.svg text eol=lf
+*.csv text eol=lf
+.editorconfig text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
 # Published digest payloads. Their sha256 is recorded in the run manifest and
 # re-verified, so the stored bytes and the checked-out bytes must agree.
 frontend/public/**/*.json text eol=lf
@@ -44,3 +66,5 @@ frontend/public/**/*.md text eol=lf
 *.gguf binary
 *.png binary
 *.webp binary
+*.onnx binary
+*.wasm binary

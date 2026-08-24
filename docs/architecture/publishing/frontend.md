@@ -2,7 +2,7 @@
 
 **Last Updated**: 2026-08-23
 
-The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive, the eval dashboard and the console.
+The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
 Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md), [../../concepts/design-system.md](../../concepts/design-system.md) and [../../concepts/ui-shell.md](../../concepts/ui-shell.md). This page is the *shape*, and it records where the owner, Jony and Reader disagreed and how it was settled.
 
@@ -138,6 +138,12 @@ The run is the data's provenance; the commit is the site's. They move independen
 
 `/console/` is the operator's surface. The digest tells a reader what happened in the world; the console tells the owner what happened to the pipeline. It is instrumentation, it earns no design budget, and its only obligation is to be correct ([../../concepts/vision.md](../../concepts/vision.md)).
 
+`/evals/` remains a published entry point for old bookmarks. It carries a
+prerendered meta refresh, a canonical link and a plain link to `/console/`.
+GitHub Pages cannot serve a SvelteKit server redirect, so the redirect must be
+static HTML. A reader with JavaScript disabled still receives a page and can use
+the link.
+
 **The grid is one column per day and one square per run.** Four runs a day means four squares, oldest at the bottom of the column. A month of pipeline history fits above the fold, and the shape of a problem - one bad afternoon, or every run since Tuesday - is visible before any number is read.
 
 Three colours, and the boundaries are read from config rather than chosen by the page:
@@ -154,18 +160,50 @@ Three colours, and the boundaries are read from config rather than chosen by the
 
 Beneath the grid is **every feed that failed at least once**, worst first, with its attempt count, its last outcome and how close it is to quarantine. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
 
-**The console reads the committed ledgers at build time and computes nothing at read time.** Every number on it was measured when the run happened and written down. Nothing under `state/` is ever served - the page carries the figures, never the file ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)).
+**The console reads committed records in two ways.** The run grid, feed list and
+timing medians still read the ledgers at build time. The item-health viewport
+fetches the browser-safe monthly projection under `telemetry/<YYYY-MM>.csv`.
+Nothing under `state/` is ever served - the browser reads only the narrow
+projection that drops `canonical_url`, `url_key` and `detail`
+([telemetry-series.md](telemetry-series.md)).
 
 Stage timing medians read from `state/item-health/<YYYY-MM>.csv`, not from
 `state/scores.csv`. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run. The score
 ledger still owns faithfulness and scorer time for the scored subset.
 
+The viewport is a 30-day default window, not a retention policy. The window size
+and where today sits are `console.default_window_days` and
+`console.today_anchor`. When less history exists, the first view fits the rows
+that exist instead of drawing empty calendar space. JavaScript enhances the
+server-rendered SVG with pan and zoom. Arrow keys pan, and `+` / `-` zoom, from a
+labelled focusable control with a visible focus ring. If a telemetry month is
+absent or cannot be parsed, that month is a gap in the charts. It is not
+interpolated, and it never white-screens the console.
+
+The item-health viewport has three parts:
+
+- Failure panels: fetch, extract and summarize failure rates as separate bars.
+  The label carries the raw pair. Thin denominators use outlined bars below
+  `console.min_attempts_for_rate`. Colour is spent only on a failure.
+- Failed item list: a panel chip filters this list, because after a spike the
+  operator needs rows.
+- Compression scatter: source words against summary words, with the
+  `summarize.bands` step function as the reference band and a distinct mark for
+  truncation-flagged scored items.
+
 ## Design rationale
 
 Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
 
 Spending the colour at the day level rather than per item is the resolution of a genuine conflict between an owner instruction and a persona's ruling. The owner asked for a colourful confidence signal; Reader argued that per-item confidence badges are the project talking to itself. Both are satisfied by putting the aggregate where it is a real instrument and the per-item signal where it is proportionate. Authority: owner (section 0), designed by Jony, constrained by Reader.
+
+Folding `/evals/` into `/console/` keeps one route answering "how is the
+pipeline doing". Both old routes read `state/scores.csv` and counted per-day
+bands. Two surfaces reading one ledger would disagree as soon as one count
+changed. `/evals/` stays as a static entry point because `CLAUDE.md` section 3
+says the published dashboard keeps the route. Authority: Jony and owner defect
+3.
 
 ## Rejected alternatives
 
@@ -192,12 +230,13 @@ Spending the colour at the day level rather than per item is the resolution of a
 | A second threshold for the red square | CI already reads a success floor to decide whether to open an issue. Two numbers answering one question drift, and then a red square and an open issue disagree. | owner |
 | Counting skipped items against a run's health | An already-published article is skipped by design. Counting it would paint a healthy day amber for doing its job. | owner |
 | Reading stage timings from `state/scores.csv` | The score ledger did not carry those columns, and it only covers scored items. Timings belong on the item-health census. | Fowler |
+| Serving `state/item-health/` directly | It carries `canonical_url`, `url_key` and untrusted `detail`. The browser gets only the published telemetry projection. | Fowler, Rule #11 |
 
 ## See also
 
 - [layout.md](layout.md) - the routes, the dated addresses and retention.
 - [../sources/health.md](../sources/health.md) - the feed ledger the console renders, and the quarantine rule it mirrors.
-- [../sources/freshness.md](../sources/freshness.md) - the six-hour cadence that gives the grid four squares a day.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - the four-run cadence that gives the grid four squares a day.
 - [../../concepts/digest.md](../../concepts/digest.md) - what an item carries and the visual rule.
 - [../../concepts/design-system.md](../../concepts/design-system.md) - typography, tokens and the colour rule.
 - [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the four states.

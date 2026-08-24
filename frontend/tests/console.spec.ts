@@ -35,6 +35,15 @@ function publishedDay(): string {
 
 const DAY = publishedDay();
 
+function span(start: string | null, end: string | null): number {
+	if (!start || !end) return 0;
+	return (
+		(new Date(`${end}T00:00:00Z`).getTime() - new Date(`${start}T00:00:00Z`).getTime()) /
+			86_400_000 +
+		1
+	);
+}
+
 /** How many runs the fixture manifest records for that day. */
 function runCount(): number {
 	const [year, month, day] = DAY.split('-');
@@ -113,6 +122,73 @@ test('stage medians come from item health, not the score ledger', async ({ page 
 	await expect(page.getByText('200 ms')).toBeVisible();
 	await expect(page.getByText('30 ms')).toBeVisible();
 	await expect(page.getByText('700 ms')).toBeVisible();
+});
+
+test('the telemetry viewport renders the published projection', async ({ page }) => {
+	await page.goto('/console/');
+
+	await expect(page.locator('[data-viewport-control]')).toBeVisible();
+	await expect(page.locator('[data-failure-panels]')).toBeVisible();
+	await expect(page.locator('[data-compression]')).toBeVisible();
+	await expect(page.locator('[data-viewport-control]')).toContainText('3 rows in view');
+});
+
+test('the old evals route moves bookmarks to the console', async ({ page }) => {
+	await page.goto('/evals/');
+
+	await expect(page).toHaveURL(/\/console\/$/);
+	await expect(page.getByRole('heading', { name: 'Console' })).toBeVisible();
+});
+
+test('the evals entry point keeps a no-JS link to the console', () => {
+	const page = readFileSync(resolve(process.cwd(), 'src', 'routes', 'evals', '+page.svelte'), 'utf8');
+
+	expect(page).toContain('http-equiv="refresh"');
+	expect(page).toContain('<link rel="canonical" href={consoleHref} />');
+	expect(page).toContain('<a href={consoleHref}');
+	expect(page).not.toContain('evalRows');
+	expect(page).not.toContain('BAND_ORDER');
+});
+
+test('keyboard alone pans and zooms the telemetry viewport', async ({ page }) => {
+	await page.goto('/console/');
+
+	const viewport = page.locator('[data-viewport-control]');
+	await viewport.focus();
+	await expect(viewport).toBeFocused();
+	const start = await viewport.getAttribute('data-window-start');
+	const end = await viewport.getAttribute('data-window-end');
+
+	await page.keyboard.press('ArrowLeft');
+	await expect(viewport).not.toHaveAttribute('data-window-start', start ?? '');
+
+	const pannedStart = await viewport.getAttribute('data-window-start');
+	const pannedEnd = await viewport.getAttribute('data-window-end');
+	await page.keyboard.press('-');
+	const widenedStart = await viewport.getAttribute('data-window-start');
+	const widenedEnd = await viewport.getAttribute('data-window-end');
+	expect(span(widenedStart, widenedEnd)).toBeGreaterThan(span(pannedStart, pannedEnd));
+	await page.keyboard.press('-');
+	const widerStart = await viewport.getAttribute('data-window-start');
+	const widerEnd = await viewport.getAttribute('data-window-end');
+	await page.keyboard.press('+');
+	const zoomedStart = await viewport.getAttribute('data-window-start');
+	const zoomedEnd = await viewport.getAttribute('data-window-end');
+	expect(span(zoomedStart, zoomedEnd)).toBeLessThan(span(widerStart, widerEnd));
+	expect(span(start, end)).toBeGreaterThan(0);
+});
+
+test('panning to a month with no rows leaves a visible gap', async ({ page }) => {
+	await page.goto('/console/');
+
+	const viewport = page.locator('[data-viewport-control]');
+	await viewport.focus();
+	for (let index = 0; index < 8; index += 1) {
+		await page.keyboard.press('ArrowLeft');
+	}
+
+	await expect(page.getByText('No rows in this window').first()).toBeVisible();
+	await expect(viewport).toContainText('0 rows in view');
 });
 
 test('a missing ledger costs the page a section, never the page', async ({ page }) => {

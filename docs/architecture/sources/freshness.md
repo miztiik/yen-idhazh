@@ -4,9 +4,13 @@
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
-## The run happens every six hours
+## The run happens four times each day
 
-Four runs a day, at `20 */6 * * *`. The digest is a thing you open in the morning and again after lunch, and a once-a-day run makes the afternoon read stale by construction.
+The runs start at 06:20, 10:20, 14:20, and 18:20 UTC, expressed as
+`20 6,10,14,18 * * *`. The digest is a thing you open in the morning and again
+after lunch, and a once-a-day run makes the afternoon read stale by
+construction. The exact workflow trigger contract is
+[../../reference/github-actions.md](../../reference/github-actions.md).
 
 Twenty past the hour, not the top of it. GitHub queues scheduled jobs by load, and the top of every hour is when everyone else asks.
 
@@ -76,7 +80,7 @@ Both first-sighting and the published ledger are append-only files under `state/
 | --- | --- |
 | A 24-hour freshness window | Empties a vertical on a quiet day and costs the digest its best item. The decay already ranks fresh news first without ever losing anything. |
 | A daily item cap | Decides how many good articles a day is allowed to have before knowing what the day contains. |
-| Treating an undated article as brand new every run | It would win the top slot every six hours forever. First sighting is the fix, and it costs one append-only row. |
+| Treating an undated article as brand new every run | It would win the top slot on every run forever. First sighting is the fix, and it costs one append-only row. |
 | A `published` boolean on the seen row | Turns an append into a read-modify-write over the whole history, and two runs racing on it lose rows. |
 | Rejecting any future date outright | Clock skew between a publisher and the runner is normal and small. A zero tolerance would drop real articles for being three minutes early. |
 | Keeping rank position as the item id | Run 2 of a day renumbers every story, and anything that moved one place publishes twice. |
@@ -89,4 +93,5 @@ Both first-sighting and the published ledger are append-only files under `state/
 - [../contracts/determinism.md](../contracts/determinism.md) - the fingerprint that makes "this re-run changed nothing" checkable.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages, and which of them see the whole day.
 - [../../concepts/config.md](../../concepts/config.md) - where these knobs live and the knob-versus-fact rule.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - workflow names and exact triggers.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - the engineering contract.

@@ -1,4 +1,4 @@
-name: validate
+name: Model validation
 
 # Row #7: does the model pick survive contact with our own prompt, our own
 # extraction and our own corpus? A leaderboard ranks models against someone

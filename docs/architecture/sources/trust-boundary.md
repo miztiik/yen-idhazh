@@ -68,6 +68,25 @@ Treating every failure as a refusal was measured on `ubuntu-latest` on 2026-08-2
 
 **A permanent status is recorded and skipped, never retried.** Retrying a 404 burns the budget the transient failures need, and on a shared runner that budget is wall-clock the rest of the matrix is waiting on.
 
+## Extraction records shape and access
+
+The extractor classifies page shape after sanitization. It records `too_short`,
+`not_prose` and `boilerplate` as signals. These are evidence, not editorial
+verdicts. By default the item still publishes, often through the brief tier. A
+curator can turn on `extract.reject_not_prose` or `extract.reject_boilerplate`,
+but length and shape do not decide newsworthiness by themselves.
+
+The paywall discriminator is different. Publisher JSON-LD with
+`isAccessibleForFree = false`, or a configured marker such as "subscribe to
+continue reading", records `paywalled` and stops the item. A metered or
+login-walled source is out of scope, so the pipeline does not summarize what it
+cannot lawfully or fairly read.
+
+The item-health `detail` field is ours by construction. It is written only by
+the failure classifier, only for `unknown`, and it is sanitized before it reaches
+the ledger. It is never copied from a page. That keeps diagnostic text from
+becoming a second channel for fetched prose.
+
 ## Model output never becomes an action
 
 Asserted structurally rather than promised:
@@ -110,6 +129,7 @@ Accepting that prose instructions survive - and saying so - is the honest positi
 ## See also
 
 - [discovery.md](discovery.md) - where the text comes from before it reaches this boundary.
+- [item-health.md](item-health.md) - where extraction signals and classifier details are recorded.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload shapes, including the pinned summary.
 - [../contracts/determinism.md](../contracts/determinism.md) - why the sanitizer carries a version.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the Extract stage that owns the crossing.

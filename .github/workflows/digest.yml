@@ -1,4 +1,4 @@
-name: digest
+name: Content refresh
 
 # The run, four times a day. An orchestrator that never does the work,
 # disposable workers that do, and an assemble step that publishes whatever
@@ -10,21 +10,27 @@ name: digest
 
 on:
   schedule:
-    # Every six hours. A story that broke at 07:00 waited a full day under a
-    # daily schedule, and the digest is only worth opening if it is current.
+    # Four daytime UTC runs. A story that broke at 07:00 waited a full day under
+    # a daily schedule, and the digest is only worth opening if it is current.
     #
     # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
     # is the busiest minute on the platform; twenty past costs a reader nothing
     # and buys a run that starts closer to when it was asked for.
-    - cron: '20 */6 * * *'
+    - cron: '20 6,10,14,18 * * *'
   workflow_dispatch:
     inputs:
       date:
         description: 'Digest date (YYYY-MM-DD). Defaults to today, UTC.'
         default: ''
       shards:
-        description: 'Worker jobs to fan out across'
+        description: 'Total work-shard jobs'
+        type: choice
         default: '4'
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
       faithfulness:
         description: 'Run the faithfulness scorer (slow first run - downloads weights)'
         type: boolean
@@ -71,6 +77,11 @@ jobs:
           [ -n "$DATE" ] || DATE=$(date -u +%F)
           SHARDS="${{ inputs.shards }}"
           [ -n "$SHARDS" ] || SHARDS=4
+          SHARD_PATTERN='^[1-4]$'
+          if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
+            echo "shards must be an integer from 1 through 4" >&2
+            exit 1
+          fi
           # A scheduled run has no inputs at all, so every one of these is the
           # empty string and every one needs its default here. `faithfulness`
           # is normalized to a STRING for the same reason: read as a boolean,
@@ -125,6 +136,7 @@ jobs:
     timeout-minutes: 330
     strategy:
       fail-fast: false
+      max-parallel: 4
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
@@ -452,7 +464,7 @@ jobs:
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add frontend/public/digest state
+          git add frontend/public/digest frontend/public/telemetry state
           if git diff --cached --quiet; then
             echo "nothing changed"
             exit 0

@@ -25,6 +25,8 @@ from pathlib import Path
 from typing import Final, NamedTuple
 from urllib.parse import urlsplit
 
+from pydantic import ValidationError
+
 from idhazh import (
     assemble,
     config,
@@ -32,6 +34,7 @@ from idhazh import (
     extract,
     fetch,
     ledger,
+    publish_telemetry,
     rank,
     route,
     summarize,
@@ -204,6 +207,7 @@ def stage_plan(
         verticals.append(summary)
         items.extend(planned)
 
+    items = _dedupe_planned_items(items)
     items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
     counts = Counter(item.vertical for item in items)
     verticals = [
@@ -312,6 +316,33 @@ def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedIt
     return [item for item in items if item.item_id in keep]
 
 
+def _dedupe_planned_items(items: list[PlannedItem]) -> list[PlannedItem]:
+    """Keep one planned item per address before the crash guard counts slots."""
+    by_key: dict[str, list[PlannedItem]] = {}
+    for item in items:
+        by_key.setdefault(item.url_key, []).append(item)
+
+    duplicate_keys = [url_key for url_key, carried in by_key.items() if len(carried) > 1]
+    if not duplicate_keys:
+        return items
+
+    winners = {
+        url_key: min(
+            carried,
+            key=lambda item: (-item.rank_score, item.vertical, item.item_id, item.source_id),
+        )
+        for url_key, carried in by_key.items()
+    }
+    dropped = [item for item in items if winners[item.url_key] is not item]
+    LOG.info(
+        "plan duplicates dropped count=%s url_keys=%s source_ids=%s",
+        len(dropped),
+        ",".join(sorted(duplicate_keys)),
+        ",".join(sorted({item.source_id for item in dropped})),
+    )
+    return [item for item in items if winners[item.url_key] is item]
+
+
 def _next_run_n(date: str) -> int:
     """Which run of the day this is, read from what the last one committed.
 
@@ -319,7 +350,8 @@ def _next_run_n(date: str) -> int:
     constant: two runs claiming one run id put two different work lists under
     the same address in the manifest.
     """
-    manifest = _load_manifest(assemble.day_dir(PUBLIC_ROOT, date) / "run.json")
+    target = assemble.day_dir(PUBLIC_ROOT, date)
+    manifest = _load_manifest(target / "run.json", day=_load_day(target / "digest.json"))
     return manifest.runs[-1].n + 1 if manifest else 1
 
 
@@ -774,7 +806,7 @@ def stage_assemble(
     kinds = assemble.source_kinds(settings.sources)
     target = assemble.day_dir(PUBLIC_ROOT, plan.date)
     previous_day = _load_day(target / "digest.json")
-    previous_manifest = _load_manifest(target / "run.json")
+    previous_manifest = _load_manifest(target / "run.json", day=previous_day)
     run_n = (previous_manifest.runs[-1].n + 1) if previous_manifest else 1
     run_id = f"{plan.date}-{run_n}"
     digest_items = []
@@ -877,6 +909,9 @@ def stage_assemble(
     landed = writer.append(LEDGER, rows)
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
+    publish_telemetry.publish(
+        state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry"
+    )
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s",
         plan.date,
@@ -920,8 +955,44 @@ def _load_day(path: Path) -> DigestDay | None:
     return DigestDay.from_json(path.read_text(encoding="utf-8")) if path.exists() else None
 
 
-def _load_manifest(path: Path) -> RunManifest | None:
-    return RunManifest.from_json(path.read_text(encoding="utf-8")) if path.exists() else None
+def _load_manifest(path: Path, *, day: DigestDay | None = None) -> RunManifest | None:
+    if not path.exists():
+        return None
+    text = path.read_text(encoding="utf-8")
+    try:
+        manifest = RunManifest.from_json(text)
+    except ValidationError:
+        if day is None:
+            raise
+        return _manifest_with_run_vertical_counts(json.loads(text), day)
+    if day is None or manifest.version == RunManifest.schema_version():
+        return manifest
+    return _manifest_with_run_vertical_counts(json.loads(text), day)
+
+
+def _manifest_with_run_vertical_counts(payload: object, day: DigestDay) -> RunManifest:
+    if not isinstance(payload, dict):
+        return RunManifest.model_validate(payload)
+
+    counts: Counter[tuple[int, str]] = Counter(
+        (item.introduced_by_run, item.vertical) for item in day.items
+    )
+    migrated_runs = []
+    for run in payload.get("runs", []):
+        if not isinstance(run, dict):
+            migrated_runs.append(run)
+            continue
+        run_n = int(run.get("n", 0) or 0)
+        verticals = []
+        for vertical in run.get("verticals", []):
+            if not isinstance(vertical, dict):
+                verticals.append(vertical)
+                continue
+            vertical_id = str(vertical.get("id", ""))
+            verticals.append({**vertical, "published": counts[(run_n, vertical_id)]})
+        migrated_runs.append({**run, "verticals": verticals})
+    migrated = {**payload, "version": RunManifest.schema_version(), "runs": migrated_runs}
+    return RunManifest.model_validate(migrated)
 
 
 # --- entry point --------------------------------------------------------------

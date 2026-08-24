@@ -52,10 +52,20 @@ function writeItemHealthCanary() {
 }
 
 writeItemHealthCanary();
+execFileSync(
+	'python',
+	['-m', 'idhazh.publish_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],
+	{
+		stdio: 'inherit',
+		shell: process.platform === 'win32',
+		cwd: resolve(process.cwd(), '..'),
+		env: { ...process.env, PYTHONPATH: resolve(process.cwd(), '..', 'backend') }
+	}
+);
 
 console.log(`building the site from ${ROOT}`);
 execFileSync('npm', ['run', 'build'], {
 	stdio: 'inherit',
 	shell: process.platform === 'win32',
-	env: { ...process.env, DIGEST_ROOT: ROOT, STATE_ROOT: STATE }
+	env: { ...process.env, DIGEST_ROOT: ROOT, STATE_ROOT: STATE, TELEMETRY_ROOT: join(STATE, 'telemetry') }
 });

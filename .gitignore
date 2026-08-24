@@ -52,3 +52,4 @@ backend/var/
 
 # Staged by frontend/scripts/copy-visuals.mjs from the pipeline's own output.
 frontend/static/digest/
+frontend/static/telemetry/

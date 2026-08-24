@@ -1,4 +1,4 @@
-name: measure
+name: Measurements
 
 # Measures real prefill/decode throughput on a stock GitHub-hosted runner so the
 # pipeline design rests on numbers rather than estimates (CLAUDE.md Rule #10).
@@ -7,21 +7,30 @@ name: measure
 on:
   workflow_dispatch:
     inputs:
+      target:
+        description: 'Measurement target'
+        type: choice
+        required: true
+        default: llm
+        options:
+          - llm
+          - image
+          - corpus
+          - runtime
       models:
         description: 'Comma-separated HF GGUF refs (repo:file)'
         default: 'Qwen/Qwen3-4B-GGUF:Qwen3-4B-Q4_K_M.gguf,Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf'
       threads:
-        description: 'Threads for llama-bench (runner has 4 vCPU)'
+        description: 'Comma-separated llama-bench thread counts, for example 4,8'
         default: '4'
       corpus_links:
         description: 'How many real links to measure for the length distribution'
         default: '200'
       runtime_candidate:
-        description: 'llama-server runtime candidate. none keeps the existing jobs.'
+        description: 'llama-server runtime candidate'
         type: choice
-        default: none
+        default: baseline
         options:
-          - none
           - baseline
           - np1
           - batch2048
@@ -30,8 +39,12 @@ on:
           - load_mode_mmap_mlock
           - kv_q8
           - prio_poll
+          - threads
           - threads_batch
           - np2_inflight
+      runtime_threads:
+        description: 'Value for --threads when runtime_candidate is threads'
+        default: '8'
       runtime_threads_batch:
         description: 'Value for -tb when runtime_candidate is threads_batch'
         default: '4'
@@ -39,39 +52,71 @@ on:
 permissions:
   contents: read
 
+env:
+  LLAMA_CPP_BUILD: b10598
+  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
+  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+
 jobs:
   llm:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.runtime_candidate == 'none' || inputs.runtime_candidate == '' }}
+    if: ${{ inputs.target == 'llm' }}
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    timeout-minutes: 330
     steps:
       - uses: actions/checkout@v6
 
       - name: Record runner hardware
         run: |
-          echo "nproc=$(nproc)"
-          free -g | sed -n '1,2p'
-          lscpu | grep -E 'Model name|MHz|Flags' | head -3
-          df -h / /mnt 2>/dev/null | sed -n '1,4p'
+          set -euo pipefail
+          mkdir -p backend/var
+          {
+            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "nproc=$(nproc)"
+            echo "nproc_all=$(nproc --all)"
+            echo "getconf_online=$(getconf _NPROCESSORS_ONLN)"
+            echo "getconf_configured=$(getconf _NPROCESSORS_CONF)"
+            echo "runner_image_os=${ImageOS:-unknown}"
+            echo "runner_image_version=${ImageVersion:-unknown}"
+            if [ -r /sys/fs/cgroup/cpu.max ]; then
+              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
+            fi
+            if [ -r /sys/fs/cgroup/cpuset.cpus.effective ]; then
+              echo "cgroup_cpuset=$(cat /sys/fs/cgroup/cpuset.cpus.effective)"
+            fi
+            grep '^Cpus_allowed_list:' /proc/self/status
+            cat /proc/self/cgroup
+            free -g | sed -n '1,2p'
+            lscpu
+            echo "cpu_core_map:"
+            lscpu -p=CPU,CORE,SOCKET,NODE
+            echo "thread_siblings:"
+            for topology in /sys/devices/system/cpu/cpu*/topology/thread_siblings_list; do
+              printf '%s=%s\n' \
+                "$(basename "$(dirname "$(dirname "$topology")")")" \
+                "$(cat "$topology")"
+            done
+            df -h / /mnt 2>/dev/null | sed -n '1,4p'
+          } | tee backend/var/hardware.txt
 
-      # Search recent releases for the Linux binary rather than building a URL
-      # from `releases/latest`. On 2026-08-22 that endpoint returned a tag with
-      # no binaries at all, so the constructed URL 404ed and the whole
-      # measurement failed on a step that had nothing to do with measuring.
-      - name: Install llama.cpp
+      # The measurement runtime is immutable even while production still
+      # follows the latest compatible release. A candidate and an incumbent
+      # measured on different builds are not a controlled comparison.
+      - name: Install pinned llama.cpp
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           URL=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
-            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
           if [ -z "$URL" ] || [ "$URL" = "null" ]; then
-            echo "no plain ubuntu-x64 build in the last 30 llama.cpp releases" >&2
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
             exit 1
           fi
           echo "llama.cpp from $URL"
-          curl -sSL -o llama.tar.gz "$URL"
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           # The whole directory, not one binary. These builds are dynamically
           # linked, so copying llama-bench alone leaves libllama-bench-impl.so
@@ -81,59 +126,43 @@ jobs:
           echo "LLAMA_BIN=$BIN" >> "$GITHUB_ENV"
           echo "LD_LIBRARY_PATH=$BIN" >> "$GITHUB_ENV"
           chmod +x "$BIN"/llama-* || true
-          LD_LIBRARY_PATH="$BIN" "$BIN/llama-bench" --help >/dev/null && echo "llama-bench ok"
+          {
+            echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
+            echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
+            sha256sum "$BIN/llama-bench"
+          } | tee -a backend/var/hardware.txt
 
-      - name: Cache GGUF weights
-        id: gguf
-        uses: actions/cache@v4
-        with:
-          path: backend/models
-          key: gguf-${{ hashFiles('.github/workflows/measure.yml') }}
-
-      - name: Record weight-cache state
-        run: |
-          mkdir -p backend/var
-          # A cache-hit run and a cache-miss run are different measurements. The
-          # artifact has to say which one it was, or the wall-clock is unreadable.
-          echo "gguf_cache_hit=${{ steps.gguf.outputs.cache-hit == 'true' }}" \
-            | tee backend/var/cache-state.txt
-
-      - name: Download weights (timed)
-        if: steps.gguf.outputs.cache-hit != 'true'
+      - name: Download and benchmark exact models
+        env:
+          MODEL_REFS: ${{ inputs.models }}
+          THREAD_COUNTS: ${{ inputs.threads }}
         run: |
           set -euo pipefail
-          mkdir -p backend/models
-          IFS=',' read -ra REFS <<< "${{ inputs.models }}"
-          for ref in "${REFS[@]}"; do
-            repo="${ref%%:*}"; file="${ref##*:}"
-            start=$(date +%s)
-            curl -sSL --retry 3 -o "backend/models/${file}" \
-              "https://huggingface.co/${repo}/resolve/main/${file}"
-            echo "download ${file} $(( $(date +%s) - start ))s $(du -h "backend/models/${file}" | cut -f1)" \
-              | tee -a backend/var/cache-state.txt
+          max_threads=$(( $(nproc) * 2 ))
+          IFS=',' read -ra THREADS <<< "$THREAD_COUNTS"
+          for threads in "${THREADS[@]}"; do
+            if [[ ! "$threads" =~ ^[1-9][0-9]*$ ]]; then
+              echo "threads must be comma-separated positive integers" >&2
+              exit 2
+            fi
+            if [ "$threads" -gt "$max_threads" ]; then
+              echo "thread count ${threads} exceeds 2 x nproc (${max_threads})" >&2
+              exit 2
+            fi
           done
-
-      - name: Benchmark at real article lengths
-        run: |
-          set -euo pipefail
-          mkdir -p backend/var
-          # 730 / 1800 / 4850 input tokens = short / medium / long article buckets
-          for m in backend/models/*.gguf; do
-            echo "=== $m"
-            "$LLAMA_BIN/llama-bench" -m "$m" -p 730,1800,4850 -n 250 \
-              -t ${{ inputs.threads }} -r 3 -o json >> backend/var/llm.json
-          done
-
-      - name: Summarise
-        run: python3 backend/utilities/summarise_bench.py backend/var/llm.json
+          python3 backend/utilities/measure_llm.py \
+            --models "$MODEL_REFS" \
+            --threads "$THREAD_COUNTS" \
+            --binary "$LLAMA_BIN/llama-bench"
 
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: bench-llm
           path: backend/var/
 
   image:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.runtime_candidate == 'none' || inputs.runtime_candidate == '' }}
+    if: ${{ inputs.target == 'image' }}
     runs-on: ubuntu-latest
     timeout-minutes: 120
     steps:
@@ -168,7 +197,7 @@ jobs:
           path: backend/var/
 
   corpus:
-    if: ${{ github.event_name != 'workflow_dispatch' || inputs.runtime_candidate == 'none' || inputs.runtime_candidate == '' }}
+    if: ${{ inputs.target == 'corpus' }}
     # The length buckets every per-article cost figure multiplies by are invented
     # until this job runs. It reaches the open web, which is why it lives here and
     # never in a test (Rule #7).
@@ -199,7 +228,7 @@ jobs:
           path: backend/var/corpus.json
 
   runtime:
-    if: ${{ github.event_name == 'workflow_dispatch' && inputs.runtime_candidate != 'none' && inputs.runtime_candidate != '' }}
+    if: ${{ inputs.target == 'runtime' }}
     runs-on: ubuntu-latest
     timeout-minutes: 330
     env:
@@ -222,49 +251,53 @@ jobs:
             echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
             echo "runner=${RUNNER_OS:-unknown}"
             echo "nproc=$(nproc)"
+            echo "nproc_all=$(nproc --all)"
+            echo "getconf_online=$(getconf _NPROCESSORS_ONLN)"
+            if [ -r /sys/fs/cgroup/cpu.max ]; then
+              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
+            fi
+            grep '^Cpus_allowed_list:' /proc/self/status
             free -g | sed -n '1,2p'
-            lscpu | grep -E 'Model name|MHz' | head -3
+            lscpu
+            echo "cpu_core_map:"
+            lscpu -p=CPU,CORE,SOCKET,NODE
           } | tee backend/var/runtime-sweep/hardware.txt
 
       - name: Install
         run: pip install -e .
 
-      - name: Cache weights and runtime
-        id: weights
-        uses: actions/cache@v4
-        with:
-          path: |
-            backend/models
-            backend/bin
-          key: runtime-sweep-${{ env.MODEL_FILE }}-v1
-
       - name: Fetch runtime and weights
-        if: steps.weights.outputs.cache-hit != 'true'
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           mkdir -p backend/bin backend/models
-          URL=$(curl -sS -H "Authorization: ******" \
-            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
-            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
-          if [ -z "$URL" ]; then
-            echo "no ubuntu-x64 llama.cpp build found - rate limited, or the asset was renamed" >&2
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
             exit 1
           fi
-          curl -sSL -o llama.tar.gz "$URL"
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
           cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
-          curl -sSL -o "backend/models/${MODEL_FILE}" \
+          curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${MODEL_FILE}" \
             "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
 
-      - name: Record weight-cache state
+      - name: Record input identity
         run: |
           {
-            echo "gguf_cache_hit=${{ steps.weights.outputs.cache-hit == 'true' }}"
+            echo "gguf_cache_hit=false"
+            echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
+            echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
+            sha256sum backend/bin/llama-server
             stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
+            sha256sum "backend/models/${MODEL_FILE}"
           } | tee backend/var/runtime-sweep/cache-state.txt
 
       - name: Build fixed five-article corpus
@@ -276,6 +309,7 @@ jobs:
           python -m idhazh plan --date "$DATE" --cap 5
           python - <<'PY'
           import json
+          import hashlib
           import os
           from collections import Counter
           from pathlib import Path
@@ -300,8 +334,9 @@ jobs:
       - name: Measure runtime candidate
         env:
           RUNTIME_CANDIDATE: ${{ inputs.runtime_candidate }}
+          RUNTIME_THREADS: ${{ inputs.runtime_threads }}
           RUNTIME_THREADS_BATCH: ${{ inputs.runtime_threads_batch }}
-          GGUF_CACHE_HIT: ${{ steps.weights.outputs.cache-hit == 'true' }}
+          GGUF_CACHE_HIT: 'false'
         run: |
           set -euo pipefail
           python - <<'PY'
@@ -326,9 +361,16 @@ jobs:
           ROOT = Path("backend/var/runtime-sweep")
           CONFIG_ROOT = ROOT / "configs"
           MODEL_FILE = os.environ["MODEL_FILE"]
+          THREADS = int(os.environ["RUNTIME_THREADS"])
           THREADS_BATCH = int(os.environ["RUNTIME_THREADS_BATCH"])
+          MAX_THREADS = 2 * (os.cpu_count() or 1)
           REPEATS = 3
           SERVER_PORT = 8080
+
+          if not 1 <= THREADS <= MAX_THREADS:
+              raise SystemExit(f"runtime_threads must be in 1..{MAX_THREADS}")
+          if not 1 <= THREADS_BATCH <= MAX_THREADS:
+              raise SystemExit(f"runtime_threads_batch must be in 1..{MAX_THREADS}")
 
           def candidate_update(name):
               if name == "baseline":
@@ -347,6 +389,8 @@ jobs:
                   return {"cache_type_k": "q8_0", "cache_type_v": "q8_0"}, 1
               if name == "prio_poll":
                   return {"priority": 2, "poll": 100}, 1
+              if name == "threads":
+                  return {"n_threads": THREADS}, 1
               if name == "threads_batch":
                   return {"n_threads_batch": THREADS_BATCH}, 1
               if name == "np2_inflight":
@@ -405,9 +449,25 @@ jobs:
 
           def collect_digests(label, repeat):
               items_dir = Path("backend/var/run") / DATE / "items"
+              articles = sorted(items_dir.glob("*.article.json"))
               summaries = sorted(items_dir.glob("*.summary.json"))
+              if len(articles) != 5:
+                  raise RuntimeError(f"{label} repeat {repeat} wrote {len(articles)} articles, not 5")
               if len(summaries) != 5:
                   raise RuntimeError(f"{label} repeat {repeat} wrote {len(summaries)} summaries, not 5")
+              sources = {}
+              for path in articles:
+                  data = json.loads(path.read_text(encoding="utf-8"))
+                  source = {
+                      key: data.get(key)
+                      for key in ("title", "text", "source_form", "truncated", "brief")
+                  }
+                  canonical = json.dumps(
+                      source, ensure_ascii=True, sort_keys=True, separators=(",", ":")
+                  )
+                  sources[data["item_id"]] = hashlib.sha256(
+                      canonical.encode("utf-8")
+                  ).hexdigest()
               digests = {}
               per_item = []
               for path in summaries:
@@ -425,7 +485,7 @@ jobs:
                       "input_tokens": data["input_tokens"],
                       "output_tokens": data["output_tokens"],
                   })
-              return digests, per_item
+              return sources, digests, per_item
 
           def run_once(label, update, repeat, worker_count):
               cfg = write_config(f"{label}-{repeat}", update)
@@ -493,7 +553,8 @@ jobs:
                           server.kill()
                           server.wait(timeout=20)
                       sampler.join(timeout=5)
-              digests, per_item = collect_digests(label, repeat)
+              sources, digests, per_item = collect_digests(label, repeat)
+              summarize_total_ms = sum(item["summarize_ms"] for item in per_item)
               return {
                   "label": label,
                   "candidate": CANDIDATE,
@@ -503,9 +564,11 @@ jobs:
                   "startup_ms": startup_ms,
                   "work_ms": work_ms,
                   "total_ms": total_ms,
+                  "model_path_ms": startup_ms + summarize_total_ms,
                   "server_rss_samples": rss_samples,
                   "cgroup_memory_peak_bytes": cgroup_peak(),
                   "server_facts": parse_server_facts(log_path),
+                  "sources": sources,
                   "digests": digests,
                   "per_item": per_item,
               }
@@ -515,9 +578,9 @@ jobs:
           labels = ["baseline"] if CANDIDATE == "baseline" else ["baseline", CANDIDATE]
           updates = {"baseline": ({}, 1), CANDIDATE: (update, workers)}
           results = []
-          for label in labels:
-              current_update, worker_count = updates[label]
-              for repeat in range(1, REPEATS + 1):
+          for repeat in range(1, REPEATS + 1):
+              for label in labels:
+                  current_update, worker_count = updates[label]
                   result = run_once(label, current_update, repeat, worker_count)
                   results.append(result)
                   print(
@@ -531,15 +594,27 @@ jobs:
               digest_sets.setdefault(result["label"], []).append(result["digests"])
           verdict = "passed"
           problems = []
+          expected_sources = results[0]["sources"]
+          for result in results[1:]:
+              if result["sources"] != expected_sources:
+                  verdict = "rejected_input_drift"
+                  problems.append({
+                      "label": result["label"],
+                      "repeat": result["repeat"],
+                      "expected_sources": expected_sources,
+                      "actual_sources": result["sources"],
+                  })
           for label, maps in digest_sets.items():
               first = maps[0]
               for index, current in enumerate(maps[1:], start=2):
                   if current != first:
-                      verdict = "rejected_output_drift"
+                      if verdict == "passed":
+                          verdict = "rejected_output_drift"
                       problems.append({"label": label, "repeat": index, "expected": first, "actual": current})
           if CANDIDATE != "baseline":
               if digest_sets[CANDIDATE][0] != digest_sets["baseline"][0]:
-                  verdict = "rejected_output_drift"
+                  if verdict == "passed":
+                      verdict = "rejected_output_drift"
                   problems.append({
                       "label": CANDIDATE,
                       "expected": digest_sets["baseline"][0],
@@ -559,14 +634,19 @@ jobs:
                   "startup_ms": stats(label, "startup_ms"),
                   "work_ms": stats(label, "work_ms"),
                   "total_ms": stats(label, "total_ms"),
+                  "model_path_ms": stats(label, "model_path_ms"),
               }
               for label in labels
           }
           if CANDIDATE != "baseline":
-              baseline = timing["baseline"]["total_ms"]
-              candidate = timing[CANDIDATE]["total_ms"]
+              comparison_key = (
+                  "total_ms" if CANDIDATE == "np2_inflight" else "model_path_ms"
+              )
+              baseline = timing["baseline"][comparison_key]
+              candidate = timing[CANDIDATE][comparison_key]
               faster_by_ms = baseline["median"] - candidate["median"]
               timing["candidate_vs_baseline"] = {
+                  "comparison_key": comparison_key,
                   "faster_by_ms": faster_by_ms,
                   "beats_baseline_outside_spread": faster_by_ms > max(
                       baseline["spread"], candidate["spread"]

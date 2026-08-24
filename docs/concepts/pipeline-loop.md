@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -46,7 +46,13 @@ In order, with what each one owns:
 
 The orchestration mirrors the same rule one level up: a planning step decides the work and divides it, a set of independent workers each does a batch on its own machine, and an assembling step collects whatever finished.
 
-**The loop turns four times a day, every six hours.** All four runs append to the same dated digest rather than replacing it, so a day grows through the day. That is only safe because an item's identity comes from its address rather than its rank - see [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+**The loop turns four times a day: 06:20, 10:20, 14:20, and 18:20 UTC.** All
+four runs append to the same dated digest rather than replacing it, so a day
+grows through the day. That is only safe because an item's identity comes from
+its address rather than its rank - see
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+The exact trigger contract is
+[../reference/github-actions.md](../reference/github-actions.md).
 
 Four invariants hold regardless of how the batches are sized:
 
@@ -59,6 +65,10 @@ Four invariants hold regardless of how the batches are sized:
   locality and not correctness.
 - **An item whose fingerprint already matches does no work and writes no eval row.** A re-run that changed nothing measured nothing. What the fingerprint covers, and what happens when it matches but the words differ, is [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
+- **Run counts stay run-scoped.** The day payload grows across runs. The run
+  manifest does not. Each `runs[]` record says what that run planned, skipped,
+  failed and introduced. Its `verticals[].published` count is the number of
+  items introduced by that run for that vertical, not the accumulated day total.
 
 ## What one run leaves for the next
 
@@ -89,6 +99,15 @@ See [../architecture/sources/freshness.md](../architecture/sources/freshness.md)
 
 ## Design rationale
 
+The plan step guarantees one `url_key` across the whole run before it applies
+the safety ceiling. Discovery deduplicates repeated entries inside one feed, and
+ranking deduplicates repeated entries inside one vertical. The plan step is the
+first place that can see a story carried by two verticals. It keeps the
+highest-ranked occurrence, with stable tie-breaks, then records the dropped
+duplicates in the log. A duplicate is not a bad source and not a failed item. It
+is one address seen twice, so it degrades to one planned item instead of failing
+the run or consuming a ceiling slot.
+
 The pipeline records shape. It does not judge newsworthiness. A one-line item can
 be news, and a long article can be empty. Extract therefore records `too_short`,
 `not_prose` and `boilerplate` by default, then lets the item continue. Only a
@@ -98,7 +117,8 @@ Owner override O3.
 ## See also
 
 - [../architecture/sources/discovery.md](../architecture/sources/discovery.md) - what Collect consults, and how the source set changes over time.
-- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the six-hour cadence, how age is scored, and what stops an article publishing twice.
+- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the run cadence, how age is scored, and what stops an article publishing twice.
+- [../reference/github-actions.md](../reference/github-actions.md) - workflow names and exact triggers.
 - [../architecture/sources/health.md](../architecture/sources/health.md) - what every feed did on every run, and the quarantine that reads it.
 - [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md) - what Extract does to a stranger's bytes, and the canaries that assert it.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what Summarize asks a model for, and where every number in that ask comes from.
