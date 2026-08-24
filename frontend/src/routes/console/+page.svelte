@@ -11,10 +11,13 @@
 	 * still carries server-rendered SVG fallback.
 	 */
 	import { base } from '$app/paths';
+	import { axisLabels, CELL_PX, GAP_PX, type LabelAlign } from '$lib/charts/run-history';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import type { Health } from './+page.server';
 
 	let { data } = $props();
+
+	let strip = $state<HTMLDivElement | null>(null);
 
 	const stages = [
 		{ key: 'fetchMs', label: 'fetch', colour: 'var(--band-low)' },
@@ -32,9 +35,9 @@
 	};
 
 	const KEY = $derived([
-		{ health: 'green' as Health, text: 'every item published' },
-		{ health: 'amber' as Health, text: 'some items lost, still above the floor' },
-		{ health: 'red' as Health, text: `run failed or fell under ${data.floorPct}%` }
+		{ health: 'green' as Health, text: 'ran clean' },
+		{ health: 'amber' as Health, text: 'worth a look' },
+		{ health: 'red' as Health, text: `failed, or under ${data.floorPct}% published` }
 	]);
 
 	const worst = $derived(
@@ -42,6 +45,27 @@
 	);
 
 	const totalRuns = $derived(data.grid.reduce((count, day) => count + day.squares.length, 0));
+	const axis = $derived(axisLabels(data.grid.map((day) => day.date)));
+
+	/** A label is placed inside its column, not laid out by it, so the widest
+	 * date on the axis cannot push a single day track out of step. */
+	const ANCHOR: Record<LabelAlign, string> = {
+		start: 'left: 0',
+		centre: 'left: 50%; transform: translateX(-50%)',
+		end: 'right: 0'
+	};
+
+	// The newest run is the one an operator came to see, and it sits at the far
+	// end. One frame, so the strip has been laid out before it is moved, and
+	// never again - after this the scroll position belongs to the operator.
+	$effect(() => {
+		const node = strip;
+		if (!node) return;
+		const frame = requestAnimationFrame(() => {
+			node.scrollLeft = node.scrollWidth - node.clientWidth;
+		});
+		return () => cancelAnimationFrame(frame);
+	});
 
 	function seconds(ms: number): string {
 		return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;
@@ -67,31 +91,61 @@
 
 	<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">Run health</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		One column per day, one square per run, newest day first. Skipped items are not counted
-		against a run - an article we already published is skipped by design.
+		One column per day, oldest to newest, one square per recorded run with run 1 at the bottom.
+		Skipped items are not counted against a run - an article we already published is skipped by
+		design.
 	</p>
 
 	{#if totalRuns === 0}
 		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-grid="empty">
-			No run has recorded a manifest yet. The grid fills as runs publish.
+			No run has recorded a manifest yet. The strip fills as runs publish.
 		</p>
 	{:else}
-		<div class="mt-4 overflow-x-auto pb-1">
-			<div class="flex items-start gap-1.5" data-grid="days">
-				{#each data.grid as day (day.date)}
-					<div class="flex w-8 shrink-0 flex-col items-center gap-1.5" data-day={day.date}>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div
+			class="mt-4 overflow-x-auto pb-1"
+			role="region"
+			tabindex="0"
+			aria-label="Run health history, oldest to newest"
+			bind:this={strip}
+			data-run-history
+		>
+			<div
+				class="grid w-max min-w-full items-end justify-end"
+				style="grid-template-columns: repeat({data.grid.length}, {CELL_PX}px); gap: {GAP_PX}px"
+				data-grid="days"
+			>
+				{#each data.grid as day, index (day.date)}
+					<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
+					     upward, while the DOM keeps reading run 1 first. -->
+					<div
+						class="flex flex-col-reverse justify-start"
+						style="grid-row: 1; grid-column: {index + 1}; gap: {GAP_PX}px"
+						data-day={day.date}
+					>
 						{#each day.squares as square (square.runId)}
 							<span
-								class="size-8 rounded-sm"
-								style="background: {COLOUR[square.health]}"
+								class="rounded-sm"
+								style="width: {CELL_PX}px; height: {CELL_PX}px; background: {COLOUR[
+									square.health
+								]}"
 								title={square.label}
 								aria-label={square.label}
 								data-health={square.health}
 								role="img"
 							></span>
 						{/each}
-						<span class="text-[0.625rem] tabular-nums text-text-tertiary">
-							{day.date.slice(8)}
+					</div>
+				{/each}
+
+				{#each axis as label (label.column)}
+					<div class="relative h-4" style="grid-row: 2; grid-column: {label.column}">
+						<span
+							class="absolute top-0 whitespace-nowrap text-[0.625rem] leading-4 tabular-nums text-text-tertiary"
+							style={ANCHOR[label.align]}
+							data-axis-label={label.column}
+						>
+							{label.text}
 						</span>
 					</div>
 				{/each}
