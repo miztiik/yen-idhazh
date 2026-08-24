@@ -37,6 +37,22 @@ interface CompressionPoint {
 	truncation_flagged: boolean;
 }
 
+/** What the model managed in a day, with reading and writing kept apart.
+ *
+ * Prefill is the model reading the article, decode is it writing the summary,
+ * and they run at different rates - so one blended figure cannot say which of
+ * the two made a slow day slow.
+ */
+export interface ThroughputDay {
+	date: string;
+	items: number;
+	prefillTps: number;
+	decodeTps: number;
+	prefillMsPerToken: number;
+	decodeMsPerToken: number;
+	cacheHitPct: number;
+}
+
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
 
@@ -223,6 +239,34 @@ export function load() {
 		.filter((day) => day.fetchMs > 0 || day.extractMs > 0 || day.summarizeMs > 0 || day.scoreMs > 0)
 		.sort((a, b) => b.date.localeCompare(a.date));
 
+	// A rate is a ratio, so a day is the sum of its parts and never the median of
+	// them: the four workers each did a share of the same day, and averaging four
+	// per-item rates would weigh a 60-word release note like a 2000-word feature.
+	const throughputDays: ThroughputDay[] = [...itemHealthByDate.entries()]
+		.map(([date, group]) => {
+			const total = (name: string) =>
+				group.reduce((running, row) => running + (measured(row, name) ?? 0), 0);
+			const prefillMs = total('prefill_ms');
+			const decodeMs = total('decode_ms');
+			const cached = total('cached_tokens');
+			const prompt = total('input_tokens');
+			const written = total('output_tokens');
+			// What prefill actually paid for. The cache carried the rest, so counting
+			// the whole prompt would report a rate the machine never ran at.
+			const read = Math.max(prompt - cached, 0);
+			return {
+				date,
+				items: group.filter((row) => measured(row, 'prefill_ms') !== null).length,
+				prefillTps: prefillMs > 0 ? read / (prefillMs / 1000) : 0,
+				decodeTps: decodeMs > 0 ? written / (decodeMs / 1000) : 0,
+				prefillMsPerToken: read > 0 ? prefillMs / read : 0,
+				decodeMsPerToken: written > 0 ? decodeMs / written : 0,
+				cacheHitPct: prompt > 0 ? (cached / prompt) * 100 : 0
+			};
+		})
+		.filter((day) => day.prefillTps > 0 || day.decodeTps > 0)
+		.sort((a, b) => b.date.localeCompare(a.date));
+
 	const scoreDays: ScoreStats[] = [...scoresByDate.entries()]
 		.map(([date, group]) => {
 			const num = (name: string) => group.map((r) => Number(r[name] ?? 0) || 0);
@@ -263,6 +307,7 @@ export function load() {
 		.sort((a, b) => a.date.localeCompare(b.date));
 	return {
 		timingDays,
+		throughputDays,
 		scoreDays,
 		manifests,
 		totalRows: rows.length,

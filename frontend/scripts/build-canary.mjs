@@ -40,13 +40,17 @@ function writeItemHealthCanary() {
 	const date = `${year}-${month}-${day}`;
 	const dir = join(STATE, 'item-health');
 	mkdirSync(dir, { recursive: true });
+	// The token and millisecond columns are one real request each, taken from
+	// run 32742672105 job work (0): the cold first request, then two that reused
+	// the slot's prompt. A made-up cache figure would make the console's rate
+	// look like arithmetic nobody could check.
 	writeFileSync(
 		join(dir, `${year}-${month}.csv`),
 		[
-			'version,date,run_id,item_id,url_key,canonical_url,vertical,source_id,stage,outcome,code,http_status,source_chars,source_words,summary_words,detail,fetch_ms,extract_ms,summarize_ms',
-			`2026-08-23T18:40,${date},${date}-1,ai-01,one,https://canary.example/one,ai,canary,publish,ok,,,1200,180,45,,100,20,600`,
-			`2026-08-23T18:40,${date},${date}-1,ai-02,two,https://canary.example/two,ai,canary,publish,ok,,,1200,180,45,,200,30,700`,
-			`2026-08-23T18:40,${date},${date}-1,ai-03,three,https://canary.example/three,ai,canary,publish,ok,,,1200,180,45,,300,40,800`
+			'version,date,run_id,item_id,url_key,canonical_url,vertical,source_id,stage,outcome,code,http_status,source_chars,source_words,summary_words,detail,fetch_ms,extract_ms,summarize_ms,prefill_ms,decode_ms,input_tokens,output_tokens,cached_tokens',
+			`2026-08-24T18:30,${date},${date}-1,ai-01,one,https://canary.example/one,ai,canary,publish,ok,,,1200,180,45,,100,20,600,79100,29062,942,170,0`,
+			`2026-08-24T18:30,${date},${date}-1,ai-02,two,https://canary.example/two,ai,canary,publish,ok,,,1200,180,45,,200,30,700,7120,28206,975,167,900`,
+			`2026-08-24T18:30,${date},${date}-1,ai-03,three,https://canary.example/three,ai,canary,publish,ok,,,1200,180,45,,300,40,800,8883,22537,999,129,900`
 		].join('\n') + '\n'
 	);
 }

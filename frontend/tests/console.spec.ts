@@ -346,6 +346,31 @@ test('stage medians come from item health, not the score ledger', async ({ page 
 	await expect(page.getByText('700 ms')).toBeVisible();
 });
 
+test('reading and writing are reported as separate rates', async ({ page }) => {
+	await page.goto('/console/');
+
+	await expect(page.getByText('Model tokens per second')).toBeVisible();
+	const day = page.locator('[data-throughput-day]').first();
+
+	// Summed, not averaged: 2916 prompt tokens less 1800 the cache carried is
+	// 1116 read in 95.103 s, and 466 written in 79.805 s.
+	await expect(day).toContainText('11.73 tok/s');
+	await expect(day).toContainText('85 ms');
+	await expect(day).toContainText('5.84 tok/s');
+	await expect(day).toContainText('171 ms');
+	await expect(day).toContainText('62% of prompt reused');
+
+	// Both bars share one scale, so the slower rate has to draw shorter. Drawn
+	// against their own maxima they would both be full width and say nothing.
+	const widths = await day.locator('.h-3 > div').evaluateAll((bars) =>
+		bars.map((bar) => bar.getBoundingClientRect().width)
+	);
+	expect(widths).toHaveLength(2);
+	expect(widths[0]).toBeGreaterThan(0);
+	expect(widths[1]).toBeGreaterThan(0);
+	expect(widths[1]).toBeLessThan(widths[0]);
+});
+
 test('the telemetry viewport renders the published projection', async ({ page }) => {
 	await page.goto('/console/');
 

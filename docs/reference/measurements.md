@@ -295,6 +295,9 @@ band. Because `band_for()` changes the rendered prompt, only the roughly
 but the log did not print the band or article token count beside each timing
 line.
 
+**Superseded 2026-08-24.** The log did carry the proof; the workflow's summary
+step was not grepping for it. See "Reuse settled" below.
+
 | Slot | Prompt-eval tokens, in task order |
 | --- | --- |
 | 2 | 2441, 580, 654, 781, 862, 621, 738, 1195, 1064, 1883 |
@@ -336,6 +339,84 @@ that logs slot id, item id, band id, rendered system-prompt tokens, article
 tokens, full prompt tokens, evaluated prompt tokens, and a reused-prefix field
 such as `p0` or `n_past`; the golden set's `output_digest` values must stay
 unchanged.
+
+### Reuse settled: the log did prove it, the grep hid it
+
+**Measured 2026-08-24** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
+`32742672105`, job `work (0)`, `Qwen3-8B-Q4_K_M.gguf` through `llama-server`
+with `--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4`. The job
+log did not name the CPU model or the llama.cpp build.
+
+The section above concluded the log could not prove prefix reuse. That was a
+reading of the workflow's summary step, not of the log. The step greps for
+`kv cache rm [`, which this build never emits. The uploaded `runtime-log-0`
+artifact carries the line that settles it:
+
+```text
+slot get_availabl: id  3 | task -1 | selected slot by LRU, t_last = -1
+slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, f_sim_best = 0.923 (> 0.100 thold), f_keep = 0.811
+slot print_timing: id  3 | task 172 | prompt eval time = 7119.70 ms / 75 tokens
+```
+
+`f_sim_best` is the longest common prefix divided by the incoming prompt, and
+`f_keep` is the same prefix divided by what the slot already held. On that
+request about 900 of roughly 975 prompt tokens were reused and 75 were
+evaluated: 7.1 s instead of about 88 s.
+
+| Quantity | `work (0)` |
+| --- | --- |
+| Requests | 34 |
+| Cold, selected by LRU | 1 |
+| Selected by LCP similarity | 33 |
+| Prompt tokens evaluated | 31,714 |
+| Prompt tokens reused (approx.) | 28,700 |
+
+Two requests fell to `f_sim_best` 0.29 and 0.14. Both sit where the worker
+crosses a prompt band, which is the reorder question above seen from the other
+side: the band-varying numbers sit early in the system prompt, so a band change
+truncates the shared prefix. That is now a measured cost, not a suspicion.
+
+Only one of the four slots was ever used. The workflow passes no `-np`, so
+llama.cpp built its default four, and the worker sends one request at a time.
+
+Correction to record: only the workflow's summary step was blind. Nothing about
+the earlier `32648218952` throughput figures changes.
+
+## Model throughput across the four workers
+
+**Measured 2026-08-24** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
+`32742672105`, all four `work` jobs, `Qwen3-8B-Q4_K_M.gguf`, settings as above.
+Taken from the four `runtime-log-*` artifacts. Each figure is that job's total
+tokens divided by its total milliseconds, not a median of per-request rates,
+because a rate is a ratio.
+
+| Job | Articles | Prefill tok/s | Prefill ms/tok | Decode tok/s | Decode ms/tok |
+| --- | --- | --- | --- | --- | --- |
+| `work (0)` | 34 | 11.05 | 90.5 | 5.23 | 191 |
+| `work (1)` | 35 | 10.91 | 91.7 | 4.93 | 203 |
+| `work (2)` | 39 | 10.92 | 91.6 | 5.02 | 199 |
+| `work (3)` | 41 | 10.94 | 91.4 | 5.04 | 198 |
+| **All four** | **149** | **10.95** | **91.3** | **5.05** | **198** |
+
+Totals: 152,933 prompt tokens evaluated in 232.7 min, 41,098 tokens written in
+135.7 min.
+
+Two readings hold:
+
+- **The four workers agree.** Prefill spreads 1.3% across jobs and decode 6%.
+  There is no slow runner in this run, so a shard that finishes late is carrying
+  longer articles rather than worse hardware.
+- **Decode slows inside a job; prefill does not.** Median decode falls about 11%
+  from the first half of a job to the second (5.4 to 4.8 tok/s) in all four,
+  while prefill stays flat. Longer contexts later in the run cost more per
+  generated token. It is behaviour, not a fault, and it is why a job's remaining
+  time cannot be extrapolated from its first few items.
+
+Prefill runs about 2.2x the decode rate, which is the reason `prefill_ms` and
+`decode_ms` are separate columns on the item-health row rather than one
+`summarize_ms`. From this run on, every run records its own figures, so this
+table stops being the only copy - see
+[../architecture/sources/item-health.md](../architecture/sources/item-health.md).
 
 ### The prompt token counts, from the tokenizer
 

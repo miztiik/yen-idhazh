@@ -47,6 +47,12 @@
 	const totalRuns = $derived(data.grid.reduce((count, day) => count + day.squares.length, 0));
 	const axis = $derived(axisLabels(data.grid.map((day) => day.date)));
 
+	// Both rates share one scale. Drawn against their own maxima, a decode bar
+	// that is half the speed would look the same length as the prefill bar.
+	const fastest = $derived(
+		Math.max(1, ...data.throughputDays.flatMap((day) => [day.prefillTps, day.decodeTps]))
+	);
+
 	/** A label is placed inside its column, not laid out by it, so the widest
 	 * date on the axis cannot push a single day track out of step. */
 	const ANCHOR: Record<LabelAlign, string> = {
@@ -265,6 +271,49 @@
 			{/each}
 		</div>
 
+	{/if}
+
+	{#if data.throughputDays.length > 0}
+		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Model tokens per second</h2>
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+			<em>Read</em> is the model taking the article in, <em>write</em> is it producing the summary.
+			Writing is slower because it goes one token at a time. Each day is its whole run divided by its
+			whole time, so every worker counts for the work it actually did. Cached prompt tokens are left
+			out of the read rate - the machine never ran them.
+		</p>
+
+		<div class="mt-4 space-y-5" data-throughput="chart">
+			{#each data.throughputDays as day (day.date)}
+				<div data-throughput-day={day.date}>
+					<div class="flex items-baseline justify-between text-[0.8125rem]">
+						<a href="{base}/{day.date}/" class="text-accent hover:underline">{day.date}</a>
+						<span class="text-text-tertiary">
+							{day.items} timed, {day.cacheHitPct.toFixed(0)}% of prompt reused
+						</span>
+					</div>
+					<div class="mt-1 space-y-1">
+						{#each [{ label: 'read', tps: day.prefillTps, msPerToken: day.prefillMsPerToken, colour: 'var(--accent)' }, { label: 'write', tps: day.decodeTps, msPerToken: day.decodeMsPerToken, colour: 'var(--band-medium)' }] as rate (rate.label)}
+							<div class="flex items-center gap-2 text-[0.75rem]">
+								<span class="w-20 shrink-0 text-text-tertiary">{rate.label}</span>
+								<div class="h-3 flex-1 overflow-hidden rounded-sm bg-surface">
+									<div
+										class="h-full rounded-sm"
+										style="width: {Math.max(
+											(rate.tps / fastest) * 100,
+											rate.tps > 0 ? 1 : 0
+										)}%; background: {rate.colour}"
+									></div>
+								</div>
+								<span class="w-32 shrink-0 text-end tabular-nums text-text-secondary">
+									{rate.tps.toFixed(2)} tok/s
+									<span class="text-text-tertiary">&middot; {rate.msPerToken.toFixed(0)} ms</span>
+								</span>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/each}
+		</div>
 	{/if}
 
 	{#if data.scoreDays.length === 0}

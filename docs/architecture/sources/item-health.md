@@ -13,7 +13,7 @@ written for each planned item on each run, whether the item succeeds or fails.
 
 The row carries:
 
-`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms`
+`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens`
 
 The file is append-only and never pruned. The 30-day window is a read-side
 parameter. Monthly shards follow `state/seen/` and `state/feed-health/`.
@@ -52,6 +52,35 @@ a better enum member".
 `fetch_ms`, `extract_ms`, and `summarize_ms` are nullable. Null means the stage
 did not run, or the row predates timing capture. It is not zero. A zero would be
 a measurement.
+
+## What the model cost
+
+`summarize_ms` is wall-clock for the whole request. `prefill_ms` and `decode_ms`
+split it the way the runtime charges it: prefill is the model reading the
+prompt, decode is it writing the reply, and decode runs at roughly half the
+prefill rate because it produces one token at a time. A blended figure cannot
+say which of the two made a slow day slow.
+
+All five columns come straight from the runtime's own reply, so nothing here is
+our arithmetic. A runtime that reports no timings leaves them null, and the item
+still publishes.
+
+A rate needs its token count beside its milliseconds, so both are on the row:
+
+| Read | From |
+| --- | --- |
+| Prompt tokens the model actually read | `input_tokens - cached_tokens` |
+| Prefill tokens per second | `(input_tokens - cached_tokens) / (prefill_ms / 1000)` |
+| Decode tokens per second | `output_tokens / (decode_ms / 1000)` |
+| Prompt cache hit rate | `cached_tokens / input_tokens` |
+
+`cached_tokens` is what the runtime reused instead of reading. Leaving it in the
+prefill count reports a rate the machine never ran at, which is why the console
+subtracts it.
+
+**A day is the sum of its rows, never the median of their rates.** A rate is a
+ratio, and the workers each did a share of one day: averaging per-item rates
+weighs a 60-word release note the same as a 2000-word feature.
 
 ## What counts against a source
 
@@ -106,6 +135,8 @@ Authority: Carmack.
 | Persist free-text failure detail as the signal | A chart cannot group free text. |
 | A `skipped` code | A skip is not one cause. The row records the typed cause instead. |
 | Add `attempt`, `recorded_at`, `title`, or `source_url` | No query needs them. `date` and `run_id` already address the row. |
+| Parse the throughput out of the runtime log | The log is a CI artifact kept for two days, and a rate nobody can recompute later is not a measurement. The reply already carries the numbers. |
+| Store the rates instead of the counts | A stored rate cannot be re-aggregated across a day, a week, or the four workers. Store what was measured; divide on read. |
 
 ## See also
 
