@@ -51,7 +51,7 @@ The system knows things about its own output that a reader cannot see: that a so
 - A top-band item says nothing at all. Copy about the absence of a problem is ink a reader cannot act on.
 - **Confidence is stated per item and never as a day-level chart.** A three-segment bar of the day's bands was deleted on 2026-08-24: its proportions were the same every day (57.7 / 24.2 / 18.1 re-banded at n=447), it shared its tokens with the item mark so it trained a reader to ignore the mark that does vary, and it spread a number over hundreds of items a reader could neither locate nor act on. Colour is spent where it changes between two items on one screen.
 - A partial run **publishes, and says it was partial.** The failure count is a tracked number with a date on it, not something noticed when a human complains.
-- **The day is stated in one line, once.** Four runs used to print four near-identical paragraphs saying one fact. The line is the count, the failures, and how many arrived after the first run.
+- **The day is stated in one line, once.** Every run used to print its own near-identical paragraph saying one fact. The line is the count, the failures, and how many arrived after the first run.
 - The footer says: "We skipped N stories today because we could not read enough of the page to summarize them fairly."
 - A run with zero successes still publishes. A day whose failures are invisible is a day nobody fixes.
 
