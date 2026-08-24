@@ -14,10 +14,11 @@ Operator tooling. It never runs in the pipeline and never writes into the
 published tree.
 
 It also writes the run manifest and the feed-health rows that day would have
-produced. The console draws both, and a console with no data to draw can only
-be tested for the empty state. These are fixtures under `backend/var/canary/`,
-reachable only because the build reads `DIGEST_ROOT` and `STATE_ROOT` - a
-fixture can never reach the real ledger.
+produced, plus a run of earlier quiet days so the console's run strip has a real
+time axis to draw. The console draws both, and a console with no data to draw
+can only be tested for the empty state. These are fixtures under
+`backend/var/canary/`, reachable only because the build reads `DIGEST_ROOT` and
+`STATE_ROOT` - a fixture can never reach the real ledger.
 """
 
 from __future__ import annotations
@@ -25,6 +26,8 @@ from __future__ import annotations
 import argparse
 import hashlib
 import json
+from datetime import date as calendar_date
+from datetime import timedelta
 from pathlib import Path
 
 from idhazh.assemble import build_embeddings, day_dir, to_digest_visual, write_atomic
@@ -42,6 +45,12 @@ from idhazh.render import asset_relpath, render_route
 CANARY_DIR = Path("tests/fixtures/canaries")
 DATE = "2026-08-20"
 YESTERDAY = "2026-08-19"
+
+#: Quiet days before the attack day. The console's run strip is a time axis, and
+#: a time axis with one column cannot be read, scrolled or mislabelled - so it
+#: cannot be tested either. Nineteen earlier days give it a week cadence, a
+#: dropped label near the newest end, and more width than a phone.
+HISTORY_DAYS = 19
 
 #: A fixture commit, not a real one. Forty hex characters is the shape the
 #: manifest requires, and a run of zeroes cannot be mistaken for a commit.
@@ -159,6 +168,7 @@ def build(target: Path) -> DigestDay:
 
 
 def _record(
+    date: str,
     n: int,
     status: RunStatus,
     *,
@@ -169,10 +179,10 @@ def _record(
 ) -> RunRecord:
     hour = f"{n * 6:02d}"
     return RunRecord(
-        run_id=f"{DATE}-{n}",
+        run_id=f"{date}-{n}",
         n=n,
-        started_at=f"{DATE}T{hour}:00:00Z",
-        completed_at=f"{DATE}T{hour}:20:00Z",
+        started_at=f"{date}T{hour}:00:00Z",
+        completed_at=f"{date}T{hour}:20:00Z",
         status=status,
         commit_sha=FIXTURE_SHA,
         runner="canary",
@@ -210,6 +220,7 @@ def manifest(target: Path, published: int) -> RunManifest:
         runs=[
             # Green: everything planned was published.
             _record(
+                DATE,
                 1,
                 RunStatus.COMPLETED,
                 planned=published,
@@ -218,13 +229,53 @@ def manifest(target: Path, published: int) -> RunManifest:
                 skipped=0,
             ),
             # Amber: nothing was attempted. Every candidate was already published.
-            _record(2, RunStatus.COMPLETED, planned=4, succeeded=0, failed=0, skipped=4),
+            _record(DATE, 2, RunStatus.COMPLETED, planned=4, succeeded=0, failed=0, skipped=4),
             # Red: the run failed and added nothing.
-            _record(3, RunStatus.FAILED, planned=5, succeeded=0, failed=5, skipped=0),
+            _record(DATE, 3, RunStatus.FAILED, planned=5, succeeded=0, failed=5, skipped=0),
         ],
     )
     write_atomic(day_dir(target, DATE) / "run.json", day.to_json())
     return day
+
+
+def earlier_days() -> list[str]:
+    """Every quiet day before the attack day, oldest first."""
+    latest = calendar_date.fromisoformat(DATE)
+    return [
+        (latest - timedelta(days=HISTORY_DAYS - offset)).isoformat()
+        for offset in range(HISTORY_DAYS)
+    ]
+
+
+def quiet_day(target: Path, date: str) -> None:
+    """A day that ran, published nothing, and still wrote both files.
+
+    It carries no items on purpose. One hostile day is the fixture; copying its
+    markup nineteen times would only make the browser suite slower without
+    asking the page a new question.
+
+    One completed run that attempted nothing paints amber, which is the correct
+    reading of a day the pipeline found no new article on.
+    """
+    day = DigestDay(
+        version=DigestDay.schema_version(),
+        date=date,
+        generated_at=f"{date}T06:00:00Z",
+        partial=False,
+        items_planned=0,
+        items_failed=0,
+        retention_window_months=-1,
+        runs=[DigestRunRef(n=1, at=f"{date}T06:00:00Z", items_added=0)],
+        verticals=[],
+        items=[],
+    )
+    write_atomic(day_dir(target, date) / "digest.json", day.to_json())
+    runs = RunManifest(
+        version=RunManifest.schema_version(),
+        date=date,
+        runs=[_record(date, 1, RunStatus.COMPLETED, planned=0, succeeded=0, failed=0, skipped=0)],
+    )
+    write_atomic(day_dir(target, date) / "run.json", runs.to_json())
 
 
 def _health(
@@ -297,6 +348,9 @@ def main() -> int:
     parser.add_argument("--out", type=Path, default=Path("backend/var/canary/digest"))
     parser.add_argument("--state", type=Path, default=Path("backend/var/canary/state"))
     args = parser.parse_args()
+    quiet = earlier_days()
+    for date in quiet:
+        quiet_day(args.out, date)
     day = build(args.out)
     runs = manifest(args.out, len(day.items))
     checks = health(args.state)
@@ -305,6 +359,7 @@ def main() -> int:
     print(f"canary day {DATE}: {len(day.items)} items, {visuals} visuals, payload {digest}")
     print(f"wrote {(day_dir(args.out, DATE) / 'digest.json').as_posix()}")
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
+    print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
     return 0
 

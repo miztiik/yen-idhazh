@@ -24,7 +24,14 @@ export function longDate(date: string): string {
 export function shortDate(date: string): string {
 	const [year, month, day] = date.split('-').map(Number);
 	if (!year || !month || !day) return date;
-	return `${day} ${MONTHS[month - 1]!.slice(0, 3)} ${year}`;
+	return `${dayMonth(date)} ${year}`;
+}
+
+/** "20 Aug" - the short form without the year, for a dense axis. */
+export function dayMonth(date: string): string {
+	const [year, month, day] = date.split('-').map(Number);
+	if (!year || !month || !day) return date;
+	return `${day} ${MONTHS[month - 1]!.slice(0, 3)}`;
 }
 
 export function clockUtc(timestamp: string): string {

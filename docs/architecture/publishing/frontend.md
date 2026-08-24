@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -144,7 +144,40 @@ GitHub Pages cannot serve a SvelteKit server redirect, so the redirect must be
 static HTML. A reader with JavaScript disabled still receives a page and can use
 the link.
 
-**The grid is one column per day and one square per run.** Four runs a day means four squares, oldest at the bottom of the column. A month of pipeline history fits above the fold, and the shape of a problem - one bad afternoon, or every run since Tuesday - is visible before any number is read.
+**The run strip is a time axis: one column per day, oldest on the left.** Days
+advance left to right the way every other time series does, so "it broke on
+Tuesday and has been amber since" is a shape rather than a sentence. Each day is
+a fixed 16px track with a 4px gap, and a label may never widen a track - two
+days apart must measure twice one day apart, whatever the date under it says.
+
+**Within a day, runs rise from a shared baseline.** Run 1 sits on the ground and
+later runs stack upward, so every column starts from the same line and a busy
+day is visibly taller than a quiet one. The DOM still reads run 1 first: the
+order is reversed by layout, not by markup, so a screen reader gets the day in
+the order it happened.
+
+**Only a run that wrote a manifest gets a square.** A scheduled run that never
+started left no evidence, and an empty slot would claim knowledge of a schedule
+the payload does not carry. Drawing missed runs needs a persisted schedule or
+attempt contract first; until one exists, the strip says what happened and
+nothing about what should have.
+
+**Dates are a separate, sparse row.** One day gets one full date. Two to six
+days get one compact span (`18-20 Aug 2026`). Seven or more get a full date at
+each end and a label every seventh column between them, dropping any
+intermediate that lands within six columns of the newest end, where the two
+texts would share pixels. The year is printed on the first label that changes
+it and not again. The arithmetic lives in
+[frontend/src/lib/charts/run-history.ts](../../../frontend/src/lib/charts/run-history.ts)
+so it can be tested without a browser.
+
+**Overflow opens on the newest edge.** The strip is a native horizontal scroll
+region - focusable, labelled, and pannable with the arrow keys, with no buttons
+and no chart dependency. A history shorter than the viewport aligns right, so
+the newest run is in the same place whether there are three days or three
+hundred. JavaScript sets the initial scroll to the newest edge once, on the
+first animation frame after mount, and never again: after that the position
+belongs to the operator.
 
 Three colours, and the boundaries are read from config rather than chosen by the page:
 
@@ -158,9 +191,9 @@ Three colours, and the boundaries are read from config rather than chosen by the
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
-Beneath the grid is **every feed that failed at least once**, worst first, with its attempt count, its last outcome and how close it is to quarantine. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
+Beneath the strip is **every feed that failed at least once**, worst first, with its attempt count, its last outcome and how close it is to quarantine. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
 
-**The console reads committed records in two ways.** The run grid, feed list and
+**The console reads committed records in two ways.** The run strip, feed list and
 timing medians still read the ledgers at build time. The item-health viewport
 fetches the browser-safe monthly projection under `telemetry/<YYYY-MM>.csv`.
 Nothing under `state/` is ever served - the browser reads only the narrow
@@ -227,6 +260,11 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | Migrating undated read marks rather than discarding them | There is no honest way to say which day they belonged to, and a wrong mark costs a reader an article. | owner |
 | A read mark that hides or demotes an item by default | Two people at the same URL would see different pages, and a shared link would stop showing the recipient what the sender saw. | Reader |
 | A console listing every feed, healthy ones included | Naming all seventy sources hides the four that are broken. | owner |
+| A newest-first run strip | Every other time series on the page reads left to right in time. One that read right to left made the newest day's position depend on how much history existed. | Jony |
+| An empty square for a scheduled run that wrote no manifest | It claims evidence the payload does not carry. Missed runs need a persisted schedule or attempt contract before they can be drawn. | Fowler |
+| A date under every column | At 16px a track and 10px a label the dates overlap from about the fourth day, and an axis that cannot be read is decoration. | Jony |
+| Scroll buttons, a zoom control or a chart library for the strip | A native scroll region already pans with the arrow keys, costs no bytes and needs no focus management of its own. | Jony |
+| Re-centring the strip on the newest run after data or layout changes | The operator scrolled there on purpose. A view that snaps back cannot be read. | Jony |
 | A second threshold for the red square | CI already reads a success floor to decide whether to open an issue. Two numbers answering one question drift, and then a red square and an open issue disagree. | owner |
 | Counting skipped items against a run's health | An already-published article is skipped by design. Counting it would paint a healthy day amber for doing its job. | owner |
 | Reading stage timings from `state/scores.csv` | The score ledger did not carry those columns, and it only covers scored items. Timings belong on the item-health census. | Fowler |
@@ -236,7 +274,7 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 
 - [layout.md](layout.md) - the routes, the dated addresses and retention.
 - [../sources/health.md](../sources/health.md) - the feed ledger the console renders, and the quarantine rule it mirrors.
-- [../../reference/github-actions.md](../../reference/github-actions.md) - the four-run cadence that gives the grid four squares a day.
+- [../../reference/github-actions.md](../../reference/github-actions.md) - the four-run cadence that gives the strip four squares a day.
 - [../../concepts/digest.md](../../concepts/digest.md) - what an item carries and the visual rule.
 - [../../concepts/design-system.md](../../concepts/design-system.md) - typography, tokens and the colour rule.
 - [../../concepts/ui-shell.md](../../concepts/ui-shell.md) - the shell's obligations and the four states.
