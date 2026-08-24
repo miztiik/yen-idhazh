@@ -25,6 +25,21 @@ EXPECTED_WORKFLOWS: Final = {
 CONTENT_REFRESH_CRON: Final = "20 6,10,14,18 * * *"
 CONTENT_REFRESH_UTC_HOURS: Final = (6, 10, 14, 18)
 CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4"})
+
+# Every major below was read from its own `action.yml` on 2026-08-24 and declares
+# `using: node24`. `upload-pages-artifact@v5` is composite and pins a Node 24
+# `upload-artifact`, so it carries no Node 20 of its own.
+APPROVED_ACTION_MAJORS: Final = {
+    "actions/cache": "v6",
+    "actions/checkout": "v6",
+    "actions/configure-pages": "v6",
+    "actions/deploy-pages": "v5",
+    "actions/download-artifact": "v8",
+    "actions/setup-node": "v7",
+    "actions/setup-python": "v7",
+    "actions/upload-artifact": "v7",
+    "actions/upload-pages-artifact": "v5",
+}
 MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime"})
 RUNTIME_CANDIDATES: Final = frozenset(
     {
@@ -95,6 +110,18 @@ def _step(
     matches = [step for step in _steps(workflow, job_name) if step.get(key) == value]
     assert len(matches) == 1, f"job {job_name} must have one step with {key}={value}"
     return matches[0]
+
+
+def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
+    references: list[tuple[str, str]] = []
+    for job_name in _mapping(workflow.get("jobs"), "jobs"):
+        for step in _steps(workflow, job_name):
+            uses = step.get("uses")
+            if uses is None:
+                continue
+            assert isinstance(uses, str), f"job {job_name} 'uses' must be a string"
+            references.append((job_name, uses))
+    return references
 
 
 def _evaluate_shard_matrix(script: str, requested_shards: str) -> list[int] | None:
@@ -284,7 +311,12 @@ def test_runtime_candidate_has_a_valid_default() -> None:
 def test_llm_measurement_does_not_cache_or_glob_candidate_weights() -> None:
     workflow = _load_workflows()["measure.yml"]
     steps = _steps(workflow, "llm")
-    assert not any(step.get("uses") == "actions/cache@v4" for step in steps)
+    # Matched on the action, never on its version: pinning the version here would
+    # quietly stop testing anything the next time the major moves.
+    used = [step.get("uses") for step in steps]
+    assert not any(
+        isinstance(value, str) and value.startswith("actions/cache@") for value in used
+    )
     benchmark = _step(workflow, "llm", "name", "Download and benchmark exact models")
     script = benchmark.get("run")
     assert isinstance(script, str)
@@ -304,3 +336,24 @@ def test_runtime_download_uses_the_existing_github_token() -> None:
     assert download.get("env") == {"GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
     assert 'Authorization: Bearer ${GITHUB_TOKEN}' in script
     assert "Authorization: ******" not in read_text(WORKFLOWS_DIR / "measure.yml")
+
+
+def test_every_action_is_pinned_to_an_approved_major() -> None:
+    """GitHub retired Node 20 on the runners.
+
+    An action major that still declares `using: node20` is force-run on Node 24
+    today and stops running at all later. The warning names the action, not the
+    workflow, so nothing in the repo pointed at the 35 call sites until this test
+    existed. A new action must be added here with its Node 24 major.
+    """
+    for filename, workflow in _load_workflows().items():
+        references = _action_references(workflow)
+        assert references, f"{filename} must call at least one action"
+
+        for job_name, uses in references:
+            where = f"{filename}/{job_name}"
+            action, separator, version = uses.partition("@")
+            assert separator, f"{where} must pin a version: {uses}"
+            assert action in APPROVED_ACTION_MAJORS, f"{where} uses unapproved {action}"
+            expected = APPROVED_ACTION_MAJORS[action]
+            assert version == expected, f"{where} must use {action}@{expected}, not {uses}"
