@@ -10,17 +10,68 @@ false.
 
 from __future__ import annotations
 
-from typing import Final
+from typing import Final, NamedTuple
 
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.evals import metrics
 
 _DELTA_PLACES: Final = 6
 _UNTITLED: Final = "Untitled item"
+
+
+class Verdict(NamedTuple):
+    """The band and the one thing that explains it.
+
+    Returned together because a page that showed a band from one code path and a
+    reason from another would eventually show a reason that is not why.
+    """
+
+    band: ConfidenceBand
+    reason: BandReason | None
+
+
+def verdict(
+    faithfulness: float | None,
+    *,
+    unsupported_numbers: int,
+    lead_coverage: float,
+    hedge_dropped: bool,
+    config: EvaluationConfig,
+) -> Verdict:
+    """The band, and why it is not the top one.
+
+    An unsupported figure forces the bottom band. Nothing else in the row can
+    see that defect, so nothing else may outvote it. Missing lead facts and
+    dropped hedges cap confidence at medium rather than forcing low.
+
+    A `high` item carries no reason. It has nothing to explain, and copy about
+    the absence of a problem is ink a reader cannot act on.
+
+    When both counterweights fail, the missing lead is named. Dropped facts are
+    the larger loss: a flattened hedge changes how a sentence reads, and a
+    missing lead means the story's who, what and how-much never arrived.
+    """
+    if unsupported_numbers:
+        return Verdict(ConfidenceBand.LOW, BandReason.UNSUPPORTED_NUMBER)
+    if faithfulness is None:
+        scored, reason = ConfidenceBand.MEDIUM, BandReason.NOT_SCORED
+    elif faithfulness >= config.band_high_min:
+        scored, reason = ConfidenceBand.HIGH, None
+    elif faithfulness >= config.band_medium_min:
+        scored, reason = ConfidenceBand.MEDIUM, BandReason.FAITHFULNESS
+    else:
+        scored, reason = ConfidenceBand.LOW, BandReason.FAITHFULNESS
+
+    if scored is ConfidenceBand.HIGH:
+        if lead_coverage < config.lead_coverage_min:
+            return Verdict(ConfidenceBand.MEDIUM, BandReason.LEAD_MISSING)
+        if hedge_dropped:
+            return Verdict(ConfidenceBand.MEDIUM, BandReason.HEDGE_DROPPED)
+    return Verdict(scored, reason)
 
 
 def band(
@@ -31,29 +82,14 @@ def band(
     hedge_dropped: bool,
     config: EvaluationConfig,
 ) -> ConfidenceBand:
-    """The band, not the number, is what drives behaviour and what a reader sees.
-
-    An unsupported figure forces the bottom band. Nothing else in the row can
-    see that defect, so nothing else may outvote it. Missing lead facts and
-    dropped hedges cap confidence at medium rather than forcing low.
-    """
-    if unsupported_numbers:
-        return ConfidenceBand.LOW
-    if faithfulness is None:
-        scored = ConfidenceBand.MEDIUM
-    elif faithfulness >= config.band_high_min:
-        scored = ConfidenceBand.HIGH
-    elif faithfulness >= config.band_medium_min:
-        scored = ConfidenceBand.MEDIUM
-    else:
-        scored = ConfidenceBand.LOW
-
-    if (
-        scored is ConfidenceBand.HIGH
-        and (lead_coverage < config.lead_coverage_min or hedge_dropped)
-    ):
-        return ConfidenceBand.MEDIUM
-    return scored
+    """The band alone, for a caller that has no reader to explain it to."""
+    return verdict(
+        faithfulness,
+        unsupported_numbers=unsupported_numbers,
+        lead_coverage=lead_coverage,
+        hedge_dropped=hedge_dropped,
+        config=config,
+    ).band
 
 
 def to_eval_row(

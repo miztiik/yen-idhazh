@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -399,6 +399,36 @@ source URLs appear under both fingerprints. Every one moved downward: -0.105,
 change in a way scattered noise would not. The largest observed item-level HHEM
 move is 0.595: the Google biomarker article moved from 0.9578 (`high`) to 0.3626
 (`low`) with no model or scorer change recorded.
+
+**Re-measured 2026-08-24** on the same ledger at n=447, same method.
+
+| Band | Recorded | Re-banded with today's `band()` |
+| --- | --- | --- |
+| high | 285 (63.8%) | 258 (57.7%) |
+| medium | 81 (18.1%) | 108 (24.2%) |
+| low | 81 (18.1%) | 81 (18.1%) |
+
+Still exactly 27 rows move, and with the same split: 11 lead coverage, 11 dropped
+hedge, 5 both. Every row written since the caps landed is already banded with
+them, so the gap between the two columns is a fixed historical residue rather
+than a rate that grows. It is 6.0% of the ledger now and shrinks with every run.
+
+## The route job's budget
+
+**Status 2026-08-24: instrumented, not yet measured.** `route` carries
+`timeout-minutes: 60` and has been observed at three points: cancelled at the
+timeout on `32661273335` and `32671663130`, and 51 minutes on `32701966659`.
+Three observations, one model, no controlled variable. That is a symptom, not a
+measurement, and Rule #2 forbids raising the number until there is one.
+
+What was missing is now recorded. Every run manifest carries `items_routed` and
+`route_ms`, the stage total summed over the items the router reached. `route_ms`
+is null when the router never ran, which is not the same as zero. The stage total
+read against the job's own wall-clock is the discriminating measurement: a stage
+far below the job says the fixed cost - checkout, weights, install, model start -
+is what sits near the bound, not the model.
+
+The row stays open until several days of manifests exist.
 
 ## llama-server runtime sweep
 
