@@ -49,7 +49,9 @@ The system knows things about its own output that a reader cannot see: that a so
 - A low-confidence item **publishes, marked.** Suppressing it would make the digest look better than it is.
 - **The mark names what is missing, not how good the item is.** "Our summary leaves out names or figures from the opening" is something a reader can check when they click through. "Mostly matches the source" is a grade, and a reader can do nothing with it. The published item carries a `band_reason` identifier and the site owns the sentence ([evaluation.md](evaluation.md)).
 - A top-band item says nothing at all. Copy about the absence of a problem is ink a reader cannot act on.
+- **Confidence is stated per item and never as a day-level chart.** A three-segment bar of the day's bands was deleted on 2026-08-24: its proportions were the same every day (57.7 / 24.2 / 18.1 re-banded at n=447), it shared its tokens with the item mark so it trained a reader to ignore the mark that does vary, and it spread a number over hundreds of items a reader could neither locate nor act on. Colour is spent where it changes between two items on one screen.
 - A partial run **publishes, and says it was partial.** The failure count is a tracked number with a date on it, not something noticed when a human complains.
+- **The day is stated in one line, once.** Four runs used to print four near-identical paragraphs saying one fact. The line is the count, the failures, and how many arrived after the first run.
 - The footer says: "We skipped N stories today because we could not read enough of the page to summarize them fairly."
 - A run with zero successes still publishes. A day whose failures are invisible is a day nobody fixes.
 
@@ -59,7 +61,9 @@ Surfacing this without turning every item into a disclaimer is a typography and 
 
 About two minutes. Ten items a reader can skim beats forty they cannot.
 
-That is a design target for the page, not a cap on the pipeline. Nothing limits how many items a day may carry - supply and the ranking decide ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation. Whether a long day needs more than ordering is a typography question, and it is open.
+That is a design target for the page, not a cap on the pipeline. Nothing limits how many items a day may carry - supply and the ranking decide ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
+
+**A long day gets its hierarchy from its topics.** 586 items in one queue had no usable first screen - its opening items were whichever vertical id sorted first, which is an accident rather than an edit. The all-topics page now shows each topic's first few and links to the rest ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Nothing is removed, hidden or re-ranked; the published order survives inside every section. That is hierarchy doing the work the reader's budget always asked of it, and it is why truncating a long day was refused.
 
 The page must also render when its data file is absent or empty. That is a normal state, designed on purpose, not an error discovered as a white screen ([../../CLAUDE.md](../../CLAUDE.md) section 12).
 

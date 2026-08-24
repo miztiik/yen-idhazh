@@ -11,6 +11,7 @@
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
 	import TopicPills from '$lib/components/TopicPills.svelte';
 	import TopicSection from '$lib/components/TopicSection.svelte';
+	import { shouldGroup, topicSlices } from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
 	import type { DigestDay } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
@@ -70,11 +71,8 @@
 		Object.fromEntries(day.verticals.map((ref) => [ref.id, ref.display_name]))
 	);
 
-	// The all-topics page, unfiltered, is the only view with no shape of its
-	// own: one queue of every vertical, whose first screen is whichever topic
-	// id sorts first. A topic route already has a subject, and a filter already
-	// has one, so both stay flat.
-	const grouped = $derived(vertical === null && needle === '' && day.verticals.length > 0);
+	const grouped = $derived(shouldGroup(vertical, needle, day.verticals));
+	const slices = $derived(topicSlices(day.verticals, visible, ui.items_per_topic));
 
 	// `introduced_by_run` is on every item and was rendered nowhere, so the day
 	// notice named a fact with no place on the page. One divider, at the seam.
@@ -127,19 +125,16 @@
 					You have read everything here today.
 				</p>
 			{:else if grouped}
-				{#each day.verticals as ref (ref.id)}
-					{@const topicItems = visible.filter((item) => item.vertical === ref.id)}
-					{#if topicItems.length > 0}
-						<TopicSection
-							vertical={ref}
-							items={topicItems}
-							limit={ui.items_per_topic}
-							{datePrefix}
-							showMark={ui.source_mark}
-							{read}
-							onRead={(itemId) => (read = markRead(itemId, read, day.date))}
-						/>
-					{/if}
+				{#each slices as slice (slice.vertical.id)}
+					<TopicSection
+						vertical={slice.vertical}
+						items={slice.items}
+						more={slice.hasMore}
+						{datePrefix}
+						showMark={ui.source_mark}
+						{read}
+						onRead={(itemId) => (read = markRead(itemId, read, day.date))}
+					/>
 				{/each}
 			{:else}
 				{#each paged as item (item.item_id)}

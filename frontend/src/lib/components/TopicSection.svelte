@@ -18,7 +18,7 @@
 	let {
 		vertical,
 		items,
-		limit,
+		more,
 		datePrefix = '',
 		showMark = true,
 		read,
@@ -26,14 +26,14 @@
 	}: {
 		vertical: DigestVerticalRef;
 		items: DigestItem[];
-		limit: number;
+		/** The day published more of this topic than this section shows. */
+		more: boolean;
 		datePrefix?: string;
 		showMark?: boolean;
 		read: Set<string>;
 		onRead: (itemId: string) => void;
 	} = $props();
 
-	const shown = $derived(items.slice(0, limit));
 	const href = $derived(verticalHref(base, datePrefix, vertical.id));
 </script>
 
@@ -44,7 +44,7 @@
 		{vertical.display_name}
 	</h2>
 
-	{#each shown as item (item.item_id)}
+	{#each items as item (item.item_id)}
 		<DigestItemView
 			{item}
 			level={3}
@@ -56,7 +56,7 @@
 		/>
 	{/each}
 
-	{#if vertical.count > limit}
+	{#if more}
 		<p class="pt-4">
 			<a href={href} class="text-[0.9375rem] text-accent hover:underline" data-topic-link>
 				All {vertical.count}

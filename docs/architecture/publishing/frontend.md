@@ -63,7 +63,24 @@ It sits **on the meta line, after the summary and beside the source link** - nev
 
 **No stripe, no tint, no coloured card.** If two-thirds of items are medium or low, a large treatment paints two-thirds of the page as broken and the reader concludes the whole digest is. One dot and eight words stays proportionate at any distribution.
 
-**The colour the owner asked for is spent once, at the top, as an aggregate**: a three-segment bar with the counts beside it in words. "How much of today can you trust" is a day-level question, and that is the honest place for a colourful instrument.
+**The day level carries no confidence chart, and this reverses an earlier
+ruling.** The owner asked for a colourful confidence signal, and what shipped
+first was a three-segment bar of the day's bands with the counts beside it. It
+was deleted on 2026-08-24 for four reasons that compound:
+
+- It charted a constant. Measured 2026-08-24 at n=447, re-banded: 57.7 / 24.2 / 18.1. The same three-part shape every day is not a signal.
+- It shared `--band-medium` and `--band-low` with the item dot, so a reader trained to ignore the day-level red was trained to ignore the item-level red - the one that does have something to say.
+- Its legend still printed "mostly matches the source", the exact string the item level abandoned when it moved to naming what is missing. The reader met the retracted sentence first.
+- Its `aria-label` was the legend verbatim, so a screen-reader user heard the counts twice.
+
+The owner's ask is still honoured: the colour is on the item dot, where it
+varies between two items on one screen, carries a sentence naming what is
+missing, and sits beside the link that lets the reader check. **The prose
+version is refused too** - "104 of today's 586 summaries may not match their
+article" is the same defect in a different typeface, a number over a corpus the
+reader can neither locate nor act on. A day-level confidence instrument that
+would be honest is a trend against previous days, and that is the console's job.
+Authority: Jony and Reader, 2026-08-24.
 
 **Source limits are sentences**, not chips. An abstract item says "This is a
 summary of the paper's abstract. The full paper is a PDF." A truncated item says
@@ -116,6 +133,47 @@ The owner asked for it. What ships is the narrow defensible version, which is a 
 - The query is untrusted reader input matched against untrusted payload text: compared with a lowercased substring test, and never interpolated into a selector, a class, a URL or markup.
 
 Real cross-day search belongs on the archive, later, where the question "where was that thing about the reactor?" is genuinely unanswerable by scrolling.
+
+## The all-topics page is grouped, and nothing is dropped to do it
+
+A day of 586 items rendered as one queue had no usable first screen. Items are
+appended in plan order, which is per-vertical, so the payload reads
+`[run 1: ai..., business..., energy...][run 2: ai...]` and the first twelve on
+the page were the top twelve of whichever vertical id sorted first. That is an
+accident, not an edit.
+
+The all-topics view now renders one section per vertical, in the payload's own
+topic order - the same order the pills use - showing each topic's first
+`ui.items_per_topic` items and then a link into the prerendered topic route:
+`All 173 AI stories`. A topic that fits inside the limit carries no link,
+because the link would lead to what is already on screen.
+
+Three rules make this hierarchy rather than truncation:
+
+- **No item is removed, hidden or re-ranked.** A slice is the head of the published order, and the whole topic is one click away on a route that is prerendered, shareable and works with JavaScript off. [layout.md](layout.md) forbids demoting a published item, and this does not.
+- **A topic route and an active filter stay flat.** Both already have a subject, and filter results cross topics.
+- **A day that ran to a single topic stays flat too.** One heading over the whole page states what the page already says, and it would put items behind a link that leads back to the same list. This is also what keeps every planted item on one page for the injection canaries.
+
+An emptied section is not rendered. A heading over nothing reads as broken
+software, and it happens for real when a reader hides what they have read - so
+the link is measured against the day's own count, not against the view.
+
+The arithmetic lives in
+[frontend/src/lib/day-shape.ts](../../../frontend/src/lib/day-shape.ts), the way
+the run strip's axis does, so the rules can be tested without a browser.
+
+## The day notice is one line, and one divider marks the later runs
+
+The notice states the day as facts and never as a judgement: the count, the
+failures when the run was partial, and how many arrived after the first run. It
+used to print one near-identical paragraph per later run, which said one fact
+three times.
+
+`introduced_by_run` is on every item and used to be rendered nowhere, so the
+notice named a fact with no place on the page. A flat list now carries one
+hairline divider - `Added later today` - before the first item a later run
+added. Once per page, never once per run and never once per item, and never a
+run number or a UTC time, because a reader does not know what run 3 is.
 
 ## No summary of the summaries
 
@@ -208,28 +266,41 @@ ledger still owns faithfulness and scorer time for the scored subset.
 The viewport is a 30-day default window, not a retention policy. The window size
 and where today sits are `console.default_window_days` and
 `console.today_anchor`. When less history exists, the first view fits the rows
-that exist instead of drawing empty calendar space. JavaScript enhances the
-server-rendered SVG with pan and zoom. Arrow keys pan, and `+` / `-` zoom, from a
-labelled focusable control with a visible focus ring. If a telemetry month is
-absent or cannot be parsed, that month is a gap in the charts. It is not
-interpolated, and it never white-screens the console.
+that exist instead of drawing empty calendar space. Arrow keys pan, and `+` /
+`-` zoom, from a labelled focusable control with a visible focus ring; the
+buttons beside it do the same thing with a pointer. **Every console chart is
+hand-written SVG rendered on the server**, so the page is complete before any
+script runs and stays complete if none does. If a telemetry month is absent or
+cannot be parsed, that month is a gap in the charts. It is not interpolated, and
+it never white-screens the console.
 
-The item-health viewport has three parts:
+The item-health viewport has three parts, in this order:
 
-- Failure panels: fetch, extract and summarize failure rates as separate bars.
-  The label carries the raw pair. Thin denominators use outlined bars below
-  `console.min_attempts_for_rate`. Colour is spent only on a failure.
-- Failed item list: a panel chip filters this list, because after a spike the
-  operator needs rows.
-- Compression scatter: source words against summary words, with the
-  `summarize.bands` step function as the reference band and a distinct mark for
-  truncation-flagged scored items.
+- **Failure panels**: fetch, extract and summarize failure rates as separate bars. **The rate is printed in type under each stage name** - `16% failed, 126 of 800.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **The y domain is fixed at 0 to 100%.** Scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **A window holding one day draws no chart at all**: a chart of one value is a rectangle, and the sentence is the panel. Thin denominators use outlined bars below `console.min_attempts_for_rate`, explained once under the row rather than once per bar. Colour is spent only on a failure.
+- **Compression scatter**: source words against summary words on a log x axis with decade ticks, the `summarize.bands` step function as the reference band, and a distinct mark for truncation-flagged scored items. One chart, hand-written SVG. It used to carry a second `uplot` canvas underneath drawing the same dataset with neither the band reference nor the truncation mark, which is two drawings of one dataset that disagree.
+- **Failed item list**: the rows behind the shape, **capped at `console.failure_list_max` with a `Show 25 more` button**, and stating its own scope - `Showing 25 of 214 failed items in this window.` A panel chip filters it, because after a spike the operator needs rows, and a new window or a new chip resets the cap because it is a new question. Uncapped it measured 7824px against 800 rows and put the compression chart at document y=9105. It sits last for the same reason: it is the only child that can outgrow the screen, so it cannot sit between two charts.
+
+Measured 2026-08-24 on the committed ledger: the console document went from
+11552px to 4878px.
+
+**Stage timings are one trend chart, not a list per day.** Four polylines over a
+calendar x axis, oldest on the left, sharing the run strip's own sparse-label
+arithmetic. A day with no census breaks the line rather than closing the gap,
+because "no data" and "no time spent" are different facts, and a single day
+draws dots rather than lines. The legend prints the newest day's value per
+stage. The old block was one group of four bars per day - about 150 rows at a
+30-day window, and no trend - and "is it getting slower" is the only question
+the section is asked.
 
 ## Design rationale
 
 Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
 
-Spending the colour at the day level rather than per item is the resolution of a genuine conflict between an owner instruction and a persona's ruling. The owner asked for a colourful confidence signal; Reader argued that per-item confidence badges are the project talking to itself. Both are satisfied by putting the aggregate where it is a real instrument and the per-item signal where it is proportionate. Authority: owner (section 0), designed by Jony, constrained by Reader.
+Spending the colour per item rather than at the day level is the resolution of a genuine conflict between an owner instruction and a persona's ruling, and it took two passes to land. The owner asked for a colourful confidence signal; Reader argued that per-item confidence badges are the project talking to itself. The first answer put the aggregate at the top and the proportionate signal on the item. The aggregate then had four months of data behind it and never moved, so it was deleted: colour belongs where it varies, and where a reader can click through and check. Authority: owner (section 0), designed by Jony, constrained by Reader.
+
+Grouping the all-topics page by topic is hierarchy, not truncation, and the distinction is the whole argument. [layout.md](layout.md) forbids removing or demoting a published item, and [../../concepts/digest.md](../../concepts/digest.md) says the reader's budget is protected by ordering and hierarchy - so the fix for a 586-item day had to come from typography rather than from a cap. Every item stays published, in its published order, one prerendered click away. The rejected alternative, truncating the day, would have made the page look like a digest by making it stop being one. Authority: Jony, with Reader as the check.
+
+Removing `uplot` restores the refusal one row below rather than overturning it. Rule #8 requires a dependency to name a beneficiary feature; its recorded beneficiary was pan and zoom, and `Viewport.svelte` implements those itself with a keydown handler and four buttons. What it actually drew was a second, smaller copy of the compression scatter with less information than the SVG above it. It would come back for pan and zoom *inside* a single chart, which is a different requirement, and the gzipped route chunk would be re-measured on that day rather than reusing the 2026-08-23 figure. Authority: Jony, Rule #8.
 
 Folding `/evals/` into `/console/` keeps one route answering "how is the
 pipeline doing". Both old routes read `state/scores.csv` and counted per-day
@@ -269,6 +340,23 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | Counting skipped items against a run's health | An already-published article is skipped by design. Counting it would paint a healthy day amber for doing its job. | owner |
 | Reading stage timings from `state/scores.csv` | The score ledger did not carry those columns, and it only covers scored items. Timings belong on the item-health census. | Fowler |
 | Serving `state/item-health/` directly | It carries `canonical_url`, `url_key` and untrusted `detail`. The browser gets only the published telemetry projection. | Fowler, Rule #11 |
+| A day-level bar of the confidence bands | It charted a constant, shared its tokens with the item mark so it trained the reader to ignore the mark that varies, and printed a sentence the item level had already retracted. | Jony, Reader |
+| A day-level sentence counting how many summaries may not match | The bar in prose. A number spread over hundreds of items a reader can neither locate nor act on. | Jony, Reader |
+| A cross-topic "top stories" strip on the day page | The payload carries no cross-vertical rank, so the page would have to invent one at read time. The page renders; it does not think. | Jony |
+| Truncating a long day to protect the two-minute budget | Ordering and hierarchy protect the budget. Dropping items a run published is not a typography fix. | Jony |
+| A colour per topic | A category-to-colour map that must be re-picked every time the taxonomy changes, carrying nothing the count does not. | Jony |
+| A "newest first" or "best first" sort control | The published order is global and identical for every reader. A sort control makes a shared link show the recipient a different page. | Jony |
+| An estimated reading time per topic | An unmeasured number printed as a fact, and it changes nothing a reader does. | Jony, Rule #10 |
+| One paragraph per later run in the day notice | Three runs printed three near-identical sentences saying one fact. One total says it once. | Jony |
+| Grouping a day that ran to a single topic | One heading over the whole page states what the page already says, and it puts items behind a link that leads back to the same list. | Jony |
+| A failure bar scaled to the window's own maximum | With one day in view the bar normalises to itself, so a 12% failure rate and a 90% one both fill the panel. | Jony |
+| A failure rate carried only by an SVG `<title>` | A tooltip does not fire on touch and does not survive the screenshot an operator pastes into an issue. | Jony |
+| A bar chart for a window holding one day | A chart of a single value is a rectangle. The number is the panel. | Jony |
+| Rendering every failed row in the window | 800 rows measured 7824px and pushed the compression chart to document y=9105. The rows are on demand. | Jony |
+| A virtual-scrolling failure table | A dependency and a scroll-position bug for something a cap and a button already solve. | Jony |
+| A per-day stacked bar list for stage timings | Thirty days is about 150 rows and no trend, and the trend is the only question the section is asked. | Jony |
+| `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Rule #8 |
+| A `run.success_floor_pct` reference line on a stage failure panel | That floor is a published rate over attempted items; a stage panel is a different denominator. A wrong reference line is worse than none. | Jony |
 
 ## See also
 
