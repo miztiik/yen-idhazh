@@ -13,7 +13,9 @@ so `none` is the default that everything else has to earn its way past.
 from __future__ import annotations
 
 import json
+import logging
 import re
+from collections import Counter
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 from typing import Any, Final, Literal
@@ -28,6 +30,8 @@ from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import sanitize, untrusted_block
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "route.txt"
+
+LOG: Final = logging.getLogger("idhazh")
 
 _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
@@ -236,7 +240,7 @@ def fact_menu(facts: list[NumericFact]) -> str:
 
 
 def user_turn(
-    article: Article, summary: Summary, facts: list[NumericFact], *, lead_words: int = 150
+    article: Article, summary: Summary, facts: list[NumericFact], *, lead_words: int
 ) -> str:
     """The summary, the article's own opening, and the indexed numbers - all fenced.
 
@@ -245,6 +249,9 @@ def user_turn(
     comparison the point of the story" against text that may have dropped the
     whole series is judging the wrong document, and it would let a chart carry
     numbers no sentence beside it mentions.
+
+    `lead_words` is most of the request's prefill, and prefill is most of the
+    stage's wall-clock, so it is a config knob rather than a literal (Rule #6).
     """
     parts = [f"Title: {article.title}" if article.title else "Title: (untitled)"]
     parts.append(untrusted_block(summary.summary or ""))
@@ -268,7 +275,7 @@ def build_request(
     return request_payload(
         model_id=model_id,
         system=system_prompt(),
-        user=user_turn(article, summary, facts),
+        user=user_turn(article, summary, facts, lead_words=visuals.lead_words),
         output_schema=output_schema(),
         inference=routing,
         schema_name="route",
@@ -295,6 +302,26 @@ def _nothing(
         model_id=model_id,
         routed_at=routed_at,
     )
+
+
+def decided_without_the_model(
+    summary: Summary, *, model_id: str, routed_at: str, facts_found: int
+) -> Route:
+    """The `none` a fact-poor item gets when the router skipped the model.
+
+    The rationale says the model never ran, so a reader of the payload is never
+    left to infer it from a decision that looks like every other `none`.
+    """
+    return _nothing(
+        summary,
+        model_id=model_id,
+        reason=(
+            f"no visual kind could be built from the {facts_found} quantities in this "
+            "article, so the router was not asked"
+        ),
+        routed_at=routed_at,
+        version=Route.schema_version(),
+    ).model_copy(update={"asked_the_model": False})
 
 
 def common_unit(points: list[ChartPoint], facts: list[NumericFact]) -> str | None:
@@ -331,6 +358,49 @@ def same_unit_bars(
         groups.setdefault(facts[point.fact_index].unit, []).append(point)
     unit = max(groups, key=lambda key: (len(groups[key]), -points.index(groups[key][0])))
     return unit, groups[unit]
+
+
+def chart_is_reachable(facts: list[NumericFact], *, visuals: VisualsConfig) -> bool:
+    """Could ANY choice of indices over these facts survive `to_route`?
+
+    A published bar is always `facts[i]` for some `i`, every bar in a chart
+    shares one unit, and the bars must be distinct quantities. So the ceiling on
+    a chart's width is the size of the largest unit group in the article's own
+    numbers. Below `min_chart_points` the answer is `none` before the model is
+    asked, which makes asking it 21 measured seconds spent to prove something
+    already proved.
+
+    The empty string is a unit group like any other - `numeric_facts` writes it
+    when nothing after the number reads as a unit, and `same_unit_bars` already
+    treats it as one. Excluding it here would gate items that publish today.
+
+    This reads the facts only - never the article's words. A predicate that
+    branched on fetched prose would let a stranger's page steer our control
+    flow (Rule #11).
+    """
+    if not facts:
+        return False
+    widest = Counter(fact.unit for fact in facts).most_common(1)[0][1]
+    return widest >= visuals.min_chart_points
+
+
+def reachable_kinds(facts: list[NumericFact], *, visuals: VisualsConfig) -> list[VisualKind]:
+    """The enabled kinds this item could still produce, in config order.
+
+    Written as a predicate over every kind rather than as a chart special case.
+    A diagram's steps come from prose, so nothing about it is decidable in
+    advance and it is always reachable while enabled - which means turning
+    diagrams off is a visible config edit, never a silent consequence of adding
+    this gate.
+    """
+    survivors: list[VisualKind] = []
+    for kind in visuals.enabled_kinds:
+        if kind is VisualKind.CHART and not chart_is_reachable(facts, visuals=visuals):
+            continue
+        if kind is VisualKind.IMAGE:
+            continue  # no renderer; `enabled_kinds` should not carry it, but do not trust that
+        survivors.append(kind)
+    return survivors
 
 
 def chart_spec(
@@ -460,6 +530,18 @@ def to_route(
             version=version,
         )
 
+    # What the model CHOSE, before any rejection folds it into `none`. Without
+    # this line a diagram the model asked for and this function refused is
+    # indistinguishable from a diagram it never wanted, and the arm's zero
+    # production rate has no cause anyone can name.
+    LOG.info(
+        "router draft id=%s kind=%s points=%s steps=%s",
+        summary.item_id,
+        draft.kind,
+        len(draft.points),
+        len(draft.steps),
+    )
+
     if draft.kind == "none":
         return _nothing(
             summary,
@@ -485,6 +567,20 @@ def to_route(
                 summary,
                 model_id=model_id,
                 reason="the chart pointed at a quantity the article does not contain",
+                routed_at=routed_at,
+                version=version,
+            )
+        # One quantity may fill one bar. Without this the model can name index 3
+        # three times, `same_unit_bars` groups all three under one unit, the
+        # width check passes, and a chart of one number repeated under three
+        # invented labels publishes - a fabricated comparison built entirely out
+        # of real facts, which is the one failure this stage claims is
+        # unreachable.
+        if len({point.fact_index for point in draft.points}) != len(draft.points):
+            return _nothing(
+                summary,
+                model_id=model_id,
+                reason="the chart used one quantity for more than one bar",
                 routed_at=routed_at,
                 version=version,
             )

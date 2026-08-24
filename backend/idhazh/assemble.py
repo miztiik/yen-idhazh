@@ -280,6 +280,7 @@ def build_manifest(
     # the clock existed carries no number. Both are "nothing was measured", which
     # is null - not a zero that would read as "it took no time".
     timed = [route.route_ms for route in (routes or []) if route.route_ms is not None]
+    prefiltered = sum(1 for route in (routes or []) if not route.asked_the_model)
     record = RunRecord(
         run_id=f"{plan.date}-{run_n}",
         n=run_n,
@@ -295,6 +296,7 @@ def build_manifest(
         items_failed=failed,
         items_skipped=skipped,
         items_routed=len(routes or []),
+        items_prefiltered=prefiltered,
         route_ms=sum(timed) if timed else None,
         verticals=[
             VerticalCount(

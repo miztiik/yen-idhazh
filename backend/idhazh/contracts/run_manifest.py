@@ -96,6 +96,15 @@ class RunRecord(Model):
     items_routed: int = Field(
         default=0, ge=0, description="Items the router reached. Zero when the route job died."
     )
+    items_prefiltered: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Items the router decided without asking the model, because no enabled "
+            "visual kind could survive the checks. Counted separately so a chart rate "
+            "is never quoted against items_routed alone."
+        ),
+    )
     route_ms: int | None = Field(
         default=None,
         ge=0,
@@ -136,6 +145,18 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T23:10",
+            change="Added optional items_prefiltered to a run.",
+            why=(
+                "The router now decides an item without asking the model when no enabled "
+                "visual kind could survive its own checks. Counting those separately keeps "
+                "the denominator honest: after the gate the same charts sit over a much "
+                "smaller routed set, so a chart rate quoted against items_routed alone "
+                "would climb without a single extra chart existing. Defaults to zero on a "
+                "manifest written before it existed."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T11:15",
             change="Added optional items_routed and route_ms to a run.",

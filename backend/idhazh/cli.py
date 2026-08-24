@@ -603,6 +603,7 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
     visuals = settings.app.visuals
     ordinals: dict[str, int] = {}
     spent: list[int] = []
+    skipped = 0
 
     for item in plan.items:
         article_path = items_dir / f"{item.item_id}.article.json"
@@ -615,7 +616,9 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
             continue
 
         started = time.monotonic()
-        decision = _route_one(article, summary, settings)
+        decision, asked = _route_one(article, summary, settings)
+        if not asked:
+            skipped += 1
         if decision.kind is not VisualKind.NONE:
             ordinals[article.vertical] = ordinals.get(article.vertical, 0) + 1
             decision = render_route(
@@ -630,10 +633,11 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
         decision = decision.model_copy(update={"route_ms": route_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}.route.json", decision.to_json())
         LOG.info(
-            "item routed id=%s kind=%s state=%s route_ms=%s",
+            "item routed id=%s kind=%s state=%s asked=%s route_ms=%s",
             item.item_id,
             decision.kind.value,
             decision.visual_state.value,
+            asked,
             route_ms,
         )
 
@@ -641,39 +645,80 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
     # it spent. The gap between the two is the fixed cost - checkout, weights,
     # install, model start - and separating them is the whole point of the
     # measurement (Rule #10).
+    total_ms = sum(spent)
     LOG.info(
-        "routing done items=%s total_ms=%s median_ms=%s slowest_ms=%s",
+        "routing done items=%s asked=%s prefiltered=%s total_ms=%s median_ms=%s slowest_ms=%s",
         len(spent),
-        sum(spent),
+        len(spent) - skipped,
+        skipped,
+        total_ms,
         sorted(spent)[len(spent) // 2] if spent else 0,
         max(spent, default=0),
     )
+    budget_ms = settings.app.run.route_budget_minutes * 60_000
+    if total_ms > budget_ms:
+        # A router cancelled at the job bound publishes a day with no visuals and
+        # says nothing about it. This says it while there is still room to act.
+        LOG.warning(
+            "route stage over budget spent_minutes=%.1f budget_minutes=%s items=%s",
+            total_ms / 60_000,
+            settings.app.run.route_budget_minutes,
+            len(spent),
+        )
 
 
-def _route_one(article: Article, summary: Summary, settings: config.Settings) -> Route:
-    facts = route.numeric_facts(article.text or "", limit=settings.app.visuals.max_facts)
+def _route_one(
+    article: Article, summary: Summary, settings: config.Settings
+) -> tuple[Route, bool]:
+    """One routing decision, and whether the model was asked for it.
+
+    The model is skipped when no enabled visual kind could survive `to_route`'s
+    own checks - a chart's bars are indices into these facts and must share one
+    unit, so an article whose numbers hold no unit group wide enough cannot
+    produce one whatever the model answers. Measured at 21.0 s an item on
+    `ubuntu-latest` (2026-08-24), asking anyway is that long spent proving a
+    settled question.
+
+    A skipped item still writes a `Route`. Silence is what turns a skip into a
+    quiet descope of the feature.
+    """
+    visuals = settings.app.visuals
+    facts = route.numeric_facts(article.text or "", limit=visuals.max_facts)
     model_id = settings.app.models.route.id
+    if not route.reachable_kinds(facts, visuals=visuals):
+        return (
+            route.decided_without_the_model(
+                summary,
+                model_id=model_id,
+                routed_at=assemble.utc_now(),
+                facts_found=len(facts),
+            ),
+            False,
+        )
     payload = route.build_request(
         article,
         summary,
         facts,
         model_id=model_id,
         inference=settings.app.models.inference,
-        visuals=settings.app.visuals,
+        visuals=visuals,
     )
     try:
-        completion = post(payload, timeout=settings.app.run.shard_timeout_minutes * 60)
+        completion = post(payload, timeout=visuals.request_timeout_minutes * 60)
     except OSError as error:
         completion = Completion(content="")
         LOG.warning("router unreachable id=%s reason=%s", article.item_id, type(error).__name__)
-    return route.to_route(
-        article,
-        summary,
-        completion,
-        model_id=model_id,
-        routed_at=assemble.utc_now(),
-        visuals=settings.app.visuals,
-        facts=facts,
+    return (
+        route.to_route(
+            article,
+            summary,
+            completion,
+            model_id=model_id,
+            routed_at=assemble.utc_now(),
+            visuals=visuals,
+            facts=facts,
+        ),
+        True,
     )
 
 
