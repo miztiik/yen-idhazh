@@ -10,7 +10,7 @@ times are UTC.
 | File | Display name | Automatic trigger | Manual dispatch |
 | --- | --- | --- | --- |
 | `ci.yml` | `CI` | Pull request; push to `main` | yes |
-| `digest.yml` | `Content refresh` | `20 6,10,14,18 * * *` | yes |
+| `digest.yml` | `Content refresh` | `20 2,6,10,14,18 * * *` | yes |
 | `pages.yml` | `Pages publication` | Push to `main` when `frontend/**`, `config/idhazh.json`, or `state/**` changes; completed `Content refresh` run | yes |
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
@@ -43,7 +43,7 @@ failure, then commits the digest and state.
 
 ```mermaid
 flowchart LR
-    SCHEDULE["schedule<br/>06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
+    SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
     MANUAL["manual dispatch"] --> PLAN
     PLAN --> WORK["work shards<br/>at most four total jobs"]
     WORK --> ROUTE["route"]
@@ -146,5 +146,5 @@ application runtime and is unrelated to the runtime an action itself declares.
 - [../architecture/overview.md](../architecture/overview.md) - how CI, committed payloads, and the static site fit together.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each pipeline stage owns.
 - [../how-to/run-the-pipeline.md](../how-to/run-the-pipeline.md) - how to run the same stages locally.
-- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - what four runs add to one day.
+- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - what five runs add to one day.
 - [../../CLAUDE.md](../../CLAUDE.md) - Rules #1, #2, #9, and #10.
