@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import csv
+import inspect
 from pathlib import Path
 
+from idhazh import cli
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.publish_telemetry import FORBIDDEN_COLUMNS, PUBLIC_COLUMNS, publish
 
@@ -88,3 +90,18 @@ def test_publish_telemetry_can_seed_an_empty_month(tmp_path: Path) -> None:
 
     assert [path.name for path in written] == ["2026-08.csv"]
     assert written[0].read_text(encoding="utf-8") == ",".join(PUBLIC_COLUMNS) + "\n"
+
+
+def test_the_pipeline_never_writes_the_committed_telemetry_projection(tmp_path: Path) -> None:
+    """A test run must not rewrite published bytes.
+
+    `stage_assemble` used the module default for `public_root`, so driving the
+    pipeline from a temporary tree still truncated the committed projection in
+    `frontend/public/telemetry/`. A dirty tree is what aborts the publish push
+    and discards a day, so the default must never reach a caller that passed
+    its own roots.
+    """
+    source = inspect.getsource(cli.stage_assemble)
+
+    assert "publish_telemetry.publish(" in source
+    assert "public_root=" in source.split("publish_telemetry.publish(", 1)[1][:200]
