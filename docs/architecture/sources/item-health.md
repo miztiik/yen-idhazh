@@ -107,6 +107,40 @@ later source-health reader uses it.
 `model_unreachable` records our local model server being down. It is
 infrastructure failure. It never counts against a source.
 
+## Adding a column is a two-part change
+
+A new column on this row is not finished when the contract and the schema agree.
+`ledger._append` calls `require_matching_header` before it writes, and that
+refuses any header that is not the contract's column list exactly. The month
+shard the pipeline is currently appending to already exists with the old header,
+so the first run after the contract widens raises:
+
+```text
+2026-08.csv has 19 columns and the contract has 24.
+Migrate the ledger before appending to it.
+```
+
+That is a failed scheduled run, not a failed lint. The migration ships in the
+same commit (`CLAUDE.md` section 11):
+
+1. Append the new columns at the **end** of the model, never in the middle. The
+   guard compares the whole list, and a reader maps by name, so the only reason
+   order matters is that an appended column leaves the old header a prefix of the
+   new one - which is what makes step 2 mechanical and reviewable.
+2. Rewrite each existing shard under `state/` with the widened header and an
+   empty cell for every new column on every old row. Empty is correct: those
+   runs measured nothing, and `from_csv_row` reads an empty cell as `None`.
+3. Read every migrated row back through `from_csv_row` before committing. A
+   header that widened without its rows widening is worse than a raised error.
+
+Expect a merge conflict on the shard, because the pipeline appends to it several
+times an hour. Resolve it by taking the upstream file whole and re-running the
+migration on it - never by keeping your copy, which would drop the rows the
+pipeline wrote while the branch was open.
+
+The guard is deliberate and stays. Widening it to tolerate a prefix would let a
+column land silently in the wrong position on a shard nobody re-read.
+
 ## Design rationale
 
 A failure-only file cannot produce a rate. The ledger writes successes and
