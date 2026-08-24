@@ -121,9 +121,33 @@ saying what measured it and when. The numbers that currently shape the design:
 | Blended seconds per article, 8B | 196 s | derived from the above |
 | Article length, p50 / p90 | 978 / 2769 words | 20 live articles, 2026-08-22 |
 | On-device search download | 43 MB | encoder + tokenizer + WASM |
+| `route` per item, 4B | 21.0 s | `ubuntu-latest`, 2026-08-24, n=148 |
+| One 512px CPU image, Z-Image-Turbo | ~79 min | `ubuntu-latest`, 2026-08-23 |
 
 The full ledger, including what is still unmeasured, is
 [`../reference/measurements.md`](../reference/measurements.md).
+
+## Two features the measurements ruled out
+
+Both were planned, both were escalated on a measured fact, and both are recorded
+here rather than left as an unexplained gap in the roadmap.
+
+**Generated images.** `Tongyi-MAI/Z-Image-Turbo` at bfloat16 needs 527 s per
+denoising step and 9.2 GB resident on a 4 vCPU runner, so one 512x512 image costs
+about 79 minutes - longer than the entire `route` job's budget. The second
+candidate, `alpha-vllm/Anima-2.9B`, does not exist on the Hub. No step count or
+resolution reaches a usable number from 527 s per step. Narrative items publish
+with no visual, which is already the common answer
+([`publishing/visuals.md`](publishing/visuals.md)).
+
+**A chat model in the reader's browser.** Every candidate's smallest single
+weight file is over GitHub's 100 MB hard limit: 347.7 MB for SmolLM2-360M, 470.9
+MB for Qwen1.5-0.5B, 488.4 MB for Qwen2.5-0.5B, 1179.4 MB for Llama-3.2-1B
+(measured against the Hugging Face API, 2026-08-22). Splitting a file to slip
+under the limit evades it rather than meeting it, and fetching weights from
+somebody else's origin makes a stranger's server part of the reading experience.
+The reader already pays 43 MB for search; the smallest chat model would take that
+past 390 MB before answering one question. On-device **search** ships and stays.
 
 ## Degrade, do not fail
 
