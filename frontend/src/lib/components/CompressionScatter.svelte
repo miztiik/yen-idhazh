@@ -1,6 +1,11 @@
 <script lang="ts">
-	import 'uplot/dist/uPlot.min.css';
-	import { onDestroy, onMount } from 'svelte';
+	/** Source words against summary words, once.
+	 *
+	 * There used to be a second `uplot` canvas below this SVG drawing the same
+	 * dataset with neither the band reference nor the truncation mark. Two
+	 * drawings of one dataset disagree; the pan and zoom the dependency was
+	 * bought for live in the viewport control, not in the plot.
+	 */
 	import { rowsInWindow, type CompressionPoint, type SummaryBand } from '$lib/charts/series';
 	import type { TimeWindow } from '$lib/charts/viewport';
 
@@ -16,12 +21,18 @@
 		height: number;
 	} = $props();
 
-	let host: HTMLDivElement;
-	let plot: { destroy: () => void } | null = null;
-	let ready = $state(false);
+	const DECADES = [10, 100, 1000, 10000];
+
 	const visible = $derived(rowsInWindow(points, viewport));
 	const maxSource = $derived(Math.max(100, ...visible.map((point) => point.source_words)));
-	const maxSummary = $derived(Math.max(100, ...visible.map((point) => point.summary_words), ...bands.map((band) => band.target_words_max)));
+	const maxSummary = $derived(
+		Math.max(
+			100,
+			...visible.map((point) => point.summary_words),
+			...bands.map((band) => band.target_words_max)
+		)
+	);
+	const ticks = $derived(DECADES.filter((value) => value <= maxSource));
 
 	function x(value: number): number {
 		const min = Math.log10(1);
@@ -34,67 +45,11 @@
 	}
 
 	function bandFor(sourceWords: number): SummaryBand {
-		return bands.reduce((chosen, band) => (sourceWords >= band.min_source_words ? band : chosen), bands[0]);
-	}
-
-	function token(name: string, fallback: string): string {
-		if (typeof window === 'undefined') return fallback;
-		const value = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-		return value || fallback;
-	}
-
-	async function drawUplot() {
-		if (!host) return;
-		const [{ default: uPlot }] = await Promise.all([import('uplot')]);
-		plot?.destroy();
-		const sorted = [...visible].sort((a, b) => a.source_words - b.source_words);
-		const ink = token('--color-text', '#16181d');
-		const rule = token('--color-rule', '#e5e3df');
-		const accent = token('--color-accent', '#0b5cd5');
-		plot = new uPlot(
-			{
-				width: host.clientWidth || 360,
-				height,
-				scales: { x: { time: false } },
-				axes: [
-					{ stroke: ink, grid: { stroke: rule } },
-					{ stroke: ink, grid: { stroke: rule } }
-				],
-				series: [
-					{},
-					{
-						label: 'summary words',
-						stroke: accent,
-						fill: accent,
-						points: { show: true, size: 6 }
-					}
-				]
-			},
-			[sorted.map((point) => point.source_words), sorted.map((point) => point.summary_words)],
-			host
+		return bands.reduce(
+			(chosen, band) => (sourceWords >= band.min_source_words ? band : chosen),
+			bands[0]
 		);
 	}
-
-	onMount(() => {
-		ready = true;
-		void drawUplot();
-		const observer = new MutationObserver(() => void drawUplot());
-		observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] });
-		const resize = () => void drawUplot();
-		globalThis.window.addEventListener('resize', resize);
-		return () => {
-			observer.disconnect();
-			globalThis.window.removeEventListener('resize', resize);
-		};
-	});
-
-	$effect(() => {
-		if (ready) void drawUplot();
-	});
-
-	onDestroy(() => {
-		plot?.destroy();
-	});
 </script>
 
 <section class="mt-8">
@@ -105,8 +60,8 @@
 	<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-compression>
 		<svg
 			class="w-full overflow-visible"
-			height={height + 34}
-			viewBox={`0 0 360 ${height + 34}`}
+			height={height + 40}
+			viewBox={`0 0 360 ${height + 40}`}
 			role="img"
 			aria-label="Source words against summary words"
 		>
@@ -158,13 +113,34 @@
 					{/if}
 				{/each}
 			{/if}
-			<text x="0" y={height + 24} fill="var(--color-text-tertiary)" font-size="11">
+			{#each ticks as tick (tick)}
+				<line
+					x1={x(tick)}
+					x2={x(tick)}
+					y1={height}
+					y2={height + 4}
+					stroke="var(--color-rule)"
+				/>
+				<text
+					x={x(tick)}
+					y={height + 15}
+					text-anchor="middle"
+					fill="var(--color-text-tertiary)"
+					font-size="10"
+				>
+					{tick}
+				</text>
+			{/each}
+			<text x="0" y={height + 30} fill="var(--color-text-tertiary)" font-size="11">
 				source words
 			</text>
-			<text x="282" y={height + 24} fill="var(--color-text-tertiary)" font-size="11">
+			<text x="282" y={height + 30} fill="var(--color-text-tertiary)" font-size="11">
 				summary words
 			</text>
 		</svg>
-		<div class="mt-4" bind:this={host} aria-hidden="true"></div>
+		<p class="mt-3 text-[0.75rem] text-text-tertiary">
+			Dot - one scored item. Diamond - the source was truncated. Vertical line - the target
+			summary length for that source size.
+		</p>
 	</div>
 </section>
