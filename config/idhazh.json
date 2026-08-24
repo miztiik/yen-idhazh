@@ -1,5 +1,8 @@
 {
   "collect": {
+    "blocked_url_markers": [
+      "fool.com/the-ascent/"
+    ],
     "front_page_bonus": 0.4,
     "max_future_hours": 6.0,
     "max_per_source": 2,
@@ -165,7 +168,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-23T19:50",
+  "version": "2026-08-24T11:15",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
