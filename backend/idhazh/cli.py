@@ -173,7 +173,17 @@ def stage_plan(
             LOG.warning("feed unavailable id=%s reason=%s", feed.id, result.detail)
             continue
         read += 1
-        candidates.extend(found)
+        # What the feed offered is the health row's business; what we accept is
+        # the pool's. A promotional page a healthy feed syndicated is not the
+        # feed failing, so the two counts stay apart.
+        kept, blocked = discover.split_blocked(found, markers=collect.blocked_url_markers)
+        for candidate in blocked:
+            LOG.info(
+                "candidate blocked feed=%s reason=address_marker url=%s",
+                feed.id,
+                candidate.canonical_url,
+            )
+        candidates.extend(kept)
 
     front_page: set[str] = set()
     for salience in settings.sources.salience:
@@ -592,6 +602,7 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
     items_dir = _run_dir(plan.date) / "items"
     visuals = settings.app.visuals
     ordinals: dict[str, int] = {}
+    spent: list[int] = []
 
     for item in plan.items:
         article_path = items_dir / f"{item.item_id}.article.json"
@@ -603,6 +614,7 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
         if summary.status is not SummaryStatus.OK:
             continue
 
+        started = time.monotonic()
         decision = _route_one(article, summary, settings)
         if decision.kind is not VisualKind.NONE:
             ordinals[article.vertical] = ordinals.get(article.vertical, 0) + 1
@@ -613,13 +625,29 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
                 canvas_width=visuals.canvas_width,
                 canvas_height=visuals.canvas_height,
             )
+        route_ms = int((time.monotonic() - started) * 1000)
+        spent.append(route_ms)
+        decision = decision.model_copy(update={"route_ms": route_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}.route.json", decision.to_json())
         LOG.info(
-            "item routed id=%s kind=%s state=%s",
+            "item routed id=%s kind=%s state=%s route_ms=%s",
             item.item_id,
             decision.kind.value,
             decision.visual_state.value,
+            route_ms,
         )
+
+    # The job's own wall-clock is in the run log; this is what the stage inside
+    # it spent. The gap between the two is the fixed cost - checkout, weights,
+    # install, model start - and separating them is the whole point of the
+    # measurement (Rule #10).
+    LOG.info(
+        "routing done items=%s total_ms=%s median_ms=%s slowest_ms=%s",
+        len(spent),
+        sum(spent),
+        sorted(spent)[len(spent) // 2] if spent else 0,
+        max(spent, default=0),
+    )
 
 
 def _route_one(article: Article, summary: Summary, settings: config.Settings) -> Route:
@@ -812,6 +840,7 @@ def stage_assemble(
     digest_items = []
     summaries: list[Summary] = []
     rows = []
+    routes: list[Route] = []
     item_health_rows = [
         telemetry.classify_item(
             planned=payload.planned,
@@ -838,7 +867,7 @@ def stage_assemble(
         if payload.eval_path.exists():
             row = EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8"))
             rows.append(row)
-            band = score.band(
+            decided = score.verdict(
                 row.hhem,
                 unsupported_numbers=row.unsupported_numbers,
                 lead_coverage=row.coverage,
@@ -848,26 +877,30 @@ def stage_assemble(
         else:
             text = summary.summary or ""
             full_text = article.text or ""
-            band = score.band(
+            decided = score.verdict(
                 None,
                 unsupported_numbers=metrics.unsupported_numbers(text, full_text),
                 lead_coverage=metrics.lead_coverage(text, full_text),
                 hedge_dropped=metrics.hedge_dropped(text, full_text),
                 config=settings.app.evaluation,
             )
+        decision = (
+            Route.from_json(payload.route_path.read_text(encoding="utf-8"))
+            if payload.route_path.exists()
+            else None
+        )
+        if decision is not None:
+            routes.append(decision)
         digest_items.append(
             assemble.to_digest_item(
                 article=article,
                 summary=summary,
-                band=band,
+                band=decided.band,
+                band_reason=decided.reason,
                 source_name=names.get(article.source_id, article.source_id),
                 source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
                 run_n=1,
-                route=(
-                    Route.from_json(payload.route_path.read_text(encoding="utf-8"))
-                    if payload.route_path.exists()
-                    else None
-                ),
+                route=decision,
             )
         )
 
@@ -904,6 +937,7 @@ def stage_assemble(
         site_bytes=site_bytes,
         site_files=site_files,
         item_health_rows=item_health_rows,
+        routes=routes,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
