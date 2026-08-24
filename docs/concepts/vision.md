@@ -1,6 +1,6 @@
 # Vision
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 What yen-idhazh is, what it is not, and the one-sentence product idea every other concept doc serves. This is the top of the concept tier; if a later doc contradicts this page, this page is wrong and gets fixed.
 
@@ -20,8 +20,8 @@ The two audiences are why the two surfaces are held to different standards, and 
 
 ## The shape
 
-A run starts at 06:20, 10:20, 14:20, and 18:20 UTC inside GitHub Actions,
-and commits what it produced. All four runs of a day append to the same dated
+A run starts at 02:20, 06:20, 10:20, 14:20, and 18:20 UTC inside GitHub Actions,
+and commits what it produced. All five runs of a day append to the same dated
 digest, so the day grows through the day. A reader later opens a static page.
 Nothing computes at read time, so there is no server to run, nothing to scale,
 and nothing that can be down. See

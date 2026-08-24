@@ -1,6 +1,6 @@
 name: Content refresh
 
-# The run, four times a day. An orchestrator that never does the work,
+# The run, five times a day. An orchestrator that never does the work,
 # disposable workers that do, and an assemble step that publishes whatever
 # finished.
 #
@@ -10,13 +10,19 @@ name: Content refresh
 
 on:
   schedule:
-    # Four daytime UTC runs. A story that broke at 07:00 waited a full day under
-    # a daily schedule, and the digest is only worth opening if it is current.
+    # Five UTC runs, four hours apart. A story that broke at 07:00 waited a full
+    # day under a daily schedule, and the digest is only worth opening if it is
+    # current.
+    #
+    # The 02:20 slot exists so a finished digest is waiting before 06:30. A
+    # scheduled run here starts 40-70 min after its cron minute and then takes
+    # 164-184 min (ubuntu-latest, 2026-08-23/24, n=3), so the old 06:20 first
+    # slot did not publish until about 10:30.
     #
     # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
     # is the busiest minute on the platform; twenty past costs a reader nothing
     # and buys a run that starts closer to when it was asked for.
-    - cron: '20 6,10,14,18 * * *'
+    - cron: '20 2,6,10,14,18 * * *'
   workflow_dispatch:
     inputs:
       date:
