@@ -2,11 +2,14 @@
 
 **Last Updated**: 2026-08-24
 
-Ten defects found while shipping and re-reading the freshness, identity, health
-and evaluation work. None was in that scope.
+Twelve defects found while shipping and re-reading the freshness, identity,
+health and evaluation work. None was in that scope. Defects 11 and 12 were found
+by running the gates and by opening the published day in a browser, not by
+reading code.
 
-**Eight are closed.** Defect 8 is closed on the item copy and on the day's band
-bar. Defect 2 is a Level 5 consultation, not a task.
+**Ten are closed.** Defect 8 is closed on the item copy and on the day's band
+bar. Defect 2 has its instrument built and is waiting on human labels and
+calendar time, which no amount of engineering closes.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -23,6 +26,8 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 8 | Reader-facing confidence copy says too little | 2 | **PARTLY FIXED - the band bar is open** |
 | 9 | The push loop loses a whole day when the tree is dirty | 2 | FIXED - 2026-08-24 |
 | 10 | The `route` job hits its 60-minute timeout | 3 | FIXED - 2026-08-24 |
+| 11 | A second run of a day overwrites the first run's charts | 3 | FIXED - 2026-08-24 |
+| 12 | One quantity could fill three bars of a published chart | 2 | FIXED - 2026-08-24 |
 
 ## 2 - The faithfulness thresholds have no labelled error rate (INSTRUMENT BUILT)
 
@@ -196,6 +201,53 @@ produced a publishable chart of one number under three invented labels - every
 value true, the comparison fabricated. Found by Carmack and Andre independently
 while ruling on the gate. Fixed in the same commit, and it is what makes the
 gate's proof exact rather than approximate.
+
+## 11 - A second run of a day overwrites the first run's charts (FIXED)
+
+Found by opening the published day in a browser and counting, 2026-08-24. The
+committed digest declares **32 rendered visuals** and the day's directory holds
+**18 SVG files**. Nothing was missing: **fourteen paths were each claimed by two
+different items.**
+
+`digest/2026/08/24/india-01.svg` is referenced by both:
+
+| Item | Its alt text |
+| --- | --- |
+| Indian stock markets open higher on blue-chip buying amid global cues | Bar chart. 2026 30; 2026 77,744.15; 2026 225; 2026 77,540.83. |
+| Defence Stocks Rise on Indigenous Procurement Push | Bar chart. 15% 15 %; 9% 9 %; 194% 194 %; 39% 39 %. |
+
+One of those two showed a chart drawn from the other article's numbers, under
+alt text describing figures that were not in the picture. Every value in the
+chart was true and the picture belonged to another story - the same class of
+failure as defect 12, and the more serious of the two because the numbers are
+not even about the same subject.
+
+The cause is `ordinals` in `stage_route`, a per-process counter. The day ran four
+times on 2026-08-24. Each run started at 1 and overwrote the previous run's file,
+while the digest kept every run's items and every run's path.
+
+Fixed at the writer. Numbering continues from the highest `<vertical>-<NN>`
+already in the day's directory, so run 3 starts where run 1 stopped. That keeps
+the `<vertical>-<NN>` shape the contract fixes - no hash in any published path -
+and needs no handshake between `route` and `assemble`, which run in different
+jobs. Carmack raised the same counter as the reason not to shard the route job;
+it turned out to be biting already, across runs rather than across shards.
+
+## 12 - One quantity could fill three bars of a published chart (FIXED)
+
+`ChartPoint.fact_index` was bounds-checked and never deduplicated. A draft naming
+index 3 three times passed every control: `same_unit_bars` grouped all three
+under one unit, the width check saw three bars, and a chart of one number under
+three invented labels published with alt text reading "2025 4,200 tonne; 2024
+4,200 tonne; 2023 4,200 tonne".
+
+Found by Carmack and Andre independently while ruling on defect 10's gate.
+[`docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md)
+said this failure was unreachable, and it was not.
+
+Fixed at `to_route`: a draft that repeats a `fact_index` routes to nothing. That
+is also what makes defect 10's reachability gate exact rather than approximate,
+and the proof is an exhaustive test over every index subset.
 
 ## What closed, and where it went
 
