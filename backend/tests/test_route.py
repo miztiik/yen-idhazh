@@ -8,6 +8,7 @@ index, so a number it never saw is not reachable.
 
 from __future__ import annotations
 
+import itertools
 import json
 from collections.abc import Mapping
 from decimal import Decimal
@@ -23,13 +24,16 @@ from idhazh.llm.server import Completion
 from idhazh.route import (
     ChartPoint,
     RouteDraft,
+    chart_is_reachable,
     chart_spec,
     common_unit,
+    decided_without_the_model,
     diagram_spec,
     fact_menu,
     numeric_facts,
     output_schema,
     parse_draft,
+    reachable_kinds,
     same_unit_bars,
     system_prompt,
     to_route,
@@ -125,7 +129,7 @@ class TestNumericFacts:
 
 class TestPrompting:
     def test_the_article_is_fenced_as_data(self, article_ok: Article, summary_ok: Summary) -> None:
-        turn = user_turn(article_ok, summary_ok, numeric_facts(ARTICLE_TEXT))
+        turn = user_turn(article_ok, summary_ok, numeric_facts(ARTICLE_TEXT), lead_words=150)
         assert "UNTRUSTED" in turn.upper()
 
     def test_the_system_prompt_never_carries_the_article(
@@ -336,6 +340,38 @@ class TestToRoute:
             facts=numeric_facts(ARTICLE_TEXT),
         )
         assert decision.kind is VisualKind.NONE
+
+    def test_one_quantity_may_not_fill_two_bars(
+        self, article_ok: Article, summary_ok: Summary
+    ) -> None:
+        """A chart of one number repeated is a fabricated comparison of real facts.
+
+        `same_unit_bars` groups by unit, so three copies of index 0 all land in
+        one group, the width check passes, and the alt-text reads "2025 4,200
+        megawatt hour; 2024 4,200 megawatt hour; 2023 4,200 megawatt hour". Every
+        number is true and the comparison is invented.
+        """
+        decision = to_route(
+            article_ok,
+            summary_ok,
+            _draft_completion(
+                {
+                    "kind": "chart",
+                    "reason": "a trend",
+                    "points": [
+                        {"label": "2025", "fact_index": 0},
+                        {"label": "2024", "fact_index": 0},
+                        {"label": "2023", "fact_index": 0},
+                    ],
+                }
+            ),
+            model_id="qwen3-4b",
+            routed_at="2026-08-22T00:00:00Z",
+            visuals=self._visuals(),
+            facts=numeric_facts(ARTICLE_TEXT),
+        )
+        assert decision.kind is VisualKind.NONE
+        assert "more than one bar" in (decision.rationale or "")
 
     def test_a_disabled_kind_is_unreachable(self, article_ok: Article, summary_ok: Summary) -> None:
         decision = to_route(
@@ -549,3 +585,94 @@ class TestToRoute:
         )
         assert decision.spec is not None
         assert "http://evil.example" not in decision.spec
+
+
+class TestReachability:
+    """The gate that lets the router skip a call whose answer is already settled.
+
+    A chart's bars are indices into these facts, every bar shares one unit, and
+    one quantity may fill only one bar. So the widest chart an article can carry
+    is the size of its largest unit group. Below `min_chart_points` the answer is
+    `none` whatever the model says, and asking costs a measured 21.0 s.
+    """
+
+    def test_an_article_with_no_numbers_can_carry_no_chart(self) -> None:
+        assert not chart_is_reachable([], visuals=VisualsConfig())
+
+    def test_a_wide_enough_unit_group_keeps_the_chart_reachable(self) -> None:
+        facts = numeric_facts(ARTICLE_TEXT)
+        assert chart_is_reachable(facts, visuals=VisualsConfig())
+
+    def test_scattered_units_cannot_reach_the_minimum(self) -> None:
+        facts = numeric_facts("It cost 12 percent, employs 48 people and ran 9 hours.")
+        assert not chart_is_reachable(facts, visuals=VisualsConfig())
+
+    def test_the_empty_unit_is_a_group_like_any_other(self) -> None:
+        """`numeric_facts` writes `""` when nothing after the number reads as a unit.
+
+        `same_unit_bars` already groups on it, so excluding it here would gate
+        items that publish today.
+        """
+        facts = numeric_facts("The counts were 41, 52 and 63.")
+        assert [fact.unit for fact in facts] == ["", "", ""]
+        assert chart_is_reachable(facts, visuals=VisualsConfig())
+
+    def test_a_diagram_is_always_reachable_while_it_is_enabled(self) -> None:
+        """Steps come from prose, so nothing about a diagram is decidable in advance.
+
+        This is what stops the gate silently descoping diagrams: with the arm on,
+        no item is ever skipped. Turning it off stays a config edit somebody makes
+        on purpose.
+        """
+        kinds = reachable_kinds([], visuals=VisualsConfig())
+        assert kinds == [VisualKind.DIAGRAM]
+
+    def test_nothing_is_reachable_for_a_fact_poor_item_when_only_charts_are_on(self) -> None:
+        chart_only = VisualsConfig(enabled_kinds=[VisualKind.CHART])
+        assert reachable_kinds([], visuals=chart_only) == []
+
+    def test_an_unreachable_item_says_the_model_never_ran(self, summary_ok: Summary) -> None:
+        decision = decided_without_the_model(
+            summary_ok, model_id="qwen3-4b", routed_at="2026-08-22T00:00:00Z", facts_found=0
+        )
+        assert decision.kind is VisualKind.NONE
+        assert decision.asked_the_model is False
+        assert "was not asked" in (decision.rationale or "")
+
+    def test_the_gate_never_rejects_a_chart_the_model_path_would_publish(
+        self, article_ok: Article, summary_ok: Summary
+    ) -> None:
+        """Exhaustion, not sampling. This is what makes "provable" a true word.
+
+        For a fact list the gate calls unreachable, enumerate EVERY distinct
+        index subset a draft could name, up to `max_chart_points`, and assert
+        `to_route` lands on `none` for all of them. A single survivor would mean
+        the gate drops a chart a reader would have seen.
+        """
+        visuals = VisualsConfig(enabled_kinds=[VisualKind.CHART])
+        facts = numeric_facts("It cost 12 percent, employs 48 people and ran 9 hours.")
+        assert not chart_is_reachable(facts, visuals=visuals)
+
+        checked = 0
+        for width in range(1, visuals.max_chart_points + 1):
+            for indices in itertools.combinations(range(len(facts)), width):
+                decision = to_route(
+                    article_ok,
+                    summary_ok,
+                    _draft_completion(
+                        {
+                            "kind": "chart",
+                            "reason": "any",
+                            "points": [
+                                {"label": f"b{i}", "fact_index": i} for i in indices
+                            ],
+                        }
+                    ),
+                    model_id="qwen3-4b",
+                    routed_at="2026-08-22T00:00:00Z",
+                    visuals=visuals,
+                    facts=facts,
+                )
+                assert decision.kind is VisualKind.NONE, indices
+                checked += 1
+        assert checked > 0

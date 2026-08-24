@@ -118,6 +118,7 @@
   },
   "run": {
     "max_parallel": 2,
+    "route_budget_minutes": 25,
     "safety_ceiling_per_run": 120,
     "shard_size": 3,
     "shard_timeout_minutes": 90,
@@ -175,11 +176,13 @@
       "chart",
       "diagram"
     ],
+    "lead_words": 120,
     "max_chart_points": 8,
     "max_diagram_steps": 6,
     "max_facts": 16,
     "max_output_tokens": 400,
     "min_chart_points": 3,
-    "min_diagram_steps": 3
+    "min_diagram_steps": 3,
+    "request_timeout_minutes": 1.5
   }
 }

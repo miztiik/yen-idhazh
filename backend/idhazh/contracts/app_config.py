@@ -70,6 +70,16 @@ class RunConfig(Model):
         ge=1,
         description="Derived from the WORST-case article, not the blended figure.",
     )
+    route_budget_minutes: int = Field(
+        default=40,
+        ge=1,
+        description=(
+            "What the route stage may spend before the run log warns. Not a kill switch - "
+            "the job's own timeout is that. This fires early enough that a person still "
+            "has room to act, because a router cancelled at its bound publishes a day "
+            "with no visuals and says nothing about it."
+        ),
+    )
     success_floor_pct: int = Field(
         default=70, ge=0, le=100, description="Below this, the run additionally opens an issue."
     )
@@ -551,6 +561,25 @@ class VisualsConfig(Model):
             "lost-in-the-middle for a small model picking an integer index."
         ),
     )
+    lead_words: int = Field(
+        default=150,
+        ge=1,
+        description=(
+            "How much of the article's own opening the router reads beside the summary. "
+            "This is most of each request's prefill, and prefill is most of the stage's "
+            "wall-clock, so it is a measured lever rather than a literal (Rule #6)."
+        ),
+    )
+    request_timeout_minutes: float = Field(
+        default=2.0,
+        gt=0.0,
+        description=(
+            "One routing POST may wait this long. Sized from the measured worst routed "
+            "item - 56.0 s on ubuntu-latest, 2026-08-24 - doubled. The stage used the "
+            "summarizer's 150-minute shard bound before this existed, which is longer "
+            "than the job it runs in, so it could never fire."
+        ),
+    )
 
     @property
     def canvas_height(self) -> int:
@@ -689,6 +718,24 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T23:10",
+            change=(
+                "Added visuals.request_timeout_minutes, visuals.lead_words and "
+                "run.route_budget_minutes."
+            ),
+            why=(
+                "The route stage crossed its 60-minute job bound on five of the last "
+                "eight runs. Measured on ubuntu-latest 2026-08-24 (run 32742672105): "
+                "fixed cost 47 s, stage 3155 s, 149 items at a mean of 21.0 s. So "
+                "per-item inference owns the time, not model load. The router had no "
+                "request budget of its own and borrowed run.shard_timeout_minutes - "
+                "150 minutes against a 60-minute job, which can never fire. lead_words "
+                "was a literal on the hot path and is most of each request's prefill. "
+                "The route budget warns before the bound instead of after it. All three "
+                "are additive with defaults, so an older config still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T21:40",
             change="Added ui.items_per_topic and console.failure_list_max.",

@@ -55,6 +55,18 @@ class Route(Contract):
     __schema_stem__: ClassVar[str] = "route"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-24T23:10",
+            change="Added asked_the_model, defaulting to true.",
+            why=(
+                "The router now decides an item without posting when no enabled visual "
+                "kind could survive its checks. That decision must be a field, not a "
+                "sentence a reader parses out of the rationale, because the run manifest "
+                "counts it and a chart rate quoted against the wrong denominator is the "
+                "first thing this gate would break. True on an older payload, which is "
+                "correct: every item was asked before the gate existed."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-24T11:15",
             change="Added optional route_ms.",
             why=(
@@ -92,6 +104,14 @@ class Route(Contract):
         description=(
             "Wall-clock for this item: the router call plus the render. Null on a payload "
             "written before the clock existed."
+        ),
+    )
+    asked_the_model: bool = Field(
+        default=True,
+        description=(
+            "False when the router decided this item on its own facts and never posted. "
+            "True on a payload written before the gate existed, because every item was "
+            "asked then."
         ),
     )
     failure_detail: UntrustedLine | None = None

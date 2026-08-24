@@ -5,9 +5,8 @@
 Ten defects found while shipping and re-reading the freshness, identity, health
 and evaluation work. None was in that scope.
 
-**Seven are closed.** Defect 8 is closed on the item copy and open on the day's
-band bar. Defect 10 now has the instrument it was missing and keeps its number.
-Defect 2 is a Level 5 consultation, not a task.
+**Eight are closed.** Defect 8 is closed on the item copy and on the day's band
+bar. Defect 2 is a Level 5 consultation, not a task.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -23,7 +22,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 7 | Affiliate marketing pages pass the faithfulness bar | 3 | FIXED - 2026-08-24 |
 | 8 | Reader-facing confidence copy says too little | 2 | **PARTLY FIXED - the band bar is open** |
 | 9 | The push loop loses a whole day when the tree is dirty | 2 | FIXED - 2026-08-24 |
-| 10 | The `route` job hits its 60-minute timeout every run | 3 | **INSTRUMENTED - awaiting rows** |
+| 10 | The `route` job hits its 60-minute timeout | 3 | FIXED - 2026-08-24 |
 
 ## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
 
@@ -121,39 +120,62 @@ removes the class.
 Both loops were fixed, not only the one that failed. The plan job's loop has the
 same shape and loses the sight and health ledgers when it hits it.
 
-## 10 - The `route` job hits its 60-minute timeout every run (INSTRUMENTED)
+## 10 - The `route` job hits its 60-minute timeout (FIXED)
 
-`digest.yml` gives `route` `timeout-minutes: 60`. It sits close to that bound and
-has crossed it twice:
+**Measured 2026-08-24**, `ubuntu-latest` 4 vCPU, run `32742672105`. The reading in
+the first two versions of this row was wrong twice. It is not "the timeout fires
+every run", and it is not a spread nobody can explain.
 
-| Run | `route` | Outcome |
-| --- | --- | --- |
-| `32661273335` | 2026-08-23 | cancelled at the timeout |
-| `32671663130` | 2026-08-24T00:26:36Z | cancelled after 60 min |
-| `32701966659` | 2026-08-24T09:24:36Z -> 10:15:50Z | **succeeded in 51 min** |
+| What | Value |
+| --- | --- |
+| Fixed cost - checkout, Python, cache, llama-server start, install, artifacts | 47 s |
+| `Route and render` step | 3155 s (52.6 min) |
+| Items routed | 149 |
+| Per-item | mean 21.0 s, min 8.1 s, max 56.0 s, n=148 |
+| Kinds | 15 chart, 134 none, **0 diagram** |
 
-The third run corrects the first reading of this defect. It is not "the timeout
-fires every run"; it is "the job finishes at 51 to 60+ minutes against a 60
-minute bound", so whether a day gets its visuals depends on which side of the
-line that run lands. Three observations, one model, no controlled variable -
-this is a symptom, not yet a measurement.
+The fixed cost is 1.5% of the job. Model loading does not own the time. Per-item
+inference does, and nine calls in ten produce nothing.
 
-`route` carries `continue-on-error` and `assemble` runs on `always()`, so the
-day publishes either way - by design, a dead router must not stop publication.
-The cost of a crossing is silent: items publish without the visuals the router
-would have chosen, and nothing on the page says so.
+**The real defect is an arithmetic inconsistency, not a slow model.**
+`(3600 - 47) / 21.0` is 169 routable items. `run.safety_ceiling_per_run` is 200.
+Those two numbers have never agreed. The runs that fit did so because about a
+quarter of the plan had no `OK` summary and was skipped, so improving the
+summarizer breaks the router. Five of the last eight runs were cancelled at the
+bound, and a cancellation reads 60.3 because that is where the runner stopped it,
+not because anything was measured there.
 
-Three questions, and they are different: what actually drives the spread (item
-count? article length? a slow first load?), whether the 4B router is too slow
-for the item count at this budget, and whether 60 minutes is the right budget.
-None should be answered by raising the number until it stops going red (Rule #2:
-the budget is the platform, not a preference).
+Fixed structurally, three ways, none of them the timeout:
 
-**The instrument now exists and the number has not moved.** Every committed run
-manifest carries `items_routed` and `route_ms`. Read `route_ms` against the job's
-own wall-clock in the Actions log: a stage total far below the job total says the
-fixed cost is what sits near the bound, not the model. Revisit when several days
-of manifests exist ([`docs/reference/measurements.md`](../docs/reference/measurements.md)).
+- **The model is not asked a question already answered.** A chart's bars index
+  the article's own facts and must share one unit, so the widest chart an item
+  can carry is its largest unit group. Below `min_chart_points` the answer is
+  `none` whatever the model says. `reachable_kinds()` decides that before the
+  request is built, and the skip is a payload field (`asked_the_model`) plus a
+  manifest count (`items_prefiltered`), never an inference from prose.
+- **The router has its own request budget.** It had been borrowing
+  `run.shard_timeout_minutes` - 150 minutes against a 60-minute job, so it could
+  never fire. `visuals.request_timeout_minutes` defaults to 2.0, from the
+  measured 56.0 s worst item, doubled.
+- **The stage warns before the bound.** `run.route_budget_minutes`, default 40.
+  A router cancelled at its bound publishes a day with no visuals and says
+  nothing about it.
+
+**The gate yields nothing on the default config, and that is deliberate.** A
+diagram is always reachable while `diagram` is in `visuals.enabled_kinds`, so no
+item is skipped. Turning the arm off would clear the bound immediately - 0
+diagrams in 149 routed and 0 in 586 published - but nothing committed says *why*
+it is zero, because `to_route` folds a rejected diagram into `none`. The router
+now logs the draft kind beside the final kind, so one run separates "the model
+never picks it" from "our own floor rejects it". Measure, then descope. Not the
+reverse.
+
+**One live correctness bug fell out of this.** `ChartPoint.fact_index` was
+bounds-checked and never deduplicated, so a draft naming index 3 three times
+produced a publishable chart of one number under three invented labels - every
+value true, the comparison fabricated. Found by Carmack and Andre independently
+while ruling on the gate. Fixed in the same commit, and it is what makes the
+gate's proof exact rather than approximate.
 
 ## What closed, and where it went
 
@@ -167,7 +189,7 @@ of manifests exist ([`docs/reference/measurements.md`](../docs/reference/measure
 | 7 | `cnn-world` syndicated three `fool.com/the-ascent/` affiliate credit-card pages into the `world` vertical. They scored 0.92 to 0.95 and published as `high`, because short declarative marketing prose is trivially entailed. | 2026-08-24. `collect.blocked_url_markers`, a config-driven list of case-insensitive address substrings that never enter the pool. Default empty; the entry `fool.com/the-ascent/` lives in `config/idhazh.json`. Applied after the feed-health row is written, so what a feed offered and what the pool accepted stay separate facts. Recorded in [`docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md). |
 | 8 | `medium` printed "Mostly matches the source" - a grade a reader can do nothing with. Both things that cap an item at `medium` were computed and neither reached the page. | 2026-08-24. `score.verdict()` returns the band and the one reason together; `band()` is a wrapper with no logic. `DigestItem.band_reason` is a closed identifier and the site owns the sentence. A day published before this renders exactly as it did. Browser-smoked at 420px across `/`, a day, a vertical, the archive and the empty state. **Closed fully 2026-08-24** by deleting the day-level band bar, which still printed the retracted sentence at the top of the page - above the item that had abandoned it. Recorded in [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md). |
 | 9 | Both commit steps in `digest.yml` ran `git pull --rebase --autostash`. A rebase will not start on a dirty tree, and run `32671663130` lost a finished day to one CRLF file. | 2026-08-24. Each loop prints what is dirty and discards it before the rebase; untracked files are left alone; `--autostash` is gone. A workflow contract test pins the shape in both jobs. CI does not run `digest.yml`, so the next change there still needs a dispatched run. |
-| 10 | `route` lands between 51 and 60+ minutes against a 60-minute bound, and nothing recorded what it spent. | 2026-08-24, instrumented not closed. `Route.route_ms` per item; `RunRecord.items_routed` and `RunRecord.route_ms` on every committed manifest. `route_ms` is null when the router never ran, which is not zero. The number stays at 60 until several days of manifests exist (Rule #2). |
+| 10 | `route` lands between 51 and 60+ minutes against a 60-minute bound, and nothing recorded what it spent. | 2026-08-24. Measured on run `32742672105`: 47 s fixed cost, a 3155 s stage, 149 items at 21.0 s each, 15 charts and 134 nothings. Per-item inference owns the time and 90% of it produces nothing, so the router now decides an item on its own facts when no enabled kind could survive, gets a request timeout of its own instead of borrowing the summarizer's 150-minute one, and warns at `run.route_budget_minutes`. A live bug fell out of the ruling: `fact_index` was never deduplicated, so one quantity could fill three bars and publish a fabricated comparison. Recorded in [`docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md) and [`docs/reference/measurements.md`](../docs/reference/measurements.md). |
 
 ## See also
 
