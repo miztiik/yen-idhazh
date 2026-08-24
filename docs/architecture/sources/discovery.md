@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -63,6 +63,34 @@ Deduplication is the whole point of collecting from many feeds, and it only work
 
 Identity is the digest of the canonical address, and it lives in a payload field - never in a path, a filename or a URL. Paths are for humans and for globs.
 
+## An address a healthy feed should not have offered
+
+A working news feed syndicates promotional pages. `cnn-world` carried three
+`fool.com/the-ascent/` affiliate credit-card reviews into the `world` vertical on
+2026-08-23 and 2026-08-24. They summarized well, scored 0.92 to 0.95
+faithfulness, and published as `high`.
+
+That is not an evaluation defect and no threshold fixes it. A page of short
+declarative marketing sentences is trivially entailed, so raising the
+faithfulness bar rewards the wrong source. The only honest signal available
+before anything is spent is the address, so the control sits at collection:
+`collect.blocked_url_markers` is a list of case-insensitive substrings that never
+enter the pool.
+
+Two rules keep it from becoming a censorship surface:
+
+- **The entries live in `config/`, and the default is empty** (Rule #6). The knob
+  is the shape; the list is a source-curation decision like the feed list beside
+  it.
+- **The feed's health row still counts what the feed offered.** What we accept is
+  the pool's business, not the feed's. A source that syndicated a promo is not a
+  source that failed, and folding the two counts together would quarantine a
+  working feed.
+
+The marker is the narrowest thing that was measured. `fool.com/the-ascent/` is
+the publisher's affiliate arm; `fool.com/investing/` is not blocked, because no
+item from it has been observed to fail (Rule #10).
+
 ## Ranking is arithmetic, not judgement
 
 The day is decided before any model loads, by a score with five terms:
@@ -97,6 +125,8 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 
 ## Design rationale
 
+**The affiliate-page control sits at collection, not at the score (2026-08-24).** The three `fool.com/the-ascent/` items are the case that separates "the summary is wrong" from "the item should not be here". Every instrument in the eval ledger compares our summary to the article, and all of them passed. Moving the control to collection also costs nothing: a blocked address is never fetched, never summarized and never scored, which is the cheapest place a rejection can happen (Rule #2). Authority: owner, closing known defect 7.
+
 Segmenting by subject is a source-diversity problem, not a compute one. The pipeline had spare capacity long before it had spare sources, so the binding constraint was never how many items could be summarized - it was how many were worth summarizing, and whether they covered more than one subject.
 
 Two findings from prior art settled the shape. First, every system that publishes a multi-subject daily digest attaches a curated feed list per subject; none of them sorts a single firehose into subjects. Second, those systems enforce a floor below which a subject is not surfaced at all, because a thin list produces a thin day and the reader cannot tell the difference between a quiet day and a broken one.
@@ -125,6 +155,9 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | Deleting a retired entry from config | Breaks every payload written under that id and forces a read-side migration. |
 | Leaving a retired feed in the live `feeds` list with a status flag | Every run has to filter past it, and one missed filter is a request to a source we decided to stop asking. |
 | Adding the feed weight to the tier score instead of multiplying | Addition lets a weighted-down institution overtake a full-weight one of the same tier, which is the opposite of what turning it down meant. |
+| Raising the faithfulness threshold to keep affiliate pages out | They are faithful. Short declarative marketing prose is trivially entailed, so every cut that excludes them excludes real reporting first, and the bar rewards the source it should reject. |
+| Retiring `cnn-world` over the syndicated affiliate pages | It is a working feed carrying real reporting. Retiring a whole source over three items it passed through costs the vertical a desk to fix a link filter. |
+| Blocking `fool.com` entirely | The publisher's editorial arm has not been observed to fail. The measured cut is the affiliate section, and nothing wider has been measured. |
 | A per-feed weight only, with no tier | The tier is the reusable half: it is a fact about a kind of source, and a new feed inherits it without anyone inventing a number. |
 | Keeping the flat floor of twenty-five and leaving two verticals unpublished | The floor would then be measuring the borrowed constant, not the health of the desk. Two verticals stay dark for a reason that does not survive being stated. |
 | Dropping the floor to whatever the thinnest vertical reached | That is tuning the target to the result with no rule behind it, and the floor stops being able to fail. |
