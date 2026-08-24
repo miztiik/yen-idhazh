@@ -369,7 +369,9 @@ test('the evals entry point keeps a no-JS link to the console', () => {
 	expect(page).toContain('<link rel="canonical" href={consoleHref} />');
 	expect(page).toContain('<a href={consoleHref}');
 	expect(page).not.toContain('evalRows');
-	expect(page).not.toContain('BAND_ORDER');
+	// The stub is a redirect, not a second dashboard. Two surfaces counting one
+	// ledger disagree the moment one count changes.
+	expect(page).not.toContain('$lib/bands');
 });
 
 test('keyboard alone pans and zooms the telemetry viewport', async ({ page }) => {

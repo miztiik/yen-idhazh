@@ -1,3 +1,4 @@
+import type { StageTimingDay } from '$lib/charts/series';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig } from '$lib/server/config';
 import {
 	evalRows,
@@ -12,14 +13,7 @@ import {
 
 export const prerender = true;
 
-interface TimingStats {
-	date: string;
-	items: number;
-	fetchMs: number;
-	extractMs: number;
-	summarizeMs: number;
-	scoreMs: number;
-}
+type TimingStats = StageTimingDay;
 
 interface ScoreStats {
 	date: string;

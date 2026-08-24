@@ -7,24 +7,18 @@
 	 * here is derived at read time, which is what stops today's code quietly
 	 * restating yesterday's figures.
 	 *
-	 * The run grid stays static. The telemetry viewport is enhanced by uPlot and
-	 * still carries server-rendered SVG fallback.
+	 * The run grid stays static. The telemetry viewport and the timing trend are
+	 * hand-written SVG, so the console still reads with JavaScript off.
 	 */
 	import { base } from '$app/paths';
 	import { axisLabels, CELL_PX, GAP_PX, type LabelAlign } from '$lib/charts/run-history';
+	import StageTimings from '$lib/components/StageTimings.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import type { Health } from './+page.server';
 
 	let { data } = $props();
 
 	let strip = $state<HTMLDivElement | null>(null);
-
-	const stages = [
-		{ key: 'fetchMs', label: 'fetch', colour: 'var(--band-low)' },
-		{ key: 'extractMs', label: 'extract', colour: 'var(--band-medium)' },
-		{ key: 'summarizeMs', label: 'summarize', colour: 'var(--accent)' },
-		{ key: 'scoreMs', label: 'score', colour: 'var(--band-high)' }
-	] as const;
 
 	// The same three tokens the confidence bands use. A run that went well and a
 	// summary that scored well should not be two different greens.
@@ -39,10 +33,6 @@
 		{ health: 'amber' as Health, text: 'worth a look' },
 		{ health: 'red' as Health, text: `failed, or under ${data.floorPct}% published` }
 	]);
-
-	const worst = $derived(
-		Math.max(1, ...data.timingDays.flatMap((day) => stages.map((stage) => day[stage.key] as number)))
-	);
 
 	const totalRuns = $derived(data.grid.reduce((count, day) => count + day.squares.length, 0));
 	const axis = $derived(axisLabels(data.grid.map((day) => day.date)));
@@ -66,10 +56,6 @@
 		});
 		return () => cancelAnimationFrame(frame);
 	});
-
-	function seconds(ms: number): string {
-		return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${ms} ms`;
-	}
 
 	function mb(bytes: number): string {
 		return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
@@ -228,43 +214,7 @@
 			No item timing has been recorded yet. The item-health ledger fills as runs publish.
 		</p>
 	{:else}
-		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Median seconds per item, by stage</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			Median, not mean: one very slow host would otherwise describe the whole day. Only
-			<em>summarize</em> moves when the model changes - the rest is the open web and our own extractor.
-		</p>
-
-		<div class="mt-4 space-y-5" data-timing="chart">
-			{#each data.timingDays as day (day.date)}
-				<div>
-					<div class="flex items-baseline justify-between text-[0.8125rem]">
-						<a href="{base}/{day.date}/" class="text-accent hover:underline">{day.date}</a>
-						<span class="text-text-tertiary">{day.items} scored</span>
-					</div>
-					<div class="mt-1 space-y-1">
-						{#each stages as stage (stage.key)}
-							{@const value = day[stage.key] as number}
-							<div class="flex items-center gap-2 text-[0.75rem]">
-								<span class="w-20 shrink-0 text-text-tertiary">{stage.label}</span>
-								<div class="h-3 flex-1 overflow-hidden rounded-sm bg-surface">
-									<div
-										class="h-full rounded-sm"
-										style="width: {Math.max(
-											(value / worst) * 100,
-											value > 0 ? 1 : 0
-										)}%; background: {stage.colour}"
-									></div>
-								</div>
-								<span class="w-16 shrink-0 text-end tabular-nums text-text-secondary">
-									{seconds(value)}
-								</span>
-							</div>
-						{/each}
-					</div>
-				</div>
-			{/each}
-		</div>
-
+		<StageTimings days={data.timingDays} height={data.console.chart_height} />
 	{/if}
 
 	{#if data.scoreDays.length === 0}
