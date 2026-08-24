@@ -142,6 +142,13 @@
           "title": "Items Planned",
           "type": "integer"
         },
+        "items_prefiltered": {
+          "default": 0,
+          "description": "Items the router decided without asking the model, because no enabled visual kind could survive the checks. Counted separately so a chart rate is never quoted against items_routed alone.",
+          "minimum": 0,
+          "title": "Items Prefiltered",
+          "type": "integer"
+        },
         "items_routed": {
           "default": 0,
           "description": "Items the router reached. Zero when the route job died.",
@@ -317,6 +324,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional items_prefiltered to a run.",
+      "version": "2026-08-24T23:10",
+      "why": "The router now decides an item without asking the model when no enabled visual kind could survive its own checks. Counting those separately keeps the denominator honest: after the gate the same charts sit over a much smaller routed set, so a chart rate quoted against items_routed alone would climb without a single extra chart existing. Defaults to zero on a manifest written before it existed."
+    },
+    {
       "change": "Added optional items_routed and route_ms to a run.",
       "version": "2026-08-24T11:15",
       "why": "The route job lands between 51 and 60 minutes against a 60-minute bound, and no committed artifact said what it spent or how many items it spent it on. The budget cannot be argued from an estimate (Rule #10). Both default on a manifest written before they existed."
@@ -353,7 +365,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-24T11:15",
+      "default": "2026-08-24T23:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -365,5 +377,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-24T11:15"
+  "version": "2026-08-24T23:10"
 }

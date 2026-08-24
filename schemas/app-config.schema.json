@@ -708,6 +708,13 @@
           "title": "Max Parallel",
           "type": "integer"
         },
+        "route_budget_minutes": {
+          "default": 40,
+          "description": "What the route stage may spend before the run log warns. Not a kill switch - the job's own timeout is that. This fires early enough that a person still has room to act, because a router cancelled at its bound publishes a day with no visuals and says nothing about it.",
+          "minimum": 1,
+          "title": "Route Budget Minutes",
+          "type": "integer"
+        },
         "safety_ceiling_per_run": {
           "default": 200,
           "description": "A crash guard, not an editorial choice. Supply and the ranking decide how big a day is; this only stops a mis-parsed feed from publishing hundreds of items in one run. A normal day never reaches it.",
@@ -979,6 +986,13 @@
           "title": "Enabled Kinds",
           "type": "array"
         },
+        "lead_words": {
+          "default": 150,
+          "description": "How much of the article's own opening the router reads beside the summary. This is most of each request's prefill, and prefill is most of the stage's wall-clock, so it is a measured lever rather than a literal (Rule #6).",
+          "minimum": 1,
+          "title": "Lead Words",
+          "type": "integer"
+        },
         "max_chart_points": {
           "default": 8,
           "minimum": 2,
@@ -1017,6 +1031,13 @@
           "minimum": 2,
           "title": "Min Diagram Steps",
           "type": "integer"
+        },
+        "request_timeout_minutes": {
+          "default": 2.0,
+          "description": "One routing POST may wait this long. Sized from the measured worst routed item - 56.0 s on ubuntu-latest, 2026-08-24 - doubled. The stage used the summarizer's 150-minute shard bound before this existed, which is longer than the job it runs in, so it could never fire.",
+          "exclusiveMinimum": 0.0,
+          "title": "Request Timeout Minutes",
+          "type": "number"
         }
       },
       "title": "VisualsConfig",
@@ -1027,6 +1048,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added visuals.request_timeout_minutes, visuals.lead_words and run.route_budget_minutes.",
+      "version": "2026-08-24T23:10",
+      "why": "The route stage crossed its 60-minute job bound on five of the last eight runs. Measured on ubuntu-latest 2026-08-24 (run 32742672105): fixed cost 47 s, stage 3155 s, 149 items at a mean of 21.0 s. So per-item inference owns the time, not model load. The router had no request budget of its own and borrowed run.shard_timeout_minutes - 150 minutes against a 60-minute job, which can never fire. lead_words was a literal on the hot path and is most of each request's prefill. The route budget warns before the bound instead of after it. All three are additive with defaults, so an older config still validates."
+    },
     {
       "change": "Added ui.items_per_topic and console.failure_list_max.",
       "version": "2026-08-24T21:40",
@@ -1154,7 +1180,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-24T21:40",
+      "default": "2026-08-24T23:10",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1168,5 +1194,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-24T21:40"
+  "version": "2026-08-24T23:10"
 }

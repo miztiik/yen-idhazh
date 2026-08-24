@@ -1,11 +1,12 @@
 {
   "alt_text": null,
+  "asked_the_model": false,
   "asset_path": null,
   "failure_detail": null,
   "item_id": "world-01",
   "kind": "none",
   "model_id": "qwen3-4b-q4-k-m",
-  "rationale": "No numbers and no process. Nothing is the correct answer.",
+  "rationale": "no visual kind could be built from the 0 quantities in this article, so the router was not asked",
   "route_ms": null,
   "routed_at": "2026-08-21T06:15:19Z",
   "spec": null,
