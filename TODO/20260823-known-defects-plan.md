@@ -22,6 +22,8 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 6 | Duplicate eval rows inflate the ledger | 2 | **OPEN** |
 | 7 | Affiliate marketing pages pass the faithfulness bar | 3 | **OPEN** |
 | 8 | Reader-facing confidence copy says too little | 2 | **OPEN** |
+| 9 | The push loop loses a whole day when the tree is dirty | 2 | **OPEN** |
+| 10 | The `route` job hits its 60-minute timeout every run | 3 | **OPEN** |
 
 ## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
 
@@ -94,6 +96,61 @@ this row.
 Reader's summary: "If someone re-cuts for the sake of the bar looking less
 green, that is tuning a number so a chart looks humbler, which is the opposite
 of honesty."
+
+## 9 - The push loop loses a whole day when the tree is dirty (OPEN)
+
+`digest.yml`, step `Commit the day`. The day payload is committed, then pushed.
+If the push races another commit to `main`, the loop runs
+`git pull --rebase --autostash origin main`. Any unstaged change in the checkout
+is stashed, and if it fails to reapply, the step exits 1 and **the whole day's
+work is discarded** after plan, four shards and assemble all succeeded.
+
+Evidence: run `32671663130`, 2026-08-24. Plan and all four shards succeeded,
+assemble built the day, and the step died with `error: cannot rebase: You have
+unstaged changes.` The dirty file was `docs/concepts/design-system.md`, whose
+blob was CRLF against a `text eol=lf` attribute, so every Linux checkout saw it
+modified before the job did anything. Fixed by PR #44, which removes that
+trigger.
+
+The loop is still fragile to the next dirty file. Its own comment assumes the
+opposite: "the day payload touches paths nobody edits by hand, so there is
+nothing here for a rebase to conflict with". Section 1a says degrade, do not
+fail; losing a day to a counter of working-tree noise is the opposite.
+
+The day's payload is already committed by the time the rebase runs, so anything
+still unstaged is noise and could be discarded before the pull. That is a
+deliberate change to a production workflow that CI does not exercise, so it
+needs its own consideration rather than a quiet edit.
+
+## 10 - The `route` job hits its 60-minute timeout every run (OPEN)
+
+`digest.yml` gives `route` `timeout-minutes: 60`. It sits close to that bound and
+has crossed it twice:
+
+| Run | `route` | Outcome |
+| --- | --- | --- |
+| `32661273335` | 2026-08-23 | cancelled at the timeout |
+| `32671663130` | 2026-08-24T00:26:36Z | cancelled after 60 min |
+| `32701966659` | 2026-08-24T09:24:36Z -> 10:15:50Z | **succeeded in 51 min** |
+
+The third run corrects the first reading of this defect. It is not "the timeout
+fires every run"; it is "the job finishes at 51 to 60+ minutes against a 60
+minute bound", so whether a day gets its visuals depends on which side of the
+line that run lands. Three observations, one model, no controlled variable -
+this is a symptom, not yet a measurement.
+
+`route` carries `continue-on-error` and `assemble` runs on `always()`, so the
+day publishes either way - by design, a dead router must not stop publication.
+The cost of a crossing is silent: items publish without the visuals the router
+would have chosen, and nothing on the page says so.
+
+Three questions, and they are different: what actually drives the spread (item
+count? article length? a slow first load?), whether the 4B router is too slow
+for the item count at this budget, and whether 60 minutes is the right budget.
+None should be answered by raising the number until it stops going red (Rule #2:
+the budget is the platform, not a preference). Start by recording `route`
+wall-clock per run against item count, which is a measurement nothing currently
+keeps.
 
 ## What closed, and where it went
 
