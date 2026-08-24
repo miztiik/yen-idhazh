@@ -41,6 +41,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added prefill_ms, decode_ms and cached_tokens.",
+      "version": "2026-08-24T18:30",
+      "why": "summarize_ms is one number covering two costs with different rates: reading the article runs about twice as fast per token as writing the summary, so a blended figure cannot say whether a slow run was a long article or a long reply. The runtime already reports both separately, and cached_tokens is what makes a prefill figure comparable between items. All three default to zero, so an older payload still validates."
+    },
+    {
       "change": "Added optional failure_code for typed summarize failures.",
       "version": "2026-08-23T17:36",
       "why": "A dead local model server is infrastructure failure, not a malformed model reply. The failure payload now carries model_unreachable as a typed value so the item-health classifier can read it without pattern-matching failure_detail."
@@ -73,6 +78,20 @@
       "description": "A low-band summary is retried on the smaller model.",
       "minimum": 1,
       "title": "Attempt",
+      "type": "integer"
+    },
+    "cached_tokens": {
+      "default": 0,
+      "description": "Prompt tokens the runtime reused instead of reading. input_tokens minus this is what prefill_ms actually paid for.",
+      "minimum": 0,
+      "title": "Cached Tokens",
+      "type": "integer"
+    },
+    "decode_ms": {
+      "default": 0,
+      "description": "Writing the summary. One token at a time, so about half the prefill rate.",
+      "minimum": 0,
+      "title": "Decode Ms",
       "type": "integer"
     },
     "duration_ms": {
@@ -169,6 +188,13 @@
       "title": "Pipeline Fingerprint",
       "type": "string"
     },
+    "prefill_ms": {
+      "default": 0,
+      "description": "Reading the prompt. Scales with article length, minus what the cache kept.",
+      "minimum": 0,
+      "title": "Prefill Ms",
+      "type": "integer"
+    },
     "source_truncated": {
       "default": false,
       "title": "Source Truncated",
@@ -217,7 +243,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-23T17:36",
+      "default": "2026-08-24T18:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -234,5 +260,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-23T17:36"
+  "version": "2026-08-24T18:30"
 }

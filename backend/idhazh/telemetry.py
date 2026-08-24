@@ -120,6 +120,11 @@ def classify_item(
         fetch_ms=summary.fetch_ms,
         extract_ms=summary.extract_ms,
         summarize_ms=summary.summarize_ms,
+        prefill_ms=summary.prefill_ms,
+        decode_ms=summary.decode_ms,
+        input_tokens=summary.input_tokens,
+        output_tokens=summary.output_tokens,
+        cached_tokens=summary.cached_tokens,
     )
 
 
@@ -139,6 +144,11 @@ def _row(
     fetch_ms: int | None = None,
     extract_ms: int | None = None,
     summarize_ms: int | None = None,
+    prefill_ms: int | None = None,
+    decode_ms: int | None = None,
+    input_tokens: int | None = None,
+    output_tokens: int | None = None,
+    cached_tokens: int | None = None,
 ) -> ItemHealthRow:
     return ItemHealthRow(
         version=ItemHealthRow.schema_version(),
@@ -160,6 +170,11 @@ def _row(
         fetch_ms=fetch_ms,
         extract_ms=extract_ms,
         summarize_ms=summarize_ms,
+        prefill_ms=prefill_ms,
+        decode_ms=decode_ms,
+        input_tokens=input_tokens,
+        output_tokens=output_tokens,
+        cached_tokens=cached_tokens,
     )
 
 
