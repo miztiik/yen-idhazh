@@ -116,6 +116,31 @@ display name. `pages.yml` therefore names `Content refresh` in that selector.
 The workflow contract test pins both sides so a label change cannot silently
 stop publication.
 
+## Action versions
+
+Every workflow calls the same nine actions, each pinned to one approved major.
+GitHub retired the Node 20 runtime on its runners, so an action major that still
+declares `using: node20` is force-run on Node 24 today and stops running later.
+
+| Action | Major | Runtime |
+| --- | --- | --- |
+| `actions/cache` | `v6` | `node24` |
+| `actions/checkout` | `v6` | `node24` |
+| `actions/configure-pages` | `v6` | `node24` |
+| `actions/deploy-pages` | `v5` | `node24` |
+| `actions/download-artifact` | `v8` | `node24` |
+| `actions/setup-node` | `v7` | `node24` |
+| `actions/setup-python` | `v7` | `node24` |
+| `actions/upload-artifact` | `v7` | `node24` |
+| `actions/upload-pages-artifact` | `v5` | composite, pins a `node24` `upload-artifact` |
+
+Each runtime above was read from that major's own `action.yml` on 2026-08-24.
+The workflow contract test asserts the table: a new action, or a call site left
+on an old major, fails CI.
+
+`setup-node` still selects Node 22 for the frontend commands. That is the
+application runtime and is unrelated to the runtime an action itself declares.
+
 ## See also
 
 - [../architecture/overview.md](../architecture/overview.md) - how CI, committed payloads, and the static site fit together.
