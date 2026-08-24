@@ -143,6 +143,7 @@ workflow names and triggers are pinned in
 
 ## See also
 
+- [troubleshoot-one-url.md](troubleshoot-one-url.md) - isolate one planned URL or use the explicit manual diagnostic workaround.
 - [set-up-local-inference.md](set-up-local-inference.md) - getting the runtime and the weights.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what each stage owns.
 - [../concepts/config.md](../concepts/config.md) - the knobs these stages read.
