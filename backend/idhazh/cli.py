@@ -909,7 +909,9 @@ def stage_assemble(
     landed = writer.append(LEDGER, rows)
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
-    publish_telemetry.publish(state_root=STATE_ROOT)
+    publish_telemetry.publish(
+        state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry"
+    )
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s",
         plan.date,
