@@ -316,16 +316,17 @@ def main() -> int:
         return 2
 
     models: list[Path] = []
-    report = [runtime_identity(binary)]
+    args.weights_report.parent.mkdir(parents=True, exist_ok=True)
+    args.weights_report.write_text(runtime_identity(binary) + "\n", encoding="utf-8")
     for ref in refs:
         remote = resolve_remote_file(ref)
         path, elapsed = download(ref, remote, args.models_dir)
         models.append(path)
         source = "local" if elapsed == 0.0 else f"download {elapsed:.1f}s"
-        report.append(f"{ref.repo}:{ref.file} {source} bytes={remote.bytes} sha256={remote.sha256}")
-
-    args.weights_report.parent.mkdir(parents=True, exist_ok=True)
-    args.weights_report.write_text("\n".join(report) + "\n", encoding="utf-8")
+        with args.weights_report.open("a", encoding="utf-8", newline="\n") as report:
+            report.write(
+                f"{ref.repo}:{ref.file} {source} bytes={remote.bytes} sha256={remote.sha256}\n"
+            )
     run_benchmarks(
         binary=binary,
         models=models,
