@@ -254,8 +254,8 @@ export interface RunSummary {
  *
  * Every figure here belongs to a run, not to the day: the manifest holds no
  * top-level counts at all. The day's totals are summed across its runs, and the
- * site size is taken from the last run rather than added up - the site is a
- * thing that was measured four times, not four things.
+ * site size is taken from the last run rather than added up - the site is one
+ * thing measured once per run, not a new thing each run.
  */
 export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 	const found: RunSummary[] = [];
