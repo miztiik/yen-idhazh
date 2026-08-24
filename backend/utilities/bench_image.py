@@ -1,5 +1,10 @@
 """Time a diffusion model on CPU. The image leg is the one stage whose cost
 nobody has published for a 4-vCPU runner, so measure it rather than guess.
+
+Two attempts died before reporting anything, which is why this reports per step
+rather than per image. A run killed at step 7 of 9 with a printed step time has
+still measured the thing; a run killed at step 7 of 9 with nothing printed until
+the image completes has measured nothing at all.
 """
 
 from __future__ import annotations
@@ -9,6 +14,7 @@ import json
 import os
 import time
 from pathlib import Path
+from typing import Any
 
 PROMPT = (
     "flat vector infographic, three labelled panels, muted editorial palette, "
@@ -26,6 +32,33 @@ def _rss_gb() -> float:
     except OSError:
         pass
     return 0.0
+
+
+class StepClock:
+    """Prints each denoising step as it lands, so a killed job leaves a number.
+
+    The first two attempts on a runner reported nothing at all: one was shut down
+    under memory pressure and one was cancelled at step 7 of 9. Both times the
+    cost per step was the answer, and both times it went unrecorded because the
+    harness printed only once the whole image was finished.
+    """
+
+    def __init__(self, total: int) -> None:
+        self.total = total
+        self.seconds: list[float] = []
+        self.mark = time.perf_counter()
+
+    def __call__(self, *_: Any, **kwargs: Any) -> dict[str, Any]:
+        now = time.perf_counter()
+        self.seconds.append(now - self.mark)
+        self.mark = now
+        print(
+            f"  step {len(self.seconds)}/{self.total} {self.seconds[-1]:.1f}s "
+            f"rss={_rss_gb():.1f}GB",
+            flush=True,
+        )
+        passthrough: dict[str, Any] = kwargs.get("callback_kwargs", {})
+        return passthrough
 
 
 def main() -> int:
@@ -63,6 +96,7 @@ def main() -> int:
 
     results = []
     for size in (int(s) for s in args.sizes.split(",")):
+        clock = StepClock(args.steps)
         t0 = time.perf_counter()
         image = pipe(
             prompt=PROMPT,
@@ -71,6 +105,7 @@ def main() -> int:
             num_inference_steps=args.steps,
             guidance_scale=0.0,  # Turbo variants are distilled; CFG must be off
             generator=torch.Generator("cpu").manual_seed(0),
+            callback_on_step_end=clock,
         ).images[0]
         elapsed = time.perf_counter() - t0
         png = args.out / f"{size}.png"
@@ -82,6 +117,7 @@ def main() -> int:
                 "size": size,
                 "steps": args.steps,
                 "seconds": round(elapsed, 1),
+                "step_seconds": [round(value, 1) for value in clock.seconds],
                 "png_bytes": png.stat().st_size,
                 "webp_q80_bytes": webp.stat().st_size,
                 "peak_rss_gb": round(_rss_gb(), 2),
