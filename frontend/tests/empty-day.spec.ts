@@ -82,3 +82,39 @@ test('reader source limits are sentences in the page text', () => {
 		'We skipped {day.items_failed} stories today because we could not read enough of the page to'
 	);
 });
+
+/**
+ * The home page is the one page every reader lands on, and its topic pills were
+ * dead for as long as they have existed: the pills build their address from a
+ * `datePrefix`, the dated routes pass one, and the root passed nothing - so
+ * every pill pointed at `/<vertical>/`, a route this site does not have.
+ *
+ * Asserted by walking the links rather than by pinning the prefix, because the
+ * defect was never the prefix. It was that nothing checked a link on the home
+ * page went anywhere. A test that only pinned the attribute would pass the day
+ * someone changed the route shape underneath it.
+ */
+test('every internal link on the home page goes somewhere', async ({ page }) => {
+	await page.goto('/');
+
+	const targets = await page
+		.locator('main a[href], nav a[href]')
+		.evaluateAll((links) =>
+			links
+				.map((link) => (link as HTMLAnchorElement).href)
+				.filter((href) => href.startsWith(window.location.origin))
+				.filter((href, index, all) => all.indexOf(href) === index)
+		);
+
+	expect(targets.length).toBeGreaterThan(0);
+
+	const dead: string[] = [];
+	for (const href of targets) {
+		const response = await page.goto(href);
+		if (!response || response.status() >= 400) {
+			dead.push(`${href} -> ${response ? response.status() : 'no response'}`);
+		}
+	}
+
+	expect(dead, `dead links on the home page:\n${dead.join('\n')}`).toEqual([]);
+});
