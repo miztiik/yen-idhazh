@@ -31,6 +31,32 @@ def asset_relpath(date: str, vertical: str, ordinal: int) -> str:
     return f"digest/{year}/{month}/{day}/{vertical}-{ordinal:02d}{SUFFIX}"
 
 
+def highest_ordinal(public_root: Path, date: str, vertical: str) -> int:
+    """The largest `<vertical>-<NN>` already written for this day, or zero.
+
+    A day runs several times. Numbering from one in each process made the second
+    run overwrite the first run's `india-01.svg` while the digest still carried
+    both items, so two different articles pointed at one file and one of them
+    displayed a chart drawn from the other's numbers - with alt text describing
+    figures that were not in the picture. Every value was true and the picture
+    belonged to another story.
+
+    Reading the directory keeps the `<vertical>-<NN>` shape the contract fixes
+    (no hash in any published path) and needs no handshake between the router
+    and the assembler, which run in different jobs.
+    """
+    year, month, day = date.split("-")
+    folder = public_root / "digest" / year / month / day
+    if not folder.is_dir():
+        return 0
+    highest = 0
+    for path in folder.glob(f"{vertical}-*{SUFFIX}"):
+        tail = path.stem[len(vertical) + 1 :]
+        if tail.isdigit():
+            highest = max(highest, int(tail))
+    return highest
+
+
 def write_bytes_atomic(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     handle = tempfile.NamedTemporaryFile("wb", dir=path.parent, delete=False)
