@@ -103,8 +103,19 @@ The console knobs are:
 - `console.max_window_days`
 - `console.min_attempts_for_rate`
 - `console.chart_height`
+- `console.failure_list_max`
 
-The 30-day setting is a viewport. It never deletes rows.
+The 30-day setting is a viewport. It never deletes rows. `failure_list_max` is
+the same idea one level down: the failed-item list shows a page at a time and
+offers the rest, so the charts above it stay reachable.
+
+## Reader surface
+
+`ui.items_per_topic` is how many of a topic's stories the all-topics page shows
+before it links to the rest. It is a hierarchy knob, never a cap: nothing is
+removed, hidden or re-ranked, and the whole topic is one prerendered click away.
+A day that ran to a single topic ignores it, because a lone heading over the
+whole page states what the page already says.
 
 ## What is NOT a knob
 

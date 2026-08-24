@@ -609,6 +609,15 @@ class ConsoleConfig(Model):
         description="Below this count a rate is outlined because the denominator is thin.",
     )
     chart_height: int = Field(default=180, ge=120)
+    failure_list_max: int = Field(
+        default=25,
+        ge=1,
+        description=(
+            "How many failed items the console lists before it offers more. The shape "
+            "comes first and the rows come on demand: an uncapped list put the "
+            "compression chart 9000 pixels down the page."
+        ),
+    )
 
     @model_validator(mode="after")
     def _window_bounds_are_ordered(self) -> Self:
@@ -646,6 +655,16 @@ class UiConfig(Model):
             "page this short it would promise an archive it cannot reach."
         ),
     )
+    items_per_topic: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "How many of a topic's stories the all-topics page shows before it links to "
+            "the rest. One long queue has no usable first screen: its opening items are "
+            "whichever topic sorts first. Nothing is removed or re-ranked - every item "
+            "stays one click away on its own topic page."
+        ),
+    )
     repo_url: str = Field(default="https://github.com/miztiik/yen-idhazh", min_length=1)
     site_title: str = Field(default="yen-idhazh", min_length=1)
     tagline: str = Field(
@@ -670,6 +689,18 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T21:40",
+            change="Added ui.items_per_topic and console.failure_list_max.",
+            why=(
+                "Both are the same defect at two altitudes: a page that renders every "
+                "row it holds. 586 items in one queue gave the day page a first screen "
+                "chosen by whichever topic id sorts first, and 800 failed rows measured "
+                "7824 pixels and pushed the compression chart off the operator's reach. "
+                "How many to show first is a tuning decision, not a literal (Rule #6). "
+                "Both are additive with defaults, so an older config still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T11:15",
             change="Added collect.blocked_url_markers, empty by default.",

@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -57,18 +57,22 @@ Icons are **vector glyphs referenced by id** from a generated manifest, never in
 
 ## Charts are static first, enhanced only when interaction earns it
 
-A chart on an item is rendered at build time from a specification and shipped as an asset ([digest.md](digest.md)). The dashboard's own chart is hand-written markup over a committed CSV. A charting library that outweighs the data it draws has not earned its bytes, and a runtime dependency on a reading page is a runtime dependency for nothing.
+A chart on an item is rendered at build time from a specification and shipped as an asset ([digest.md](digest.md)). Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
-The console is the exception because the owner requires pan and zoom over time.
-It uses `uplot`: MIT, zero dependencies, and small enough to keep the bundle gate
-meaningful. In the 2026-08-23 Windows_NT production build, the route chunk that
-carries `uplot` was 23.5 KB gzipped. It is bundled from `node_modules`, never
-fetched from a CDN.
+**There is no chart library, on any surface.** One was carried for the console
+between 2026-08-23 and 2026-08-24 on the argument that the owner required pan
+and zoom. It was removed once that argument was checked: the pan and zoom are
+implemented by the viewport control, with a keydown handler and four buttons,
+and what the library actually drew was a second, smaller copy of a chart the
+hand-written SVG already drew better. A charting library that outweighs the data
+it draws has not earned its bytes, and a runtime dependency on a reading page is
+a runtime dependency for nothing.
 
-`uplot` renders to canvas, so it cannot inherit CSS custom properties inside the
-drawn pixels. Console charts read the token values with `getComputedStyle` at
-mount and after theme changes, then pass the resolved colours into the plot.
-That keeps the token file as the source of truth while naming the canvas cost.
+Hand-written SVG has a second property worth stating: it renders on the server,
+so a page is complete before any script runs. A canvas cannot inherit a CSS
+custom property inside the drawn pixels, so a canvas chart has to resolve the
+token values in JavaScript at mount and again after every theme change - which
+means the token file stops being the only place a colour is decided.
 
 ## Design rationale
 
