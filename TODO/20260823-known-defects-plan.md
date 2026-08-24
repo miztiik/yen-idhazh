@@ -14,7 +14,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | # | Defect | Level | Status |
 | --- | --- | --- | --- |
 | 1 | The published band ignores two of its own counterweights | 2 | FIXED - PR #18 |
-| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - consultation** |
+| 2 | The faithfulness thresholds have no labelled error rate | 5 | **INSTRUMENT BUILT - 0 of 60 labels, 1 of 10 run-days** |
 | 3 | `/evals` and `/console` answer the same question twice | 3 | FIXED - PR #30 |
 | 4 | `EmptyDay` points at a notice that is not on the page | 1 | FIXED - PR #14 |
 | 5 | The home page bakes the build date and calls it today | 2 | FIXED - PR #14 |
@@ -24,7 +24,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 9 | The push loop loses a whole day when the tree is dirty | 2 | FIXED - 2026-08-24 |
 | 10 | The `route` job hits its 60-minute timeout | 3 | FIXED - 2026-08-24 |
 
-## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
+## 2 - The faithfulness thresholds have no labelled error rate (INSTRUMENT BUILT)
 
 The old saturation premise is closed and false. Measured 2026-08-24 on the
 committed ledger, `state/scores.csv` at n=447, the recorded `band` column says
@@ -54,14 +54,34 @@ Closing steps, in order:
 2. Draw 60 human-label rows: 6 per `hhem` decile, deterministic by hash. Label
    from the summary plus source URL, with `hhem` and `band` hidden. Record one
    binary answer, "does this assert anything the article does not support?", plus
-   one tag. **This mints a new persisted surface and needs sign-off before it is
-   built (Rule #3, section 6).**
+   one tag. **Done 2026-08-24.** `LabelRow` in `backend/idhazh/contracts/`,
+   `state/labels.csv`, the deterministic draw in `backend/idhazh/evals/labels.py`,
+   and a human-paced CLI at `backend/utilities/label_queue.py`. The draw fills all
+   ten deciles with no shortfall on today's ledger. Recorded in
+   [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md).
 3. Collect at least 10 distinct run-days at one `scorer_version` and one
-   `pipeline_fingerprint`.
-4. Re-test the cuts by stratum against the labels.
+   `pipeline_fingerprint`. **1 of 10.** Measured 2026-08-24: 731 eligible rows,
+   all on `2026-08-24`, all under fingerprint `969b1917...d2b945`, at scorer
+   `hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30`.
+4. Label the 60 rows. **0 of 60.** Human work. No AI judge, and the contract has
+   nowhere to put one.
+5. Re-test the cuts by stratum against the labels.
+
+**This row cannot close on engineering.** Steps 3 and 4 are a human prerequisite
+and a calendar prerequisite. Anyone reading this later: the instrument is built
+and nothing about it entitles a threshold to move.
+
+One risk worth surfacing now. The pipeline fingerprint moved at least twice in
+three days, so ten consecutive days under one fingerprint may be unreachable
+while the pipeline is under active change. The falsifiable relaxation is "10
+run-days at one `scorer_version`, with `pipeline_fingerprint` recorded per row and
+reported as a stratum" - the threshold belongs to the scorer, and a producer
+change is a covariate rather than a disqualification. That would change this
+plan's text, so it is the owner's call.
 
 `evaluation.spot_checks_per_week` is already 10, and the spot-check has never
-run. The missing instrument is labels, not more rows.
+run. The missing instrument was labels, not more rows. The instrument now exists;
+the labels do not.
 
 ## 6 - Duplicate eval rows inflate the ledger (FIXED)
 

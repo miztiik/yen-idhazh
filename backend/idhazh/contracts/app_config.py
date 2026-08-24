@@ -459,6 +459,34 @@ class EvaluationConfig(Model):
         default=250, ge=1, description="Above this it is a copy. Absolute, not a ratio."
     )
     spot_checks_per_week: int = Field(default=10, ge=0)
+    labellers: list[Slug] = Field(
+        default_factory=list,
+        description=(
+            "Who may write a faithfulness label. Empty by default, so a fresh clone can "
+            "draw the queue and read it but cannot record a verdict. The list is what "
+            "keeps a machine out of the label ledger: there is no author field a model "
+            "could fill, and adding one would be a schema change with a written reason "
+            "(CLAUDE.md section 0a)."
+        ),
+    )
+    label_draw_per_decile: int = Field(
+        default=6,
+        ge=1,
+        description=(
+            "Labels drawn from each hhem decile. Uniform, not weighted to the cuts: the "
+            "first question is what `high` means at all, and a boundary-weighted draw "
+            "cannot answer that."
+        ),
+    )
+    label_min_run_days: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "Distinct run-days at one scorer version and one pipeline fingerprint before "
+            "a draw is worth finalising. A draw over one day is a draw over one day's "
+            "sources."
+        ),
+    )
     golden_set_size: int = Field(default=20, ge=1)
     validation_articles: int = Field(
         default=20,
@@ -718,6 +746,22 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T23:40",
+            change=(
+                "Added evaluation.labellers, evaluation.label_draw_per_decile and "
+                "evaluation.label_min_run_days."
+            ),
+            why=(
+                "The faithfulness cuts are a reader-facing promise with no measured error "
+                "rate behind them, and the missing instrument was labels rather than more "
+                "rows. The draw size and the collection floor are tuning decisions, not "
+                "literals (Rule #6). `labellers` is empty by default, so a fresh clone can "
+                "draw the queue and read it but cannot record a verdict - and because the "
+                "row has no author field a model could fill, that list is a structural "
+                "control rather than a discouragement. Additive with defaults."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T23:10",
             change=(

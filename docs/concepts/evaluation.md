@@ -78,6 +78,10 @@ The confidence band stays on the faithfulness axis.
 
 **2. The model does not grade the model.** LLM-as-judge is a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a). A judge built from the same technology shares the failure modes of the thing it is judging, and agrees with it for exactly the reasons you needed an independent check. The substitute is a purpose-built scorer, plus the deterministic counterweights above, plus a small recurring human spot-check whose only job is to keep the automated scores calibrated.
 
+Discouragement is not a control, so four things make it structurally hard rather than merely forbidden. `LabelRow` has no author field a model could fill and no nullable one it could leave blank - `labeller` is required and checked against `evaluation.labellers`. The writer is a human-paced CLI with no `--from-file`, no `--model` and no stdin path, so generating labels from a model means writing a second writer in a diff in a pull request. `seconds_spent` has a floor. And the draw module may not import `idhazh.llm` or the scorer, asserted by a test, so the loop cannot close on itself after a refactor by somebody who never read this paragraph.
+
+Not to be done: seeding the queue with model pre-labels for a human to confirm. Confirmation is anchoring, and it turns an independent measurement into an expensive agreement rate with the model - LLM-as-judge with a rubber stamp.
+
 ## Bands, not raw numbers
 
 Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config.md](config.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
@@ -110,6 +114,70 @@ before using the bands as a distribution. Measured 2026-08-24 on the committed
 `state/scores.csv` at 447 rows: recorded 63.8 / 18.1 / 18.1, re-banded
 57.7 / 24.2 / 18.1. Twenty-seven rows move, all of them written before the caps
 landed - 11 on lead coverage, 11 on a dropped hedge, 5 on both.
+
+## The human labels: the instrument, and what it still needs
+
+The thresholds are a promise to a reader and nothing has measured their error
+rate. `state/labels.csv` is where that measurement would live, and
+`backend/utilities/label_queue.py` is how a person fills it.
+
+**The draw.** Six rows from each `hhem` decile, deterministic by hash over the
+address, the inputs, the words, the scorer and the draw id. Sixty rows. Uniform
+across deciles rather than crowded at the cuts, because the first question is a
+level question - what does `high` mean at all - and a boundary-weighted draw
+would speak about 0.75 to 0.85 and stay silent about the rest of the ledger. A
+uniform draw re-weights to the live distribution; the reverse is not available.
+
+**A label is a fact about a (summary, article) pair, not about a score.**
+`output_digest` pins the exact words judged. The scorer's number at draw time is
+recorded and hidden - recorded so an analysis can refuse to mix instruments,
+hidden so it cannot anchor the labeller. When the scorer moves, the label stays
+valid as a label and stops being evidence about that scorer's numbers, so the
+read side re-joins on `output_digest` and takes the live score from this ledger.
+
+**Hidden from the labeller, without exception:** `hhem`, `hhem_full`,
+`hhem_delta`, the band, the band reason, every counterweight, `model_id`,
+`attempt`, `pipeline_fingerprint`, `scorer_version`, any other row's label, the
+running tally, and the row's decile. The queue is never ordered by score - that
+would leak the gradient off the sequence.
+
+**Shown:** our summary as published, the source's own headline, the date, the
+link, and the extracted article text. The extracted text is the authority for the
+verdict; the link exists to decide whether that text is the article at all. URL
+alone would have the labeller judging a page that has since changed. Extracted
+text alone would hide the case where the extractor grabbed navigation chrome,
+which is what the `not_the_article` tag is for.
+
+**One binary verdict plus one closed tag.** Every tag names a defect with a
+different fix, so two tags leading to one code change would be one tag.
+`invented_fact`, `wrong_number`, `overstated`, `wrong_subject`,
+`not_the_article`, `unjudgeable`, and `none` for a supported summary. Three of
+them mirror a counterweight the pipeline already computes, which buys that
+counterweight's own precision and recall out of the same sixty labels.
+
+Short-source rows stay in the pool. They are extraction failures rather than
+summary defects, and dropping them would bias the sample toward well-extracted
+items - the sampling error this whole page argues against. `unjudgeable` carries
+them, and the rate is reported with and without.
+
+**The exact remaining requirement**, counted on the committed ledger 2026-08-24:
+
+| What | Have | Need |
+| --- | --- | --- |
+| Labels | **0** | 60 |
+| Distinct run-days at one `scorer_version` AND one `pipeline_fingerprint` | **1** (`2026-08-24`) | 10 |
+| Eligible rows | 731 | not the constraint |
+
+Fixed `scorer_version`:
+`hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30`.
+Fixed `pipeline_fingerprint`: `969b1917...d2b945`. Note the band values sit
+**inside** the scorer version string, so moving a threshold mints a new scorer
+version and restarts the count. That is correct, and it is also why a cut cannot
+move halfway through a collection.
+
+**Nothing here may move a threshold.** The instrument exists; the labels do not.
+Until both the label count and the run-day count are met, any re-cut is a number
+chosen so a chart looks humbler.
 
 ## The band says what is missing, not how good the item is
 
