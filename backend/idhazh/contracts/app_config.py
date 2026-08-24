@@ -120,6 +120,16 @@ class CollectConfig(Model):
             "committed and readable; they are just not evidence about today."
         ),
     )
+    blocked_url_markers: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Case-insensitive substrings of a canonical address that never enter the "
+            "pool. For the promotional page a working news feed syndicates: an affiliate "
+            "product review is short declarative prose, so it is trivially entailed and "
+            "no faithfulness threshold detects it at any cut. Empty by default - the "
+            "entries are a source list and live in config/ (Rule #6)."
+        ),
+    )
 
 
 class ExtractConfig(Model):
@@ -660,6 +670,18 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T11:15",
+            change="Added collect.blocked_url_markers, empty by default.",
+            why=(
+                "A working news feed syndicated affiliate credit-card pages, which "
+                "published at 0.92 to 0.95 faithfulness and banded high. The summaries "
+                "were faithful - that is the point. Short declarative marketing prose is "
+                "trivially entailed, so no faithfulness threshold detects it at any cut "
+                "and raising the bar rewards it. The control has to sit where the item is "
+                "collected, before anything is spent on it (Rule #2)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T19:50",
             change=(

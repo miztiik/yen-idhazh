@@ -35,6 +35,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional route_ms.",
+      "version": "2026-08-24T11:15",
+      "why": "The route job sits between 51 and 60 minutes against a 60-minute bound and nothing recorded what it spent, so every argument about the budget was an estimate (Rule #10). Null on a payload written before the clock existed, which is what keeps the field additive."
+    },
+    {
       "change": "Initial shape: the four-way routing enum, the spec, and the render outcome.",
       "version": "2026-08-21",
       "why": "Contracts before logic - Route and Render are written against a fixed payload."
@@ -112,6 +117,20 @@
       "default": null,
       "title": "Rationale"
     },
+    "route_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall-clock for this item: the router call plus the render. Null on a payload written before the clock existed.",
+      "title": "Route Ms"
+    },
     "routed_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
       "title": "Routed At",
@@ -147,7 +166,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-24T11:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -166,5 +185,5 @@
   ],
   "title": "Route",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-24T11:15"
 }

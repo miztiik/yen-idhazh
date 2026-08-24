@@ -6,6 +6,7 @@
   "kind": "none",
   "model_id": "qwen3-4b-q4-k-m",
   "rationale": "No numbers and no process. Nothing is the correct answer.",
+  "route_ms": null,
   "routed_at": "2026-08-21T06:15:19Z",
   "spec": null,
   "spec_format": null,
