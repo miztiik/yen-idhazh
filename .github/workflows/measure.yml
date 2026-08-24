@@ -155,7 +155,7 @@ jobs:
             --threads "$THREAD_COUNTS" \
             --binary "$LLAMA_BIN/llama-bench"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: always()
         with:
           name: bench-llm
@@ -167,7 +167,7 @@ jobs:
     timeout-minutes: 120
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -191,7 +191,7 @@ jobs:
             --model Tongyi-MAI/Z-Image-Turbo --steps 9 --sizes 512 --dtype bfloat16 \
             || echo "Z-Image-Turbo did not complete on this runner"
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bench-image
           path: backend/var/
@@ -205,7 +205,7 @@ jobs:
     timeout-minutes: 90
     steps:
       - uses: actions/checkout@v6
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
 
@@ -222,7 +222,7 @@ jobs:
           python3 backend/utilities/measure_corpus.py \
             --limit ${{ inputs.corpus_links }} --sleep 1
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: bench-corpus
           path: backend/var/corpus.json
@@ -237,7 +237,7 @@ jobs:
     steps:
       - uses: actions/checkout@v6
 
-      - uses: actions/setup-python@v5
+      - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
           cache: pip
@@ -674,7 +674,7 @@ jobs:
 
       - name: Upload runtime sweep
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: runtime-sweep-${{ inputs.runtime_candidate }}
           path: backend/var/runtime-sweep/
