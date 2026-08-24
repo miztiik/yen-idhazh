@@ -83,9 +83,15 @@ npm run build:canary
 npm run test:browser
 ```
 
-58 tests in 6 files (2026-08-24).
+61 tests in 6 files (2026-08-24).
 
-Three traps make this suite lie to you:
+Three traps make this suite lie to you. A fourth used to, and was fixed at the
+source rather than written down as a step to remember: `build_canary_day.py`
+now clears its state directory before writing, so running it twice no longer
+stacks a second copy of every feed-health row and quarantines a feed the fixture
+meant to keep healthy.
+
+The traps that remain:
 
 - **`frontend/build` is one shared directory.** `npm run build` and
   `npm run build:canary` both write it. If anything rebuilds the real site
