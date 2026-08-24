@@ -13,6 +13,7 @@
       "determinism_violations": 0,
       "items_failed": 1,
       "items_planned": 3,
+      "items_routed": 0,
       "items_skipped": 0,
       "items_succeeded": 2,
       "models": [
@@ -42,6 +43,7 @@
       "pipeline_fingerprints": [
         "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
       ],
+      "route_ms": null,
       "run_id": "2026-08-21-1",
       "runner": "github-hosted ubuntu-latest, 4 vCPU, 16 GB",
       "site_bytes": 1048576,
@@ -82,6 +84,7 @@
       "determinism_violations": 1,
       "items_failed": 0,
       "items_planned": 3,
+      "items_routed": 0,
       "items_skipped": 2,
       "items_succeeded": 1,
       "models": [
@@ -101,6 +104,7 @@
       "pipeline_fingerprints": [
         "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
       ],
+      "route_ms": null,
       "run_id": "2026-08-21-2",
       "runner": "github-hosted ubuntu-latest, 4 vCPU, 16 GB",
       "site_bytes": 1052672,

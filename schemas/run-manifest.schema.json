@@ -142,6 +142,13 @@
           "title": "Items Planned",
           "type": "integer"
         },
+        "items_routed": {
+          "default": 0,
+          "description": "Items the router reached. Zero when the route job died.",
+          "minimum": 0,
+          "title": "Items Routed",
+          "type": "integer"
+        },
         "items_skipped": {
           "default": 0,
           "minimum": 0,
@@ -186,6 +193,20 @@
           },
           "title": "Pipeline Fingerprints",
           "type": "array"
+        },
+        "route_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the router spent on this day, summed over its items. Read against items_routed and against the job's own wall-clock: a stage total far below the job total says the fixed cost is the problem, not the model.",
+          "title": "Route Ms"
         },
         "run_id": {
           "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
@@ -296,6 +317,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional items_routed and route_ms to a run.",
+      "version": "2026-08-24T11:15",
+      "why": "The route job lands between 51 and 60 minutes against a 60-minute bound, and no committed artifact said what it spent or how many items it spent it on. The budget cannot be argued from an estimate (Rule #10). Both default on a manifest written before they existed."
+    },
+    {
       "change": "Pinned RunRecord vertical published counts to the run that wrote them.",
       "version": "2026-08-24T00:30",
       "why": "A later run appends to the day payload. Counting the accumulated day against this run's plan rejected valid second and later runs."
@@ -327,7 +353,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-24T00:30",
+      "default": "2026-08-24T11:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -339,5 +365,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-24T00:30"
+  "version": "2026-08-24T11:15"
 }

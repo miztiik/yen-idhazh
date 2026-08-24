@@ -1,5 +1,17 @@
 {
   "$defs": {
+    "BandReason": {
+      "description": "Why an item did not reach the top band.\n\nAn identifier, never copy: the sentence a reader sees is owned by the site\nand can be rewritten without a schema change. A `high` item has no reason,\nbecause there is nothing to explain.",
+      "enum": [
+        "unsupported_number",
+        "not_scored",
+        "lead_missing",
+        "hedge_dropped",
+        "faithfulness"
+      ],
+      "title": "BandReason",
+      "type": "string"
+    },
     "ConfidenceBand": {
       "description": "The band, not the number, is what drives behaviour and what a reader sees.",
       "enum": [
@@ -52,6 +64,18 @@
       "properties": {
         "band": {
           "$ref": "#/$defs/ConfidenceBand"
+        },
+        "band_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BandReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the item is not in the top band. An identifier the site turns into a sentence; null on a `high` item and on a day published before this existed."
         },
         "entities": {
           "items": {
@@ -383,6 +407,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional band_reason to published items.",
+      "version": "2026-08-24T11:15",
+      "why": "The medium band printed 'Mostly matches the source', which is a grade and not a sentence: it told a reader an item was worse without telling them what was missing. Both things that cap an item at medium were already computed and neither reached the page. Null on a high item and on every day published before this, which keeps an older payload rendering exactly as it does today."
+    },
+    {
       "change": "Added source_form and reader_note to published items.",
       "version": "2026-08-23T18:51",
       "why": "Short and abstract sources can now publish, so the page needs our own sentence that tells the reader what kind of source was summarized without turning the limitation into a badge."
@@ -464,7 +493,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-23T18:51",
+      "default": "2026-08-24T11:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -489,5 +518,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-23T18:51"
+  "version": "2026-08-24T11:15"
 }
