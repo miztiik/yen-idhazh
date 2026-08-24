@@ -96,6 +96,52 @@ which is generous - and a timeout should be. It must never be re-derived from
 the 229s blend, which would set it at 20 minutes and kill healthy shards that
 happened to draw long articles.
 
+### Candidate: Qwen3.5-9B-Q4_K_M (measured, not adopted)
+
+**Measured 2026-08-23** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4 threads,
+llama.cpp `b10598` (`56db501e7`), 3 repeats, `llama-bench` at the same three
+input lengths. Taken to answer "can we use Qwen3.5-9B", so the model pick rests
+on a number rather than on a model card (Rule #10). **The pick did not change**;
+this row exists so the next person asking does not re-run the job.
+
+| Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
+| --- | --- | --- | --- | --- |
+| Qwen3-8B-Q4_K_M (incumbent, b10580) | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
+| Qwen3.5-9B-Q4_K_M (candidate, b10598) | 10.14 +/- 0.01 | 10.06 +/- 0.01 | 9.84 +/- 0.01 | **6.01 +/- 0.11** |
+
+Derived by `backend/utilities/summarise_bench.py`: short 99s, medium 258s, long
+433s, **blended 222s**, worst long **639s** - against the 8B's 196s and 597s. A
+5-item shard of worst-case long articles is 53 minutes against the 330-minute
+`digest.yml` timeout.
+
+**The prefill curve flattens, and that is the architecture showing up.** The 8B
+loses 14% from 730 to 4850 tokens (12.1 -> 10.4). The 9B loses **3.0%** (10.14
+-> 9.84). Qwen3.5 is a hybrid: 24 of its 32 layers are Gated DeltaNet, which is
+linear in sequence length, and only 8 carry quadratic attention. Long articles
+cost it far less than they cost a dense model. `llama.cpp` reports the arch as
+`qwen35` and loads it without a flag.
+
+**Decode is the price, and bandwidth arithmetic under-predicted it.** 6.01
+against 7.28 tok/s is 1.21x slower. A pure memory-bandwidth estimate said 1.09x
+(6.7 tok/s) from the 248,320-token vocabulary streaming a larger LM head per
+token; the measurement is below that floor, so the DeltaNet state update costs
+more than bandwidth alone predicts. The estimate was labelled a floor and the
+floor held as a floor - it did not hold as a prediction.
+
+**Weight download, cache miss:** 5.3 GB in **118s** - faster than the 8B's 4.7 GB
+in 180s. Download speed on this runner varies more than file size does; two
+observations 2.9x apart mean neither is a rate.
+
+Three caveats this row cannot discharge:
+
+- `llama-bench` runs at its own `n_batch` 2048, not the pipeline's 512. That is
+  true of the incumbent rows too, so the comparison is fair and neither figure is
+  a production figure.
+- Throughput is not quality. Nothing here says the model summarizes faithfully;
+  that is `validate.yml` and the golden set, and it was not run.
+- `b10598` is not `b10580`. No workflow pins a llama.cpp build, so the incumbent
+  row and the candidate row were taken on different runtimes.
+
 ### On a laptop (kept only as a warning)
 
 ### Qwen3-4B-Q4_K_M
@@ -684,6 +730,8 @@ to justify a design decision.
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | unmeasured | lands with the eval harness |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
+| Whether Qwen3.5-9B summarizes faithfully through our prompt | **throughput measured, quality unmeasured** | a `validate.yml` dispatch with `challenger_repo=unsloth/Qwen3.5-9B-GGUF`; needs 20 scored articles, and the gate has never yet reached that floor |
+| Whether prefix cache reuse survives a recurrent (Gated DeltaNet) model | inferred only; llama.cpp #24714 reports full re-processing | `/completion` timings for item 1 vs items 2..N of one shard, candidate model served |
 
 ## How to add a row here
 
