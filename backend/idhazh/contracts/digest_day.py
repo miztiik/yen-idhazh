@@ -29,7 +29,7 @@ from idhazh.contracts.base import (
     Timestamp,
     Url,
 )
-from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.route import VisualKind, VisualState
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import EventType, LensId, SourceKind
@@ -84,6 +84,13 @@ class DigestItem(Model):
     entities: list[Slug] = Field(default_factory=list)
 
     band: ConfidenceBand
+    band_reason: BandReason | None = Field(
+        default=None,
+        description=(
+            "Why the item is not in the top band. An identifier the site turns into a "
+            "sentence; null on a `high` item and on a day published before this existed."
+        ),
+    )
     source_form: SourceForm = Field(
         default=SourceForm.ARTICLE,
         description="Declared feed form, so a reader can see when an item is an abstract.",
@@ -140,6 +147,18 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T11:15",
+            change="Added optional band_reason to published items.",
+            why=(
+                "The medium band printed 'Mostly matches the source', which is a grade and "
+                "not a sentence: it told a reader an item was worse without telling them "
+                "what was missing. Both things that cap an item at medium were already "
+                "computed and neither reached the page. Null on a high item and on every "
+                "day published before this, which keeps an older payload rendering exactly "
+                "as it does today."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T18:51",
             change="Added source_form and reader_note to published items.",

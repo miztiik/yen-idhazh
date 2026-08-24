@@ -5,6 +5,7 @@
   "items": [
     {
       "band": "high",
+      "band_reason": null,
       "entities": [
         "example-lab"
       ],
@@ -42,6 +43,7 @@
     },
     {
       "band": "medium",
+      "band_reason": null,
       "entities": [],
       "events": [
         "capex",
@@ -73,6 +75,7 @@
     },
     {
       "band": "high",
+      "band_reason": null,
       "entities": [
         "example-lab"
       ],

@@ -93,6 +93,18 @@ class RunRecord(Model):
     items_succeeded: int = Field(ge=0)
     items_failed: int = Field(ge=0)
     items_skipped: int = Field(default=0, ge=0)
+    items_routed: int = Field(
+        default=0, ge=0, description="Items the router reached. Zero when the route job died."
+    )
+    route_ms: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "What the router spent on this day, summed over its items. Read against "
+            "items_routed and against the job's own wall-clock: a stage total far below "
+            "the job total says the fixed cost is the problem, not the model."
+        ),
+    )
     verticals: list[VerticalCount] = Field(default_factory=list)
 
     pipeline_fingerprints: list[Sha256] = Field(
@@ -124,6 +136,16 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-24T11:15",
+            change="Added optional items_routed and route_ms to a run.",
+            why=(
+                "The route job lands between 51 and 60 minutes against a 60-minute bound, "
+                "and no committed artifact said what it spent or how many items it spent it "
+                "on. The budget cannot be argued from an estimate (Rule #10). Both default "
+                "on a manifest written before they existed."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T00:30",
             change="Pinned RunRecord vertical published counts to the run that wrote them.",

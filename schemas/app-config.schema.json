@@ -3,6 +3,14 @@
     "CollectConfig": {
       "additionalProperties": false,
       "properties": {
+        "blocked_url_markers": {
+          "description": "Case-insensitive substrings of a canonical address that never enter the pool. For the promotional page a working news feed syndicates: an affiliate product review is short declarative prose, so it is trivially entailed and no faithfulness threshold detects it at any cut. Empty by default - the entries are a source list and live in config/ (Rule #6).",
+          "items": {
+            "type": "string"
+          },
+          "title": "Blocked Url Markers",
+          "type": "array"
+        },
         "front_page_bonus": {
           "default": 0.4,
           "minimum": 0.0,
@@ -1006,6 +1014,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added collect.blocked_url_markers, empty by default.",
+      "version": "2026-08-24T11:15",
+      "why": "A working news feed syndicated affiliate credit-card pages, which published at 0.92 to 0.95 faithfulness and banded high. The summaries were faithful - that is the point. Short declarative marketing prose is trivially entailed, so no faithfulness threshold detects it at any cut and raising the bar rewards it. The control has to sit where the item is collected, before anything is spent on it (Rule #2)."
+    },
+    {
       "change": "Added the brief summary band, lowered evaluation.summary_words_min to 25, lowered extract.min_source_words to its derived value, added evaluation.brief_compression_ceiling, and added line-shape prose knobs.",
       "version": "2026-08-23T19:50",
       "why": "Short sources should publish with an honest brief instead of being padded or dropped. The old word gate forced the decoder to keep writing on a small source, which made invention more likely."
@@ -1122,7 +1135,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-23T19:50",
+      "default": "2026-08-24T11:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1136,5 +1149,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-23T19:50"
+  "version": "2026-08-24T11:15"
 }

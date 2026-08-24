@@ -42,6 +42,26 @@ class ConfidenceBand(StrEnum):
     LOW = "low"
 
 
+class BandReason(StrEnum):
+    """Why an item did not reach the top band.
+
+    An identifier, never copy: the sentence a reader sees is owned by the site
+    and can be rewritten without a schema change. A `high` item has no reason,
+    because there is nothing to explain.
+    """
+
+    #: The summary asserts a figure that appears nowhere in the article.
+    UNSUPPORTED_NUMBER = "unsupported_number"
+    #: No faithfulness score exists, so the item cannot claim the top band.
+    NOT_SCORED = "not_scored"
+    #: The names and figures in the article's opening did not survive.
+    LEAD_MISSING = "lead_missing"
+    #: The article hedged and the summary asserted.
+    HEDGE_DROPPED = "hedge_dropped"
+    #: The faithfulness score itself put the item here.
+    FAITHFULNESS = "faithfulness"
+
+
 class EvalRow(Contract):
     """The Evaluate stage's output, appended once per item."""
 
