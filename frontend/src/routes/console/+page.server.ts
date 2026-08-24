@@ -242,7 +242,10 @@ export function load() {
 		.sort((a, b) => b.date.localeCompare(a.date));
 
 	const manifests = loadManifests();
-	const grid: DayColumn[] = manifests.map((day) => ({
+	// The strip is a time axis, so it reads oldest to newest. The Runs table under
+	// it still reads newest first, which is why this copies rather than reverses:
+	// an in-place reverse would silently turn that table upside down too.
+	const grid: DayColumn[] = [...manifests].reverse().map((day) => ({
 		date: day.date,
 		squares: day.records.map((run) => ({
 			runId: run.runId,
