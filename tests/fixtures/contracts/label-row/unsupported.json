@@ -1,0 +1,22 @@
+{
+  "band_at_label": "high",
+  "date": "2026-08-24",
+  "draw_id": "2026-08-24-decile-6",
+  "hhem_at_label": 0.87,
+  "label_id": "b81d0e4a2c795f36",
+  "labelled_at": "2026-08-24T12:07:38Z",
+  "labeller": "example-labeller",
+  "note": "The article says the cut is expected. Our summary says it happened.",
+  "output_digest": "6666666666666666666666666666666666666666666666666666666666666666",
+  "pipeline_fingerprint": "7777777777777777777777777777777777777777777777777777777777777777",
+  "run_id": "2026-08-24-2",
+  "scorer_version": "hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30",
+  "seconds_spent": 71,
+  "source_url": "https://example.com/rate-decision",
+  "source_word_count": 62,
+  "summary_word_count": 88,
+  "tag": "overstated",
+  "url_key": "2222222222222222222222222222222222222222222222222222222222222222",
+  "verdict": "unsupported",
+  "version": "2026-08-24"
+}

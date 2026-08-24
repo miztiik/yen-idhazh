@@ -1,0 +1,22 @@
+{
+  "band_at_label": "high",
+  "date": "2026-08-24",
+  "draw_id": "2026-08-24-decile-6",
+  "hhem_at_label": 0.93,
+  "label_id": "3f2a91c4d8e0b567",
+  "labelled_at": "2026-08-24T12:04:11Z",
+  "labeller": "example-labeller",
+  "note": null,
+  "output_digest": "4444444444444444444444444444444444444444444444444444444444444444",
+  "pipeline_fingerprint": "7777777777777777777777777777777777777777777777777777777777777777",
+  "run_id": "2026-08-24-1",
+  "scorer_version": "hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30",
+  "seconds_spent": 52,
+  "source_url": "https://example.com/plant-output",
+  "source_word_count": 1140,
+  "summary_word_count": 96,
+  "tag": "none",
+  "url_key": "9999999999999999999999999999999999999999999999999999999999999999",
+  "verdict": "supported",
+  "version": "2026-08-24"
+}

@@ -1,0 +1,186 @@
+{
+  "$defs": {
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    },
+    "LabelTag": {
+      "description": "Why, in one closed word.\n\nEvery tag names a defect with a **different** fix. Two tags that lead to the\nsame code change would be one tag. Three of these deliberately mirror a\ncounterweight the pipeline already computes, which buys that counterweight's\nown precision and recall out of the same 60 labels.\n\nAbsent on purpose: severity, which is a second axis with its own agreement\nproblem; anything about style, which is not faithfulness; and `other`, which\ngrows until the vocabulary means nothing. `note` carries the misses.",
+      "enum": [
+        "none",
+        "invented_fact",
+        "wrong_number",
+        "overstated",
+        "wrong_subject",
+        "not_the_article",
+        "unjudgeable"
+      ],
+      "title": "LabelTag",
+      "type": "string"
+    },
+    "LabelVerdict": {
+      "description": "The one question. Not a bool - a bool named `unsupported` inverts in\nsomebody's head within a month.",
+      "enum": [
+        "supported",
+        "unsupported"
+      ],
+      "title": "LabelVerdict",
+      "type": "string"
+    }
+  },
+  "$id": "label-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the draw's identity, the scorer at draw time, and the label.",
+      "version": "2026-08-24",
+      "why": "The faithfulness cuts are a reader-facing promise with no measured error rate behind them. Nothing can move a threshold until labels exist, and labels cannot exist until the shape that holds them does (Rule #3). Contracts before logic, and this one lands before a single row."
+    }
+  ],
+  "description": "One labelled item, appended by a human.",
+  "properties": {
+    "band_at_label": {
+      "$ref": "#/$defs/ConfidenceBand"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "draw_id": {
+      "description": "Which draw this row belongs to. Distinguishes a second draw from a re-label of the first.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Draw Id",
+      "type": "string"
+    },
+    "hhem_at_label": {
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Hhem At Label",
+      "type": "number"
+    },
+    "label_id": {
+      "description": "Deterministic draw key, rebuilt from its value fields on read and never trusted from the file.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Label Id",
+      "type": "string"
+    },
+    "labelled_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Labelled At",
+      "type": "string"
+    },
+    "labeller": {
+      "description": "Who. Checked against evaluation.labellers. Two people disagreeing is signal; an anonymous ledger cannot see it.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Labeller",
+      "type": "string"
+    },
+    "note": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Capped and sanitized. If notes pile onto one tag, the vocabulary is wrong.",
+      "title": "Note"
+    },
+    "output_digest": {
+      "description": "The exact summary that was judged. The load-bearing field: a mismatch means the label is about different words.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "scorer_version": {
+      "description": "The full string, band values included. Recorded so an analysis can refuse to mix instruments, hidden so it cannot anchor the labeller.",
+      "minLength": 1,
+      "title": "Scorer Version",
+      "type": "string"
+    },
+    "seconds_spent": {
+      "description": "How long this row took. The cheapest fatigue detector there is, and half of what makes a machine-paced dump detectable.",
+      "minimum": 1,
+      "title": "Seconds Spent",
+      "type": "integer"
+    },
+    "source_url": {
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "source_word_count": {
+      "minimum": 0,
+      "title": "Source Word Count",
+      "type": "integer"
+    },
+    "summary_word_count": {
+      "minimum": 0,
+      "title": "Summary Word Count",
+      "type": "integer"
+    },
+    "tag": {
+      "$ref": "#/$defs/LabelTag"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "verdict": {
+      "$ref": "#/$defs/LabelVerdict"
+    },
+    "version": {
+      "default": "2026-08-24",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "label_id",
+    "draw_id",
+    "url_key",
+    "source_url",
+    "date",
+    "run_id",
+    "output_digest",
+    "pipeline_fingerprint",
+    "summary_word_count",
+    "source_word_count",
+    "scorer_version",
+    "hhem_at_label",
+    "band_at_label",
+    "verdict",
+    "tag",
+    "labeller",
+    "labelled_at",
+    "seconds_spent"
+  ],
+  "title": "LabelRow",
+  "type": "object",
+  "version": "2026-08-24"
+}

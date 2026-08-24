@@ -38,6 +38,9 @@
     "band_medium_min": 0.55,
     "brief_compression_ceiling": 0.5,
     "golden_set_size": 40,
+    "label_draw_per_decile": 6,
+    "label_min_run_days": 10,
+    "labellers": [],
     "lead_coverage_min": 0.3,
     "spot_checks_per_week": 15,
     "summary_words_max": 250,
@@ -169,7 +172,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-23T19:50",
+  "version": "2026-08-24T23:40",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
