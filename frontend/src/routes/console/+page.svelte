@@ -13,6 +13,7 @@
 	import { base } from '$app/paths';
 	import { axisLabels, CELL_PX, GAP_PX, type LabelAlign } from '$lib/charts/run-history';
 	import StageTimings from '$lib/components/StageTimings.svelte';
+	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import type { Health } from './+page.server';
 
@@ -215,6 +216,14 @@
 		</p>
 	{:else}
 		<StageTimings days={data.timingDays} height={data.console.chart_height} />
+	{/if}
+
+	{#if data.throughputDays.length > 0}
+		<ThroughputTrend
+			days={data.throughputDays}
+			height={data.console.chart_height}
+			reference={data.throughputReference}
+		/>
 	{/if}
 
 	{#if data.scoreDays.length === 0}

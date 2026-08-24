@@ -241,6 +241,11 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "fetch_ms",
         "extract_ms",
         "summarize_ms",
+        "prefill_ms",
+        "decode_ms",
+        "input_tokens",
+        "output_tokens",
+        "cached_tokens",
     )
 
 

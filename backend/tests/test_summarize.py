@@ -728,6 +728,61 @@ def test_an_absent_reasoning_channel_is_not_a_failure() -> None:
     assert summarised("ok").status is SummaryStatus.OK
 
 
+# --- What the model cost, split the way the runtime charges it ---------------
+
+
+def test_prefill_and_decode_are_read_apart_from_each_other() -> None:
+    """Reading the article and writing the summary run at different rates.
+
+    The numbers are the recorded reply from run 32742672105, slot 3 task 172:
+    75 prompt tokens read in 7.1 s is 10.5 tok/s, and 167 written in 28.2 s is
+    5.9 tok/s. One blended figure cannot say which of the two was slow.
+    """
+    reply = completion("timed")
+    assert reply.prefill_ms == 7120
+    assert reply.decode_ms == 28206
+    assert reply.cached_tokens == 900
+    assert reply.prompt_tokens == 975
+
+
+def test_the_cost_the_runtime_reported_reaches_the_payload() -> None:
+    result = summarised("timed")
+    assert result.status is SummaryStatus.OK
+    assert result.prefill_ms == 7120
+    assert result.decode_ms == 28206
+    assert result.cached_tokens == 900
+    # What prefill actually paid for: the cache carried the rest.
+    assert result.input_tokens - result.cached_tokens == 75
+
+
+def test_a_runtime_that_reports_no_timings_costs_the_item_nothing() -> None:
+    """A missing block degrades to zero rather than failing the item (section 1a)."""
+    reply = completion("ok")
+    assert reply.prefill_ms == 0
+    assert reply.decode_ms == 0
+    assert reply.cached_tokens == 0
+    assert summarised("ok").status is SummaryStatus.OK
+
+
+def test_a_reply_claiming_more_cache_than_prompt_is_refused() -> None:
+    """The console divides by the difference, so a negative remainder cannot land."""
+    with pytest.raises(ValidationError):
+        Summary(
+            version=Summary.schema_version(),
+            item_id="ai-01",
+            url_key="9" * 64,
+            summary="word " * 60,
+            key_points=["one point here", "two points here"],
+            pipeline_fingerprint=FINGERPRINT,
+            output_digest=derive_output_digest("word " * 60, ["one point here", "two points here"]),
+            model_id="m",
+            input_tokens=100,
+            cached_tokens=101,
+            generated_at=GENERATED_AT,
+            status=SummaryStatus.OK,
+        )
+
+
 # --- What the pipeline agrees to believe ------------------------------------
 
 

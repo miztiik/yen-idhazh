@@ -52,6 +52,41 @@ export interface StageTimingDay {
 	scoreMs: number;
 }
 
+/** The spread of one day's per-item rates. A candle, never an average.
+ *
+ * The spread is the point. A worker summarises its short articles first and its
+ * long ones last, so the slowest item of a day is several times slower than the
+ * fastest, and a single number hides the fact that the two ends moved apart.
+ */
+export interface RateSpread {
+	min: number;
+	p25: number;
+	median: number;
+	p75: number;
+	max: number;
+}
+
+/** One run's median rates. Four of these sit behind a day's candle. */
+export interface ThroughputRun {
+	runId: string;
+	items: number;
+	read: number;
+	write: number;
+}
+
+export interface ThroughputDay {
+	date: string;
+	items: number;
+	read: RateSpread;
+	write: RateSpread;
+	/** The whole day's tokens over the whole day's milliseconds. Weighted by
+	 * work done, unlike the median, which weighs a release note like a feature. */
+	readTps: number;
+	writeTps: number;
+	cacheHitPct: number;
+	runs: ThroughputRun[];
+}
+
 export interface StageFailureDay {
 	date: string;
 	attempts: number;

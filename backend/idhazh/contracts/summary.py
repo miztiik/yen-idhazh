@@ -39,6 +39,18 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-24T18:30",
+            change="Added prefill_ms, decode_ms and cached_tokens.",
+            why=(
+                "summarize_ms is one number covering two costs with different rates: "
+                "reading the article runs about twice as fast per token as writing the "
+                "summary, so a blended figure cannot say whether a slow run was a long "
+                "article or a long reply. The runtime already reports both separately, "
+                "and cached_tokens is what makes a prefill figure comparable between "
+                "items. All three default to zero, so an older payload still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-23T17:36",
             change="Added optional failure_code for typed summarize failures.",
             why=(
@@ -126,6 +138,24 @@ class Summary(Contract):
         ge=0,
         description="The model. The only one of the three that a model swap moves.",
     )
+    prefill_ms: int = Field(
+        default=0,
+        ge=0,
+        description="Reading the prompt. Scales with article length, minus what the cache kept.",
+    )
+    decode_ms: int = Field(
+        default=0,
+        ge=0,
+        description="Writing the summary. One token at a time, so about half the prefill rate.",
+    )
+    cached_tokens: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Prompt tokens the runtime reused instead of reading. "
+            "input_tokens minus this is what prefill_ms actually paid for."
+        ),
+    )
 
     generated_at: Timestamp
     status: SummaryStatus
@@ -143,6 +173,13 @@ class Summary(Contract):
         expected = derive_output_digest(self.summary, self.key_points, title=self.title)
         if self.output_digest != expected:
             raise ValueError("output_digest must be the digest of the published words")
+        return self
+
+    @model_validator(mode="after")
+    def _cache_fits_inside_the_prompt(self) -> Self:
+        # Read straight off the runtime, and the console divides by the remainder.
+        if self.cached_tokens > self.input_tokens:
+            raise ValueError("cached_tokens cannot exceed input_tokens")
         return self
 
     @model_validator(mode="after")

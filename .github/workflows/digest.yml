@@ -277,7 +277,7 @@ jobs:
         if: always()
         run: |
           if [ -f llama-server.log ]; then
-            grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' llama-server.log || true
+            grep -E 'selected slot by|kv cache rm \[|prompt eval time =|n_slots|n_ctx_slot|n_ctx_per_seq' llama-server.log || true
           else
             echo "llama-server.log not found"
           fi
@@ -409,7 +409,7 @@ jobs:
         if: always()
         run: |
           if [ -f router.log ]; then
-            grep -E 'kv cache rm \[|prompt eval time =|n_slots|n_ctx_per_seq' router.log || true
+            grep -E 'selected slot by|kv cache rm \[|prompt eval time =|n_slots|n_ctx_slot|n_ctx_per_seq' router.log || true
           else
             echo "router.log not found"
           fi
