@@ -38,8 +38,6 @@ export function bandSentence(band: ConfidenceBand, reason: BandReason | null): s
 	return reason ? BAND_REASONS[reason] : BANDS[band].label;
 }
 
-export const BAND_ORDER: ConfidenceBand[] = ['high', 'medium', 'low'];
-
 /** Who is speaking. A vendor's own copy must not read like a reporter's. */
 export const SOURCE_KINDS: Record<SourceKind, string> = {
 	reporting: 'Reporting',

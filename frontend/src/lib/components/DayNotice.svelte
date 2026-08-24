@@ -8,23 +8,18 @@
 	 * What does belong here is the partial-run count. If four of five items did
 	 * not finish and the page does not say so, a reader who works it out later
 	 * has spent the trust the digest was saving.
+	 *
+	 * One paragraph, one sentence per fact. Four runs used to print four
+	 * near-identical paragraphs stating one thing.
 	 */
 	import { longDate } from '$lib/format';
-	import type { ConfidenceBand, DigestDay } from '$lib/payload/types';
-	import BandBar from './BandBar.svelte';
+	import type { DigestDay } from '$lib/payload/types';
 
 	let { day }: { day: DigestDay } = $props();
 
-	const counts = $derived(
-		day.items.reduce(
-			(totals, item) => {
-				totals[item.band] += 1;
-				return totals;
-			},
-			{ high: 0, medium: 0, low: 0 } as Record<ConfidenceBand, number>
-		)
+	const laterAdded = $derived(
+		day.runs.filter((run) => run.n > 1).reduce((total, run) => total + run.items_added, 0)
 	);
-	const laterRuns = $derived(day.runs.filter((run) => run.n > 1 && run.items_added > 0));
 </script>
 
 <section class="border-b border-rule py-5" aria-label="About today">
@@ -33,20 +28,17 @@
 	</h1>
 
 	<p class="mt-1 text-[0.9375rem] text-text-secondary">
-		{day.items.length}
-		{day.items.length === 1 ? 'story' : 'stories'}{#if day.partial}, {day.items_failed} did not finish{/if}.
+		{#if day.items.length === 0}
+			No stories today.
+		{:else}
+			{day.items.length}
+			{day.items.length === 1 ? 'story' : 'stories'}.
+		{/if}
+		{#if day.partial}
+			{day.items_failed} did not finish.
+		{/if}
+		{#if laterAdded > 0}
+			{laterAdded} arrived after the first run.
+		{/if}
 	</p>
-
-	{#each laterRuns as run (run.n)}
-		<p class="mt-1 text-[0.9375rem] text-text-secondary">
-			{run.items_added}
-			{run.items_added === 1 ? 'story' : 'stories'} added later today.
-		</p>
-	{/each}
-
-	{#if day.items.length > 0}
-		<div class="mt-4">
-			<BandBar {counts} />
-		</div>
-	{/if}
 </section>

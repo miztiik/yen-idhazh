@@ -22,6 +22,7 @@
   "console": {
     "chart_height": 180,
     "default_window_days": 30,
+    "failure_list_max": 25,
     "max_window_days": 366,
     "min_attempts_for_rate": 5,
     "min_window_days": 7,
@@ -154,6 +155,7 @@
     "title_words_min": 6
   },
   "ui": {
+    "items_per_topic": 3,
     "read_mark_days": 7,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [
@@ -168,7 +170,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-24T11:15",
+  "version": "2026-08-24T21:40",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

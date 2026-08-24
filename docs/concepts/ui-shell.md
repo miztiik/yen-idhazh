@@ -14,7 +14,7 @@ That means the shell's job is small and worth stating plainly: **load a payload,
 
 | Surface | Owns | Reads |
 | --- | --- | --- |
-| **Digest** | The day's items, in order, and the run-level notice when a run was partial. | The published digest payload. |
+| **Digest** | The day's items, grouped by topic when the day has more than one, and the run-level notice when a run was partial. | The published digest payload. |
 | **Archive** | Reaching a previous day. A reader who missed a day wants to catch up, not start over ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)). | The index of published days. |
 | **Dashboard** | The eval ledger rendered as a trend - band counts over time. It never recomputes a score ([evaluation.md](evaluation.md)). | The committed CSV. |
 | **Console** | Whether the pipeline itself is working: a chronological strip of runs and the feeds that failed. An operator surface, not a reading one ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). | The committed run manifests and the feed-health ledger. |
@@ -74,6 +74,8 @@ The console is the one surface added since, and it was added for a named person 
 | Client-side filtering or search over the ledger | Moves computation to read time for a surface whose whole premise is that nothing computes at read time. | Carmack |
 | Run health shown on the digest page | The reader is not the operator. A grid of squares above the news answers a question they did not ask. | owner |
 | A cookie for the read mark | Sent on every request, so it would put a reading history into the host's access logs. | Reader |
+| A day-level chart of the confidence bands | Its proportions were the same every day, and it shared its colours with the item mark that does vary. Colour is spent per item. | Jony, Reader |
+| Truncating a long day so the page looks like a digest | It would stop being one. Topic sections give the day a shape without dropping a published item. | Jony |
 
 ## See also
 

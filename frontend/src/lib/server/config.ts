@@ -18,6 +18,7 @@ export interface UiConfig {
 	visual_side: 'above' | 'leading' | 'trailing';
 	source_mark: boolean;
 	show_filter: boolean;
+	items_per_topic: number;
 	repo_url: string;
 	site_title: string;
 	tagline: string;
@@ -53,6 +54,7 @@ export interface ConsoleConfig {
 	max_window_days: number;
 	min_attempts_for_rate: number;
 	chart_height: number;
+	failure_list_max: number;
 }
 
 const DEFAULTS: UiConfig = {
@@ -61,6 +63,7 @@ const DEFAULTS: UiConfig = {
 	visual_side: 'above',
 	source_mark: true,
 	show_filter: true,
+	items_per_topic: 3,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
 	tagline: 'A daily digest that checks its own work.',
@@ -84,7 +87,8 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_window_days: 7,
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
-	chart_height: 180
+	chart_height: 180,
+	failure_list_max: 25
 };
 
 interface RawConfig {

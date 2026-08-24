@@ -38,6 +38,13 @@ function publishedDay(): string {
 
 const DAY = publishedDay();
 
+/** The cap read from the knob, so the test cannot drift from the config. */
+const FAILURE_LIST_MAX = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
+	) as { console?: { failure_list_max?: number } }
+).console?.failure_list_max ?? 25;
+
 /** Every day the fixture wrote a manifest for, oldest first, with its run count.
  *
  * The strip is asserted against this rather than a number: a fixture that grows
@@ -341,9 +348,11 @@ test('stage medians come from item health, not the score ledger', async ({ page 
 	await page.goto('/console/');
 
 	await expect(page.getByText('Median seconds per item, by stage')).toBeVisible();
-	await expect(page.getByText('200 ms')).toBeVisible();
-	await expect(page.getByText('30 ms')).toBeVisible();
-	await expect(page.getByText('700 ms')).toBeVisible();
+	// The legend, not the axis: the largest median is printed in both places, so
+	// an unscoped match is ambiguous the moment one stage is the slowest.
+	await expect(page.locator('[data-stage="fetch"]')).toContainText('200 ms');
+	await expect(page.locator('[data-stage="extract"]')).toContainText('30 ms');
+	await expect(page.locator('[data-stage="summarize"]')).toContainText('700 ms');
 });
 
 test('the telemetry viewport renders the published projection', async ({ page }) => {
@@ -353,6 +362,68 @@ test('the telemetry viewport renders the published projection', async ({ page })
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 	await expect(page.locator('[data-compression]')).toBeVisible();
 	await expect(page.locator('[data-viewport-control]')).toContainText('3 rows in view');
+});
+
+test('a failure panel prints its rate in type, not only in a tooltip', async ({ page }) => {
+	await page.goto('/console/');
+
+	// A `<title>` does not fire on touch and does not survive the screenshot an
+	// operator pastes into an issue, so a chart whose only number is a tooltip
+	// has no number.
+	for (const stage of ['fetch', 'extract', 'summarize']) {
+		await expect(page.locator(`[data-panel-rate="${stage}"]`)).toHaveText(
+			/(\d+%|<1%) failed, \d+ of \d+\.|No rows in this window\./
+		);
+	}
+});
+
+test('a window holding one day draws no bar, because a bar would be the panel', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	const viewport = page.locator('[data-viewport-control]');
+	const start = await viewport.getAttribute('data-window-start');
+	const end = await viewport.getAttribute('data-window-end');
+	test.skip(start !== end, 'the fixture window spans more than one day');
+
+	await expect(page.locator('[data-panel]')).toHaveCount(0);
+	await expect(page.locator('[data-panel-rate="fetch"]')).toBeVisible();
+});
+
+test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
+	await page.goto('/console/');
+
+	const rows = page.locator('[data-failure-list="rows"] tbody tr');
+	const empty = page.locator('[data-failure-list="empty"]');
+	if ((await empty.count()) === 1) {
+		await expect(empty).toBeVisible();
+		return;
+	}
+
+	// Whatever the fixture holds, the list never renders more than the cap.
+	expect(await rows.count()).toBeLessThanOrEqual(FAILURE_LIST_MAX);
+	await expect(page.locator('[data-failure-scope]')).toContainText('in this window.');
+});
+
+test('the compression view draws the data once', async ({ page }) => {
+	await page.goto('/console/');
+
+	// A second plot under the first drew strictly less - no band reference and
+	// no truncation mark - which is two drawings of one dataset that disagree.
+	const chart = page.locator('[data-compression]');
+	await expect(chart.locator('svg')).toHaveCount(1);
+	await expect(chart.locator('canvas')).toHaveCount(0);
+});
+
+test('the reading path and the console carry no chart library', () => {
+	const manifest = JSON.parse(
+		readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
+	) as { dependencies?: Record<string, string> };
+
+	// Rule #8: a dependency names a beneficiary feature. The pan and zoom this
+	// one was bought for are implemented in `Viewport.svelte`.
+	expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);
 });
 
 test('the old evals route moves bookmarks to the console', async ({ page }) => {
@@ -369,7 +440,9 @@ test('the evals entry point keeps a no-JS link to the console', () => {
 	expect(page).toContain('<link rel="canonical" href={consoleHref} />');
 	expect(page).toContain('<a href={consoleHref}');
 	expect(page).not.toContain('evalRows');
-	expect(page).not.toContain('BAND_ORDER');
+	// The stub is a redirect, not a second dashboard. Two surfaces counting one
+	// ledger disagree the moment one count changes.
+	expect(page).not.toContain('$lib/bands');
 });
 
 test('keyboard alone pans and zooms the telemetry viewport', async ({ page }) => {
