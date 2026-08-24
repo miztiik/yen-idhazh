@@ -10,6 +10,8 @@
 	import DigestItemView from '$lib/components/DigestItem.svelte';
 	import EmptyDay from '$lib/components/EmptyDay.svelte';
 	import TopicPills from '$lib/components/TopicPills.svelte';
+	import TopicSection from '$lib/components/TopicSection.svelte';
+	import { shouldGroup, topicSlices } from '$lib/day-shape';
 	import type { UiConfig } from '$lib/server/config';
 	import type { DigestDay } from '$lib/payload/types';
 	import { forgetAll, loadHideRead, loadRead, markRead, setHideRead } from '$lib/readstate';
@@ -69,6 +71,15 @@
 		Object.fromEntries(day.verticals.map((ref) => [ref.id, ref.display_name]))
 	);
 
+	const grouped = $derived(shouldGroup(vertical, needle, day.verticals));
+	const slices = $derived(topicSlices(day.verticals, visible, ui.items_per_topic));
+
+	// `introduced_by_run` is on every item and was rendered nowhere, so the day
+	// notice named a fact with no place on the page. One divider, at the seam.
+	const firstLaterItem = $derived(
+		paged.find((item) => item.introduced_by_run > 1)?.item_id ?? null
+	);
+
 	function toggleHide() {
 		hideRead = !hideRead;
 		setHideRead(hideRead);
@@ -113,8 +124,28 @@
 				<p class="py-12 text-[0.9375rem] text-text-secondary">
 					You have read everything here today.
 				</p>
+			{:else if grouped}
+				{#each slices as slice (slice.vertical.id)}
+					<TopicSection
+						vertical={slice.vertical}
+						items={slice.items}
+						more={slice.hasMore}
+						{datePrefix}
+						showMark={ui.source_mark}
+						{read}
+						onRead={(itemId) => (read = markRead(itemId, read, day.date))}
+					/>
+				{/each}
 			{:else}
 				{#each paged as item (item.item_id)}
+					{#if item.item_id === firstLaterItem}
+						<p
+							class="border-t border-rule pt-6 text-[0.75rem] tracking-wide text-text-tertiary uppercase"
+							data-later-runs
+						>
+							Added later today
+						</p>
+					{/if}
 					<DigestItemView
 						{item}
 						verticalName={verticalNames[item.vertical] ?? item.vertical}

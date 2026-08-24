@@ -31,7 +31,11 @@
 		initialRows: TelemetryRow[];
 		availableMonths: string[];
 		today: string;
-		config: ViewportConfig & { chart_height: number; min_attempts_for_rate: number };
+		config: ViewportConfig & {
+			chart_height: number;
+			min_attempts_for_rate: number;
+			failure_list_max: number;
+		};
 		compressionPoints: CompressionPoint[];
 		bands: SummaryBand[];
 	} = $props();
@@ -157,6 +161,8 @@
 			Keyboard: Left and Right pan {config.pan_days} days. Plus and Minus zoom.
 		</p>
 
+		<!-- Shape first, rows last. The list is the only child that can outgrow
+		     the screen, so it cannot sit between two charts. -->
 		<div class="mt-6">
 			<FailurePanels
 				{rows}
@@ -166,12 +172,17 @@
 				{selectedCode}
 				onSelect={(code) => (selectedCode = code)}
 			/>
-			<FailureList {rows} window={viewport} {selectedCode} />
 			<CompressionScatter
 				points={compressionPoints}
 				viewport={viewport}
 				{bands}
 				height={config.chart_height}
+			/>
+			<FailureList
+				{rows}
+				window={viewport}
+				{selectedCode}
+				max={config.failure_list_max}
 			/>
 		</div>
 	</div>

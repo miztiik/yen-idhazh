@@ -11,6 +11,7 @@
 	 * archive it has no way to reach.
 	 */
 	import { base } from '$app/paths';
+	import { dayRoot, verticalHref } from '$lib/links';
 	import type { DigestVerticalRef } from '$lib/payload/types';
 
 	let {
@@ -31,7 +32,7 @@
 		showFilter?: boolean;
 	} = $props();
 
-	const root = $derived(datePrefix ? `${base}/${datePrefix}` : base || '/');
+	const root = $derived(dayRoot(base, datePrefix));
 </script>
 
 <nav
@@ -52,7 +53,7 @@
 		</a>
 		{#each verticals as vertical (vertical.id)}
 			<a
-				href="{root}{root.endsWith('/') ? '' : '/'}{vertical.id}/"
+				href={verticalHref(base, datePrefix, vertical.id)}
 				class="inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-3.5 text-[0.875rem] whitespace-nowrap transition-colors"
 				class:border-accent={active === vertical.id}
 				class:text-accent={active === vertical.id}

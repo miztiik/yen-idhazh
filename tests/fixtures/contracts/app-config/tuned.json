@@ -20,6 +20,7 @@
   "console": {
     "chart_height": 160,
     "default_window_days": 21,
+    "failure_list_max": 10,
     "max_window_days": 180,
     "min_attempts_for_rate": 3,
     "min_window_days": 7,
@@ -152,6 +153,7 @@
     "title_words_min": 5
   },
   "ui": {
+    "items_per_topic": 5,
     "read_mark_days": 3,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [

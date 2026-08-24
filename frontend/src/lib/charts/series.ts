@@ -42,6 +42,16 @@ export interface SummaryBand {
 	target_words_max: number;
 }
 
+/** One day's median milliseconds per stage, over the item-health census. */
+export interface StageTimingDay {
+	date: string;
+	items: number;
+	fetchMs: number;
+	extractMs: number;
+	summarizeMs: number;
+	scoreMs: number;
+}
+
 export interface StageFailureDay {
 	date: string;
 	attempts: number;
