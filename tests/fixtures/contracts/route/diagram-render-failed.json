@@ -6,6 +6,7 @@
   "kind": "diagram",
   "model_id": "qwen3-4b-q4-k-m",
   "rationale": "The article describes a four-stage procurement sequence.",
+  "route_ms": null,
   "routed_at": "2026-08-21T06:16:40Z",
   "spec": "flowchart LR\n  order --> licence --> build --> grid",
   "spec_format": "mermaid",
