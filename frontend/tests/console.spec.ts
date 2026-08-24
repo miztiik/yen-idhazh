@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -16,16 +17,18 @@ import { join, resolve } from 'node:path';
 
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 
+function dirs(at: string): string[] {
+	return readdirSync(at, { withFileTypes: true })
+		.filter((entry) => entry.isDirectory())
+		.map((entry) => entry.name)
+		.sort();
+}
+
 /** The day the canary build publishes, discovered rather than hardcoded.
  *
  * A hardcoded date passes on an empty 404 page the moment the fixture moves.
  */
 function publishedDay(): string {
-	const dirs = (at: string) =>
-		readdirSync(at, { withFileTypes: true })
-			.filter((entry) => entry.isDirectory())
-			.map((entry) => entry.name)
-			.sort();
 	const root = join(CANARY, 'digest');
 	const year = dirs(root).at(-1) as string;
 	const month = dirs(join(root, year)).at(-1) as string;
@@ -35,13 +38,68 @@ function publishedDay(): string {
 
 const DAY = publishedDay();
 
-function span(start: string | null, end: string | null): number {
-	if (!start || !end) return 0;
-	return (
-		(new Date(`${end}T00:00:00Z`).getTime() - new Date(`${start}T00:00:00Z`).getTime()) /
-			86_400_000 +
-		1
+/** Every day the fixture wrote a manifest for, oldest first, with its run count.
+ *
+ * The strip is asserted against this rather than a number: a fixture that grows
+ * a day must not need the test renumbered, and a test that is renumbered by
+ * hand gets renumbered wrong.
+ */
+function manifestDays(): { date: string; runs: number }[] {
+	const root = join(CANARY, 'digest');
+	const found: { date: string; runs: number }[] = [];
+	for (const year of dirs(root)) {
+		for (const month of dirs(join(root, year))) {
+			for (const day of dirs(join(root, year, month))) {
+				const raw = readFileSync(join(root, year, month, day, 'run.json'), 'utf8');
+				found.push({
+					date: `${year}-${month}-${day}`,
+					runs: (JSON.parse(raw) as { runs: unknown[] }).runs.length
+				});
+			}
+		}
+	}
+	return found.sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/** A run of consecutive ISO days, read in UTC so the suite cannot drift west. */
+function days(start: string, count: number): string[] {
+	const first = new Date(`${start}T00:00:00Z`).getTime();
+	return Array.from({ length: count }, (_, index) =>
+		new Date(first + index * 86_400_000).toISOString().slice(0, 10)
 	);
+}
+
+interface Box {
+	x: number;
+	y: number;
+	width: number;
+	height: number;
+	right: number;
+	bottom: number;
+}
+
+/** `DOMRect` does not survive the wire, so only the numbers cross it. */
+const TO_BOX = (nodes: Element[]): Box[] =>
+	nodes.map((node) => {
+		const rect = node.getBoundingClientRect();
+		return {
+			x: rect.x,
+			y: rect.y,
+			width: rect.width,
+			height: rect.height,
+			right: rect.right,
+			bottom: rect.bottom
+		};
+	});
+
+function stripMetrics(page: Page) {
+	return page
+		.locator('[data-run-history]')
+		.evaluate((node) => ({
+			scrollLeft: node.scrollLeft,
+			scrollWidth: node.scrollWidth,
+			clientWidth: node.clientWidth
+		}));
 }
 
 /** How many runs the fixture manifest records for that day. */
@@ -49,6 +107,16 @@ function runCount(): number {
 	const [year, month, day] = DAY.split('-');
 	const raw = readFileSync(join(CANARY, 'digest', year, month, day, 'run.json'), 'utf8');
 	return (JSON.parse(raw) as { runs: unknown[] }).runs.length;
+}
+
+/** How many days a telemetry viewport window covers, ends included. */
+function span(start: string | null, end: string | null): number {
+	if (!start || !end) return 0;
+	return (
+		(new Date(`${end}T00:00:00Z`).getTime() - new Date(`${start}T00:00:00Z`).getTime()) /
+			86_400_000 +
+		1
+	);
 }
 
 /** Every request the page made that came back missing. */
@@ -59,6 +127,160 @@ function watchFor404s(page: Page): string[] {
 	});
 	return missing;
 }
+
+test('one day gets a full date, and a short run gets one span', () => {
+	expect(axisLabels([])).toEqual([]);
+	expect(axisLabels(['2026-08-20'])).toEqual([{ column: 1, text: '20 Aug 2026', align: 'end' }]);
+
+	// Two to six days cannot carry a cadence, so the whole span is said once.
+	expect(spanLabel('2026-08-18', '2026-08-20')).toBe('18-20 Aug 2026');
+	expect(spanLabel('2026-07-30', '2026-08-02')).toBe('30 Jul - 2 Aug 2026');
+	expect(spanLabel('2025-12-30', '2026-01-02')).toBe('30 Dec 2025 - 2 Jan 2026');
+	expect(axisLabels(days('2026-08-15', 4))).toEqual([
+		{ column: 4, text: '15-18 Aug 2026', align: 'end' }
+	]);
+});
+
+test('a longer run carries both ends and a weekly cadence between them', () => {
+	const twenty = axisLabels(days('2026-08-01', 20));
+
+	// Column 15 would land five columns from the newest end, where the two texts
+	// would share pixels. It is dropped rather than crowded.
+	expect(twenty.map((label) => label.column)).toEqual([1, 8, 20]);
+	expect(twenty.map((label) => label.text)).toEqual(['1 Aug 2026', '8 Aug', '20 Aug 2026']);
+	expect(twenty.map((label) => label.align)).toEqual(['start', 'centre', 'end']);
+
+	expect(axisLabels(days('2026-08-01', 30)).map((label) => label.column)).toEqual([1, 8, 15, 22, 30]);
+});
+
+test('the year is stated on the first label that changes it, and not again', () => {
+	const across = axisLabels(days('2025-12-20', 30));
+
+	expect(across.map((label) => label.text)).toEqual([
+		'20 Dec 2025',
+		'27 Dec',
+		'3 Jan 2026',
+		'10 Jan',
+		'18 Jan 2026'
+	]);
+});
+
+test('the strip reads oldest to newest, left to right', async ({ page }) => {
+	await page.goto('/console/');
+
+	const columns = page.locator('[data-day]');
+	const dates = await columns.evaluateAll((nodes) =>
+		nodes.map((node) => node.getAttribute('data-day') ?? '')
+	);
+	expect(dates).toEqual(manifestDays().map((day) => day.date));
+
+	// Chronology a reader can see, not only one the DOM asserts.
+	const boxes = await columns.evaluateAll(TO_BOX);
+	for (let index = 1; index < boxes.length; index += 1) {
+		expect(boxes[index].x).toBeGreaterThan(boxes[index - 1].x);
+	}
+});
+
+test('every recorded run gets a square, and nothing else does', async ({ page }) => {
+	await page.goto('/console/');
+
+	const expected = manifestDays();
+	await expect(page.locator('[data-day]')).toHaveCount(expected.length);
+	await expect(page.locator('[data-health]')).toHaveCount(
+		expected.reduce((total, day) => total + day.runs, 0)
+	);
+
+	// A scheduled run that never wrote a manifest has left no evidence, so the
+	// strip cannot draw a slot for it without inventing one.
+	for (const day of expected) {
+		await expect(page.locator(`[data-day="${day.date}"] [data-health]`)).toHaveCount(day.runs);
+	}
+});
+
+test('runs rise from a shared baseline, on a 16px day track', async ({ page }) => {
+	await page.goto('/console/');
+
+	const stack = await page.locator(`[data-day="${DAY}"] [data-health]`).evaluateAll(TO_BOX);
+	expect(stack.length).toBe(runCount());
+
+	// Run 1 is first in the DOM so it is read first, and lowest on screen so the
+	// day reads upward from the ground like every other time series.
+	const lowest = Math.max(...stack.map((box) => box.y));
+	expect(stack[0].y).toBe(lowest);
+
+	for (const box of stack) {
+		expect(box.width).toBe(16);
+		expect(box.height).toBe(16);
+	}
+	for (let index = 1; index < stack.length; index += 1) {
+		expect(stack[index - 1].y - stack[index].bottom).toBeCloseTo(4, 1);
+	}
+
+	// Every day's run 1 sits on the same line, or the strip is a scatter.
+	const baselines = await page
+		.locator('[data-day]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => node.querySelector('[data-health]')!.getBoundingClientRect().bottom)
+		);
+	for (const bottom of baselines) expect(bottom).toBeCloseTo(baselines[0], 1);
+
+	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
+	for (let index = 1; index < columns.length; index += 1) {
+		expect(columns[index].x - columns[index - 1].right).toBeCloseTo(4, 1);
+	}
+});
+
+test('no two date labels print on top of each other', async ({ page }) => {
+	await page.goto('/console/');
+
+	const labels = await page.locator('[data-axis-label]').evaluateAll(TO_BOX);
+	expect(labels.length).toBeGreaterThan(1);
+
+	const ordered = [...labels].sort((a, b) => a.x - b.x);
+	for (let index = 1; index < ordered.length; index += 1) {
+		expect(ordered[index].x).toBeGreaterThan(ordered[index - 1].right);
+	}
+});
+
+test('a short history sits at the newest edge, never adrift on the left', async ({ page }) => {
+	await page.goto('/console/');
+
+	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
+	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
+
+	expect(Math.abs(strip.right - columns[columns.length - 1].right)).toBeLessThan(2);
+	expect(columns[0].x - strip.x).toBeGreaterThan(1);
+});
+
+test('on a phone the strip scrolls, and opens on the newest run', async ({ page }) => {
+	await page.setViewportSize({ width: 360, height: 720 });
+	await page.goto('/console/');
+
+	// More history than a phone is wide. The operator reaches the rest by
+	// scrolling, and starts where the newest run is.
+	await expect
+		.poll(async () => {
+			const metrics = await stripMetrics(page);
+			return metrics.scrollWidth > metrics.clientWidth;
+		})
+		.toBe(true);
+	await expect
+		.poll(async () => {
+			const metrics = await stripMetrics(page);
+			return Math.abs(metrics.scrollWidth - metrics.clientWidth - metrics.scrollLeft) < 1;
+		})
+		.toBe(true);
+
+	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
+	const [newest] = await page.locator(`[data-day="${DAY}"]`).evaluateAll(TO_BOX);
+	expect(newest.x).toBeGreaterThanOrEqual(strip.x - 1);
+	expect(newest.right).toBeLessThanOrEqual(strip.right + 1);
+
+	const opened = (await stripMetrics(page)).scrollLeft;
+	await page.locator('[data-run-history]').focus();
+	await page.keyboard.press('ArrowLeft');
+	await expect.poll(async () => (await stripMetrics(page)).scrollLeft).toBeLessThan(opened);
+});
 
 test('the grid draws one square per run, coloured by what the run did', async ({ page }) => {
 	await page.goto('/console/');
