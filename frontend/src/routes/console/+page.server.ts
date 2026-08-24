@@ -1,5 +1,5 @@
-import type { StageTimingDay } from '$lib/charts/series';
-import { collectConfig, consoleConfig, runConfig, summarizeConfig } from '$lib/server/config';
+import type { RateSpread, StageTimingDay, ThroughputDay } from '$lib/charts/series';
+import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
 	feedResults,
@@ -29,22 +29,6 @@ interface CompressionPoint {
 	source_words: number;
 	summary_words: number;
 	truncation_flagged: boolean;
-}
-
-/** What the model managed in a day, with reading and writing kept apart.
- *
- * Prefill is the model reading the article, decode is it writing the summary,
- * and they run at different rates - so one blended figure cannot say which of
- * the two made a slow day slow.
- */
-export interface ThroughputDay {
-	date: string;
-	items: number;
-	prefillTps: number;
-	decodeTps: number;
-	prefillMsPerToken: number;
-	decodeMsPerToken: number;
-	cacheHitPct: number;
 }
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
@@ -94,6 +78,49 @@ function byDate(rows: Record<string, string>[]): Map<string, Record<string, stri
 		grouped.set(date, [...(grouped.get(date) ?? []), row]);
 	}
 	return grouped;
+}
+
+function quantile(sorted: number[], fraction: number): number {
+	if (sorted.length === 1) return sorted[0];
+	const position = (sorted.length - 1) * fraction;
+	const low = Math.floor(position);
+	const high = Math.ceil(position);
+	return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
+}
+
+function spread(values: number[]): RateSpread | null {
+	if (values.length === 0) return null;
+	const sorted = [...values].sort((a, b) => a - b);
+	return {
+		min: sorted[0],
+		p25: quantile(sorted, 0.25),
+		median: quantile(sorted, 0.5),
+		p75: quantile(sorted, 0.75),
+		max: sorted[sorted.length - 1]
+	};
+}
+
+/** One item's two rates, or null where the runtime reported no timing.
+ *
+ * Cached prompt tokens are taken out of the read count. Leaving them in reports
+ * a rate the machine never ran at: it did not read them.
+ */
+function itemRates(row: Record<string, string>): { read: number | null; write: number | null } {
+	const prefillMs = measured(row, 'prefill_ms');
+	const decodeMs = measured(row, 'decode_ms');
+	const prompt = measured(row, 'input_tokens');
+	const written = measured(row, 'output_tokens');
+	const evaluated = prompt === null ? null : prompt - (measured(row, 'cached_tokens') ?? 0);
+	return {
+		read:
+			prefillMs !== null && prefillMs > 0 && evaluated !== null && evaluated > 0
+				? evaluated / (prefillMs / 1000)
+				: null,
+		write:
+			decodeMs !== null && decodeMs > 0 && written !== null && written > 0
+				? written / (decodeMs / 1000)
+				: null
+	};
 }
 
 function publicTelemetry(row: Record<string, string>) {
@@ -233,33 +260,64 @@ export function load() {
 		.filter((day) => day.fetchMs > 0 || day.extractMs > 0 || day.summarizeMs > 0 || day.scoreMs > 0)
 		.sort((a, b) => b.date.localeCompare(a.date));
 
-	// A rate is a ratio, so a day is the sum of its parts and never the median of
-	// them: the four workers each did a share of the same day, and averaging four
-	// per-item rates would weigh a 60-word release note like a 2000-word feature.
+	// Two different statistics, both kept on purpose. The candle is the spread of
+	// per-item rates, because the worker sorts short articles first and the two
+	// ends of a day drift apart. The day figure is the sum of the parts, because
+	// a rate is a ratio and averaging per-item rates weighs a release note like a
+	// feature. Oldest first: the chart reads left to right.
 	const throughputDays: ThroughputDay[] = [...itemHealthByDate.entries()]
 		.map(([date, group]) => {
-			const total = (name: string) =>
-				group.reduce((running, row) => running + (measured(row, name) ?? 0), 0);
-			const prefillMs = total('prefill_ms');
-			const decodeMs = total('decode_ms');
-			const cached = total('cached_tokens');
-			const prompt = total('input_tokens');
-			const written = total('output_tokens');
-			// What prefill actually paid for. The cache carried the rest, so counting
-			// the whole prompt would report a rate the machine never ran at.
-			const read = Math.max(prompt - cached, 0);
+			const reads: number[] = [];
+			const writes: number[] = [];
+			const perRun = new Map<string, { read: number[]; write: number[] }>();
+			let prefillMs = 0;
+			let decodeMs = 0;
+			let cached = 0;
+			let prompt = 0;
+			let written = 0;
+			for (const row of group) {
+				const rate = itemRates(row);
+				if (rate.read === null && rate.write === null) continue;
+				const bucket = perRun.get(row.run_id ?? '') ?? { read: [], write: [] };
+				if (rate.read !== null) {
+					reads.push(rate.read);
+					bucket.read.push(rate.read);
+				}
+				if (rate.write !== null) {
+					writes.push(rate.write);
+					bucket.write.push(rate.write);
+				}
+				perRun.set(row.run_id ?? '', bucket);
+				prefillMs += measured(row, 'prefill_ms') ?? 0;
+				decodeMs += measured(row, 'decode_ms') ?? 0;
+				cached += measured(row, 'cached_tokens') ?? 0;
+				prompt += measured(row, 'input_tokens') ?? 0;
+				written += measured(row, 'output_tokens') ?? 0;
+			}
+			const read = spread(reads);
+			const write = spread(writes);
+			if (read === null || write === null) return null;
+			const evaluated = Math.max(prompt - cached, 0);
 			return {
 				date,
-				items: group.filter((row) => measured(row, 'prefill_ms') !== null).length,
-				prefillTps: prefillMs > 0 ? read / (prefillMs / 1000) : 0,
-				decodeTps: decodeMs > 0 ? written / (decodeMs / 1000) : 0,
-				prefillMsPerToken: read > 0 ? prefillMs / read : 0,
-				decodeMsPerToken: written > 0 ? decodeMs / written : 0,
-				cacheHitPct: prompt > 0 ? (cached / prompt) * 100 : 0
+				items: Math.max(reads.length, writes.length),
+				read,
+				write,
+				readTps: prefillMs > 0 ? evaluated / (prefillMs / 1000) : 0,
+				writeTps: decodeMs > 0 ? written / (decodeMs / 1000) : 0,
+				cacheHitPct: prompt > 0 ? (cached / prompt) * 100 : 0,
+				runs: [...perRun.entries()]
+					.map(([runId, bucket]) => ({
+						runId,
+						items: Math.max(bucket.read.length, bucket.write.length),
+						read: spread(bucket.read)?.median ?? 0,
+						write: spread(bucket.write)?.median ?? 0
+					}))
+					.sort((a, b) => a.runId.localeCompare(b.runId))
 			};
 		})
-		.filter((day) => day.prefillTps > 0 || day.decodeTps > 0)
-		.sort((a, b) => b.date.localeCompare(a.date));
+		.filter((day): day is ThroughputDay => day !== null)
+		.sort((a, b) => a.date.localeCompare(b.date));
 
 	const scoreDays: ScoreStats[] = [...scoresByDate.entries()]
 		.map(([date, group]) => {
@@ -302,6 +360,9 @@ export function load() {
 	return {
 		timingDays,
 		throughputDays,
+		// The explanation lives in docs/, which the site does not publish, so the
+		// chart points at the repository rather than restating it in a caption.
+		throughputReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/architecture/summarize/throughput.md`,
 		scoreDays,
 		manifests,
 		totalRows: rows.length,

@@ -412,9 +412,24 @@ Two readings hold:
   longer articles rather than worse hardware.
 - **Decode slows inside a job; prefill does not.** Median decode falls about 11%
   from the first half of a job to the second (5.4 to 4.8 tok/s) in all four,
-  while prefill stays flat. Longer contexts later in the run cost more per
-  generated token. It is behaviour, not a fault, and it is why a job's remaining
-  time cannot be extrapolated from its first few items.
+  while prefill stays flat. Nothing carries over between articles - each request
+  overwrites the slot's prompt. The cause is our own ordering: `stage_work`
+  sorts a worker's items by prompt band, so the short articles are summarised
+  first and the long ones last, and the second half of every job is therefore
+  carrying bigger prompts and being asked for longer summaries. Both raise the
+  cost per generated token within that one request.
+
+| Job | Context tokens, median | Summary tokens, median | Decode tok/s, median |
+| --- | --- | --- | --- |
+| `work (0)` | 1712 -> 2382 | 242 -> 298 | 5.53 -> 5.13 |
+| `work (1)` | 1651 -> 2552 | 244 -> 316 | 5.35 -> 4.70 |
+| `work (2)` | 1612 -> 2527 | 233 -> 296 | 5.38 -> 4.81 |
+| `work (3)` | 1688 -> 2694 | 245 -> 315 | 5.41 -> 4.78 |
+
+First half of each job against its second half. The consequence for planning is
+that a job's remaining time cannot be extrapolated from its first few items -
+those are the cheapest ones it will do. See
+[../architecture/summarize/throughput.md](../architecture/summarize/throughput.md).
 
 Prefill runs about 2.2x the decode rate, which is the reason `prefill_ms` and
 `decode_ms` are separate columns on the item-health row rather than one

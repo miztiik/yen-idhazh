@@ -82,6 +82,12 @@ subtracts it.
 ratio, and the workers each did a share of one day: averaging per-item rates
 weighs a 60-word release note the same as a 2000-word feature.
 
+The **spread** of the per-item rates is a different statistic and is kept too.
+The console draws it as a candle per day, because the worker summarises short
+articles before long ones and the two ends of a day drift apart on purpose. Why
+that happens, and what a change in either rate is allowed to prove, is
+[../summarize/throughput.md](../summarize/throughput.md).
+
 ## What counts against a source
 
 Twelve codes never count against a source:
@@ -141,6 +147,7 @@ Authority: Carmack.
 ## See also
 
 - [health.md](health.md) - the feed-grain ledger.
+- [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
 - [trust-boundary.md](trust-boundary.md) - how fetched bytes become sanitized text.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.

@@ -339,6 +339,7 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 ## See also
 
 - [`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md) - where Summarize sits and what it emits.
+- [`throughput.md`](throughput.md) - what a summary costs the model, and why the band sort makes a run look like it degrades.
 - [`../../concepts/evaluation.md`](../../concepts/evaluation.md) - what measures the summary this prompt produces, and the two columns that measure the article.
 - [`../../concepts/config.md`](../../concepts/config.md) - what belongs in a knob.
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the title as a reader-facing element.
