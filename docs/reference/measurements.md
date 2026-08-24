@@ -432,9 +432,11 @@ The row stays open until several days of manifests exist.
 
 ## llama-server runtime sweep
 
-**Status 2026-08-23:** harness added, sweep not yet run. No runtime flag is
-adopted by this change. `startup_warmup = true` records the behaviour that PR
-#24 already put in `digest.yml`; it is not a new adoption here.
+**Status 2026-08-24:** the controlled sweep has not run. By user approval,
+production now pins `-np 1` for an observational trial across real content
+refreshes. These runs show operational behaviour, but changing article mixes
+and runner hosts mean they do not isolate the flag's effect. `startup_warmup =
+true` records the behaviour that PR #24 already put in `digest.yml`.
 
 The `runtime` job in `.github/workflows/measure.yml` runs one dispatch per
 candidate flag. It creates a fixed five-article run plan for that dispatch, then
@@ -445,7 +447,7 @@ cgroup memory peak, the full `server_argv`, and parsed server facts such as
 whether the candidate beat the baseline outside the measured spread. It rejects a
 candidate when any `output_digest` differs between repeats or from the baseline.
 
-The baseline remains:
+The controlled-sweep baseline remains:
 
 ```text
 --model --alias --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --port 8080
@@ -456,7 +458,7 @@ date and spread:
 
 | Candidate | Flag under test | Status |
 | --- | --- | --- |
-| `np1` | `-np 1` | Defect half settled by PR #23: run `32648218952` logged `n_slots = 4`, `n_ctx_slot = 8192`, `kv_unified = 'true'`, so the current 4279-token worst case still fits. Optimization value pending. |
+| `np1` | `-np 1` | Production observation started 2026-08-24 by user approval. Run `32648218952` established that omitted `-np` selected four auto slots with `n_ctx_slot = 8192` and unified KV. Optimization value remains pending because real refreshes are not a controlled A/B. |
 | `batch2048` | `-b 2048` | Pending. Hypothesis: the current `--batch-size 512` may throttle prefill. Use the measured live-digest prefill median of 34.23 tok/s, range 29.24-37.92, spread 8.68 from run `32648218952`, not the older derived 12.1 tok/s figure. |
 | `no_startup_warmup` | restore `--no-warmup` | Pending reversal check. PR #24 already made startup warmup the digest default after a golden-set check. The harness records server startup and shard wall-clock separately. |
 | `flash_attention_on` | `-fa on` | Pending. Different attention math is allowed only if every golden `output_digest` is unchanged. |
