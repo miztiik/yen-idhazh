@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -47,6 +47,8 @@ The system knows things about its own output that a reader cannot see: that a so
 - A short or abstract source can publish as a brief item. Brevity is not a confidence band; a 100-word post can be summarized faithfully.
 - A source-limit sentence appears only where the missing context would surprise the reader. A normal short post does not get a label.
 - A low-confidence item **publishes, marked.** Suppressing it would make the digest look better than it is.
+- **The mark names what is missing, not how good the item is.** "Our summary leaves out names or figures from the opening" is something a reader can check when they click through. "Mostly matches the source" is a grade, and a reader can do nothing with it. The published item carries a `band_reason` identifier and the site owns the sentence ([evaluation.md](evaluation.md)).
+- A top-band item says nothing at all. Copy about the absence of a problem is ink a reader cannot act on.
 - A partial run **publishes, and says it was partial.** The failure count is a tracked number with a date on it, not something noticed when a human complains.
 - The footer says: "We skipped N stories today because we could not read enough of the page to summarize them fairly."
 - A run with zero successes still publishes. A day whose failures are invisible is a day nobody fixes.

@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-24
 
 How a summary is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -106,7 +106,39 @@ not supply an error rate for any cut.
 Historical `band` cells are a time-of-write record, not a live distribution.
 Rows written before the counterweight caps may record `high` even though today's
 `band()` would cap them at `medium`. Re-band the ledger with the current function
-before using the bands as a distribution.
+before using the bands as a distribution. Measured 2026-08-24 on the committed
+`state/scores.csv` at 447 rows: recorded 63.8 / 18.1 / 18.1, re-banded
+57.7 / 24.2 / 18.1. Twenty-seven rows move, all of them written before the caps
+landed - 11 on lead coverage, 11 on a dropped hedge, 5 on both.
+
+## The band says what is missing, not how good the item is
+
+A band on its own is a grade. `medium` used to print "Mostly matches the source",
+which tells a reader an item is worse without telling them what to look for when
+they click through - the only thing they can actually do about it. Both things
+that cap an item at `medium` were already computed, and neither reached the page.
+
+One function now returns the band **and** the one reason that explains it, so a
+page can never show a band decided by one code path next to a reason decided by
+another. The reason is a closed identifier on the published item; the sentence a
+reader sees is copy owned by the site, and can be rewritten without a schema
+change.
+
+| Reason | What it means |
+| --- | --- |
+| `unsupported_number` | The summary asserts a figure that appears nowhere in the article. Forces `low`. |
+| `not_scored` | No faithfulness score exists, so the item cannot claim the top band. |
+| `lead_missing` | The names and figures in the article's opening did not survive. |
+| `hedge_dropped` | The article hedged and the summary asserted. |
+| `faithfulness` | The faithfulness score itself put the item where it is. |
+
+A `high` item carries no reason. There is nothing to explain, and copy about the
+absence of a problem is ink a reader cannot act on.
+
+When both counterweights fail together - 5 of the 27 re-banded rows - the missing
+lead is named. Dropped facts are the larger loss: a flattened hedge changes how a
+sentence reads, and a missing lead means the story's who, what and how-much never
+arrived.
 
 ## Per-item scores cannot see drift
 
@@ -127,12 +159,21 @@ A drift detector that has never fired has not been shown to work; it is tested b
 
 **Lead entities do not cross line breaks (2026-08-23).** The source's title and body can be adjacent without sentence punctuation. Treating the newline as ordinary whitespace created impossible entities such as `biodiversity loss\nwe`, which counted against the summary and could never match it. A line break now ends the entity run while spaces and tabs still join names inside one line, such as `US President Donald Trump`. Authority: Andre's metric boundary, implemented as a structural bug fix.
 
+**The band and its reason are one function (2026-08-24).** Returning them separately would let a page print a reason that is not why. They travel together as one value, and the band-only helper is a wrapper with no logic of its own. Authority: Fowler.
+
+**The reason is an identifier and the sentence is copy (2026-08-24).** The published item carries `band_reason`; the site owns the words. Rewording a reader-facing sentence must not need a schema change, and the same identifier can read differently on a phone and in a feed. Authority: the identifier discipline in `docs/agents/guardrails.md`.
+
+**A re-observation writes no row (2026-08-24).** The page has said since it was written that an item whose inputs did not change writes no row at all, and the writer did not enforce it. The rule was the better one - a ledger of measurements, not of times the pipeline looked - so the code changed. Authority: Fowler, closing known defect 6.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
 | --- | --- | --- |
 | Let lead coverage or a dropped hedge force `low` | It overcorrects. A good summary of a badly-extracted or narrow source can miss the lead and still be faithful to what it says. | owner |
 | Re-cut the faithfulness band thresholds to reduce the `high` share | A band share is not an error rate. Choosing 0.90 over 0.80 would choose how much of the digest is called `high` and only then discover what `high` means. The decision needs human labels, not more unlabelled rows. It also changes nothing the reader sees: `high` prints no item-level copy. | Andre, Reader |
+| Delete the four duplicate rows the old writer left in the ledger | They are an honest record of a run that really did re-summarize those items. The ledger is append-only, and rewriting history to make a denominator tidier is the band-aid, not the fix. | Fowler |
+| Store `band_reason` on the eval row as well | It is derivable from four columns already on the row, and adding a column to a committed append-only CSV is a migration bought for nothing. | Fowler |
+| Print both reasons when both counterweights fail | Two sentences on one item in a meta row is a paragraph. A reader gets one thing to check. | Reader |
 
 ## Why this is a census and not a sample
 
@@ -155,6 +196,12 @@ Every item produces one row, appended to a committed CSV. It is appended by CI, 
 Committing the scores rather than deriving them is what makes a claim about last quarter a lookup instead of a re-run against a model that has since changed.
 
 The ledger header is part of the contract. A writer now refuses to append when the committed header no longer matches `EvalRow.csv_columns()`. A contract test also parses every committed `state/*.csv` with Python's `csv` module and fails if any data row has a different cell count from its header. This protects the file itself, not only the append path.
+
+**The ledger records measurements, not runs.** The writer refuses a row whose address, pipeline fingerprint, output words and scorer version all match a row the file already holds. Nothing about that item changed, so there is nothing new to measure, and a second row would only inflate the denominator every rate is computed against. `item_id` is deliberately not part of that identity: it is a slot on a page, not the item.
+
+Any of the four differing makes it a new measurement and it lands: different words under identical inputs is the determinism violation the ledger exists to catch, and the same words read by a different scorer is a reading worth keeping.
+
+Four rows written before this rule are still committed - four items on 2026-08-23 that a second day re-summarized because `state/published.csv` had no record of the day before. They are honest history and stay. Anything counting the whole ledger de-duplicates on those four columns first.
 
 The 2026-08-23 repair kept positions stable. It measured `state/scores.csv` with Python's `csv` module: 33 header names and 19 data rows, all with 33 cells. Ten historical rows predated `score_ms`, so they now carry the contract default `0`. All 19 rows predated `evidential_density` and `speculative_density`, so those cells stay empty as CSV nulls.
 
