@@ -355,13 +355,76 @@ test('stage medians come from item health, not the score ledger', async ({ page 
 	await expect(page.locator('[data-stage="summarize"]')).toContainText('700 ms');
 });
 
+test('reading and writing are drawn as separate candles per day', async ({ page }) => {
+	await page.goto('/console/');
+
+	await expect(page.getByText('Model tokens per second')).toBeVisible();
+
+	// Two days on record, two series each. A day with no census draws nothing
+	// rather than a candle sitting on zero.
+	await expect(page.locator('[data-candle="read"]')).toHaveCount(2);
+	await expect(page.locator('[data-candle="write"]')).toHaveCount(2);
+
+	// The whole day over the whole day: 4253 prompt tokens less the 2183 the
+	// cache carried is 2070 read in 177.249 s, and 655 written in 113.008 s.
+	const verdict = page.locator('[data-throughput="verdict"]');
+	await expect(verdict).toContainText('read 11.68 tok/s');
+	await expect(verdict).toContainText('write 5.80 tok/s');
+	await expect(verdict).toContainText('4 items across 2 runs');
+	await expect(verdict).toContainText('Read is up 5% and write is up 9%');
+
+	// Milliseconds per token is 1000 / tokens per second, so drawing it too
+	// would be the same fact mirrored. It must not come back.
+	await expect(verdict).not.toContainText('ms per token');
+});
+
+test('a candle carries its spread and its runs without a mouse', async ({ page }) => {
+	await page.goto('/console/');
+
+	const newest = page.locator('[data-candle="write"][data-date="2026-08-20"]');
+	const caption = await newest.locator('title').textContent();
+
+	expect(caption).toContain('median');
+	expect(caption).toContain('middle half');
+	// Per run, because a day hides which of its four runs moved.
+	expect(caption).toContain('Run medians: 2026-08-20-1');
+	expect(caption).toContain('2026-08-20-2');
+});
+
+test('writing draws slower than reading, on one shared scale', async ({ page }) => {
+	await page.goto('/console/');
+
+	const medians = async (series: string) =>
+		page
+			.locator(`[data-candle="${series}"][data-date="2026-08-20"] rect`)
+			.evaluateAll((boxes) => boxes.map((box) => box.getBoundingClientRect().top));
+
+	const [read] = await medians('read');
+	const [write] = await medians('write');
+
+	// Y grows downward, so the slower series sits lower on the page. Drawn
+	// against their own maxima both would top out and say nothing.
+	expect(read).toBeGreaterThan(0);
+	expect(write).toBeGreaterThan(read);
+});
+
+test('the chart points at the write-up rather than restating it', async ({ page }) => {
+	await page.goto('/console/');
+
+	const link = page.getByRole('link', { name: 'why the spread is wide' });
+	await expect(link).toHaveAttribute(
+		'href',
+		'https://github.com/miztiik/yen-idhazh/blob/main/docs/architecture/summarize/throughput.md'
+	);
+});
+
 test('the telemetry viewport renders the published projection', async ({ page }) => {
 	await page.goto('/console/');
 
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 	await expect(page.locator('[data-compression]')).toBeVisible();
-	await expect(page.locator('[data-viewport-control]')).toContainText('3 rows in view');
+	await expect(page.locator('[data-viewport-control]')).toContainText('7 rows in view');
 });
 
 test('a failure panel prints its rate in type, not only in a tooltip', async ({ page }) => {

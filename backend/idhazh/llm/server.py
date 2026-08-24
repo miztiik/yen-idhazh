@@ -33,6 +33,9 @@ class Completion:
     prompt_tokens: int = 0
     completion_tokens: int = 0
     finish_reason: str = "stop"
+    prefill_ms: int = 0
+    decode_ms: int = 0
+    cached_tokens: int = 0
 
     @property
     def hit_the_budget(self) -> bool:
@@ -145,12 +148,18 @@ def parse_completion(body: str) -> Completion:
         raise ValueError("the runtime returned no choices")
     usage = payload.get("usage") or {}
     message = choices[0].get("message", {})
+    # llama.cpp reports prefill and decode separately; a runtime that does not
+    # leaves the rates absent rather than blending them into one wrong number.
+    timings = payload.get("timings") or {}
     return Completion(
         content=message.get("content") or "",
         reasoning=message.get("reasoning_content") or "",
         prompt_tokens=int(usage.get("prompt_tokens", 0)),
         completion_tokens=int(usage.get("completion_tokens", 0)),
         finish_reason=choices[0].get("finish_reason") or "stop",
+        prefill_ms=round(float(timings.get("prompt_ms", 0.0))),
+        decode_ms=round(float(timings.get("predicted_ms", 0.0))),
+        cached_tokens=int(timings.get("cache_n", 0)),
     )
 
 

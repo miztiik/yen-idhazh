@@ -117,6 +117,21 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-24T18:30",
+            change=(
+                "Added nullable prefill_ms, decode_ms, input_tokens, output_tokens and "
+                "cached_tokens at the end of the row."
+            ),
+            why=(
+                "This is the only ledger that carries every planned item, so it is the "
+                "only place a day's model throughput can be read without keeping a "
+                "runtime log. Reading the prompt and writing the summary run at "
+                "different rates, and summarize_ms blends them. A rate needs its token "
+                "count beside its milliseconds, so both land here. Appended at the end "
+                "and nullable, so a row an earlier run wrote still reads."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-23T18:40",
             change="Added nullable fetch_ms, extract_ms and summarize_ms at the end of the row.",
             why=(
@@ -167,6 +182,11 @@ class ItemHealthRow(Contract):
     fetch_ms: int | None = Field(default=None, ge=0)
     extract_ms: int | None = Field(default=None, ge=0)
     summarize_ms: int | None = Field(default=None, ge=0)
+    prefill_ms: int | None = Field(default=None, ge=0)
+    decode_ms: int | None = Field(default=None, ge=0)
+    input_tokens: int | None = Field(default=None, ge=0)
+    output_tokens: int | None = Field(default=None, ge=0)
+    cached_tokens: int | None = Field(default=None, ge=0)
 
     @property
     def counts_against_source(self) -> bool:
@@ -223,6 +243,11 @@ class ItemHealthRow(Contract):
             "fetch_ms",
             "extract_ms",
             "summarize_ms",
+            "prefill_ms",
+            "decode_ms",
+            "input_tokens",
+            "output_tokens",
+            "cached_tokens",
         )
         for name in optional_fields:
             if payload[name] == "":

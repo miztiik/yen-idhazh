@@ -129,10 +129,24 @@ merge. Only `gh`'s local post-merge cleanup was skipped.
   browser suite, not by hand.
 - **`locator.scrollIntoViewIfNeeded()` times out on a page that keeps relaying
   out.** Use `page.evaluate` with `scrollIntoView` instead.
+- **`getBoundingClientRect()` returns zero width for every element on the
+  console.** Layout is not being driven in a hidden page, so a bar that draws
+  perfectly still measures 0. The `style` attribute is still correct and still
+  worth asserting; take any real geometry from the Playwright suite, where the
+  same elements measure normally.
 - **Check that the element you grabbed is the one you meant.** On the digest
   page `[data-band]` matches both the `<article>` and the confidence chip inside
   it, so a height measured off the wrong one is silently wrong. Target
   `span[data-band]`.
+
+## The canary build
+
+- **`build_canary_day.py` appends to the canary ledgers; it does not replace
+  them.** Running it a second time doubles every feed-health row, and by the
+  fifth run `canary-gone` has five failures, crosses
+  `collect.quarantine_after_failures`, and fails the unrelated "marked rested"
+  browser test. The failure looks like a regression in code nobody touched.
+  Delete `backend/var/canary` before rebuilding.
 
 ## See also
 

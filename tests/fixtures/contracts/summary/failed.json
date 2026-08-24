@@ -1,5 +1,7 @@
 {
   "attempt": 2,
+  "cached_tokens": 0,
+  "decode_ms": 0,
   "duration_ms": 900000,
   "extract_ms": 0,
   "failure_code": null,
@@ -13,6 +15,7 @@
   "output_digest": "8254cc9b9d84471f2b0bbc98ea4cd08ee7351c7be86704da9b2f96cfb7b7fb78",
   "output_tokens": 0,
   "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
+  "prefill_ms": 0,
   "source_truncated": true,
   "status": "failed",
   "summarize_ms": 0,
