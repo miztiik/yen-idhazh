@@ -141,12 +141,17 @@ merge. Only `gh`'s local post-merge cleanup was skipped.
 
 ## The canary build
 
-- **`build_canary_day.py` appends to the canary ledgers; it does not replace
-  them.** Running it a second time doubles every feed-health row, and by the
-  fifth run `canary-gone` has five failures, crosses
-  `collect.quarantine_after_failures`, and fails the unrelated "marked rested"
-  browser test. The failure looks like a regression in code nobody touched.
-  Delete `backend/var/canary` before rebuilding.
+- **`build_canary_day.py` used to append to the canary ledgers instead of
+  replacing them.** Running it a second time doubled every feed-health row, and
+  by the fifth run `canary-gone` had five failures, crossed
+  `collect.quarantine_after_failures`, and failed the unrelated "marked rested"
+  browser test - a red suite on a developer machine, in code nobody had touched,
+  while CI stayed green because its `backend/var/` is empty every run.
+  **Fixed 2026-08-24**: the builder clears `--state` before writing, so the
+  canary day is a function of that file rather than of how many times somebody
+  has run it. Nothing needs deleting by hand any more. Kept here because the
+  shape of the trap generalises - a fixture builder that is not idempotent turns
+  every later gate into a coin toss.
 
 ## See also
 
