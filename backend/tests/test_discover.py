@@ -16,11 +16,13 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
-from conftest import FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
+from idhazh import config
 from idhazh.contracts.app_config import CollectConfig
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.sources import FeedDef
+from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
 from idhazh.discover import (
     Candidate,
@@ -30,6 +32,7 @@ from idhazh.discover import (
     live,
     resting,
     salience_urls,
+    split_blocked,
 )
 from idhazh.rank import ITEM_ID_DIGITS, merge, plan_vertical, score, tier_weight
 
@@ -169,6 +172,77 @@ def test_an_empty_title_becomes_absent_rather_than_blank() -> None:
 def test_a_salience_feed_only_votes() -> None:
     voted = salience_urls(body("front-page.xml"))
     assert "https://blog.example-lab.org/2026/08/model-release" in voted
+
+
+def offered(url: str) -> Candidate:
+    canonical = canonicalise(url)
+    return Candidate(
+        canonical_url=canonical,
+        source_url=url,
+        url_key=derive_url_key(canonical),
+        source_id="cnn-world",
+        vertical="world",
+        tier=SourceTier.TRADE_PRESS,
+        source_form=SourceForm.ARTICLE,
+        title="Experts: this is the best cash back card of 2022",
+        published_at=NOW,
+    )
+
+
+def test_a_promotional_address_never_enters_the_pool() -> None:
+    """A healthy news feed syndicated affiliate credit-card pages.
+
+    They scored 0.92 to 0.95 faithfulness and banded high, because a page of
+    short declarative marketing sentences is trivially entailed. No faithfulness
+    threshold catches this at any cut, so the address is the control.
+    """
+    markers = CollectConfig(
+        blocked_url_markers=["fool.com/the-ascent/"]
+    ).blocked_url_markers
+    kept, blocked = split_blocked(
+        [
+            offered("https://www.cnn.com/2026/08/23/world/summit"),
+            offered("https://fool.com/the-ascent/credit-cards/landing/citi-simplicity-review"),
+            offered("https://FOOL.com/The-Ascent/credit-cards/landing/wells-fargo-reflect-review"),
+            offered("https://fool.com/investing/2026/08/23/quarterly-results"),
+        ],
+        markers=markers,
+    )
+
+    assert [candidate.canonical_url for candidate in blocked] == [
+        "https://fool.com/the-ascent/credit-cards/landing/citi-simplicity-review",
+        "https://fool.com/The-Ascent/credit-cards/landing/wells-fargo-reflect-review",
+    ]
+    # The publisher's editorial arm is not blocked. The measured cut is the
+    # affiliate section, and nothing wider has been measured (Rule #10).
+    assert [candidate.canonical_url for candidate in kept] == [
+        "https://cnn.com/2026/08/23/world/summit",
+        "https://fool.com/investing/2026/08/23/quarterly-results",
+    ]
+
+
+def test_an_unconfigured_clone_blocks_nothing() -> None:
+    """The knob is the shape; the entries are a source list and live in config/."""
+    offering = [offered("https://fool.com/the-ascent/credit-cards/landing/anything")]
+    kept, blocked = split_blocked(offering, markers=CollectConfig().blocked_url_markers)
+    assert kept == offering
+    assert blocked == []
+
+
+def test_the_committed_config_blocks_the_pages_that_got_through() -> None:
+    """The three that published on 2026-08-23 and 2026-08-24 cannot publish again."""
+    settings = config.load(CONFIG_DIR)
+    _, blocked = split_blocked(
+        [
+            offered("https://fool.com/the-ascent/credit-cards/landing/citi-simplicity-review"),
+            offered(
+                "https://fool.com/the-ascent/credit-cards/landing/wells-fargo-active-cash-card-review"
+            ),
+            offered("https://fool.com/the-ascent/credit-cards/landing/wells-fargo-reflect-review"),
+        ],
+        markers=settings.app.collect.blocked_url_markers,
+    )
+    assert len(blocked) == 3
 
 
 def test_a_draft_feed_is_not_read() -> None:
