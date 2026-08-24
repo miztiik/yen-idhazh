@@ -118,6 +118,14 @@ Both write SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.svg
 payload that references them. A render failure records why and the item publishes without a
 picture. No failure path raises.
 
+**The number continues across a day's runs.** A day runs several times, and a per-process counter
+that restarts at 1 makes the second run overwrite the first run's file while the digest still
+references both items. That happened on 2026-08-24: 32 declared visuals over 18 files, fourteen
+paths claimed twice, and `india-01.svg` shared by a stock-market story and a defence-stocks story -
+so one of them showed a chart of the other's numbers under alt text describing figures that were
+not in the picture. The router now seeds each vertical's counter from the highest `<vertical>-<NN>`
+already on disk for that day.
+
 Measured 2026-08-22 (Windows 11, 8 vCPU, `vl-convert-python` 1.9.0.post1): a Vega-Lite render takes
 2568 ms for the first call in a process and 49 ms warm, and produces about 7 KB of SVG. The cold
 cost is engine boot, paid once per run rather than once per item.

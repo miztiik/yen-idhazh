@@ -8,6 +8,12 @@ from __future__ import annotations
 
 from idhazh.render.chart import render_chart
 from idhazh.render.diagram import render_diagram
-from idhazh.render.write import asset_relpath, render_route
+from idhazh.render.write import asset_relpath, highest_ordinal, render_route
 
-__all__ = ["asset_relpath", "render_chart", "render_diagram", "render_route"]
+__all__ = [
+    "asset_relpath",
+    "highest_ordinal",
+    "render_chart",
+    "render_diagram",
+    "render_route",
+]
