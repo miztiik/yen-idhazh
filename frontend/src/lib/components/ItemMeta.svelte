@@ -39,7 +39,7 @@
 		<span class="text-text-tertiary">{shortDate(item.published_at.slice(0, 10))}</span>
 	{/if}
 
-	<ConfidenceChip band={item.band} />
+	<ConfidenceChip band={item.band} reason={item.band_reason} />
 
 	<ReadAloud title={item.title} summary={item.summary} />
 

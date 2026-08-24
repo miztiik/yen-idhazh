@@ -3,6 +3,13 @@
 export type ConfidenceBand = 'high' | 'medium' | 'low';
 export type SourceForm = 'article' | 'abstract';
 
+export type BandReason =
+	| 'unsupported_number'
+	| 'not_scored'
+	| 'lead_missing'
+	| 'hedge_dropped'
+	| 'faithfulness';
+
 export type SourceKind =
 	| 'reporting'
 	| 'announcement'
@@ -33,6 +40,7 @@ export interface DigestItem {
 	events: string[];
 	entities: string[];
 	band: ConfidenceBand;
+	band_reason: BandReason | null;
 	source_form: SourceForm;
 	reader_note: string | null;
 	truncated: boolean;
