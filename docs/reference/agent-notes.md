@@ -167,6 +167,21 @@ figures those runs produced are in
   instead.
 - **`npm` and `npx` are not on `PATH` in a freshly spawned terminal.** Use the
   absolute `C:\Program Files\nodejs\npx.ps1`.
+- **A sync terminal call can return "Command produced no output" without having
+  run.** Parallel agents share one shell, so a sibling's interrupt or an
+  unfinished input line swallows yours. Re-issue the identical command before
+  believing the result. An empty result is not a failed gate.
+- **Write every long gate to a uniquely named file and read the file back.**
+  `... *> "$env:TEMP\yi_<row>_pytest.txt"`, then read that file. The terminal
+  pane shows whoever spoke last, which may not be you.
+- **`pwsh -NoProfile -File <script>.ps1` can exit 1 and do nothing at all** - no
+  output, no side effects, no file written. Invoke the script as
+  `& '<absolute path>.ps1'` instead.
+- **A PowerShell pipe appends CRLF, so a piped `sha256sum --check` manifest
+  cannot find its file.** The error names the file with a trailing `$'\r'`.
+  Write the manifest LF-only with `[System.IO.File]::WriteAllText` and pass the
+  path as an argument. The workflow's own `echo | sha256sum --check` is correct;
+  only the local rehearsal of it needs this.
 
 ## The integrated browser
 
