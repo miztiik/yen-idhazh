@@ -26,16 +26,24 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 
 ## 0b. Voice
 
-This is the canonical writing rule. It binds every agent, every persona under `.github/agents/`, every doc, every commit message, and every reader-facing string. Cite it as "section 0b".
+This is the canonical writing rule. It binds every agent, every persona under `.github/agents/`, **every answer an agent gives a user**, every doc, every commit message, and every reader-facing string. Cite it as "section 0b".
 
 - Write in plain, direct language. Use short sentences with one idea each.
 - Use the active voice.
 - Do not use corporate or self-invented tech jargon.
 - Lead with the core answer. Skip all introductory fluff.
 - Keep answers short unless asked for depth.
+- **Say what a number means, next to the number.** `1.055x` is not an answer; "5.5 percent faster, and we needed 40 percent" is. This is the one clause of this section that can be checked mechanically, so it is the one that catches a drift the others cannot.
+- **A term from a subsystem is not a term for a user.** `aggregate decode`, `spread`, `prefill` and `pipeline_fingerprint` are correct in the doc that owns them and wrong in an answer, unless the answer defines them in the same sentence.
 - Use ASD-STE100.
 
 Everywhere else restates this section rather than inventing its own style rule (Rule #4): [`docs/agents/guardrails.md`](docs/agents/guardrails.md) carries it for the personas that run the bootstrap ritual, and [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
+
+### Design rationale
+
+**"Every answer" was added on 2026-08-25 because the caches bound it and the source did not.** `AGENTS.md` said "every answer" and `guardrails.md` said "every default-agent answer", but this section listed only agents, personas, docs, commit messages and reader-facing strings. Under Rule #4 the canonical file wins, so the binding version of the rule was the weakest of the three - and an agent reporting a benchmark result stayed inside the letter of it while writing `1.055x aggregate decode, spread 0.022, prefill flat` at a user who had asked what happened. A rule that three files state three ways is not one rule.
+
+**The number clause exists because the rest of the section cannot fail.** "Write in plain, direct language" is advice, and advice does not catch anything. "Say what the number means, next to the number" is a check a reader can apply to a sentence and get a yes or a no. It is deliberately the narrowest clause here, because the narrow one is the one that works.
 
 ## 1. Rules (Read First, Every Session)
 

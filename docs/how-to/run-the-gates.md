@@ -67,9 +67,35 @@ npm run build
 npm run bundle-gate
 ```
 
-`check` is `svelte-check`. `bundle-gate` asserts no encoder lands on the
-first-load path. `build` is the strongest of the three: every route is
+`check` is `svelte-check`. `build` is the strongest of the three: every route is
 prerendered, so a contract-invalid payload fails the build rather than the page.
+
+`bundle-gate` does two things. It asserts no encoder lands on the first-load
+path, and it compares every route's first-load JavaScript against the weight
+recorded for it in `frontend/bundle-baseline.json`.
+
+**That comparison is a two-sided ratchet, not a budget.** A route that grew past
+the recorded weight fails, and so does one that shrank past it - an unclaimed
+saving left in the record is slack the next regression lands inside. The
+tolerance is 64 bytes either way, derived in
+[../reference/measurements.md](../reference/measurements.md) from the spread over
+four builds of one tree. The gate prints every route on a pass, with its delta,
+so the numbers are visible before anybody has a reason to look at them.
+
+When it fails on a weight, the change is four steps and the gate has already
+written most of it:
+
+1. `npm run build`, then `npm run bundle-gate`.
+2. Paste the replacement line it printed into `frontend/bundle-baseline.json`.
+3. Write the `why` in one sentence naming the beneficiary feature. It is
+   required, and an empty one fails the gate - so a new route fails twice before
+   it passes, which is the friction doing its job.
+4. Commit the code change and the baseline edit together. The reviewer's job is
+   then one sentence, not a byte diff.
+
+Nothing writes that file but a person. There is no `--update` flag and no
+environment variable that skips the check, because a gate whose own tooling
+updates its baseline cannot fail.
 
 ## The browser suite
 
