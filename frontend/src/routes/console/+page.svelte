@@ -215,13 +215,18 @@
 			No item timing has been recorded yet. The item-health ledger fills as runs publish.
 		</p>
 	{:else}
-		<StageTimings days={data.timingDays} height={data.console.chart_height} />
+		<StageTimings
+			days={data.timingDays}
+			height={data.console.chart_height}
+			width={data.console.chart_width}
+		/>
 	{/if}
 
 	{#if data.throughputDays.length > 0}
 		<ThroughputTrend
 			days={data.throughputDays}
 			height={data.console.chart_height}
+			width={data.console.chart_width}
 			reference={data.throughputReference}
 		/>
 	{/if}
