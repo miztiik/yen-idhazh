@@ -1,6 +1,6 @@
 # Known defects
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Twelve defects found while shipping and re-reading the freshness, identity,
 health and evaluation work. None was in that scope. Defects 11 and 12 were found
@@ -24,7 +24,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 6 | Duplicate eval rows inflate the ledger | 2 | FIXED - 2026-08-24 |
 | 7 | Affiliate marketing pages pass the faithfulness bar | 3 | FIXED - 2026-08-24 |
 | 8 | Reader-facing confidence copy says too little | 2 | **PARTLY FIXED - the band bar is open** |
-| 9 | The push loop loses a whole day when the tree is dirty | 2 | FIXED - 2026-08-24 |
+| 9 | The push loop loses a whole day when it races another commit | 3 | CLOSED EARLY, REOPENED 2026-08-25, FIXED - 2026-08-25 |
 | 10 | The `route` job hits its 60-minute timeout | 3 | FIXED - 2026-08-24 |
 | 11 | A second run of a day overwrites the first run's charts | 3 | FIXED - 2026-08-24 |
 | 12 | One quantity could fill three bars of a published chart | 2 | FIXED - 2026-08-24 |
@@ -127,23 +127,79 @@ Reader's summary: "If someone re-cuts for the sake of the bar looking less
 green, that is tuning a number so a chart looks humbler, which is the opposite
 of honesty."
 
-## 9 - The push loop loses a whole day when the tree is dirty (FIXED)
+## 9 - The push loop loses a whole day when it races another commit (FIXED)
+
+**Closed on 2026-08-24 while the loop still could not loop. Reopened 2026-08-25.**
+The first close removed one trigger and called the class removed. It did not:
+the loop kept dying on the first race it could not text-merge, and run
+`32772221068` lost a finished day to it a day later. Level 2 was also wrong; the
+repair is Level 3.
 
 `digest.yml`, steps `Commit what the plan saw` and `Commit the day`. The work is
-committed, then pushed. If the push races another commit to `main`, the loop ran
-`git pull --rebase --autostash origin main`. Any unstaged change in the checkout
-is stashed, and if it fails to reapply, the step exits 1 and **the whole day's
-work is discarded** after plan, four shards and assemble all succeeded.
+committed, then pushed. A push that loses a race is meant to rebase and try
+again, three times.
 
-Evidence: run `32671663130`, 2026-08-24. Plan and all four shards succeeded,
-assemble built the day, and the step died with `error: cannot rebase: You have
-unstaged changes.` The dirty file was `docs/concepts/design-system.md`, whose
-blob was CRLF against a `text eol=lf` attribute, so every Linux checkout saw it
-modified before the job did anything. PR #44 removed that trigger; this row
-removes the class.
+**What the first pass fixed.** The loop ran `git pull --rebase --autostash origin
+main`. Any unstaged change in the checkout was stashed, and when it failed to
+reapply the step exited 1 and the whole day's work was discarded after plan,
+four shards and assemble had all succeeded. Evidence: run `32671663130`,
+2026-08-24, dying with `error: cannot rebase: You have unstaged changes.` The
+dirty file was `docs/concepts/design-system.md`, whose blob was CRLF against a
+`text eol=lf` attribute, so every Linux checkout saw it modified before the job
+did anything. PR #44 removed that trigger; the autostash went with it.
 
-Both loops were fixed, not only the one that failed. The plan job's loop has the
-same shape and loses the sight and health ledgers when it hits it.
+**What it missed, twice over.**
+
+First, `set -e` and one unguarded command. `git pull --rebase origin main` was
+the only command in the loop with no guard, so a rebase that conflicted ended
+the script where it stood - inside attempt 1. There was no attempt 2, the
+three-attempt message never printed, and the checkout was left mid-rebase.
+Measured 2026-08-25 against a scripted local origin, git 2.55.0, bash 5.3.15.
+
+Second, and this is the actual defect: the base was stale. `actions/checkout@v6`
+in `assemble` carries no `ref`, so it takes main's tip at trigger time, and the
+workflow's own comment measures a run at 164-184 min. Assemble always rebuilt
+the day from a base up to three hours old and then asked `git merge-file` to
+reconcile two derived payloads. Fixing only the guard would not have published
+run `32772221068`: attempt 2 dies two lines further down at `git checkout -- .`,
+which fails on unmerged paths, and the conflict is deterministic - the same
+commit rebased onto the same tip conflicts all three times.
+
+**Fixed structurally, three ways.**
+
+- **Every command in the loop is guarded**, and a rebase it cannot finish is
+  aborted so the next attempt starts on a checkout with no rebase in progress.
+- **The append-only ledgers union.** Every file under `state/` carries
+  `merge=union` in `.gitattributes`. Two runs that both appended are not in
+  disagreement, so the union of both sides is the merge. That is what the plan
+  job needs: it records what it saw and cannot rebuild it.
+- **Assemble refreshes its base and rebuilds.** On a rejected push the loop
+  hands the derived paths back to origin's tip and runs `python -m idhazh
+  assemble` again against it. `stage_assemble` already loads the previous day
+  and appends - it IS the conflict resolver, and it was being run once against a
+  stale base. The refresh names `digest.json` and `run.json` one file at a time
+  and never the day's directory: the routes artifact unpacks this run's rendered
+  charts into that directory and no producer in the assemble job can make them
+  again (defect 11). `frontend/public/telemetry/` is a full rewrite of
+  `state/item-health/`, so it is regenerated rather than unioned.
+
+**Evidence this time.** `backend/tests/test_workflows.py` executes the script
+against real local repositories, no network and no mocks. The hard case scripts
+an origin that gains BOTH another run of the same day and an unrelated pull-
+request merge while the job works, then asserts the day published: five items
+from two runs in `digest.json`, run 3 recorded as run 3 rather than a second run
+2, and both sides' rows exactly once in `state/published.csv`,
+`state/scores.csv` and `state/item-health/<YYYY-MM>.csv` - two of which append
+blind, so a rebuild on its own last attempt would show seven rows for five
+items. The rendered chart survives, the pull request is untouched, and the
+checkout ends with no rebase in progress. Both falsified on 2026-08-25 by
+removing the fix and watching the same tests fail.
+
+Recorded in
+[`docs/reference/github-actions.md`](../docs/reference/github-actions.md).
+
+**Still open, and named rather than folded in:** `build_manifest` and
+`build_day` disagree about run identity. That is its own Level-4 row.
 
 ## 10 - The `route` job hits its 60-minute timeout (FIXED)
 

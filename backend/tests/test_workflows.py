@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import csv
+import io
 import json
 import os
 import re
 import shlex
 import shutil
 import subprocess
+import sys
 from collections.abc import Sequence
 from pathlib import Path
 from typing import Final, cast
@@ -122,18 +125,25 @@ RUNTIME_CANDIDATES: Final = frozenset(
         "np2_inflight",
     }
 )
-# The one commit-and-push step both daily jobs run. They differ only in what
-# they stage and in the three strings they pass, which is what makes the retry
-# behaviour executable by a test instead of only greppable in YAML.
+# The one commit-and-push step both daily jobs run. They differ in what they
+# stage, in the strings they pass, and in whether they can rebuild what they
+# commit, which is what makes the retry behaviour executable by a test instead
+# of only greppable in YAML.
 COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
 COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 COMMIT_STEPS: Final = {
     "plan": "Commit what the plan saw",
     "assemble": "Commit the day",
 }
-COMMIT_SCRIPT_ENV: Final = frozenset(
+COMMIT_BASE_ENV: Final = frozenset(
     {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
 )
+# Only assemble can rebuild what it commits, so only assemble carries the two
+# settings that make the loop rebuild instead of merge.
+COMMIT_SCRIPT_ENV: Final = {
+    "plan": COMMIT_BASE_ENV,
+    "assemble": COMMIT_BASE_ENV | {"REFRESH_PATHS", "REGENERATE_COMMAND"},
+}
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
     "assemble": ["frontend/public/digest", "frontend/public/telemetry", "state"],
@@ -142,8 +152,35 @@ COMMIT_IDENTITY: Final = (
     "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 )
 # What a `${{ }}` expression stands in for when a test runs the real call site
-# outside Actions. Only the date expressions survive into these strings.
+# outside Actions. `day_dir` is the digest date as a path, which is what lets the
+# refresh set name `digest.json` and `run.json` one file at a time.
 SUBSTITUTED_DATE: Final = "2026-08-25"
+SUBSTITUTED_DAY_DIR: Final = "frontend/public/digest/2026/08/25"
+SUBSTITUTED_SHA: Final = "0" * 40
+EXPRESSION_VALUES: Final = {
+    "needs.plan.outputs.date": SUBSTITUTED_DATE,
+    "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
+    "steps.decide.outputs.date": SUBSTITUTED_DATE,
+    "github.sha": SUBSTITUTED_SHA,
+}
+# What assemble hands back to origin's tip before it rebuilds. The day's own
+# directory is never in this list: the routes artifact unpacks this run's
+# rendered charts into it, and no producer in the assemble job can make those
+# again, so the two payload files are named one at a time.
+COMMIT_REFRESH_PATHS: Final = {
+    "assemble": [
+        f"{SUBSTITUTED_DAY_DIR}/digest.json",
+        f"{SUBSTITUTED_DAY_DIR}/run.json",
+        "frontend/public/telemetry",
+        "state/published.csv",
+        "state/scores.csv",
+        "state/item-health",
+    ],
+}
+# The producer the harness drives through the loop. See its own docstring for
+# why the pipeline's `assemble` cannot be the one under a temporary clone.
+REBUILD_STAND_IN: Final = Path(__file__).with_name("rebuild_day.py")
+RUN_ARTIFACTS: Final = "backend/var/run"
 
 
 def _load_workflows() -> dict[str, dict[str, object]]:
@@ -299,6 +336,21 @@ def _grep_pattern(script: str, description: str) -> re.Pattern[str]:
     return re.compile(patterns[0], flags=re.MULTILINE)
 
 
+def _substitute(text: str) -> str:
+    """Stand in for what Actions would expand, so a test can run the real call site.
+
+    Every expression is named. An unlisted one fails here rather than quietly
+    substituting a date into a path and testing a string nothing ever produces.
+    """
+
+    def resolve(match: re.Match[str]) -> str:
+        expression = match.group(1).strip()
+        assert expression in EXPRESSION_VALUES, f"no test value for '{expression}'"
+        return EXPRESSION_VALUES[expression]
+
+    return re.sub(r"\$\{\{(.*?)\}\}", resolve, text, flags=re.DOTALL)
+
+
 def _commit_call(job_name: str) -> tuple[list[str], dict[str, str]]:
     """The paths and the strings one daily job hands the shared commit script."""
     workflow = _load_workflows()["digest.yml"]
@@ -308,10 +360,7 @@ def _commit_call(job_name: str) -> tuple[list[str], dict[str, str]]:
         f"job {job_name} must commit through {COMMIT_SCRIPT_CALL[1]}"
     )
     declared = _mapping(step.get("env"), f"job {job_name} commit env")
-    settings = {
-        name: re.sub(r"\$\{\{.*?\}\}", SUBSTITUTED_DATE, str(value))
-        for name, value in declared.items()
-    }
+    settings = {name: _substitute(str(value)) for name, value in declared.items()}
     return command[2:], settings
 
 
@@ -333,6 +382,13 @@ def _bash() -> str | None:
 requires_bash: Final = pytest.mark.skipif(
     _bash() is None,
     reason="no bash on this host to execute .github/scripts/commit-and-push.sh",
+)
+# The loop word-splits `REGENERATE_COMMAND` on spaces, exactly as the workflow's
+# own value expects, so a harness that has to name an interpreter needs a path
+# without one.
+requires_space_free_paths: Final = pytest.mark.skipif(
+    " " in sys.executable or " " in str(REBUILD_STAND_IN),
+    reason="REGENERATE_COMMAND is word-split on spaces",
 )
 
 
@@ -390,12 +446,87 @@ def _scripted_origin(
         _write(seed / staged / "ledger.csv", f"header\nrow-{index}\n")
     _write(seed / "docs" / "unrelated.md", "seed\n")
     _write(seed / "runner-noise.txt", "clean\n")
-    _git(seed, env, "add", "docs", "runner-noise.txt", *staged_paths)
+    # This repository's own attributes file. `merge=union` on the ledgers is
+    # what decides whether two runs that both appended are in conflict, so a
+    # scripted origin without it would test a different repository.
+    _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
+    _git(seed, env, "add", ".gitattributes", "docs", "runner-noise.txt", *staged_paths)
     _git(seed, env, "commit", "-m", "seed")
     _git(seed, env, "push", "-u", "origin", "main")
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
+
+
+def _rebuild_command(date: str) -> str:
+    """The producer the harness puts through the loop, as the loop word-splits it."""
+    return f"{Path(sys.executable).as_posix()} {REBUILD_STAND_IN.as_posix()} --date {date}"
+
+
+def _rebuild(repo: Path, env: dict[str, str], date: str, items: Sequence[str]) -> None:
+    """One assemble run: write this run's artifacts, then publish them."""
+    _write(
+        repo / RUN_ARTIFACTS / date / "items.json",
+        json.dumps({"items": list(items)}) + "\n",
+    )
+    subprocess.run(
+        [sys.executable, str(REBUILD_STAND_IN), "--date", date],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+
+
+def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path, Path]:
+    """An origin carrying a published day, plus the clone the assemble job runs in.
+
+    The day is written by the same producer the loop reruns, so nothing here is
+    a hand-made fixture of what that producer emits.
+    """
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, env, "init", "--bare", "-b", "main", str(origin))
+    seed = tmp_path / "seed"
+    _git(tmp_path, env, "clone", str(origin), str(seed))
+    _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
+    _write(seed / "docs" / "unrelated.md", "seed\n")
+    _rebuild(seed, env, date, ["item-a", "item-b"])
+    _git(seed, env, "add", ".gitattributes", "docs", *COMMIT_STAGED_PATHS["assemble"])
+    _git(seed, env, "commit", "-m", f"digest: {date}")
+    _git(seed, env, "push", "-u", "origin", "main")
+    runner = tmp_path / "runner"
+    _git(tmp_path, env, "clone", str(origin), str(runner))
+    return origin, runner
+
+
+def _race_the_day(
+    tmp_path: Path, env: dict[str, str], date: str, items: Sequence[str], pull_request: str
+) -> None:
+    """Origin gains another run of the same day AND an unrelated merge, in that order."""
+    other = tmp_path / "other"
+    _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
+    _rebuild(other, env, date, items)
+    _git(other, env, "add", *COMMIT_STAGED_PATHS["assemble"])
+    _git(other, env, "commit", "-m", f"digest: {date}")
+    _write(other / "docs" / "unrelated.md", "merged by a pull request\n")
+    _git(other, env, "add", "docs")
+    _git(other, env, "commit", "-m", pull_request)
+    _git(other, env, "push", "origin", "main")
+
+
+def _rows(text: str) -> list[dict[str, str]]:
+    return list(csv.DictReader(io.StringIO(text)))
+
+
+def _tracked(repo: Path, env: dict[str, str], relative: str) -> bool:
+    return relative in _git(repo, env, "ls-tree", "-r", "--name-only", "main").splitlines()
+
+
+def _mid_rebase(runner: Path) -> bool:
+    return (runner / ".git" / "rebase-merge").is_dir() or (
+        runner / ".git" / "rebase-apply"
+    ).is_dir()
 
 
 def _race(tmp_path: Path, env: dict[str, str], relative: str, text: str) -> None:
@@ -526,7 +657,7 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         (path.relative_to(REPO_ROOT).as_posix(), read_text(path))
         for path in sorted(SCRIPTS_DIR.glob("*.sh"))
     ]
-    scripts = [(where, body) for where, body in bodies if "git pull --rebase" in body]
+    scripts = [(where, body) for where, body in bodies if "git rebase" in body]
     assert scripts, "the daily run must still push through a rebase-and-retry loop"
 
     for where, script in scripts:
@@ -534,12 +665,51 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         # `--autostash` looks like the answer and is not: it stashes the noise,
         # then fails the step when the stash will not reapply.
         assert "--autostash" not in script, f"{where} must not stash before rebasing"
-        discard = lines.index("git checkout -- .")
-        rebase = lines.index("git pull --rebase origin main")
+        discard = next(
+            index for index, line in enumerate(lines) if line.startswith("git checkout -- .")
+        )
+        rebase = next(
+            index
+            for index, line in enumerate(lines)
+            if "git rebase " in line and "--abort" not in line
+        )
         assert discard < rebase, f"{where} must clear the tree before it rebases"
         assert any(
             "--untracked-files=no" in line for line in lines
         ), f"{where} must leave untracked files alone - they cannot block a rebase"
+        # A rebase that cannot finish must not be left half-applied for the next
+        # attempt to trip over.
+        assert "git rebase --abort" in script, f"{where} must leave no rebase in progress"
+
+
+def test_every_command_in_the_retry_loop_is_guarded() -> None:
+    """`set -e` plus one unguarded command is the whole defect.
+
+    `git pull --rebase origin main` was the only unguarded command in the loop,
+    so a conflicting rebase ended the script inside attempt 1 and left the
+    checkout mid-rebase. This reads the loop body and asserts every command in it
+    is either a condition, a guarded call, or an `echo`, which is what makes the
+    three attempts real. The Oracle test below proves the same thing by running
+    it; this one names the line when a new command arrives unguarded.
+    """
+    lines = read_text(COMMIT_SCRIPT).splitlines()
+    start = next(index for index, line in enumerate(lines) if line.startswith("for attempt in "))
+    end = next(index for index, line in enumerate(lines) if line.startswith("done"))
+    assert start < end
+
+    unguarded = []
+    for line in lines[start + 1 : end]:
+        stripped = line.strip()
+        if not stripped or stripped.startswith("#"):
+            continue
+        guarded = (
+            stripped.startswith(("if ", "elif ", "fi", "else", "echo ", "["))
+            or stripped in {"exit 0", "break", "continue", "then"}
+            or "||" in stripped
+        )
+        if not guarded:
+            unguarded.append(stripped)
+    assert unguarded == [], f"unguarded inside the retry loop: {unguarded}"
 
 
 def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
@@ -550,7 +720,7 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     for job_name in COMMIT_STEPS:
         staged_paths, settings = _commit_call(job_name)
         assert staged_paths == COMMIT_STAGED_PATHS[job_name]
-        assert set(settings) == COMMIT_SCRIPT_ENV
+        assert set(settings) == COMMIT_SCRIPT_ENV[job_name]
         assert all(value for value in settings.values())
 
     plan = _commit_call("plan")[1]
@@ -562,6 +732,76 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
 
 
+def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -> None:
+    """The producer named in the loop is the producer the job already ran.
+
+    Compared as argv rather than as text: the step runs its command through a
+    shell and quotes what it interpolates, and the loop runs the same words with
+    no shell at all. Two copies of the invocation would be two things to keep in
+    step, and the one inside the loop only runs on a race - which is the copy
+    nobody would notice going stale.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    publish = _script(
+        _step(workflow, "assemble", "name", "Assemble and publish"), "assemble publish step"
+    )
+    settings = _commit_call("assemble")[1]
+
+    # `shlex.split` keeps a backslash-newline as a token of its own, so the
+    # step's line continuations are folded first.
+    published_argv = shlex.split(_substitute(publish).replace("\\\n", " "))
+    assert published_argv == settings["REGENERATE_COMMAND"].split()
+    assert settings["REFRESH_PATHS"].split() == COMMIT_REFRESH_PATHS["assemble"]
+    # Never the day's directory itself. The routes artifact unpacks this run's
+    # rendered charts into it and no producer here can make them again, so the
+    # two payload files are named one at a time.
+    assert SUBSTITUTED_DAY_DIR not in settings["REFRESH_PATHS"].split()
+    # Neither setting may carry a space inside one of its words: the loop
+    # word-splits both, and nothing here re-parses shell quoting.
+    assert not any(
+        '"' in value or "'" in value
+        for value in (settings["REFRESH_PATHS"], settings["REGENERATE_COMMAND"])
+    )
+    # The plan job records what it saw and cannot rebuild it, so it resolves a
+    # race by rebasing, and `.gitattributes` unions its ledgers.
+    assert "REGENERATE_COMMAND" not in _commit_call("plan")[1]
+
+
+def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> None:
+    """A text merge of two appends is a merge nobody asked for.
+
+    Every file under `state/` is an append-only ledger of independent rows, so
+    the union of both sides is the answer. `frontend/public/telemetry/` is a
+    full rewrite of `state/item-health/`, so a union of two rewrites is a file
+    with every row twice; assemble regenerates it instead.
+    """
+    attributes = read_text(REPO_ROOT / ".gitattributes")
+    unioned = {
+        line.split()[0]
+        for line in attributes.splitlines()
+        if line and not line.startswith("#") and "merge=union" in line
+    }
+
+    assert unioned == {"state/*.csv", "state/**/*.csv"}
+    assert not any(
+        "telemetry" in pattern or pattern.startswith("frontend") for pattern in unioned
+    )
+
+
+def test_the_plan_job_publishes_the_day_directory_it_decided() -> None:
+    """The refresh set has to name two files inside the day, so the run says where it is."""
+    workflow = _load_workflows()["digest.yml"]
+    script = _script(_step(workflow, "plan", "id", "decide"), "plan decide step")
+    outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
+
+    assert outputs.get("day_dir") == "${{ steps.decide.outputs.day_dir }}"
+    assert 'echo "day_dir=frontend/public/digest/${DATE//-//}" >> "$GITHUB_OUTPUT"' in [
+        line.strip() for line in script.splitlines()
+    ]
+    # The expansion above, evaluated the way bash would.
+    assert f"frontend/public/digest/{SUBSTITUTED_DATE.replace('-', '/')}" == SUBSTITUTED_DAY_DIR
+
+
 @requires_bash
 @pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
 def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
@@ -569,6 +809,12 @@ def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) ->
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nfresh\n")
+    if "REGENERATE_COMMAND" in settings:
+        # The push wins here, so the producer never runs. Point it at the
+        # harness one anyway: the pipeline's own `assemble` anchors its paths on
+        # the installed repository, so a regression that made it run would write
+        # into the working repository rather than fail the test.
+        settings = {**settings, "REGENERATE_COMMAND": _rebuild_command(SUBSTITUTED_DATE)}
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
@@ -624,14 +870,17 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
 
 
 @requires_bash
-def test_the_commit_step_gives_up_on_the_first_conflicting_rebase(tmp_path: Path) -> None:
-    """Today's behaviour, measured, not the behaviour the loop looks like it has.
+def test_a_racing_append_to_the_same_ledger_unions_instead_of_conflicting(
+    tmp_path: Path,
+) -> None:
+    """Two runs appended two independent rows. Both belong, and nothing has to choose.
 
-    `git pull --rebase origin main` is the one unguarded command in the loop, so
-    when it conflicts `set -e` ends the script inside attempt 1. There is no
-    attempt 2, the three-attempt message never prints, the day never lands, and
-    the checkout is left mid-rebase. Observed 2026-08-25 against a scripted local
-    origin, git 2.55.0, bash 5.3.15.
+    This is where the loop used to die. `git pull --rebase origin main` was the
+    one unguarded command in it, so a conflicting rebase ended the script inside
+    attempt 1 under `set -e`: no attempt 2, no failure message, no day, and a
+    checkout left mid-rebase. Measured that way on 2026-08-25, git 2.55.0, bash
+    5.3.15. The ledgers carry `merge=union` now, so the union of both appends is
+    the merge, and every command in the loop is guarded.
     """
     staged_paths, settings = _commit_call("plan")
     env = _isolated_env(tmp_path)
@@ -641,15 +890,145 @@ def test_the_commit_step_gives_up_on_the_first_conflicting_rebase(tmp_path: Path
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("push rejected, rebasing (attempt ") == 1
+    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
+    assert _git(origin, env, "log", "--format=%s", "-2").splitlines() == [
+        settings["COMMIT_MESSAGE"],
+        "racing change",
+    ]
+    landed = _git(origin, env, "show", f"main:{staged_paths[0]}/ledger.csv").splitlines()
+    assert landed[0] == "header"
+    assert sorted(landed[1:]) == ["ours", "row-0", "theirs"]
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+def test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly(tmp_path: Path) -> None:
+    """The guard, proved by running it: no command in the loop can exit early.
+
+    A ledger retired upstream while this run appended to it is a modify/delete,
+    which no merge driver resolves. The loop must abort the rebase, say what
+    happened, print the failure message and leave the checkout usable - not stop
+    on the line that failed.
+    """
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    other = tmp_path / "other"
+    _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
+    _git(other, env, "rm", "--quiet", f"{staged_paths[0]}/ledger.csv")
+    _git(other, env, "commit", "-m", "retire the ledger")
+    _git(other, env, "push", "origin", "main")
+    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nours\n")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
     assert result.returncode == 1
     assert result.stdout.count("push rejected, rebasing (attempt ") == 1
-    assert "push rejected, rebasing (attempt 2)" not in result.stdout
+    assert "the rebase did not apply cleanly" in result.stderr
+    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    assert _git(origin, env, "log", "-1", "--format=%s").strip() == "retire the ledger"
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+@requires_space_free_paths
+def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
+    """The Oracle: a stale base is answered by a current base, not by a text merge.
+
+    Run `32772221068` lost a finished day here. The assemble job checks out
+    main's tip at TRIGGER time and the run takes 164-184 min, so the day was
+    always rebuilt from a base up to three hours old, and the push found a main
+    that had moved. Here it has moved twice: another run published the same day,
+    and a pull request merged on top.
+
+    So the day is refreshed from the tip the push wants and built again against
+    it. Both runs' items reach the reader, both runs' rows reach all three
+    ledgers exactly once, the pull request is untouched, and this run's rendered
+    chart - which no producer in this job can make again - is still there.
+    """
+    date = SUBSTITUTED_DATE
+    month = date[:7]
+    staged_paths, settings = _commit_call("assemble")
+    settings = {**settings, "REGENERATE_COMMAND": _rebuild_command(date)}
+    env = _isolated_env(tmp_path)
+    origin, runner = _digest_origin(tmp_path, env, date)
+    _race_the_day(
+        tmp_path, env, date, ["item-c"], "Merge pull request #123 from someone/branch"
+    )
+    # This run: the routes artifact unpacked a chart into the day's directory,
+    # and assemble published two items on the base the checkout carried.
+    _write(runner / SUBSTITUTED_DAY_DIR / "assets" / "chart-1.svg", "<svg />\n")
+    _rebuild(runner, env, date, ["item-d", "item-e"])
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert result.stdout.count("push rejected, rebasing (attempt ") == 1
+    assert "rebuilding the day against origin/main" in result.stdout
     assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
-    assert "CONFLICT (content)" in result.stdout + result.stderr
-    assert _git(origin, env, "log", "-1", "--format=%s").strip() == "racing change"
-    assert (runner / ".git" / "rebase-merge").is_dir() or (
-        runner / ".git" / "rebase-apply"
-    ).is_dir(), "the checkout is left mid-rebase"
+    assert _git(origin, env, "log", "--format=%s", "-3").splitlines() == [
+        f"digest: {date}",
+        "Merge pull request #123 from someone/branch",
+        f"digest: {date}",
+    ]
+
+    day = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/digest.json"))
+    assert day["items"] == ["item-a", "item-b", "item-c", "item-d", "item-e"]
+    # Run three, not a second run two. The rebuild read the day origin holds, so
+    # it knows which run it is; on its own last attempt it would not.
+    assert day["runs"] == [
+        {"n": 1, "items_added": 2},
+        {"n": 2, "items_added": 1},
+        {"n": 3, "items_added": 2},
+    ]
+    manifest = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/run.json"))
+    assert manifest["runs"] == day["runs"]
+
+    published = _rows(_git(origin, env, "show", "main:state/published.csv"))
+    scores = _rows(_git(origin, env, "show", "main:state/scores.csv"))
+    health = _rows(_git(origin, env, "show", f"main:state/item-health/{month}.csv"))
+    every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
+    # Exactly once each. Two of these ledgers append blind, so a rebuild against
+    # a base that already held this run's rows would show five items and seven
+    # rows.
+    assert [row["item_id"] for row in published] == every_item
+    assert [row["item_id"] for row in scores] == every_item
+    assert [row["item_id"] for row in health] == every_item
+
+    telemetry = _rows(_git(origin, env, "show", f"main:frontend/public/telemetry/{month}.csv"))
+    assert telemetry == health, "the public projection is a rewrite of item-health, not a merge"
+
+    assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
+    assert _tracked(origin, env, f"{SUBSTITUTED_DAY_DIR}/assets/chart-1.svg")
+    assert (runner / SUBSTITUTED_DAY_DIR / "assets" / "chart-1.svg").is_file()
+    assert not _mid_rebase(runner)
+
+
+@requires_bash
+@requires_space_free_paths
+def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path) -> None:
+    """A producer that cannot run is a lost day, said out loud, not a half-rebased tree."""
+    date = SUBSTITUTED_DATE
+    staged_paths, settings = _commit_call("assemble")
+    # A date this checkout has no artifacts for: the producer really fails, on a
+    # real missing input, rather than being told to pretend.
+    settings = {**settings, "REGENERATE_COMMAND": _rebuild_command("2026-08-24")}
+    env = _isolated_env(tmp_path)
+    origin, runner = _digest_origin(tmp_path, env, date)
+    _race_the_day(tmp_path, env, date, ["item-c"], "Merge pull request #124 from someone/other")
+    _rebuild(runner, env, date, ["item-d"])
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1
+    assert "the rebuild failed against origin/main" in result.stderr
+    assert settings["PUSH_FAILED_MESSAGE"] in result.stderr
+    assert _git(origin, env, "log", "-1", "--format=%s").strip() == (
+        "Merge pull request #124 from someone/other"
+    )
+    assert not _mid_rebase(runner)
 
 
 def test_measurements_dispatch_selects_exactly_one_target() -> None:
