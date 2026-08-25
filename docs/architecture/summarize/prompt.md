@@ -78,15 +78,16 @@ The request sends `chat_template_kwargs.enable_thinking` from
 `models.inference.thinking`. The configured value is false. The pipeline does
 not rely on `/nothink` or another instruction in the untrusted user turn.
 
-The intended control rejects reasoning in either channel:
+The control rejects reasoning in either channel:
 
 - a non-empty inline `<think>...</think>` block; or
 - non-empty `message.reasoning_content`.
 
-`reasoning_content` is rejected today. The inline parser has a gap: it checks
-only the first matched block for content and then strips every block. An empty
-first block followed by a non-empty second block can pass. Repair that loop and
-add the empty-first regression case before using it as a candidate oracle.
+Both are rejected today. `split_thinking` reads every inline block, not the
+first. It read only the first until 2026-08-25, and stripped every block
+afterwards, so an empty opening block hid a second block that reasoned and
+nothing downstream could see it. A guard that asserts an absence has to look
+everywhere the thing can be.
 
 The split-channel check matters because llama.cpp can move reasoning out of
 `message.content`; reading only content would make a thinking model look
