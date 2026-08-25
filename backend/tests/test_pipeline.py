@@ -659,6 +659,135 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
     assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_UNREACHABLE}
 
 
+class SteppingClock:
+    """A monotonic clock that advances a fixed number of seconds on every read.
+
+    The route stage is bounded by wall-clock, and a bound that can only be
+    proved by waiting for it is a bound nobody tests. This spends the budget in
+    zero real seconds and makes which items survive it deterministic.
+    """
+
+    def __init__(self, step_seconds: float) -> None:
+        self._step = step_seconds
+        self._now = 0.0
+
+    def __call__(self) -> float:
+        now = self._now
+        self._now += self._step
+        return now
+
+
+def stage_route_payloads(run_plan: RunPlan, items_dir: Path, *, text: str) -> None:
+    """One article and one OK summary per planned item, sharing one body."""
+    items_dir.mkdir(parents=True, exist_ok=True)
+    for item in run_plan.items:
+        base_article = article().model_copy(
+            update={
+                "item_id": item.item_id,
+                "url_key": item.url_key,
+                "canonical_url": item.canonical_url,
+                "source_url": item.canonical_url,
+                "vertical": item.vertical,
+                "rank_score": item.rank_score,
+                "text": text,
+            }
+        )
+        base_summary = summary().model_copy(
+            update={"item_id": item.item_id, "url_key": item.url_key}
+        )
+        (items_dir / f"{item.item_id}.article.json").write_text(
+            base_article.to_json(), encoding="utf-8"
+        )
+        (items_dir / f"{item.item_id}.summary.json").write_text(
+            base_summary.to_json(), encoding="utf-8"
+        )
+
+
+# No quantity in here survives `numeric_facts`, so no enabled kind is reachable
+# and the router decides every item without a model. That is what keeps this an
+# offline test of the bound rather than a test of the model (Rule #7).
+FACT_FREE_TEXT = (
+    "The laboratory said the work continues and gave no figures. A spokesperson "
+    "declined to describe the schedule, and no comparison against the previous "
+    "release was offered."
+)
+
+
+def test_the_route_stage_stops_at_its_budget_instead_of_being_killed(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The defect this replaces: the job was cancelled at 60 minutes, a cancelled
+    job skips its upload step, and the whole hour's decisions were thrown away.
+    """
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+    settings = config.load(CONFIG_DIR)
+    one_minute = config.Settings(
+        app=settings.app.model_copy(
+            update={"run": settings.app.run.model_copy(update={"route_budget_minutes": 1})}
+        ),
+        sources=settings.sources,
+        taxonomy=settings.taxonomy,
+        watchlist=settings.watchlist,
+        digests=settings.digests,
+    )
+
+    cli.stage_route(run_plan, settings=one_minute, clock=SteppingClock(10.0))
+
+    routed = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
+    assert routed == ["ai-01", "ai-02"], "the budget stopped the stage part-way, by rank"
+    decision = Route.from_json(read_text(items_dir / "ai-01.route.json"))
+    assert decision.route_ms == 10_000
+    assert decision.asked_the_model is False
+
+
+def test_a_stage_inside_its_budget_routes_every_item(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    run_plan = plan()
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+
+    cli.stage_route(run_plan, settings=config.load(CONFIG_DIR), clock=SteppingClock(0.0))
+
+    routed = sorted(path.name.split(".")[0] for path in items_dir.glob("*.route.json"))
+    assert routed == [item.item_id for item in run_plan.items]
+
+
+def test_the_router_visits_the_best_story_first(tmp_path: Path) -> None:
+    """Plan order is vertical-major, so a suffix cut would cost whole verticals."""
+    run_plan = plan()
+    items_dir = tmp_path / "items"
+    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+
+    ordered = cli.routable_items(run_plan, items_dir)
+
+    assert [entry.item.item_id for entry in ordered] == ["ai-01", "ai-02", "ai-03", "ai-04", "ai-05"]
+    assert [entry.item.rank_score for entry in ordered] == sorted(
+        (item.rank_score for item in run_plan.items), reverse=True
+    )
+
+
+def test_an_item_without_a_usable_summary_is_never_routable(tmp_path: Path) -> None:
+    run_plan = plan()
+    items_dir = tmp_path / "items"
+    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+    failed = Summary.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "summary" / "failed.json")
+    ).model_copy(update={"item_id": "ai-01", "url_key": run_plan.items[0].url_key})
+    (items_dir / "ai-01.summary.json").write_text(failed.to_json(), encoding="utf-8")
+
+    ordered = cli.routable_items(run_plan, items_dir)
+
+    assert failed.status is not SummaryStatus.OK
+    assert "ai-01" not in [entry.item.item_id for entry in ordered]
+
+
 def test_a_retired_feed_still_labels_the_items_it_published() -> None:
     """Splitting the feed lists must not cost an older item its name or its kind.
 
