@@ -72,7 +72,9 @@ Four invariants hold regardless of how the batches are sized:
   discards every decision it had already made - measured on 2026-08-25, 88 routed
   items and 9 rendered charts thrown away, and the day published 145 items with
   no visuals at all. An item the stage never reached writes no payload, which is
-  what `items_routed` already reports (Rule #10).
+  what `items_routed` already reports (Rule #10). It also skips what the day
+  already published, because the assembler keeps the published copy and discards
+  the new one - so re-deciding it is work no reader can ever see.
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
 - **Run counts stay run-scoped.** The day payload grows across runs. The run
   manifest does not. Each `runs[]` record says what that run planned, skipped,

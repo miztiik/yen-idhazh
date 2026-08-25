@@ -49,7 +49,7 @@ The 24 columns, in file order:
 | `version` | date-stamp | always | which contract wrote this row (section 11) |
 | `date` | `YYYY-MM-DD` | always | the digest day, and the shard this row files under |
 | `run_id` | `<date>-<n>` | always | which of the day's runs wrote it |
-| `item_id` | slug | always | the item's per-day ordinal; **it can move between runs** |
+| `item_id` | slug | always | `<vertical>-<ten digits>`, derived from the address. Stable across a day's runs, but see the caveat below |
 | `url_key` | sha256 | always | the stable article key. Join on this, not `item_id` |
 | `canonical_url` | URL | always | the address, after a run artifact has expired |
 | `vertical` | slug | always | which topic queue it was planned into |
@@ -239,9 +239,14 @@ a wrong code stays. A reclassification is a new row under a later `run_id`, and
 a reader that wants "the latest verdict per item" has to say so. Nothing in the
 pipeline does that today.
 
-**`item_id` is not stable.** It is a per-day ordinal and moves between runs when
-the plan changes. `url_key` is the stable key and is on the row for exactly this
-reason.
+**`item_id` is stable, but not guaranteed stable.** `rank.item_id` derives it
+from the address - `<vertical>-<ten digits>` off the `url_key` - so a later run
+of the same day recognises the work an earlier one did. It was a rank position
+once, which renumbered every story on run 2 and published anything that moved a
+place twice. The residual risk is `assign_ids`: two addresses landing on the same
+ten digits are resolved by stepping the second one forward, so a colliding id
+depends on the day's pool rather than on the address alone. `url_key` has no such
+case. Join on `url_key`.
 
 **The failed share is not the source failure rate.** 324 of the 1200 committed
 rows are `failed`, but twelve of the nineteen codes never count against a
@@ -320,8 +325,10 @@ to the editor. They never count against a source by default. Only a paywall, an
 unsupported form, or genuine missing text stops extract. Authority: Owner
 override O3.
 
-The row stores both `url_key` and `item_id`. `item_id` is a per-day ordinal and
-can move between runs. `url_key` is the stable article key. Authority: Fowler.
+The row stores both `url_key` and `item_id`. `item_id` is derived from the
+address, so it survives a re-plan, but `assign_ids` steps a colliding id forward
+and that depends on the day's pool. `url_key` is the key with no such case.
+Authority: Fowler.
 
 The row stores `canonical_url`. About 80 bytes buys back the URL that otherwise
 expires with a run artifact. Authority: Fowler.
