@@ -766,12 +766,15 @@ the eight artifacts by the method above, and it is recorded here only as stated
 on that date. What does reproduce, from the eight `items-*` artifacts rather
 than the runtime logs: 95 items appear in both runs and 93 of those had
 byte-identical extracted text. Pairing those 93 by item and reading
-`input_tokens + output_tokens` over `summarize_ms`, the mean difference is
+`input_tokens + output_tokens` over `summarize_ms`, which counts the cached
+prefix as read and so is a higher basis than the whole-job rate above, the
+four-slot run pools to 15.06 tok/s. The mean paired difference against it is
 -0.05 tok/s, 95 percent interval -4.7 to +4.0 percent. Over the 36 pairs that
-ran on a slow host in both runs it is +0.67 tok/s, interval -1.2 to +10.8
-percent. The interval is the mean paired difference plus and minus 1.96 standard
-errors. The comparison therefore excludes nothing smaller than about 11 percent,
-and what it measured is 2 percent.
+ran on a slow host in both runs the base is 13.95 tok/s and the difference is
++0.67 tok/s, interval -1.2 to +10.8 percent. The interval is the mean paired
+difference plus and minus 1.96 standard errors. The comparison therefore
+excludes nothing smaller than about 11 percent, and what it measured is 2
+percent.
 
 **The `kv_unified` flip is cosmetic.** `-np 1` sets `n_seq_max = 1`, and the
 server then prints `kv_unified = 'false'`. The quantity that decides whether the
