@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -274,6 +274,32 @@ script runs and stays complete if none does. If a telemetry month is absent or
 cannot be parsed, that month is a gap in the charts. It is not interpolated, and
 it never white-screens the console.
 
+**Every chart draws through one coordinate frame, in CSS pixels.**
+[frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
+owns the width, the margin box and the two domain rules - linear, zero-anchored
+and rounded to numbers a reader can place; and log, snapped to whole decades.
+Before it, each chart chose its own `viewBox` and let the browser stretch it to
+the column, and a `viewBox` is a scale factor rather than a unit. Measured
+2026-08-25 at a 1057px window: the same `font-size="10"` came out 4.5px in the
+three-up failure panel and 16.6px in the chart under it, and a `stroke-width` of
+1 came out at 0.45px and 1.66px. One module means a chart cannot invent a fifth
+convention.
+
+A prerendered chart has no element to measure, so the server draws at
+`console.chart_width` and the client redraws once it has measured the real
+width. The knob is what keeps the prerendered chart honest: without a width
+given to it, a server-rendered SVG has to pick an arbitrary one, and picking an
+arbitrary one is the defect.
+
+The arithmetic comes from `d3-scale` and `d3-array`, which compute and draw
+nothing. This is not a chart library returning ([../../concepts/design-system.md](../../concepts/design-system.md)):
+they own no element, no canvas and no theme, and no reader route imports either
+one. `npm run bundle-gate` holds that true. Beside its encoder check it now
+prices every route class against a gzipped first-load ceiling, so the next
+dependency has to be measured before it can ship. HTML weight is deliberately
+outside that gate: the document belongs to the payload work, and one gate
+spanning both would make two workstreams fail each other's builds.
+
 The item-health viewport has three parts, in this order:
 
 - **Failure panels**: fetch, extract and summarize failure rates as separate bars. **The rate is printed in type under each stage name** - `16% failed, 126 of 800.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **The y domain is fixed at 0 to 100%.** Scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **A window holding one day draws no chart at all**: a chart of one value is a rectangle, and the sentence is the panel. Thin denominators use outlined bars below `console.min_attempts_for_rate`, explained once under the row rather than once per bar. Colour is spent only on a failure.
@@ -301,6 +327,22 @@ Spending the colour per item rather than at the day level is the resolution of a
 Grouping the all-topics page by topic is hierarchy, not truncation, and the distinction is the whole argument. [layout.md](layout.md) forbids removing or demoting a published item, and [../../concepts/digest.md](../../concepts/digest.md) says the reader's budget is protected by ordering and hierarchy - so the fix for a 586-item day had to come from typography rather than from a cap. Every item stays published, in its published order, one prerendered click away. The rejected alternative, truncating the day, would have made the page look like a digest by making it stop being one. Authority: Jony, with Reader as the check.
 
 Removing `uplot` restores the refusal one row below rather than overturning it. Rule #8 requires a dependency to name a beneficiary feature; its recorded beneficiary was pan and zoom, and `Viewport.svelte` implements those itself with a keydown handler and four buttons. What it actually drew was a second, smaller copy of the compression scatter with less information than the SVG above it. It would come back for pan and zoom *inside* a single chart, which is a different requirement, and the gzipped route chunk would be re-measured on that day rather than reusing the 2026-08-23 figure. Authority: Jony, Rule #8.
+
+Taking `d3-scale` and `d3-array` a day later is not that decision reversed. A
+chart library owns the element, the redraw and the theme, which is how the last
+one ended up drawing a chart that already existed; a scale library returns a
+number. The beneficiary feature Rule #8 asks for is the whole console: four
+charts that agree on what a pixel is. The cost is measured rather than argued -
+the ceiling in `bundle-gate.mjs` is what a later row has to fit inside, and
+Carmack made that gate a condition of accepting the dependency at all. Authority:
+Jony and Carmack, 2026-08-25, owner accepted.
+
+Putting the first-load ceilings in `bundle-gate.mjs` rather than in `config/`
+is deliberate, and it is the one place the config rule does not apply. Rule #6
+sends a tunable to `config/` because an operator may reasonably want it
+different; nobody reasonably wants a reader to download more. A budget an
+operator can edit to fit the build is not a budget (Rule #2), so raising one is a
+reviewed diff with a measurement beside it. Authority: Carmack.
 
 Folding `/evals/` into `/console/` keeps one route answering "how is the
 pipeline doing". Both old routes read `state/scores.csv` and counted per-day
@@ -356,6 +398,12 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | A virtual-scrolling failure table | A dependency and a scroll-position bug for something a cap and a button already solve. | Jony |
 | A per-day stacked bar list for stage timings | Thirty days is about 150 rows and no trend, and the trend is the only question the section is asked. | Jony |
 | `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Rule #8 |
+| A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. | Jony, Carmack |
+| `d3-scale` from a CDN | The HTTP cache is partitioned per site, so the shared-cache argument is dead, and the repo's `script-src` allows `self` only. | Carmack |
+| Fixing the units by hand instead of taking the dependency | `.nice()` and `ticks()` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
+| A `console.chart_width` default per chart shape | One knob names the width the reading column leaves; a chart sharing a row divides it. Four knobs would be four ways to disagree about one column. | Jony |
+| Gating HTML weight in the same script as first-load JS | The document is owned by the payload work. One gate over both would make two independent workstreams fail each other's builds. | Carmack |
+| Putting the first-load ceilings in `config/` | An operator has no reason to raise the weight a reader pays, and a budget that can be edited to fit the build is not a budget. | Carmack, Rule #2 |
 | A `run.success_floor_pct` reference line on a stage failure panel | That floor is a published rate over attempted items; a stage panel is a different denominator. A wrong reference line is worse than none. | Jony |
 
 ## See also

@@ -93,6 +93,13 @@
           "title": "Chart Height",
           "type": "integer"
         },
+        "chart_width": {
+          "default": 600,
+          "description": "The width a console chart is drawn at on the server, in CSS pixels. A prerendered chart has no element to measure, and a chart drawn in arbitrary units and then stretched by its viewBox renders its labels at whatever the stretch factor happens to be - measured 2026-08-25, one page put the same font-size at 4.5px and at 16.6px. 600 is what the reading column leaves a full-width chart on any window wide enough to reach it; a narrower one redraws at its measured width once a script runs.",
+          "minimum": 240,
+          "title": "Chart Width",
+          "type": "integer"
+        },
         "default_window_days": {
           "default": 30,
           "description": "Initial time span for the console charts. A viewport, not a deletion.",
@@ -1072,6 +1079,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added console.chart_width.",
+      "version": "2026-08-25T18:00",
+      "why": "Every console chart is prerendered, so on the server there is no element to measure and the chart needs a width given to it. Without one each chart drew into an arbitrary viewBox and let the browser stretch it: measured 2026-08-25 at a 1057px window, one page scaled the same font-size to 4.5px in one panel and 16.6px in the next. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "run.route_budget_minutes now stops the route stage instead of warning it, and visuals.enabled_kinds defaults to chart alone.",
       "version": "2026-08-25",
       "why": "Warning after the fact never saved a day. Measured on ubuntu-latest over six runs on 2026-08-24/25 (703 routed items): the mean per-item cost is 20.7 s on a fast host and 40.3 s on a slow one, so a 145-item day needs 50 to 97 minutes against a 60-minute job. Four of the six runs were cancelled at the bound, and a cancelled job skips its upload step - so every decision the hour bought was discarded and the day published with zero visuals. The diagram arm is what made the existing pre-filter unfireable: it is reachable for every item by construction, so the model was asked about 145 of 145 items on 2026-08-25 while it drafted zero diagrams in 88 and rendered zero in 703. With the arm off, 68 of those 145 items (46.9%) never reach the model at all. Same fields, same types, same units; an older config still validates. Semantic shift on one and a changed default on the other, so both are stamped here (section 11)."
@@ -1213,7 +1225,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-25",
+      "default": "2026-08-25T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1227,5 +1239,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-25"
+  "version": "2026-08-25T18:00"
 }

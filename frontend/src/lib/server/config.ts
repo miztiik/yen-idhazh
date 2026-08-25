@@ -54,6 +54,7 @@ export interface ConsoleConfig {
 	max_window_days: number;
 	min_attempts_for_rate: number;
 	chart_height: number;
+	chart_width: number;
 	failure_list_max: number;
 }
 
@@ -88,6 +89,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	max_window_days: 366,
 	min_attempts_for_rate: 5,
 	chart_height: 180,
+	chart_width: 600,
 	failure_list_max: 25
 };
 

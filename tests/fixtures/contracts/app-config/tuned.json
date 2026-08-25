@@ -19,6 +19,7 @@
   },
   "console": {
     "chart_height": 160,
+    "chart_width": 520,
     "default_window_days": 21,
     "failure_list_max": 10,
     "max_window_days": 180,
