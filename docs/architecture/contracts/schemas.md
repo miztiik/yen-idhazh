@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -57,6 +57,48 @@ The seventeen shapes, and where each one lives once written:
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
+
+### A ledger shards by month only when its read carries a window
+
+Some `state/` ledgers are one file and some are a directory of `<YYYY-MM>.csv`
+shards. The rule is one question: **does the read that consumes this ledger
+carry a time window?**
+
+| Ledger | Layout | The question it answers | Windowed on read |
+| --- | --- | --- | --- |
+| `state/seen/` | monthly shards | how old is this address? | yes, `collect.seen_window_days` |
+| `state/feed-health/` | monthly shards | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
+| `state/item-health/` | monthly shards | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and fetches month shards |
+| `state/published.csv` | one file | have we already published this? | no - published is forever |
+| `state/fingerprints.csv` | one file | has this exact input run before? | no |
+| `state/scores.csv` | one file | how did every scored item do? | no |
+
+A window turns a shard into a skipped file open. `ledger._shards_in_window`
+walks the days the window can touch and opens only those stems, so a plan run
+reads one or two files instead of every month the project has ever written. The
+item-health shard boundary survives all the way to the browser: the projection
+under `frontend/public/telemetry/` is written one file per month, so the console
+fetches the months its window covers and no more.
+
+Without a window, sharding is a cost with no matching saving. A question with no
+time bound has to read every row, so every shard gets opened anyway - the same
+bytes through more file handles, plus a directory listing and a stem loop that a
+single `open` does not need. Splitting a file you always read whole makes it
+slower, not faster.
+
+Two consequences worth stating so nobody re-derives them:
+
+- **Adding a window to an unsharded ledger buys nothing on its own.** Filtering
+  rows after reading them saves no I/O. A window is only a saving once it can
+  decide which files to skip, so the window and the shard land together or
+  neither does.
+- **A monthly shard is not the only shard period available.** A ledger whose
+  month file grows past what a reader should download moves to a shorter period
+  (`YYYY-Www.csv`) rather than losing rows - see
+  [../sources/item-health.md](../sources/item-health.md). The readers glob the
+  directory, so the period is a layout change and not a contract change.
+
+Authority: Carmack (cache and shard economics), 2026-08-25.
 
 The eval ledger and source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values.
 
@@ -178,6 +220,9 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 ## See also
 
 - [determinism.md](determinism.md) - the pipeline fingerprint, its ledger, and the skip rule built on it.
+- [../sources/freshness.md](../sources/freshness.md) - why the published ledger is one file and its dedupe read has no window.
+- [../sources/item-health.md](../sources/item-health.md) - the fastest-growing shard, and what would move it to a shorter period.
+- [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, one of these shapes.

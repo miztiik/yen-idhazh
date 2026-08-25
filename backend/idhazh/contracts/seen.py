@@ -19,7 +19,7 @@ racing on that file would lose rows.
 
 from __future__ import annotations
 
-from typing import ClassVar, Self
+from typing import ClassVar
 
 from pydantic import Field
 
@@ -85,7 +85,3 @@ class PublishedRow(Contract):
     def csv_columns(cls) -> tuple[str, ...]:
         """One definition, so a writer and a reader cannot disagree about the shape."""
         return tuple(cls.model_fields)
-
-    @classmethod
-    def from_csv_row(cls, row: dict[str, str]) -> Self:
-        return cls.model_validate({name: row[name] for name in cls.model_fields})
