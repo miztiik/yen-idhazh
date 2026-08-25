@@ -1,9 +1,13 @@
-"""Unit-tier tests for the pipeline stamp.
+"""Unit- and contract-tier tests for the pipeline stamp.
 
 The row exists because eleven of sixteen enumerated drift sources are silent
 without it, so the tests are written against blindness rather than against
 happy paths: every declared input must move the digest, and a field that stops
 moving it is the failure this file is here to catch.
+
+The closed-world block is contract tier (`CLAUDE.md` section 13). It holds the
+stamp and `InferenceConfig` to one another, so a knob added to config is either
+digested or written down as undigested, and never simply forgotten.
 
 No mocks and no network (Rule #7): the stamp under test is the committed
 fixture, so the test and the fixture cannot drift apart.
@@ -13,8 +17,9 @@ from __future__ import annotations
 
 import csv
 import re
+from collections.abc import Iterable
 from pathlib import Path
-from typing import Any
+from typing import Any, Final
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, STATE_DIR, read_text
@@ -23,10 +28,12 @@ from idhazh.contracts.app_config import InferenceConfig, ModelRef
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.fingerprint import (
     LEDGER_RELPATH,
+    NOT_DIGESTED,
     Observation,
     append_new,
     build_inputs,
     classify,
+    digested_inference_fields,
     read_ledger,
     sampling_spelling,
     text_digest,
@@ -34,6 +41,14 @@ from idhazh.fingerprint import (
 
 FIXTURE = CONTRACT_FIXTURES_DIR / "fingerprint-row" / "first-seen.json"
 HEX64 = re.compile(r"[0-9a-f]{64}")
+
+#: Ruled on 2026-08-25: these five change the arithmetic, so leaving them out
+#: of the stamp is a blind spot. Row 4 of `TODO/20260825-qwen35-9b-swap-plan.md`
+#: digests them. Until then each one stays flagged, and this list is what stops
+#: a quiet downgrade to "safe".
+RULED_LOGIT_MOVERS: Final[frozenset[str]] = frozenset(
+    {"cache_type_k", "cache_type_v", "flash_attention", "n_parallel", "n_threads_batch"}
+)
 
 
 def committed_row() -> FingerprintRow:
@@ -97,6 +112,58 @@ def test_the_digest_is_stable_across_construction_order() -> None:
         dict(reversed(list(inputs.model_dump(mode="json").items())))
     )
     assert rebuilt.fingerprint() == inputs.fingerprint()
+
+
+# --- Contract tier: the inference knobs are a closed world ------------------
+
+
+def unclassified_knobs(knobs: Iterable[str]) -> frozenset[str]:
+    """Knob names that neither reach the stamp nor sit in `NOT_DIGESTED`."""
+    return frozenset(knobs) - digested_inference_fields() - frozenset(NOT_DIGESTED)
+
+
+def test_every_inference_knob_is_digested_or_written_down_as_undigested() -> None:
+    """A knob nobody classified is a drift source nobody recorded."""
+    missing = unclassified_knobs(InferenceConfig.model_fields)
+    assert not missing, (
+        "classify these in idhazh.fingerprint.NOT_DIGESTED, or digest them in "
+        f"PipelineInputs: {sorted(missing)}"
+    )
+
+
+def test_a_new_knob_nobody_classified_fails_the_check() -> None:
+    """The check has to bite, or the closed world is only a comment."""
+    with_an_unclassified_knob = [*InferenceConfig.model_fields, "cache_reuse"]
+    assert unclassified_knobs(with_an_unclassified_knob) == {"cache_reuse"}
+
+
+def test_no_knob_is_both_digested_and_written_down_as_undigested() -> None:
+    """A knob in both places means one of the two statements is false."""
+    assert not digested_inference_fields() & frozenset(NOT_DIGESTED)
+
+
+def test_the_undigested_set_names_only_real_knobs() -> None:
+    """A renamed knob leaves a stale name here, and the stale name proves nothing."""
+    assert frozenset(NOT_DIGESTED) <= frozenset(InferenceConfig.model_fields)
+
+
+def test_every_undigested_knob_carries_a_reason() -> None:
+    assert all(entry.reason.strip() for entry in NOT_DIGESTED.values())
+
+
+@pytest.mark.parametrize("knob", sorted(RULED_LOGIT_MOVERS))
+def test_a_ruled_blind_spot_is_digested_or_still_flagged(knob: str) -> None:
+    """Marking one of these safe would retire a known drift source without a reason."""
+    entry = NOT_DIGESTED.get(knob)
+    assert knob in digested_inference_fields() or (entry is not None and entry.moves_logits), (
+        f"{knob} was ruled a logit mover: digest it, or keep moves_logits=True"
+    )
+
+
+def test_the_sampling_knobs_are_digested_through_the_spelling() -> None:
+    """They reach the stamp folded into one field, not under their own names."""
+    folded = digested_inference_fields() - frozenset(PipelineInputs.model_fields)
+    assert folded == {"temperature", "top_p", "seed", "max_output_tokens", "thinking"}
 
 
 # --- What a prior stamp means ----------------------------------------------
