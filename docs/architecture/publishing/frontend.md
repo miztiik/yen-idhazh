@@ -276,10 +276,13 @@ it never white-screens the console.
 
 **Every chart draws through one coordinate frame, in CSS pixels.**
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
-owns the width, the margin box and the two domain rules - linear, zero-anchored
-and rounded to numbers a reader can place; and log, snapped to whole decades.
-Before it, each chart chose its own `viewBox` and let the browser stretch it to
-the column, and a `viewBox` is a scale factor rather than a unit. Measured
+owns the width, the margin box and the two domain rules - linear, rounded
+outward to numbers a reader can place, and anchored at zero only where the
+mark's *length* carries the value; and log, snapped to whole decades. A mark
+that encodes by position takes the padded domain instead, because a zero no run
+was ever measured at is plot spent on nothing. Before the frame, each chart
+chose its own `viewBox` and let the browser fit it to the column, and a
+`viewBox` is a scale factor rather than a unit. Measured
 2026-08-25 at a 1057px window: the same `font-size="10"` came out 4.5px in the
 three-up failure panel and 16.6px in the chart under it, and a `stroke-width` of
 1 came out at 0.45px and 1.66px. One module means a chart cannot invent a fifth
