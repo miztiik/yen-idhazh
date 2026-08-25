@@ -600,6 +600,54 @@ test('the compression view draws the data once', async ({ page }) => {
 	const chart = page.locator('[data-compression]');
 	await expect(chart.locator('svg')).toHaveCount(1);
 	await expect(chart.locator('canvas')).toHaveCount(0);
+
+	// The band reference is one step outline across the whole axis, so it costs
+	// the same handful of nodes at seven points and at eleven hundred. It used
+	// to be one vertical line per point: 1166 of them on the committed ledger,
+	// measured 2026-08-25.
+	expect(await chart.locator('svg path').count()).toBeLessThanOrEqual(4);
+
+	// The canary window holds no scored item, so the zone is asserted only
+	// where there is data to draw it under - and the empty state is asserted
+	// where there is not.
+	const marks = await chart.locator('svg circle, svg rect').count();
+	if (marks === 0) {
+		await expect(chart).toContainText('No scored items in this window');
+	} else {
+		await expect(chart.locator('[data-band-zone]')).toHaveCount(1);
+	}
+});
+
+test('the compression chart draws in CSS pixels, and labels its own y axis', async ({ page }) => {
+	for (const width of [380, 768, 1400]) {
+		await page.setViewportSize({ width, height: 900 });
+		await page.goto('/console/');
+
+		// A viewBox is a scale factor, not a unit. One that disagrees with the
+		// rendered width puts `font-size="10"` on screen at some other size.
+		await expect
+			.poll(async () =>
+				page.locator('[data-compression] svg').evaluate((node) => {
+					const declared = Number((node.getAttribute('viewBox') ?? '').split(/\s+/)[2]);
+					return Math.abs(node.getBoundingClientRect().width - declared);
+				})
+			)
+			.toBeLessThan(1);
+	}
+
+	// "summary words" used to be printed on the bottom row beside the x axis
+	// title, which is what made the chart read as unfinished rather than ugly.
+	const [title] = await page.locator('[data-compression] [data-axis="y"]').evaluateAll(TO_BOX);
+	const [across] = await page.locator('[data-compression] [data-axis="x"]').evaluateAll(TO_BOX);
+	expect(title.bottom).toBeLessThan(across.y);
+	// Rotated, so it runs along the axis it names rather than across it.
+	expect(title.height).toBeGreaterThan(title.width);
+
+	// The left margin holds both the title and the tick numbers. It is narrow,
+	// so the two overlapping is a real failure rather than a theoretical one.
+	const ticks = await page.locator('[data-compression] [data-tick="y"]').evaluateAll(TO_BOX);
+	expect(ticks.length).toBeGreaterThan(1);
+	for (const tick of ticks) expect(tick.x).toBeGreaterThanOrEqual(title.right);
 });
 
 test('the reading path and the console carry no chart library', () => {

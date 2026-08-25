@@ -4,9 +4,10 @@ import { chartWidth, frame, linearAxis, logAxis, MARGIN } from '../src/lib/chart
 /**
  * The coordinate frame every console chart draws through.
  *
- * These run in Node rather than in a page. The module is pure arithmetic, and
- * nothing on the console renders through it yet, so a rendered assertion would
- * be a proxy for the thing this file can state exactly.
+ * These run in Node rather than in a page. Every console chart renders through
+ * this module now, and the rendered assertions live in `console.spec.ts`. What
+ * is left here is the arithmetic, which this file can state exactly where a
+ * rendered check could only approximate it.
  *
  * The defect it exists to prevent: a chart that draws into an arbitrary
  * `viewBox` and lets the browser stretch it renders its type at the stretch
@@ -58,6 +59,19 @@ test('a linear domain keeps the zero anchor off when asked', () => {
 	const axis = linearAxis([120, 180], [0, 100], { zero: false });
 	expect(axis.domain[0]).toBeGreaterThan(0);
 	expect(axis.domain[0]).toBeLessThanOrEqual(120);
+});
+
+test('a linear domain keeps the rounding off when asked, and still gets d3 ticks', () => {
+	// 207 was the longest summary on the console on 2026-08-25. Rounded, the
+	// domain runs to 250 and every point moves down the plot - to buy a set of
+	// tick labels that reads the same either way.
+	const axis = linearAxis([0, 207], [180, 0], { nice: false });
+	expect(axis.domain).toEqual([0, 207]);
+	expect(axis.ticks).toEqual([0, 50, 100, 150, 200]);
+	expect(axis.scale(207)).toBeCloseTo(0, 6);
+
+	// Rounding stays the default, so turning it off has to be asked for.
+	expect(linearAxis([0, 207], [180, 0]).domain).toEqual([0, 250]);
 });
 
 test('an empty series still returns an axis instead of NaN', () => {
