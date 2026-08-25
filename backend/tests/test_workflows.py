@@ -3,13 +3,21 @@
 from __future__ import annotations
 
 import json
+import os
 import re
+import shlex
+import shutil
+import subprocess
+from collections.abc import Sequence
+from pathlib import Path
 from typing import Final, cast
 
+import pytest
 import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
+SCRIPTS_DIR: Final = REPO_ROOT / ".github" / "scripts"
 
 EXPECTED_WORKFLOWS: Final = {
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
@@ -114,6 +122,28 @@ RUNTIME_CANDIDATES: Final = frozenset(
         "np2_inflight",
     }
 )
+# The one commit-and-push step both daily jobs run. They differ only in what
+# they stage and in the three strings they pass, which is what makes the retry
+# behaviour executable by a test instead of only greppable in YAML.
+COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
+COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
+COMMIT_STEPS: Final = {
+    "plan": "Commit what the plan saw",
+    "assemble": "Commit the day",
+}
+COMMIT_SCRIPT_ENV: Final = frozenset(
+    {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
+)
+COMMIT_STAGED_PATHS: Final = {
+    "plan": ["state/seen", "state/feed-health"],
+    "assemble": ["frontend/public/digest", "frontend/public/telemetry", "state"],
+}
+COMMIT_IDENTITY: Final = (
+    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+)
+# What a `${{ }}` expression stands in for when a test runs the real call site
+# outside Actions. Only the date expressions survive into these strings.
+SUBSTITUTED_DATE: Final = "2026-08-25"
 
 
 def _load_workflows() -> dict[str, dict[str, object]]:
@@ -269,6 +299,133 @@ def _grep_pattern(script: str, description: str) -> re.Pattern[str]:
     return re.compile(patterns[0], flags=re.MULTILINE)
 
 
+def _commit_call(job_name: str) -> tuple[list[str], dict[str, str]]:
+    """The paths and the strings one daily job hands the shared commit script."""
+    workflow = _load_workflows()["digest.yml"]
+    step = _step(workflow, job_name, "name", COMMIT_STEPS[job_name])
+    command = shlex.split(_script(step, f"job {job_name} commit step"))
+    assert tuple(command[:2]) == COMMIT_SCRIPT_CALL, (
+        f"job {job_name} must commit through {COMMIT_SCRIPT_CALL[1]}"
+    )
+    declared = _mapping(step.get("env"), f"job {job_name} commit env")
+    settings = {
+        name: re.sub(r"\$\{\{.*?\}\}", SUBSTITUTED_DATE, str(value))
+        for name, value in declared.items()
+    }
+    return command[2:], settings
+
+
+def _bash() -> str | None:
+    """A bash that can run the commit script, or None on a host without one."""
+    if os.name != "nt":
+        return shutil.which("bash")
+    candidates: list[Path] = []
+    git = shutil.which("git")
+    if git is not None:
+        candidates.append(Path(git).resolve().parent.parent / "bin" / "bash.exe")
+    for variable in ("ProgramFiles", "ProgramW6432", "ProgramFiles(x86)"):
+        root = os.environ.get(variable)
+        if root:
+            candidates.append(Path(root) / "Git" / "bin" / "bash.exe")
+    return next((str(path) for path in candidates if path.is_file()), None)
+
+
+requires_bash: Final = pytest.mark.skipif(
+    _bash() is None,
+    reason="no bash on this host to execute .github/scripts/commit-and-push.sh",
+)
+
+
+def _isolated_env(tmp_path: Path) -> dict[str, str]:
+    """Git with no machine identity and no machine config to fall back on.
+
+    The script sets its own committer, so the test must not supply one: an
+    inherited `user.name` would hide the day the script stopped setting it.
+    """
+    home = tmp_path / "home"
+    home.mkdir(exist_ok=True)
+    return {
+        **os.environ,
+        "HOME": str(home),
+        "USERPROFILE": str(home),
+        "GIT_CONFIG_GLOBAL": str(home / "gitconfig"),
+        "GIT_CONFIG_NOSYSTEM": "1",
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+
+
+def _git(repo: Path, env: dict[str, str], *args: str) -> str:
+    completed = subprocess.run(
+        [
+            "git",
+            "-c",
+            "user.name=Scripted Origin",
+            "-c",
+            "user.email=origin@example.invalid",
+            *args,
+        ],
+        cwd=repo,
+        env=env,
+        capture_output=True,
+        text=True,
+        check=True,
+    )
+    return completed.stdout
+
+
+def _write(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="ascii", newline="\n")
+
+
+def _scripted_origin(
+    tmp_path: Path, env: dict[str, str], staged_paths: Sequence[str]
+) -> tuple[Path, Path]:
+    """A bare origin holding one commit, plus the clone a job would check out."""
+    origin = tmp_path / "origin.git"
+    _git(tmp_path, env, "init", "--bare", "-b", "main", str(origin))
+    seed = tmp_path / "seed"
+    _git(tmp_path, env, "clone", str(origin), str(seed))
+    for index, staged in enumerate(staged_paths):
+        _write(seed / staged / "ledger.csv", f"header\nrow-{index}\n")
+    _write(seed / "docs" / "unrelated.md", "seed\n")
+    _write(seed / "runner-noise.txt", "clean\n")
+    _git(seed, env, "add", "docs", "runner-noise.txt", *staged_paths)
+    _git(seed, env, "commit", "-m", "seed")
+    _git(seed, env, "push", "-u", "origin", "main")
+    runner = tmp_path / "runner"
+    _git(tmp_path, env, "clone", str(origin), str(runner))
+    return origin, runner
+
+
+def _race(tmp_path: Path, env: dict[str, str], relative: str, text: str) -> None:
+    """Somebody else pushes to origin while the job is still working."""
+    other = tmp_path / "other"
+    if not other.exists():
+        _git(tmp_path, env, "clone", str(tmp_path / "origin.git"), str(other))
+    _write(other / relative, text)
+    _git(other, env, "add", relative)
+    _git(other, env, "commit", "-m", "racing change")
+    _git(other, env, "push", "origin", "main")
+
+
+def _run_commit_script(
+    runner: Path,
+    env: dict[str, str],
+    staged_paths: Sequence[str],
+    settings: dict[str, str],
+) -> subprocess.CompletedProcess[str]:
+    bash = _bash()
+    assert bash is not None
+    return subprocess.run(
+        [bash, COMMIT_SCRIPT.as_posix(), *staged_paths],
+        cwd=runner,
+        env={**env, **settings},
+        capture_output=True,
+        text=True,
+    )
+
+
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
     workflows = _load_workflows()
 
@@ -352,20 +509,27 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
     checkout before any step ran, and the retry loop lost plan, four shards and
     assemble with it. The work is committed before the loop begins, so the fix is
     to drop what is left rather than to carry it into the rebase.
+
+    This reads the shared script and the workflow's own `run:` bodies, so an
+    inline loop written back into a step is still covered.
     """
     workflow = _load_workflows()["digest.yml"]
     jobs = _mapping(workflow.get("jobs"), "jobs")
 
-    scripts = [
-        (job_name, step.get("name"), script)
+    bodies = [
+        (f"{job_name}/{step.get('name')}", script)
         for job_name in jobs
         for step in _steps(workflow, job_name)
-        if isinstance(script := step.get("run"), str) and "git pull --rebase" in script
+        if isinstance(script := step.get("run"), str)
     ]
-    assert scripts, "digest.yml must still push through a rebase-and-retry loop"
+    bodies += [
+        (path.relative_to(REPO_ROOT).as_posix(), read_text(path))
+        for path in sorted(SCRIPTS_DIR.glob("*.sh"))
+    ]
+    scripts = [(where, body) for where, body in bodies if "git pull --rebase" in body]
+    assert scripts, "the daily run must still push through a rebase-and-retry loop"
 
-    for job_name, step_name, script in scripts:
-        where = f"{job_name}/{step_name}"
+    for where, script in scripts:
         lines = [line.strip() for line in script.splitlines()]
         # `--autostash` looks like the answer and is not: it stashes the noise,
         # then fails the step when the stash will not reapply.
@@ -376,6 +540,116 @@ def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
         assert any(
             "--untracked-files=no" in line for line in lines
         ), f"{where} must leave untracked files alone - they cannot block a rebase"
+
+
+def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
+    """Two copies of a retry loop is one copy nobody can execute in a test."""
+    assert COMMIT_SCRIPT.is_file()
+    assert read_text(COMMIT_SCRIPT).startswith("#!/usr/bin/env bash\n")
+
+    for job_name in COMMIT_STEPS:
+        staged_paths, settings = _commit_call(job_name)
+        assert staged_paths == COMMIT_STAGED_PATHS[job_name]
+        assert set(settings) == COMMIT_SCRIPT_ENV
+        assert all(value for value in settings.values())
+
+    plan = _commit_call("plan")[1]
+    assemble = _commit_call("assemble")[1]
+    # The two jobs say different things about the same event, and the extraction
+    # kept both rather than choosing one.
+    assert plan != assemble
+    assert plan["COMMIT_MESSAGE"] == f"plan: {SUBSTITUTED_DATE}"
+    assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
+
+
+@requires_bash
+@pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
+def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
+    staged_paths, settings = _commit_call(job_name)
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nfresh\n")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert _git(origin, env, "log", "-1", "--format=%s").strip() == (
+        settings["COMMIT_MESSAGE"]
+    )
+    # The script sets the committer itself, and the test supplies none.
+    assert _git(origin, env, "log", "-1", "--format=%an <%ae>").strip() == COMMIT_IDENTITY
+    assert _git(runner, env, "status", "--porcelain").strip() == ""
+
+
+@requires_bash
+def test_the_commit_step_says_so_and_stops_when_nothing_changed(tmp_path: Path) -> None:
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    before = _git(origin, env, "rev-parse", "main").strip()
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert settings["NOTHING_STAGED_MESSAGE"] in result.stdout
+    assert _git(origin, env, "rev-parse", "main").strip() == before
+    assert _git(runner, env, "rev-parse", "HEAD").strip() == before
+
+
+@requires_bash
+def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
+    """The whole point of the loop: a push that loses a race still lands."""
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _race(tmp_path, env, "docs/unrelated.md", "racing\n")
+    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nfresh\n")
+    _write(runner / "runner-noise.txt", "dirty\n")
+    _write(runner / "leftover.log", "kept\n")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 0, result.stderr
+    assert "push rejected, rebasing (attempt 1)" in result.stdout
+    assert "discarding working-tree noise before the rebase:" in result.stdout
+    assert "runner-noise.txt" in result.stdout
+    assert _git(origin, env, "log", "--format=%s", "-2").splitlines() == [
+        settings["COMMIT_MESSAGE"],
+        "racing change",
+    ]
+    # The noise was discarded; the untracked file was not.
+    assert (runner / "runner-noise.txt").read_text(encoding="ascii") == "clean\n"
+    assert (runner / "leftover.log").is_file()
+    assert _git(runner, env, "status", "--porcelain", "--untracked-files=no").strip() == ""
+
+
+@requires_bash
+def test_the_commit_step_gives_up_on_the_first_conflicting_rebase(tmp_path: Path) -> None:
+    """Today's behaviour, measured, not the behaviour the loop looks like it has.
+
+    `git pull --rebase origin main` is the one unguarded command in the loop, so
+    when it conflicts `set -e` ends the script inside attempt 1. There is no
+    attempt 2, the three-attempt message never prints, the day never lands, and
+    the checkout is left mid-rebase. Observed 2026-08-25 against a scripted local
+    origin, git 2.55.0, bash 5.3.15.
+    """
+    staged_paths, settings = _commit_call("plan")
+    env = _isolated_env(tmp_path)
+    origin, runner = _scripted_origin(tmp_path, env, staged_paths)
+    _race(tmp_path, env, f"{staged_paths[0]}/ledger.csv", "header\nrow-0\ntheirs\n")
+    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nours\n")
+
+    result = _run_commit_script(runner, env, staged_paths, settings)
+
+    assert result.returncode == 1
+    assert result.stdout.count("push rejected, rebasing (attempt ") == 1
+    assert "push rejected, rebasing (attempt 2)" not in result.stdout
+    assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
+    assert "CONFLICT (content)" in result.stdout + result.stderr
+    assert _git(origin, env, "log", "-1", "--format=%s").strip() == "racing change"
+    assert (runner / ".git" / "rebase-merge").is_dir() or (
+        runner / ".git" / "rebase-apply"
+    ).is_dir(), "the checkout is left mid-rebase"
 
 
 def test_measurements_dispatch_selects_exactly_one_target() -> None:

@@ -57,6 +57,11 @@ tests/fixtures/** text eol=lf
 .gitignore text eol=lf
 .gitattributes text eol=lf
 
+# Shell a workflow step runs. A CRLF blob here is not a diff nuisance, it is a
+# broken job: the runner's bash reads the carriage return as part of the shebang
+# and as part of every command.
+*.sh text eol=lf
+
 # Published digest payloads. Their sha256 is recorded in the run manifest and
 # re-verified, so the stored bytes and the checked-out bytes must agree.
 frontend/public/**/*.json text eol=lf
