@@ -1428,10 +1428,22 @@ than copied to each of them.
 
 ## Eight work shards
 
-**Status: unmeasured - awaiting the authorized eight-shard dispatch.** The
-ceiling moved from four to eight on 2026-08-25 and nothing has run at it. No
-figure in this section exists yet, and none may be cited until the run below
-fills it in (Rule #10).
+**Measured 2026-08-25** on GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB), run
+`32869125768` - a `Content refresh` dispatch at `shards = 8` and
+`faithfulness = true`, commit `5773762`, eight `work` jobs,
+`Qwen3-8B-Q4_K_M.gguf` through `llama-server`, llama.cpp `b10598`,
+`n_slots = 1`, `n_ctx_slot = 8192`, `kv_unified = 'false'`.
+
+**The slowest worker halved: 113.1 minutes at four shards, 58.8 at eight.
+That is 1.92x, and the last worker is what the rest of the run waits for.**
+Doubling the fan-out was expected to buy about 2x, because it halves the work
+each shard carries. The measurement is consistent with that. It is not a
+controlled proof of it, for the four reasons under
+[Not a paired measurement](#not-a-paired-measurement).
+
+The dispatch queued at 15:58 UTC and `plan` did not start until 17:45, 1 h 47
+min later, behind a scheduled run. Every figure here is taken from job
+timestamps, so that queue is not inside any of them.
 
 ### What changed, and what did not
 
@@ -1441,8 +1453,8 @@ four was a choice and not a platform limit. Every shard restores the same cache
 key, so the change adds cache restores and model loads, never cache bytes.
 
 The scheduled run is unchanged. It passes no inputs, so the plan job's
-`SHARDS=4` fallback still decides it. Moving that fallback is what the
-measurement below authorizes.
+`SHARDS=4` fallback still decides it. This measurement does not move it - see
+[Does this move the scheduled default](#does-this-move-the-scheduled-default-to-eight).
 
 ### The baseline to compare against
 
@@ -1460,46 +1472,217 @@ already on this page under
 | Prompt tokens evaluated | 152,933 in 232.7 min |
 | Tokens written | 41,098 in 135.7 min |
 
-Its per-job wall-clock is not on this page. Read it from the run itself with
-`gh api repos/miztiik/yen-idhazh/actions/runs/32742672105/jobs`; the
-`started_at` and `completed_at` fields outlive the two-day artifact retention.
+Its per-job wall-clock was not on this page. Read from the jobs API on
+2026-08-25, it is:
 
-### The measurement
+| Job | Four shards, run `32742672105` | Eight shards, run `32869125768` |
+| --- | --- | --- |
+| `plan` | 3.2 min | 3.2 min |
+| slowest `work` | **113.1 min** | **58.8 min** |
+| fastest `work` | 83.2 min | 36.5 min |
+| `route` | 53.5 min | 41.5 min |
+| `assemble` | 0.5 min, success | 1.2 min, **failed** |
+| `plan` start to last job end | 170.4 min | 104.8 min |
 
-One `Content refresh` dispatch at `shards = 8`, every other input left at its
-default. Then read six quantities out of that run and out of `32742672105`:
+### The clock, shard by shard
 
-1. **The slowest `work` job's wall-clock**, from `completed_at - started_at` in
-   the jobs API. This is the quantity the ceiling was raised to move: `route`
-   cannot start until the last worker finishes, so the slowest shard is the
-   run.
-2. **Items per worker.** Eight shards over a comparable day should each carry
-   about half of a four-shard worker. If they do not, the plan was smaller
-   rather than the fan-out wider.
-3. **Aggregate prefill and decode tok/s per job**, from each
-   `runtime-log-<shard>` artifact: summed tokens over summed milliseconds, not a
-   median of per-request rates. These say whether eight hosts run as fast per
-   host as four did.
-4. **Cache restore seconds per job**, from the `Cache weights and runtime` step
-   timing. Eight restores of one key instead of four is the entire added cost,
-   and it has never been measured.
-5. **`cgroup_memory_peak_bytes`** from every `memory-peak.txt`, against the
-   16 GB the runner has.
-6. **Total artifact bytes** for the run against the 500 MB budget, and the cache
-   entry size against 10 GB (Rule #2).
+`route` cannot start until the last worker finishes, so the slowest shard is
+the one that sets the wall-clock. Everything else in this table is context for
+it.
 
-The two runs cannot share a day's articles, so this is not a paired measurement.
-Report items per worker beside wall-clock so a smaller day is not read as a
-faster fan-out, and record the CPU model each job prints under
-[What a job log names](#what-a-job-log-names): a 3.1x prefill swing between hosts
-is already measured on this page and would dominate a two-run comparison.
+| Shard | Wall-clock | Items given | Items summarized | Cache restore |
+| --- | --- | --- | --- | --- |
+| `work (0)` | 41.1 min | 25 | 15 | 30 s |
+| `work (1)` | 50.7 min | 25 | 16 | 73 s |
+| `work (2)` | 48.6 min | 25 | 19 | 41 s |
+| `work (3)` | 51.4 min | 25 | 19 | 70 s |
+| `work (4)` | 43.1 min | 25 | 19 | 49 s |
+| `work (5)` | **58.8 min** | 25 | 21 | 37 s |
+| `work (6)` | **36.5 min** | 25 | 19 | 52 s |
+| `work (7)` | 55.3 min | 25 | 19 | 37 s |
+| All eight | 58.8 min, the slowest | 200 | 147 | 30-73 s, median 45 |
 
-### What would move the scheduled default to eight
+**Items per worker is exactly 25, not the file count.** The eight `items-*`
+artifacts hold 494 JSON files between them, and 494 is not the number of items.
+Each item writes up to three files - `<id>.article.json`, `<id>.summary.json`
+and `<id>.eval.json` - so the count that means anything is the number of
+distinct file stems. That is 25 on every shard: 200 article files, 147 summary
+files and 147 eval files, and nothing else. The plan job logged the same 200:
+`safety ceiling reached planned=221 ceiling=200`, then
+`planned date=2026-08-25 items=200 feeds=122`. The 55-to-67 file spread between
+shards is how many of each shard's 25 items produced a summary - 15 to 21 - not
+a difference in how much work a shard was handed. The fan-out divided the day
+evenly, which had to be true before any wall-clock comparison meant anything.
 
-The slowest `work` job falls, the run finishes inside `timeout-minutes: 330`,
-every shard's memory peak stays clear of 16 GB, and the artifact and cache
-totals stay inside Rule #2. Then the `SHARDS=4` fallback moves, in a commit that
-writes the numbers above into this section.
+### Which machine a shard drew moved its rate 3.4x
+
+Throughput per shard, from llama-server's own `/metrics` counters in each
+`runtime-log-<shard>` artifact: tokens summed and seconds summed, divided once.
+Peak resident set is the highest single 15-second sample of llama-server plus
+every Python process in that job, from `rss-samples.tsv`.
+
+| Shard | CPU it drew | Prefill | Decode | Peak resident set |
+| --- | --- | --- | --- | --- |
+| `work (0)` | AMD EPYC 7763 | 11.34 tok/s | 5.25 tok/s | 13.85 GiB |
+| `work (1)` | AMD EPYC 7763 | 11.30 | 5.01 | 13.77 GiB |
+| `work (2)` | AMD EPYC 9V74 | 10.98 | 5.15 | 13.65 GiB |
+| `work (3)` | AMD EPYC 7763 | 11.28 | 4.79 | 13.52 GiB |
+| `work (4)` | Intel Xeon Platinum 8573C | **37.50** | 3.29 | 14.33 GiB |
+| `work (5)` | AMD EPYC 9V74 | 10.98 | 5.00 | 14.39 GiB |
+| `work (6)` | Intel Xeon 6973P-C | **37.71** | 3.48 | 14.06 GiB |
+| `work (7)` | AMD EPYC 9V74 | 10.65 | 4.98 | 14.24 GiB |
+| All eight | four CPU models | 13.25 | 4.45 | - |
+
+Totals: 149,444 prompt tokens evaluated in 188.0 min, 117,016 further prompt
+tokens reused from the slot's prefix (43.9% of all prompt tokens), 41,192 tokens
+written in 154.2 min.
+
+**The two Intel hosts prefill 3.4x faster than the six AMD hosts and decode
+about a third slower.** Group averages: 37.6 against 11.09 tok/s reading a
+prompt, 3.39 against 5.03 tok/s writing a summary. Same day, same build, same
+weights, same prompt, same one-slot server, eight jobs running at once - so this
+is the most controlled look this project has had at a swing it has been chasing
+for a week. It is the same shape as the `route` finding already on this page:
+reading speed moves 3x and writing speed moves the *other* way. It is one
+observation per CPU model, so it names a suspect rather than proving a cause.
+
+It also means a shard's wall-clock does not follow its reading speed.
+`work (6)` drew a fast host and finished first at 36.5 minutes. `work (4)` drew
+an equally fast host and still came third at 43.1, because the fast hosts are
+the slow writers and writing is where a summary's time goes: `work (4)` spent
+28.8 of its 43.1 minutes writing 5,690 tokens at 3.29 tok/s.
+
+### Not a paired measurement
+
+Read 1.92x as consistent with the prediction, never as proof of it. Four things
+differ between the two runs besides the shard count:
+
+- **Different days, different articles.** 2026-08-24 against 2026-08-25.
+  Neither run chose its own corpus.
+- **Different hosts.** The eight shards drew four CPU models and their prefill
+  rates span 3.5x within the one run - 10.65 tok/s on the slowest shard against
+  37.71 on the fastest. This page already records that the host alone moves
+  prefill 3.4x. A two-run comparison sits inside that spread.
+- **Different server configuration.** The baseline ran four slots with
+  `kv_unified = 'true'`; this run ran one slot with `kv_unified = 'false'`.
+- **Different instruments.** The baseline's tok/s came from parsing per-request
+  lines out of the server log. This run's came from llama-server's `/metrics`
+  counters, which the baseline did not publish.
+
+What *is* close between the two runs is the size of the job the model was asked
+to do: **41,192 tokens written here against 41,098 in the baseline, and 149,444
+prompt tokens evaluated against 152,933.** Two days apart, the model was asked
+for nearly the same amount of work and the slowest worker finished it in a
+little under half the time. That similarity is the reason to believe the 1.92x,
+not the arithmetic of dividing by two.
+
+### The run did not publish
+
+`assemble` failed 1.2 minutes after `route` finished. **No digest for
+2026-08-25 was published from this run.** The day was lost.
+
+The cause is in the commit step and has nothing to do with the fan-out. The
+day's published directory already held
+`frontend/public/digest/2026/08/25/india-07.svg` from an earlier run, this run
+wrote different bytes to the same path, and the rebase onto the moved `main`
+stopped on `CONFLICT (add/add)`. The job then reported `could not push the day
+after three attempts` and exited 1. That is the published-asset-name defect -
+the asset ordinal comes from a per-process counter - and it is being fixed in
+its own change.
+
+**All eight `work` jobs succeeded and so did `route`.** Eight shards did not
+cause this, and the same day at four shards would have hit the same conflict.
+Everything measured above is the `work` phase, which completed.
+
+### `route` is now the larger share of what is left
+
+`route` is not sharded. It ran 41.5 minutes after the last worker finished, and
+it stopped itself at its own 40-minute budget with
+`routed=93 unrouted=54 mean_ms=26239` - 93 of the day's 147 summarized items
+got a visual decision at a mean of 26.2 s each, and 54 got none.
+
+Of the clock after `plan` finishes:
+
+| | `work` | `route` | Sum | `route` share |
+| --- | --- | --- | --- | --- |
+| Four shards | 113.1 min | 53.5 min | 166.6 min | 32% |
+| Eight shards | 58.8 min | 41.5 min | 100.3 min | **41%** |
+
+Halving the workers again would put a 29.4-minute `work` phase beside the same
+unsharded `route`: 70.9 minutes, and `route` becomes 59% of it. The first
+halving took 66 minutes off the pair; a second would take 29. `route` already
+owns more of the remaining clock than any further worker fan-out can give back,
+and it is the stage that dropped 54 items.
+
+### Cache, memory and artifacts against Rule #2
+
+**Cache restore is 30 to 73 seconds per shard**, median 45, mean 49 - from the
+`Cache weights and runtime` step timing on each job. This page had asserted
+about 90 s. Each restore runs inside its own job in parallel with the other
+seven, so eight restores instead of four cost the run no wall-clock at all;
+they cost about three quarters of a minute inside jobs that run 36 to 59
+minutes.
+
+**Cache bytes did not move, and that was the design claim.** All eight shards
+restored the one entry `llm-Qwen3-8B-Q4_K_M.gguf-b10598-v3`, 4,943,540,782 bytes
+(4.60 GiB). Read on 2026-08-25 after the run, the repository held eight cache
+entries totalling 10,585,631,000 bytes against the 10 GB ceiling in Rule #2 -
+at the ceiling, but not because of this change. What fills it is a stale 4B
+entry under an old key plus duplicated Python and npm entries. More shards
+restore the same key and never add a byte.
+
+**Artifacts are 0.33% of the budget.** Nineteen artifacts, 1,740,473 bytes in
+total - 1.66 MB against the 500 MB in Rule #2. The eight `items-*` artifacts are
+709,603 bytes together and the eight `runtime-log-*` are 83,050; `routes` at
+906,169 bytes is the single largest. Doubling the worker count left the
+`items-*` total flat, exactly as predicted: the plan is divided between the
+workers, never copied to each of them.
+
+**The memory peak is not readable from this run.**
+`cgroup_memory_peak_bytes=unavailable` on all eight shards -
+`/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so the
+step that was meant to answer this printed a placeholder. Not readable, not
+estimated (Rule #10).
+
+The RSS sampler beside it did work. llama-server's resident set is 9.0 GiB when
+the weights finish loading and climbs to 12.1-13.5 GiB by the end of a job;
+adding the Python processes running in the same 15-second sample, the highest
+simultaneous total is 13.52 GiB on the lightest shard and **14.39 GiB on
+`work (5)`, against the 16 GB the runner has.** Two things that does not say.
+Most of that resident set is the memory-mapped weights file, which the kernel
+can drop under pressure, so a resident set near the host's memory is not the
+same as demand the host cannot meet. And the shard count does not move this
+number: each shard is its own runner VM with its own 16 GB, so eight shards are
+eight machines rather than more pressure on one. The four-shard baseline
+predates the sampler, so there is no four-against-eight memory comparison to
+make.
+
+### Does this move the scheduled default to eight?
+
+Not yet, and what blocks it is not the fan-out.
+
+Three of the four conditions this section had set are met. The slowest `work`
+job fell from 113.1 to 58.8 minutes. The whole run finished in 104.8 minutes
+against the job's `timeout-minutes: 330`. Artifacts and cache bytes are inside
+Rule #2. The fourth - every shard's memory peak clear of 16 GB - is unread
+rather than failed, and the resident-set figure that stands in for it is a
+per-machine number the shard count does not change.
+
+Three things have to hold before the `SHARDS=4` fallback moves:
+
+1. **A day at eight shards has to publish.** This one did not. Raising the
+   fan-out on the path a reader depends on, on the strength of a run that lost
+   its day at the last step, is the wrong order. The asset-name fix lands first.
+2. **A second run at eight, on a different day, that reaches `assemble`.** One
+   run cannot separate a fan-out effect from the host lottery this same run
+   shows at 3.4x.
+3. **`route` gets an answer.** At eight shards `route` is already 41% of the
+   clock and it stopped with 54 of 147 items unrouted. Making the workers
+   faster while `route` drops a third of the day's visuals moves the failure
+   rather than removing it.
+
+Then the fallback moves, in its own commit, naming the run it rests on. This
+section does not move it.
 
 ## Still unmeasured
 
@@ -1508,17 +1691,17 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
-| **Whether eight work shards move the slowest shard** | **unmeasured; the ceiling is raised and no run has used it** | dispatch `Content refresh` with `shards = 8`, then compare the slowest `work` job's wall-clock, its items per worker, and its per-job throughput against run `32742672105`'s four shards ([Eight work shards](#eight-work-shards)). |
+| **Whether a day at eight work shards publishes** | **the work phase is measured, the day was not published** | run `32869125768` halved the slowest worker and then lost the day when `assemble` hit an asset-name conflict ([Eight work shards](#eight-work-shards)). A second dispatch at `shards = 8`, after the asset-name fix, that reaches `assemble` and commits its day. |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
-| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the instrument now exists, no run has used it** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names), so read the next fast run against the next slow one and compare the CPU model first. |
+| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate, and now to the CPU part; one observation per part** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names). The first run to use them narrows it further: in run `32869125768` the two `work` shards on Intel Xeon parts prefilled at 37.5 and 37.7 tok/s while the six on AMD EPYC parts prefilled at 10.7 to 11.3, same day, same build, same weights, same prompt, with decode again moving the other way ([Eight work shards](#eight-work-shards)). That is one observation per CPU model, so it names a suspect rather than proving a cause; a `route` job on each part, on the same day, would settle it. |
 | **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the candidate through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | Exact complete-request context for the configured summarizer | **unmeasured; 877-879 covers only the system prompt** | render system prompt + source form + title + fences + exact sanitized model-visible text through the embedded chat template, count the generation suffix, add output budget, and record the maximum by band |
-| Cache-restore time per job, cache-hit | ~90 s, asserted | the `Cache weights and runtime` step duration on every shard of the eight-shard dispatch above. Eight restores of one key instead of four is the entire cost the raised ceiling adds. |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | unmeasured | lands with the eval harness |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
+| A `work` job's true memory peak | **not readable; the instrument prints a placeholder** | every shard of run `32869125768` wrote `cgroup_memory_peak_bytes=unavailable`, because `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner. Read the job's own cgroup path out of `/proc/self/cgroup` and take `memory.peak` from there, or fall back to the lowest `MemAvailable` in `/proc/meminfo` over the job. The RSS sampler's 14.39 GiB high point is a resident set, not a demand ([Eight work shards](#eight-work-shards)). |
 | Qwen3.5-9B complete-request tokens and worst-case context | **unmeasured; Qwen3 counts do not transfer** | render system prompt + source form + title + fences + exact sanitized model-visible text through the embedded chat template, count the generation suffix with `Qwen3.5-9B-Q4_K_M.gguf`, add output budget, and record the maximum by band |
 | Qwen3.5-9B live non-thinking, schema and canary compatibility | **unmeasured; parser controls exist, candidate behaviour does not** | serve the exact candidate under the configured greedy sampler; run short/medium/long/brief inputs plus all injection canaries; require empty reasoning channels, `finish_reason=stop`, valid schema and repeat-stable published words |
 | Whether Qwen3.5-9B summarizes faithfully through our prompt | **throughput measured, quality unmeasured** | first replace the current validation workflow with a cache-safe replay over frozen Article payloads; then require at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread and a pre-registered blind human selector |

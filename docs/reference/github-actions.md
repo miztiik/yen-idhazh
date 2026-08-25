@@ -40,9 +40,10 @@ a dispatch at the ceiling runs every worker at once.
 
 **The ceiling is eight; the scheduled run is still four.** A scheduled run
 passes no inputs, so the plan job's own `SHARDS=4` fallback decides it, and that
-fallback is deliberately untouched. Eight shards has no measured wall-clock yet,
-and an unmeasured number may not move the path a reader depends on (Rule #10).
-What moves the scheduled default is the measurement described under
+fallback is deliberately untouched. One dispatch has now run at eight and halved
+the slowest worker, from 113.1 minutes to 58.8 - but it failed at `assemble` and
+published nothing, so no day has yet reached a reader through this fan-out.
+What moves the scheduled default is written under
 [Eight work shards](measurements.md#eight-work-shards), not this change.
 
 Rule #2 allows 20 concurrent jobs. Eight workers plus the router is nine, and
