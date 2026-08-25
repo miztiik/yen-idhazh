@@ -222,6 +222,7 @@
 		<ThroughputTrend
 			days={data.throughputDays}
 			height={data.console.chart_height}
+			width={data.console.chart_width}
 			reference={data.throughputReference}
 		/>
 	{/if}
