@@ -12,7 +12,13 @@ from idhazh.render.chart import RenderError as ChartError
 from idhazh.render.chart import render_chart
 from idhazh.render.diagram import RenderError as DiagramError
 from idhazh.render.diagram import parse_mermaid, render_diagram, wrap
-from idhazh.render.write import asset_relpath, highest_ordinal, render_route
+from idhazh.render.write import (
+    asset_relpath,
+    free_relpath,
+    highest_ordinal,
+    render_route,
+    renumber_racing_assets,
+)
 
 SPEC = {
     "$schema": "https://vega.github.io/schema/vega-lite/v5.json",
@@ -191,3 +197,130 @@ class TestRenderRoute:
             routed_at="2026-08-22T00:00:00Z",
         )
         assert render_route(nothing, public_root=tmp_path, relpath="x.svg") is nothing
+
+
+DATE = "2026-08-22"
+DAY = "digest/2026/08/22"
+
+
+def _rendered(tmp_path: Path, item_id: str, relpath: str) -> Path:
+    """One rendered chart on disk, plus the route payload that says where it is."""
+    (tmp_path / "public" / relpath).parent.mkdir(parents=True, exist_ok=True)
+    (tmp_path / "public" / relpath).write_bytes(f"<svg>{item_id}</svg>".encode("ascii"))
+    route = _route(VisualKind.CHART, json.dumps(SPEC)).model_copy(
+        update={
+            "item_id": item_id,
+            "asset_path": relpath,
+            "visual_state": VisualState.RENDERED,
+        }
+    )
+    path = tmp_path / "items" / f"{item_id}.route.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(route.to_json(), encoding="utf-8", newline="\n")
+    return path
+
+
+def _renumber(tmp_path: Path, published: list[str]) -> list[tuple[str, str]]:
+    return renumber_racing_assets(
+        public_root=tmp_path / "public",
+        items_dir=tmp_path / "items",
+        date=DATE,
+        published=published,
+    )
+
+
+class TestFreeRelpath:
+    def test_an_empty_day_starts_at_one(self) -> None:
+        assert free_relpath(set(), DATE, "ai") == f"{DAY}/ai-01.svg"
+
+    def test_it_skips_what_is_taken(self) -> None:
+        taken = {f"{DAY}/ai-01.svg", f"{DAY}/ai-02.svg"}
+        assert free_relpath(taken, DATE, "ai") == f"{DAY}/ai-03.svg"
+
+    def test_a_vertical_is_not_blocked_by_another_one(self) -> None:
+        assert free_relpath({f"{DAY}/india-01.svg"}, DATE, "ai") == f"{DAY}/ai-01.svg"
+
+
+class TestRenumberRacingAssets:
+    """Two runs of one day both numbered a chart from a directory neither could see.
+
+    Run `32869125768` on 2026-08-25: eight workers and a router finished, then
+    the rebase hit `CONFLICT (add/add)` on four chart paths and the day was
+    lost. The published copy keeps its address; this run's takes the next free
+    number and its payload follows it.
+    """
+
+    def test_a_path_the_other_run_published_is_given_up_and_renumbered(
+        self, tmp_path: Path
+    ) -> None:
+        route_path = _rendered(tmp_path, "energy-0000000002", f"{DAY}/energy-01.svg")
+
+        moves = _renumber(tmp_path, [f"{DAY}/energy-01.svg"])
+
+        assert moves == [(f"{DAY}/energy-01.svg", f"{DAY}/energy-02.svg")]
+        assert (tmp_path / "public" / DAY / "energy-02.svg").read_bytes() == (
+            b"<svg>energy-0000000002</svg>"
+        )
+        assert not (tmp_path / "public" / DAY / "energy-01.svg").exists()
+        # The payload is the record of where the file went, and assemble copies
+        # it into the day verbatim. A move that left it behind would publish a
+        # path with no file under it.
+        moved = Route.from_json(route_path.read_text(encoding="utf-8"))
+        assert moved.asset_path == f"{DAY}/energy-02.svg"
+
+    def test_a_path_nobody_else_holds_is_left_alone(self, tmp_path: Path) -> None:
+        route_path = _rendered(tmp_path, "ai-0000000001", f"{DAY}/ai-01.svg")
+
+        assert _renumber(tmp_path, [f"{DAY}/energy-01.svg"]) == []
+
+        assert (tmp_path / "public" / DAY / "ai-01.svg").exists()
+        kept = Route.from_json(route_path.read_text(encoding="utf-8"))
+        assert kept.asset_path == f"{DAY}/ai-01.svg"
+
+    def test_the_new_number_clears_both_sides_not_just_one(self, tmp_path: Path) -> None:
+        """The published set and this run's own directory are different lists.
+
+        Numbering one past the highest of either alone is how a second chart in
+        the same vertical lands on a path the first one just took.
+        """
+        _rendered(tmp_path, "energy-0000000002", f"{DAY}/energy-01.svg")
+        _rendered(tmp_path, "energy-0000000003", f"{DAY}/energy-02.svg")
+
+        moves = _renumber(tmp_path, [f"{DAY}/energy-01.svg", f"{DAY}/energy-02.svg"])
+
+        assert moves == [
+            (f"{DAY}/energy-01.svg", f"{DAY}/energy-03.svg"),
+            (f"{DAY}/energy-02.svg", f"{DAY}/energy-04.svg"),
+        ]
+        assert sorted(path.name for path in (tmp_path / "public" / DAY).iterdir()) == [
+            "energy-03.svg",
+            "energy-04.svg",
+        ]
+
+    def test_a_vertical_is_not_confused_with_a_longer_one_that_starts_the_same(
+        self, tmp_path: Path
+    ) -> None:
+        _rendered(tmp_path, "business-economy-0000000001", f"{DAY}/business-economy-01.svg")
+
+        moves = _renumber(tmp_path, [f"{DAY}/business-economy-01.svg"])
+
+        assert moves == [
+            (f"{DAY}/business-economy-01.svg", f"{DAY}/business-economy-02.svg")
+        ]
+
+    def test_a_payload_whose_file_this_checkout_lacks_is_left_alone(
+        self, tmp_path: Path
+    ) -> None:
+        """Nothing here would commit that path, so nothing here can collide on it."""
+        route_path = _rendered(tmp_path, "ai-0000000001", f"{DAY}/ai-01.svg")
+        (tmp_path / "public" / DAY / "ai-01.svg").unlink()
+
+        assert _renumber(tmp_path, [f"{DAY}/ai-01.svg"]) == []
+
+        kept = Route.from_json(route_path.read_text(encoding="utf-8"))
+        assert kept.asset_path == f"{DAY}/ai-01.svg"
+
+    def test_a_run_with_no_routes_at_all_is_a_no_op(self, tmp_path: Path) -> None:
+        """The router is allowed to never start, and the day still publishes."""
+        assert _renumber(tmp_path, [f"{DAY}/energy-01.svg"]) == []
+
