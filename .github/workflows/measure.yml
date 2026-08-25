@@ -17,6 +17,7 @@ on:
           - image
           - corpus
           - runtime
+          - batched
       models:
         description: 'Comma-separated HF GGUF refs (repo:file)'
         default: 'Qwen/Qwen3-4B-GGUF:Qwen3-4B-Q4_K_M.gguf,Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf'
@@ -676,4 +677,269 @@ jobs:
         with:
           name: runtime-sweep-${{ inputs.runtime_candidate }}
           path: backend/var/runtime-sweep/
+          retention-days: 7
+
+  batched:
+    if: ${{ inputs.target == 'batched' }}
+    # Does decoding more than one sequence at a time pay for itself on 4 vCPU?
+    # `llama-batched-bench` answers it in one table: `S_TG t/s` is aggregate
+    # decode throughput at a parallel level, so the ratio between two rows is
+    # the whole result. Nothing else in this file measures that.
+    #
+    # One job, never a matrix. The ratio is only meaningful self-paired -
+    # prefill spans 3.4x across runner hosts (docs/reference/measurements.md),
+    # so two matrix members would compare hardware and call it batching. Three
+    # repeats run as three processes inside this one job so a level that dies
+    # still leaves the earlier repeats on disk.
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      MODEL_REPO: Qwen/Qwen3-8B-GGUF
+      MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+      # Fixed here rather than dispatchable, so a later reading stays
+      # comparable to the recorded one. The lengths round the medians of the
+      # 293 requests behind docs/reference/measurements.md's one-slot
+      # observation, 2026-08-24: prompt p50 877 - the tokens prefill evaluates
+      # once the shared system prompt is cached, not the whole context - and
+      # generated p50 279. Parallel level 4 is a read the bench gives away
+      # free, not a build target: it oversubscribes 4 vCPU at 4 threads.
+      BENCH_PROMPT_TOKENS: '900'
+      BENCH_GENERATE_TOKENS: '300'
+      BENCH_PARALLEL_LEVELS: '1,2,4'
+      BENCH_REPEATS: '3'
+      # Decode is 36.8 percent of model time (232.7 min prefill, 135.7 min
+      # decode, run 32742672105, 2026-08-24). At 1.5x aggregate decode a run
+      # saves 12.3 percent of wall-clock, at 2.0x it saves 18.4 percent. Below
+      # this ratio the whole parallel-decode line of work is dead.
+      BENCH_GATE_RATIO: '1.4'
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Record runner hardware
+        run: |
+          set -euo pipefail
+          mkdir -p backend/var/batched-bench
+          {
+            echo "measured_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+            echo "runner=${RUNNER_OS:-unknown}"
+            echo "nproc=$(nproc)"
+            echo "nproc_all=$(nproc --all)"
+            echo "runner_image_os=${ImageOS:-unknown}"
+            echo "runner_image_version=${ImageVersion:-unknown}"
+            if [ -r /sys/fs/cgroup/cpu.max ]; then
+              echo "cgroup_cpu_max=$(cat /sys/fs/cgroup/cpu.max)"
+            fi
+            grep '^Cpus_allowed_list:' /proc/self/status
+            free -g | sed -n '1,2p'
+            lscpu
+            echo "cpu_core_map:"
+            lscpu -p=CPU,CORE,SOCKET,NODE
+          } | tee backend/var/batched-bench/hardware.txt
+
+      - name: Install pinned llama.cpp
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
+            exit 1
+          fi
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
+          # The whole directory, not one binary. `llama-batched-bench` links
+          # against its own `libllama-batched-bench-impl.so` next to it.
+          BIN=$(dirname "$(find llama -type f -name 'llama-batched-bench' | head -1)")
+          echo "LLAMA_BIN=$BIN" >> "$GITHUB_ENV"
+          echo "LD_LIBRARY_PATH=$BIN" >> "$GITHUB_ENV"
+          chmod +x "$BIN"/llama-* || true
+          {
+            echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
+            echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
+            sha256sum "$BIN/llama-batched-bench"
+          } | tee -a backend/var/batched-bench/hardware.txt
+
+      - name: Read the production inference settings
+        # The bench has to run the shape production runs, so the four context
+        # and threading knobs come from config rather than from a literal
+        # copied into this file (CLAUDE.md Rule #6). Change config and the next
+        # reading follows it.
+        run: |
+          set -euo pipefail
+          for key in n_ctx n_batch n_ubatch n_threads; do
+            value=$(jq -er ".models.inference.${key}" config/idhazh.json)
+            case "$value" in
+              ''|*[!0-9]*)
+                echo "config/idhazh.json models.inference.${key} must be a positive integer, got '${value}'" >&2
+                exit 2
+                ;;
+            esac
+            name="BENCH_$(echo "$key" | tr '[:lower:]' '[:upper:]')"
+            echo "${name}=${value}" >> "$GITHUB_ENV"
+            echo "${name}=${value}" | tee -a backend/var/batched-bench/hardware.txt
+          done
+
+      - name: Download the summarizer weights
+        run: |
+          set -euo pipefail
+          mkdir -p backend/models
+          curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${MODEL_FILE}" \
+            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
+          {
+            echo "gguf_cache_hit=false"
+            echo "model_repo=${MODEL_REPO}"
+            stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
+            sha256sum "backend/models/${MODEL_FILE}"
+          } | tee -a backend/var/batched-bench/hardware.txt
+
+      - name: Benchmark parallel decode
+        run: |
+          set -euo pipefail
+          MAX_LEVEL=$(echo "$BENCH_PARALLEL_LEVELS" | tr ',' '\n' | sort -n | tail -1)
+          NEEDED=$(( MAX_LEVEL * (BENCH_PROMPT_TOKENS + BENCH_GENERATE_TOKENS) ))
+          # llama-batched-bench silently skips any level whose context does not
+          # fit, so an undersized context returns a shorter table rather than an
+          # error. Refuse before spending an hour on a table with a hole in it.
+          if [ "$NEEDED" -gt "$BENCH_N_CTX" ]; then
+            echo "parallel level ${MAX_LEVEL} needs ${NEEDED} context tokens, config gives ${BENCH_N_CTX}" >&2
+            exit 2
+          fi
+          for repeat in $(seq 1 "$BENCH_REPEATS"); do
+            echo "repeat ${repeat} of ${BENCH_REPEATS}"
+            "$LLAMA_BIN/llama-batched-bench" \
+              -m "backend/models/${MODEL_FILE}" \
+              -c "$BENCH_N_CTX" -b "$BENCH_N_BATCH" -ub "$BENCH_N_UBATCH" \
+              -t "$BENCH_N_THREADS" \
+              -npp "$BENCH_PROMPT_TOKENS" \
+              -ntg "$BENCH_GENERATE_TOKENS" \
+              -npl "$BENCH_PARALLEL_LEVELS" \
+              2>&1 | tee "backend/var/batched-bench/repeat-${repeat}.txt"
+          done
+
+      - name: Report the parallel decode ratio
+        # A verdict of "dead" is a successful measurement, so this step reports
+        # it and exits zero. It fails only when the instrument did.
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          import os
+          import re
+          import statistics
+          import time
+          from pathlib import Path
+
+          ROOT = Path("backend/var/batched-bench")
+          GATE = float(os.environ["BENCH_GATE_RATIO"])
+          LEVELS = [int(value) for value in os.environ["BENCH_PARALLEL_LEVELS"].split(",")]
+          REPEATS = int(os.environ["BENCH_REPEATS"])
+          DATA_ROW = re.compile(r"^\|\s*\d")
+          COLUMNS = (
+              "prompt_tokens",
+              "generate_tokens",
+              "parallel",
+              "n_kv",
+              "prefill_seconds",
+              "prefill_tok_s",
+              "decode_seconds",
+              "decode_tok_s",
+              "total_seconds",
+              "total_tok_s",
+          )
+
+          def read_table(path):
+              found = {}
+              for line in path.read_text(encoding="utf-8", errors="replace").splitlines():
+                  if not DATA_ROW.match(line):
+                      continue
+                  cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+                  if len(cells) != len(COLUMNS):
+                      continue
+                  values = [int(cell) for cell in cells[:4]] + [float(cell) for cell in cells[4:]]
+                  row = dict(zip(COLUMNS, values))
+                  found[row["parallel"]] = row
+              missing = [level for level in LEVELS if level not in found]
+              if missing:
+                  raise SystemExit(f"{path.name} has no row for parallel level(s) {missing}")
+              return found
+
+          def spread(values):
+              return {
+                  "values": values,
+                  "median": statistics.median(values),
+                  "spread": max(values) - min(values),
+              }
+
+          repeats = [read_table(ROOT / f"repeat-{n}.txt") for n in range(1, REPEATS + 1)]
+          base = LEVELS[0]
+          by_level = {
+              str(level): {
+                  "decode_tok_s": spread([table[level]["decode_tok_s"] for table in repeats]),
+                  "prefill_tok_s": spread([table[level]["prefill_tok_s"] for table in repeats]),
+              }
+              for level in LEVELS
+          }
+          # Paired inside a repeat, then taken across repeats. A ratio of two
+          # medians would mix repeats that ran minutes apart.
+          ratios = {
+              f"{level}_over_{base}": spread(
+                  [table[level]["decode_tok_s"] / table[base]["decode_tok_s"] for table in repeats]
+              )
+              for level in LEVELS[1:]
+          }
+          gate_ratio = ratios[f"2_over_{base}"]
+          verdict = "alive" if gate_ratio["median"] >= GATE else "dead"
+
+          summary = {
+              "measured_at": time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime()),
+              "llama_cpp_build": os.environ["LLAMA_CPP_BUILD"],
+              "model_file": os.environ["MODEL_FILE"],
+              "prompt_tokens": int(os.environ["BENCH_PROMPT_TOKENS"]),
+              "generate_tokens": int(os.environ["BENCH_GENERATE_TOKENS"]),
+              "n_ctx": int(os.environ["BENCH_N_CTX"]),
+              "n_batch": int(os.environ["BENCH_N_BATCH"]),
+              "n_ubatch": int(os.environ["BENCH_N_UBATCH"]),
+              "n_threads": int(os.environ["BENCH_N_THREADS"]),
+              "parallel_levels": LEVELS,
+              "repeats": REPEATS,
+              "gate_ratio": GATE,
+              "aggregate_by_parallel_level": by_level,
+              "paired_decode_ratios": ratios,
+              "verdict": verdict,
+              "tables": [
+                  {"repeat": index, "rows": [table[level] for level in LEVELS]}
+                  for index, table in enumerate(repeats, start=1)
+              ],
+          }
+          (ROOT / "batched-summary.json").write_text(
+              json.dumps(summary, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+          )
+
+          print(f"aggregate decode (S_TG t/s), {REPEATS} repeats, one host:")
+          for level in LEVELS:
+              stat = by_level[str(level)]["decode_tok_s"]
+              values = ", ".join(f"{value:.2f}" for value in stat["values"])
+              print(
+                  f"  B={level}: median {stat['median']:.2f} t/s, "
+                  f"spread {stat['spread']:.2f}, values {values}"
+              )
+          paired = ", ".join(f"{value:.3f}" for value in gate_ratio["values"])
+          print(
+              f"gate: S_TG(B=2) / S_TG(B=1) = {gate_ratio['median']:.3f} "
+              f"(spread {gate_ratio['spread']:.3f}, paired {paired}); "
+              f"gate is {GATE}x; parallel decode is {verdict}"
+          )
+          PY
+
+      - name: Upload batched bench
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-batched
+          path: backend/var/batched-bench/
           retention-days: 7
