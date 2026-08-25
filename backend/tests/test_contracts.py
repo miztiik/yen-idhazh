@@ -493,6 +493,30 @@ def test_run_counts_reconcile() -> None:
         RunManifest.model_validate(payload)
 
 
+def test_a_manifest_written_before_charts_were_counted_still_reads() -> None:
+    """Section 11's release blocker for `charts_drafted`, tested against the key."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-manifest" / "two-runs.json"))
+    for run in payload["runs"]:
+        del run["charts_drafted"]
+    assert [run.charts_drafted for run in RunManifest.model_validate(payload).runs] == [0, 0]
+
+
+def test_a_published_chart_written_before_the_field_reads_as_a_chart_draft() -> None:
+    """A chart on the page was necessarily the chart the model asked for.
+
+    Defaulting the missing key to false would make the manifest report fewer
+    drafts than published charts, which is the one thing `charts_drafted` exists
+    to measure.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "route" / "chart-rendered.json"))
+    del payload["drafted_chart"]
+    assert Route.model_validate(payload).drafted_chart is True
+
+    absent = json.loads(read_text(CONTRACT_FIXTURES_DIR / "route" / "none.json"))
+    del absent["drafted_chart"]
+    assert Route.model_validate(absent).drafted_chart is False
+
+
 def test_a_later_run_appends_and_never_reorders() -> None:
     """Row 13's monotonicity rule, made mechanical."""
     payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
