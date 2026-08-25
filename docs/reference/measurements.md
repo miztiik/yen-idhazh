@@ -701,6 +701,115 @@ against `run.safety_ceiling_per_run = 200` and a 50-minute stage budget. The
 slow host still cannot finish a maximum day, which is why the stage now stops
 itself rather than being killed.
 
+## The one-slot production observation
+
+**Observed 2026-08-24** on GitHub-hosted `ubuntu-latest`, 4 vCPU, across two
+consecutive `digest` runs, `Qwen3-8B-Q4_K_M.gguf` through `llama-server` with
+`--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4`. Taken from the
+eight `runtime-log-*` artifacts. Each figure is that job's total tokens divided
+by its total milliseconds, not a median of per-request rates, because a rate is
+a ratio.
+
+| Run | `work` jobs started | `-np` | `n_slots` | `kv_unified` |
+| --- | --- | --- | --- | --- |
+| `32766098026` | 2026-08-24 19:08 UTC | omitted | 4 | `'true'` |
+| `32772221068` | 2026-08-24 21:57 UTC | `1` | 1 | `'false'` |
+
+**This comparison cannot answer the question.** It is two real content
+refreshes, not a controlled A/B. Three hardware profiles appear across the eight
+jobs, prefill spans 3.4x between them, and the two runs did not draw the same
+mix. Nothing below says `-np 1` is free. It says the observation has no power.
+
+| Run `32766098026`, four auto slots | Requests | Prefill tok/s | Decode tok/s | Whole job tok/s |
+| --- | --- | --- | --- | --- |
+| `work (0)` | 37 | 10.85 | 4.93 | 8.74 |
+| `work (1)` | 36 | 11.43 | 5.26 | 9.07 |
+| `work (2)` | 32 | 11.32 | 5.16 | 9.08 |
+| `work (3)` | 40 | 36.42 | 3.36 | 11.56 |
+| **All four** | **145** | **13.67** | **4.47** | **9.52** |
+
+| Run `32772221068`, one slot | Requests | Prefill tok/s | Decode tok/s | Whole job tok/s |
+| --- | --- | --- | --- | --- |
+| `work (0)` | 37 | 14.18 | 3.58 | 8.68 |
+| `work (1)` | 42 | 11.49 | 5.46 | 9.05 |
+| `work (2)` | 38 | 10.93 | 4.99 | 8.83 |
+| `work (3)` | 31 | 37.24 | 3.30 | 11.61 |
+| **All four** | **148** | **14.10** | **4.21** | **9.33** |
+
+Six findings. The first three are why the comparison has no power. The next two
+are facts it did settle. The last is a gap it exposed.
+
+**Three hardware profiles, and the runs drew different mixes.** Per-request
+prefill clusters tightly inside each job and not at all across jobs: five jobs
+sit near 11 tok/s, one at 14.2, and two at 36.4 and 37.2. The clusters do not
+touch. The slowest request on a fast-prefill host measured 30.7 tok/s, above the
+fastest request on any other host at 15.5. Across all eight jobs prefill spans
+10.85 to 37.24 tok/s, **3.4x**. The four-slot run drew three slow hosts and one
+fast; the one-slot run drew two slow, one middle and one fast. The runs differ
+in hardware before they differ in flags. Decode moves the other way, exactly as
+it did in the `route` stage: the two fast-prefill jobs wrote at 3.36 and 3.30
+tok/s while the slow-prefill jobs wrote at 4.93 to 5.46. A host that is simply
+faster would speed both.
+
+**The run-level figure, and the two ways to compute it.** By the ratio this page
+uses - tokens summed, milliseconds summed, divided once - the runs are **9.52**
+and **9.33** tok/s, a 2.0 percent fall. The 2026-08-25 observation reported
+**9.61** and **9.54**, a 0.7 percent fall. Both pairs are recorded so that
+neither is later quoted as a null result. The gap between them is arithmetic:
+9.61 and 9.54 are the unweighted mean of the four per-shard ratios, which weighs
+a 31-request job the same as a 42-request one. A rate is a ratio, so 9.52 and
+9.33 are the pair to cite.
+
+**The comparison is too loose to exclude anything.** The 2026-08-25 observation
+put the effect bound at **18.4 percent**. That figure does not reproduce from
+the eight artifacts by the method above, and it is recorded here only as stated
+on that date. What does reproduce, from the eight `items-*` artifacts rather
+than the runtime logs: 95 items appear in both runs and 93 of those had
+byte-identical extracted text. Pairing those 93 by item and reading
+`input_tokens + output_tokens` over `summarize_ms`, which counts the cached
+prefix as read and so is a higher basis than the whole-job rate above, the
+four-slot run pools to 15.06 tok/s. The mean paired difference against it is
+-0.05 tok/s, 95 percent interval -4.7 to +4.0 percent. Over the 36 pairs that
+ran on a slow host in both runs the base is 13.95 tok/s and the difference is
++0.67 tok/s, interval -1.2 to +10.8 percent. The interval is the mean paired
+difference plus and minus 1.96 standard errors. The comparison therefore
+excludes nothing smaller than about 11 percent, and what it measured is 2
+percent.
+
+**The `kv_unified` flip is cosmetic.** `-np 1` sets `n_seq_max = 1`, and the
+server then prints `kv_unified = 'false'`. The quantity that decides whether the
+context is split is `n_ctx_seq`: unified KV gives `n_ctx_seq = n_ctx`, and
+non-unified gives `n_ctx_seq = n_ctx / n_seq_max`. At `n_seq_max = 1` that is
+`8192 / 1 = 8192`, the same number. All eight jobs logged `n_ctx_slot = 8192`.
+The flag changed; the context each request gets did not. Do not reopen this.
+
+**Identical declared inputs produced different words on different hardware.**
+Both runs carry the same `pipeline_fingerprint`
+(`969b1917d38f4b44344dc818559122547bcbaf1aa37c836fbfc2eec6d1d2b945`) and the
+same `model_id` (`qwen3-8b-q4-k-m`). Comparing the `output_digest` written into
+the `items-*` artifacts, over the 93 pairs with byte-identical extracted text:
+
+| Host profile | Pairs | Identical `output_digest` |
+| --- | --- | --- |
+| Same in both runs | 43 | 40 (93.0%) |
+| Different | 50 | 2 (4.0%) |
+
+The 2026-08-25 observation put the cross-profile figure at 10 percent; the
+artifacts give 4.0 percent. This is the field confirmation of why `host_cpu` is
+recorded on the ledger row and kept out of the fingerprint. It is the only field
+that explains a divergence, and digesting it would hide the divergence instead
+([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+
+**The llama.cpp build is UNKNOWN for both runs.** Verified 2026-08-25: no build
+line and no CPU line appears in any of the eight artifacts. Do not assert that
+the two runs shared a binary, and do not assert that they did not. The workflow
+cache makes this harder rather than easier, and that trap is recorded in
+[agent-notes.md](agent-notes.md).
+
+The consequence for the sweep table below is that `np1` stays pending. A flag
+whose measured effect is smaller than the noise floor of the comparison has not
+been measured.
+
 ## llama-server runtime sweep
 
 **Status 2026-08-24:** the controlled sweep has not run. By user approval,
@@ -729,7 +838,7 @@ date and spread:
 
 | Candidate | Flag under test | Status |
 | --- | --- | --- |
-| `np1` | `-np 1` | Production observation started 2026-08-24 by user approval. Run `32648218952` established that omitted `-np` selected four auto slots with `n_ctx_slot = 8192` and unified KV. Optimization value remains pending because real refreshes are not a controlled A/B. |
+| `np1` | `-np 1` | Production observation started 2026-08-24 by user approval. Run `32648218952` established that omitted `-np` selected four auto slots with `n_ctx_slot = 8192` and unified KV. Two full runs were then compared and the comparison had no power: see [The one-slot production observation](#the-one-slot-production-observation). Still pending, because real refreshes are not a controlled A/B. |
 | `batch2048` | `-b 2048` | Pending. Hypothesis: the current `--batch-size 512` may throttle prefill. Use the measured live-digest prefill median of 34.23 tok/s, range 29.24-37.92, spread 8.68 from run `32648218952`, not the older derived 12.1 tok/s figure. |
 | `no_startup_warmup` | restore `--no-warmup` | Pending reversal check. PR #24 already made startup warmup the digest default after a golden-set check. The harness records server startup and shard wall-clock separately. |
 | `flash_attention_on` | `-fa on` | Pending. Different attention math is allowed only if every golden `output_digest` is unchanged. |
@@ -1060,7 +1169,7 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
-| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the cause is not recorded** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU, so the host difference has no name. The `route` job now prints `/proc/cpuinfo` model name, `nproc` and llama-server's `system_info`; read those against the next fast run and the next slow one. The `work` job wants the same three lines and does not have them. |
+| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the cause is not recorded** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU, so the host difference has no name. The `route` job now prints `/proc/cpuinfo` model name, `nproc` and llama-server's `system_info`; read those against the next fast run and the next slow one. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)), and wants the same three lines. It does not have them. |
 | **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the candidate through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
