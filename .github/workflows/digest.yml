@@ -648,6 +648,12 @@ jobs:
       # what that rebuild owns, named one file at a time under the day's
       # directory - the routes artifact unpacked this run's rendered charts into
       # that same directory, and no producer here can make those again.
+      #
+      # `RENUMBER_COMMAND` is what keeps those charts from being the thing that
+      # loses the day. Their filenames are numbered from the day's directory, so
+      # a run that pushed while this one worked has already taken the number
+      # this one wrote. Its file is published; this run's is not, so this run's
+      # is the one that moves.
       - name: Commit the day
         env:
           COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
@@ -663,6 +669,9 @@ jobs:
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest
+          RENUMBER_COMMAND: >-
+            python backend/utilities/renumber_racing_assets.py
+            --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
           frontend/public/digest frontend/public/telemetry state
