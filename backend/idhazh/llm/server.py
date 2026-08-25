@@ -62,9 +62,11 @@ def server_argv(
 ) -> list[str]:
     """The exact process the run stands up.
 
-    Every knob here is also a fingerprint input, so a change to this list must
-    be a change to the stamp - which is why it is built from config rather than
-    written out by hand at the call site.
+    The list is built from config, not written out by hand at the call site, so
+    one config edit moves the local server and the workflow together.
+
+    Not every knob here reaches the stamp. `idhazh.fingerprint.NOT_DIGESTED`
+    names the ones that do not and says which of them can still move the words.
     """
     argv = [
         str(binary),

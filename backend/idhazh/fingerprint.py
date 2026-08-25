@@ -17,10 +17,11 @@ from __future__ import annotations
 
 import csv
 import hashlib
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from pathlib import Path
-from typing import Final
+from types import MappingProxyType
+from typing import Final, NamedTuple
 
 from idhazh.contracts.app_config import InferenceConfig, ModelRef
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
@@ -61,6 +62,71 @@ def sampling_spelling(inference: InferenceConfig) -> str:
             f"thinking={'on' if inference.thinking else 'off'}",
         )
     )
+
+
+class Undigested(NamedTuple):
+    """Why one inference knob sits outside the stamp."""
+
+    moves_logits: bool
+    reason: str
+
+
+#: Every `InferenceConfig` knob the stamp does not carry, and why each one is out.
+#:
+#: `moves_logits=True` marks a known blind spot, not a claim that the knob is
+#: safe: those five change the arithmetic the runtime does, so moving one can
+#: rewrite a summary while the stamp holds still. Row 4 of
+#: `TODO/20260825-qwen35-9b-swap-plan.md` digests them, because it resets every
+#: fingerprint already and doing that twice spends the reset twice.
+#:
+#: The set is closed: a knob that is neither here nor digested fails the
+#: contract test in `backend/tests/test_fingerprint.py`.
+NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
+    {
+        "cache_type_k": Undigested(
+            True, "A quantised K cache changes the attention arithmetic."
+        ),
+        "cache_type_v": Undigested(
+            True, "A quantised V cache changes the attention arithmetic."
+        ),
+        "flash_attention": Undigested(
+            True, "Another kernel adds the same values in another order."
+        ),
+        "n_parallel": Undigested(
+            True, "Slots divide the context, which changes the batch shapes."
+        ),
+        "n_threads_batch": Undigested(
+            True, "Prompt threads change how the partial sums accumulate."
+        ),
+        "load_mode": Undigested(
+            False, "mmap and mlock move where the weights sit, not what they hold."
+        ),
+        "poll": Undigested(
+            False, "How the runtime waits for work. It calculates nothing."
+        ),
+        "priority": Undigested(
+            False, "Scheduler priority changes when work runs, not what it produces."
+        ),
+        "startup_warmup": Undigested(
+            False, "A pass before the run. It decodes nothing that we keep."
+        ),
+        "request_timeout_minutes": Undigested(
+            False, "A clock bound on one POST. It stops a call, it does not reword one."
+        ),
+    }
+)
+
+
+def digested_inference_fields() -> frozenset[str]:
+    """The `InferenceConfig` knobs the stamp carries, read back from the stamp itself.
+
+    Four reach `PipelineInputs` under their own name. The rest arrive folded
+    into the sampling spelling, so the names come out of that spelling rather
+    than out of a second list somebody has to keep in step.
+    """
+    folded = (pair.split("=", 1)[0] for pair in sampling_spelling(InferenceConfig()).split(";"))
+    reaches_the_digest = frozenset(PipelineInputs.model_fields) | frozenset(folded)
+    return frozenset(InferenceConfig.model_fields) & reaches_the_digest
 
 
 def build_inputs(
