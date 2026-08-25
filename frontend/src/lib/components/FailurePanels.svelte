@@ -5,10 +5,18 @@
 	 * fire on touch and does not survive the screenshot an operator pastes into
 	 * an issue, so a chart whose only number is a tooltip has no number.
 	 *
-	 * The y domain is fixed at 0 to 100%. Scaled to the window's own maximum, a
-	 * single day in view normalised its bar to itself, so a 12% failure rate and
-	 * a 90% one both filled the panel.
+	 * The y domain is fixed at 0 to 100% and stays fixed. A rate over a known
+	 * range is compared across panels and across days, so padding it to the
+	 * drawn extent would break the comparison the panel exists for. Scaled to
+	 * the window's own maximum, a 12% failure rate and a 90% one both filled the
+	 * panel.
+	 *
+	 * A panel is the narrowest chart on the page - 163px measured at a 1057px
+	 * window - and it used to declare a 360-unit `viewBox` into that space, so
+	 * `font-size="10"` reached the screen at 4.5px. It draws in CSS pixels now,
+	 * through the same frame as every other console chart.
 	 */
+	import { chartWidth, frame, linearAxis, MARGIN, observeWidth } from '$lib/charts/frame';
 	import { failureSeries, type StageFailureSeries, type TelemetryRow } from '$lib/charts/series';
 	import type { TimeWindow } from '$lib/charts/viewport';
 
@@ -17,20 +25,41 @@
 		window,
 		minAttempts,
 		height,
+		width,
 		selectedCode,
 		onSelect
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
 		minAttempts: number;
+		/** The whole SVG, margins included. */
 		height: number;
+		/** The column the three panels share, until one has been measured. */
+		width: number;
 		selectedCode: string | null;
 		onSelect: (code: string | null) => void;
 	} = $props();
 
-	/** Room for the y labels, so a bar never starts on top of "100%". */
-	const PLOT_LEFT = 30;
-	const PLOT_RIGHT = 360;
+	/** The shared label column beside, and no tick row below: these panels label
+	 * their window in type above the chart, so a date axis would say it twice. */
+	const PANEL_MARGIN = { top: 8, right: 8, bottom: 8, left: MARGIN.left };
+
+	/** The `gap-4` and `p-3` of the three-up row below, in pixels. */
+	const ROW_GAP = 16;
+	const PANEL_PADDING = 12;
+
+	/** Nought to one. A rate is already on a known scale. */
+	const DOMAIN = [0, 1];
+
+	// One measurement for three panels: the grid gives every column the same
+	// width at every breakpoint it has.
+	let measured = $state<number | null>(null);
+
+	const panelWidth = $derived(
+		chartWidth(measured, Math.max(1, Math.round((width - ROW_GAP * 2) / 3) - PANEL_PADDING * 2))
+	);
+	const box = $derived(frame(panelWidth, height, PANEL_MARGIN));
+	const axis = $derived(linearAxis(DOMAIN, [box.bottom, box.top]));
 
 	const series = $derived(failureSeries(rows, window));
 	const codes = $derived(
@@ -71,7 +100,7 @@
 
 	function barHeight(day: StageFailureSeries['days'][number]): number {
 		if (day.rate === null || day.rate === 0) return 0;
-		return Math.max(1, day.rate * height);
+		return Math.max(1, box.bottom - axis.scale(day.rate));
 	}
 </script>
 
@@ -106,61 +135,66 @@
 				</div>
 				<!-- A chart of one value is a rectangle. The sentence above is the panel. -->
 				{#if entry.days.length > 1}
-					<svg
-						class="mt-3 w-full overflow-visible"
-						height={height + 26}
-						viewBox={`0 0 ${PLOT_RIGHT} ${height + 26}`}
-						role="img"
-						aria-label={`${entry.label} failure rate per day. ${headline(entry)}`}
-						data-panel={entry.stage}
-					>
-						<line x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={height} y2={height} stroke="var(--color-rule)" />
-						<line x1={PLOT_LEFT} x2={PLOT_LEFT} y1="0" y2={height} stroke="var(--color-rule)" />
-						<line
-							x1={PLOT_LEFT}
-							x2={PLOT_RIGHT}
-							y1={height / 2}
-							y2={height / 2}
-							stroke="var(--color-rule)"
-							stroke-dasharray="2 4"
-						/>
-						<text
-							x={PLOT_LEFT - 4}
-							y="9"
-							text-anchor="end"
-							fill="var(--color-text-tertiary)"
-							font-size="10"
+					<div class="mt-3" use:observeWidth={(value) => (measured = value)}>
+						<svg
+							width={box.width}
+							height={box.height}
+							viewBox={`0 0 ${box.width} ${box.height}`}
+							role="img"
+							aria-label={`${entry.label} failure rate per day. ${headline(entry)}`}
+							data-panel={entry.stage}
 						>
-							100%
-						</text>
-						<text
-							x={PLOT_LEFT - 4}
-							y={height}
-							text-anchor="end"
-							fill="var(--color-text-tertiary)"
-							font-size="10"
-						>
-							0
-						</text>
-						{#each entry.days as day, index (day.date)}
-							{@const width = (PLOT_RIGHT - PLOT_LEFT) / entry.days.length}
-							{@const x = PLOT_LEFT + index * width + 1}
-							{@const h = barHeight(day)}
-							{@const thin = day.attempts > 0 && day.attempts < minAttempts}
-							<rect
-								x={x}
-								y={height - h}
-								width={Math.max(1, width - 2)}
-								height={h}
-								fill={day.failures > 0 ? 'var(--band-low)' : 'var(--color-text)'}
-								fill-opacity={day.failures > 0 ? 0.9 : 0.25}
-								stroke={thin ? 'var(--color-text)' : 'none'}
-								stroke-dasharray={thin ? '3 2' : undefined}
+							<line
+								x1={box.left}
+								x2={box.right}
+								y1={box.bottom}
+								y2={box.bottom}
+								stroke="var(--color-rule)"
+							/>
+							<line
+								x1={box.left}
+								x2={box.left}
+								y1={box.top}
+								y2={box.bottom}
+								stroke="var(--color-rule)"
+							/>
+							<text
+								x={box.left - 4}
+								y={box.top + 3.5}
+								text-anchor="end"
+								fill="var(--color-text-tertiary)"
+								font-size="10"
 							>
-								<title>{day.date}: {day.failures}/{day.attempts} failed</title>
-							</rect>
-						{/each}
-					</svg>
+								{percent(axis.domain[1])}
+							</text>
+							<text
+								x={box.left - 4}
+								y={box.bottom + 3.5}
+								text-anchor="end"
+								fill="var(--color-text-tertiary)"
+								font-size="10"
+							>
+								{percent(axis.domain[0])}
+							</text>
+							{#each entry.days as day, index (day.date)}
+								{@const slot = box.innerWidth / entry.days.length}
+								{@const h = barHeight(day)}
+								{@const thin = day.attempts > 0 && day.attempts < minAttempts}
+								<rect
+									x={box.left + index * slot + 0.5}
+									y={box.bottom - h}
+									width={Math.max(1, slot - 1)}
+									height={h}
+									fill={day.failures > 0 ? 'var(--band-low)' : 'var(--color-text)'}
+									fill-opacity={day.failures > 0 ? 0.9 : 0.25}
+									stroke={thin ? 'var(--color-text)' : 'none'}
+									stroke-dasharray={thin ? '3 2' : undefined}
+								>
+									<title>{day.date}: {day.failures}/{day.attempts} failed</title>
+								</rect>
+							{/each}
+						</svg>
+					</div>
 				{/if}
 				<div class="mt-2 flex flex-wrap gap-2">
 					{#each codes as code (code)}
