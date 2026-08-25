@@ -464,6 +464,51 @@ test('the chart points at the write-up rather than restating it', async ({ page 
 	);
 });
 
+test('the throughput chart draws in the pixels it occupies', async ({ page }) => {
+	await page.goto('/console/');
+
+	const svg = page.locator('[data-throughput="chart"] svg');
+	// A viewBox is a scale factor, not a unit. Where the two disagree the chart
+	// renders every declared font-size at some other number of pixels.
+	for (const width of [380, 768, 1400]) {
+		await page.setViewportSize({ width, height: 900 });
+		await expect
+			.poll(async () =>
+				svg.evaluate(
+					(node) =>
+						Math.abs(
+							Number((node.getAttribute('viewBox') ?? '').split(' ')[2]) -
+								node.getBoundingClientRect().width
+						) <= 1
+				)
+			)
+			.toBe(true);
+	}
+});
+
+test('the throughput axis covers the rates drawn, not zero to the fastest', async ({ page }) => {
+	await page.goto('/console/');
+
+	const ticks = await page
+		.locator('[data-throughput-tick]')
+		.evaluateAll((nodes) => nodes.map((node) => Number(node.getAttribute('data-throughput-tick'))));
+
+	// The fixture's slowest item writes at 5.30 tok/s and its fastest reads at
+	// 11.91. Both ends are printed, and the axis does not spend most of its
+	// height on rates nothing ran at - a candle says where a rate is, and only a
+	// mark whose length carries the number needs zero on the axis.
+	expect(ticks.length).toBeGreaterThanOrEqual(2);
+	expect(Math.min(...ticks)).toBeGreaterThan(0);
+	expect(Math.min(...ticks)).toBeLessThanOrEqual(5.3);
+	expect(Math.max(...ticks)).toBeGreaterThanOrEqual(11.91);
+
+	// The prompt-reuse line and its right-hand 0-100% axis are gone. Reuse is a
+	// cache statistic, so the number stays in the legend and nothing draws a
+	// second y scale a reader could correlate against tokens per second.
+	await expect(page.locator('[data-throughput="chart"] polyline')).toHaveCount(0);
+	await expect(page.locator('[data-series="reused"]')).toContainText('51%');
+});
+
 test('the telemetry viewport renders the published projection', async ({ page }) => {
 	await page.goto('/console/');
 
