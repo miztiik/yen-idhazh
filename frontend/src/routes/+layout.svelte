@@ -11,5 +11,5 @@
 	<main>
 		{@render children()}
 	</main>
-	<SiteFooter day={data.day ?? null} repoUrl={data.ui.repo_url} />
+	<SiteFooter facts={data.footer} repoUrl={data.ui.repo_url} />
 </div>
