@@ -91,10 +91,12 @@ current maximum. A derived time now requires an explicit model-specific prompt
 count and truncation cap; without them the tool prints raw throughput only.
 
 **These figures do not size a production worker.** `run.shard_size = 5` is not
-enforced by `digest.yml`; the workflow divides the whole plan among four worker
-jobs. Run `32742672105` measured 34 to 41 items per worker. A current day can be
-larger. Size request and job bounds from a measured real worker population and
-its worst item, never from five-item arithmetic or the 229-second blend.
+enforced by `digest.yml`; the workflow divides the whole plan among the worker
+jobs the dispatch asked for - one to eight since 2026-08-25, and four on every
+scheduled run. Run `32742672105` measured 34 to 41 items per worker across four.
+A current day can be larger. Size request and job bounds from a measured real
+worker population and its worst item, never from five-item arithmetic or the
+229-second blend.
 
 ### Candidate: Qwen3.5-9B-Q4_K_M (measured; adoption work incomplete)
 
@@ -1350,9 +1352,87 @@ how close a 16 GB runner came to its limit. The samples upload inside
 
 The sampler's artifact cost is bounded, not estimated: a row is five
 tab-separated fields and at most about 60 bytes. The `work` job's configured
-bound is 330 minutes, so one shard writes at most 1,320 rows, about 79 KB, and
-four shards at most about 317 KB - 0.06% of the 500 MB artifact budget (Rule
-#2). A 105-minute shard writes about a third of that.
+bound is 330 minutes, so one shard writes at most 1,320 rows, about 79 KB; four
+shards at most about 317 KB and eight at most about 634 KB - 0.06% and 0.13% of
+the 500 MB artifact budget (Rule #2). A 105-minute shard writes about a third of
+that. Raising the shard ceiling scales this term with the shard count and leaves
+the `items-*` total flat, because the plan is divided between workers rather
+than copied to each of them.
+
+## Eight work shards
+
+**Status: unmeasured - awaiting the authorized eight-shard dispatch.** The
+ceiling moved from four to eight on 2026-08-25 and nothing has run at it. No
+figure in this section exists yet, and none may be cited until the run below
+fills it in (Rule #10).
+
+### What changed, and what did not
+
+`digest.yml` held the fan-out at four with a regex, `^[1-4]$`, and a matching
+`max-parallel: 4`. Both now read eight. Rule #2 allows 20 concurrent jobs, so
+four was a choice and not a platform limit. Every shard restores the same cache
+key, so the change adds cache restores and model loads, never cache bytes.
+
+The scheduled run is unchanged. It passes no inputs, so the plan job's
+`SHARDS=4` fallback still decides it. Moving that fallback is what the
+measurement below authorizes.
+
+### The baseline to compare against
+
+Run `32742672105`, 2026-08-24, GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB),
+four `work` jobs, `Qwen3-8B-Q4_K_M.gguf`, llama.cpp `b10598`. Every row is
+already on this page under
+[Model throughput across the four workers](#model-throughput-across-the-four-workers).
+
+| Quantity | Four shards |
+| --- | --- |
+| Articles | 149 |
+| Items per worker | 34, 35, 39, 41 |
+| Aggregate prefill | 10.95 tok/s |
+| Aggregate decode | 5.05 tok/s |
+| Prompt tokens evaluated | 152,933 in 232.7 min |
+| Tokens written | 41,098 in 135.7 min |
+
+Its per-job wall-clock is not on this page. Read it from the run itself with
+`gh api repos/miztiik/yen-idhazh/actions/runs/32742672105/jobs`; the
+`started_at` and `completed_at` fields outlive the two-day artifact retention.
+
+### The measurement
+
+One `Content refresh` dispatch at `shards = 8`, every other input left at its
+default. Then read six quantities out of that run and out of `32742672105`:
+
+1. **The slowest `work` job's wall-clock**, from `completed_at - started_at` in
+   the jobs API. This is the quantity the ceiling was raised to move: `route`
+   cannot start until the last worker finishes, so the slowest shard is the
+   run.
+2. **Items per worker.** Eight shards over a comparable day should each carry
+   about half of a four-shard worker. If they do not, the plan was smaller
+   rather than the fan-out wider.
+3. **Aggregate prefill and decode tok/s per job**, from each
+   `runtime-log-<shard>` artifact: summed tokens over summed milliseconds, not a
+   median of per-request rates. These say whether eight hosts run as fast per
+   host as four did.
+4. **Cache restore seconds per job**, from the `Cache weights and runtime` step
+   timing. Eight restores of one key instead of four is the entire added cost,
+   and it has never been measured.
+5. **`cgroup_memory_peak_bytes`** from every `memory-peak.txt`, against the
+   16 GB the runner has.
+6. **Total artifact bytes** for the run against the 500 MB budget, and the cache
+   entry size against 10 GB (Rule #2).
+
+The two runs cannot share a day's articles, so this is not a paired measurement.
+Report items per worker beside wall-clock so a smaller day is not read as a
+faster fan-out, and record the CPU model each job prints under
+[What a job log names](#what-a-job-log-names): a 3.1x prefill swing between hosts
+is already measured on this page and would dominate a two-run comparison.
+
+### What would move the scheduled default to eight
+
+The slowest `work` job falls, the run finishes inside `timeout-minutes: 330`,
+every shard's memory peak stays clear of 16 GB, and the artifact and cache
+totals stay inside Rule #2. Then the `SHARDS=4` fallback moves, in a commit that
+writes the numbers above into this section.
 
 ## Still unmeasured
 
@@ -1361,6 +1441,7 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
+| **Whether eight work shards move the slowest shard** | **unmeasured; the ceiling is raised and no run has used it** | dispatch `Content refresh` with `shards = 8`, then compare the slowest `work` job's wall-clock, its items per worker, and its per-job throughput against run `32742672105`'s four shards ([Eight work shards](#eight-work-shards)). |
 | **Whether parallel decode pays on 4 vCPU** | **unmeasured; the arm is built and waits on an authorized dispatch** | dispatch `Measurements` with `target = batched`, then divide `S_TG t/s` at `B = 2` by `S_TG t/s` at `B = 1` inside each repeat file and take the median. The gate is 1.4x; below it the whole `-np` line of work stops ([Parallel decode on 4 vCPU](#parallel-decode-on-4-vcpu)). |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the instrument now exists, no run has used it** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names), so read the next fast run against the next slow one and compare the CPU model first. |
@@ -1368,7 +1449,7 @@ to justify a design decision.
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the candidate through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | Exact complete-request context for the configured summarizer | **unmeasured; 877-879 covers only the system prompt** | render system prompt + source form + title + fences + exact sanitized model-visible text through the embedded chat template, count the generation suffix, add output budget, and record the maximum by band |
-| Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
+| Cache-restore time per job, cache-hit | ~90 s, asserted | the `Cache weights and runtime` step duration on every shard of the eight-shard dispatch above. Eight restores of one key instead of four is the entire cost the raised ceiling adds. |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | unmeasured | lands with the eval harness |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
