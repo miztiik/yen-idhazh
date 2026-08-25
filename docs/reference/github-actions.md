@@ -33,11 +33,22 @@ flowchart LR
 ## Content refresh
 
 The schedule and manual dispatch use the same job graph. The plan job creates
-the work list. The work matrix creates one to four total worker jobs. Scheduled
-runs use four. Manual dispatch offers only 1, 2, 3, or 4 and defaults to four.
-The plan job rejects any other value before it creates the matrix. The work
-strategy also sets `max-parallel: 4`; that limits concurrency but is not the
-total-job cap.
+the work list. The work matrix creates one to eight total worker jobs. Manual
+dispatch offers 1 through 8 and defaults to four. The plan job rejects any other
+value before it creates the matrix. The work strategy sets `max-parallel: 8`, so
+a dispatch at the ceiling runs every worker at once.
+
+**The ceiling is eight; the scheduled run is still four.** A scheduled run
+passes no inputs, so the plan job's own `SHARDS=4` fallback decides it, and that
+fallback is deliberately untouched. Eight shards has no measured wall-clock yet,
+and an unmeasured number may not move the path a reader depends on (Rule #10).
+What moves the scheduled default is the measurement described under
+[Eight work shards](measurements.md#eight-work-shards), not this change.
+
+Rule #2 allows 20 concurrent jobs. Eight workers plus the router is nine, and
+`route` waits on `work` rather than racing it, so the ceiling is nowhere near
+the platform limit. Every shard restores the same cache key, so more shards buy
+more restores and never more cache bytes.
 
 Each worker receives its round-robin share of the whole plan. The workflow does
 not enforce `config.run.shard_size` or `shard_timeout_minutes`; the work job uses
@@ -51,7 +62,7 @@ failure, then commits the digest and state.
 flowchart LR
     SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
     MANUAL["manual dispatch"] --> PLAN
-    PLAN --> WORK["work shards<br/>at most four total jobs"]
+    PLAN --> WORK["work shards<br/>at most eight total jobs"]
     WORK --> ROUTE["route"]
     ROUTE --> ASSEMBLE["assemble"]
     ASSEMBLE --> COMMIT["commit digest and state"]

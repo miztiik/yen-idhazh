@@ -133,7 +133,7 @@ The rest ends on its own after five skips. Nothing here ever edits
 `.github/workflows/digest.yml`, displayed as `Content refresh`, starts at 02:20,
 06:20, 10:20, 14:20, and 18:20 UTC. A plan job loads no weights. A matrix of
 worker jobs each restores the weights once and works a shard. Scheduled runs
-create four total worker jobs. Manual runs accept one to four and default to
+create four total worker jobs. Manual runs accept one to eight and default to
 four; the plan rejects any other value before it creates the matrix. Route uses
 their output, and assemble runs **even when a worker failed** - a run that publishes nothing
 on a bad day is a run whose bad days are invisible. Each run appends to the
