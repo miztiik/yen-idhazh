@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -559,9 +559,124 @@ had been borrowing `run.shard_timeout_minutes` - 150 minutes against a 60-minute
 job, so it could never fire. See
 [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md).
 
-**Still unmeasured on this row:** what fraction of a real day the gate removes.
-It is free to measure - `numeric_facts` needs no model, no network and no runner -
-and it stays out of this page until it has been.
+### Re-measured across six runs, 2026-08-25
+
+The single-run figure above was not the whole picture. Six `route` jobs on
+`ubuntu-latest` between 2026-08-24 07:32 and 2026-08-25 03:14, 703 routed items.
+Method: parse the `item routed` lines out of each job log; per-item cost is the
+recorded `route_ms` where the run wrote one and the gap between consecutive log
+timestamps where it did not. The two agree on the runs that carry both.
+
+| Run | slots | n | mean | median | min | max | span | Outcome |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `32701966659` | 4 | 145 | **20.7 s** | 17.8 s | 8.0 | 53.5 | 49.7 min | success |
+| `32719349248` | 4 | 93 | **38.2 s** | 35.6 s | 11.9 | 78.8 | 58.6 min | cancelled |
+| `32742672105` | 4 | 149 | **21.0 s** | 18.1 s | 8.1 | 56.0 | 51.7 min | success |
+| `32766098026` | 4 | 95 | **37.2 s** | 33.3 s | 12.2 | 79.5 | 58.2 min | cancelled |
+| `32772221068` | 1 | 133 | **26.6 s** | 24.2 s | 9.2 | 59.0 | 58.1 min | cancelled |
+| `32804437110` | 1 | 88 | **40.3 s** | 38.0 s | 12.5 | 76.5 | 58.1 min | cancelled |
+
+Three readings, and the second and third are the ones that matter:
+
+- **The cost is bimodal between runs, not drifting.** Every run is either about
+  21 s an item or about 38 s. The spread *within* a run is far smaller than the
+  spread *between* runs. The job's fate is decided by which host it drew.
+- **`n_slots` does not explain it.** Both 21 s runs and two of the 38 s runs ran
+  four auto-selected slots; the two one-slot runs sit at 26.6 s and 40.3 s. The
+  `-np 1` production trial is not what moved this number.
+- **The pre-filter had never fired.** `asked=False` appears **zero times in all
+  703 items**. `diagram` was in `visuals.enabled_kinds`, a diagram is reachable
+  for every item by construction, so `reachable_kinds` never returned empty.
+
+### What the pre-filter removes, measured offline
+
+**Measured 2026-08-25** on the 145 items with an `OK` summary from run
+`32804437110`. No model, no network, no runner: the `items-*` artifacts were
+downloaded and `route.reachable_kinds` was asked the same question
+`_route_one` asks. This is the row `measurements.md` had listed as free to
+measure and still unmeasured.
+
+| `enabled_kinds` | Model asked | Model skipped |
+| --- | --- | --- |
+| `[chart, diagram]` (as shipped until 2026-08-25) | 145 (100%) | 0 |
+| `[chart]` | 77 (53.1%) | **68 (46.9%)** |
+
+Distribution behind it: median 7 quantities per article (mean 7.8), median
+widest unit group 3 (mean 2.9, max 14), median 621 article words (mean 732, max
+1923). The widest-unit-group histogram, where `min_chart_points` is 3:
+
+| Widest group | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 14 |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| Articles | 13 | 30 | 25 | 31 | 19 | 12 | 4 | 3 | 5 | 1 | 1 | 1 |
+
+### What the model actually asked for
+
+Run `32804437110` is the first to log the draft kind beside the final kind:
+**17 chart drafts, 71 `none` drafts, 0 diagram drafts in 88 items.** Nine of the
+17 chart drafts survived the same-unit and distinct-bar checks. Across all six
+runs above, `diagram` was the final kind **zero times in 703 items**. The arm was
+switched off on the strength of this.
+
+### Where the per-item cost actually goes
+
+**Measured 2026-08-25** from llama-server's own `print_timing` lines in each
+run's `router-log` artifact - the runtime's numbers, not ours. Same six runs,
+608 requests.
+
+| Run | slots | Per item | Prefill | Decode | Prefill share | Prompt | Reply |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| `32701966659` | 4 | 20.7 s | **62.9 tok/s** | 5.5 tok/s | 56% | 696 tok | 38 tok |
+| `32719349248` | 4 | 38.2 s | **20.2 tok/s** | 8.7 tok/s | 86% | 622 tok | 38 tok |
+| `32742672105` | 4 | 21.0 s | **60.6 tok/s** | 5.5 tok/s | 56% | 659 tok | 38 tok |
+| `32766098026` | 4 | 37.2 s | **21.0 tok/s** | 9.1 tok/s | 86% | 623 tok | 39 tok |
+| `32772221068` | 1 | 26.6 s | **31.5 tok/s** | 8.7 tok/s | 81% | 628 tok | 38 tok |
+| `32804437110` | 1 | 40.3 s | **21.3 tok/s** | 9.0 tok/s | 85% | 700 tok | 39 tok |
+
+Rates are day totals - tokens summed, milliseconds summed, divided once - not
+the mean of per-item rates. Prompt and reply are medians.
+
+Four candidate causes die here and one survives:
+
+- **Not the article mix.** The median prompt is 622-700 tokens on every run and
+  the median reply is 38-39. The work per item did not change.
+- **Not `n_slots`.** Four-slot runs appear at both 62.9 and 20.2 tok/s, and
+  one-slot runs at both 31.5 and 21.3. The `-np 1` production trial is not what
+  moved this.
+- **Not decode, and not a generally slower machine.** Decode moves the *other
+  way*: 5.5 tok/s on the fast runs against 8.7-9.3 on the slow ones. A slower
+  host would slow both.
+- **Not a truncated request.** `visuals.request_timeout_minutes` is 2.0 and the
+  slowest item measured 79.5 s.
+- **It is the prefill rate, and only the prefill rate.** It swings 3.1x, and
+  because prefill is 56% to 86% of a request, the whole per-item figure follows
+  it. What differs between hosts to produce a 3x prompt-eval swing alongside a
+  *faster* decode is not recorded, because nothing logged the CPU. The `route`
+  job now prints `/proc/cpuinfo` model name, `nproc` and llama-server's
+  `system_info` line, so the next slow run answers it.
+
+The lever this points at is the prompt, not the runtime: `visuals.lead_words`
+(150) is most of each request's prefill, and prefill is most of the stage. It has
+never been swept.
+
+### Why a cancelled run published nothing
+
+A job cancelled at its timeout skips every step without an explicit condition.
+Step 15 of run `32804437110`'s `route` job - the `routes` artifact upload - is
+recorded as `skipped`, while `Upload router log` (which carries `if: always()`)
+ran. So 88 routing decisions and 9 rendered charts existed on that runner and
+none of them left it. `assemble` downloaded no routes artifact and published 145
+items with zero visuals.
+
+The derived ceiling, restated for both hosts and both configurations:
+
+| Per-item | `[chart, diagram]` | `[chart]` |
+| --- | --- | --- |
+| 20.7 s (fast host) | 172 items | 324 items |
+| 40.3 s (slow host) | 88 items | 166 items |
+
+against `run.safety_ceiling_per_run = 200` and a 50-minute stage budget. The
+slow host still cannot finish a maximum day, which is why the stage now stops
+itself rather than being killed.
 
 ## llama-server runtime sweep
 
@@ -922,6 +1037,8 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
+| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the cause is not recorded** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU, so the host difference has no name. The `route` job now prints `/proc/cpuinfo` model name, `nproc` and llama-server's `system_info`; read those against the next fast run and the next slow one. The `work` job wants the same three lines and does not have them. |
+| **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
 | **Whether the prompt prefix is reused at all** | **unmeasured, and currently unobservable** | a permanent instrument, not a one-off grep. `usage.prompt_tokens` reports the full prompt whether cached or not, and llama-server emits no `kv cache rm` line at our verbosity, so the question went blind again the moment row 3 closed. Log slot id, item id, band id, rendered system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens, and `p0` or `n_past`. |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
