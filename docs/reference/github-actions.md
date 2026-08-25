@@ -120,6 +120,26 @@ make them again, so the two payload files are named one at a time.
 why it is regenerated and not unioned: a union of two rewrites is a file with
 every row twice.
 
+**The charts in that directory are the other way to lose the day, and they get
+their own answer.** A chart is filed as `<vertical>-<NN>.svg`, numbered from the
+day's directory, and two runs of one day overlap by hours - so both read the same
+highest number and both write `energy-03.svg` for different items. Run
+`32869125768` finished eight workers and a router and then died at this step on
+`CONFLICT (add/add)` over four such paths, because git cannot rebase two adds of
+one path. `REFRESH_PATHS` cannot help: hand-back would delete this run's charts
+while the rebuilt `digest.json` still names them.
+
+`RENUMBER_COMMAND` is the answer. Before each rebase attempt the loop lists the
+asset paths the tip already publishes - `git ls-tree -r --name-only FETCH_HEAD`
+over the same staged paths - and pipes them to that command. Anything local
+standing on one of those paths moves to the next free number for its vertical,
+and the route payload naming it moves with it, so the rebuild that follows writes
+a day whose every asset path is really in the tree. The tip's file never moves: it
+is published, and a reader may already hold that address. `RENUMBER_COMMAND`
+without `REGENERATE_COMMAND` is rejected at startup, because only a job that
+rebuilds can commit the moves. Why it is a rename and not a merge side is in
+[`../architecture/publishing/visuals.md`](../architecture/publishing/visuals.md).
+
 **Every command in the loop is guarded.** Until 2026-08-25 `git pull --rebase
 origin main` was the only unguarded one, so under `bash -e` a conflict ended the
 script inside attempt 1: no attempt 2, no failure message, no day, and a checkout
@@ -128,9 +148,10 @@ progress, and ends on the three-attempt message.
 
 A workflow contract test pins this shape, and executes the script against real
 local repositories - including a scripted origin that gains both another run of
-the same day and an unrelated pull-request merge while the job works. Measured
-2026-08-25, git 2.55.0, bash 5.3.15. CI never runs `digest.yml`, so a change to
-the loop still needs a dispatched run to verify end to end.
+the same day and an unrelated pull-request merge while the job works, and one
+where both sides rendered a chart onto the same path. Measured 2026-08-25, git
+2.55.0, bash 5.3.15. CI never runs `digest.yml`, so a change to the loop still
+needs a dispatched run to verify end to end.
 
 Model validation and measurements never run on a pull request, push, or
 schedule. A person dispatches them. Drift review is a separate weekly or manual

@@ -8,7 +8,8 @@ about without an index.
 from __future__ import annotations
 
 import tempfile
-from pathlib import Path
+from collections.abc import Collection, Iterable
+from pathlib import Path, PurePosixPath
 from typing import Final
 
 from idhazh.contracts.route import Route, VisualKind, VisualState
@@ -67,6 +68,71 @@ def write_bytes_atomic(path: Path, payload: bytes) -> None:
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
         raise
+
+
+def assets_in_day(public_root: Path, date: str) -> set[str]:
+    """Every asset already sitting in this day's directory, as `asset_relpath` writes it."""
+    year, month, day = date.split("-")
+    folder = public_root / "digest" / year / month / day
+    if not folder.is_dir():
+        return set()
+    return {f"digest/{year}/{month}/{day}/{path.name}" for path in folder.glob(f"*{SUFFIX}")}
+
+
+def free_relpath(taken: Collection[str], date: str, vertical: str) -> str:
+    """The lowest `<vertical>-<NN>` for this day that `taken` does not hold.
+
+    Free by construction rather than by counting: the caller's `taken` is the
+    union of two directories that cannot see each other, so "one past the
+    highest" would be one past the highest of whichever side it read.
+    """
+    ordinal = 1
+    while asset_relpath(date, vertical, ordinal) in taken:
+        ordinal += 1
+    return asset_relpath(date, vertical, ordinal)
+
+
+def renumber_racing_assets(
+    *, public_root: Path, items_dir: Path, date: str, published: Iterable[str]
+) -> list[tuple[str, str]]:
+    """Move this run's assets off any path another run of the day already holds.
+
+    Two runs of one day both seed their counter from the day's directory
+    (`highest_ordinal`), and neither can see what the other pushed while it
+    worked. So both write `energy-03.svg`, for different items, with different
+    bytes. Git cannot rebase two adds of one path, and run `32869125768` lost a
+    finished day right there - eight workers and a router done, every summary
+    thrown away at the push.
+
+    The other run's copy is published and a reader may already hold that
+    address, so this run's copy is the one that moves. The route payload moves
+    with it, because that payload is the record of where the file went and
+    `assemble` copies it into the day verbatim.
+
+    `published` names what the other run holds, relative to `public_root`.
+    Returns the moves it made, so the run log can name them.
+    """
+    already = set(published)
+    taken = already | assets_in_day(public_root, date)
+    moves: list[tuple[str, str]] = []
+    for route_path in sorted(items_dir.glob("*.route.json")):
+        route = Route.from_json(route_path.read_text(encoding="utf-8"))
+        relpath = route.asset_path
+        if relpath is None or relpath not in already:
+            continue
+        source = public_root / relpath
+        # A payload naming a file this checkout does not hold cannot collide
+        # with anything: nothing here would commit that path.
+        if not source.is_file():
+            continue
+        vertical = PurePosixPath(relpath).stem.rsplit("-", 1)[0]
+        moved = free_relpath(taken, date, vertical)
+        source.replace(public_root / moved)
+        taken.add(moved)
+        renamed = route.model_copy(update={"asset_path": moved})
+        write_bytes_atomic(route_path, renamed.to_json().encode("utf-8"))
+        moves.append((relpath, moved))
+    return moves
 
 
 def render_route(

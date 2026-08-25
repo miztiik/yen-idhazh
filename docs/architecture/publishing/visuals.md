@@ -201,6 +201,23 @@ so one of them showed a chart of the other's numbers under alt text describing f
 not in the picture. The router now seeds each vertical's counter from the highest `<vertical>-<NN>`
 already on disk for that day.
 
+**Seeding from disk answers one run at a time, and two runs of a day overlap.** A run takes about
+three hours and the day is refreshed five times, so a second run is routing while the first is still
+summarizing. Neither checkout can see what the other has not pushed yet, so both read the same
+highest ordinal and both write `energy-03.svg` for different items with different bytes. The router
+never finds out. The push does: run `32869125768` finished eight workers and a router, then lost the
+whole day at the commit step on `CONFLICT (add/add)` over four asset paths, because git cannot
+rebase two adds of one path. Every summary in the day expired with the `items-*` artifacts.
+
+**The tip's chart never moves; this run's does.** Before each rebase attempt the commit step lists
+the asset paths the tip already publishes and hands them to
+[`backend/utilities/renumber_racing_assets.py`](../../../backend/utilities/renumber_racing_assets.py).
+Any local file standing on one of those paths is moved to the next free `<vertical>-<NN>` for the
+day - free against both sides at once, not one past the highest of whichever side was read - and the
+route payload that names it moves with it. The rebuild then re-reads the routes, so the `digest.json`
+that lands names a file that is really in the tree. A published address is one a reader may already
+hold, which is why the side that has never been published is always the side that gives way.
+
 Measured 2026-08-22 (Windows 11, 8 vCPU, `vl-convert-python` 1.9.0.post1): a Vega-Lite render takes
 2568 ms for the first call in a process and 49 ms warm, and produces about 7 KB of SVG. The cold
 cost is engine boot, paid once per run rather than once per item.
@@ -293,6 +310,23 @@ the page a reader can neither verify nor act on. `items_failed` stays, because a
 something the reader actually lost. The router's failure belongs where an operator looks: the run
 manifest's `items_routed` and `route_ms`, and the console.
 
+**Why a colliding chart is renumbered rather than merged, refreshed or picked between.** The three
+cheaper-looking answers all publish a wrong picture instead of failing, which is worse than losing a
+day because nobody finds out. Adding the day's directory to `REFRESH_PATHS` makes the rebuild's
+hand-back delete every chart this run added that the tip lacks, while the regenerated `digest.json`
+still names them - `assemble` copies the path from the route payload and cannot render anything - so
+the day publishes with broken images. It also overwrites the colliding file with the tip's bytes,
+which is the 2026-08-24 defect above, restored: one story's picture under another story's alt text.
+Resolving the add/add by a stated side has the same two outcomes and no third one; `-X theirs` gives
+our item the tip's picture, `-X ours` overwrites an asset a reader may already hold. Renumbering is
+the only option where both runs' charts survive and every path in the published day resolves.
+
+**Why the move happens in the shell's retry loop and not inside `assemble`.** The rebase is what
+fails, and it runs before `REGENERATE_COMMAND` does, so a fix that runs after it never gets to run
+at all. The naming rule itself stays in `backend/idhazh/render/write.py`, which owns it: the shell
+lists paths and pipes them, and a small argv wrapper under `backend/utilities/` does the arithmetic
+and rewrites the JSON. Bash never learns what `<vertical>-<NN>` means (Rule #3).
+
 **Why the budget became a stop rather than a louder warning.** `run.route_budget_minutes` already
 existed and already logged when the stage went over. It fired after the fact, into a log nobody
 reads until a reader notices a day with no pictures - and by then the run had already been
@@ -306,7 +340,10 @@ bound by design instead of by which host it drew (Rule #2).
 | --- | --- |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
 | Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
-| Shard the `route` job across a matrix | Still the strongest remaining lever, and still blocked on the same thing. Asset filenames come from a per-vertical counter seeded by reading the day's directory, so four shards would each read the same highest ordinal and two would write `energy-01.svg` - the exact collision fixed on 2026-08-24, reintroduced fourfold. Sharding needs the published asset path to come from the item's own identity first, and that is a published-payload change. Take the budget stop now, measure again, shard if a day still cannot finish. |
+| Shard the `route` job across a matrix | Still the strongest remaining lever, and still blocked on the same thing. Asset filenames come from a per-vertical counter seeded by reading the day's directory, so four shards would each read the same highest ordinal and two would write `energy-01.svg` - the exact collision fixed on 2026-08-24, reintroduced fourfold. The 2026-08-25 renumbering does not unblock it: that runs once, at the commit step, against paths the tip already publishes, and four shards collide inside one run when their artifacts unpack over each other - long before any commit, and silently. Sharding needs the published asset path to come from the item's own identity first, and that is a published-payload change. Take the budget stop now, measure again, shard if a day still cannot finish. |
+| Name the asset from the item's own identity, `<vertical>-<url_key prefix>.svg` | The full fix. It removes the counter, so no two runs and no two shards can ever choose one path, and it is what sharding is waiting for. It is also a published-payload change to a shape [`layout.md`](layout.md) states deliberately - no hash appears in any path, filename or URL - so it is CLAUDE.md section 6 Level 5 and belongs to the owner, not to a defect fix. Escalated 2026-08-25, not shipped. |
+| Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
+| Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
 | Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
 | Give a budget-stopped item a `Route` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
@@ -323,6 +360,7 @@ bound by design instead of by which host it drew (Rule #2).
 ## See also
 
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the visual rule this serves.
+- [`../../reference/github-actions.md`](../../reference/github-actions.md) - the commit loop that renumbers a raced chart.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - why decoding is pinned in one place.
 - [`../../concepts/evaluation.md`](../../concepts/evaluation.md) - how a stage gets measured.

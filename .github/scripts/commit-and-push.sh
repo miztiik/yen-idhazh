@@ -30,9 +30,11 @@
 #   PUSH_FAILED_MESSAGE     printed to stderr when every attempt is spent
 #   REFRESH_PATHS           optional: the committed paths this job rebuilds
 #   REGENERATE_COMMAND      optional: the producer that rebuilds them
+#   RENUMBER_COMMAND        optional: moves this attempt's rendered assets off
+#                           the paths the tip already publishes
 #
-# The last two are word-split on spaces, so no path and no argument may carry
-# one. They are given together or not at all.
+# The last three are word-split on spaces, so no path and no argument may carry
+# one. The first two are given together or not at all.
 set -euo pipefail
 
 : "${COMMIT_MESSAGE:?commit-and-push.sh needs COMMIT_MESSAGE}"
@@ -40,6 +42,7 @@ set -euo pipefail
 : "${PUSH_FAILED_MESSAGE:?commit-and-push.sh needs PUSH_FAILED_MESSAGE}"
 REFRESH_PATHS="${REFRESH_PATHS:-}"
 REGENERATE_COMMAND="${REGENERATE_COMMAND:-}"
+RENUMBER_COMMAND="${RENUMBER_COMMAND:-}"
 
 if [ "$#" -eq 0 ]; then
   echo "commit-and-push.sh needs at least one path to stage" >&2
@@ -56,12 +59,23 @@ if [ -z "$REFRESH_PATHS" ] && [ -n "$REGENERATE_COMMAND" ]; then
   echo "REGENERATE_COMMAND needs REFRESH_PATHS: a rebuild with no refresh reads its own last attempt" >&2
   exit 2
 fi
+# Only the amend below carries a renumber into the commit the rebase replays,
+# and only a rebuilding job amends. Elsewhere the moves would be made and then
+# left out of the push.
+if [ -n "$RENUMBER_COMMAND" ] && [ -z "$REGENERATE_COMMAND" ]; then
+  echo "RENUMBER_COMMAND needs REGENERATE_COMMAND: only a rebuilding job commits the moves" >&2
+  exit 2
+fi
 
 REFRESH=()
 REGENERATE=()
+RENUMBER=()
 if [ -n "$REFRESH_PATHS" ]; then
   IFS=' ' read -r -a REFRESH <<< "$REFRESH_PATHS"
   IFS=' ' read -r -a REGENERATE <<< "$REGENERATE_COMMAND"
+fi
+if [ -n "$RENUMBER_COMMAND" ]; then
+  IFS=' ' read -r -a RENUMBER <<< "$RENUMBER_COMMAND"
 fi
 
 # The work is in a commit by the time the loop runs, so anything still in the
@@ -106,6 +120,23 @@ hand_back() {
   done
 }
 
+# A rendered asset is filed by its vertical and its ordinal within the day, and
+# the ordinal is seeded by reading the day's directory. Two runs of one day read
+# that directory before either has pushed, so both number a chart `energy-03`,
+# for different items, with different bytes. Git cannot rebase two adds of one
+# path: run 32869125768 finished eight workers and a router and then threw the
+# whole day away here.
+#
+# The tip's copy is published and a reader may already hold that address, so the
+# tip's copy never moves. This attempt's does, to a number free on both sides,
+# and the route payload naming it moves with it - which is what keeps the
+# rebuilt digest pointing at a file that exists.
+spare_the_published_assets() {
+  local tip="$1"
+  shift
+  git ls-tree -r --name-only "$tip" -- "$@" | "${RENUMBER[@]}" || return 1
+}
+
 git config user.name "github-actions[bot]"
 git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 git add "$@"
@@ -131,9 +162,20 @@ for attempt in 1 2 3; do
     echo "could not read origin/main" >&2
     break
   fi
+  if [ "${#RENUMBER[@]}" -gt 0 ]; then
+    if ! spare_the_published_assets FETCH_HEAD "$@"; then
+      echo "could not move this attempt's assets off the paths origin publishes" >&2
+      break
+    fi
+  fi
   if [ "${#REFRESH[@]}" -gt 0 ]; then
     if ! hand_back FETCH_HEAD; then
       echo "could not hand the rebuilt paths back to origin/main" >&2
+      break
+    fi
+    # The moves above are worktree renames, which no index knows about yet.
+    if ! git add "$@"; then
+      echo "could not stage the refreshed paths" >&2
       break
     fi
     if ! git commit --amend --no-edit --allow-empty; then

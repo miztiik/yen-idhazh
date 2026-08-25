@@ -10,7 +10,8 @@ repository - and it would put the pipeline under test rather than the git loop.
 
 So this is a real program doing real file I/O with `stage_assemble`'s shape:
 read the previous day, drop the items it already carries, replace this run's
-entry in the run list, blind-append the two ledgers that blind-append,
+entry in the run list, copy each route's asset path into the day the way
+`to_digest_visual` does, blind-append the two ledgers that blind-append,
 deduplicate the one that deduplicates, and rewrite the telemetry projection
 whole. It decides nothing - no model, no scorer, no contracts - because the
 thing under test is the loop, not the digest.
@@ -55,6 +56,26 @@ def _write_json(path: Path, payload: dict[str, object]) -> None:
     )
 
 
+def _read_visuals(root: Path, date: str) -> dict[str, str]:
+    """Where this run's routes say their rendered assets landed.
+
+    `stage_assemble` copies each route's `asset_path` into the day payload
+    verbatim, so the payload and the files on disk agree only while something
+    keeps them agreeing. A stand-in that skipped this could not tell a day that
+    publishes a picture from a day that publishes a broken image.
+    """
+    items = root / "backend" / "var" / "run" / date / "items"
+    if not items.is_dir():
+        return {}
+    found: dict[str, str] = {}
+    for path in sorted(items.glob("*.route.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        asset = payload.get("asset_path")
+        if asset:
+            found[str(payload["item_id"])] = str(asset)
+    return found
+
+
 def rebuild(root: Path, date: str) -> None:
     """Publish this run's items into whatever day the checkout already holds."""
     day_dir = root / "frontend" / "public" / "digest" / date[:4] / date[5:7] / date[8:10]
@@ -77,7 +98,16 @@ def rebuild(root: Path, date: str) -> None:
     runs.append({"n": run_n, "items_added": len(fresh)})
     runs.sort(key=lambda run: int(run["n"]))
 
-    _write_json(day_dir / "digest.json", {"date": date, "items": [*carried, *fresh], "runs": runs})
+    # An item already published keeps the picture it published with, as
+    # `build_day` does: only a fresh item brings one.
+    routed = _read_visuals(root, date)
+    visuals: dict[str, str] = dict(previous["visuals"]) if previous else {}
+    visuals.update({item: routed[item] for item in fresh if item in routed})
+
+    _write_json(
+        day_dir / "digest.json",
+        {"date": date, "items": [*carried, *fresh], "runs": runs, "visuals": visuals},
+    )
     _write_json(day_dir / "run.json", {"date": date, "runs": runs})
 
     # Two of the three ledgers append blind, as `ledger._append` does: a row is
