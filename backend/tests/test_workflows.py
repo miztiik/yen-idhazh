@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+import json
 import re
 from typing import Final, cast
 
 import yaml  # type: ignore[import-untyped]
-from conftest import REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
 
@@ -52,7 +53,17 @@ LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256su
 LLAMA_PINNED_ENDPOINT: Final = (
     "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}"
 )
-MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime"})
+MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime", "batched"})
+# The batched-bench arm's own definition. `docs/reference/measurements.md`
+# publishes these values as the invocation behind its number, so a silent edit
+# here would leave that page describing a run nobody made.
+BATCHED_BENCH_SETTINGS: Final = {
+    "BENCH_PROMPT_TOKENS": "900",
+    "BENCH_GENERATE_TOKENS": "300",
+    "BENCH_PARALLEL_LEVELS": "1,2,4",
+    "BENCH_REPEATS": "3",
+    "BENCH_GATE_RATIO": "1.4",
+}
 # Every job that stands up llama-server, and the log that job writes. Both must
 # name the host, the binary and the weights: a shard's throughput is decided by
 # the host it drew, and a number that cannot name the bytes that produced it is
@@ -421,6 +432,64 @@ def test_runtime_download_uses_the_existing_github_token() -> None:
     assert download.get("env") == {"GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
     assert 'Authorization: Bearer ${GITHUB_TOKEN}' in script
     assert "Authorization: ******" not in read_text(WORKFLOWS_DIR / "measure.yml")
+
+
+def test_batched_bench_measures_one_host_against_itself() -> None:
+    """The result is a ratio, so every parallel level runs in the same job.
+
+    Prefill spans 3.4x across runner hosts, so a matrix member per level would
+    compare hardware and report it as batching. The arm also asks config for the
+    context and threading knobs: a literal copied into the workflow stops
+    describing production the day config moves (Rule #6).
+    """
+    workflow = _load_workflows()["measure.yml"]
+    job = _job(workflow, "batched")
+    summarize = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]["summarize"]
+
+    assert "strategy" not in job, "every parallel level must share one host"
+    env = _mapping(job.get("env"), "job batched env")
+    assert env.get("MODEL_FILE") == summarize["file"]
+    assert env.get("MODEL_REPO") == summarize["repo"]
+    for name, value in BATCHED_BENCH_SETTINGS.items():
+        assert env.get(name) == value, name
+
+    # A cache hit serves whatever binary or weights happened to be written into
+    # the entry, and nothing records which. A measurement arm downloads.
+    assert not any(
+        isinstance(uses := step.get("uses"), str) and uses.startswith("actions/cache@")
+        for step in _steps(workflow, "batched")
+    )
+
+    settings = _step(workflow, "batched", "name", "Read the production inference settings")
+    settings_script = settings.get("run")
+    assert isinstance(settings_script, str)
+    assert "config/idhazh.json" in settings_script
+
+    bench = _step(workflow, "batched", "name", "Benchmark parallel decode")
+    script = bench.get("run")
+    assert isinstance(script, str)
+    assert '"$LLAMA_BIN/llama-batched-bench"' in script
+    for flag, name in (
+        ("-c", "BENCH_N_CTX"),
+        ("-b", "BENCH_N_BATCH"),
+        ("-ub", "BENCH_N_UBATCH"),
+        ("-t", "BENCH_N_THREADS"),
+    ):
+        assert f'{flag} "${name}"' in script, f"{flag} must come from config"
+    for flag, name in (
+        ("-npp", "BENCH_PROMPT_TOKENS"),
+        ("-ntg", "BENCH_GENERATE_TOKENS"),
+        ("-npl", "BENCH_PARALLEL_LEVELS"),
+    ):
+        assert f'{flag} "${name}"' in script, f"{flag} must come from the pinned settings"
+    # llama-batched-bench drops a level whose context does not fit and says
+    # nothing, so the arm refuses before it spends the runner time.
+    assert 'if [ "$NEEDED" -gt "$BENCH_N_CTX" ]' in script
+
+    upload = _step(workflow, "batched", "name", "Upload batched bench")
+    uploaded = _mapping(upload.get("with"), "batched upload 'with'")
+    assert uploaded.get("path") == "backend/var/batched-bench/"
+    assert upload.get("if") == "always()", "the raw tables outlive a failed summary"
 
 
 def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
