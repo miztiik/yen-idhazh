@@ -591,30 +591,113 @@ def _summarize_one(
 # --- route -------------------------------------------------------------------
 
 
-def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
+class _RoutableItem(NamedTuple):
+    item: PlannedItem
+    article_path: Path
+    summary: Summary
+
+
+def already_published(date: str) -> frozenset[str]:
+    """The item ids the day's committed digest already carries.
+
+    `assemble.build_day` keeps an already-published item and discards the new
+    run's copy of it, because the reading order is part of what a shared link
+    shows. So a later run's routing decision for one of those items can never
+    reach a reader: it is computed, written, read back, and thrown away.
+
+    A day runs five times. Without this the second run spends its whole budget
+    re-deciding the first run's items at 20 to 40 measured seconds each, and the
+    items it actually introduced queue behind them.
+    """
+    day = _load_day(assemble.day_dir(PUBLIC_ROOT, date) / "digest.json")
+    return frozenset(item.item_id for item in day.items) if day else frozenset()
+
+
+def routable_items(
+    plan: RunPlan, items_dir: Path, *, published: frozenset[str]
+) -> list[_RoutableItem]:
+    """The items this run could still decide, best story first.
+
+    Rank order, not plan order. The plan is vertical-major, so stopping part-way
+    down it would cost whole verticals their pictures while the weakest story in
+    the first vertical kept one. This is the rule the safety ceiling already
+    follows: drop the weakest stories across every vertical, never a suffix.
+
+    The article stays on disk until the item is actually routed. Building this
+    list is what lets the stage know its own denominator before it spends
+    anything on the first item.
+    """
+    routable: list[_RoutableItem] = []
+    for item in plan.items:
+        if item.item_id in published:
+            continue
+        article_path = items_dir / f"{item.item_id}.article.json"
+        summary_path = items_dir / f"{item.item_id}.summary.json"
+        if not (article_path.exists() and summary_path.exists()):
+            continue
+        summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
+        if summary.status is not SummaryStatus.OK:
+            continue
+        routable.append(_RoutableItem(item, article_path, summary))
+    routable.sort(key=lambda entry: (-entry.item.rank_score, entry.item.item_id))
+    return routable
+
+
+def stage_route(
+    plan: RunPlan,
+    *,
+    settings: config.Settings,
+    clock: Callable[[], float] = time.monotonic,
+) -> None:
     """Decide and draw the visuals, one item at a time.
 
     A separate stage from `work` because it runs a different, smaller model, and
     one llama-server serves one set of weights. Splitting it also means a run
     that never starts a router still publishes - every item simply carries no
     picture, which is already the common and correct answer.
+
+    **The stage stops itself at `run.route_budget_minutes`.** It used to run
+    until the job's own timeout killed it, and a killed job uploads no artifact,
+    so a day that overran by one item threw away every decision the whole hour
+    had bought. Measured on `ubuntu-latest`: five of the eight runs since the
+    daily size moved to 200 items were cancelled that way, and each one published
+    a full day with zero visuals. Stopping early is the difference between
+    publishing the charts the run made and publishing none of them (Rule #2 -
+    the feature fits the runner, the runner is not raised to fit the feature).
+
+    **It also skips what the day already published**, because the assembler keeps
+    the published copy and discards the new one. That is what makes the stage
+    resumable in the sense the rest of the pipeline already is: a re-run costs
+    only the items the earlier run did not introduce.
+
+    `clock` is injected so the bound can be tested without spending it.
     """
     items_dir = _run_dir(plan.date) / "items"
     visuals = settings.app.visuals
     ordinals: dict[str, int] = {}
     spent: list[int] = []
     skipped = 0
-    for item in plan.items:
-        article_path = items_dir / f"{item.item_id}.article.json"
-        summary_path = items_dir / f"{item.item_id}.summary.json"
-        if not (article_path.exists() and summary_path.exists()):
-            continue
-        article = Article.from_json(article_path.read_text(encoding="utf-8"))
-        summary = Summary.from_json(summary_path.read_text(encoding="utf-8"))
-        if summary.status is not SummaryStatus.OK:
-            continue
+    unrouted = 0
 
-        started = time.monotonic()
+    published = already_published(plan.date)
+    routable = routable_items(plan, items_dir, published=published)
+    budget_ms = settings.app.run.route_budget_minutes * 60_000
+    stage_started = clock()
+    LOG.info(
+        "routing start items=%s already_published=%s budget_minutes=%s",
+        len(routable),
+        len(published),
+        settings.app.run.route_budget_minutes,
+    )
+
+    for index, entry in enumerate(routable):
+        if (clock() - stage_started) * 1000 >= budget_ms:
+            unrouted = len(routable) - index
+            break
+        item, summary = entry.item, entry.summary
+        article = Article.from_json(entry.article_path.read_text(encoding="utf-8"))
+
+        started = clock()
         decision, asked = _route_one(article, summary, settings)
         if not asked:
             skipped += 1
@@ -634,7 +717,7 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
                 canvas_width=visuals.canvas_width,
                 canvas_height=visuals.canvas_height,
             )
-        route_ms = int((time.monotonic() - started) * 1000)
+        route_ms = int((clock() - started) * 1000)
         spent.append(route_ms)
         decision = decision.model_copy(update={"route_ms": route_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}.route.json", decision.to_json())
@@ -653,23 +736,26 @@ def stage_route(plan: RunPlan, *, settings: config.Settings) -> None:
     # measurement (Rule #10).
     total_ms = sum(spent)
     LOG.info(
-        "routing done items=%s asked=%s prefiltered=%s total_ms=%s median_ms=%s slowest_ms=%s",
+        "routing done items=%s asked=%s prefiltered=%s unrouted=%s "
+        "total_ms=%s median_ms=%s slowest_ms=%s",
         len(spent),
         len(spent) - skipped,
         skipped,
+        unrouted,
         total_ms,
         sorted(spent)[len(spent) // 2] if spent else 0,
         max(spent, default=0),
     )
-    budget_ms = settings.app.run.route_budget_minutes * 60_000
-    if total_ms > budget_ms:
-        # A router cancelled at the job bound publishes a day with no visuals and
-        # says nothing about it. This says it while there is still room to act.
+    if unrouted:
+        # An unrouted item is one the run never decided, which is what
+        # `items_routed` in the manifest already reports. This says it in the run
+        # log too, with the rate that would have to change for it to fit.
         LOG.warning(
-            "route stage over budget spent_minutes=%.1f budget_minutes=%s items=%s",
-            total_ms / 60_000,
+            "route stage stopped at its budget minutes=%s routed=%s unrouted=%s mean_ms=%s",
             settings.app.run.route_budget_minutes,
             len(spent),
+            unrouted,
+            total_ms // len(spent) if spent else 0,
         )
 
 

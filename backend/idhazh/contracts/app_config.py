@@ -74,10 +74,10 @@ class RunConfig(Model):
         default=40,
         ge=1,
         description=(
-            "What the route stage may spend before the run log warns. Not a kill switch - "
-            "the job's own timeout is that. This fires early enough that a person still "
-            "has room to act, because a router cancelled at its bound publishes a day "
-            "with no visuals and says nothing about it."
+            "What the route stage may spend before it stops asking the model and leaves "
+            "the rest of the day unrouted. Sized below the job's own timeout, not equal "
+            "to it: a job killed at its bound uploads no artifact, so the whole hour's "
+            "decisions are lost rather than the tail it could not reach."
         ),
     )
     success_floor_pct: int = Field(
@@ -560,8 +560,15 @@ class VisualsConfig(Model):
     """
 
     enabled_kinds: list[VisualKind] = Field(
-        default_factory=lambda: [VisualKind.CHART, VisualKind.DIAGRAM],
-        description="Kinds the router may choose. `none` is always available and never listed.",
+        default_factory=lambda: [VisualKind.CHART],
+        description=(
+            "Kinds the router may choose. `none` is always available and never listed. "
+            "Diagram ships off: the model drafted it zero times in 88 items and rendered "
+            "it zero times in 703 (ubuntu-latest, 2026-08-24/25), while its presence made "
+            "the router's own pre-filter unfireable, because a diagram's steps come from "
+            "prose and nothing about it is decidable in advance. The renderer is built and "
+            "tested; turning the arm back on is this one word."
+        ),
     )
     min_chart_points: int = Field(
         default=3,
@@ -746,6 +753,28 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-25",
+            change=(
+                "run.route_budget_minutes now stops the route stage instead of warning it, "
+                "and visuals.enabled_kinds defaults to chart alone."
+            ),
+            why=(
+                "Warning after the fact never saved a day. Measured on ubuntu-latest over "
+                "six runs on 2026-08-24/25 (703 routed items): the mean per-item cost is "
+                "20.7 s on a fast host and 40.3 s on a slow one, so a 145-item day needs "
+                "50 to 97 minutes against a 60-minute job. Four of the six runs were "
+                "cancelled at the bound, and a cancelled job skips its upload step - so "
+                "every decision the hour bought was discarded and the day published with "
+                "zero visuals. The diagram arm is what made the existing pre-filter "
+                "unfireable: it is reachable for every item by construction, so the model "
+                "was asked about 145 of 145 items on 2026-08-25 while it drafted zero "
+                "diagrams in 88 and rendered zero in 703. With the arm off, 68 of those "
+                "145 items (46.9%) never reach the model at all. Same fields, same types, "
+                "same units; an older config still validates. Semantic shift on one and a "
+                "changed default on the other, so both are stamped here (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T23:40",
             change=(

@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -36,7 +36,7 @@ In order, with what each one owns:
 | **Extract** | Turning a page into readable text, and **the trust boundary**. This is where a stranger's bytes are sanitized, exactly once. See [../architecture/sources/trust-boundary.md](../architecture/sources/trust-boundary.md). Also where an over-long body is truncated and *flagged* as truncated - never silently dropped. Short or list-shaped text is recorded as a signal and still publishes by default. Publisher-declared paywalls and unsupported forms do not publish. | One article payload per item, including the failure cases and recorded shape signals. |
 | **Summarize** | Turning article text into a summary of a pinned shape, deterministically. The output shape is enforced by the decoder, not requested in the prompt. Also writes the item's title: a headline is written to win a click, so the digest publishes its own. If the local model server is down, Summarize records `model_unreachable` on the item rather than blaming the source or the model reply. See [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md). | One summary payload per item. |
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
-| **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. | A route decision per item. |
+| **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. It stops at its own budget rather than waiting to be killed, and it visits the best story first so what it cannot reach is the day's weakest items. See [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). | A route decision per item, for the items it reached. |
 | **Render** | Producing the visual the route asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
 | **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. It also writes the item-health census once per run, because it is the only stage that sees every planned item and every finished payload. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md). | One dated day payload plus its run manifest under `frontend/public/digest/`, and one item-health row per planned item under `state/item-health/`. |
 
@@ -64,7 +64,17 @@ Four invariants hold regardless of how the batches are sized:
   item id, not by processing order, so grouping same-band prompts changes cache
   locality and not correctness.
 - **An item whose fingerprint already matches does no work and writes no eval row.** A re-run that changed nothing measured nothing. What the fingerprint covers, and what happens when it matches but the words differ, is [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md). The eval writer enforces the same rule at the file, so a run that re-summarized an item it had no record of still writes nothing when the words and the scorer are unchanged ([evaluation.md](evaluation.md)).
-- **The router records what it spent.** Each run manifest carries `items_routed` and `route_ms`, the stage total over the items the router reached. `route_ms` is null when the router never ran, which is a different fact from zero. The stage total read against the job's own wall-clock is what separates a slow model from a fixed cost, and `route` sits close enough to its timeout that the difference decides the budget (Rule #10).
+- **The router records what it spent, and stops when it has spent it.** Each run
+  manifest carries `items_routed` and `route_ms`, the stage total over the items
+  the router reached. `route_ms` is null when the router never ran, which is a
+  different fact from zero. The stage stops itself at `run.route_budget_minutes`,
+  because a job killed at its own timeout skips its upload step and therefore
+  discards every decision it had already made - measured on 2026-08-25, 88 routed
+  items and 9 rendered charts thrown away, and the day published 145 items with
+  no visuals at all. An item the stage never reached writes no payload, which is
+  what `items_routed` already reports (Rule #10). It also skips what the day
+  already published, because the assembler keeps the published copy and discards
+  the new one - so re-deciding it is work no reader can ever see.
 - **The assemble step always runs, and always publishes.** A run with failures publishes a digest that says so, and the failure count lands in the ledger as a fact with a date on it. A run that publishes nothing on a bad day is a run whose bad days are invisible.
 - **Run counts stay run-scoped.** The day payload grows across runs. The run
   manifest does not. Each `runs[]` record says what that run planned, skipped,

@@ -1,6 +1,6 @@
 # Visual routing and rendering
 
-**Last Updated**: 2026-08-22
+**Last Updated**: 2026-08-25
 
 How an item gets a chart, a diagram, or - most of the time - nothing at all.
 
@@ -64,9 +64,9 @@ Three properties of how it is written, and each one is load-bearing:
 
 - **It is a predicate over every enabled kind, not a chart special case.** A diagram's steps come
   from prose, so nothing about a diagram is decidable in advance and it is always reachable while
-  enabled. With `diagram` in `visuals.enabled_kinds` no item is ever skipped. That is deliberate:
-  turning the arm off stays a config edit somebody makes on purpose, and can never be a silent
-  consequence of adding this gate.
+  enabled. With `diagram` in `visuals.enabled_kinds` **no item is ever skipped** - measured at 145
+  of 145 asked on 2026-08-25. That is why the arm now ships off (below): the gate cannot fire
+  underneath it, and turning it back on stays a config edit somebody makes on purpose.
 - **It reads the facts only - never the article's words.** A predicate that branched on fetched
   prose would let a stranger's page steer our control flow, which is Rule #11 with no prompt in
   sight. There is no keyword rescue for the diagram arm for the same reason.
@@ -74,9 +74,68 @@ Three properties of how it is written, and each one is load-bearing:
   reads as a unit, and `same_unit_bars` already groups on it. Excluding it here would gate items
   that publish today.
 
+With the arm off, measured on the 145 items of run `32804437110` with no model and no network:
+**68 items (46.9%) never reach the model**, and 77 do. The histogram of widest unit group per
+article is in [`../../reference/measurements.md`](../../reference/measurements.md).
+
 The denominator moves when this is on: the same charts sit over a smaller routed set, so a chart
 rate quoted against `items_routed` alone climbs without a single extra chart existing. Quote it
 against `items_routed + items_prefiltered`, or state which one you meant.
+
+## The stage stops itself before the job does
+
+The stage's wall-clock is `items with an OK summary x per-item cost`, and neither factor was
+bounded. The first is set by how well the summarizer did, up to `run.safety_ceiling_per_run`
+(200). The second is set by whichever host the runner gave us: measured mean **20.7 s on a fast
+host and 40.3 s on a slow one**, over six runs and 703 items on 2026-08-24/25. A 145-item day
+therefore needs anywhere from 50 to 97 minutes against a 60-minute job.
+
+What happened when it went over is the part that made the defect invisible. A job cancelled at its
+timeout **skips any step without an explicit condition**, and the `routes` artifact upload was one
+of those. So the run threw away every decision the hour had bought - on 2026-08-25 that was 88
+routed items and 9 rendered charts - and `assemble` published 145 items with zero visuals and no
+error anywhere on the page. The day cannot recover: `build_day` keeps an already-published item,
+so the four later runs of that day re-route the same items at full price and their answers are
+discarded.
+
+Three things changed, and each one addresses a different link in that chain:
+
+| Change | What it stops |
+| --- | --- |
+| `stage_route` stops at `run.route_budget_minutes` (50 in config, 40 by default) | The job is never cancelled, so it always reaches its upload step. |
+| The `routes` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
+| `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
+| The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
+
+**The router visits the best story first.** The plan is vertical-major, so stopping part-way down
+it would cost whole verticals their pictures while the weakest story in the first vertical kept
+one. `routable_items` sorts by `rank_score` before the loop, which is the rule
+`_within_ceiling` already follows for the safety ceiling: drop the weakest stories across every
+vertical, never a suffix.
+
+**The router skips an item the day's committed digest already carries.** `build_day` keeps an
+already-published item and discards the new run's copy, because the reading order is part of what a
+shared link shows. So a later run's decision for one of those items is computed, written, read back
+and thrown away. A day runs five times: without the skip, run 2 spends its whole budget re-deciding
+run 1's items at 20 to 40 measured seconds each, and the items it actually introduced queue behind
+them. This is the resumability invariant the rest of the pipeline already holds - a re-run costs
+only the unfinished items - applied to the one stage that did not. It reads the committed
+`digest.json` the same way the asset counter reads the committed directory, so it needs no handshake
+with the assembler.
+
+The corollary is worth stating plainly: **an item published without a visual can never gain one.**
+That is a property of `build_day`, not of the router, and it is why a run cancelled at the bound
+cost its day permanently rather than for one run. Changing it means letting a later run mutate a
+published item, which is a decision about the day payload rather than about the router.
+
+**An item the stage never reached writes no payload.** That is the same fact `items_routed` already
+reports - "items the router reached" - and it is what an item looks like today when the router
+never starts. A budget stop is the stage stopping, not a decision about an item, so it does not
+borrow `asked_the_model` and does not move `items_prefiltered`, which counts one specific cause.
+The run log names the count and the mean that produced it.
+
+The job's `timeout-minutes: 60` stays. It is the backstop, not the budget - raising it is the one
+move Rule #2 forbids.
 
 ## Two controls that run after the model has answered
 
@@ -184,22 +243,57 @@ unreachable, and asserts `to_route` lands on `none` for all of them. One survivo
 gate drops a chart a reader would have seen. That test is what makes "provable" a true word here,
 and it only became true once one quantity was limited to one bar.
 
-**The diagram arm has produced nothing, and that is recorded rather than acted on.** 0 diagrams in
-149 routed items and 0 in the 586 published on 2026-08-24. Three explanations fit - the prompt
-carries no diagram exemplar, `min_diagram_steps` blocks short answers, or news items genuinely are
-not flowcharts - and nothing committed can tell them apart, because `to_route` folds a rejected
-diagram into `none`. The router now logs the draft kind beside the final kind, so one run separates
-them. Until it does, the arm stays enabled and the gate yields nothing on a default config. That is
-the honest order: measure, then descope, never the reverse.
+**The diagram arm is off, on the measurement it was waiting for.** The doc used to say "the arm
+stays enabled until one run separates the three explanations - no exemplar in the prompt,
+`min_diagram_steps` blocking short answers, or news items genuinely not being flowcharts." That run
+landed. `32804437110` logs the draft kind beside the final kind: **17 chart drafts, 71 `none`
+drafts, and 0 diagram drafts in 88 items.** The model is not asking for diagrams and our checks are
+not rejecting them, so the first explanation is the live one - and the second and third cannot be
+told apart without a prompt change nobody has a reason to make. Across 703 routed items on
+2026-08-24/25 the arm produced nothing at all. Meanwhile it was the reason the reachability gate
+above could never fire, which cost 46.9% of every day at 20.7 to 40.3 s an item.
+
+So the arm is switched off in `visuals.enabled_kinds`, and the contract default follows, because a
+fresh clone should not pay for it either (Rule #6: the sane default is the measured one). Nothing
+else changes: the `diagram` enum member, the Mermaid writer, the SVG layout and their tests all
+stay, and `TestToRoute` keeps both arms on so the rejection paths and the injection canaries still
+hold. Turning it back on is one word in `config/idhazh.json`. The prompt still describes diagrams;
+it was left alone on purpose, because editing it changes the decode grammar and would invalidate
+the 21 s and 40 s figures this whole page rests on. A draft that asks for one now folds to `none`
+with a rationale naming the switch.
+
+**This is a pause, not a descope, and the condition to reopen it is written down.** Authority:
+Jony, 2026-08-25. Two things reopen the arm together, never separately: a prompt carrying a diagram
+exemplar that, measured offline against fixture articles, drafts diagrams at a rate surviving the
+post-model checks - AND a hand-read sample showing those drafts carry an order the summary does not
+already state. The first alone only proves a model will say "diagram" when asked to. The experiment
+runs against fixtures, off the daily path, because on the daily path its bill is paid by readers:
+every day it runs, the gate cannot fire and the router spends the hour before publishing nothing.
+
+**A day with no visuals says nothing to the reader.** Authority: Jony, 2026-08-25. "No picture" is
+the normal answer for an item, so a day where the router died reads exactly like a day where
+nothing earned one, and both are honest. A line about our own missing machinery is the one thing on
+the page a reader can neither verify nor act on. `items_failed` stays, because a missing story is
+something the reader actually lost. The router's failure belongs where an operator looks: the run
+manifest's `items_routed` and `route_ms`, and the console.
+
+**Why the budget became a stop rather than a louder warning.** `run.route_budget_minutes` already
+existed and already logged when the stage went over. It fired after the fact, into a log nobody
+reads until a reader notices a day with no pictures - and by then the run had already been
+cancelled and had already binned its artifact. A warning that only ever describes a loss is not a
+control. The same field now stops the loop, which is the smallest change that makes the job fit its
+bound by design instead of by which host it drew (Rule #2).
 
 ## Rejected alternatives
 
 | Option | Why rejected |
 | --- | --- |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
-| Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). The job was doing work whose outcome was already decided; the fix is to remove the work. |
-| Shard the `route` job across a matrix | The arithmetic works - 4 shards cost `4 x 47 s` of fixed cost and divide 3155 s - but asset filenames come from a per-process counter, so two shards would both write `energy-01.svg` and `merge-multiple: true` would pick a winner at random. Sharding as the code stands corrupts the day's assets. Gate first, measure again, shard only if still needed. |
+| Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
+| Shard the `route` job across a matrix | Still the strongest remaining lever, and still blocked on the same thing. Asset filenames come from a per-vertical counter seeded by reading the day's directory, so four shards would each read the same highest ordinal and two would write `energy-01.svg` - the exact collision fixed on 2026-08-24, reintroduced fourfold. Sharding needs the published asset path to come from the item's own identity first, and that is a published-payload change. Take the budget stop now, measure again, shard if a day still cannot finish. |
+| Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
+| Give a budget-stopped item a `Route` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
 | A keyword pre-filter to rescue the diagram arm | Fetched words would steer our control flow. Rule #11 in spirit, with no prompt involved. |
 | A second, smaller model to triage items first | Two calls where the point was zero. |
 | Diffusion for charts | Produces a beautiful picture of a chart with hallucinated axis labels. |

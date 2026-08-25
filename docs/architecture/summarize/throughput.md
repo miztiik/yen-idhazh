@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
@@ -82,6 +82,23 @@ the drift reverses.
 - **Check the reuse line before blaming the model.** The read rate is computed
   over the tokens the machine actually read. If prompt reuse jumps, the read
   rate moves without the model changing at all.
+
+**The chart has one day on it.** Counted 2026-08-25: the token columns landed on
+2026-08-24, so `2026-08-25` is the only date with any `prefill_ms`, 145 rows of
+it. Every reading rule above is therefore a rule about a chart nobody has yet
+read across days. The multi-day trend, the gap-breaking in the reuse line and
+the like-with-like comparison are all unexercised against real data. Re-check
+the console after a few more days before trusting any of them.
+
+**A model-swap mark is not built, and today it would draw nothing.** The rule
+above tells a reader to attribute a whole-candle move to a swap, but the chart
+does not say where a swap happened - so the reader has to know. `loadManifests()`
+already returns each day's model ids, so the join is small. What is missing is a
+way to prove it: all five published days ran `qwen3-8b-q4-k-m` and nothing else,
+so the mark cannot fire, the browser suite cannot see it, and the frontend has no
+unit-test runner to test the swap-detection in isolation. Build it with the first
+swap, or with a pure module and a runner to test it - not before, or it ships
+unverified.
 
 ## Design rationale
 
