@@ -297,6 +297,7 @@ def build_manifest(
         items_skipped=skipped,
         items_routed=len(routes or []),
         items_prefiltered=prefiltered,
+        charts_drafted=sum(1 for route in (routes or []) if route.drafted_chart),
         route_ms=sum(timed) if timed else None,
         verticals=[
             VerticalCount(

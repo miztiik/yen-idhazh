@@ -291,7 +291,13 @@ def parse_draft(raw: str) -> RouteDraft:
 
 
 def _nothing(
-    summary: Summary, *, model_id: str, reason: str, routed_at: str, version: str
+    summary: Summary,
+    *,
+    model_id: str,
+    reason: str,
+    routed_at: str,
+    version: str,
+    drafted_chart: bool = False,
 ) -> Route:
     return Route(
         version=version,
@@ -301,6 +307,7 @@ def _nothing(
         rationale=sanitize(reason)[:200] or None,
         model_id=model_id,
         routed_at=routed_at,
+        drafted_chart=drafted_chart,
     )
 
 
@@ -552,6 +559,10 @@ def to_route(
         )
 
     kind = VisualKind(draft.kind)
+    # What the model asked for, kept whatever this function does with it next.
+    # Every return below is a post-model check, and the difference between this
+    # flag and the published kind is exactly what those checks rejected.
+    drafted_chart = kind is VisualKind.CHART
     if kind not in visuals.enabled_kinds:
         return _nothing(
             summary,
@@ -559,6 +570,7 @@ def to_route(
             reason=f"{kind.value} has no renderer switched on",
             routed_at=routed_at,
             version=version,
+            drafted_chart=drafted_chart,
         )
 
     if kind is VisualKind.CHART:
@@ -569,6 +581,7 @@ def to_route(
                 reason="the chart pointed at a quantity the article does not contain",
                 routed_at=routed_at,
                 version=version,
+                drafted_chart=drafted_chart,
             )
         # One quantity may fill one bar. Without this the model can name index 3
         # three times, `same_unit_bars` groups all three under one unit, the
@@ -583,6 +596,7 @@ def to_route(
                 reason="the chart used one quantity for more than one bar",
                 routed_at=routed_at,
                 version=version,
+                drafted_chart=drafted_chart,
             )
         unit, bars = same_unit_bars(draft.points, available)
         kept_from = len(draft.points)
@@ -596,6 +610,7 @@ def to_route(
                 ),
                 routed_at=routed_at,
                 version=version,
+                drafted_chart=drafted_chart,
             )
         draft = draft.model_copy(update={"points": bars})
         # A caption written about five bars is a false statement about three.
@@ -633,4 +648,5 @@ def to_route(
         visual_state=VisualState.ABSENT,
         model_id=model_id,
         routed_at=routed_at,
+        drafted_chart=drafted_chart,
     )

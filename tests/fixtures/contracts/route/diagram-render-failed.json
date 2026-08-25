@@ -2,6 +2,7 @@
   "alt_text": null,
   "asked_the_model": true,
   "asset_path": null,
+  "drafted_chart": false,
   "failure_detail": "mermaid-cli exited 1: unsupported node shape",
   "item_id": "energy-01",
   "kind": "diagram",

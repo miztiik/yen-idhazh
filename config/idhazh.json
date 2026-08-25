@@ -120,7 +120,7 @@
   },
   "run": {
     "max_parallel": 4,
-    "route_budget_minutes": 50,
+    "route_budget_minutes": 40,
     "safety_ceiling_per_run": 200,
     "shard_size": 5,
     "shard_timeout_minutes": 150,

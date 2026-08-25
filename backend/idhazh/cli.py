@@ -677,6 +677,8 @@ def stage_route(
     ordinals: dict[str, int] = {}
     spent: list[int] = []
     skipped = 0
+    drafted = 0
+    kept = 0
     unrouted = 0
 
     published = already_published(plan.date)
@@ -701,6 +703,8 @@ def stage_route(
         decision, asked = _route_one(article, summary, settings)
         if not asked:
             skipped += 1
+        if decision.drafted_chart:
+            drafted += 1
         if decision.kind is not VisualKind.NONE:
             # Numbering continues from what this day already holds. A day runs
             # several times, and starting from one in each process overwrote the
@@ -717,6 +721,8 @@ def stage_route(
                 canvas_width=visuals.canvas_width,
                 canvas_height=visuals.canvas_height,
             )
+        if decision.kind is VisualKind.CHART:
+            kept += 1
         route_ms = int((clock() - started) * 1000)
         spent.append(route_ms)
         decision = decision.model_copy(update={"route_ms": route_ms})
@@ -735,13 +741,19 @@ def stage_route(
     # install, model start - and separating them is the whole point of the
     # measurement (Rule #10).
     total_ms = sum(spent)
+    # `drafted` minus `kept` is what the post-model checks refused. Without both
+    # numbers a model that stopped asking for charts reads the same as checks
+    # that started refusing them.
     LOG.info(
         "routing done items=%s asked=%s prefiltered=%s unrouted=%s "
+        "charts_drafted=%s charts_kept=%s "
         "total_ms=%s median_ms=%s slowest_ms=%s",
         len(spent),
         len(spent) - skipped,
         skipped,
         unrouted,
+        drafted,
+        kept,
         total_ms,
         sorted(spent)[len(spent) // 2] if spent else 0,
         max(spent, default=0),
