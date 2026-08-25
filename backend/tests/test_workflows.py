@@ -36,7 +36,11 @@ EXPECTED_WORKFLOWS: Final = {
 
 CONTENT_REFRESH_CRON: Final = "20 2,6,10,14,18 * * *"
 CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
-CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4"})
+# The ceiling, not the dispatch rule. Rule #2 allows 20 concurrent jobs; a regex
+# held the fan-out at four. The empty-input default below stays at four, because
+# that is what every scheduled run gets and no eight-shard run is measured yet.
+CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4", "5", "6", "7", "8"})
+CONTENT_REFRESH_SHARD_DEFAULT: Final = "4"
 
 # Every major below was read from its own `action.yml` on 2026-08-24 and declares
 # `using: node24`. `upload-pages-artifact@v5` is composite and pins a Node 24
@@ -251,11 +255,11 @@ def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
 
 def _evaluate_shard_matrix(script: str, requested_shards: str) -> list[int] | None:
     lines = [line.strip() for line in script.splitlines()]
-    default_line = '[ -n "$SHARDS" ] || SHARDS=4'
-    pattern_line = "SHARD_PATTERN='^[1-4]$'"
+    default_line = f'[ -n "$SHARDS" ] || SHARDS={CONTENT_REFRESH_SHARD_DEFAULT}'
+    pattern_line = "SHARD_PATTERN='^[1-8]$'"
     guard_block = [
         'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then',
-        'echo "shards must be an integer from 1 through 4" >&2',
+        'echo "shards must be an integer from 1 through 8" >&2',
         "exit 1",
         "fi",
     ]
@@ -600,18 +604,20 @@ def test_ci_and_pages_keep_their_push_boundaries() -> None:
     }
 
 
-def test_content_refresh_has_four_total_work_shards_at_most() -> None:
+def test_content_refresh_has_eight_total_work_shards_at_most() -> None:
     workflow = _load_workflows()["digest.yml"]
     shards = _mapping(_dispatch_inputs(workflow).get("shards"), "shards input")
     options = _string_list(shards.get("options"), "shards options")
 
     assert shards.get("type") == "choice"
-    assert shards.get("default") == "4"
+    assert shards.get("default") == CONTENT_REFRESH_SHARD_DEFAULT
     assert len(options) == len(CONTENT_REFRESH_SHARDS)
     assert frozenset(options) == CONTENT_REFRESH_SHARDS
 
     strategy = _mapping(_job(workflow, "work").get("strategy"), "work strategy")
-    assert strategy.get("max-parallel") == "4"
+    # The concurrency cap matches the ceiling. Left at four it would queue half
+    # of an eight-shard dispatch and hand back the wall-clock the fan-out buys.
+    assert strategy.get("max-parallel") == "8"
 
 
 def test_content_refresh_decide_step_caps_total_jobs_by_behavior() -> None:
@@ -620,16 +626,15 @@ def test_content_refresh_decide_step_caps_total_jobs_by_behavior() -> None:
     script = decide.get("run")
     assert isinstance(script, str)
 
-    expected = {
-        "": [0, 1, 2, 3],
-        "1": [0],
-        "2": [0, 1],
-        "3": [0, 1, 2],
-        "4": [0, 1, 2, 3],
-    }
+    default_matrix = list(range(int(CONTENT_REFRESH_SHARD_DEFAULT)))
+    expected = {shards: list(range(int(shards))) for shards in sorted(CONTENT_REFRESH_SHARDS)}
+    # A scheduled run passes no inputs at all, so the empty string is the case
+    # that decides what a reader actually gets.
+    expected[""] = default_matrix
     for requested_shards, matrix in expected.items():
         assert _evaluate_shard_matrix(script, requested_shards) == matrix
-    for invalid_shards in ("0", "5", "10", "-1", "1.5", "text"):
+    # Both edges of the new ceiling, plus the shapes that are not an integer.
+    for invalid_shards in ("0", "9", "10", "-1", "1.5", "text", "04", " 4"):
         assert _evaluate_shard_matrix(script, invalid_shards) is None
 
 
