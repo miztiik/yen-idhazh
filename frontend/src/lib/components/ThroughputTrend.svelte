@@ -9,27 +9,42 @@
 	 *
 	 * Whisker is fastest to slowest item, box is the middle half, the tick is the
 	 * median. Cached prompt tokens are already out of the read rate.
+	 *
+	 * The chart draws through `frame.ts` in CSS pixels, so `font-size="10"` is
+	 * ten pixels on screen. Its domain is the drawn extent rather than zero to
+	 * the fastest item: a candle says where a rate is, and zero belongs on an
+	 * axis only where the length of the mark carries the number. Measured on the
+	 * published console 2026-08-25, zero-anchored, the read whisker occupied
+	 * 17.5% of the plot height and the middle-half box 3.7%.
 	 */
+	import { chartWidth, frame, linearAxis, observeWidth } from '$lib/charts/frame';
 	import { axisLabels, type LabelAlign } from '$lib/charts/run-history';
 	import type { ThroughputDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
+	import { shortDate } from '$lib/format';
 
 	let {
 		days,
 		height,
+		width,
 		reference
-	}: { days: ThroughputDay[]; height: number; reference: string } = $props();
+	}: { days: ThroughputDay[]; height: number; width: number; reference: string } = $props();
 
 	const SERIES = [
 		{ key: 'read', label: 'read', colour: 'var(--color-accent)' },
 		{ key: 'write', label: 'write', colour: 'var(--color-text)' }
 	] as const;
 
-	/** Room for the tokens-per-second labels on the left and the percentage on
-	 * the right, so a candle never lands on top of one. */
-	const PLOT_LEFT = 30;
-	const PLOT_RIGHT = 330;
-	const CANVAS = 360;
+	type SeriesKey = (typeof SERIES)[number]['key'];
+
+	/** Thin enough that 60 days do not overlap into a smear, thick enough that
+	 * the middle-half box still reads as a box. */
+	const CANDLE_MIN = 2;
+	const CANDLE_MAX = 6;
+
+	/** The width the chart occupies, once a browser has measured it. Null on the
+	 * server, where the knob is the width. */
+	let measured = $state<number | null>(null);
 
 	const ordered = $derived([...days].sort((a, b) => a.date.localeCompare(b.date)));
 	const calendar = $derived(
@@ -38,15 +53,36 @@
 			: daysInWindow({ start: ordered[0].date, end: ordered[ordered.length - 1].date })
 	);
 	const byDate = $derived(new Map(ordered.map((day) => [day.date, day])));
-	const step = $derived((PLOT_RIGHT - PLOT_LEFT) / Math.max(1, calendar.length - 1));
-	const fastest = $derived(Math.max(1, ...ordered.flatMap((day) => [day.read.max, day.write.max])));
+	const box = $derived(frame(chartWidth(measured, width), height));
+
+	/** A series with nothing in the window draws nothing, and takes its axis, its
+	 * ticks and its legend entry with it. */
+	const drawn = $derived(
+		SERIES.filter((series) =>
+			ordered.some((day) => Number.isFinite(day[series.key].max) && day[series.key].max > 0)
+		)
+	);
+	const rates = $derived(
+		ordered.flatMap((day) => drawn.flatMap((series) => [day[series.key].min, day[series.key].max]))
+	);
+	const y = $derived(linearAxis(rates, [box.bottom, box.top], { zero: false }));
+
 	const axis = $derived(axisLabels(calendar));
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 	const previous = $derived(ordered.length > 1 ? ordered[ordered.length - 2] : null);
 
-	/** Candles thin as the window widens, so 60 days do not overlap into a smear. */
-	const width = $derived(Math.max(2, Math.min(6, step * 0.34)));
-	const offset = $derived(width * 0.62);
+	/** Candles thin as the window widens. */
+	const candle = $derived(
+		Math.max(
+			CANDLE_MIN,
+			Math.min(CANDLE_MAX, (box.innerWidth / Math.max(1, calendar.length - 1)) * 0.34)
+		)
+	);
+	const offset = $derived(candle * 0.62);
+	/** Half a pair of candles, so the oldest and the newest day sit inside the
+	 * plot rather than straddling its edge. */
+	const pad = $derived(Math.min(offset + candle / 2, box.innerWidth / 2));
+	const step = $derived((box.innerWidth - pad * 2) / Math.max(1, calendar.length - 1));
 
 	const ANCHOR: Record<LabelAlign, 'start' | 'middle' | 'end'> = {
 		start: 'start',
@@ -55,41 +91,18 @@
 	};
 
 	function x(index: number): number {
-		return calendar.length === 1 ? (PLOT_LEFT + PLOT_RIGHT) / 2 : PLOT_LEFT + index * step;
+		return calendar.length === 1 ? (box.left + box.right) / 2 : box.left + pad + index * step;
 	}
 
-	function y(tps: number): number {
-		return height - (tps / fastest) * height;
-	}
-
-	function centre(index: number, key: (typeof SERIES)[number]['key']): number {
+	function centre(index: number, key: SeriesKey): number {
 		return x(index) + (key === 'read' ? -offset : offset);
 	}
-
-	/** Each unbroken stretch of days that has a census. An absent day breaks the
-	 * line rather than drawing through nothing - no data and no reuse are
-	 * different facts. */
-	const reuseRuns = $derived.by(() => {
-		const paths: string[] = [];
-		let current: string[] = [];
-		calendar.forEach((date, index) => {
-			const day = byDate.get(date);
-			if (day) {
-				current.push(`${x(index)},${height - (day.cacheHitPct / 100) * height}`);
-			} else if (current.length > 0) {
-				paths.push(current.join(' '));
-				current = [];
-			}
-		});
-		if (current.length > 0) paths.push(current.join(' '));
-		return paths;
-	});
 
 	function rate(value: number): string {
 		return `${value.toFixed(2)} tok/s`;
 	}
 
-	function caption(day: ThroughputDay, key: (typeof SERIES)[number]['key']): string {
+	function caption(day: ThroughputDay, key: SeriesKey): string {
 		const band = day[key];
 		const runs = day.runs
 			.map((run) => `${run.runId} ${(key === 'read' ? run.read : run.write).toFixed(2)}`)
@@ -113,101 +126,115 @@
 <p class="mt-1 text-[0.8125rem] text-text-tertiary">
 	<em>Read</em> is the model taking an article in, <em>write</em> is it producing the summary. Writing
 	is slower because it goes one token at a time. Each candle is one day: the line spans the slowest
-	and fastest item, the box is the middle half, and the tick is the median. A wide candle is a mixed
-	day, not a fault -
+	and fastest item, the box is the middle half, and the tick is the median. The axis starts at the
+	slowest rate drawn, not at zero. A wide candle is a mixed day, not a fault -
 	<a href={reference} class="text-accent hover:underline" rel="noreferrer">why the spread is wide</a
 	>.
 </p>
 
 <div class="mt-4 rounded-md border border-rule bg-surface p-3" data-throughput="chart">
-	<svg
-		class="w-full overflow-visible"
-		height={height + 26}
-		viewBox={`0 0 ${CANVAS} ${height + 26}`}
-		role="img"
-		aria-label="Model tokens per second per day, oldest day on the left"
-	>
-		<line x1={PLOT_LEFT} x2={PLOT_RIGHT} y1={height} y2={height} stroke="var(--color-rule)" />
-		<line x1={PLOT_LEFT} x2={PLOT_LEFT} y1="0" y2={height} stroke="var(--color-rule)" />
-		<line x1={PLOT_RIGHT} x2={PLOT_RIGHT} y1="0" y2={height} stroke="var(--color-rule)" />
-		<text x={PLOT_LEFT - 4} y="9" text-anchor="end" fill="var(--color-text-tertiary)" font-size="10">
-			{fastest.toFixed(0)}
-		</text>
-		<text
-			x={PLOT_LEFT - 4}
-			y={height}
-			text-anchor="end"
-			fill="var(--color-text-tertiary)"
-			font-size="10"
+	<!-- The measured element is this one, not the card: the card's padding and
+	     border are not part of the width the chart draws into. -->
+	<div use:observeWidth={(px) => (measured = px)}>
+		<svg
+			class="w-full"
+			height={box.height}
+			viewBox={`0 0 ${box.width} ${box.height}`}
+			role="img"
+			aria-label="Model tokens per second per day, oldest day on the left"
 		>
-			0
-		</text>
-		<text x={PLOT_RIGHT + 4} y="9" fill="var(--color-text-tertiary)" font-size="10">100%</text>
-		<text x={PLOT_RIGHT + 4} y={height} fill="var(--color-text-tertiary)" font-size="10">0</text>
-
-		{#each reuseRuns as path, index (`reuse-${index}`)}
-			<polyline
-				points={path}
-				fill="none"
-				stroke="var(--color-text-tertiary)"
-				stroke-width="1"
-				stroke-dasharray="2 3"
-			/>
-		{/each}
-
-		{#each calendar as date, index (date)}
-			{@const day = byDate.get(date)}
-			{#if day}
-				{#each SERIES as series (series.key)}
-					{@const band = day[series.key]}
-					{@const cx = centre(index, series.key)}
-					<g data-candle={series.key} data-date={date}>
-						<title>{caption(day, series.key)}</title>
-						<line
-							x1={cx}
-							x2={cx}
-							y1={y(band.max)}
-							y2={y(band.min)}
-							stroke={series.colour}
-							stroke-width="1"
-						/>
-						<rect
-							x={cx - width / 2}
-							y={y(band.p75)}
-							width={width}
-							height={Math.max(1, y(band.p25) - y(band.p75))}
-							fill={series.colour}
-							opacity="0.55"
-						/>
-						<line
-							x1={cx - width / 2 - 1}
-							x2={cx + width / 2 + 1}
-							y1={y(band.median)}
-							y2={y(band.median)}
-							stroke={series.colour}
-							stroke-width="1.5"
-						/>
-					</g>
+			{#if drawn.length > 0}
+				<line
+					x1={box.left}
+					x2={box.right}
+					y1={box.bottom}
+					y2={box.bottom}
+					stroke="var(--color-rule)"
+				/>
+				<line x1={box.left} x2={box.left} y1={box.top} y2={box.bottom} stroke="var(--color-rule)" />
+				{#each y.ticks as tick (tick)}
+					<text
+						x={box.left - 4}
+						y={y.scale(tick) + 3}
+						text-anchor="end"
+						fill="var(--color-text-tertiary)"
+						font-size="10"
+						data-throughput-tick={tick}
+					>
+						{tick}
+					</text>
 				{/each}
 			{/if}
-		{/each}
 
-		{#each axis as label (label.column)}
-			<text
-				x={x(label.column - 1)}
-				y={height + 16}
-				text-anchor={ANCHOR[label.align]}
-				fill="var(--color-text-tertiary)"
-				font-size="10"
-			>
-				{label.text}
-			</text>
-		{/each}
-	</svg>
+			{#each calendar as date, index (date)}
+				{@const day = byDate.get(date)}
+				{#if day}
+					{#each drawn as series (series.key)}
+						{@const band = day[series.key]}
+						{@const cx = centre(index, series.key)}
+						<g data-candle={series.key} data-date={date}>
+							<title>{caption(day, series.key)}</title>
+							<line
+								x1={cx}
+								x2={cx}
+								y1={y.scale(band.max)}
+								y2={y.scale(band.min)}
+								stroke={series.colour}
+								stroke-width="1"
+							/>
+							<rect
+								x={cx - candle / 2}
+								y={y.scale(band.p75)}
+								width={candle}
+								height={Math.max(1, y.scale(band.p25) - y.scale(band.p75))}
+								fill={series.colour}
+								opacity="0.55"
+							/>
+							<line
+								x1={cx - candle / 2 - 1}
+								x2={cx + candle / 2 + 1}
+								y1={y.scale(band.median)}
+								y2={y.scale(band.median)}
+								stroke={series.colour}
+								stroke-width="1.5"
+							/>
+						</g>
+					{/each}
+				{/if}
+			{/each}
+
+			<!-- One day is still a candle - five order statistics is a shape - but a
+			     single column cannot carry a cadence, so it says which day it is. -->
+			{#if calendar.length === 1}
+				<text
+					x={(box.left + box.right) / 2}
+					y={box.height - 6}
+					text-anchor="middle"
+					fill="var(--color-text-tertiary)"
+					font-size="10"
+					data-throughput="day"
+				>
+					{shortDate(calendar[0])}
+				</text>
+			{:else}
+				{#each axis as label (label.column)}
+					<text
+						x={x(label.column - 1)}
+						y={box.height - 6}
+						text-anchor={ANCHOR[label.align]}
+						fill="var(--color-text-tertiary)"
+						font-size="10"
+					>
+						{label.text}
+					</text>
+				{/each}
+			{/if}
+		</svg>
+	</div>
 
 	{#if newest}
 		<ul class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-			{#each SERIES as series (series.key)}
+			{#each drawn as series (series.key)}
 				<li class="flex items-center gap-2" data-series={series.label}>
 					<span class="size-3 shrink-0 rounded-sm" style="background: {series.colour}"></span>
 					{series.label}
@@ -216,8 +243,10 @@
 					</span>
 				</li>
 			{/each}
+			<!-- A cache statistic, not a series. Drawn as a line against a second y
+			     axis until 2026-08-25, which invited a reader to correlate it with a
+			     rate it shares no unit with. -->
 			<li class="flex items-center gap-2" data-series="reused">
-				<span class="h-0 w-3 shrink-0 border-t border-dashed border-text-tertiary"></span>
 				prompt reused
 				<span class="tabular-nums text-text-secondary">{newest.cacheHitPct.toFixed(0)}%</span>
 			</li>

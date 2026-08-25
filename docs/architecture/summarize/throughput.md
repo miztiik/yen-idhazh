@@ -79,9 +79,13 @@ the drift reverses.
   milliseconds - is the one weighted by work actually done.
 - **A model swap should move the whole candle,** both ends together. A change in
   one end only is more likely a change in the article mix.
-- **Check the reuse line before blaming the model.** The read rate is computed
+- **The axis starts at the slowest rate drawn, not at zero,** and both ends are
+  printed. What a reader compares on this chart is a distance between two
+  candles, so the axis carries only the range the run actually reached.
+- **Check prompt reuse before blaming the model.** The read rate is computed
   over the tokens the machine actually read. If prompt reuse jumps, the read
-  rate moves without the model changing at all.
+  rate moves without the model changing at all. The figure is in the legend
+  under `prompt reused`; it is a cache statistic and is not drawn.
 - **Check the host before blaming anything.** The runner host moves the read
   rate further than any knob we set. Measured 2026-08-24 across eight `work`
   jobs, the read rate clustered at about 11, 14 and 37 tok/s - a 3.4x span with
@@ -101,9 +105,11 @@ and do not settle, are in
 **The chart has one day on it.** Counted 2026-08-25: the token columns landed on
 2026-08-24, so `2026-08-25` is the only date with any `prefill_ms`, 145 rows of
 it. Every reading rule above is therefore a rule about a chart nobody has yet
-read across days. The multi-day trend, the gap-breaking in the reuse line and
-the like-with-like comparison are all unexercised against real data. Re-check
-the console after a few more days before trusting any of them.
+read across days. The multi-day trend and the like-with-like comparison are both
+unexercised against real data. Re-check the console after a few more days before
+trusting either. A one-day window still draws its candle: min, p25, median, p75
+and max is five numbers and a real shape. It drops the date cadence, which one
+column cannot carry, and prints the date as one label instead.
 
 **A model-swap mark is not built, and today it would draw nothing.** The rule
 above tells a reader to attribute a whole-candle move to a swap, but the chart
@@ -138,6 +144,30 @@ default because four runs a day over a 30-day window is 120 candles in about
 300 pixels, which is a smear rather than a chart. The day is the unit that fits
 the window every other console chart already uses.
 
+**Why the axis is not anchored at zero (2026-08-25).** Zero belongs on an axis
+when the length of the mark encodes the value, as it does on a bar. A candle
+encodes by position, so what a reader reads off it is the distance between two
+candles, and an anchor nothing ran near spends the plot on empty space. Measured
+on the published console the same day: zero-anchored, the read whisker occupied
+17.5% of the plot height and the interquartile box 3.7%. The domain is now the
+drawn extent rounded outward by `.nice()`, and both ends are printed so the
+reader can still place a number. Authority: Jony.
+
+**Why the prompt-reuse line was deleted (2026-08-25).** It was drawn against a
+second y axis, 0 to 100%, on a chart whose own axis is tokens per second. Two
+scales on one plot invite a reader to correlate the two series, and these two do
+not share a unit or a cause - reuse is a property of the prompt cache, not of
+how fast the model runs. The number is a statistic and stays in the legend.
+Authority: Jony.
+
+**Why the chart draws in CSS pixels (2026-08-25).** It used to draw into a fixed
+360-unit `viewBox` and stretch to the column. A `viewBox` is a scale factor, so
+at a 1057px window the chart rendered 598px wide, which put `font-size="10"` on
+screen at 16.6px and `stroke-width="1"` at 1.66px. It now draws through
+[`frontend/src/lib/charts/frame.ts`](../../../frontend/src/lib/charts/frame.ts)
+at the width it occupies, so one unit is one pixel. The server draws at
+`console.chart_width` and the browser redraws once it has measured the element.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -147,6 +177,10 @@ the window every other console chart already uses.
 | Sort items by discovery order to flatten the drift | Trades a real prefix-cache saving for a prettier chart. |
 | Report one blended `summarize_ms` rate | Cannot separate a long-article day from a long-summary day, which is the question the chart exists for. |
 | Average the per-item rates for the day figure | A rate is a ratio. Averaging weighs a 60-word release note the same as a 2000-word feature. |
+| Keep the zero-anchored domain | Spends most of the plot on rates nothing ran at. Zero on a candle chart is not a landmark, it is padding. |
+| Draw prompt reuse as a single marker on a one-day window | One point compares to nothing. |
+| Hide the chart until two days exist | Five order statistics is a real shape on day one. |
+| Delete the per-mark `<title>` for a pinned readout | A tooltip redesign is a separate change, and the browser suite binds to this text. Deferred, not overlooked. |
 
 ## See also
 
