@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the orchestrator contract)
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-25
 
 The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
 
@@ -36,6 +36,8 @@ orchestrator (main thread)                 worker subagent (one per row)        
 
 The orchestrator does NOT open the row's source files, write its code, or run its inner test loop inline - that is the worker's job. The orchestrator's own edits are limited to the Status Reckoner and the merge.
 
+**When the orchestrator reports to the user, it translates; it does not forward.** A worker writes in the vocabulary of the subsystem it just changed, which is correct for the doc that row updated and wrong for a person asking what happened. Say what each number means next to the number (`CLAUDE.md` section 0b). Forwarding a worker's phrasing is the single easiest way for an orchestrator to break the voice rule while every row underneath it is green.
+
 ### The worker subagent (one per row) does the actual work
 Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Scope, Files touched, Acceptance gates, Oracle, Decisions, Rejected alternatives) plus the standing instruction: run bootstrap, honor CLAUDE.md, stay in scope, consult personas on ambiguity, return a report. The worker:
 1. Runs bootstrap; reads the row + the docs its surface touches.
@@ -43,7 +45,7 @@ Dispatched with `runSubagent` (default agent). Its brief is the row verbatim (Sc
 3. Resolves ambiguity by consulting personas (below), baking the ruling into the code.
 4. Runs the row's Oracle and every acceptance gate locally; iterates until green.
 5. Turns every defect discovered during execution into explicit work: fix it in the row if it is in scope, or record a follow-up row / scope-change item. Do not bury defects in a footnote.
-6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state.
+6. Returns a STRUCTURED report: files changed, gate + Oracle results, decisions taken (+ which persona ruled), any ESCALATE, and the branch / worktree state. **The report opens with one plain sentence saying what the row settled, before any table.** A report that opens with a table hands the orchestrator the subsystem's vocabulary, and the orchestrator then forwards it to a person who asked what happened (`CLAUDE.md` section 0b).
 7. Does NOT merge, does NOT edit the Status Reckoner, does NOT start another row. Merge and closure are the orchestrator's.
 
 ### Persona custom agents resolve ambiguity (they are not an approval gate)

@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -26,13 +26,15 @@ Adding a sixth persona requires a distinct altitude not already covered; two per
 
 ## Voice (`CLAUDE.md` section 0b)
 
-Binds every persona and every default-agent answer, plus docs, commit messages and reader-facing strings.
+Binds every persona and every answer an agent gives a user, plus docs, commit messages and reader-facing strings.
 
 - Write in plain, direct language. Use short sentences with one idea each.
 - Use the active voice.
 - Do not use corporate or self-invented tech jargon.
 - Lead with the core answer. Skip all introductory fluff.
 - Keep answers short unless asked for depth.
+- Say what a number means, next to the number. `1.055x` is not an answer; "5.5 percent faster, and we needed 40 percent" is.
+- A term from a subsystem is not a term for a user. Define it in the same sentence or do not use it.
 - Use ASD-STE100.
 
 A persona's own worldview shapes what it says, never how plainly it says it.
