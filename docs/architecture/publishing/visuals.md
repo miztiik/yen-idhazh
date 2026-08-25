@@ -105,12 +105,28 @@ Three things changed, and each one addresses a different link in that chain:
 | `stage_route` stops at `run.route_budget_minutes` (50 in config, 40 by default) | The job is never cancelled, so it always reaches its upload step. |
 | The `routes` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
+| The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
 
 **The router visits the best story first.** The plan is vertical-major, so stopping part-way down
 it would cost whole verticals their pictures while the weakest story in the first vertical kept
 one. `routable_items` sorts by `rank_score` before the loop, which is the rule
 `_within_ceiling` already follows for the safety ceiling: drop the weakest stories across every
 vertical, never a suffix.
+
+**The router skips an item the day's committed digest already carries.** `build_day` keeps an
+already-published item and discards the new run's copy, because the reading order is part of what a
+shared link shows. So a later run's decision for one of those items is computed, written, read back
+and thrown away. A day runs five times: without the skip, run 2 spends its whole budget re-deciding
+run 1's items at 20 to 40 measured seconds each, and the items it actually introduced queue behind
+them. This is the resumability invariant the rest of the pipeline already holds - a re-run costs
+only the unfinished items - applied to the one stage that did not. It reads the committed
+`digest.json` the same way the asset counter reads the committed directory, so it needs no handshake
+with the assembler.
+
+The corollary is worth stating plainly: **an item published without a visual can never gain one.**
+That is a property of `build_day`, not of the router, and it is why a run cancelled at the bound
+cost its day permanently rather than for one run. Changing it means letting a later run mutate a
+published item, which is a decision about the day payload rather than about the router.
 
 **An item the stage never reached writes no payload.** That is the same fact `items_routed` already
 reports - "items the router reached" - and it is what an item looks like today when the router

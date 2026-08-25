@@ -765,12 +765,25 @@ def test_the_router_visits_the_best_story_first(tmp_path: Path) -> None:
     items_dir = tmp_path / "items"
     stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
 
-    ordered = cli.routable_items(run_plan, items_dir)
+    ordered = cli.routable_items(run_plan, items_dir, published=frozenset())
 
     assert [entry.item.item_id for entry in ordered] == ["ai-01", "ai-02", "ai-03", "ai-04", "ai-05"]
     assert [entry.item.rank_score for entry in ordered] == sorted(
         (item.rank_score for item in run_plan.items), reverse=True
     )
+
+
+def test_an_item_the_day_already_published_is_never_routed_again(tmp_path: Path) -> None:
+    """`build_day` keeps the published copy and discards the new one, so deciding
+    it again is 20 to 40 measured seconds spent on an answer nobody can read.
+    """
+    run_plan = plan()
+    items_dir = tmp_path / "items"
+    stage_route_payloads(run_plan, items_dir, text=FACT_FREE_TEXT)
+
+    ordered = cli.routable_items(run_plan, items_dir, published=frozenset({"ai-01", "ai-03"}))
+
+    assert [entry.item.item_id for entry in ordered] == ["ai-02", "ai-04", "ai-05"]
 
 
 def test_an_item_without_a_usable_summary_is_never_routable(tmp_path: Path) -> None:
@@ -782,7 +795,7 @@ def test_an_item_without_a_usable_summary_is_never_routable(tmp_path: Path) -> N
     ).model_copy(update={"item_id": "ai-01", "url_key": run_plan.items[0].url_key})
     (items_dir / "ai-01.summary.json").write_text(failed.to_json(), encoding="utf-8")
 
-    ordered = cli.routable_items(run_plan, items_dir)
+    ordered = cli.routable_items(run_plan, items_dir, published=frozenset())
 
     assert failed.status is not SummaryStatus.OK
     assert "ai-01" not in [entry.item.item_id for entry in ordered]
