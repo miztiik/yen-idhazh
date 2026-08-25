@@ -1,15 +1,15 @@
 # Known defects
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
-Twelve defects found while shipping and re-reading the freshness, identity,
-health and evaluation work. None was in that scope. Defects 11 and 12 were found
-by running the gates and by opening the published day in a browser, not by
-reading code.
+Fourteen defects found while shipping and re-reading the freshness, identity,
+health and evaluation work, plus the console charts. None was in the scope that
+found it. Defects 11 and 12 were found by running the gates and by opening the
+published day in a browser, not by reading code; 13 and 14 the same way.
 
 **Ten are closed.** Defect 8 is closed on the item copy and on the day's band
 bar. Defect 2 has its instrument built and is waiting on human labels and
-calendar time, which no amount of engineering closes.
+calendar time, which no amount of engineering closes. Defects 13 and 14 are open.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -28,6 +28,39 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 10 | The `route` job hits its 60-minute timeout | 3 | FIXED - 2026-08-24 |
 | 11 | A second run of a day overwrites the first run's charts | 3 | FIXED - 2026-08-24 |
 | 12 | One quantity could fill three bars of a published chart | 2 | FIXED - 2026-08-24 |
+| 13 | One stage is 2600x the others, so a linear timing axis answers for one of four | 2 | **OPEN** |
+| 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | **OPEN** |
+
+## 13 - One stage is 2600x the others, so a linear timing axis answers for one of four (OPEN)
+
+Found 2026-08-25 while putting the console charts on a real coordinate system
+(PR #93). Measured on the committed ledger: `summarize` runs 110.6 s, `score`
+3.2 s, `fetch` 516 ms, `extract` 42 ms. The extent is 42 ms to 110.6 s, which
+`.nice(4)` rounds out to 0-150 s, so three of the four stage lines sit on the
+baseline and 26% of the plot is empty above the highest one. The chart can
+answer "is summarize getting slower" and cannot answer it for anything else.
+
+The padded linear domain was ruled deliberately for that chart and is correct
+for stages of comparable size, so this is not a regression to revert. The two
+candidate fixes are a log y axis - `logAxis` already exists in
+`frontend/src/lib/charts/frame.ts` and the compression chart uses it - or one
+small multiple per stage. Choosing between them is a Jony call, because it is a
+question about what the chart is for, not about the maths.
+
+## 14 - The canary day has no scored item, so the compression chart is only ever tested empty (OPEN)
+
+Found 2026-08-25 while redrawing the compression scatter (PR #97). The browser
+suite runs against the canary day, and that day carries no scored item, so the
+chart's populated state - the band zone, the truncation diamond, the point
+marks, the y domain - has no coverage at all. Everything the suite proves about
+that chart today is proved about an empty window. The live chart draws 1166
+points; the tested one draws none.
+
+The fix is a scored row in `backend/utilities/build_canary_day.py`. It is small,
+but it changes the fixture every browser test reads, so it lands on its own and
+the whole suite is re-run against it. Any fixture change must keep the builder
+idempotent - see the entry in
+[../docs/reference/agent-notes.md](../docs/reference/agent-notes.md).
 
 ## 2 - The faithfulness thresholds have no labelled error rate (INSTRUMENT BUILT)
 
