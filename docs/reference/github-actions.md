@@ -155,7 +155,7 @@ application runtime and is unrelated to the runtime an action itself declares.
 
 ## Repository settings these workflows depend on
 
-Read from the repository API on 2026-08-24.
+Read from the repository API on 2026-08-25.
 
 | Setting | Value | Why |
 | --- | --- | --- |
@@ -165,6 +165,10 @@ Read from the repository API on 2026-08-24.
 | `allow_update_branch` | true | A PR can be brought up to date from `main` without a local push. |
 | `delete_branch_on_merge` | true | The remote branch goes away on merge. |
 | `allow_auto_merge` | **false** | Deliberate. See below. |
+| `squash_merge_commit_title` | `PR_TITLE` | The subject is the PR title. GitHub appends the PR number. |
+| `squash_merge_commit_message` | `PR_BODY` | The body is the PR body. Branch commit bodies are never concatenated. See below. |
+| `merge_commit_title` | `MERGE_MESSAGE` | The merge path, when a PR carries several intents. |
+| `merge_commit_message` | `PR_TITLE` | Neither merge-commit setting reads a branch commit body, so that path was never affected. |
 
 **`main` is not a protected branch, and protecting it would break
 publication.** `digest.yml` and `validate.yml` push their state commits straight
@@ -174,6 +178,19 @@ that cannot commit has done its work for nothing. GitHub's built-in auto-merge
 requires branch protection, which is why `allow_auto_merge` is off rather than
 merely unused. Protecting `main` is possible, but only after the direct pushes
 in those two workflows are redesigned or explicitly exempted.
+
+**A squash commit takes its message from the pull request, not from the branch
+commits.** `squash_merge_commit_message` was `COMMIT_MESSAGES` until 2026-08-25.
+That value concatenates every branch commit body into the landed message, so a
+`Co-authored-by` attribution trailer written on a branch commit reaches `main`
+by itself. `CLAUDE.md` section 8 forbids that trailer, and PR #71 stayed clean
+only because the message was passed by hand at merge time. `PR_BODY` removes the
+path instead of relying on the person merging to notice.
+
+The cost is that the pull request body is now the commit body. Write it as a
+commit message - plain prose, ASCII, no heading markup - because whatever it
+contains lands on `main` verbatim. `main` is unprotected, so no check can block
+a bad message; this setting is what makes the good outcome the default one.
 
 ## Platform limits that shape the workflows
 
