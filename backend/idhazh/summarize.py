@@ -7,7 +7,7 @@ reason a specific failure cannot happen:
   system prompt. An instruction inside it is data about a web page.
 - The response shape is enforced by the decoder, so an injection can change the
   words and cannot change the shape.
-- The empty `<think>` block is asserted rather than assumed. A flag that
+- Every `<think>` block is asserted empty rather than assumed. A flag that
   silently stopped taking effect would otherwise cost faithfulness for months
   before anyone noticed.
 
@@ -229,11 +229,17 @@ def build_request(
 
 
 def split_thinking(raw: str) -> tuple[str, str | None]:
-    """Return the content with any think block removed, plus what was inside it."""
-    match = _THINK.search(raw)
-    if not match:
+    """Return the content with every think block removed, plus what was inside them.
+
+    Every block is read, not the first. The caller asserts the absence of
+    reasoning, so one unread block defeats the assertion: an empty opening block
+    in front of a block that reasoned used to pass, and every block was stripped
+    afterwards, so nothing downstream could see it either.
+    """
+    blocks: list[str] = _THINK.findall(raw)
+    if not blocks:
         return raw.strip(), None
-    return _THINK.sub("", raw).strip(), match.group(1)
+    return _THINK.sub("", raw).strip(), "\n".join(blocks)
 
 
 def parse_draft(
