@@ -168,6 +168,20 @@ pre-fix run so the fix can be shown to have done something:
 gh api repos/<owner>/<repo>/check-runs/<jobId>/annotations
 ```
 
+**`gh api repos/<owner>/<repo>/actions/jobs/<id>/logs` exits 1 and prints
+nothing.** It reads like the job kept no log. The job did; the endpoint answers
+with a redirect `gh api` does not follow. Ask through the run instead:
+
+```powershell
+gh run view <runId> --repo <owner/repo> --job <jobId> --log
+```
+
+**`gh run download` can exit 0 on a partial artifact.** One download extracted
+25 of 37 items and returned success; a second attempt gave all 124 files. Count
+what you got against what you expected before you compute anything from it - a
+measurement taken from a silently truncated artifact is wrong in a direction
+nobody checks.
+
 **`gh pr merge --squash --delete-branch` prints
 `fatal: 'main' is already used by worktree` and exits non-zero when any worktree
 has `main` checked out - but the server-side merge has already succeeded.**
