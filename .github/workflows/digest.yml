@@ -302,6 +302,11 @@ jobs:
   # llama-server serves one set of weights. It is deliberately unable to stop a
   # publication: `continue-on-error` plus assemble's `always()` means a router
   # that never starts costs every item its picture and costs the day nothing.
+  #
+  # This bound is the backstop, not the budget. The stage stops itself at
+  # `run.route_budget_minutes` in config/idhazh.json, which is set below this
+  # number with room for the fixed cost and one worst-case item. Raising this
+  # number is not the fix for a slow router (Rule #2); lowering that one is.
   route:
     needs: [plan, work]
     if: always()
@@ -398,6 +403,16 @@ jobs:
             exit 1
           }
 
+      # The router's prefill rate varies 3x between runs (20.2 to 62.9 tok/s,
+      # six runs 2026-08-24/25) while the prompt size and the decode rate stay
+      # put, which is what decides whether a day fits its budget. The runner's
+      # CPU is the remaining suspect and nothing recorded it, so record it.
+      - name: What this runner is
+        run: |
+          grep -m1 'model name' /proc/cpuinfo || true
+          nproc
+          grep -m1 'system_info' router.log || true
+
       - name: Route and render
         run: python -m idhazh route --date "${{ needs.plan.outputs.date }}"
 
@@ -423,7 +438,13 @@ jobs:
           retention-days: 2
           if-no-files-found: ignore
 
+      # `always()`, because a cancelled job skips a step that has no condition.
+      # Every route decision and every rendered chart lives only in this
+      # artifact, so without it a router stopped for any reason hands assemble
+      # nothing and the day publishes with no visuals at all - which is exactly
+      # what four of the six runs on 2026-08-24/25 did.
       - uses: actions/upload-artifact@v7
+        if: always()
         with:
           name: routes
           path: |

@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-25
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -17,6 +17,69 @@ The row carries:
 
 The file is append-only and never pruned. The 30-day window is a read-side
 parameter. Monthly shards follow `state/seen/` and `state/feed-health/`.
+
+## The structure
+
+Three files carry one item-health row, and each owns one thing:
+
+| Where | What it owns |
+| --- | --- |
+| `backend/idhazh/contracts/item_health.py` | the shape: field order, types, enums, the validator, and `csv_columns()` |
+| `schemas/item-health-row.schema.json` | the generated schema. Never hand-edited (Rule #3) |
+| `backend/idhazh/ledger.py` | the append, the header guard, and the monthly shard path |
+
+**One definition of the column list.** `ItemHealthRow.csv_columns()` returns
+`tuple(model_fields)`, so the CSV header IS the contract's field order. A writer
+and a reader cannot disagree, and there is no second list to forget.
+
+**The file layout.** One directory, one file per calendar month of the `date`
+column, named `YYYY-MM.csv`. A row is placed by the digest date it describes,
+not by the clock when it was written, so a run that publishes just after
+midnight UTC still files under the day it published. Header on line 1, `\n`
+endings, `utf-8`, no quoting beyond what `csv` needs.
+
+**Every cell is a string.** `csv_row()` writes `""` for an absent optional and
+`from_csv_row()` reads `""` back as `None`. There is no sentinel number and no
+`NULL` literal, because both of those get averaged by accident one day.
+
+The 24 columns, in file order:
+
+| Column | Type | Present when | What it answers |
+| --- | --- | --- | --- |
+| `version` | date-stamp | always | which contract wrote this row (section 11) |
+| `date` | `YYYY-MM-DD` | always | the digest day, and the shard this row files under |
+| `run_id` | `<date>-<n>` | always | which of the day's runs wrote it |
+| `item_id` | slug | always | the item's per-day ordinal; **it can move between runs** |
+| `url_key` | sha256 | always | the stable article key. Join on this, not `item_id` |
+| `canonical_url` | URL | always | the address, after a run artifact has expired |
+| `vertical` | slug | always | which topic queue it was planned into |
+| `source_id` | slug | always | which feed contributed it |
+| `stage` | enum | always | where it stopped: `plan`, `fetch`, `extract`, `summarize`, `publish` |
+| `outcome` | enum | always | `ok` or `failed` |
+| `code` | enum | on failure, or as an `ok` extract signal | the typed cause |
+| `http_status` | 100-599 | `fetch` rows only | what the server said |
+| `source_chars` | int | once extract ran | article size before summarizing |
+| `source_words` | int | once extract ran | the denominator of compression |
+| `summary_words` | int | once summarize succeeded | the numerator of compression |
+| `detail` | <= 200 chars | `code = unknown` only | our own one-line reason. Never source text |
+| `fetch_ms` | int | once fetch ran | wall-clock for the HTTP read |
+| `extract_ms` | int | once extract ran | wall-clock for text extraction |
+| `summarize_ms` | int | once the model replied | wall-clock for the whole model request |
+| `prefill_ms` | int | when the runtime reports it | the model reading the prompt |
+| `decode_ms` | int | when the runtime reports it | the model writing the reply |
+| `input_tokens` | int | when the runtime reports it | prompt tokens, cached ones included |
+| `output_tokens` | int | when the runtime reports it | tokens written |
+| `cached_tokens` | int | when the runtime reports it | prompt tokens reused instead of read |
+
+**The row is a census, not an error log.** Successes and failures share one file
+because a rate needs its denominator beside its numerator.
+
+**Assemble is the only writer.** It is the one stage that sees every planned item
+and every finished payload. A worker writing its own rows would turn a
+diagnostic append into a rebase race against the publish commit.
+
+**Nothing under `state/` is served.** The console reads a narrow projection of
+this file - see [Scaling](#scaling) - and a reader gets figures, never the file.
 
 ## Stages and outcomes
 
@@ -141,6 +204,110 @@ pipeline wrote while the branch was open.
 The guard is deliberate and stays. Widening it to tolerate a prefix would let a
 column land silently in the wrong position on a shard nobody re-read.
 
+## Caveats
+
+Everything here is a property of the ledger, not a bug in it. Read them before
+quoting a number off this file.
+
+**A row is one item-run, not one item.** The day runs five times and every run
+writes a row for every item it planned. Measured on the committed
+`state/item-health/2026-08.csv` at 1200 rows (2026-08-25): 1067 distinct
+`url_key`, so 1.12 rows per address. `COUNT(*)` over-counts anything a person
+would call "articles". Group by `url_key`, and pick a run with `run_id` when the
+question is about one attempt.
+
+**A null is not a zero.** Empty means the stage did not run, or the row predates
+the column. Measured on the same file: `summarize_ms` is present on 879 of 1200
+rows (73%) and `prefill_ms` on 145 (12%), because the token columns landed on
+2026-08-24 and every earlier row is legitimately blank. A mean taken over the
+whole column with blanks read as zero is wrong by the share of blanks.
+
+**Timings come from the runtime, not from us.** `prefill_ms`, `decode_ms` and
+the three token counts are copied out of the model server's own reply. A runtime
+that reports nothing leaves them null and the item still publishes. Nothing on
+this row is our arithmetic, which is the point - see
+[../summarize/throughput.md](../summarize/throughput.md).
+
+**Route and render are not here.** An item that got a chart and an item that got
+nothing write the same row. A render failure degrades an item and never fails
+it, so the two are indistinguishable in this ledger by design. What the router
+spent lives in the run manifest (`items_routed`, `items_prefiltered`,
+`route_ms`) and in the digest payload's per-item `visual`.
+
+**A row can never be corrected.** The file is append-only, so a row written with
+a wrong code stays. A reclassification is a new row under a later `run_id`, and
+a reader that wants "the latest verdict per item" has to say so. Nothing in the
+pipeline does that today.
+
+**`item_id` is not stable.** It is a per-day ordinal and moves between runs when
+the plan changes. `url_key` is the stable key and is on the row for exactly this
+reason.
+
+**The failed share is not the source failure rate.** 324 of the 1200 committed
+rows are `failed`, but twelve of the nineteen codes never count against a
+source - `model_unreachable` is our own server being down, `robots_denied` is a
+publisher's stated wish. Filter on `counts_against_source` before calling
+anything a source's fault.
+
+**Shape signals ride on `ok` rows.** `too_short`, `not_prose` and `boilerplate`
+appear with `outcome = ok` because the item published and the signal still
+matters. `WHERE code IS NOT NULL` is not the same query as `WHERE outcome =
+'failed'`.
+
+**A merge conflict on the shard is normal.** The pipeline appends to it several
+times an hour, so any branch open for more than a run will conflict. Resolve by
+taking the upstream file whole and re-applying your change - never by keeping
+your copy, which drops the rows the pipeline wrote while the branch was open.
+
+## Scaling
+
+Measured 2026-08-25 on the committed repository.
+
+| Quantity | Value | How |
+| --- | --- | --- |
+| Rows in `state/item-health/2026-08.csv` | 1200 | `Import-Csv` count |
+| File size | 354,465 bytes | `stat` |
+| Mean row | **295 bytes** | size / rows |
+| Rows on a full day | **1000** | 2026-08-24: 5 runs x the 200-item `safety_ceiling_per_run` |
+| Published projection `frontend/public/telemetry/2026-08.csv` | 103,004 bytes, 10 of the 24 columns | `stat` |
+| Mean published row | 85.8 bytes raw, **13.8 bytes gzipped** (6.2x) | gzip at maximum level |
+| Blob versions of the shard in git so far | 14, 1.44 MB uncompressed | `git rev-list --objects` then `git cat-file -s` |
+| Whole repository pack | 26.09 MiB | `git count-objects -vH` |
+
+Projected forward at the current cadence and ceiling:
+
+| Horizon | Ledger shard | Served projection (gzipped) |
+| --- | --- | --- |
+| a day | 295 KB | 14 KB |
+| a month (one shard) | **8.8 MB** | **410 KB** |
+| a year (12 shards) | 106 MB | 4.9 MB |
+
+Three limits, in the order they will actually bite:
+
+1. **The reader's download, first.** The console fetches a whole month shard.
+   410 KB gzipped at the end of a busy month is already more than the rest of
+   the page. The lever is the projection, not the ledger: the served file
+   carries 10 columns today and could carry fewer, or become a pre-aggregated
+   day-grain file with the per-item rows kept for the operator only. Nothing
+   here is measured against a slow connection yet, so that is the next
+   measurement rather than the next change.
+2. **Git history, second.** Every run rewrites the whole shard as a new blob, so
+   the repository grows with `commits x shard size`, not with rows: five commits
+   a day against a shard averaging half its final size is roughly 660 MB of
+   uncompressed blob a month. Delta compression on an append-only file is
+   cheap - 14 versions and 1.44 MB sit inside a 26 MiB pack - but "cheap" is not
+   a measured number here and must not be quoted as one. The lever if it bites
+   is a shorter shard period (weekly, `YYYY-Www.csv`), which the reader already
+   handles because it globs the directory.
+3. **The 1 GB published site, last and least.** `state/` is never served, so it
+   does not count against that cap at all. Only the projection under
+   `frontend/public/telemetry/` does, and at 4.9 MB gzipped a year it is not the
+   thing that fills a gigabyte - the day payloads and their SVG assets are.
+
+What is deliberately **not** planned: pruning. The ledger is the only durable
+record of what a bad day did, and a retention pass over it would delete exactly
+the evidence it exists to keep. Windows are applied on read.
+
 ## Design rationale
 
 A failure-only file cannot produce a rate. The ledger writes successes and
@@ -177,12 +344,18 @@ Authority: Carmack.
 | Add `attempt`, `recorded_at`, `title`, or `source_url` | No query needs them. `date` and `run_id` already address the row. |
 | Parse the throughput out of the runtime log | The log is a CI artifact kept for two days, and a rate nobody can recompute later is not a measurement. The reply already carries the numbers. |
 | Store the rates instead of the counts | A stored rate cannot be re-aggregated across a day, a week, or the four workers. Store what was measured; divide on read. |
+| Prune the ledger on a retention schedule | The rows worth keeping longest are the ones from the worst days, and those are the first a size-driven prune would take. Windows are a read-side parameter instead. |
+| Serve `state/item-health/` directly to the console | The row carries `canonical_url`, `url_key` and `detail`, none of which belongs in a browser. The narrow projection under `frontend/public/telemetry/` exists so the forbidden columns are absent by construction rather than filtered on read. |
+| One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
+| Add a route or render outcome column | Route is not a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the router did. |
 
 ## See also
 
 - [health.md](health.md) - the feed-grain ledger.
 - [../summarize/throughput.md](../summarize/throughput.md) - what the two model rates mean, and why the spread inside a run is wide.
+- [../publishing/visuals.md](../publishing/visuals.md) - what the router spends, which this ledger deliberately does not carry.
 - [trust-boundary.md](trust-boundary.md) - how fetched bytes become sanitized text.
 - [../contracts/schemas.md](../contracts/schemas.md) - the contract and schema rules.
 - [../../concepts/telemetry.md](../../concepts/telemetry.md) - logs as evidence, ledgers as records.
+- [../../reference/measurements.md](../../reference/measurements.md) - the sizes and rates quoted above.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3, Rule #11, and section 11.

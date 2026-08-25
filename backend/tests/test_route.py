@@ -251,7 +251,13 @@ class TestSpecBuilding:
 
 class TestToRoute:
     def _visuals(self) -> VisualsConfig:
-        return VisualsConfig()
+        """Both arms on, because this class tests `to_route`, not the shipped config.
+
+        The diagram arm ships off. Its rejection paths, its Mermaid source and
+        its injection canaries still have to hold, because turning it back on is
+        one word in `config/idhazh.json`.
+        """
+        return VisualsConfig(enabled_kinds=[VisualKind.CHART, VisualKind.DIAGRAM])
 
     def test_a_failed_summary_routes_to_nothing(
         self, article_ok: Article, summary_ok: Summary
@@ -620,16 +626,16 @@ class TestReachability:
     def test_a_diagram_is_always_reachable_while_it_is_enabled(self) -> None:
         """Steps come from prose, so nothing about a diagram is decidable in advance.
 
-        This is what stops the gate silently descoping diagrams: with the arm on,
-        no item is ever skipped. Turning it off stays a config edit somebody makes
-        on purpose.
+        This is why the arm now ships off. With it on, no item is ever skipped -
+        measured at 145 of 145 asked on 2026-08-25 - so the gate below it could
+        never fire. Turning it back on stays a config edit somebody makes on
+        purpose, and this test is what says what that edit costs.
         """
-        kinds = reachable_kinds([], visuals=VisualsConfig())
-        assert kinds == [VisualKind.DIAGRAM]
+        both = VisualsConfig(enabled_kinds=[VisualKind.CHART, VisualKind.DIAGRAM])
+        assert reachable_kinds([], visuals=both) == [VisualKind.DIAGRAM]
 
-    def test_nothing_is_reachable_for_a_fact_poor_item_when_only_charts_are_on(self) -> None:
-        chart_only = VisualsConfig(enabled_kinds=[VisualKind.CHART])
-        assert reachable_kinds([], visuals=chart_only) == []
+    def test_nothing_is_reachable_for_a_fact_poor_item_by_default(self) -> None:
+        assert reachable_kinds([], visuals=VisualsConfig()) == []
 
     def test_an_unreachable_item_says_the_model_never_ran(self, summary_ok: Summary) -> None:
         decision = decided_without_the_model(

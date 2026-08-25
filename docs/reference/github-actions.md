@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -181,6 +181,16 @@ Verified 2026-08-20.
   a loop spends a budget the scheduled pipeline also needs.
 - **The Pages deploy itself times out at 10 minutes**, separately from the job
   timeout, and separately from the 1 GB site cap.
+- **A job stopped by `timeout-minutes` is *cancelled*, and a cancelled job skips
+  every step that carries no condition.** `if: failure()` does not run either -
+  only `if: always()` does. So an artifact upload written the ordinary way is
+  silently dropped exactly when a long job most needed to hand over what it
+  made. Observed 2026-08-25 on `digest.yml`'s `route` job, run `32804437110`:
+  the step list records `Route and render` as `cancelled`, `Upload router log`
+  (which has `always()`) as `success`, and the `routes` upload as **`skipped`**.
+  88 routing decisions and 9 rendered charts existed on that runner and none of
+  them left it. **Any upload step that carries a job's only copy of its output
+  needs `if: always()`.**
 
 ## See also
 
