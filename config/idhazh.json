@@ -120,6 +120,7 @@
   },
   "run": {
     "max_parallel": 4,
+    "route_budget_minutes": 50,
     "safety_ceiling_per_run": 200,
     "shard_size": 5,
     "shard_timeout_minutes": 150,
@@ -170,12 +171,11 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-24T21:40",
+  "version": "2026-08-25",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
-      "chart",
-      "diagram"
+      "chart"
     ],
     "max_chart_points": 8,
     "max_diagram_steps": 6,
