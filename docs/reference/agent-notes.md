@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -21,6 +21,34 @@ If an entry here starts explaining the product, it has been filed wrong.
 mid-task. Run `git worktree list` immediately before you stage, never trust a
 listing from earlier in the session, and never `git add .` in a checkout you did
 not create - it sweeps another branch's work into your commit.
+
+**Never `git checkout -b` in the shared checkout.** With no start-point it
+branches off whatever `HEAD` currently is, and a parallel agent moves `HEAD`
+between your commands. On 2026-08-25 a plan branch was cut while `HEAD` sat on
+another agent's `plan/console-charts`, so it carried that agent's unmerged
+commit as its parent. Always name the start-point and take your own worktree:
+
+```powershell
+git worktree add <absolute path> -b <branch> origin/main
+```
+
+**Neither `git status` nor the commit output reveals that contamination**, because
+it is in the branch's parent, not in the index. `git status --porcelain` showed
+one staged file and `git commit` reported "1 file changed" - both true, both
+useless. Three checks that do catch it:
+
+```powershell
+git log --oneline origin/main..<branch>          # more commits than you made
+git diff --stat origin/main..HEAD                # more files than you touched
+gh pr view <n> --repo <owner/repo> --json files --jq '[.files[].path]'
+```
+
+Run the `gh pr view` one before every merge; it is the cheapest and it is what
+caught the 2026-08-25 case. To recover without a force push (`CLAUDE.md`
+section 8): branch again off `origin/main` in a fresh worktree, `git cherry-pick`
+your own commit, confirm the diff lists only your files, push the new branch,
+open a new PR, close the old one with the reason, then
+`git push origin --delete <old-branch>`.
 
 Safe pattern when the shared checkout is dirty with work that is not yours:
 
