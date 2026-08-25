@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -99,6 +99,25 @@ gh api repos/<owner>/<repo>/check-runs/<jobId>/annotations
 has `main` checked out - but the server-side merge has already succeeded.**
 Verify with `gh pr view <n> --json state` before reacting. Do not retry the
 merge. Only `gh`'s local post-merge cleanup was skipped.
+
+## The Actions cache
+
+**The cache key names the weights, so the runtime is frozen to a binary nobody
+named.** In `digest.yml` the `work` job caches `backend/models` and
+`backend/bin` together under `llm-<MODEL_FILE>-v2`, and the `route` job does the
+same under `llm-<ROUTE_FILE>-v2`. The step that asks the GitHub API for the
+newest `llama-b<N>-bin-ubuntu-x64` release is guarded by
+`if: steps.weights.outputs.cache-hit != 'true'`. On a hit it never runs. The
+server that starts is whatever `llama-server` was saved the first time that key
+was written, and nothing in the run says which one that is.
+
+The symptom is a step that reads as live code and has not executed for days,
+beside a log with no build line in it. Verified 2026-08-25 against runs
+`32766098026` and `32772221068`: neither of the eight `runtime-log-*` artifacts
+carries a build identifier. Two runs a cache apart may share a binary or may
+not, and the workflow gives no way to tell. Do not assert either. The throughput
+figures those runs produced are in
+[measurements.md](measurements.md).
 
 ## PowerShell
 

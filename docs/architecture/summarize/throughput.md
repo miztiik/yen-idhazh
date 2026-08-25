@@ -82,6 +82,21 @@ the drift reverses.
 - **Check the reuse line before blaming the model.** The read rate is computed
   over the tokens the machine actually read. If prompt reuse jumps, the read
   rate moves without the model changing at all.
+- **Check the host before blaming anything.** The runner host moves the read
+  rate further than any knob we set. Measured 2026-08-24 across eight `work`
+  jobs, the read rate clustered at about 11, 14 and 37 tok/s - a 3.4x span with
+  one model, one set of settings and one day's articles. Nothing records which
+  host a job drew, so two days are comparable only if their host mix matched,
+  and today nothing proves it did.
+
+**The write rate moves the opposite way from the read rate when the host
+changes.** In the same eight jobs the two fastest-reading jobs were the two
+slowest-writing ones: they read at 36.4 and 37.2 tok/s and wrote at 3.36 and
+3.30, while the jobs that read near 11 wrote at 4.93 to 5.46. A host that is
+simply faster would move both ends together, so a day where the two ends move
+apart is a host difference and not a model one. The figures, and what they do
+and do not settle, are in
+[`../../reference/measurements.md`](../../reference/measurements.md).
 
 **The chart has one day on it.** Counted 2026-08-25: the token columns landed on
 2026-08-24, so `2026-08-25` is the only date with any `prefill_ms`, 145 rows of
