@@ -88,7 +88,7 @@ The stage's wall-clock is `items with an OK summary x per-item cost`, and neithe
 bounded. The first is set by how well the summarizer did, up to `run.safety_ceiling_per_run`
 (200). The second is set by whichever host the runner gave us: measured mean **20.7 s on a fast
 host and 40.3 s on a slow one**, over six runs and 703 items on 2026-08-24/25. A 145-item day
-therefore needs anywhere from 50 to 97 minutes against a 60-minute job.
+therefore needs anywhere from 50 to 97 minutes against a 50-minute job.
 
 What happened when it went over is the part that made the defect invisible. A job cancelled at its
 timeout **skips any step without an explicit condition**, and the `routes` artifact upload was one
@@ -102,7 +102,7 @@ Three things changed, and each one addresses a different link in that chain:
 
 | Change | What it stops |
 | --- | --- |
-| `stage_route` stops at `run.route_budget_minutes` (50 in config, 40 by default) | The job is never cancelled, so it always reaches its upload step. |
+| `stage_route` stops at `run.route_budget_minutes` (40) | The job is never cancelled, so it always reaches its upload step. |
 | The `routes` upload runs on `always()` | Even a job cancelled for some other reason hands over what it made. |
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
 | The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
@@ -134,8 +134,24 @@ never starts. A budget stop is the stage stopping, not a decision about an item,
 borrow `asked_the_model` and does not move `items_prefiltered`, which counts one specific cause.
 The run log names the count and the mean that produced it.
 
-The job's `timeout-minutes: 60` stays. It is the backstop, not the budget - raising it is the one
-move Rule #2 forbids.
+The job's `timeout-minutes` is 50 against a 40-minute stage budget. It is the backstop, not the
+budget, and the 10 minutes between them are the fixed cost the stage clock never sees - checkout,
+weights, install, model start. Both numbers came down together on 2026-08-25, because a job bound
+20 minutes above the stage bound is 20 minutes in which a stuck stage burns runner wall-clock past
+its own limit. Raising either one is the move Rule #2 forbids.
+
+**The chart arm has a kill line, registered before the data was read.** Authority: Jony,
+2026-08-25. Over 14 consecutive days with the chart-only gate on, retire the arm if the median day
+publishes a chart on fewer than 5% of published items, or spends more than 6 router minutes per
+published chart. Either limb trips it. A day stopped at the budget still counts. Measured
+2026-08-25 on `ubuntu-latest` (4 vCPU, 16 GB): 6.2% and 4.4 minutes - inside the line on both
+limbs, which is why the arm ships. Writing the line down first is what stops the number being
+argued after it is seen.
+
+`charts_drafted` on the run manifest is what makes that reading possible. It counts the items whose
+routing reply asked for a chart, whatever the decision became, so the gap between it and the day's
+published charts is exactly what the two controls below rejected. Without it a model that stops
+asking for charts and checks that start refusing them are the same number.
 
 ## Two controls that run after the model has answered
 

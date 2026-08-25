@@ -14,11 +14,14 @@ from collections.abc import Mapping
 from decimal import Decimal
 
 import pytest
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
+from idhazh import assemble, config
 from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.route import SpecFormat, VisualKind, VisualState
+from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
+from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.llm.server import Completion
 from idhazh.route import (
@@ -682,3 +685,113 @@ class TestReachability:
                 assert decision.kind is VisualKind.NONE, indices
                 checked += 1
         assert checked > 0
+
+
+class TestChartDrafts:
+    """Why a drafted chart did not become a published one, as a committed number.
+
+    On 2026-08-25 the router drafted 17 charts and published 9. Nothing said
+    where the other 8 went, so a model that had stopped asking for charts and a
+    set of checks that had started refusing them read exactly the same. The
+    count only means anything beside the charts that survived, so what is
+    asserted here is the identity between the two, not either number alone.
+    """
+
+    def _fixture_day(self, article: Article, summary: Summary) -> list[Route]:
+        """Six items: one chart published, three refused after the model, two never drafted."""
+        facts = numeric_facts(ARTICLE_TEXT)
+        percent = next(i for i, fact in enumerate(facts) if fact.unit == "%")
+        people = next(i for i, fact in enumerate(facts) if fact.unit == "people")
+        visuals = VisualsConfig(enabled_kinds=[VisualKind.CHART])
+
+        def routed(draft: Mapping[str, object]) -> Route:
+            return to_route(
+                article,
+                summary,
+                _draft_completion(draft),
+                model_id="qwen3-4b",
+                routed_at="2026-08-22T00:00:00Z",
+                visuals=visuals,
+                facts=facts,
+            )
+
+        def bars(*indices: int) -> list[dict[str, object]]:
+            return [{"label": f"b{index}", "fact_index": index} for index in indices]
+
+        return [
+            routed({"kind": "chart", "reason": "the months compare", "points": bars(0, 1, 2)}),
+            routed({"kind": "chart", "reason": "a made-up bar", "points": bars(0, 1, 999)}),
+            routed({"kind": "chart", "reason": "one number thrice", "points": bars(0, 0, 0)}),
+            routed({"kind": "chart", "reason": "mixed units", "points": bars(percent, people)}),
+            routed({"kind": "none", "reason": "nothing here compares"}),
+            decided_without_the_model(
+                summary, model_id="qwen3-4b", routed_at="2026-08-22T00:00:00Z", facts_found=0
+            ),
+        ]
+
+    def test_a_refused_chart_still_records_that_the_model_asked_for_one(
+        self, article_ok: Article, summary_ok: Summary
+    ) -> None:
+        drafted = [route for route in self._fixture_day(article_ok, summary_ok) if route.drafted_chart]
+        assert len(drafted) == 4
+        assert sum(1 for route in drafted if route.kind is VisualKind.NONE) == 3
+
+    def test_an_item_the_model_never_saw_drafted_nothing(
+        self, article_ok: Article, summary_ok: Summary
+    ) -> None:
+        skipped = self._fixture_day(article_ok, summary_ok)[-1]
+        assert skipped.asked_the_model is False
+        assert skipped.drafted_chart is False
+
+    def test_the_gap_between_drafted_and_published_is_what_the_checks_refused(
+        self, article_ok: Article, summary_ok: Summary
+    ) -> None:
+        """The row's oracle, over the objects."""
+        routes = self._fixture_day(article_ok, summary_ok)
+        drafted = sum(1 for route in routes if route.drafted_chart)
+        published = sum(1 for route in routes if route.kind is VisualKind.CHART)
+
+        refused = [
+            route.rationale or ""
+            for route in routes
+            if route.drafted_chart and route.kind is VisualKind.NONE
+        ]
+        assert "does not contain" in refused[0]
+        assert "more than one bar" in refused[1]
+        assert "outside the publishable range" in refused[2]
+
+        assert (drafted, published, len(refused)) == (4, 1, 3)
+        assert drafted - published == len(refused)
+
+    def test_the_manifest_carries_the_days_drafted_count(
+        self, article_ok: Article, summary_ok: Summary
+    ) -> None:
+        """The same oracle, read off the committed row rather than the objects."""
+        settings = config.load(CONFIG_DIR)
+        run_plan = RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
+        day = assemble.build_day(
+            plan=run_plan,
+            items=[],
+            previous=None,
+            taxonomy=settings.taxonomy,
+            run_n=1,
+            generated_at="2026-08-22T07:00:00Z",
+            retention_window_months=-1,
+        )
+        manifest = assemble.build_manifest(
+            plan=run_plan,
+            day=day,
+            previous=None,
+            summaries=[],
+            models=[],
+            commit_sha="a" * 40,
+            runner="local",
+            started_at="2026-08-22T06:00:00Z",
+            completed_at="2026-08-22T07:00:00Z",
+            config_digests=settings.digests,
+            site_bytes=1024,
+            site_files=2,
+            routes=self._fixture_day(article_ok, summary_ok),
+        )
+        record = manifest.runs[-1]
+        assert (record.charts_drafted, record.items_routed, record.items_prefiltered) == (4, 6, 1)

@@ -114,6 +114,17 @@ class RunRecord(Model):
             "the job total says the fixed cost is the problem, not the model."
         ),
     )
+    charts_drafted: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Items whose routing reply asked for a chart, whatever the decision became. "
+            "Subtract the day's published charts and the remainder is what the "
+            "post-model checks rejected - the only number that separates a model that "
+            "does not want charts from checks that refuse the ones it wants. Zero on a "
+            "manifest written before it existed."
+        ),
+    )
     verticals: list[VerticalCount] = Field(default_factory=list)
 
     pipeline_fingerprints: list[Sha256] = Field(
@@ -145,6 +156,18 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-25",
+            change="Added optional charts_drafted to a run.",
+            why=(
+                "On 2026-08-25 the router drafted 17 charts and published 9, and no "
+                "committed row said where the other 8 went. Without the drafted count a "
+                "model that stops asking for charts and a set of checks that starts "
+                "refusing them look identical, so the chart arm's kill line cannot be "
+                "read from anything the run leaves behind. Defaults to zero on a "
+                "manifest written before it existed."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T23:10",
             change="Added optional items_prefiltered to a run.",

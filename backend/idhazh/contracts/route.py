@@ -55,6 +55,18 @@ class Route(Contract):
     __schema_stem__: ClassVar[str] = "route"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-25",
+            change="Added drafted_chart, defaulting to false and derived true for a chart.",
+            why=(
+                "A chart draft that the post-model checks reject is today indistinguishable "
+                "from a draft the model never wrote, so nothing committed says why 8 of 17 "
+                "drafts died on 2026-08-25. The run manifest sums this into charts_drafted. "
+                "The read-side migration is a validator: a payload written before the field "
+                "existed whose kind is chart was necessarily drafted as one, and a default "
+                "of false there would report fewer drafts than published charts."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-24T23:10",
             change="Added asked_the_model, defaulting to true.",
             why=(
@@ -114,7 +126,22 @@ class Route(Contract):
             "asked then."
         ),
     )
+    drafted_chart: bool = Field(
+        default=False,
+        description=(
+            "True when the model's reply asked for a chart, whatever this decision "
+            "became. The gap between this and a kind of chart is what the post-model "
+            "checks rejected."
+        ),
+    )
     failure_detail: UntrustedLine | None = None
+
+    @model_validator(mode="after")
+    def _a_published_chart_was_drafted_as_one(self) -> Self:
+        """The read side for a payload written before `drafted_chart` existed."""
+        if self.kind is VisualKind.CHART and not self.drafted_chart:
+            self.drafted_chart = True
+        return self
 
     @model_validator(mode="after")
     def _outcome_matches_the_decision(self) -> Self:
