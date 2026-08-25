@@ -270,6 +270,56 @@ jobs:
             exit 1
           }
 
+      # A shard's throughput varies with the host it drew, and no run log named
+      # the host, the binary or the weights - so no number a shard produced could
+      # say which bytes produced it (Rule #10). These six lines settle all three.
+      # `always()`, because the shard that failed is the one whose host is worth
+      # naming.
+      - name: What this runner is
+        if: always()
+        run: |
+          echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
+          grep -m1 'model name' /proc/cpuinfo || true
+          nproc || true
+          grep -m1 'system_info' llama-server.log || true
+          LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
+          sha256sum backend/bin/llama-server || true
+          sha256sum "backend/models/${MODEL_FILE}" || true
+
+      # Neither of the two runs this shape was read from measured memory at all,
+      # and the runner has 16 GB (Rule #2). `measure.yml` already samples exactly
+      # this; the daily path did not. VmRSS is what a process holds, and the
+      # cgroup peak read at job end is what the runner counted against the limit.
+      - name: Sample memory
+        run: |
+          set -euo pipefail
+          cat > sample-rss.sh <<'SAMPLER'
+          set -u
+          pid="$1"
+          printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\n' > rss-samples.tsv
+          while kill -0 "$pid" 2>/dev/null; do
+            rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
+            hwm=$(awk '/^VmHWM:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
+            python_kb=0
+            python_n=0
+            for proc in /proc/[0-9]*; do
+              case "$(cat "$proc/comm" 2>/dev/null || true)" in
+                python*) ;;
+                *) continue ;;
+              esac
+              kb=$(awk '/^VmRSS:/ {print $2}' "$proc/status" 2>/dev/null || true)
+              [ -n "$kb" ] || continue
+              python_kb=$((python_kb + kb))
+              python_n=$((python_n + 1))
+            done
+            printf '%s\t%s\t%s\t%s\t%s\n' \
+              "$(date -u +%FT%TZ)" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" >> rss-samples.tsv
+            sleep 15
+          done
+          SAMPLER
+          nohup bash sample-rss.sh "$(cat llama-server.pid)" > sample-rss.log 2>&1 &
+          echo "$!" > sample-rss.pid
+
       - name: Work the shard
         run: |
           python -m idhazh work \
@@ -285,10 +335,47 @@ jobs:
       - name: Prompt cache log summary
         if: always()
         run: |
-          if [ -f llama-server.log ]; then
-            grep -E 'selected slot by|kv cache rm \[|prompt eval time =|n_slots|n_ctx_slot|n_ctx_per_seq' llama-server.log || true
-          else
+          if [ ! -f llama-server.log ]; then
             echo "llama-server.log not found"
+            exit 0
+          fi
+          # A fixed list of known lines hid the proof of prefix reuse for two
+          # measured runs: the list greps `kv cache rm [`, which this build never
+          # emits, while the line that settles it starts `slot get_availabl:`.
+          # `^(srv|slot) ` cannot hide a line the runtime chose to print.
+          # `n_ctx_slot` and `n_ctx_seq` are one field under two llama.cpp
+          # spellings, and the pin does not stop a later bump from renaming it.
+          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' llama-server.log || true
+          # `f_sim_best` is the shared prefix over the incoming prompt and
+          # `f_keep` the same prefix over what the slot held. The distribution is
+          # where a prefix-reuse loss shows; the presence of the line is not.
+          for field in f_sim_best f_keep; do
+            grep -oE "${field} = [0-9.]+" llama-server.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
+              { v[NR] = $1 + 0 }
+              END {
+                if (NR == 0) { printf "%s: no samples\n", field; exit }
+                for (i = 1; i <= NR; i++) { b = int(v[i] * 10); if (b > 9) b = 9; bucket[b]++ }
+                line = ""
+                for (b = 0; b <= 9; b++) line = line sprintf(" %.1f:%d", b / 10, bucket[b] + 0)
+                printf "%s: n=%d min=%.3f median=%.3f max=%.3f buckets%s\n", field, NR, v[1], v[int((NR + 1) / 2)], v[NR], line
+              }'
+          done
+
+      - name: What memory this shard used
+        if: always()
+        run: |
+          if [ -f /sys/fs/cgroup/memory.peak ]; then
+            echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" | tee memory-peak.txt
+          else
+            echo "cgroup_memory_peak_bytes=unavailable" | tee memory-peak.txt
+          fi
+          if [ -f rss-samples.tsv ]; then
+            awk -F'\t' '
+              NR > 1 { if ($2 + 0 > llama) llama = $2 + 0; if ($4 + 0 > py) py = $4 + 0 }
+              END { printf "peak llama VmRSS %d kB, peak python VmRSS %d kB, n=%d samples\n", llama, py, NR - 1 }
+            ' rss-samples.tsv
+          else
+            echo "rss-samples.tsv not found"
           fi
 
       - name: Upload runtime log
@@ -296,7 +383,10 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: runtime-log-${{ matrix.shard }}
-          path: llama-server.log
+          path: |
+            llama-server.log
+            rss-samples.tsv
+            memory-peak.txt
           retention-days: 2
           if-no-files-found: ignore
 
@@ -417,12 +507,18 @@ jobs:
       # The router's prefill rate varies 3x between runs (20.2 to 62.9 tok/s,
       # six runs 2026-08-24/25) while the prompt size and the decode rate stay
       # put, which is what decides whether a day fits its budget. The runner's
-      # CPU is the remaining suspect and nothing recorded it, so record it.
+      # CPU is the remaining suspect and nothing recorded it, so record it -
+      # along with the binary and the weights, so a number names its own bytes.
       - name: What this runner is
+        if: always()
         run: |
+          echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
           grep -m1 'model name' /proc/cpuinfo || true
-          nproc
+          nproc || true
           grep -m1 'system_info' router.log || true
+          LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
+          sha256sum backend/bin/llama-server || true
+          sha256sum "backend/models/${ROUTE_FILE}" || true
 
       - name: Route and render
         run: python -m idhazh route --date "${{ needs.plan.outputs.date }}"
@@ -434,11 +530,22 @@ jobs:
       - name: Router cache log summary
         if: always()
         run: |
-          if [ -f router.log ]; then
-            grep -E 'selected slot by|kv cache rm \[|prompt eval time =|n_slots|n_ctx_slot|n_ctx_per_seq' router.log || true
-          else
+          if [ ! -f router.log ]; then
             echo "router.log not found"
+            exit 0
           fi
+          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' router.log || true
+          for field in f_sim_best f_keep; do
+            grep -oE "${field} = [0-9.]+" router.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
+              { v[NR] = $1 + 0 }
+              END {
+                if (NR == 0) { printf "%s: no samples\n", field; exit }
+                for (i = 1; i <= NR; i++) { b = int(v[i] * 10); if (b > 9) b = 9; bucket[b]++ }
+                line = ""
+                for (b = 0; b <= 9; b++) line = line sprintf(" %.1f:%d", b / 10, bucket[b] + 0)
+                printf "%s: n=%d min=%.3f median=%.3f max=%.3f buckets%s\n", field, NR, v[1], v[int((NR + 1) / 2)], v[NR], line
+              }'
+          done
 
       - name: Upload router log
         if: always()

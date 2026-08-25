@@ -1202,6 +1202,53 @@ The harness now prints each step as it lands. Both earlier attempts died before
 the image completed and left no number behind them, which is a defect in the
 instrument rather than in the model.
 
+## What a job log names
+
+Every `work` shard and the `route` job print six identifying lines before the
+stage starts, under `if: always()` so a job that was cancelled or that failed
+still names the machine it drew. Until 2026-08-25 `work` printed none of them
+and `route` printed the first three, which is why several tables above have to
+say the job log did not name the CPU model or the build.
+
+| Line | Answers |
+| --- | --- |
+| `model name` from `/proc/cpuinfo` | which CPU the job drew |
+| `nproc` | how many logical CPUs it saw |
+| llama-server `system_info` | the instruction sets the build uses |
+| `llama-server --version` | the build the binary reports about itself |
+| `sha256sum backend/bin/llama-server` | the exact binary bytes |
+| `sha256sum` of the weights file | the exact weight bytes |
+
+The step also echoes `LLAMA_CPP_BUILD`, so a disagreement between the pin and
+what the binary says about itself is visible on one screen. The two digests are
+what let a number on this page name the bytes that produced it (Rule #10); the
+run manifest still records `runtime_build` as a fixed string and does not.
+
+Two more instruments landed beside them.
+
+**The log summary greps `^(srv|slot) `, not a list of expected lines**, plus
+both the `n_ctx_slot` and `n_ctx_seq` spellings of the one field llama.cpp has
+renamed. A fixed list reports what it expects: the old one looked for a
+`kv cache rm` line this build never emits, and that is exactly what hid the
+prefix-reuse proof described under
+[Reuse settled](#reuse-settled-the-log-did-prove-it-the-grep-hid-it) for two
+runs. The step also prints the `f_sim_best` and `f_keep` distribution - n, min,
+median, max and ten buckets - because under one slot a reuse loss shows in the
+spread rather than in whether the line was printed at all.
+
+**Every `work` shard now samples memory.** `VmRSS` and `VmHWM` for llama-server
+and the summed `VmRSS` of every python process, every 15 s, plus
+`/sys/fs/cgroup/memory.peak` read at job end. `measure.yml` already recorded
+exactly this and the daily path did not, so no run behind any table above says
+how close a 16 GB runner came to its limit. The samples upload inside
+`runtime-log-<shard>` beside the server log.
+
+The sampler's artifact cost is bounded, not estimated: a row is five
+tab-separated fields and at most about 60 bytes. The `work` job's configured
+bound is 330 minutes, so one shard writes at most 1,320 rows, about 79 KB, and
+four shards at most about 317 KB - 0.06% of the 500 MB artifact budget (Rule
+#2). A 105-minute shard writes about a third of that.
+
 ## Still unmeasured
 
 Each line names the measurement that would settle it. Nothing here may be cited
@@ -1210,7 +1257,7 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
-| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the cause is not recorded** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU, so the host difference has no name. The `route` job now prints `/proc/cpuinfo` model name, `nproc` and llama-server's `system_info`; read those against the next fast run and the next slow one. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)), and wants the same three lines. It does not have them. |
+| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the instrument now exists, no run has used it** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names), so read the next fast run against the next slow one and compare the CPU model first. |
 | **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the candidate through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
@@ -1235,6 +1282,7 @@ happened three times on this page.
 ## See also
 
 - [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture) and #10 (measured, not estimated).
+- [github-actions.md](github-actions.md) - the workflows that print and upload the lines above.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - the batch-size rule these numbers set.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - the prompt the token count above measures.
