@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-25
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -32,6 +32,7 @@ question, and the four answers do not mix.
 | `config/` | The tunable knobs: `idhazh.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
 | `schemas/` | One generated JSON Schema per contract, sixteen files | `python -m idhazh.contracts.export` | no |
 | `backend/` | The build-time producer. Not a service, ever | a person | no |
+| `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `state/` | The append-only ledgers one run leaves for the next | a run, in CI | **never** |
 | `frontend/` | The published site, plus the digest payloads under `public/` | a person, and the pipeline under `public/` | yes |
 | `tests/` | Cross-cutting fixtures: captured pages, golden summaries, injection canaries | a person | no |
@@ -95,6 +96,14 @@ That is a known gap, not the design.
 its only writer; the site only renders what is already there. That is the whole
 interface between the two halves.
 
+**`.github/scripts/` holds a step, not a tool.** A shell block that two workflow
+jobs both run is a duplicate nobody can execute in a test, and the daily run has
+already lost a day to one. Pulling it into a file next to the workflow that
+calls it makes the behaviour testable: the test runs the script against a
+scripted local git origin and reads the outcome. It is not part of the producer
+package, so `backend/` stays runnable with no knowledge of CI, and `pip install`
+never ships a runner detail.
+
 ## What is deliberately not a directory
 
 - **`evals/`** - folded into `state/`. The published dashboard keeps its
@@ -127,6 +136,8 @@ was an implementation detail and the URL was a promise to a reader.
 | `schemas/` inside `backend/` | The frontend would import across the boundary section 4 draws between the halves. |
 | Keeping `evals/` as its own top-level directory | A second answer to a question `state/` already answered. |
 | Renaming the `/evals/` route when the folder was folded | A reader's bookmark is a promise. A directory name is not. |
+| A shared workflow step under `backend/utilities/` | `backend/` is the producer, and a step only GitHub Actions runs is not producer code. Filing it there puts a runner detail inside the installable package and hides it from the workflow that calls it. |
+| Leaving the step duplicated in both jobs | Two copies of a retry loop, neither executable by a test. The copies had already drifted in two log strings. |
 | A `decisions/` directory of ADR files | A decision filed away from the thing it governs is a decision the next reader does not find. |
 
 ## See also
