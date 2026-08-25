@@ -17,6 +17,14 @@
 	--band-medium: #8a6300;
 	--band-low: #b4331f;
 
+	/* Categorical, never semantic. A chart telling four stages apart must not
+	   borrow the confidence ramp, or a slow stage reads as a failing one - so
+	   this set holds no green, no amber and no red. */
+	--series-1: #2c5fa8;
+	--series-2: #7e4bc4;
+	--series-3: #0e7c8e;
+	--series-4: #b03a86;
+
 	--source-swatch-0: #dbe7fb;
 	--source-swatch-1: #e5e0f8;
 	--source-swatch-2: #fbe2e2;
@@ -46,6 +54,11 @@
 	--band-high: #4bbd84;
 	--band-medium: #d6a743;
 	--band-low: #f0836c;
+
+	--series-1: #5b95f5;
+	--series-2: #b79bf0;
+	--series-3: #4fc7dd;
+	--series-4: #f08cc4;
 
 	--source-swatch-0: #1d2b41;
 	--source-swatch-1: #272341;

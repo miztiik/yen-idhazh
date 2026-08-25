@@ -64,13 +64,16 @@ async function seed(page: Page, marks: unknown): Promise<void> {
 
 test('a mark is filed under the day it was made and survives a reload', async ({
 	page,
-	context
+	context,
+	baseURL
 }) => {
 	// The source link opens a new tab at the article's own site. Nothing may
 	// leave this machine during a test, so every off-origin request is refused
 	// and the popup is left blank. The click still fires, which is what matters.
+	// The origin comes from the config rather than a literal: the preview port is
+	// overridable, and a hardcoded one aborts the page itself.
 	await context.route(
-		(url) => !url.href.startsWith('http://127.0.0.1:4173'),
+		(url) => !url.href.startsWith(String(baseURL)),
 		(route) => route.abort()
 	);
 
