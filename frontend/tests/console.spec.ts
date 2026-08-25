@@ -426,13 +426,13 @@ test('the timing legend is sorted by the newest day, tallest first', async ({ pa
 test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }) => {
 	await page.goto('/console/');
 
-	// The canary has no score ledger, so every score median is zero. A zero
-	// clamped onto a log axis would draw a line falling to the bottom of the
-	// plot, which says the stage got a thousand times faster.
-	await expect(page.locator('[data-stage-mark="score"]')).toHaveCount(0);
-	await expect(page.locator('[data-stage="score"]')).toHaveCount(0);
+	// The canary scores one day of the window, so `score` has a number on that
+	// day and none on the rest. A zero clamped onto a log axis would draw the
+	// line falling to the bottom of the plot, which says the stage got a
+	// thousand times faster. The chart breaks the line and names the loss.
+	await expect(page.locator('[data-stage-mark="score"]')).not.toHaveCount(0);
 	await expect(page.locator('[data-timing-gap="score"]')).toHaveText(
-		'No time recorded for score in this window.'
+		'No time recorded for score on 1 day in this window.'
 	);
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
