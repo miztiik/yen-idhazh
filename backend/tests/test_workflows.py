@@ -40,6 +40,18 @@ APPROVED_ACTION_MAJORS: Final = {
     "actions/upload-artifact": "v7",
     "actions/upload-pages-artifact": "v5",
 }
+# One llama.cpp build for the pipeline, the validation arm and the measurement
+# harness. The sha256 was read from the release API's own `digest` field and
+# confirmed by downloading the 16,377,727-byte archive and hashing it, on
+# 2026-08-25.
+PINNED_LLAMA_BUILD: Final = "b10598"
+PINNED_LLAMA_ASSET: Final = f"llama-{PINNED_LLAMA_BUILD}-bin-ubuntu-x64.tar.gz"
+PINNED_LLAMA_SHA256: Final = "d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c"
+LLAMA_RUNTIME_WORKFLOWS: Final = frozenset({"digest.yml", "measure.yml", "validate.yml"})
+LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check'
+LLAMA_PINNED_ENDPOINT: Final = (
+    "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}"
+)
 MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime"})
 RUNTIME_CANDIDATES: Final = frozenset(
     {
@@ -163,6 +175,34 @@ def _normalize_condition(value: object, description: str) -> str:
     if wrapper is not None:
         condition = wrapper.group(1)
     return " ".join(condition.split())
+
+
+def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object, str]]:
+    return [
+        (job_name, step.get("name"), script)
+        for job_name in _mapping(workflow.get("jobs"), "jobs")
+        for step in _steps(workflow, job_name)
+        if isinstance(script := step.get("run"), str)
+        and "ggml-org/llama.cpp/releases" in script
+    ]
+
+
+def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
+    keys: list[tuple[str, str]] = []
+    for job_name in _mapping(workflow.get("jobs"), "jobs"):
+        for step in _steps(workflow, job_name):
+            uses = step.get("uses")
+            if not (isinstance(uses, str) and uses.startswith("actions/cache@")):
+                continue
+            with_block = _mapping(step.get("with"), f"job {job_name} cache 'with'")
+            path = with_block.get("path")
+            assert isinstance(path, str), f"job {job_name} cache path must be a string"
+            if "backend/bin" not in path:
+                continue
+            key = with_block.get("key")
+            assert isinstance(key, str), f"job {job_name} cache key must be a string"
+            keys.append((job_name, key))
+    return keys
 
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
@@ -336,6 +376,57 @@ def test_runtime_download_uses_the_existing_github_token() -> None:
     assert download.get("env") == {"GITHUB_TOKEN": "${{ secrets.GITHUB_TOKEN }}"}
     assert 'Authorization: Bearer ${GITHUB_TOKEN}' in script
     assert "Authorization: ******" not in read_text(WORKFLOWS_DIR / "measure.yml")
+
+
+def test_every_workflow_that_runs_llama_cpp_pins_the_same_build() -> None:
+    """Production, the validation arm and the harness run one binary.
+
+    A throughput number is only about the pipeline if the pipeline runs the
+    build the number was measured on (Rule #10).
+    """
+    workflows = _load_workflows()
+
+    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
+        env = _mapping(workflows[filename].get("env"), f"{filename} env")
+        assert env.get("LLAMA_CPP_BUILD") == PINNED_LLAMA_BUILD, filename
+        assert env.get("LLAMA_CPP_ASSET") == PINNED_LLAMA_ASSET, filename
+        assert env.get("LLAMA_CPP_SHA256") == PINNED_LLAMA_SHA256, filename
+
+
+def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:
+    workflows = _load_workflows()
+
+    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
+        scripts = _llama_fetch_scripts(workflows[filename])
+        assert scripts, f"{filename} must still fetch llama.cpp"
+
+        for job_name, step_name, script in scripts:
+            where = f"{filename}/{job_name}/{step_name}"
+            assert LLAMA_PINNED_ENDPOINT in script, f"{where} must ask for one tag"
+            assert LLAMA_DIGEST_CHECK in script, f"{where} must check the archive digest"
+
+
+def test_no_workflow_takes_whichever_llama_cpp_release_is_newest() -> None:
+    """The list endpoint hands back a different binary on every cache eviction."""
+    for path in sorted((*WORKFLOWS_DIR.glob("*.yml"), *WORKFLOWS_DIR.glob("*.yaml"))):
+        assert "releases?per_page" not in read_text(path), path.name
+
+
+def test_the_runtime_cache_key_names_the_build_it_holds() -> None:
+    """The fetch runs only on a miss, so the key is what dates the binary.
+
+    Keyed on the weights alone, a hit serves whatever build happened to be
+    newest when the entry was written, and nothing records which one that was.
+    """
+    workflows = _load_workflows()
+    expected_cache_jobs = {"digest.yml": {"work", "route"}, "validate.yml": {"validate"}}
+
+    for filename, job_names in expected_cache_jobs.items():
+        keys = _runtime_cache_keys(workflows[filename])
+        assert {job_name for job_name, _ in keys} == job_names, filename
+
+        for job_name, key in keys:
+            assert "${{ env.LLAMA_CPP_BUILD }}" in key, f"{filename}/{job_name}: {key}"
 
 
 def test_every_action_is_pinned_to_an_approved_major() -> None:

@@ -153,6 +153,39 @@ on an old major, fails CI.
 `setup-node` still selects Node 22 for the frontend commands. That is the
 application runtime and is unrelated to the runtime an action itself declares.
 
+## The inference runtime is pinned, and the cache key says which build
+
+`digest.yml`, `validate.yml` and `measure.yml` run one llama.cpp build. Each
+declares the same three variables, and each checks the archive against its
+digest before it unpacks anything.
+
+| Variable | Value |
+| --- | --- |
+| `LLAMA_CPP_BUILD` | `b10598` |
+| `LLAMA_CPP_ASSET` | `llama-b10598-bin-ubuntu-x64.tar.gz` |
+| `LLAMA_CPP_SHA256` | `d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c` |
+
+The SHA-256 is the release API's own `digest` for that asset. It was confirmed
+on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
+
+The weights cache key names the build: `llm-<weights>-<build>-v3` in the two
+`digest.yml` jobs, `validate-<challenger>-<build>-v3` in `validate.yml`. The
+suffix moved from `v2` in the same change, so the first run after it landed
+refetched once rather than restoring the older entry.
+
+**The key matters more than the pin.** The fetch step runs only on a cache
+miss. Keyed on the weights alone, the cache froze one binary and then served a
+different one the first time the entry was evicted - the instability of
+following the newest release with none of its freshness, and no record on the
+run of which build served the day. A throughput number measured in `measure.yml`
+now describes the binary that writes the digest (Rule #10).
+
+The run manifest is not fixed by this. It still records `runtime_build` as the
+fixed string `llama-server-local`, so the manifest does not yet name the build.
+
+A workflow contract test pins the three variables, the digest check on every
+fetch path, and the build inside every runtime cache key.
+
 ## Repository settings these workflows depend on
 
 Read from the repository API on 2026-08-25.

@@ -33,6 +33,11 @@ concurrency:
 env:
   MODEL_REPO: Qwen/Qwen3-8B-GGUF
   MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+  # The build digest.yml and measure.yml pin. A validation arm on a different
+  # runtime than production is not measuring production.
+  LLAMA_CPP_BUILD: b10598
+  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
+  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
 
 jobs:
   validate:
@@ -60,7 +65,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: validate-${{ inputs.challenger_file }}-v2
+          key: validate-${{ inputs.challenger_file }}-${{ env.LLAMA_CPP_BUILD }}-v3
 
       - name: Fetch runtime and both models
         if: steps.weights.outputs.cache-hit != 'true'
@@ -69,14 +74,16 @@ jobs:
         run: |
           set -euo pipefail
           mkdir -p backend/bin backend/models
-          URL=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
-            'https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=30' \
-            | jq -r 'if type=="array" then ([.[].assets[] | select(.name | test("^llama-b[0-9]+-bin-ubuntu-x64\\.tar\\.gz$"))][0].browser_download_url // "") else "" end')
-          if [ -z "$URL" ]; then
-            echo "no ubuntu-x64 llama.cpp build found" >&2
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
             exit 1
           fi
-          curl -sSL -o llama.tar.gz "$URL"
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
           mkdir -p llama && tar -xzf llama.tar.gz -C llama
           SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
           cp -a "$SRC"/. backend/bin/
