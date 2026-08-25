@@ -107,6 +107,17 @@ gets is unchanged at `n_parallel: 1`, because non-unified KV divides `n_ctx` by
 the `-kvu` help text, read 2026-08-25; both behaviours appear in the run logs
 recorded at [../reference/measurements.md](../reference/measurements.md).
 
+**`n_parallel` above 1 is settled and dead.** Measured 2026-08-25 on a
+GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74, 4 vCPU, 15 GB), three repeats:
+aggregate decode rises **1.055x** from one sequence to two, spread 0.022,
+against a pre-registered 1.4x gate. Decode is 36.8 percent of model time, so
+that is about 1.9 percent of a run's wall-clock. Four sequences reach 1.133x and
+oversubscribe the 4 vCPU, so no level on this runner clears the gate. The knob
+stays, because `null` and `1` still differ and both are in use - but no value
+above 1 is a candidate here, and sweeping it again needs new hardware or a new
+runtime, not a repeat
+([Parallel decode on 4 vCPU](../reference/measurements.md#parallel-decode-on-4-vcpu)).
+
 No sweep flag is adopted merely because the knob exists. A candidate becomes the
 runtime only after a runner measurement records hardware, date and spread in
 [../reference/measurements.md](../reference/measurements.md).
