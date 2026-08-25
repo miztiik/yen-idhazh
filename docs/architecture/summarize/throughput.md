@@ -70,6 +70,39 @@ writing slower per token:
 Both are per-request effects. Run the same articles in the opposite order and
 the drift reverses.
 
+## Concurrency inside a shard is not a lever, but shard count is
+
+**Measured 2026-08-25** on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74,
+4 vCPU, 15 GB), `Qwen3-8B-Q4_K_M.gguf` through `llama-batched-bench` on
+llama.cpp `b10598`, three repeats. Running two sequences through the model at
+once raises **aggregate** write from 5.77 to 6.07 tok/s. That is **1.055x**,
+spread 0.022, against a gate of 1.4x set before the run. Four sequences reach
+1.133x and oversubscribe the 4 vCPU, so no parallel level on this runner clears
+the gate.
+
+Read does not move at all: 11.98, 11.96 and 11.96 tok/s across the three levels.
+`--ubatch-size 512` already hands a 512-column matrix to all 4 threads, so two
+concurrent reads share the same 4 threads and there is nothing to win.
+
+These are bench rates at a fixed 900-token prompt and a fixed 300-token reply on
+one host. They are not the production rates in the table at the top of this page,
+and the two are not comparable item for item. What the bench measures is the
+ratio between its own levels, which is the only quantity it exists to give.
+
+Write is 36.8 percent of model time - 232.7 minutes read against 135.7 minutes
+write on run `32742672105`, 2026-08-24 - so 1.055x buys about 1.9 percent of a
+run's wall-clock. **A second in-flight request inside one worker is therefore not
+a throughput lever on this hardware, and that line of work is closed**
+([Parallel decode on 4 vCPU](../../reference/measurements.md#parallel-decode-on-4-vcpu)).
+
+The lever that remains is the number of shards. Each shard is its own runner
+with its own 4 vCPU, so raising the shard count adds cores rather than dividing
+them, and it widens the part of the stage that is already parallel. `digest.yml`
+raised its ceiling from four shards to eight on 2026-08-25 for that reason. No
+run has used the new ceiling yet, so this page claims no figure for it; what the
+eight-shard run must show is under
+[Eight work shards](../../reference/measurements.md#eight-work-shards).
+
 ## What this means when reading the chart
 
 - **A wide candle is normal.** The spread inside a day is the article mix,
@@ -175,6 +208,7 @@ at the width it occupies, so one unit is one pixel. The server draws at
 | Plot milliseconds per token on a second axis | It is `1000 / tokens per second`. The same fact, mirrored, for twice the ink. |
 | Encode milliseconds as marker size | Same reciprocal, less legible than a position. |
 | Sort items by discovery order to flatten the drift | Trades a real prefix-cache saving for a prettier chart. |
+| Keep two requests in flight per worker to overlap read and write | Measured 2026-08-25: aggregate write rises 1.055x for a second sequence, spread 0.022, against a 1.4x gate. That is about 1.9 percent of a run. Four sequences reach 1.133x and oversubscribe the 4 vCPU. Cancelled, not deferred. |
 | Report one blended `summarize_ms` rate | Cannot separate a long-article day from a long-summary day, which is the question the chart exists for. |
 | Average the per-item rates for the day figure | A rate is a ratio. Averaging weighs a 60-word release note the same as a 2000-word feature. |
 | Keep the zero-anchored domain | Spends most of the plot on rates nothing ran at. Zero on a candle chart is not a landmark, it is padding. |
