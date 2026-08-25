@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -30,8 +30,16 @@ Every colour, space, radius, shadow, font, easing and duration is a CSS custom p
 
 - **Fonts** - a reading face and a tabular data face.
 - **Space / radius / shadow** - a small named scale. The space scale does most of the work on a page that is mostly text.
-- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; and the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs.
+- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; and the **series ramp**, `--series-1` to `--series-4`, which is categorical and carries no verdict.
 - **Motion** - one ease and a short duration scale.
+
+**The two colour ramps may not be swapped for each other.** The confidence ramp
+is green, amber and red because those colours mean good, watch and bad. The
+series ramp exists so a chart can tell four stages apart, and it deliberately
+holds none of those three hues - a chart that borrowed the band tokens told a
+reader that the slowest stage was the failing one. `--source-swatch-*` is not
+the answer either: those are pale background tints for a monogram, not stroke
+colours, and at 1px on a white card they are not visible.
 
 Theming is override, not a second set of names: dark mode overrides the same token values. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and a contract test asserts every non-exempt token has a mirror.
 
@@ -59,7 +67,8 @@ Icons are **vector glyphs referenced by id** from a generated manifest, never in
 
 A chart on an item is rendered at build time from a specification and shipped as an asset ([digest.md](digest.md)). Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
-**There is no chart library, on any surface.** One was carried for the console
+**There is no chart library, on any surface - and a scale library is not a
+chart library.** One chart library was carried for the console
 between 2026-08-23 and 2026-08-24 on the argument that the owner required pan
 and zoom. It was removed once that argument was checked: the pan and zoom are
 implemented by the viewport control, with a keydown handler and four buttons,
@@ -67,6 +76,22 @@ and what the library actually drew was a second, smaller copy of a chart the
 hand-written SVG already drew better. A charting library that outweighs the data
 it draws has not earned its bytes, and a runtime dependency on a reading page is
 a runtime dependency for nothing.
+
+What a chart may take from a library is the arithmetic. `d3-scale` and
+`d3-array` map a domain to pixels and choose the tick values; they own no
+element, no canvas and no theme, and the marks, the SVG and the prerendering
+stay ours. `.nice()` and `ticks()` are the part a hand-rolled axis gets wrong,
+and getting them wrong shows as an axis labelled 0, 37, 74 that nobody can read
+a value off. Nothing on a reader's route imports either one.
+
+**A chart draws in CSS pixels at the width it occupies.** A `viewBox` is a scale
+factor, not a unit: four charts that each pick their own and then stretch to the
+column render the same `font-size` at four sizes. Measured 2026-08-25 at a
+1057px window, one console page put `font-size="10"` on screen at 4.5px in one
+panel and at 16.6px in the next. The width comes from one place -
+[frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts) - and
+the server draws at `console.chart_width` so the page is complete before any
+script runs.
 
 Hand-written SVG has a second property worth stating: it renders on the server,
 so a page is complete before any script runs. A canvas cannot inherit a CSS
@@ -79,6 +104,21 @@ means the token file stops being the only place a colour is decided.
 Driving the look from fields the payload already carries - route kind, band, truncation - rather than from per-item styling decisions is what keeps the surface one component instead of many, and it means a new route kind or band arrives with a slot already waiting for it. The rejected alternative, bespoke treatment per item type, produces a page that must be edited every time the pipeline learns something new. Authority: Jony.
 
 Keeping the motion set to three named animations is a deliberate under-build. A reading surface that animates is a reading surface that interrupts. Authority: Jony, with Reader ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)) as the check.
+
+Taking `d3-scale` and `d3-array` while still refusing a chart library is one
+distinction, not two rules. A chart library owns the element, the redraw and the
+theme, which is why the last one drew a second copy of a chart that already
+existed. A scale library returns a number. The rejected alternatives were all
+libraries that draw: `echarts` (336 KB gz, canvas), `@observablehq/plot`
+(128 KB gz, and it needs a DOM shim to prerender), `chart.js` (67 KB gz,
+canvas), `uplot` (removed one row below, and re-adding it would re-litigate a
+settled decision), and a component library, which is worst of all when every
+chart on the surface is bespoke. A CDN was rejected on top of all of them: the
+HTTP cache is partitioned per site, so the shared-cache argument is dead, and
+the repo's `script-src` allows `self` only. "Fix the units without the
+dependency" was rejected last, because `.nice()` and `ticks()` are exactly the
+part hand-rolling gets wrong. Authority: Jony and Carmack, 2026-08-25, owner
+accepted.
 
 ## See also
 

@@ -156,6 +156,28 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     assert minimal.retention.dry_run is True
 
 
+def test_the_console_chart_width_is_a_knob_the_frontend_agrees_with() -> None:
+    """A prerendered chart has no element to measure, so the width is given to it.
+
+    The frontend keeps its own copy of every console default so a fresh clone
+    renders without `config/`. Two copies of one number drift, so the copy is
+    checked against the model rather than trusted.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    minimal = AppConfig.model_validate({"models": committed.models.model_dump()})
+    assert committed.console.chart_width == minimal.console.chart_width
+
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"chart_width:\s*(\d+)", reader)
+    assert mirrored is not None, "the frontend console defaults dropped chart_width"
+    assert int(mirrored.group(1)) == minimal.console.chart_width
+
+
+def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
+    with pytest.raises(ValueError):
+        AppConfig.model_validate({"console": {"chart_width": 0}})
+
+
 def test_every_configured_feed_names_a_declared_vertical() -> None:
     """Retired feeds too - a tombstone still labels published items by vertical."""
     taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))

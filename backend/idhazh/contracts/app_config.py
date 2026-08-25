@@ -673,6 +673,19 @@ class ConsoleConfig(Model):
         description="Below this count a rate is outlined because the denominator is thin.",
     )
     chart_height: int = Field(default=180, ge=120)
+    chart_width: int = Field(
+        default=600,
+        ge=240,
+        description=(
+            "The width a console chart is drawn at on the server, in CSS pixels. A "
+            "prerendered chart has no element to measure, and a chart drawn in "
+            "arbitrary units and then stretched by its viewBox renders its labels at "
+            "whatever the stretch factor happens to be - measured 2026-08-25, one page "
+            "put the same font-size at 4.5px and at 16.6px. 600 is what the reading "
+            "column leaves a full-width chart on any window wide enough to reach it; "
+            "a narrower one redraws at its measured width once a script runs."
+        ),
+    )
     failure_list_max: int = Field(
         default=25,
         ge=1,
@@ -753,6 +766,19 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-25T18:00",
+            change="Added console.chart_width.",
+            why=(
+                "Every console chart is prerendered, so on the server there is no element "
+                "to measure and the chart needs a width given to it. Without one each "
+                "chart drew into an arbitrary viewBox and let the browser stretch it: "
+                "measured 2026-08-25 at a 1057px window, one page scaled the same "
+                "font-size to 4.5px in one panel and 16.6px in the next. Additive with a "
+                "default, so an older config still validates and no read-side migration "
+                "is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-25",
             change=(

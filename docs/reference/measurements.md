@@ -911,6 +911,47 @@ The ordering of the levers falls straight out of this: encoding buys 5.6x,
 honouring the visual rule buys another 2.9x, and retention is what remains
 after both. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md).
 
+## First-load JavaScript per route
+
+Hardware: Intel Core i7-1265U, Windows, Node 24.12. Date: 2026-08-25. Method:
+`npm run build`, then `frontend/scripts/bundle-gate.mjs` gzips each module a
+route declares `rel="modulepreload"` at level 9 and sums them. Each module is
+compressed on its own because that is how it arrives - one response, one
+encoding. The script is the gate, so the number that is quoted is the number
+that fails a build.
+
+**The measurement has a floor of about 12 B.** Four builds of byte-identical
+source produced `/` at 49,193 / 49,198 / 49,198 / 49,205 B. SvelteKit stamps the
+app version into the entry chunk, so two builds of one tree are never quite the
+same bytes. A difference smaller than this is not a result.
+
+Before is the tree at `8867518`. After adds `d3-scale`, `d3-array` and
+`frontend/src/lib/charts/frame.ts`. Both columns are one build; the spread is
+the range over four after-builds.
+
+| Route class | Before | After | Spread over 4 builds | Verdict |
+| --- | --- | --- | --- | --- |
+| `/` | 49,201 B | 49,198 B | 12 B | unchanged |
+| `/<date>/` | 49,071 B | 49,068 B | 12 B | unchanged |
+| `/<date>/<topic>/` | 49,164 B | 49,161 B | 11 B | unchanged |
+| `/archive/` | 44,476 B | 44,474 B | 7 B | unchanged |
+| `/evals/` | 41,883 B | 41,881 B | 8 B | unchanged |
+| `/404` | 40,925 B | 40,923 B | 6 B | unchanged |
+| `/console/` | 54,180 B | 54,179 B | 6 B | unchanged |
+
+Every before-figure sits inside the after-range, so no route gained first-load
+JavaScript.
+
+**The console delta is zero by construction, not by arithmetic**: nothing draws
+through the frame yet, the module is tree-shaken out of every bundle, and
+`scaleLinear` appears in no built file. The dependency is declared, locked and
+priced; the bytes are spent by the row that draws through it, against the
+ceilings in `bundle-gate.mjs` - the measured baseline above plus 1 KB on a
+reader route and 10 KB on the console.
+
+The console's own route chunk is `nodes/4.*.js`: 38,308 B raw, 12,746 B gzipped.
+The whole build is 133.8 MB against the 1 GB Pages ceiling (Rule #2).
+
 ## Feed availability
 
 **Measured** on a developer machine (i7-1265U, Windows, 2026-08-21) by running
