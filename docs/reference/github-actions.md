@@ -65,7 +65,10 @@ the workers. This keeps observations from a failed refresh.
 ### Both commit steps push through a rebase, and neither rebases on a dirty tree
 
 The plan job and the assemble job each commit, then push in a loop of three
-attempts. A push that loses a race rebases and tries again.
+attempts. A push that loses a race rebases and tries again. Both steps run one
+script, [`.github/scripts/commit-and-push.sh`](../../.github/scripts/commit-and-push.sh),
+and differ only in what they stage and in the three strings they pass it. Two
+copies of the loop were a loop no test could execute.
 
 A rebase refuses to start while a tracked file is modified. Run `32671663130`
 died that way: one file was CRLF against a `text eol=lf` attribute, so every
@@ -73,14 +76,23 @@ Linux checkout saw it modified before any step ran, and the retry loop threw awa
 a day that plan, four shards and assemble had all finished.
 
 The work is already in a commit when the loop begins, so anything left in the
-working tree is runner noise. Each loop now prints what is dirty and discards it
+working tree is runner noise. The loop prints what is dirty and discards it
 before the rebase. Untracked files are left alone: they cannot block a rebase,
 and a later step may still want them. `--autostash` was removed - it stashes the
 noise and then fails the step when the stash will not reapply, which is the
 failure it looks like it prevents.
 
-A workflow contract test pins this shape. CI never runs `digest.yml`, so a change
-to either loop needs a dispatched run to verify.
+**The loop retries a clean rebase and does not retry a conflicting one.**
+`git pull --rebase origin main` is the only unguarded command in it, so under
+`bash -e` a conflict ends the script inside attempt 1: there is no attempt 2, the
+three-attempt message never prints, the day never lands, and the checkout is left
+mid-rebase. Measured 2026-08-25 against a scripted local origin, git 2.55.0,
+bash 5.3.15, and pinned by a test in `backend/tests/test_workflows.py` so the
+repair is visible when it lands.
+
+A workflow contract test pins this shape, and executes the script against real
+local repositories. CI never runs `digest.yml`, so a change to the loop still
+needs a dispatched run to verify end to end.
 
 Model validation and measurements never run on a pull request, push, or
 schedule. A person dispatches them. Drift review is a separate weekly or manual
