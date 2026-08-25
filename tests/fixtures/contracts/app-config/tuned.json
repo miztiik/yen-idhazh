@@ -84,6 +84,7 @@
       "flash_attention": null,
       "load_mode": null,
       "max_output_tokens": 320,
+      "metrics": true,
       "n_batch": 256,
       "n_ctx": 4096,
       "n_parallel": null,

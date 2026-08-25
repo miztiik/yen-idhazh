@@ -52,6 +52,8 @@ def main() -> None:
         value = inference.get(field)
         if value is not None:
             argv.extend((flag, str(value)))
+    if inference.get("metrics", True):
+        argv.append("--metrics")
     if not inference.get("startup_warmup", True):
         argv.append("--no-warmup")
 
