@@ -844,7 +844,7 @@ date and spread:
 | `flash_attention_on` | `-fa on` | Pending. Different attention math is allowed only if every golden `output_digest` is unchanged. |
 | `load_mode_mmap_mlock` | `-lm mmap+mlock` | Pending. Hypothesis: pinning the 4.68 GiB weights may avoid page-out. The harness records RSS and cgroup memory peak. |
 | `kv_q8` | `-ctk q8_0 -ctv q8_0` | Pending. Quantised KV changes numeric paths. It is rejected outright if the digest map changes. |
-| `np2_inflight` | `-np 2` plus two in-flight workers and `-c 16384` | Pending composite scenario. It is labelled composite because it is not a pure one-flag test. |
+| `np2_inflight` | `-np 2` plus two in-flight workers and `-c 16384` | Pending composite scenario. It is labelled composite because it is not a pure one-flag test. Its prerequisite - whether aggregate decode rises at all with a second sequence - is what [Parallel decode on 4 vCPU](#parallel-decode-on-4-vcpu) measures, and that has not run either. |
 | `prio_poll` | `--prio 2 --poll 100` | Pending. Hypothesis: higher priority and polling may help after install work stops competing for CPU. |
 | `threads` | `--threads N` | Rejected at the screen. Run `32672629352`: the VM exposed 2 cores x 2 SMT threads = 4 logical CPUs. Eight workers were slower at every prompt length and 16% slower at decode, so production stays at 4 and the server A/B does not run. |
 | `threads_batch` | `-tb N` | Pending. Only worth interpreting if `batch2048` shows prefill is the bottleneck. |
@@ -852,6 +852,111 @@ date and spread:
 The current llama-server verbosity emits no `kv cache rm` lines, so this harness
 does not claim to observe prompt-cache reuse directly. Absence of that line is a
 logging limit, not evidence that reuse did or did not happen.
+
+## Parallel decode on 4 vCPU
+
+**Status 2026-08-25: unmeasured. The arm is built and waits on an authorized
+dispatch.** Nothing on this page or anywhere else may cite a parallel-decode
+figure until the result table below carries one.
+
+The question is a single number. Two sequences decoding together share one pass
+over the weights, so aggregate decode may rise. On 4 vCPU it may instead just
+divide the same cores. `llama-batched-bench` answers it directly: it reports
+aggregate decode throughput at each parallel level, in one table, from one
+process.
+
+Dispatch `Measurements` with `target = batched`. The arm lives in
+`.github/workflows/measure.yml`, runs on `ubuntu-latest` against the same pinned
+`b10598` build every other llama.cpp job uses, and repeats the whole bench three
+times inside one job. All three levels and all three repeats stay on one host on
+purpose: prefill spans 3.4x between runner hosts
+([The one-slot production observation](#the-one-slot-production-observation)),
+so a matrix would compare hardware and report it as batching.
+
+### The invocation
+
+```text
+llama-batched-bench -m backend/models/Qwen3-8B-Q4_K_M.gguf \
+  -c 8192 -b 512 -ub 512 -t 4 \
+  -npp 900 -ntg 300 -npl 1,2,4
+```
+
+`-c`, `-b`, `-ub` and `-t` are read from `config/idhazh.json`
+(`models.inference`) when the job runs, so the bench always takes the shape
+production takes; the numbers above are what that config held on 2026-08-25.
+
+`-npp 900` and `-ntg 300` are fixed in the workflow. They round the medians the
+2026-08-25 ruling took from the two runs in
+[The one-slot production observation](#the-one-slot-production-observation) -
+prompt p50 877 and generated p50 279 over their 293 requests (145 + 148),
+2026-08-24. Read them with two cautions:
+
+- The generated figure agrees with what is recorded elsewhere: summary-token
+  medians of 233 to 316 across the four workers of run `32742672105`.
+- **The prompt figure is not the whole context a request carries.** That
+  measured 1612 to 2694 tokens on the same run. 877 is the shorter quantity -
+  what prefill evaluates once the shared system prompt is cached. A bench at the
+  full context would leave decode attending over roughly twice the KV, so this
+  arm reads the ratio at the light end. It is an operating point, not a
+  measurement of the ratio's sensitivity to prompt length.
+
+### Which two numbers a reader divides
+
+The bench prints one row per parallel level:
+
+```text
+|    PP |     TG |    B |   N_KV |   T_PP s | S_PP t/s |   T_TG s | S_TG t/s |      T s |    S t/s |
+```
+
+`B` is the parallel level. `S_TG t/s` is **aggregate** decode throughput,
+`B * TG / T_TG`. It already counts every sequence, so it answers "did the
+machine do more work", not "did one sequence go faster".
+
+**The result is `S_TG t/s` on the `B = 2` row divided by `S_TG t/s` on the
+`B = 1` row, within one repeat file.** Do that in each of `repeat-1.txt`,
+`repeat-2.txt` and `repeat-3.txt`, then take the median of the three ratios. The
+job prints that line and writes it to `batched-summary.json` under
+`paired_decode_ratios."2_over_1"`, so the reading needs no arithmetic - and the
+raw tables ship in the `bench-batched` artifact so it can be checked by hand.
+
+### The gate is 1.4x
+
+Decode is **36.8 percent** of model time: 232.7 minutes prefill against 135.7
+minutes decode, run `32742672105`, 2026-08-24. A speed-up in decode alone
+therefore buys only decode's share of the run.
+
+| Aggregate decode at `B = 2` | Wall-clock a run saves |
+| --- | --- |
+| 1.5x | 12.3 percent |
+| 2.0x | 18.4 percent |
+
+**Below 1.4x the whole `-np` line of work is dead** and no follow-up row runs. At
+or above it, the follow-up earns its runner time.
+
+### What this bench does not settle
+
+- **Not prefill.** `--ubatch-size 512` already hands a 512-column GEMM to 4
+  threads, and two concurrent prefills share those same 4 threads. There is no
+  headroom to win. `S_PP t/s` is recorded for completeness and is not an
+  argument for anything.
+- **Not a second mechanism.** "One request decodes while another prefills" is
+  the same shared weight pass as batched decode. Counting continuous batching
+  separately would count this gain twice.
+- **`B = 4` is a read, not a target.** The bench gives it away free. Four
+  sequences at `--threads 4` oversubscribe 4 vCPU, so that row describes the
+  shape of the curve rather than a setting worth adopting.
+
+### Result
+
+| Host | Date | `B = 1` | `B = 2` | `B = 4` | `B = 2` / `B = 1` | Verdict |
+| --- | --- | --- | --- | --- | --- | --- |
+| **unmeasured - awaiting an authorized dispatch** | | | | | | |
+
+One row per dispatch. Take the host from `hardware.txt`, the date from
+`batched-summary.json`, each level's median and spread of `S_TG t/s` over the
+three repeats from `aggregate_by_parallel_level`, the median paired ratio and
+its spread from `paired_decode_ratios`, and `alive` or `dead` against the 1.4x
+gate.
 
 ## Weights on disk
 
@@ -1256,6 +1361,7 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
+| **Whether parallel decode pays on 4 vCPU** | **unmeasured; the arm is built and waits on an authorized dispatch** | dispatch `Measurements` with `target = batched`, then divide `S_TG t/s` at `B = 2` by `S_TG t/s` at `B = 1` inside each repeat file and take the median. The gate is 1.4x; below it the whole `-np` line of work stops ([Parallel decode on 4 vCPU](#parallel-decode-on-4-vcpu)). |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the instrument now exists, no run has used it** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names), so read the next fast run against the next slow one and compare the CPU model first. |
 | **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
@@ -1282,7 +1388,7 @@ happened three times on this page.
 ## See also
 
 - [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture) and #10 (measured, not estimated).
-- [github-actions.md](github-actions.md) - the workflows that print and upload the lines above.
+- [github-actions.md](github-actions.md) - the workflows that print and upload the lines above, take these measurements, and how to dispatch one.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - the batch-size rule these numbers set.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - the prompt the token count above measures.
