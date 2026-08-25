@@ -83,7 +83,9 @@ npm run build:canary
 npm run test:browser
 ```
 
-61 tests in 6 files (2026-08-24).
+74 tests in 7 files (2026-08-25). Twelve of them are pure-function tests over
+`frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
+frontend unit-test runner, so a pure module proves itself here.
 
 **Set `PREVIEW_PORT` when another checkout may be running the suite.**
 `playwright.config.ts` reads it and defaults to 4173, and the whole config -
