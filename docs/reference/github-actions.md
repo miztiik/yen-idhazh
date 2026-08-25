@@ -189,8 +189,11 @@ path instead of relying on the person merging to notice.
 
 The cost is that the pull request body is now the commit body. Write it as a
 commit message - plain prose, ASCII, no heading markup - because whatever it
-contains lands on `main` verbatim. `main` is unprotected, so no check can block
-a bad message; this setting is what makes the good outcome the default one.
+contains lands on `main`. Wrap it at 72 columns. GitHub re-wraps a wider body
+and leaves an orphan word on its own line: PR #72 was written at 80 columns and
+landed with a longest line of 72, measured 2026-08-25. `main` is unprotected, so
+no check can block a bad message; this setting is what makes the good outcome
+the default one.
 
 ## Platform limits that shape the workflows
 
