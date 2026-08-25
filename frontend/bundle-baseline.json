@@ -1,0 +1,43 @@
+{
+  "method": "sum of gzip -9 over each module in the route's rel=\"modulepreload\" list, per file, never concatenated",
+  "toolchain": "node 22",
+  "tolerance_bytes": 64,
+  "tolerance_basis": "4 builds of identical source, route /, 2026-08-25, this repo: 49193 / 49198 / 49198 / 49205. Range 12 B, and the cause is named - SvelteKit stamps a version string into the entry chunk. 64 B is 5.3x that range; four samples underestimate a true range, so the multiple is the margin. Derived, not measured. If a build ever fails inside 64 B, re-derive it from more builds and more routes rather than nudging it.",
+  "routes": {
+    "/": {
+      "bytes": 49167,
+      "measured": "2026-08-25",
+      "why": "SvelteKit runtime, the app shell, and the reader item chunk every day view shares - item cards, the in-place topic filter and the per-day read mark."
+    },
+    "/<date>/": {
+      "bytes": 49039,
+      "measured": "2026-08-25",
+      "why": "The same runtime, shell and reader item chunk as /, on one day's items."
+    },
+    "/<date>/<topic>/": {
+      "bytes": 49131,
+      "measured": "2026-08-25",
+      "why": "The same runtime, shell and reader item chunk as /, on one topic of one day."
+    },
+    "/404": {
+      "bytes": 40907,
+      "measured": "2026-08-25",
+      "why": "Runtime and app shell and nothing route-specific. This is the floor every other route sits on."
+    },
+    "/archive/": {
+      "bytes": 44451,
+      "measured": "2026-08-25",
+      "why": "Runtime and shell plus the date-index route. It carries no reader item chunk, because the archive lists days rather than stories."
+    },
+    "/console/": {
+      "bytes": 63943,
+      "measured": "2026-08-25",
+      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them - the console chart work, PR #89."
+    },
+    "/evals/": {
+      "bytes": 41860,
+      "measured": "2026-08-25",
+      "why": "Runtime and shell plus the stub that moves an old bookmark to /console/."
+    }
+  }
+}

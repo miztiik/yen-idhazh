@@ -304,11 +304,12 @@ arbitrary one is the defect.
 The arithmetic comes from `d3-scale` and `d3-array`, which compute and draw
 nothing. This is not a chart library returning ([../../concepts/design-system.md](../../concepts/design-system.md)):
 they own no element, no canvas and no theme, and no reader route imports either
-one. `npm run bundle-gate` holds that true. Beside its encoder check it now
-prices every route class against a gzipped first-load ceiling, so the next
-dependency has to be measured before it can ship. HTML weight is deliberately
-outside that gate: the document belongs to the payload work, and one gate
-spanning both would make two workstreams fail each other's builds.
+one. `npm run bundle-gate` holds that true. Beside its encoder check it records
+every route class's first-load JavaScript and fails when the number moves, so
+the next dependency has to be measured and written down before it can ship. HTML
+weight is deliberately outside that gate: the document belongs to the payload
+work, and one gate spanning both would make two workstreams fail each other's
+builds.
 
 The item-health viewport has three parts, in this order:
 
@@ -328,6 +329,67 @@ stage. The old block was one group of four bars per day - about 150 rows at a
 30-day window, and no trend - and "is it getting slower" is the only question
 the section is asked.
 
+## The bundle gate is a regression detector, not a performance budget
+
+`npm run bundle-gate` reads one number per route class - the gzipped first-load
+JavaScript - and compares it against `frontend/bundle-baseline.json`. **The
+threshold is the last known-good measurement and nothing else.**
+
+It used to be a measured baseline plus an invented constant: 1 KB of "headroom"
+on a reader route and 10 KB on the console. Nothing measured either one. Rule #10
+forbids an unmeasured number justifying a design, and the console's 10 KB
+allowance was down to 464 B spare within a day of being granted - which is what
+an unused allowance always does. Both constants are gone, and the word with
+them.
+
+**A budget would need a cost this page does not have.** Every route is
+prerendered, so the document is complete HTML before a script runs and the
+reading path works with JavaScript off. First-load JavaScript is hydration cost,
+not time-to-read. There is no measured number for what that cost may be, and
+Rule #1 forbids the telemetry that would produce one, so the gate does not
+pretend to own a budget it cannot defend.
+
+**The ratchet is two-sided.** A route heavier than its record fails, and a route
+lighter than its record fails too. One-sided decays back into a flat constant:
+slack accumulates, the next regression lands inside it, and the gate goes quiet.
+Tolerance is 64 bytes either way, the same for every route, and it is derived
+rather than measured - see
+[../../reference/measurements.md](../../reference/measurements.md).
+
+Three things the file's shape is doing:
+
+- **It is hand-edited.** No writer, no `--update` flag, no environment escape
+  hatch. A file the build rewrites is a log, and a gate whose own tooling
+  updates its baseline cannot fail. The printed lines are copy-pasteable, so the
+  friction is ten seconds and the deliberate act is the friction working.
+- **`why` is required, and an empty one fails.** That turns "edit the number"
+  into a written justification sitting in the PR diff forever, and it gives a
+  reviewer a one-sentence job instead of a byte-diffing job. The gate cannot
+  tell whether a `why` went stale when `bytes` moved; a reviewer sees both in
+  the same diff, and machinery for that is not worth building.
+- **The measurement is per file.** Each module is gzipped on its own, because
+  that is how it arrives - one response, one gzip stream. Gzipping the
+  concatenation is order-sensitive, so a bundler reordering the preloads would
+  move the number for a reason nobody caused.
+
+The encoder symbol grep stays beside it. It costs no bytes and it names a cause
+the byte number cannot: the byte gate catches the hazard that is not on the
+list, and the grep catches the three that are.
+
+| Option | Why rejected |
+| --- | --- |
+| Delete the gate | `/archive/` shipped at 873.1 KB of gzipped HTML and nobody noticed until somebody measured - the same failure class, on the axis that had no gate. Deleting the gate that exists *because* it is quiet reads half the data. |
+| A transfer-time budget on a stated connection speed | Replaces one invented constant with two, and Rule #1 forbids the telemetry that would settle either. It also models a cost the reader does not pay, because the page is prerendered. |
+| A relative cap - the console may exceed the heaviest reader route by N% | Couples two routes that have nothing to do with each other, lets a legitimate reader-route increase silently grant the console more room, and N is the same invented constant wearing a percent sign. |
+| A flat constant with the justification written down | This is what was there, minus the prose. A written justification does not stop an allowance being spent: the 10 KB went to 464 B spare exactly as an unused allowance always does. Headroom is a budget people spend, not a margin they respect. |
+| A one-sided ratchet | Decays into the flat constant. |
+| The weights in `config/` | `config/` holds knobs; this is a recorded measurement, and it would make every byte change a schema change. |
+| A generated baseline file | A file the build rewrites is a log. |
+| The numbers inline in `bundle-gate.mjs` | Mixes a logic diff and a measurement diff in one review, and pollutes `git log -p` on the numbers. |
+| Gzip over the concatenated module set | Order-sensitive, so a bundler reorder moves the number for a reason nobody caused, and it under-reports the wire cost. |
+
+Authority: Carmack, 2026-08-25.
+
 ## Design rationale
 
 Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
@@ -343,16 +405,18 @@ chart library owns the element, the redraw and the theme, which is how the last
 one ended up drawing a chart that already existed; a scale library returns a
 number. The beneficiary feature Rule #8 asks for is the whole console: four
 charts that agree on what a pixel is. The cost is measured rather than argued -
-the ceiling in `bundle-gate.mjs` is what a later row has to fit inside, and
-Carmack made that gate a condition of accepting the dependency at all. Authority:
-Jony and Carmack, 2026-08-25, owner accepted.
+the recorded weight in `frontend/bundle-baseline.json` is what a later row is
+compared against, and Carmack made that gate a condition of accepting the
+dependency at all. Authority: Jony and Carmack, 2026-08-25, owner accepted.
 
-Putting the first-load ceilings in `bundle-gate.mjs` rather than in `config/`
-is deliberate, and it is the one place the config rule does not apply. Rule #6
-sends a tunable to `config/` because an operator may reasonably want it
-different; nobody reasonably wants a reader to download more. A budget an
-operator can edit to fit the build is not a budget (Rule #2), so raising one is a
-reviewed diff with a measurement beside it. Authority: Carmack.
+The first-load weights sit in `frontend/bundle-baseline.json` rather than in
+`config/`, and that is not the config rule being waived. `config/` holds knobs a
+person tunes to change behaviour; this is a recorded measurement, and filing a
+measurement under preferences invites editing it as one. Routing it through
+`config/idhazh.json` would also drag in the `AppConfig` model, a schema
+regeneration, a `changelog` stamp and the `frontend/src/lib/server/config.ts`
+mirror - which would make every byte change a schema change. Authority: Carmack,
+2026-08-25.
 
 Folding `/evals/` into `/console/` keeps one route answering "how is the
 pipeline doing". Both old routes read `state/scores.csv` and counted per-day
