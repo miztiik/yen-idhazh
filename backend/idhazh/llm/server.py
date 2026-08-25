@@ -128,6 +128,11 @@ def server_argv(
         argv.extend(("--poll", str(inference.poll)))
     if inference.n_threads_batch is not None:
         argv.extend(("-tb", str(inference.n_threads_batch)))
+    # Loopback only, and only inside a CI job. It opens no surface a reader can
+    # reach, and it is the only place the context high-water mark and the
+    # busy-slot average are published at all.
+    if inference.metrics:
+        argv.append("--metrics")
     if not inference.startup_warmup:
         argv.append("--no-warmup")
     return argv

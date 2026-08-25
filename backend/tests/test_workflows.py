@@ -91,6 +91,14 @@ RSS_SAMPLE_SECONDS: Final = 15
 RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
 MEMORY_PEAK_FILE: Final = "memory-peak.txt"
 CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
+# llama-server's own loopback counters, read once at job end. The two series are
+# named because they are the two a run is read by: the busy-slot average says
+# whether batching ever happened, and the high watermark says how close the day
+# came to `n_ctx`. Both spellings were read from `tools/server/README.md` in
+# ggml-org/llama.cpp on 2026-08-25.
+METRICS_FILE: Final = "llama-metrics.prom"
+METRICS_ENDPOINT: Final = "http://127.0.0.1:8080/metrics"
+METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_max")
 RUNTIME_CANDIDATES: Final = frozenset(
     {
         "baseline",
@@ -669,4 +677,37 @@ def test_every_work_shard_records_what_memory_it_used() -> None:
         "llama-server.log",
         RSS_SAMPLE_FILE,
         MEMORY_PEAK_FILE,
+        METRICS_FILE,
     ]
+
+
+def test_every_work_shard_records_how_hard_the_server_was_pushed() -> None:
+    """Two numbers no log line carries: the busy-slot average and the context high watermark.
+
+    `n_ctx` is 8192 and nothing said how close a day came to it, so a
+    context-full failure could only be counted after it happened. Nothing said
+    whether more than one slot was ever busy either, which makes a null result
+    from a concurrency arm unreadable - it cannot separate "batching did not
+    help" from "batching never happened".
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    step = _step(workflow, "work", "name", "What the server counted")
+    where = "digest.yml/work/What the server counted"
+    # The shard that ran out of context is the shard whose high watermark is
+    # worth reading, and that shard failed.
+    assert _normalize_condition(step.get("if"), f"{where} if") == "always()"
+    script = _script(step, where)
+
+    assert METRICS_ENDPOINT in script, f"{where} must scrape the server's own endpoint"
+    assert f"-o {METRICS_FILE}" in script, f"{where} must keep the raw body as {METRICS_FILE}"
+    # Once, at the end. A per-request scrape adds requests to what it measures.
+    assert script.count("curl") == 1, f"{where} must scrape once, not per request"
+    for series in METRICS_SERIES:
+        assert series in script, f"{where} must name {series} in the job log"
+
+    upload = _step(workflow, "work", "name", "Upload runtime log")
+    with_block = _mapping(upload.get("with"), "work runtime-log upload 'with'")
+    path = with_block.get("path")
+    assert isinstance(path, str), "work runtime-log upload path must be a string"
+    assert METRICS_FILE in path.splitlines(), "the runtime artifact must carry the raw counters"

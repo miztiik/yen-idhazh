@@ -207,6 +207,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "4",
         "--port",
         "8080",
+        "--metrics",
     ]
 
 
@@ -309,7 +310,7 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
         ),
     )
 
-    assert argv[-16:] == [
+    assert argv[-17:] == [
         "-np",
         "1",
         "-fa",
@@ -326,6 +327,7 @@ def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:
         "100",
         "-tb",
         "4",
+        "--metrics",
     ]
     assert "--no-warmup" not in argv
 

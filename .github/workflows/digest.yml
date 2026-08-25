@@ -378,6 +378,29 @@ jobs:
             echo "rss-samples.tsv not found"
           fi
 
+      # llama-server counts both of these already and only publishes them under
+      # `--metrics`, which `config/idhazh.json` now turns on. Read once, at the
+      # end: both are cumulative over the job, so a per-request scrape would add
+      # requests to the thing it measures and still only report the last one.
+      # `always()`, because the shard that died is the shard whose context
+      # high-water mark matters most. The endpoint is llama-server's own
+      # loopback surface inside this job - nothing a reader can reach (Rule #1).
+      - name: What the server counted
+        if: always()
+        run: |
+          curl -sf --max-time 30 http://127.0.0.1:8080/metrics -o llama-metrics.prom || true
+          if [ ! -s llama-metrics.prom ]; then
+            echo "no metrics: llama-server was already gone, or --metrics is off"
+            exit 0
+          fi
+          # The whole counter set, so a llama.cpp rename is visible rather than
+          # silently absent, and then the two that decide a run.
+          grep -E '^llamacpp:' llama-metrics.prom || true
+          for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max; do
+            grep -m1 "^${series} " llama-metrics.prom \
+              || echo "${series}: this build does not publish it"
+          done
+
       - name: Upload runtime log
         if: always()
         uses: actions/upload-artifact@v7
@@ -387,6 +410,7 @@ jobs:
             llama-server.log
             rss-samples.tsv
             memory-peak.txt
+            llama-metrics.prom
           retention-days: 2
           if-no-files-found: ignore
 
