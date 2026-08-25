@@ -42,7 +42,8 @@ mkdir -p backend/bin backend/models
 unpack the whole `bin` directory into `backend/bin/`.
 
 For a controlled comparison with the hosted model and thread measurements, use
-build `b10598`. The workflow verifies the Linux archive against SHA-256
+build `b10598`. That is the build the pipeline, the validation arm and the
+measurement harness all run, and each verifies the Linux archive against SHA-256
 `d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c`.
 A number from another build is a separate measurement.
 
@@ -102,7 +103,8 @@ Delete one by its numeric ID with `gh cache delete <id>`. The arbitrary-model
 measurement job no longer caches weights: a cache keyed independently of the
 `models` input can restore the wrong model, and one cache holding several
 candidates can exceed the repository's 10 GB ceiling. Scheduled pipeline jobs
-still cache their one configured model under a model-specific key.
+still cache their one configured model, under a key that names both the model
+file and the pinned llama.cpp build.
 
 ## Serve a model
 
@@ -211,9 +213,9 @@ not prove that only the weights changed.
 Other current limitations:
 
 - `.github/workflows/validate.yml` hardcodes the incumbent and server flags;
-- it resolves an unpinned runtime build;
 - it caches incumbent, challenger and runtime together;
-- its cache key omits repository revision, GGUF SHA and runtime build;
+- its cache key names the challenger filename and the runtime build, but omits
+  repository revision and GGUF SHA;
 - it can plan far more work than the job can finish; and
 - the decision reads scored count and mean HHEM, not failures or counterweights.
 
@@ -355,8 +357,8 @@ gh workflow run measure.yml \
 That job runs the current four-thread baseline and the eight-thread candidate
 three times each against one fixed five-article plan, interleaved by repeat. It
 rejects the candidate if source text or any output digest changes. Production
-stays at four threads until both measurements agree **and** production runs the
-same recorded llama.cpp bytes; production does not pin that build yet.
+stays at four threads until both measurements agree. Production and the harness
+now run the same pinned llama.cpp build, so that leg is settled.
 
 ## Test the browser model
 

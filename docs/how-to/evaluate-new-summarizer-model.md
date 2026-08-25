@@ -39,9 +39,8 @@ The current `.github/workflows/validate.yml` is exploratory, not an adoption
 gate. It:
 
 - hardcodes the Qwen3-8B incumbent and server arguments;
-- resolves the latest llama.cpp build instead of pinning one;
 - caches the incumbent, challenger and runtime together;
-- keys that cache by challenger filename only;
+- keys that cache by challenger filename and runtime build, not by GGUF bytes;
 - plans whatever the live feeds provide, not an exact scored corpus;
 - fetches live pages again for each model, so the input bytes can move; and
 - decides from article count and mean HHEM only;
