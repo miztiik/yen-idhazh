@@ -6,7 +6,7 @@ Research brief. Non-authoritative working material (`CLAUDE.md` section 3). This
 
 Run the bootstrap ritual in [`../docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) first. If this file and `docs/` disagree, `docs/` wins (Rule #4).
 
-**Independent of [`20260825-console-charts-plan.md`](20260825-console-charts-plan.md).** That plan moves first-load JS; this one moves HTML weight. Their file sets overlap only at `frontend/tests/console.spec.ts`. The charts plan's byte ceiling is scoped to first-load JS for exactly this reason. Both can run in parallel.
+**Independent of the console-charts work, which shipped 2026-08-25 in PRs #89, #92, #93, #94 and #97.** That work moved first-load JS; this one moves HTML weight. Their file sets overlapped only at `frontend/tests/console.spec.ts`. The byte ceiling it left behind in `frontend/scripts/bundle-gate.mjs` is scoped to first-load JS for exactly this reason, so it does not gate the HTML this handover is about.
 
 ---
 
@@ -134,7 +134,7 @@ Everything else follows from that answer. If the search has its own index, the a
 
 ## See also
 
-- [`20260825-console-charts-plan.md`](20260825-console-charts-plan.md) - the parallel workstream; its section 7 first recorded these findings.
+- [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - the console-charts work that first recorded these findings; it shipped 2026-08-25 and its rules live here now.
 - [`../docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md) - what the published surface loads today.
 - [`../docs/architecture/publishing/layout.md`](../docs/architecture/publishing/layout.md) - what Assemble writes and the retention rules.
 - [`../docs/reference/measurements.md`](../docs/reference/measurements.md) - where any new number belongs.

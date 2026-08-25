@@ -114,6 +114,20 @@ the state directly:
 gh api "repos/<owner>/<repo>/commits/<sha>/check-runs" --jq '.check_runs[]|"\(.name)=\(.status)/\(.conclusion // "-")"'
 ```
 
+**`gh pr checks --watch` answers about the run it already knew about.** Called
+within a few seconds of a push it reports the PREVIOUS run's conclusions, in
+full, as `pass` - so a branch that has not been built yet reads green. Observed
+2026-08-25 on PR #94 immediately after updating the branch. Bind the question to
+the commit instead:
+
+```powershell
+$head = gh pr view <n> --repo <owner/repo> --json headRefOid --jq .headRefOid
+gh api "repos/<owner>/<repo>/commits/$head/check-runs" --jq '.check_runs[]|"\(.name)=\(.status)/\(.conclusion // "-")"'
+```
+
+An empty result means CI has not registered the new head yet, which is a
+different answer from `pass` and the one you actually needed.
+
 **Deprecation warnings are check-run annotations, not log lines.** Grepping the
 log finds nothing. Read them, and always capture a baseline count from a
 pre-fix run so the fix can be shown to have done something:
@@ -185,6 +199,24 @@ figures those runs produced are in
   page `[data-band]` matches both the `<article>` and the confidence chip inside
   it, so a height measured off the wrong one is silently wrong. Target
   `span[data-band]`.
+
+## Serving a build to measure it
+
+- **`python -m http.server` serves `.js` with the Windows registry MIME type**,
+  which is often `text/plain`. The browser refuses the module, SvelteKit never
+  hydrates, and the page still looks right and still logs zero errors. Every
+  post-hydration measurement then reports the prerendered value: on 2026-08-25 a
+  chart's `viewBox` read back as the SSR fallback and looked 373 px wrong. If
+  you use it, assert hydration first - `Object.keys(window).some(k => k.startsWith('__sveltekit'))`
+  must be true before any measured number is worth reading.
+- **`vite preview` can take about a minute to bind when several agents are
+  building at once, and sometimes never binds at all.** It prints its `Local:`
+  line only once it is listening, so poll for that line rather than assuming a
+  silent process has failed. Playwright's own `webServer` starts it fine.
+- **Playwright's preview port comes from `PREVIEW_PORT`, default 4173.** Set it
+  per worktree before running the browser suite. Two agents on one port do not
+  collide loudly: `reuseExistingServer` is on outside CI, so the second one
+  silently tests the first one's bytes.
 
 ## The canary build
 
