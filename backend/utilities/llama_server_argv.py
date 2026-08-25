@@ -28,6 +28,7 @@ def main() -> None:
         args.alias,
         "--ctx-size",
         str(inference.get("n_ctx", 8192)),
+        "--no-context-shift",
         "--batch-size",
         str(inference.get("n_batch", 512)),
         "--ubatch-size",

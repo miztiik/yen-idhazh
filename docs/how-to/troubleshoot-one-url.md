@@ -1,6 +1,6 @@
 # Troubleshoot One URL Locally
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Use the real network, extraction boundary and local model to inspect one article
 without publishing a digest.
@@ -292,6 +292,7 @@ Interpret them in this order:
 | Article is `ok` with `too_short`, `not_prose` or `boilerplate` | This is a recorded shape signal. The item can still continue, usually as `brief`. |
 | Article is `ok`, no summary file | The process stopped between extraction and the model result. Check server health and stderr. |
 | Summary `model_unreachable` | Nothing is listening at `127.0.0.1:8080`, or the local server died. |
+| Summary `context_exceeded` | The server answered HTTP 400: the prompt plus the reply budget did not fit `--ctx-size`. Shorten the source, not the server. |
 | Summary `output_truncated` | The model exhausted the configured output budget before closing its JSON. |
 | Summary `bad_shape` | The constrained reply or reasoning channel violated the summary contract. |
 | Summary `length_out_of_range` | The reply parsed, but its word count missed the configured band. |

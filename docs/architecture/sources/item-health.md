@@ -101,7 +101,7 @@ degrades an item and never fails it.
 | `plan` | `not_attempted` |
 | `fetch` | `robots_denied`, `robots_unreachable`, `blocked_address`, `http_client_error`, `http_rate_limited`, `http_server_error`, `network_error` |
 | `extract` | `no_text`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
-| `summarize` | `model_unreachable`, `output_truncated`, `bad_shape`, `length_out_of_range` |
+| `summarize` | `model_unreachable`, `context_exceeded`, `output_truncated`, `bad_shape`, `length_out_of_range` |
 | any failed stage | `unknown` |
 
 `detail` is `str | None`, max 200 characters, and is populated only when
@@ -153,11 +153,12 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Twelve codes never count against a source:
+Thirteen codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
 `http_rate_limited`, `too_short`, `not_prose`, `boilerplate`,
-`model_unreachable`, `output_truncated`, `bad_shape`, `length_out_of_range`
+`model_unreachable`, `context_exceeded`, `output_truncated`, `bad_shape`,
+`length_out_of_range`
 
 The remaining seven can count against the source:
 
@@ -169,6 +170,10 @@ later source-health reader uses it.
 
 `model_unreachable` records our local model server being down. It is
 infrastructure failure. It never counts against a source.
+
+`context_exceeded` records the served context window refusing a prompt. The
+article was long, and the window, the truncation cap and the prompt overhead are
+all ours - so it is our budget, not a publisher writing at length.
 
 ## Adding a column is a two-part change
 

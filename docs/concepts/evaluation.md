@@ -45,6 +45,17 @@ the loaded weight bytes. A scorer version can therefore stay constant while the
 Hub serves different weights. Pin an immutable revision and observe the loaded
 weights before using HHEM to select a model.
 
+### The runtime must refuse, not shift
+
+A llama.cpp server shifts an oversized prompt by default. It drops the middle
+and answers about a document it no longer holds. HHEM then scores a faithful
+summary of text we never sent as a hallucination, and names the wrong cause -
+the same defect this page exists to catch, arriving from the runtime instead of
+the extractor. The server therefore runs with `--no-context-shift`, so a prompt
+that does not fit is refused, and the item records `context_exceeded` rather
+than a score nobody can read
+([../architecture/sources/item-health.md](../architecture/sources/item-health.md)).
+
 ## Why faithfulness alone is not enough
 
 Faithfulness measures **consistency with the source, not informativeness**. Two failure modes score beautifully on it:
