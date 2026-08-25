@@ -121,6 +121,21 @@ either way.
 when git stores the blob. A blanket normalise pass rewrites files you never
 touched and produces a phantom diff of hundreds of lines.
 
+**That normalisation happens at `git add`, and the gates run before it.**
+`test_repo_text_is_ascii_and_lf` in `backend/tests/test_contracts.py` reads the
+WORKING-TREE bytes of every file under `schemas/`, `config/` and the fixture
+directories, and asserts `b"\r\n" not in raw`. A new JSON file authored on
+Windows lands CRLF, so the test fails on a file you just wrote and the
+`.gitattributes` entry that covers it does nothing until the blob is stored.
+Write new files LF explicitly:
+
+```powershell
+[System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
+```
+
+The same CRLF also breaks a byte-identical round trip, so the contract drift
+gate reports a diff in a file whose content never changed.
+
 ## GitHub CLI
 
 **`gh pr checks --watch` and a bare `gh run watch` open an alternate terminal
@@ -159,24 +174,48 @@ has `main` checked out - but the server-side merge has already succeeded.**
 Verify with `gh pr view <n> --json state` before reacting. Do not retry the
 merge. Only `gh`'s local post-merge cleanup was skipped.
 
+**`gh run download` exits 0 on a partial download.** Observed 2026-08-25: one
+invocation extracted 25 of 37 items and returned a clean exit code, with no
+warning on either stream; an identical re-run gave all 124 files. Nothing in
+the output distinguishes the two. Count what landed against what the run
+declares before reading any of it:
+
+```powershell
+gh api "repos/<owner>/<repo>/actions/runs/<id>/artifacts" --jq '[.artifacts[].name]|length'
+(Get-ChildItem <dest> -Directory).Count
+```
+
+A count that disagrees is a truncated download, not a missing artifact.
+Re-run the download; do not conclude the run produced less than it did.
+
 ## The Actions cache
 
-**The cache key names the weights, so the runtime is frozen to a binary nobody
-named.** In `digest.yml` the `work` job caches `backend/models` and
-`backend/bin` together under `llm-<MODEL_FILE>-v2`, and the `route` job does the
-same under `llm-<ROUTE_FILE>-v2`. The step that asks the GitHub API for the
-newest `llama-b<N>-bin-ubuntu-x64` release is guarded by
-`if: steps.weights.outputs.cache-hit != 'true'`. On a hit it never runs. The
-server that starts is whatever `llama-server` was saved the first time that key
-was written, and nothing in the run says which one that is.
+**A cache key that does not name what it holds freezes that thing silently.**
+`digest.yml` used to cache `backend/models` and `backend/bin` together under
+`llm-<MODEL_FILE>-v2`, while the step that fetched the llama.cpp release was
+guarded by `if: steps.weights.outputs.cache-hit != 'true'`. On a hit it never
+ran, so the server that started was whatever binary happened to be saved the
+first time that key was written, and nothing in the run said which one.
 
 The symptom is a step that reads as live code and has not executed for days,
 beside a log with no build line in it. Verified 2026-08-25 against runs
 `32766098026` and `32772221068`: neither of the eight `runtime-log-*` artifacts
-carries a build identifier. Two runs a cache apart may share a binary or may
-not, and the workflow gives no way to tell. Do not assert either. The throughput
-figures those runs produced are in
-[measurements.md](measurements.md).
+carries a build identifier, so the throughput figures those runs produced (in
+[measurements.md](measurements.md)) cannot be attributed to a binary.
+
+**Closed 2026-08-25.** The key now carries `${{ env.LLAMA_CPP_BUILD }}`, the
+release is pinned and digest-checked, and each inference job prints the sha256
+of its binary and its weights. Kept here because the shape generalises: any
+cache key that omits an input the cached bytes depend on turns a fetch step
+into dead code and the artifact into an unnamed one.
+
+## Running the gates
+
+- **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
+  `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
+  then shows progress dots and an exit code and nothing else, which reads like
+  a broken collection. Run `pytest` with no quiet flag. Before concluding that
+  a missing summary means something is wrong, check `[tool.pytest.ini_options]`.
 
 ## PowerShell
 
