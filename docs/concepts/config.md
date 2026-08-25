@@ -87,6 +87,14 @@ thing at a time through config, not through workflow literals:
 - `temperature`, `top_p`, `seed`, `thinking`, `max_output_tokens`
 - `request_timeout_minutes`
 
+`n_parallel: null` and `n_parallel: 1` are not the same runtime. `null` omits
+`-np`, so llama.cpp picks its own slot count and reports unified KV; any
+explicit value passes `-np` and turns unified KV off. The context each request
+gets is unchanged at `n_parallel: 1`, because non-unified KV divides `n_ctx` by
+`n_seq_max` and `n_seq_max` is then 1. Source: llama.cpp `common/arg.cpp` and
+the `-kvu` help text, read 2026-08-25; both behaviours appear in the run logs
+recorded at [../reference/measurements.md](../reference/measurements.md).
+
 No sweep flag is adopted merely because the knob exists. A candidate becomes the
 runtime only after a runner measurement records hardware, date and spread in
 [../reference/measurements.md](../reference/measurements.md).
