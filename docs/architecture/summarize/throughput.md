@@ -98,9 +98,11 @@ a throughput lever on this hardware, and that line of work is closed**
 The lever that remains is the number of shards. Each shard is its own runner
 with its own 4 vCPU, so raising the shard count adds cores rather than dividing
 them, and it widens the part of the stage that is already parallel. `digest.yml`
-raised its ceiling from four shards to eight on 2026-08-25 for that reason. No
-run has used the new ceiling yet, so this page claims no figure for it; what the
-eight-shard run must show is under
+raised its ceiling from four shards to eight on 2026-08-25 for that reason. One
+run has now used it: the slowest worker fell from 113.1 minutes to 58.8, which
+is 1.92x, on a day whose total tokens were within 1 percent of the four-shard
+baseline's. It is not a paired measurement and it did not publish - the caveats
+and every other figure are under
 [Eight work shards](../../reference/measurements.md#eight-work-shards).
 
 ## What this means when reading the chart
