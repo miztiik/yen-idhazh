@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Two checks over a finished build: no encoder on the first-load path, and no
- * route heavier than its declared ceiling.
+ * route whose first-load JavaScript has left its recorded weight.
  *
  * The encoder rule is that nothing downloads or executes before a reader
  * clicks. A dynamic `import()` is what keeps that true, and a dynamic import is
@@ -9,10 +9,14 @@
  * looks wrong in review - the page still works, it just costs every reader of
  * every page a multi-megabyte library they never asked for.
  *
- * The weight rule prices the next dependency before it ships. A library that
- * computes rather than draws is cheap enough to be worth it and cheap enough to
- * be invisible, so the only thing that stops the second and the third one is a
- * number that fails a build.
+ * The weight rule is a regression detector and not a performance budget. Every
+ * route is prerendered, so the page is complete HTML before a script runs and
+ * the reading path works with JavaScript off: first-load JS is hydration cost,
+ * not time-to-read. Nobody has measured what that cost may be, so the gate does
+ * not invent a number for it. It compares each route against the last
+ * measurement somebody recorded and fails when the two disagree by more than
+ * the noise floor - in either direction, because an unclaimed saving left in
+ * the record is slack the next regression lands inside.
  *
  * So both promises are checked mechanically rather than remembered.
  */
@@ -23,6 +27,7 @@ import { gzipSync } from 'node:zlib';
 
 const BUILD = 'build';
 const ROOT = 'build/_app/immutable';
+const BASELINE = 'bundle-baseline.json';
 
 // Directories a browser loads before any reader gesture: the entry point and
 // the route modules. Anything under chunks/ is only fetched when something
@@ -70,41 +75,43 @@ if (offenders.length > 0) {
 console.log('bundle gate: the first-load bundle carries no encoder.');
 
 /**
- * Ceilings on gzipped first-load JavaScript, in bytes, one per route class.
+ * The recorded weight of every route class lives in `bundle-baseline.json`,
+ * hand-edited, with a sentence beside each number saying what those bytes buy.
  *
- * They live here rather than in `config/` because they are not a knob: an
- * operator has no reason to raise the weight a reader pays, and a budget that
- * can be edited to fit the build is not a budget (Rule #2). Raising one is a
- * reviewed diff with a measurement beside it in
- * `docs/reference/measurements.md`.
- *
- * Each is a measured baseline plus a stated headroom. The baselines were taken
- * by this script on 2026-08-25.
+ * Not `config/`: that holds knobs a person tunes to change behaviour, and
+ * filing a measurement under preferences invites editing it as one. Not
+ * generated either - a file the build rewrites is a log, and a gate whose own
+ * tooling updates its baseline cannot fail. And not inline here, because that
+ * mixes a logic diff and a measurement diff in one review and pollutes the
+ * history of the numbers.
  *
  * HTML weight is deliberately not gated here. The document is owned by the
  * payload work, and one gate spanning both would make two workstreams fail each
  * other's builds.
  */
+let baseline;
+try {
+	baseline = JSON.parse(readFileSync(BASELINE, 'utf8'));
+} catch (error) {
+	console.error(`bundle gate: ${BASELINE} could not be read - ${error.message}`);
+	process.exit(1);
+}
 
-/** Room for framework noise, not for a dependency. A reader route may not buy one. */
-const READER_HEADROOM = 1024;
+const TOLERANCE = baseline.tolerance_bytes;
+if (!Number.isInteger(TOLERANCE) || TOLERANCE <= 0) {
+	console.error(`bundle gate: ${BASELINE} needs a positive integer "tolerance_bytes".`);
+	process.exit(1);
+}
 
-/** What the console chart work was authorised to spend on `d3-scale` and `d3-array`. */
-const CONSOLE_HEADROOM = 10 * 1024;
-
-const CEILINGS = {
-	'/': 49_201 + READER_HEADROOM,
-	'/<date>/': 49_071 + READER_HEADROOM,
-	'/<date>/<topic>/': 49_164 + READER_HEADROOM,
-	'/archive/': 44_476 + READER_HEADROOM,
-	'/evals/': 41_883 + READER_HEADROOM,
-	'/404': 40_925 + READER_HEADROOM,
-	'/console/': 54_180 + CONSOLE_HEADROOM
-};
+const RECORDED = baseline.routes;
+if (RECORDED === null || typeof RECORDED !== 'object' || Array.isArray(RECORDED)) {
+	console.error(`bundle gate: ${BASELINE} needs a "routes" object.`);
+	process.exit(1);
+}
 
 const DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** The route class a prerendered page belongs to, so a ceiling survives a new day. */
+/** The route class a prerendered page belongs to, so a record survives a new day. */
 function routeClass(route) {
 	const parts = route.split('/').filter(Boolean);
 	if (parts.length === 0) return '/';
@@ -126,10 +133,24 @@ function pagesUnder(directory) {
 	return found;
 }
 
+// Modules repeat heavily across the route classes, so each one is compressed
+// once and its size reused.
+const compressed = new Map();
+function gzipBytes(file) {
+	let size = compressed.get(file);
+	if (size === undefined) {
+		size = gzipSync(readFileSync(file), { level: 9 }).length;
+		compressed.set(file, size);
+	}
+	return size;
+}
+
 /** What a browser fetches before a reader does anything: the preloaded modules.
  *
  * Each one is gzipped on its own because that is how it arrives - one response,
- * one encoding. Summing separately compressed files is the honest total.
+ * one encoding. Gzipping the concatenation instead is order-sensitive, so the
+ * number moves when the bundler reorders the preloads, which is noise nobody
+ * caused, and it under-reports what the wire costs.
  */
 function firstLoadBytes(page) {
 	const html = readFileSync(page, 'utf8');
@@ -141,13 +162,13 @@ function firstLoadBytes(page) {
 		// 404.html is served from any depth, so it addresses its modules from the root.
 		const absolute = href.startsWith('/');
 		const from = absolute ? resolve(BUILD) : dirname(page);
-		bytes += gzipSync(readFileSync(resolve(from, absolute ? href.slice(1) : href)), {
-			level: 9
-		}).length;
+		bytes += gzipBytes(resolve(from, absolute ? href.slice(1) : href));
 	}
 	return { bytes, modules: hrefs.size };
 }
 
+// Every date route preloads the same module set, so one instance stands for the
+// whole class: take the heaviest and compare that.
 const heaviest = new Map();
 for (const page of pagesUnder(BUILD)) {
 	const route = `/${relative(BUILD, page).split(sep).slice(0, -1).join(posix.sep)}`.replace(
@@ -160,30 +181,139 @@ for (const page of pagesUnder(BUILD)) {
 	if (!worst || bytes > worst.bytes) heaviest.set(name, { bytes, modules, page });
 }
 
-const kb = (bytes) => `${(bytes / 1024).toFixed(1)} KB`;
-console.log('\nfirst-load JS, gzip -9, heaviest page of each route class:');
-const overweight = [];
-for (const [name, { bytes, modules, page }] of [...heaviest].sort()) {
-	const ceiling = CEILINGS[name];
-	if (ceiling === undefined) {
-		overweight.push(`${name} has no ceiling (first seen at ${page})`);
+const commas = (value) => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const signed = (value) => `${value < 0 ? '-' : '+'}${commas(Math.abs(value))}`;
+const TODAY = new Date().toISOString().slice(0, 10);
+
+/** One route's record, ready to paste. Only the sentence is left to write. */
+const record = (name, bytes, why) =>
+	`    ${JSON.stringify(name)}: { "bytes": ${bytes}, "measured": "${TODAY}", ` +
+	`"why": ${JSON.stringify(why)} },`;
+
+const pinned = typeof baseline.toolchain === 'string' ? baseline.toolchain : '';
+const running = `node ${process.versions.node.split('.')[0]}`;
+if (pinned && pinned !== running) {
+	console.log(
+		`\nbundle gate: recorded on ${pinned}, running on ${running}. gzip -9 is deterministic for ` +
+			'given bytes, so a difference here may be the toolchain rather than the change.'
+	);
+}
+
+const unrecorded = [];
+const stale = [];
+const malformed = [];
+const moved = [];
+const silent = [];
+
+// A record is checked whether or not its route still builds. One that names
+// nothing, or carries no reason, is how the file rots quietly.
+for (const [name, entry] of Object.entries(RECORDED)) {
+	if (entry === null || typeof entry !== 'object' || Array.isArray(entry)) {
+		malformed.push(`${name} is not an object`);
 		continue;
 	}
+	if (!Number.isInteger(entry.bytes) || entry.bytes <= 0) {
+		malformed.push(`${name} needs a positive integer "bytes"`);
+	}
+	if (typeof entry.why !== 'string' || entry.why.trim() === '') {
+		malformed.push(`${name} has an empty "why" - say what those bytes buy`);
+	}
+	if (typeof entry.measured !== 'string' || !DATE.test(entry.measured)) {
+		malformed.push(
+			`${name} has "measured": ${JSON.stringify(entry.measured)}, which is not a YYYY-MM-DD date`
+		);
+	}
+	if (!heaviest.has(name)) {
+		stale.push(`${name} is recorded at ${commas(entry.bytes)} B, and no page in the build is that route`);
+	}
+}
+
+console.log('\nfirst-load JS, gzip -9 summed per module, against bundle-baseline.json:');
+for (const [name, { bytes, modules, page }] of [...heaviest].sort()) {
+	if (modules === 0) {
+		silent.push(`${name} preloads no module at all (${page})`);
+		continue;
+	}
+	const entry = RECORDED[name];
+	const measured = `  ${name.padEnd(18)} ${commas(bytes).padStart(7)} B  ${String(modules).padStart(2)} modules`;
+	if (entry === undefined || !Number.isInteger(entry.bytes)) {
+		if (entry === undefined) unrecorded.push({ name, bytes, page });
+		console.log(`${measured}  (no recorded weight)`);
+		continue;
+	}
+	const delta = bytes - entry.bytes;
+	const verdict = Math.abs(delta) <= TOLERANCE ? 'within' : 'OUTSIDE';
 	console.log(
-		`  ${name.padEnd(20)} ${kb(bytes).padStart(9)} ${String(bytes).padStart(7)} B  ` +
-			`${String(modules).padStart(2)} modules  (ceiling ${kb(ceiling)})`
+		`${measured}  (recorded ${commas(entry.bytes)}, ${signed(delta)}, ${verdict} +/-${TOLERANCE})`
 	);
-	if (bytes > ceiling) overweight.push(`${name} is ${kb(bytes)} against a ${kb(ceiling)} ceiling`);
+	if (Math.abs(delta) > TOLERANCE) moved.push({ name, bytes, entry, delta });
 }
 
-if (overweight.length > 0) {
-	console.error('\nbundle gate FAILED - a route outgrew its first-load budget:');
-	for (const line of overweight) console.error(`  ${line}`);
+let failed = false;
+
+if (silent.length > 0) {
+	failed = true;
+	console.error('\nbundle gate FAILED - a route declared no modules:');
+	for (const line of silent) console.error(`  ${line}`);
 	console.error(
-		'\nPrice the change: measure it, record it in docs/reference/measurements.md,'
+		'\nA gate that measures 0 B and passes is worse than no gate. Either the build\n' +
+			'changed how it declares its modules, or that page did not build.'
 	);
-	console.error('and raise the ceiling in the same diff - or do not ship the bytes.');
-	process.exit(1);
 }
 
-console.log('bundle gate: every route is inside its first-load budget.');
+if (malformed.length > 0) {
+	failed = true;
+	console.error(`\nbundle gate FAILED - a record in ${BASELINE} is incomplete:`);
+	for (const line of malformed) console.error(`  ${line}`);
+	console.error(
+		'\nThe number is the measurement; the sentence beside it is what the bytes buy.\n' +
+			'A record without both is a number nobody has to defend.'
+	);
+}
+
+if (unrecorded.length > 0) {
+	failed = true;
+	console.error('\nbundle gate FAILED - a route in the build has no recorded weight:');
+	for (const { name, bytes, page } of unrecorded) {
+		console.error(`  ${name} measured ${commas(bytes)} B, first seen at ${page}`);
+	}
+	console.error(`\nAdd it under "routes" in ${BASELINE}:`);
+	for (const { name, bytes } of unrecorded) console.error(record(name, bytes, ''));
+	console.error(
+		'\nThe gate keeps failing until the "why" names what those bytes buy. A route\n' +
+			'nobody recorded is a route nobody measured.'
+	);
+}
+
+if (stale.length > 0) {
+	failed = true;
+	console.error(`\nbundle gate FAILED - a record in ${BASELINE} names no route in the build:`);
+	for (const line of stale) console.error(`  ${line}`);
+	console.error(
+		'\nDelete the record, or find out why the route stopped building. A record that\n' +
+			'measures nothing still reads as a measurement.'
+	);
+}
+
+if (moved.length > 0) {
+	failed = true;
+	console.error('\nbundle gate FAILED - a route left its recorded weight:');
+	for (const { name, bytes, entry, delta } of moved) {
+		console.error(
+			`  ${name} ${delta > 0 ? 'grew to' : 'fell to'} ${commas(bytes)} B, ` +
+				`${commas(Math.abs(delta))} B ${delta > 0 ? 'over' : 'under'} the recorded ` +
+				`${commas(entry.bytes)} (tolerance +/-${TOLERANCE} B)`
+		);
+	}
+	console.error(
+		'\nThe ratchet is two-sided on purpose. A route that got lighter leaves slack in\n' +
+			'the record, and the next regression lands inside it without a word.'
+	);
+	console.error(`\nRecord what you measured, in ${BASELINE}:`);
+	for (const { name, bytes, entry } of moved) console.error(record(name, bytes, entry.why));
+	console.error('\nThe "why" above is the old one. Replace it when the cause changed.');
+}
+
+if (failed) process.exit(1);
+
+console.log('\nbundle gate: every route matches its recorded weight.');
