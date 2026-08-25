@@ -184,6 +184,19 @@ summary defects, and dropping them would bias the sample toward well-extracted
 items - the sampling error this whole page argues against. `unjudgeable` carries
 them, and the rate is reported with and without.
 
+### Current label-queue implementation gap
+
+The current queue cannot show the evidence this section requires.
+`state/scores.csv` carries neither summary text nor extracted article text, and
+`label_queue.py` prints a missing-summary fallback. The draw is emitted in
+sequential HHEM-decile blocks, which leaks the hidden score gradient through
+order.
+
+Calibration is blocked until the queue joins to a frozen local evidence package
+containing exact source and summary text plus source digest, and globally
+shuffles the selected rows before display. Article bodies remain local and
+uncommitted.
+
 **The exact remaining requirement**, counted on the committed ledger 2026-08-24:
 
 | What | Have | Need |
@@ -302,7 +315,12 @@ Committing the scores rather than deriving them is what makes a claim about last
 
 The ledger header is part of the contract. A writer now refuses to append when the committed header no longer matches `EvalRow.csv_columns()`. A contract test also parses every committed `state/*.csv` with Python's `csv` module and fails if any data row has a different cell count from its header. This protects the file itself, not only the append path.
 
-**The ledger records measurements, not runs.** The writer refuses a row whose address, pipeline fingerprint, output words and scorer version all match a row the file already holds. Nothing about that item changed, so there is nothing new to measure, and a second row would only inflate the denominator every rate is computed against. `item_id` is deliberately not part of that identity: it is a slot on a page, not the item.
+**The ledger records measurements, not runs.** The writer refuses a row whose
+address, pipeline fingerprint, output words and scorer version all match a row
+the file already holds. Nothing in that recorded measurement identity changed,
+so a second row would only inflate the denominator every rate is computed
+against. Article-input identity is not part of this de-duplication key.
+`item_id` is deliberately absent too: it is a slot on a page, not the item.
 
 Any of the four differing makes it a new measurement and it lands: different words under identical inputs is the determinism violation the ledger exists to catch, and the same words read by a different scorer is a reading worth keeping.
 

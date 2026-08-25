@@ -78,6 +78,13 @@ python backend/utilities/measure_llm.py \
 The files under `backend/models/` are local, gitignored files. The ad hoc
 measurement job does not put them in the repository Actions cache.
 
+Current `measure_llm.py` resolves Hugging Face `main` and verifies the LFS
+identity it observes there. It cannot request an immutable revision or accept an
+expected SHA. That is sufficient for an exploratory measurement and not for
+reproducing an adoption candidate. Add revision and expected-SHA inputs, or use
+an immutable commit URL plus mandatory digest verification, before the final
+qualification run.
+
 ## 1. Freeze the control
 
 Choose the incumbent and candidate before measuring. Hold these constant:
@@ -218,6 +225,10 @@ Require:
 Use three deterministic repeats for the adoption corpus, not one repeated
 example.
 
+Repair the current inline-think parser first. It checks only the first matched
+block for content, then removes all blocks; an empty first block can hide a
+non-empty second one.
+
 The unit suite uses recorded completions. It proves the parser and controls, not
 that a new live model follows this chat template. A live candidate canary runner
 does not exist yet. Build that instrument or perform and record the live calls;
@@ -301,7 +312,9 @@ claim an automatic winner.
 The existing human label queue records one summary's support verdict. It cannot
 record paired informativeness, title quality or key-point correctness. A model
 adoption needs a typed pairwise label shape and human-paced CLI before human
-review can act as the selector.
+review can act as the selector. That tool must show frozen local source and
+summary evidence, keep article bodies uncommitted, and globally shuffle rows so
+HHEM-decile order does not leak the hidden score gradient.
 
 ## 7. Decide
 

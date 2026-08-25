@@ -77,6 +77,12 @@ build. It is not a controlled A/B.
 13. Candidate prompt tokens, complete chat-templated context, live canaries,
     recurrent prefix reuse, production-worker RSS/time and paired quality are
     unmeasured.
+14. Inline think parsing checks only the first block; an empty block before a
+    non-empty block can bypass the reasoning guard.
+15. The current human label queue has no summary/article evidence and emits
+    sequential HHEM-decile blocks, leaking the hidden gradient through order.
+16. `measure_llm.py` and local curl commands resolve mutable `main`; they cannot
+    request an immutable model revision or require the expected adoption SHA.
 
 **Skip decision:** defer inference skipping. This plan wires truthful observed
 identity and one assembler-owned fingerprint ledger writer only. A future skip
@@ -89,7 +95,7 @@ not skipped. Do not put article identity into the configuration fingerprint.
 | Row | Work | Depends on | Status |
 | --- | --- | --- | --- |
 | 1 | Typed validation corpus/result and pairwise human-label contracts, including `not_reported` leaderboard provenance and a pre-registered selector with tie handling | - | PENDING |
-| 2 | One typed source for model/runtime identity; exact download and cache verification | - | PENDING |
+| 2 | One typed source for model/runtime identity; immutable revision plus expected-SHA download and cache verification | - | PENDING |
 | 3 | Expand fingerprint event/ledger contract and define assembler-owned writing | 2 | PENDING |
 | 4 | Wire truthful fingerprint identity and model-separated drift | 1, 2, 3 | PENDING |
 | 5 | Capture once, replay both models, preserve failures, pin scorer, isolate date/run, remove `--autostash` | 1, 2 | PENDING |
@@ -151,13 +157,16 @@ model swap in row 8 has no schema bump. Contract repairs in rows 1-3 do.
 - Missing leaderboard provenance stays null/`not_reported`, never zero.
 - One candidate failure remains in the denominator.
 - Validation argv equals production `server_argv`.
-- Wrong cached bytes fail before server start.
+- Wrong revision, expected SHA or cached bytes fail before server start.
 - Worker identity reaches one assembler-owned fingerprint writer.
 - Old validation, fingerprint and run-manifest fixtures still load.
 - Stale result files and UTC rollover cannot affect the decision.
 - Drift does not mix model-dependent series across model ids.
 - HHEM screening cannot write the final selected model; only the typed blind
   human selector can.
+- An empty first think block followed by a non-empty second block is rejected.
+- Human labels display frozen source and summary evidence, globally shuffled;
+  no HHEM-decile ordering reaches the labeller.
 
 ## See also
 

@@ -306,9 +306,9 @@ srv load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true
 
 Current llama.cpp source names the same quantity `n_ctx_seq`: when `kv_unified`
 is true, `n_ctx_seq = n_ctx`; when it is false, `n_ctx_seq = n_ctx / n_seq_max`.
-This log uses the older `n_ctx_slot` name. The value is still 8192 per slot, so
-the run's then-current 4201-token worst case fit, and today's 4279-token worst
-case also fits. This is not a live defect in run `32648218952`.
+This log uses the older `n_ctx_slot` name. The value is 8192 per slot, so the run
+refutes context splitting. It does not prove the maximum complete request fits;
+that request has not been tokenized end to end.
 
 The run does **not** settle whether the prompt prefix was reused. The grep
 emitted no `kv cache rm [p0, end)` line. The only emitted instrument was

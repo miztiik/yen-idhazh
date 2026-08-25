@@ -89,23 +89,24 @@ Without it a fingerprint is meaningless hex three years from now - it would prov
 
 The column order is defined once, by the contract, and flattened one level so every cell is a scalar. The committed header is asserted against that definition, because a hand-edited header would silently reorder every future row.
 
-## Intended skip-if-fingerprint-matches
+## Future skip uses work identity, not fingerprint alone
 
-A prior stamp classifies the work in front of the pipeline:
+A safe skip compares a future per-item `WorkIdentity` containing both pipeline
+fingerprint and article-input digest:
 
-| Prior stamp | Then | Meaning |
+| Prior work identity | Then | Meaning |
 | --- | --- | --- |
 | absent | `first_run` | run the work |
-| different | `inputs_changed` | run the work |
+| different pipeline or article digest | `inputs_changed` | run the work |
 | same | `unchanged` | do nothing, and write no eval row |
-| same, different words | `determinism_violation` | record it |
+| same, forced run, different words | `determinism_violation` | record it |
 
-Under the intended path, **an unchanged item writes no eval row**, because a
-re-run that changed nothing measured nothing, and a ledger padded with
-re-observations of the same summary makes every trend on the dashboard a
-function of how often the job ran.
+The current `classify` helper compares only pipeline fingerprint. It is not wired
+and is insufficient for skip because a publisher can change article bytes at
+the same URL. Replace or expand it with `WorkIdentity` before use.
 
-The violation case is only observable when a run was forced - on the normal path the match is enough to skip before any words exist to compare.
+Under the future safe path, an unchanged item writes no eval row. The violation
+case is observable only when a matching work identity is forced to run.
 
 ## Intended violation handling
 
