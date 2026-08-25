@@ -280,9 +280,16 @@ owns the width, the margin box and the two domain rules - linear, rounded
 outward to numbers a reader can place, and anchored at zero only where the
 mark's *length* carries the value; and log, snapped to whole decades. A mark
 that encodes by position takes the padded domain instead, because a zero no run
-was ever measured at is plot spent on nothing. Before the frame, each chart
-chose its own `viewBox` and let the browser fit it to the column, and a
-`viewBox` is a scale factor rather than a unit. Measured
+was ever measured at is plot spent on nothing. The rounding is a default rather
+than a law. A chart whose domain is already decided by something else turns it
+off, because rounding a fixed domain outward moves every mark on the chart to
+buy a tick label that reads the same either way - which is how the compression
+scatter gains a labelled y axis and still puts every point where it already
+was. That chart's x axis is the only user of the log rule: whole decades, and
+the eight steps between them. The tick values come from `d3` either way, which
+is the part hand-rolling gets wrong. Before the frame, each chart chose its own
+`viewBox` and let the browser fit it to the column, and a `viewBox` is a scale
+factor rather than a unit. Measured
 2026-08-25 at a 1057px window: the same `font-size="10"` came out 4.5px in the
 three-up failure panel and 16.6px in the chart under it, and a `stroke-width` of
 1 came out at 0.45px and 1.66px. One module means a chart cannot invent a fifth
@@ -306,7 +313,7 @@ spanning both would make two workstreams fail each other's builds.
 The item-health viewport has three parts, in this order:
 
 - **Failure panels**: fetch, extract and summarize failure rates as separate bars. **The rate is printed in type under each stage name** - `16% failed, 126 of 800.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **The y domain is fixed at 0 to 100%.** Scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **A window holding one day draws no chart at all**: a chart of one value is a rectangle, and the sentence is the panel. Thin denominators use outlined bars below `console.min_attempts_for_rate`, explained once under the row rather than once per bar. Colour is spent only on a failure.
-- **Compression scatter**: source words against summary words on a log x axis with decade ticks, the `summarize.bands` step function as the reference band, and a distinct mark for truncation-flagged scored items. One chart, hand-written SVG. It used to carry a second `uplot` canvas underneath drawing the same dataset with neither the band reference nor the truncation mark, which is two drawings of one dataset that disagree.
+- **Compression scatter**: source words against summary words on a log x axis with decade ticks and the eight steps between them, summary words labelled on a y axis of their own, the `summarize.bands` step function drawn once as a shaded target zone, and a distinct mark for truncation-flagged scored items. One chart, hand-written SVG. Two things it used to do: carry a second `uplot` canvas underneath drawing the same dataset with neither the band reference nor the truncation mark, which is two drawings of one dataset that disagree; and draw the band reference as one vertical line per point, which measured 1166 nodes on 2026-08-25 for a fact that has one value per configured band. The zone is one `<path>` at any point count, and `summary words` moved off the bottom row, where it was printed beside the x axis title of the variable it is not.
 - **Failed item list**: the rows behind the shape, **capped at `console.failure_list_max` with a `Show 25 more` button**, and stating its own scope - `Showing 25 of 214 failed items in this window.` A panel chip filters it, because after a spike the operator needs rows, and a new window or a new chip resets the cap because it is a new question. Uncapped it measured 7824px against 800 rows and put the compression chart at document y=9105. It sits last for the same reason: it is the only child that can outgrow the screen, so it cannot sit between two charts.
 
 Measured 2026-08-24 on the committed ledger: the console document went from
@@ -401,6 +408,7 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | A virtual-scrolling failure table | A dependency and a scroll-position bug for something a cap and a button already solve. | Jony |
 | A per-day stacked bar list for stage timings | Thirty days is about 150 rows and no trend, and the trend is the only question the section is asked. | Jony |
 | `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Rule #8 |
+| Fading the per-point band lines instead of collapsing them | The wash is a node count, not an alpha value. One fact drawn 1166 times is still drawn 1166 times at any opacity, and the fact has one value per configured band. | Jony, Carmack |
 | A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. | Jony, Carmack |
 | `d3-scale` from a CDN | The HTTP cache is partitioned per site, so the shared-cache argument is dead, and the repo's `script-src` allows `self` only. | Carmack |
 | Fixing the units by hand instead of taking the dependency | `.nice()` and `ticks()` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
