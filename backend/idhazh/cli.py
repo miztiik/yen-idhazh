@@ -597,8 +597,26 @@ class _RoutableItem(NamedTuple):
     summary: Summary
 
 
-def routable_items(plan: RunPlan, items_dir: Path) -> list[_RoutableItem]:
-    """The items the router could decide this run, best story first.
+def already_published(date: str) -> frozenset[str]:
+    """The item ids the day's committed digest already carries.
+
+    `assemble.build_day` keeps an already-published item and discards the new
+    run's copy of it, because the reading order is part of what a shared link
+    shows. So a later run's routing decision for one of those items can never
+    reach a reader: it is computed, written, read back, and thrown away.
+
+    A day runs five times. Without this the second run spends its whole budget
+    re-deciding the first run's items at 20 to 40 measured seconds each, and the
+    items it actually introduced queue behind them.
+    """
+    day = _load_day(assemble.day_dir(PUBLIC_ROOT, date) / "digest.json")
+    return frozenset(item.item_id for item in day.items) if day else frozenset()
+
+
+def routable_items(
+    plan: RunPlan, items_dir: Path, *, published: frozenset[str]
+) -> list[_RoutableItem]:
+    """The items this run could still decide, best story first.
 
     Rank order, not plan order. The plan is vertical-major, so stopping part-way
     down it would cost whole verticals their pictures while the weakest story in
@@ -611,6 +629,8 @@ def routable_items(plan: RunPlan, items_dir: Path) -> list[_RoutableItem]:
     """
     routable: list[_RoutableItem] = []
     for item in plan.items:
+        if item.item_id in published:
+            continue
         article_path = items_dir / f"{item.item_id}.article.json"
         summary_path = items_dir / f"{item.item_id}.summary.json"
         if not (article_path.exists() and summary_path.exists()):
@@ -645,6 +665,11 @@ def stage_route(
     publishing the charts the run made and publishing none of them (Rule #2 -
     the feature fits the runner, the runner is not raised to fit the feature).
 
+    **It also skips what the day already published**, because the assembler keeps
+    the published copy and discards the new one. That is what makes the stage
+    resumable in the sense the rest of the pipeline already is: a re-run costs
+    only the items the earlier run did not introduce.
+
     `clock` is injected so the bound can be tested without spending it.
     """
     items_dir = _run_dir(plan.date) / "items"
@@ -654,12 +679,14 @@ def stage_route(
     skipped = 0
     unrouted = 0
 
-    routable = routable_items(plan, items_dir)
+    published = already_published(plan.date)
+    routable = routable_items(plan, items_dir, published=published)
     budget_ms = settings.app.run.route_budget_minutes * 60_000
     stage_started = clock()
     LOG.info(
-        "routing start items=%s budget_minutes=%s",
+        "routing start items=%s already_published=%s budget_minutes=%s",
         len(routable),
+        len(published),
         settings.app.run.route_budget_minutes,
     )
 
