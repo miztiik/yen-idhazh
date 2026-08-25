@@ -4,6 +4,9 @@ The oracle for Row #19 is the round trip: encode on the runner, commit, decode
 on the other side, and get the same vector back to within the quantiser's own
 tolerance. A silent dtype or endianness mistake fails here rather than showing
 up months later as bad search results nobody can explain.
+
+The second oracle is determinism: a vector may depend on its own text and on
+nothing else. `TestPinnedArithmetic` holds the pins that make that true.
 """
 
 from __future__ import annotations
@@ -11,6 +14,7 @@ from __future__ import annotations
 import base64
 import math
 from pathlib import Path
+from typing import Any
 
 import pytest
 from conftest import REPO_ROOT
@@ -20,12 +24,16 @@ from idhazh.embed import (
     DIMENSIONS,
     DTYPE,
     EMBEDDER_ID,
+    MAX_TOKENS,
     ONNX_RELPATH,
+    TOKENIZER_RELPATH,
     Embedder,
+    build_tokenizer,
     cosine,
     dequantise,
     from_base64,
     quantise,
+    session_options,
     text_for,
     to_base64,
 )
@@ -34,6 +42,12 @@ CORPUS = [
     "India added 15,400 megawatts of solar capacity, its biggest year yet.",
     "The central bank held interest rates steady for a fourth meeting.",
     "A new open-weights language model was released under a permissive licence.",
+]
+
+# Fifteen sentences of deliberately mixed length, so a batch of sixteen is the
+# worst case for anything that reads a scale off the whole tensor.
+NEIGHBOURS = [
+    " ".join(["neighbour"] * (3 + 9 * index)) + f". filler item {index}." for index in range(15)
 ]
 
 
@@ -49,6 +63,13 @@ def embedder() -> Embedder:
         pytest.skip("the encoder is not committed in this checkout")
     model.load()
     return model
+
+
+@pytest.fixture(scope="module")
+def tokenizer() -> Any:
+    if not (REPO_ROOT / TOKENIZER_RELPATH).exists():
+        pytest.skip("the tokenizer is not committed in this checkout")
+    return build_tokenizer(REPO_ROOT)
 
 
 class TestQuantisation:
@@ -112,9 +133,28 @@ class TestEncoder:
         assert embedder.encode([]) == []
 
     def test_the_same_text_encodes_identically_twice(self, embedder: Embedder) -> None:
-        first = embedder.encode([CORPUS[0]])[0]
-        second = embedder.encode([CORPUS[0]])[0]
-        assert cosine(first, second) > 0.9999
+        """Exactly, not nearly. A near miss here is a vector that moves between runs."""
+        assert embedder.encode([CORPUS[0]])[0] == embedder.encode([CORPUS[0]])[0]
+
+    def test_the_oracle_a_vector_ignores_the_items_it_travelled_with(
+        self, embedder: Embedder
+    ) -> None:
+        """Alone, and inside two different batches of sixteen: the same committed bytes.
+
+        This is the reproducibility failure that started the row, and it needed
+        no second machine. The encoder is dynamically quantised, so it reads its
+        activation scales off whatever tensor it is handed - which made the
+        other fifteen items an input to this one's vector. Measured before the
+        fix on 2026-08-25 (Windows 11, 8 vCPU, onnxruntime 1.29.0): two batches
+        of sixteen disagreed about a shared sentence by up to 1.5e-2 per
+        component, far above anything int8 quantisation would hide.
+        """
+        alone = embedder.encode([CORPUS[0]])[0]
+        one_crowd = embedder.encode([CORPUS[0], *NEIGHBOURS])[0]
+        another_crowd = embedder.encode([CORPUS[0], *reversed(CORPUS), *NEIGHBOURS[:12]])[0]
+
+        assert to_base64(alone) == to_base64(one_crowd) == to_base64(another_crowd)
+        assert alone == one_crowd == another_crowd
 
     def test_a_query_retrieves_the_item_it_is_about(self, embedder: Embedder) -> None:
         """The whole point. Without this the row runs but does not work."""
@@ -149,6 +189,32 @@ class TestEncoder:
 
     def test_a_long_summary_is_truncated_rather_than_refused(self, embedder: Embedder) -> None:
         assert len(embedder.encode([" ".join(["word"] * 5000)])[0]) == DIMENSIONS
+
+
+class TestPinnedArithmetic:
+    """The pins behind the oracle above, asserted where they are set.
+
+    The oracle proves the property on this machine. These prove the reason it
+    holds on any machine, and they fail the moment somebody removes one.
+    """
+
+    def test_the_session_runs_on_one_thread_in_order(self) -> None:
+        """Float addition is not associative, so the thread count picks the answer."""
+        import onnxruntime
+
+        options = session_options()
+        assert options.intra_op_num_threads == 1
+        assert options.inter_op_num_threads == 1
+        assert options.execution_mode == onnxruntime.ExecutionMode.ORT_SEQUENTIAL
+
+    def test_the_tokenizer_truncates_at_the_cap(self, tokenizer: Any) -> None:
+        assert len(tokenizer.encode(" ".join(["word"] * 5000)).ids) == MAX_TOKENS
+
+    def test_the_tokenizer_pads_nothing(self, tokenizer: Any) -> None:
+        """A pad token is an activation too, and it widens the quantiser's range."""
+        short = tokenizer.encode("Solar capacity rose.")
+        assert len(short.ids) < MAX_TOKENS
+        assert set(short.attention_mask) == {1}
 
 
 class TestDayPayload:
