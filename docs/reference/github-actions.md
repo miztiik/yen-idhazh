@@ -62,13 +62,12 @@ flowchart LR
 The plan job also commits first-sighting and feed-health state before it starts
 the workers. This keeps observations from a failed refresh.
 
-### Both commit steps push through a rebase, and neither rebases on a dirty tree
+### Both commit steps push through a rebase, and the one that can rebuild rebuilds
 
 The plan job and the assemble job each commit, then push in a loop of three
-attempts. A push that loses a race rebases and tries again. Both steps run one
-script, [`.github/scripts/commit-and-push.sh`](../../.github/scripts/commit-and-push.sh),
-and differ only in what they stage and in the three strings they pass it. Two
-copies of the loop were a loop no test could execute.
+attempts. Both run one script,
+[`.github/scripts/commit-and-push.sh`](../../.github/scripts/commit-and-push.sh).
+Two copies of the loop were a loop no test could execute.
 
 A rebase refuses to start while a tracked file is modified. Run `32671663130`
 died that way: one file was CRLF against a `text eol=lf` attribute, so every
@@ -82,17 +81,44 @@ and a later step may still want them. `--autostash` was removed - it stashes the
 noise and then fails the step when the stash will not reapply, which is the
 failure it looks like it prevents.
 
-**The loop retries a clean rebase and does not retry a conflicting one.**
-`git pull --rebase origin main` is the only unguarded command in it, so under
-`bash -e` a conflict ends the script inside attempt 1: there is no attempt 2, the
-three-attempt message never prints, the day never lands, and the checkout is left
-mid-rebase. Measured 2026-08-25 against a scripted local origin, git 2.55.0,
-bash 5.3.15, and pinned by a test in `backend/tests/test_workflows.py` so the
-repair is visible when it lands.
+**There are two ways to lose the push race, and they need different answers.**
+
+The plan job only records what it saw. Its ledgers are append-only and every row
+is independent of its neighbours, so two runs that both appended are not in
+disagreement and the union of both sides is the answer. Every file under
+`state/` carries `merge=union` in `.gitattributes`, so that rebase resolves
+itself. A reader of those ledgers already deduplicates.
+
+The assemble job rebuilds what it commits, so it rebuilds. `actions/checkout@v6`
+carries no `ref`, so the job takes main's tip at trigger time, and a run takes
+164-184 min - the day is always built on a base up to three hours old, and the
+push is the first thing to find out. On a rejected push the loop hands the
+derived paths back to origin's tip and runs `python -m idhazh assemble` again
+against it. That stage already loads the previous day and appends to it, so it
+is the conflict resolver; it was being run once against a stale base and then
+thrown at `git merge-file`. A text merge of two digests produces a payload no
+producer would ever write.
+
+`REFRESH_PATHS` names what the rebuild owns: the day's `digest.json` and
+`run.json`, `frontend/public/telemetry/`, and the three ledgers assemble appends
+to. It never names the day's directory. The routes artifact unpacks this run's
+rendered charts into that same directory and no producer in the assemble job can
+make them again, so the two payload files are named one at a time.
+`frontend/public/telemetry/` is a full rewrite of `state/item-health/`, which is
+why it is regenerated and not unioned: a union of two rewrites is a file with
+every row twice.
+
+**Every command in the loop is guarded.** Until 2026-08-25 `git pull --rebase
+origin main` was the only unguarded one, so under `bash -e` a conflict ended the
+script inside attempt 1: no attempt 2, no failure message, no day, and a checkout
+left mid-rebase. A guarded failure now says what it was, leaves no rebase in
+progress, and ends on the three-attempt message.
 
 A workflow contract test pins this shape, and executes the script against real
-local repositories. CI never runs `digest.yml`, so a change to the loop still
-needs a dispatched run to verify end to end.
+local repositories - including a scripted origin that gains both another run of
+the same day and an unrelated pull-request merge while the job works. Measured
+2026-08-25, git 2.55.0, bash 5.3.15. CI never runs `digest.yml`, so a change to
+the loop still needs a dispatched run to verify end to end.
 
 Model validation and measurements never run on a pull request, push, or
 schedule. A person dispatches them. Drift review is a separate weekly or manual
