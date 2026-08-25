@@ -355,6 +355,52 @@ test('stage medians come from item health, not the score ledger', async ({ page 
 	await expect(page.locator('[data-stage="summarize"]')).toContainText('700 ms');
 });
 
+test('the timing chart draws one unit per CSS pixel at every width', async ({ page }) => {
+	// A viewBox is a scale factor, not a unit. When it disagrees with the width
+	// the chart occupies, every declared font-size and stroke-width comes out at
+	// some other number - 0.87x at 380px before this was fixed.
+	const measured: { viewport: number; declared: number; rendered: number }[] = [];
+	for (const viewport of [380, 768, 1400]) {
+		await page.setViewportSize({ width: viewport, height: 1000 });
+		await page.goto('/console/');
+		const plot = page.locator('[data-timing="plot"]');
+		await expect(plot).toBeVisible();
+		await expect
+			.poll(async () => {
+				const box = await plot.boundingBox();
+				const viewBox = (await plot.getAttribute('viewBox')) ?? '';
+				return Math.abs(Number(viewBox.split(' ')[2]) - (box?.width ?? 0)) <= 1;
+			})
+			.toBe(true);
+		const box = await plot.boundingBox();
+		const viewBox = (await plot.getAttribute('viewBox')) ?? '';
+		measured.push({
+			viewport,
+			declared: Number(viewBox.split(' ')[2]),
+			rendered: Math.round(box?.width ?? 0)
+		});
+	}
+
+	// Reported rather than only asserted, so a failure names the three pairs.
+	for (const pair of measured) {
+		expect(Math.abs(pair.declared - pair.rendered)).toBeLessThanOrEqual(1);
+	}
+});
+
+test('a stage colour is categorical, never a health band', () => {
+	const source = readFileSync(
+		resolve(process.cwd(), 'src', 'lib', 'components', 'StageTimings.svelte'),
+		'utf8'
+	);
+
+	// Green, amber and red mean good, watch and bad everywhere else on this page.
+	// Lending them to four stages says the slowest one is the failing one.
+	expect(source).not.toContain('--band-');
+	for (const series of ['--series-1', '--series-2', '--series-3', '--series-4']) {
+		expect(source).toContain(series);
+	}
+});
+
 test('reading and writing are drawn as separate candles per day', async ({ page }) => {
 	await page.goto('/console/');
 
