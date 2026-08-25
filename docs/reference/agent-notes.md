@@ -60,6 +60,23 @@ git apply --3way .tmp_mine.patch
 
 `.tmp_*` is gitignored, so the patch file never lands in a commit.
 
+**The venv tests the checkout it was installed from, not your worktree.**
+`pip install -e .` writes `_editable_impl_idhazh.pth` into
+`.venv/Lib/site-packages`, and that file holds the ABSOLUTE path of the checkout
+you installed from. Run the shared venv from a worktree and `pytest` collects
+your tests while `import idhazh` silently resolves to the other tree, so a green
+run says nothing about your change. `PYTHONPATH` is searched before a `.pth`
+entry, so one variable fixes it:
+
+```powershell
+$env:PYTHONPATH='<absolute path to your worktree>\backend'
+& <shared venv>\Scripts\python.exe -c "import idhazh; print(idhazh.__file__)"
+```
+
+Print that path before every gate run. If it does not name your worktree, every
+result after it is about somebody else's code. Verified 2026-08-25 across ten
+worktrees.
+
 **`origin/main` moves under you.** The scheduled pipeline pushes `plan:` and
 `digest:` commits to `main` several times an hour, and the editor auto-fetches.
 A branch created "from `origin/main`" and a merge done "against `origin/main`"
