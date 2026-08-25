@@ -322,6 +322,18 @@ def build_manifest(
     return RunManifest(version=RunManifest.schema_version(), date=plan.date, runs=runs)
 
 
+def run_that_wrote(item: DigestItem) -> int:
+    """Which run wrote the words this item now carries.
+
+    The run manifest names the model per run, so this is the join anyone asking
+    "which model wrote this summary" has to make. An item no run has revised was
+    written by the run that introduced it. A revised one names its own run,
+    because the alternative is a join that answers with the wrong run rather
+    than with nothing.
+    """
+    return item.updated_by_run or item.introduced_by_run
+
+
 def low_confidence(day: DigestDay) -> int:
     return sum(1 for item in day.items if item.band is ConfidenceBand.LOW)
 
