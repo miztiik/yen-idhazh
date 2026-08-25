@@ -14,21 +14,31 @@ from __future__ import annotations
 
 import json
 import shlex
+import socket
 import subprocess
 import sys
+import threading
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import config
+from idhazh import cli, config
 from idhazh.contracts.app_config import InferenceConfig, SummarizeConfig, SummaryBand
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.llm.server import Completion, parse_completion, request_payload, server_argv
+from idhazh.llm.server import (
+    Completion,
+    is_context_exceeded,
+    parse_completion,
+    request_payload,
+    server_argv,
+)
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
 from idhazh.summarize import (
     build_request,
@@ -45,6 +55,7 @@ from idhazh.summarize import (
 )
 
 COMPLETIONS = FIXTURES_DIR / "completions"
+LLM_ERRORS = COMPLETIONS / "errors"
 FINGERPRINT = "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da"
 GENERATED_AT = "2026-08-21T06:12:53Z"
 
@@ -187,6 +198,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "m",
         "--ctx-size",
         "8192",
+        "--no-context-shift",
         "--batch-size",
         "512",
         "--ubatch-size",
@@ -196,6 +208,24 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "--port",
         "8080",
     ]
+
+
+def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> None:
+    """A shifted context drops the middle and answers about a document we no longer sent.
+
+    The reply then reads as a hallucination and the scorer names the wrong
+    cause. An error is the only version of this the pipeline can act on.
+    """
+    from idhazh.contracts.app_config import ModelRef
+
+    argv = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
+        inference=InferenceConfig(),
+    )
+
+    assert "--no-context-shift" in argv
 
 
 def test_server_argv_matches_the_digest_workflow_command() -> None:
@@ -907,3 +937,97 @@ def test_the_summary_of_an_ok_article_carries_the_items_identity() -> None:
     assert result.item_id == source.item_id
     assert result.url_key == source.url_key
     assert source.status is ArticleStatus.OK
+
+
+# --- A server that answered is not a server that is down ---------------------
+
+
+class RecordedErrorEndpoint:
+    """A real local server that replays one recorded llama-server error reply.
+
+    Nothing is mocked: the worker makes its ordinary POST over a loopback
+    socket, and the bytes it reads back are the ones a llama-server wrote
+    (Rule #7). The stdlib server owns the framing, so the test is about the
+    body and not about HTTP.
+    """
+
+    def __init__(self, status: int, body: bytes) -> None:
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_POST(self) -> None:
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    @property
+    def endpoint(self) -> str:
+        return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
+
+    def __enter__(self) -> RecordedErrorEndpoint:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5.0)
+
+
+def refused_endpoint() -> str:
+    """A loopback port that refused a real socket before the test used it."""
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        port = int(reserved.getsockname()[1])
+    return f"http://127.0.0.1:{port}/v1/chat/completions"
+
+
+def summarize_against(endpoint: str) -> Summary:
+    return cli._summarize_one(
+        article(), config.load(CONFIG_DIR), FINGERPRINT, endpoint=endpoint, run_id="2026-08-25-1"
+    )
+
+
+def test_the_recognised_context_error_is_read_off_the_type_not_the_message() -> None:
+    """The message states the token counts and its wording moves between builds."""
+    assert is_context_exceeded(read_text(LLM_ERRORS / "context-exceeded.json"))
+    assert not is_context_exceeded(read_text(LLM_ERRORS / "server-unavailable.json"))
+    assert not is_context_exceeded("exceeds the available context size")
+    assert not is_context_exceeded("<html>502 Bad Gateway</html>")
+
+
+def test_a_prompt_the_server_refused_for_length_says_so(article_ok: Article) -> None:
+    """The oracle: a running server that refused is never reported as a dead one."""
+    body = (LLM_ERRORS / "context-exceeded.json").read_bytes()
+
+    with RecordedErrorEndpoint(400, body) as server:
+        result = summarize_against(server.endpoint)
+
+    assert result.item_id == article_ok.item_id
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is FailureCode.CONTEXT_EXCEEDED
+    assert "context window" in (result.failure_detail or "")
+
+
+def test_a_refused_connection_is_still_an_unreachable_model() -> None:
+    result = summarize_against(refused_endpoint())
+
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is FailureCode.MODEL_UNREACHABLE
+
+
+def test_an_error_the_transport_does_not_recognise_stays_unreachable() -> None:
+    """Decision 4: an unrecognised status must not become a new silent class."""
+    body = (LLM_ERRORS / "server-unavailable.json").read_bytes()
+
+    with RecordedErrorEndpoint(503, body) as server:
+        result = summarize_against(server.endpoint)
+
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is FailureCode.MODEL_UNREACHABLE

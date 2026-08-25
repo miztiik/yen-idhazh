@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -40,7 +40,8 @@ Get the runtime and the weights per
 
 ```
 backend/bin/llama-server --model backend/models/Qwen3-8B-Q4_K_M.gguf \
-  --ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --port 8080
+  --ctx-size 8192 --no-context-shift --batch-size 512 --ubatch-size 512 \
+  --threads 4 --port 8080
 ```
 
 The summarize stage talks to `127.0.0.1:8080` and nothing else. There is no

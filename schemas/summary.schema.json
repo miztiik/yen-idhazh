@@ -18,6 +18,7 @@
         "paywalled",
         "unsupported_form",
         "model_unreachable",
+        "context_exceeded",
         "output_truncated",
         "bad_shape",
         "length_out_of_range",
