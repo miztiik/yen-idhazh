@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -83,7 +83,19 @@ npm run build:canary
 npm run test:browser
 ```
 
-61 tests in 6 files (2026-08-24).
+74 tests in 7 files (2026-08-25). Twelve of them are pure-function tests over
+`frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
+frontend unit-test runner, so a pure module proves itself here.
+
+**Set `PREVIEW_PORT` when another checkout may be running the suite.**
+`playwright.config.ts` reads it and defaults to 4173, and the whole config -
+`baseURL`, the preview command and the poll URL - follows it. Two worktrees on
+one port do not queue; the second adopts the first one's server and reads its
+build.
+
+```powershell
+$env:PREVIEW_PORT = '4181'
+```
 
 Three traps make this suite lie to you. A fourth used to, and was fixed at the
 source rather than written down as a step to remember: `build_canary_day.py`
@@ -99,7 +111,7 @@ The traps that remain:
   real published dates and fails for reasons that are not your change. Confirm
   `frontend/build/console/index.html` still carries a canary date before and
   after the run.
-- **A leftover `vite preview` on port 4173 is adopted, not replaced.**
+- **A leftover `vite preview` on the preview port is adopted, not replaced.**
   `playwright.config.ts` sets `reuseExistingServer` outside CI, so a server left
   running by an earlier run serves stale bytes and most of the suite fails at
   once. The tell is that everything fails together while the pure-function tests
