@@ -21,17 +21,24 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | `server_argv` stops claiming coverage it never had | - | A | PENDING | - | - | - |
-| 2 | Record the `-np` observation and correct the `n_parallel` guidance | - | A | PENDING | - | - | - |
-| 3 | Pin the llama.cpp build and name it in the cache key | - | A | PENDING | - | - | - |
-| 4 | A context-full reply stops reporting as unreachable | 1 | B | PENDING | - | - | - |
-| 5 | The `work` job names its host, its binary and its weights | 3 | B | PENDING | - | - | - |
-| 6 | `llama-batched-bench` decides whether `-np > 1` is alive | 2 | B | PENDING | - | - | - |
-| 7 | `--metrics` is on and scraped once at job end | 4, 5 | C | PENDING | - | - | - |
-| 8 | Extract the commit-and-push step, behaviour-neutral | 7 | D | PENDING | - | - | - |
-| 9 | Assemble refreshes its base and regenerates | 8 | E | PENDING | - | - | - |
-| 10 | Raise the shard ceiling from 4 to 8 and measure it | 9 | F | PENDING | - | - | - |
-| 11 | CONDITIONAL - paired A-B-A `-np` measurement | 6, 7, 10 | G | PENDING | - | - | - |
+| 1 | `server_argv` stops claiming coverage it never had | - | A | DONE #81 | yi-r01 (removed) | #81 | worker |
+| 2 | Record the `-np` observation and correct the `n_parallel` guidance | - | A | DONE #84 | yi-r02 (removed) | #84 | worker |
+| 3 | Pin the llama.cpp build and name it in the cache key | - | A | DONE #82 | yi-r03 (removed) | #82 | worker |
+| 4 | A context-full reply stops reporting as unreachable | 1 | B | DONE #88 | yi-r04 (removed) | #88 | worker |
+| 5 | The `work` job names its host, its binary and its weights | 3 | B | DONE #87 | yi-r05 (removed) | #87 | worker |
+| 6 | `llama-batched-bench` decides whether `-np > 1` is alive | 2 | B | DONE #91, measured #101 | yi-r06, yi-r11 (removed) | #91, #101 | worker |
+| 7 | `--metrics` is on and scraped once at job end | 4, 5 | C | DONE #95 | yi-r07 (removed) | #95 | worker |
+| 8 | Extract the commit-and-push step, behaviour-neutral | 7 | D | DONE #96 | yi-r08 (removed) | #96 | worker |
+| 9 | Assemble refreshes its base and regenerates | 8 | E | DONE #98 | yi-r09 (removed) | #98 | worker |
+| 10 | Raise the shard ceiling from 4 to 8 and measure it | 9 | F | MEASURING #100 - run `32869125768` dispatched 2026-08-25 | yi-r10 (removed) | #100 | worker |
+| 11 | CONDITIONAL - paired A-B-A `-np` measurement | 6, 7, 10 | G | COLLAPSED - row 6 read 1.055x against a 1.4x gate | - | #101 records the ruling | - |
+
+Row 6's bench (run `32855163822`, AMD EPYC 9V74, 4 vCPU, 2026-08-25) returned
+aggregate decode of 1.055x at parallel level 2 and 1.133x at level 4, both under
+the 1.4x gate, with a spread of 0.022 over three repeats. ESCALATE trigger 4
+fired, so row 11 is COLLAPSED and the whole `-np` line of work is cancelled
+rather than deferred. `docs/reference/measurements.md` carries the number and
+the ruling.
 
 ## Row #1 - `server_argv` stops claiming coverage it never had
 
