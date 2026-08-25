@@ -133,8 +133,8 @@ def test_every_inference_knob_is_digested_or_written_down_as_undigested() -> Non
 
 def test_a_new_knob_nobody_classified_fails_the_check() -> None:
     """The check has to bite, or the closed world is only a comment."""
-    with_a_tenth = [*InferenceConfig.model_fields, "cache_reuse"]
-    assert unclassified_knobs(with_a_tenth) == {"cache_reuse"}
+    with_an_unclassified_knob = [*InferenceConfig.model_fields, "cache_reuse"]
+    assert unclassified_knobs(with_an_unclassified_knob) == {"cache_reuse"}
 
 
 def test_no_knob_is_both_digested_and_written_down_as_undigested() -> None:
