@@ -9,6 +9,9 @@ identical for every reader. Read-state is a client-side mark that may change how
 an item looks and may never change where it sits, whether it appears, or how it
 ranks. An item introduced by a later run appends after the items already there,
 which is why `introduced_by_run` may never decrease down the list.
+
+A run that rewrites an item's words names itself in `updated_by_run`, so the
+join to the run manifest that names the model stays true after a revision.
 """
 
 from __future__ import annotations
@@ -110,11 +113,27 @@ class DigestItem(Model):
         default=None,
         description="A later run changed this text; a revision is visible or it does not happen.",
     )
+    updated_by_run: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "The run that wrote the words this item now carries. Null until a run "
+            "revises the item, and on every day published before this existed."
+        ),
+    )
 
     @model_validator(mode="after")
     def _item_id_is_addressed_by_vertical(self) -> Self:
         if not self.item_id.startswith(f"{self.vertical}-"):
             raise ValueError("item_id must be addressed <vertical>-<NN>")
+        return self
+
+    @model_validator(mode="after")
+    def _a_revision_names_the_run_that_wrote_it(self) -> Self:
+        if (self.updated_at is None) != (self.updated_by_run is None):
+            raise ValueError("a revision carries both updated_at and updated_by_run")
+        if self.updated_by_run is not None and self.updated_by_run < self.introduced_by_run:
+            raise ValueError("a revision cannot precede the run that introduced the item")
         return self
 
 
@@ -147,6 +166,17 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-25",
+            change="Added optional updated_by_run to published items.",
+            why=(
+                "An item's words are joined to the run manifest that names the model that "
+                "wrote them. That join read introduced_by_run, which is the wrong run once "
+                "a later run rewrites the text, so it answered with the wrong model rather "
+                "than with nothing. Null until a run revises an item, and on every day "
+                "published before this, so no committed payload had to be rewritten."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T11:15",
             change="Added optional band_reason to published items.",
@@ -223,6 +253,11 @@ class DigestDay(Contract):
             raise ValueError("runs are numbered from 1 without gaps")
         if introduced and max(introduced) > len(self.runs):
             raise ValueError("an item cannot be introduced by a run that is not recorded")
+
+        revised = [item.updated_by_run for item in self.items if item.updated_by_run is not None]
+        if revised and max(revised) > len(self.runs):
+            raise ValueError("an item cannot be revised by a run that is not recorded")
+
         for run in self.runs:
             if introduced.count(run.n) != run.items_added:
                 raise ValueError(f"run {run.n} items_added disagrees with the items it introduced")

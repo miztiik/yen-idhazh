@@ -971,6 +971,23 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     assert second.runs[-1].items_added == 0, "an item already published is not published twice"
 
 
+def test_the_run_that_wrote_an_item_resolves_to_a_recorded_run() -> None:
+    """The join to the manifest that names the model lands on a run the day recorded."""
+    day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    recorded = {run.n for run in day.runs}
+
+    assert day.items
+    for item in day.items:
+        assert assemble.run_that_wrote(item) in recorded
+        assert assemble.run_that_wrote(item) == item.introduced_by_run
+
+    revised = day.items[0].model_copy(
+        update={"updated_at": "2026-08-21T18:00:00Z", "updated_by_run": 2}
+    )
+
+    assert assemble.run_that_wrote(revised) == 2, "a revision is joined to the run that revised it"
+
+
 def test_the_published_path_carries_no_digest() -> None:
     target = assemble.day_dir(Path("frontend/public/digest"), "2026-08-21")
     assert target.as_posix().endswith("digest/2026/08/21")

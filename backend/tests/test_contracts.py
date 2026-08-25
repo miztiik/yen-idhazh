@@ -514,6 +514,48 @@ def test_vertical_counts_agree_with_the_items() -> None:
         DigestDay.model_validate(payload)
 
 
+def test_a_revision_names_the_run_that_wrote_it() -> None:
+    """Either both revision fields are set or neither is. One of the two alone is a wrong join."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][0]["updated_at"] = "2026-08-21T18:00:00Z"
+    with pytest.raises(ValueError, match="both updated_at and updated_by_run"):
+        DigestDay.model_validate(payload)
+
+    payload["items"][0]["updated_by_run"] = 2
+    assert DigestDay.model_validate(payload).items[0].updated_by_run == 2
+
+    del payload["items"][0]["updated_at"]
+    with pytest.raises(ValueError, match="both updated_at and updated_by_run"):
+        DigestDay.model_validate(payload)
+
+
+def test_a_revision_cannot_precede_the_run_that_introduced_the_item() -> None:
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][2]["updated_at"] = "2026-08-21T18:00:00Z"
+    payload["items"][2]["updated_by_run"] = 1
+    with pytest.raises(ValueError, match="cannot precede"):
+        DigestDay.model_validate(payload)
+
+
+def test_an_item_cannot_name_a_revising_run_the_day_never_recorded() -> None:
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][0]["updated_at"] = "2026-08-21T18:00:00Z"
+    payload["items"][0]["updated_by_run"] = 3
+    with pytest.raises(ValueError, match="revised by a run that is not recorded"):
+        DigestDay.model_validate(payload)
+
+
+def test_a_day_written_before_the_revision_field_still_loads() -> None:
+    """Additive and null-defaulted, so no committed payload had to be rewritten."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    for item in payload["items"]:
+        del item["updated_by_run"]
+
+    day = DigestDay.model_validate(payload)
+
+    assert [item.updated_by_run for item in day.items] == [None] * len(day.items)
+
+
 def test_canonical_json_is_sorted_and_newline_terminated() -> None:
     text = canonical_json({"b": 1, "a": 2})
     assert text == '{\n  "a": 2,\n  "b": 1\n}\n'
