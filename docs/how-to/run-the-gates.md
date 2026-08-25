@@ -47,7 +47,7 @@ Run all four from the repository root. Each must be clean.
 git diff --exit-code -- schemas/
 ```
 
-On 2026-08-24 that is 739 tests and 83 files type-checked. The last two lines
+On 2026-08-25 that is 858 tests and 88 files type-checked. The last two lines
 are the contract drift gate: the export regenerates `schemas/` from the Pydantic
 models, and a non-empty diff means a generated artifact was hand-edited or a
 model changed without regenerating ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
@@ -83,9 +83,19 @@ npm run build:canary
 npm run test:browser
 ```
 
-74 tests in 7 files (2026-08-25). Twelve of them are pure-function tests over
+83 tests in 7 files (2026-08-25), one of which skips itself when the fixture
+window holds a single day. Twelve of them are pure-function tests over
 `frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
 frontend unit-test runner, so a pure module proves itself here.
+
+**The canary day carries every ledger the console reads.** The run manifest, the
+feed-health rows and the score rows are all written by `build_canary_day.py`;
+the item-health rows are written by `build:canary`. The score rows are shaped
+for the compression plot rather than picked at random - eight items from 38 to
+6100 source words, so the log x axis spans four decades, every configured target
+zone has a mark under it, and two items carry the truncation flag that draws a
+diamond. A chart state the fixture does not reach is a chart state this suite
+cannot test.
 
 **Set `PREVIEW_PORT` when another checkout may be running the suite.**
 `playwright.config.ts` reads it and defaults to 4173, and the whole config -
