@@ -26,7 +26,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 ## Section 0a - Overlapping plans, resolve before dispatch
 
 Two other plan-docs were authored on 2026-08-25 and contend for the same
-surfaces. `20260825-console-charts-plan.md` is on `main` (PR #74).
+surfaces. The console-charts work is on `main` (PRs #89, #92, #93, #94, #97).
 `20260825-runtime-and-publish-defects-plan.md` was untracked in the working tree
 when this plan was written. Resolve each collision before dispatching the
 affected row; do not dispatch two plans onto one file.
@@ -38,7 +38,7 @@ affected row; do not dispatch two plans onto one file.
 | Row 6 - truthful fingerprint inputs | Same plan, deferred item 1, widening `PipelineInputs` and adding the `require_matching_header` guard | `backend/idhazh/contracts/fingerprint.py` | Both reset every fingerprint. Land them in one commit or the stamp moves twice. |
 | Row 7 - enforce `shard_size` | Same plan, row 10, "Raise the shard ceiling from 4 to 8 and measure it" | the shard count in `.github/workflows/digest.yml` | Directly contradictory framings of the same knob. One ruling, from Carmack, before either dispatches. |
 | Row 1 - verify the model bytes | Same plan, row 5, "The `work` job names its host, its binary and its weights" | the `work` job identity steps | Overlapping intent. Merge the step lists. |
-| Rows 8 and 9 - console sections | `20260825-console-charts-plan.md`, rows 1 and 2 | `frontend/src/routes/console/` and the throughput candle | The coordinate-frame rewrite lands first. New sections build on the new frame, never on the old one. |
+| Rows 8 and 9 - console sections | the console-charts work, PRs #89 and #92 | `frontend/src/routes/console/` and the throughput candle | The coordinate-frame rewrite has landed. New sections build on `frontend/src/lib/charts/frame.ts`, never on the old 360-unit canvas. |
 
 Both contending plans cite `20260825-qwen35-9b-swap-plan.md`, which this plan
 supersedes. Re-point those citations here when the collisions are resolved.
