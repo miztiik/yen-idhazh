@@ -201,6 +201,20 @@
           "description": "A later run changed this text; a revision is visible or it does not happen.",
           "title": "Updated At"
         },
+        "updated_by_run": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The run that wrote the words this item now carries. Null until a run revises the item, and on every day published before this existed.",
+          "title": "Updated By Run"
+        },
         "vertical": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Vertical",
@@ -407,6 +421,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional updated_by_run to published items.",
+      "version": "2026-08-25",
+      "why": "An item's words are joined to the run manifest that names the model that wrote them. That join read introduced_by_run, which is the wrong run once a later run rewrites the text, so it answered with the wrong model rather than with nothing. Null until a run revises an item, and on every day published before this, so no committed payload had to be rewritten."
+    },
+    {
       "change": "Added optional band_reason to published items.",
       "version": "2026-08-24T11:15",
       "why": "The medium band printed 'Mostly matches the source', which is a grade and not a sentence: it told a reader an item was worse without telling them what was missing. Both things that cap an item at medium were already computed and neither reached the page. Null on a high item and on every day published before this, which keeps an older payload rendering exactly as it does today."
@@ -493,7 +512,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-24T11:15",
+      "default": "2026-08-25",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -518,5 +537,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-24T11:15"
+  "version": "2026-08-25"
 }

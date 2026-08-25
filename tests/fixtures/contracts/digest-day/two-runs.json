@@ -33,6 +33,7 @@
       "title": "Example Lab releases a smaller model",
       "truncated": false,
       "updated_at": null,
+      "updated_by_run": null,
       "vertical": "ai",
       "visual": {
         "alt": "Cost per million tokens, previous release against the new one.",
@@ -70,6 +71,7 @@
       "title": "Example Grid orders four small modular reactors",
       "truncated": true,
       "updated_at": null,
+      "updated_by_run": null,
       "vertical": "energy",
       "visual": null
     },
@@ -100,6 +102,7 @@
       "title": "Example Lab publishes a summarization paper",
       "truncated": false,
       "updated_at": null,
+      "updated_by_run": null,
       "vertical": "ai",
       "visual": null
     }
