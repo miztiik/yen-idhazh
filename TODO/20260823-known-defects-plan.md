@@ -7,9 +7,9 @@ health and evaluation work, plus the console charts. None was in the scope that
 found it. Defects 11 and 12 were found by running the gates and by opening the
 published day in a browser, not by reading code; 13 and 14 the same way.
 
-**Eleven are closed.** Defect 8 is closed on the item copy and on the day's band
+**Twelve are closed.** Defect 8 is closed on the item copy and on the day's band
 bar. Defect 2 has its instrument built and is waiting on human labels and
-calendar time, which no amount of engineering closes. Defect 14 is open.
+calendar time, which no amount of engineering closes. It is the only one open.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -29,7 +29,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 11 | A second run of a day overwrites the first run's charts | 3 | FIXED - 2026-08-24 |
 | 12 | One quantity could fill three bars of a published chart | 2 | FIXED - 2026-08-24 |
 | 13 | One stage is 2600x the others, so a linear timing axis answers for one of four | 2 | FIXED - 2026-08-25 |
-| 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | **OPEN** |
+| 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | FIXED - 2026-08-25 |
 
 ## 13 - One stage is 2600x the others, so a linear timing axis answers for one of four (FIXED)
 
@@ -59,20 +59,40 @@ it carries. `/console/` first-load JavaScript went from 63,943 B to 64,438 B,
 495 B for the decade furniture and the gap handling. Recorded in
 [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md).
 
-## 14 - The canary day has no scored item, so the compression chart is only ever tested empty (OPEN)
+## 14 - The canary day has no scored item, so the compression chart is only ever tested empty (FIXED)
 
 Found 2026-08-25 while redrawing the compression scatter (PR #97). The browser
-suite runs against the canary day, and that day carries no scored item, so the
+suite runs against the canary day, and that day carried no scored item, so the
 chart's populated state - the band zone, the truncation diamond, the point
-marks, the y domain - has no coverage at all. Everything the suite proves about
-that chart today is proved about an empty window. The live chart draws 1166
-points; the tested one draws none.
+marks, the y domain - had no coverage at all. Everything the suite proved about
+that chart was proved about an empty window. The live chart draws 1166 points;
+the tested one drew none.
 
-The fix is a scored row in `backend/utilities/build_canary_day.py`. It is small,
-but it changes the fixture every browser test reads, so it lands on its own and
-the whole suite is re-run against it. Any fixture change must keep the builder
-idempotent - see the entry in
-[../docs/reference/agent-notes.md](../docs/reference/agent-notes.md).
+**Fixed 2026-08-25.** `build_canary_day.py` now writes eight rows through
+`idhazh.evals.writer.append` - the writer the pipeline appends with, so the
+contract validates every field and the column order is the contract's, not a
+hand-rolled copy of it. The rows are shaped for the chart: 38 to 6100 source
+words spans four decades of log x axis and puts a mark under each of the four
+configured target zones, two items carry the truncation flag, and all three
+confidence bands appear. The published item and the ledger row take their band
+from one `score.verdict` call, so the digest and the console cannot disagree
+about what an item scored.
+
+The empty rendering is still proved: `a window holding no scored item says so
+rather than drawing an empty plot` pans off the scored days and asserts the
+sentence and zero marks. `a missing ledger costs the page a section, never the
+page` was the one existing test the fixture change invalidated; it is now `an
+empty section costs the page that section, never the page` and points at the
+failed-item list, which is the section the canary telemetry leaves with nothing
+to show.
+
+The builder stays idempotent, which is what
+[../docs/reference/agent-notes.md](../docs/reference/agent-notes.md) asks for:
+three consecutive runs produced a byte-identical `scores.csv`
+(sha256 `18ef24f9c3e6684e`, 4682 bytes, measured 2026-08-25 on Windows 11), and
+`backend/tests/test_canary_day.py` pins both halves of that - a fresh state
+directory writes the same bytes every time, and a second append to a directory
+that survived the clear adds nothing.
 
 ## 2 - The faithfulness thresholds have no labelled error rate (INSTRUMENT BUILT)
 

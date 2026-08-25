@@ -8,9 +8,10 @@ import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
  *
  * It runs against the canary build, whose fixtures carry one run of each colour
  * and one feed of each kind the page has to tell apart. The canary build writes
- * the item-health ledger because the console reads timing medians from it. The
- * fixture still has no score ledger, which proves the page keeps rendering when
- * one data source is missing.
+ * the item-health ledger because the console reads timing medians from it, and
+ * the score ledger because the compression plot reads its marks from that. The
+ * failed-item list is the section with nothing to show, which proves the page
+ * keeps rendering when one of its sources holds nothing.
  *
  * See `backend/utilities/build_canary_day.py` for the fixture.
  */
@@ -114,6 +115,16 @@ function runCount(): number {
 	const [year, month, day] = DAY.split('-');
 	const raw = readFileSync(join(CANARY, 'digest', year, month, day, 'run.json'), 'utf8');
 	return (JSON.parse(raw) as { runs: unknown[] }).runs.length;
+}
+
+/** How many items the fixture ledger scored.
+ *
+ * Read from the file rather than typed here: a count in a test is a count that
+ * goes stale the day the fixture grows a row, and it goes stale silently.
+ */
+function scoredItems(): number {
+	const raw = readFileSync(join(CANARY, 'state', 'scores.csv'), 'utf8');
+	return raw.trim().split('\n').length - 1;
 }
 
 /** How many days a telemetry viewport window covers, ends included. */
@@ -698,15 +709,70 @@ test('the compression view draws the data once', async ({ page }) => {
 	// measured 2026-08-25.
 	expect(await chart.locator('svg path').count()).toBeLessThanOrEqual(4);
 
-	// The canary window holds no scored item, so the zone is asserted only
-	// where there is data to draw it under - and the empty state is asserted
-	// where there is not.
+	// Both arms stay asserted. The canary window now holds scored items, and
+	// this test also runs against a window that holds none.
 	const marks = await chart.locator('svg circle, svg rect').count();
 	if (marks === 0) {
 		await expect(chart).toContainText('No scored items in this window');
 	} else {
 		await expect(chart.locator('[data-band-zone]')).toHaveCount(1);
 	}
+});
+
+test('the compression view draws every scored item, and marks the truncated ones', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// The state that had no coverage at all while the canary day carried no
+	// scored item: marks instead of a sentence, a zone behind them, and more
+	// than one decade under them.
+	const chart = page.locator('[data-compression]');
+	await expect(chart).not.toContainText('No scored items in this window');
+
+	const dots = await chart.locator('svg circle').count();
+	const diamonds = await chart.locator('svg rect').count();
+	expect(dots).toBeGreaterThan(0);
+	expect(diamonds, 'no truncated item, so the diamond is undrawn').toBeGreaterThan(0);
+	// Every scored row reaches the plot. A filter that dropped one would still
+	// leave a chart that looks right.
+	expect(dots + diamonds).toBe(scoredItems());
+
+	await expect(chart.locator('[data-band-zone]')).toHaveCount(1);
+
+	// A log axis labelled at one decade is a linear axis with an odd label on
+	// it. The y ticks and the two axis titles carry their own attributes, so
+	// what is left is the decades.
+	const decades = await chart
+		.locator('svg text:not([data-tick="y"]):not([data-axis])')
+		.evaluateAll((nodes) =>
+			nodes
+				.map((node) => (node.textContent ?? '').trim())
+				.filter((text) => /^10*$/.test(text))
+		);
+	expect(new Set(decades).size).toBeGreaterThan(1);
+});
+
+test('a window holding no scored item says so rather than drawing an empty plot', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	const chart = page.locator('[data-compression]');
+	await expect(chart.locator('svg circle, svg rect')).not.toHaveCount(0);
+
+	// The empty state is reached the way a reader reaches it: by panning off the
+	// days that have rows. The fixture always has rows, so this is where that
+	// rendering is still proved.
+	const viewport = page.locator('[data-viewport-control]');
+	await viewport.focus();
+	for (let index = 0; index < 8; index += 1) {
+		await page.keyboard.press('ArrowLeft');
+	}
+
+	await expect(chart).toContainText('No scored items in this window');
+	await expect(chart.locator('svg circle, svg rect')).toHaveCount(0);
+	await expect(chart.locator('[data-band-zone]')).toHaveCount(0);
 });
 
 test('the compression chart draws in CSS pixels, and labels its own y axis', async ({ page }) => {
@@ -811,22 +877,21 @@ test('panning to a month with no rows leaves a visible gap', async ({ page }) =>
 	await expect(viewport).toContainText('0 rows in view');
 });
 
-test('a missing ledger costs the page a section, never the page', async ({ page }) => {
+test('an empty section costs the page that section, never the page', async ({ page }) => {
 	const errors: string[] = [];
 	page.on('pageerror', (error) => errors.push(error.message));
 	const missing = watchFor404s(page);
 
 	await page.goto('/console/');
 
-	// The canary build has no score ledger. The page says so and carries on:
-	// the timing chart, run grid and feed table still draw.
-	await expect(page.getByText('Nothing has been scored yet.')).toBeVisible();
+	// The canary telemetry records no failed item, so the failed-item list has
+	// nothing to list. It says so and the page carries on: the timing chart, the
+	// run grid, the feed table and the score table all still draw.
+	await expect(page.locator('[data-failure-list="empty"]')).toBeVisible();
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
-	// The missing ledger costs the score line its numbers, and the chart names
-	// the loss rather than drawing a flat line at the bottom of the plot.
-	await expect(page.locator('[data-timing-gap="score"]')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'Confidence and size' })).toBeVisible();
 
 	expect(errors).toEqual([]);
 	expect(missing).toEqual([]);
