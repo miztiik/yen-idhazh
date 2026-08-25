@@ -15,8 +15,19 @@ config/*.json text eol=lf
 # store and the feed-health record. Rows are appended by CI on Linux and read by
 # a developer on Windows; a CRLF rewrite would show every historical row as
 # changed.
-state/*.csv text eol=lf
-state/**/*.csv text eol=lf
+#
+# `merge=union` because every file here is append-only and every row is
+# independent of its neighbours. Two runs that both append are not in
+# disagreement, so the union of both sides is the answer and a text merge that
+# stops the push costs a reader the whole day. A reader of these ledgers already
+# deduplicates: `load_published` and `load_seen` keep the earliest row per
+# address, and the eval writer refuses an observation it already holds.
+#
+# `frontend/public/telemetry/*.csv` is deliberately NOT union. It is a full
+# rewrite of `state/item-health/`, so a union of two rewrites is a file with
+# every row twice. Assemble regenerates it instead.
+state/*.csv text eol=lf merge=union
+state/**/*.csv text eol=lf merge=union
 
 # Test fixtures are byte-exact inputs. A golden summary, a canary payload, or a
 # captured page is compared against a fresh pipeline run, so any end-of-line
