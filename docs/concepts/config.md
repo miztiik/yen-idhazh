@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -91,6 +91,15 @@ No sweep flag is adopted merely because the knob exists. A candidate becomes the
 runtime only after a runner measurement records hardware, date and spread in
 [../reference/measurements.md](../reference/measurements.md).
 
+### Current run-shape gap
+
+`run.shard_size` and `run.shard_timeout_minutes` exist in config, but
+`digest.yml` currently distributes the full plan across a fixed worker count and
+sets the work job to 330 minutes. It does not enforce either config value.
+Treating a worker as five items, or 150 minutes, is therefore false when sizing
+a model. A model adoption must measure the actual worker population or wire the
+knobs before using them.
+
 ## Console surface
 
 The console knobs are:
@@ -178,6 +187,7 @@ Excluding the runner's ceilings is the less obvious half. They look exactly like
 
 ## See also
 
+- [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - test and adopt different summary weights without bypassing config or measurements.
 - [principles.md](principles.md) - config-driven with sane defaults.
 - [pipeline-loop.md](pipeline-loop.md) - the stages these knobs tune.
 - [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the run cadence and the scoring knobs under `collect`.

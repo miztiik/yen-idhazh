@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-25
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -71,6 +71,27 @@ The output shape is enforced by grammar-constrained decoding against a schema
 generated from `SummaryDraft`, not requested in prose. `SummaryDraft` is closed
 to unknown keys, so a planted tool call fails at validation rather than reaching
 a payload.
+
+## Model compatibility is mechanical
+
+The request sends `chat_template_kwargs.enable_thinking` from
+`models.inference.thinking`. The configured value is false. The pipeline does
+not rely on `/nothink` or another instruction in the untrusted user turn.
+
+The reply is rejected when either channel carries reasoning:
+
+- a non-empty inline `<think>...</think>` block; or
+- non-empty `message.reasoning_content`.
+
+The second check matters because llama.cpp can split reasoning out of
+`message.content`; reading only content would make a thinking model look
+compliant. A new model must pass this live check under its own embedded chat
+template. Recorded incumbent completion fixtures prove the parser and do not
+prove candidate behaviour.
+
+Prompt-token counts are also model-specific. Every candidate re-tokenizes all
+rendered bands and the complete chat-templated request. A count from the
+configured model cannot justify context or timing claims for another tokenizer.
 
 The decoder's character rails are **derived from the accept gate**, never pinned:
 
@@ -149,18 +170,19 @@ absent whenever the rewrite missed its range.
 
 ## The stamp covers the ask
 
-`pipeline_fingerprint` answers "which pipeline configuration produced this", and
-the ledger is keyed by it.
+`pipeline_fingerprint` answers "which pipeline configuration produced this".
+The intended fingerprint ledger expands it, but production does not write that
+ledger yet.
 
 It hashes `prompt_inputs()` - the template text plus every number that can be
 substituted into it - and not one rendered prompt. The rendered text varies with
 the article's length, so a stamp built from it would move per item and could not
 answer the question the stamp exists to answer.
 
-Two consequences:
+Two consequences once fingerprint-based skip is wired:
 
 - Editing the wording, any band, or any title knob changes the stamp exactly
-  once, and re-summarizes everything.
+  once and would invalidate every prior work identity.
 - A band edit re-summarizes articles in the other bands too. That
   over-invalidates by design. It is cheaper than a rule that has to decide which
   articles an edit reached, and it is wrong in the safe direction.
@@ -226,12 +248,17 @@ endings. Tokenization is deterministic, so the spread is zero. Recorded in
 | With the Title section | 781 words / 1033 tokens |
 | After the terseness pass | **598 words / 801 tokens** |
 | Current four-band prompt, including the brief tier | **658 words / 877-879 tokens** |
-| Worst case: prompt + 2500 truncation cap + 900 output | **4279 of 8192 `n_ctx`** |
+| Old nominal arithmetic: system prompt + 2500 + 900 | **4279; not a complete request measurement** |
 
-`fits_context` approximates the current prompt as `words x 2`, which reserves
-1316 against the measured maximum of 879. It over-reserves by 437 tokens, in the safe
-direction, and tokenizing the prompt per item to reclaim context we are not
-short of would buy nothing.
+The 877-879 count measures only the rendered system prompt. The old 4279 sum
+omits chat-template tokens, source-form text, feed title, fences and generation
+suffix, and treats an estimated extraction cap as exact tokenizer output. It is
+withdrawn as a context proof.
+
+`fits_context` approximates the 658-word system prompt as 1316 tokens. The
+437-token difference against 879 is a system-prompt margin only. Prove context
+fit by tokenizing the complete request under the configured model; do not infer
+it from this table.
 
 `test_the_biggest_article_the_extractor_hands_over_still_fits` pins the prompt
 against the truncation cap. A prompt grows a rule at a time, and one that crowds
@@ -299,9 +326,11 @@ is fatal (section 1a, degrade do not fail).
 reorder depended on a 66.2 s per-item re-prefill estimate. Run `32648218952`
 measured the live digest path at 34.23 tok/s median, so the same 801-token
 re-prefill costs 23.4 s median. The whole prize fell to a 1-2% wall-clock ceiling
-and the current logs cannot prove prefix reuse because they emit no `kv cache rm`
-lines. The prompt stays ordered for clarity until a runner A/B measurement proves
-a real gain without changing the golden `output_digest` values.
+before an A/B. Run `32742672105` later proved incumbent LCP reuse and showed the
+two low-reuse requests at prompt-band crossings. It did not measure the proposed
+reorder. The prompt stays ordered for clarity until a runner A/B proves a real
+gain without changing the golden `output_digest` values. A recurrent candidate
+must prove its own reuse; Qwen3 evidence does not transfer.
 
 **Why `title_words_max` is capped at 40.** The decoder ceiling is
 `title_words_max x 12` characters, and the payload field is an `UntrustedLine`
@@ -340,6 +369,7 @@ restamping and no committed `output_digest` stopped verifying (section 11).
 
 - [`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md) - where Summarize sits and what it emits.
 - [`throughput.md`](throughput.md) - what a summary costs the model, and why the band sort makes a run look like it degrades.
+- [`../../how-to/evaluate-new-summarizer-model.md`](../../how-to/evaluate-new-summarizer-model.md) - the candidate compatibility and tokenizer checks.
 - [`../../concepts/evaluation.md`](../../concepts/evaluation.md) - what measures the summary this prompt produces, and the two columns that measure the article.
 - [`../../concepts/config.md`](../../concepts/config.md) - what belongs in a knob.
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the title as a reader-facing element.
