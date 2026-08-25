@@ -106,6 +106,7 @@ The shapes carry rules a JSON Schema cannot express, and each one is a defect cl
 - The lens and event vocabularies must be labelled exactly once each, so adding an enum member without a display name fails at load.
 - A run manifest's runs are numbered from one without gaps, and its counts reconcile.
 - **In a day payload, `introduced_by_run` may never decrease down the item list.** A later run appends; it never reorders what a reader already read. That is the published-layout rule made mechanical rather than trusted to the assemble stage.
+- **A revised item names the run that rewrote it.** `updated_at` and `updated_by_run` are set together, the revising run cannot precede the introducing one, and neither may name a run the day did not record. The manifest names the model per run, so an item's words stay joinable to the model that wrote them after a later run rewrites them.
 
 ## Four things that bite when you change a model
 

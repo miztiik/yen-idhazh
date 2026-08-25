@@ -47,6 +47,8 @@ export interface DigestItem {
 	visual: DigestVisual | null;
 	introduced_by_run: number;
 	updated_at: string | null;
+	// Optional because every day published before 2026-08-25 omits the key entirely.
+	updated_by_run?: number | null;
 }
 
 export interface DigestRunRef {
