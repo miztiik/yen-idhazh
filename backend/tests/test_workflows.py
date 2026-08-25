@@ -53,6 +53,33 @@ LLAMA_PINNED_ENDPOINT: Final = (
     "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}"
 )
 MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime"})
+# Every job that stands up llama-server, and the log that job writes. Both must
+# name the host, the binary and the weights: a shard's throughput is decided by
+# the host it drew, and a number that cannot name the bytes that produced it is
+# not a measurement (Rule #10).
+RUNTIME_IDENTITY_JOBS: Final = {
+    "work": ("llama-server.log", "MODEL_FILE"),
+    "route": ("router.log", "ROUTE_FILE"),
+}
+RUNTIME_IDENTITY_STEP: Final = "What this runner is"
+RUNTIME_LOG_SUMMARY_STEPS: Final = {
+    "work": ("Prompt cache log summary", "llama-server.log"),
+    "route": ("Router cache log summary", "router.log"),
+}
+# Four real llama-server lines. The first two are the same field under the two
+# spellings llama.cpp has used; the third is the one the old fixed pattern list
+# hid for two measured runs.
+RUNTIME_LOG_LINES: Final = (
+    "srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'true'",
+    "srv    load_model: initializing, n_slots = 1, n_ctx_seq = 8192, kv_unified = 'true'",
+    "slot get_availabl: id  3 | task -1 | selected slot by LCP similarity, "
+    "f_sim_best = 0.923 (> 0.100 thold), f_keep = 0.811",
+    "slot print_timing: id  3 | task 172 | prompt eval time = 7119.70 ms / 75 tokens",
+)
+RSS_SAMPLE_SECONDS: Final = 15
+RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
+MEMORY_PEAK_FILE: Final = "memory-peak.txt"
+CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
 RUNTIME_CANDIDATES: Final = frozenset(
     {
         "baseline",
@@ -203,6 +230,24 @@ def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
             assert isinstance(key, str), f"job {job_name} cache key must be a string"
             keys.append((job_name, key))
     return keys
+
+
+def _script(step: dict[str, object], description: str) -> str:
+    script = step.get("run")
+    assert isinstance(script, str), f"{description} must run a shell script"
+    return script
+
+
+def _grep_pattern(script: str, description: str) -> re.Pattern[str]:
+    """The extended regular expression the log summary greps its log with.
+
+    Extracted and compiled rather than compared as text, so the assertion is
+    about what the pattern MATCHES. A pattern that merely mentions a field name
+    in a comment would pass a substring check and hide the same signal again.
+    """
+    patterns = re.findall(r"grep -E '([^']+)'", script)
+    assert len(patterns) == 1, f"{description} must grep its log with one -E pattern"
+    return re.compile(patterns[0], flags=re.MULTILINE)
 
 
 def test_workflow_names_and_trigger_classes_are_pinned() -> None:
@@ -448,3 +493,111 @@ def test_every_action_is_pinned_to_an_approved_major() -> None:
             assert action in APPROVED_ACTION_MAJORS, f"{where} uses unapproved {action}"
             expected = APPROVED_ACTION_MAJORS[action]
             assert version == expected, f"{where} must use {action}@{expected}, not {uses}"
+
+
+def test_every_inference_job_names_its_host_binary_and_weights() -> None:
+    """Six lines, so a number a job produced can name the bytes that made it.
+
+    The route job printed the first three from 2026-08-25. The work job printed
+    none, and the `route` prefill rate swings 3x between runs with the host as
+    the only remaining suspect. Without the version and the two digests, a run
+    still cannot say which binary and which weights served the day (Rule #10).
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    for job_name, (log_name, weights_var) in RUNTIME_IDENTITY_JOBS.items():
+        step = _step(workflow, job_name, "name", RUNTIME_IDENTITY_STEP)
+        where = f"digest.yml/{job_name}/{RUNTIME_IDENTITY_STEP}"
+        # A cancelled job skips a step with no condition, and a shard that died
+        # is exactly the one whose host is worth naming.
+        assert _normalize_condition(step.get("if"), f"{where} if") == "always()"
+        script = _script(step, where)
+
+        for probe in (
+            "'model name' /proc/cpuinfo",
+            "nproc",
+            f"'system_info' {log_name}",
+            "llama-server --version",
+            "sha256sum backend/bin/llama-server",
+            f'sha256sum "backend/models/${{{weights_var}}}"',
+        ):
+            assert probe in script, f"{where} must print {probe}"
+        assert "${LLAMA_CPP_BUILD}" in script, f"{where} must name the pinned build"
+
+
+def test_the_runtime_log_summary_cannot_hide_a_signal() -> None:
+    """A fixed list of expected lines is a filter that reports what it expects.
+
+    The old list greps `kv cache rm [`, a line this build never emits, and so
+    `measurements.md` recorded prefix reuse as unprovable for two runs while the
+    uploaded artifact carried the proof. `^(srv|slot) ` takes whatever the
+    runtime chose to print instead.
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    for job_name, (step_name, log_name) in RUNTIME_LOG_SUMMARY_STEPS.items():
+        step = _step(workflow, job_name, "name", step_name)
+        where = f"digest.yml/{job_name}/{step_name}"
+        assert _normalize_condition(step.get("if"), f"{where} if") == "always()"
+        script = _script(step, where)
+        assert re.search(rf"grep -E '[^']+' {re.escape(log_name)}", script), (
+            f"{where} must summarise {log_name}"
+        )
+        pattern = _grep_pattern(script, where)
+
+        for line in RUNTIME_LOG_LINES:
+            assert pattern.search(line) is not None, f"{where} would hide: {line}"
+        assert pattern.search("main: server is listening on http://127.0.0.1:8080") is None, (
+            f"{where} pattern is too wide to be a summary"
+        )
+        # Both spellings by name, so a llama.cpp rename cannot pass silently even
+        # if the line it sits on ever stops starting with `srv`.
+        for spelling in ("n_ctx_slot", "n_ctx_seq"):
+            assert spelling in pattern.pattern, f"{where} must grep {spelling}"
+
+        # The presence of the line is not the measurement; the spread is.
+        extractors = re.findall(r'grep -oE "([^"]+)"', script)
+        assert len(extractors) == 1, f"{where} must extract the reuse fields with one -oE pattern"
+        for field, value in (("f_sim_best", "0.923"), ("f_keep", "0.811")):
+            probe = re.compile(extractors[0].replace("${field}", field))
+            found = probe.search(RUNTIME_LOG_LINES[2])
+            assert found is not None, f"{where} would not capture {field}"
+            assert found.group(0).split(" = ")[1] == value, f"{where} mis-reads {field}"
+        assert "for field in f_sim_best f_keep" in script, f"{where} must read both fields"
+        assert "median" in script, f"{where} must report a distribution, not a count"
+
+
+def test_every_work_shard_records_what_memory_it_used() -> None:
+    """Neither of the two runs `measurements.md` reads measured memory at all.
+
+    `measure.yml` already samples `VmRSS` and reads the cgroup peak; the daily
+    path did not, so nothing says how close a 16 GB runner came to its limit
+    (Rule #2).
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    sampler = _step(workflow, "work", "name", "Sample memory")
+    sampler_script = _script(sampler, "digest.yml/work/Sample memory")
+    assert "VmRSS" in sampler_script
+    assert "VmHWM" in sampler_script
+    assert f"sleep {RSS_SAMPLE_SECONDS}" in sampler_script
+    assert RSS_SAMPLE_FILE in sampler_script
+    assert "llama-server.pid" in sampler_script, "the sampler must follow the server it samples"
+
+    peak = _step(workflow, "work", "name", "What memory this shard used")
+    where = "digest.yml/work/What memory this shard used"
+    assert _normalize_condition(peak.get("if"), f"{where} if") == "always()"
+    peak_script = _script(peak, where)
+    assert CGROUP_PEAK_PATH in peak_script
+    assert MEMORY_PEAK_FILE in peak_script
+
+    upload = _step(workflow, "work", "name", "Upload runtime log")
+    with_block = _mapping(upload.get("with"), "work runtime-log upload 'with'")
+    assert with_block.get("name") == "runtime-log-${{ matrix.shard }}"
+    path = with_block.get("path")
+    assert isinstance(path, str), "work runtime-log upload path must be a string"
+    assert [line for line in path.splitlines() if line] == [
+        "llama-server.log",
+        RSS_SAMPLE_FILE,
+        MEMORY_PEAK_FILE,
+    ]
