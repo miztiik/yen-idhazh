@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -98,6 +98,7 @@ In-memory `Path` objects for local I/O may stay platform-native. Rule applies at
 | `docs/`              | created    | Canonical knowledge (Diataxis tiers, 3-level depth).                                                         |
 | `.claude/skills/`    | created    | Claude Code skill wrappers (bootstrap, prepare-plan) that point at `docs/`.                                  |
 | `.github/agents/`    | created    | Persona advisors (Andre, Carmack, Fowler, Jony, Reader).                                                     |
+| `.github/scripts/`   | created    | A shell step two or more workflow jobs run. Written once so a test can execute it; never imported by `backend/`. |
 | `.github/workflows/` | created    | CI, the measurement harness, the daily pipeline, and the GitHub Pages deploy.                                |
 | `config/`            | planned    | Human-edited tunable knobs, schema-validated. Read by `backend/` and shipped to `frontend/` where a reader-facing surface needs one. |
 | `schemas/`           | planned    | Generated JSON Schema, one file per contract model. Never hand-edited (Rule #3, section 1a).             |
