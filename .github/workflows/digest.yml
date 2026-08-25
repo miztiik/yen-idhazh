@@ -66,6 +66,7 @@ jobs:
     timeout-minutes: 30
     outputs:
       date: ${{ steps.decide.outputs.date }}
+      day_dir: ${{ steps.decide.outputs.day_dir }}
       shards: ${{ steps.decide.outputs.shards }}
       matrix: ${{ steps.decide.outputs.matrix }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
@@ -100,6 +101,10 @@ jobs:
           # scorer off on every scheduled run - which is every automatic run.
           FAITH="${{ inputs.faithfulness }}"
           [ -n "$FAITH" ] || FAITH=true
+          # Where the day's payload lives. Derived once, here, because the date
+          # becomes a fact for the whole run here - and the assemble job needs
+          # to name `digest.json` and `run.json` one file at a time.
+          echo "day_dir=frontend/public/digest/${DATE//-//}" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
           echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "faithfulness=$FAITH" >> "$GITHUB_OUTPUT"
@@ -618,11 +623,31 @@ jobs:
             --commit "${{ github.sha }}" \
             --runner ubuntu-latest
 
+      # The checkout above carries main's tip at TRIGGER time, and this run has
+      # been going for two to three hours by now. So the day was just built on a
+      # base that old, and the push below is the first thing to find out.
+      #
+      # `REGENERATE_COMMAND` is the same invocation as the step above: when the
+      # push loses a race, the fix is to build the day again against the tip the
+      # push wants, not to ask git to text-merge two digests. `REFRESH_PATHS` is
+      # what that rebuild owns, named one file at a time under the day's
+      # directory - the routes artifact unpacked this run's rendered charts into
+      # that same directory, and no producer here can make those again.
       - name: Commit the day
         env:
           COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "nothing changed"
           PUSH_FAILED_MESSAGE: "could not push the day after three attempts"
+          REFRESH_PATHS: >-
+            ${{ needs.plan.outputs.day_dir }}/digest.json
+            ${{ needs.plan.outputs.day_dir }}/run.json
+            frontend/public/telemetry
+            state/published.csv
+            state/scores.csv
+            state/item-health
+          REGENERATE_COMMAND: >-
+            python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
+            --commit ${{ github.sha }} --runner ubuntu-latest
         run: >-
           bash .github/scripts/commit-and-push.sh
           frontend/public/digest frontend/public/telemetry state
