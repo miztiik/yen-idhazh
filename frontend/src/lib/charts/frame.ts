@@ -72,6 +72,10 @@ export interface LinearAxisOptions {
 	/** Anchor the domain at zero. A bar chart that does not is a lie. */
 	zero?: boolean;
 	tickCount?: number;
+	/** Round the domain outward to whole tick steps. Turn it off where the
+	 * domain is already decided by something else - rounding it there moves
+	 * every mark on the chart to buy a label nobody asked to change. */
+	nice?: boolean;
 }
 
 /** Domain rule one: rounded to human numbers, and zero-anchored by default.
@@ -84,7 +88,7 @@ export function linearAxis(
 	range: readonly [number, number],
 	options: LinearAxisOptions = {}
 ): Axis {
-	const { zero = true, tickCount = 4 } = options;
+	const { zero = true, tickCount = 4, nice = true } = options;
 	const finite = values.filter((value) => Number.isFinite(value));
 	const [low, high] = extent(finite);
 	let lower = low ?? 0;
@@ -94,7 +98,8 @@ export function linearAxis(
 		upper = Math.max(0, upper);
 	}
 	if (lower === upper) upper = lower + 1;
-	const scale = scaleLinear().domain([lower, upper]).nice(tickCount).range([...range]);
+	const scale = scaleLinear().domain([lower, upper]).range([...range]);
+	if (nice) scale.nice(tickCount);
 	return {
 		domain: scale.domain() as [number, number],
 		scale: (value: number) => scale(value),

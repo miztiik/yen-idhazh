@@ -179,6 +179,7 @@
 				viewport={viewport}
 				{bands}
 				height={config.chart_height}
+				width={config.chart_width}
 			/>
 			<FailureList
 				{rows}
