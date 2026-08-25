@@ -1,10 +1,13 @@
 # Test the models locally
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-25
 
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
 fast loop, not a different answer.
+
+This page operates the models. To evaluate and adopt a different summarizer,
+follow [evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md).
 
 There are four models in this project and they are tested differently:
 
@@ -68,7 +71,8 @@ curl -L -o backend/models/Qwen3.5-9B-Q4_K_M.gguf \
 
 That file is 5.29 GiB. It took 118 s to download on `ubuntu-latest` on
 2026-08-23, `n=1`; spread is unavailable. The download rate is not stable
-enough to extrapolate from.
+enough to extrapolate from. Exact SHA-256:
+`03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`.
 
 ### Local files are not the GitHub Actions cache
 
@@ -102,9 +106,11 @@ still cache their one configured model under a model-specific key.
 
 ## Serve a model
 
-The flags are not yours to choose. `server_argv` builds them from `config/`, and
-that argv is a fingerprint input, so a flag typed by hand here is a different
-server from the one CI runs. Ask for the command instead of copying one:
+The flags are not yours to choose. `server_argv` builds them from `config/`, so
+a flag typed by hand here is a different server from the one CI runs. The
+fingerprint contract intends to cover behaviour-affecting runtime inputs, but
+production identity wiring is incomplete. Ask for the command instead of
+copying one:
 
 ```bash
 python backend/utilities/llama_server_argv.py \
@@ -115,15 +121,9 @@ python backend/utilities/llama_server_argv.py \
   --format shell
 ```
 
-Today that prints:
-
-```bash
-backend/bin/llama-server --model backend/models/Qwen3-8B-Q4_K_M.gguf \
-  --alias qwen3-8b-q4-k-m --ctx-size 8192 --batch-size 512 \
-  --ubatch-size 512 --threads 4 --port 8080
-```
-
-Run it with `LD_LIBRARY_PATH=backend/bin` in front. On Windows, use
+Run the generated command with `LD_LIBRARY_PATH=backend/bin` in front. Do not
+copy a frozen rendering into another runbook: optional flags such as `-np 1`
+move through config. On Windows, use
 `backend\bin\llama-server.exe`; the generator prints the same flags.
 
 `digest.yml` starts its server the same way, from the same generator, and a test
@@ -184,14 +184,15 @@ The same four numbers land in the payloads as `fetch_ms`, `extract_ms`,
 `summarize_ms` and `score_ms`, and the published `/console/` page shows the
 daily medians.
 
-## Compare two models properly
+## Explore two models with the current validation command
 
-This is the gate from Row #7. It exists because a published leaderboard ranks
-models against **their** prompt, **their** extraction and **their** corpus -
-three variables between that number and yours.
+A published leaderboard ranks models against **their** prompt, **their**
+extraction and **their** corpus - three variables between that number and yours.
+The current command is useful for exploration and is not a controlled adoption
+gate.
 
 ```bash
-# plan the corpus once, so both models score the identical list
+# plan one URL list
 python -m idhazh plan --date 2026-08-22
 
 # with the 8B served
@@ -203,32 +204,44 @@ python -m idhazh validate --date 2026-08-22 --leaderboard 0.74
 python -m idhazh decide --runner local
 ```
 
-The corpus is the day's own run plan, not a curated list of addresses. A
-hand-picked set decays immediately - the first one this project had lost three
-of twenty within hours.
+Both models read the same planned URL list, but `validate` fetches and extracts
+each URL again for each model. The page bytes can move between runs. This does
+not prove that only the weights changed.
 
-Plan takes no size flag. There is no daily cap to raise: the plan is whatever
-the day's sources supplied, ranked
-([../architecture/sources/freshness.md](../architecture/sources/freshness.md)).
-A quiet day gives you a small corpus, and a small corpus is a weak comparison -
-plan a busier date rather than tuning a number.
+Other current limitations:
+
+- `.github/workflows/validate.yml` hardcodes the incumbent and server flags;
+- it resolves an unpinned runtime build;
+- it caches incumbent, challenger and runtime together;
+- its cache key omits repository revision, GGUF SHA and runtime build;
+- it can plan far more work than the job can finish; and
+- the decision reads scored count and mean HHEM, not failures or counterweights.
+
+Fix or replace that harness before using its verdict to adopt a model. The
+required controlled replay is in
+[evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md).
+
+The corpus is the day's own run plan, not a curated list of addresses. A
+hand-picked URL list decays immediately - the first one this project had lost
+three of twenty within hours. The correct fix is frozen validated Article
+payloads, not a permanent URL list.
 
 `validate` writes one result file per model under `backend/var/validation/`.
-`decide` applies the rule and writes `state/validation-<date>.csv`.
+`decide` applies the arithmetic and writes `state/validation-<date>.csv`.
 
-The rule, in full:
+The legacy HHEM screen, in full:
 
 - The incumbent measuring more than **0.10** below its published score means the
   ranking was not describing your pipeline. Score the others too.
-- A challenger ahead by at least **0.05** on your corpus changes the pick.
+- A challenger ahead by at least **0.05** returns `switch_and_pause`; it does not
+  select the model.
 - Fewer than **20** scored articles on either side means it refuses to judge
   rather than judging on thin evidence.
 
 Both thresholds are in `config/idhazh.json` under `evaluation`.
 
-`decide` exits non-zero on a switch. That is deliberate: swapping the model
-changes a persisted contract and re-goldens every fixture, so it pauses for a
-human instead of doing it.
+`decide` exits non-zero on a switch. That pause is deliberate. It is still only
+one input to the adoption decision.
 
 ### What the gate said on 2026-08-22
 
@@ -326,8 +339,11 @@ The LLM job downloads only that model, runs both thread counts and uploads
 `bench-llm` artifact. Image and corpus jobs are separate suites, so a CPU
 question does not start two unrelated jobs.
 
-If eight threads win that screen outside the measured spread, test the actual
-five-item server path before changing production:
+The hosted screen has already rejected eight threads for the configured runner.
+Run `32672629352` exposed two physical cores with two SMT siblings each. Eight
+workers were slower at every prompt length and 16% slower at decode, so
+production stays at four threads. Do not run the five-item candidate below
+unless a future runner topology or model changes the screen:
 
 ```bash
 gh workflow run measure.yml \
@@ -354,8 +370,9 @@ npm run build
 npm run test:browser
 ```
 
-Seventeen tests: eight injection canaries on the published surface, the visual
-path, and a hand-labelled retrieval bar.
+The suite includes injection canaries on the published surface, the visual path
+and a hand-labelled retrieval bar. Read the runner's reported count; do not copy
+a historical number into a gate.
 
 To prove the digest does not depend on it at all:
 
@@ -381,6 +398,7 @@ this.
 
 ## See also
 
+- [evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md) - measure, decide and adopt a new summary model.
 - [troubleshoot-one-url.md](troubleshoot-one-url.md) - fetch, extract and summarize one URL without publishing a digest.
 - [`run-the-pipeline.md`](run-the-pipeline.md) - the run and its stages.
 - [`set-up-local-inference.md`](set-up-local-inference.md) - llama.cpp in more detail.

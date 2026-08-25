@@ -38,6 +38,12 @@ runs use four. Manual dispatch offers only 1, 2, 3, or 4 and defaults to four.
 The plan job rejects any other value before it creates the matrix. The work
 strategy also sets `max-parallel: 4`; that limits concurrency but is not the
 total-job cap.
+
+Each worker receives its round-robin share of the whole plan. The workflow does
+not enforce `config.run.shard_size` or `shard_timeout_minutes`; the work job uses
+a 330-minute workflow timeout. A model-fit claim must use the measured worker
+population or first wire those config values.
+
 Route uses the worker outputs. Assemble runs even after a worker or route
 failure, then commits the digest and state.
 
@@ -95,11 +101,17 @@ Each Measurements dispatch selects exactly one target:
 | `llm` | GGUF download timing and `llama-bench` throughput | `models`, `threads` |
 | `image` | CPU image-model candidates | none |
 | `corpus` | Live article-length sampling | `corpus_links` |
-| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_threads_batch` for `threads_batch` |
+| `runtime` | Fixed-shard llama-server candidate sweep | `runtime_candidate`; `runtime_threads` for `threads`; `runtime_threads_batch` for `threads_batch` |
 
 The form keeps all target-specific inputs visible. A job reads only the inputs
 for its selected target. The default target is `llm`; the default runtime
 candidate is `baseline`.
+
+`Model validation` currently hardcodes Qwen3-8B as incumbent, downloads and
+caches incumbent plus challenger together, and refetches each planned URL for
+each model. It is an exploratory dispatch, not a controlled adoption gate.
+[Evaluate and Adopt a New Summarizer Model](../how-to/evaluate-new-summarizer-model.md)
+owns the repair and acceptance requirements.
 
 Pages publication builds only committed data and uploads a static bundle. It
 does not run the producer or a model, and the published site has no runtime

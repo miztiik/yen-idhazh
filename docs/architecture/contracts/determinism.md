@@ -1,6 +1,6 @@
 # Determinism and the Pipeline Fingerprint
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-25
 
 How the pipeline proves a re-run changed nothing, and how it records the times that claim turns out to be false. This page owns the stamp, the ledger that expands it, the skip rule built on it, and the violation policy.
 
@@ -39,42 +39,85 @@ The declared inputs are the weights digest, the quantisation, the runtime build,
 
 **Prompts and templates are digested, never stored.** A prompt in a committed ledger would put text into a persisted payload that nothing downstream needs, and the digest answers the only question anyone asks of it: did it move?
 
+### Current implementation gap
+
+The contract above is not fully implemented. `stage_work` currently passes
+`ModelRef.sha256`, or 64 zeroes when config omits it, and records the literal
+`llama-server-local` as the runtime build. It does not observe the GGUF file the
+server opened or the production llama.cpp build.
+
+That gap matters most during a model swap: without a fix, a new weight file can
+land under a zero digest and a changed runtime can look unchanged. The work
+command must receive the observed GGUF SHA-256 and runtime build from the process
+that downloaded and started them, compare the GGUF digest with config, and carry
+both into `PipelineInputs`. Until then, fingerprint rows do not prove weight or
+runtime identity.
+
+The remaining identity fields are also incomplete: `stage_work` uses the model
+id as chat-template identity and `local` as runner class, and `PipelineInputs`
+does not carry several behaviour-affecting optional runtime flags.
+
+Article input is deliberately not a `PipelineInputs` field: that model answers
+"which pipeline configuration", and the same value must group many items. The
+missing article digest belongs in a separate per-item work identity used by a
+future skip key.
+
+The ledger and skip path are not wired into production. `stage_work` computes a
+fingerprint but never reads `state/fingerprints.csv` or calls `classify`;
+`assemble` never calls `append_new`; and the committed ledger has only its
+header. The sections below describe the intended contract and tested helpers,
+not current run behaviour.
+
+The Qwen3.5 adoption plan defers skip wiring. A future skip needs a separate
+typed per-item work identity containing both article-input digest and pipeline
+fingerprint. Article identity does not belong inside the configuration
+fingerprint.
+
 ## `host_cpu` is recorded and never digested
 
 It sits on the ledger row, outside `PipelineInputs`, so exclusion is structural rather than a filter someone can forget.
 
 Including it would make every runner a different fingerprint, which would hide the one failure the stamp exists to catch: the same inputs producing different words on different hardware. It is the only field that *explains* a violation, so it has to be recorded and it must not be digested.
 
-## The ledger
+## The ledger contract (not wired)
 
-`state/fingerprints.csv` is **append-only and never pruned**, one row the first time a stamp is seen. Each row expands the digest into every component that produced it, plus the host.
+`state/fingerprints.csv` is intended to be **append-only and never pruned**, one
+row the first time a stamp is seen. Each row expands the digest into every
+component that produced it, plus the host.
 
 Without it a fingerprint is meaningless hex three years from now - it would prove two runs differed while saying nothing about how.
 
 The column order is defined once, by the contract, and flattened one level so every cell is a scalar. The committed header is asserted against that definition, because a hand-edited header would silently reorder every future row.
 
-## Skip-if-exists becomes skip-if-fingerprint-matches
+## Future skip uses work identity, not fingerprint alone
 
-A prior stamp classifies the work in front of the pipeline:
+A safe skip compares a future per-item `WorkIdentity` containing both pipeline
+fingerprint and article-input digest:
 
-| Prior stamp | Then | Meaning |
+| Prior work identity | Then | Meaning |
 | --- | --- | --- |
 | absent | `first_run` | run the work |
-| different | `inputs_changed` | run the work |
+| different pipeline or article digest | `inputs_changed` | run the work |
 | same | `unchanged` | do nothing, and write no eval row |
-| same, different words | `determinism_violation` | record it |
+| same, forced run, different words | `determinism_violation` | record it |
 
-**An unchanged item writes no eval row**, because a re-run that changed nothing measured nothing, and a ledger padded with re-observations of the same summary makes every trend on the dashboard a function of how often the job ran.
+The current `classify` helper compares only pipeline fingerprint. It is not wired
+and is insufficient for skip because a publisher can change article bytes at
+the same URL. Replace or expand it with `WorkIdentity` before use.
 
-The violation case is only observable when a run was forced - on the normal path the match is enough to skip before any words exist to compare.
+Under the future safe path, an unchanged item writes no eval row. The violation
+case is observable only when a matching work identity is forced to run.
 
-## A violation is recorded, counted, and never fatal
+## Intended violation handling
 
-`determinism_violation` lands on the eval row and its count lands on the run record. The build does not fail.
+When wired, `determinism_violation` lands on the eval row and its count lands on
+the run record. The build does not fail.
 
 A gate here would fire across runner CPU classes for reasons unrelated to any regression, and a flaky gate gets switched off within a month - at which point the project has neither the gate nor the signal. Recorded and counted, it stays visible and stays trustworthy.
 
-The comparison is over the **published words only** - the summary and its key points - so a re-run that produced the same text in a different wall-clock or token count does not read as drift.
+The comparison is over the **published words only** - generated title, summary
+and key points - so a re-run that produced the same text in a different
+wall-clock or token count does not read as drift.
 
 ## Design rationale
 
@@ -98,5 +141,6 @@ Digesting the model's own serialization rather than a hand-written concatenation
 - [schemas.md](schemas.md) - how these shapes are authored, versioned and generated.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the skip rule in the context of the run.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - what an eval row measures, and why an empty re-run must not write one.
+- [../../how-to/evaluate-new-summarizer-model.md](../../how-to/evaluate-new-summarizer-model.md) - the identity and replay requirements for a model change.
 - [../../reference/measurements.md](../../reference/measurements.md) - where a measured number carries its hardware and date.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #10, section 11.
