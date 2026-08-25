@@ -33,6 +33,7 @@
 		today: string;
 		config: ViewportConfig & {
 			chart_height: number;
+			chart_width: number;
 			min_attempts_for_rate: number;
 			failure_list_max: number;
 		};
@@ -169,6 +170,7 @@
 				window={viewport}
 				minAttempts={config.min_attempts_for_rate}
 				height={config.chart_height}
+				width={config.chart_width}
 				{selectedCode}
 				onSelect={(code) => (selectedCode = code)}
 			/>

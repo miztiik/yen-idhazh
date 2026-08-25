@@ -545,6 +545,38 @@ test('a window holding one day draws no bar, because a bar would be the panel', 
 	await expect(page.locator('[data-panel-rate="fetch"]')).toBeVisible();
 });
 
+test('a failure panel draws in CSS pixels, so its type is the size it declares', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	const panels = page.locator('[data-panel]');
+	test.skip((await panels.count()) === 0, 'the fixture window holds one day, so no panel draws');
+
+	// A `viewBox` is a scale factor, not a unit. Stretched from 360 units into a
+	// 163px panel it put `font-size="10"` on screen at 4.5px.
+	for (const width of [380, 768, 1400]) {
+		await page.setViewportSize({ width, height: 900 });
+		await expect
+			.poll(async () =>
+				panels.evaluateAll((nodes) =>
+					nodes.every((node) => {
+						const declared = Number((node.getAttribute('viewBox') ?? '').split(' ')[2]);
+						return Math.abs(declared - node.getBoundingClientRect().width) <= 1;
+					})
+				)
+			)
+			.toBe(true);
+	}
+
+	// Two rules: the baseline and the y axis. The unlabelled 50% dash was a
+	// reference at a value nobody acts on, and it is gone.
+	await expect(page.locator('[data-panel="fetch"] line')).toHaveCount(2);
+	// Both ends of the fixed domain are printed, so the scale can be read.
+	await expect(page.locator('[data-panel="fetch"]')).toContainText('100%');
+	await expect(page.locator('[data-panel="fetch"]')).toContainText('0%');
+});
+
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
 	await page.goto('/console/');
 
