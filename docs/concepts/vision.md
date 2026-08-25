@@ -1,6 +1,6 @@
 # Vision
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-25
 
 What yen-idhazh is, what it is not, and the one-sentence product idea every other concept doc serves. This is the top of the concept tier; if a later doc contradicts this page, this page is wrong and gets fixed.
 
@@ -37,12 +37,20 @@ Two artifacts come out of a run, and they are equally the product:
 
 Anyone can wire an article to a summarizer in an afternoon. The hard part, and the reason the second artifact exists, is that **a summarizer nobody measures is a machine for producing confident, plausible, wrong text.** Every summary reads equally authoritative. A reader cannot tell the accurate ones from the invented ones by looking, so the system has to know, and has to say.
 
-That is why the evaluation loop is not reporting. It is the feature:
+That is why the intended evaluation loop is not reporting. It is the feature:
 
 - Every summary is scored for faithfulness twice - against the text the model actually saw, and against the full article. The gap between those two numbers is what truncation cost us, and it is invisible to a single score.
 - Faithfulness is paired with deterministic counterweights, because faithfulness alone rewards copying: a summary that quotes the source verbatim scores nearly perfectly and has summarized nothing.
 - The scores are committed, not computed on demand, so the trend across months is a fact rather than a re-derivation.
 - A separate benchmark re-runs a fixed set on a schedule, because per-item scores measure variance within a day and drift is a movement across months.
+
+Two parts are not implemented as described yet. Production passes truncated
+text as both faithfulness inputs, so its truncation gap is zero by construction.
+The drift workflow compares live ledger windows rather than replaying and
+persisting a fixed-set benchmark. These are active implementation gaps, not
+reasons to weaken the product contract
+([evaluation.md](evaluation.md),
+[../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
 
 ## What it is not
 

@@ -1,6 +1,6 @@
 # How to set up local inference
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-25
 
 How to get a working local model runtime on a developer machine, so `backend/` can be run end-to-end without CI. The weights and the runtime binaries are **downloaded, not committed** - `backend/models/` and `backend/bin/` are gitignored - so a fresh clone needs this once.
 
@@ -59,6 +59,7 @@ Extremely low-bit quantisations (1-2 bit) have been published for several open-w
 
 ## See also
 
+- [evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md) - evaluate and adopt different summary weights.
 - [`test-models-locally.md`](test-models-locally.md) - compare two GGUF files and sweep thread counts.
 - [../concepts/config.md](../concepts/config.md) - where model references, quantisation and inference knobs live.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - what the Summarize stage does with the model.

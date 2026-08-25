@@ -11,11 +11,14 @@ The concrete stage list, the module names and the field-level payload shapes are
 An **item** is one source URL and everything derived from it. It is the atom of the whole system:
 
 - It is fetched, extracted, summarized, scored and routed independently of every other item.
-- It lands as one file per item under a predictable path - the day, the vertical, and the item's ordinal within that vertical. Identity for dedupe is a field on the payload, never a path segment, so a re-run skips work by comparing the payload's fingerprint rather than by probing the filesystem.
+- It lands as one file per item under a predictable path - the day, the vertical,
+  and the item's ordinal within that vertical. Identity for dedupe is a field on
+  the payload, never a path segment. Worker skip is not implemented.
 - It is written **temp-then-rename**, so a file either exists complete or does not exist. There is no half-written item.
 - Its failure is its own. A dead link, a paywall, a failed extraction, a dead model server, or a visual that would not render - each degrades that item and records why, and the run continues.
 
-This is what makes the pipeline resumable: re-running costs only the items that did not finish.
+Atomic writes make re-running safe, not cheap. The worker can redo completed
+items because per-item `WorkIdentity` skip is not implemented yet.
 
 ## Stages talk in payloads, not calls
 
@@ -57,13 +60,20 @@ The exact trigger contract is
 Four invariants hold regardless of how the batches are sized:
 
 - **A worker failure is contained to its batch**, and does not cancel its siblings.
-- **The batch size is a measured decision, not a preference.** It is set by how long loading the model takes relative to how long an item takes - if loading dominates, the batch is too small. Per-item atomicity survives inside a batch through the temp-then-rename write plus a fingerprint comparison against the run index.
+- **The batch size is a measured decision, not a preference.** It is set by how
+  long loading the model takes relative to how long an item takes - if loading
+  dominates, the batch is too small. Per-item atomicity survives inside a batch
+  through the temp-then-rename write.
 - **A worker may change the processing order inside its shard.** It currently
   fetches and extracts its assigned items, then sorts the items that can be
   summarized by prompt band before the model loop. The files are addressed by
   item id, not by processing order, so grouping same-band prompts changes cache
   locality and not correctness.
-- **An item whose fingerprint already matches does no work and writes no eval row.** A re-run that changed nothing measured nothing. What the fingerprint covers, and what happens when it matches but the words differ, is [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md). The eval writer enforces the same rule at the file, so a run that re-summarized an item it had no record of still writes nothing when the words and the scorer are unchanged ([evaluation.md](evaluation.md)).
+- **Fingerprint-based inference skip is not wired.** Workers currently compute a
+  pipeline fingerprint and still do the work. The eval writer can suppress a
+  duplicate measurement after re-summarization; that is ledger de-duplication,
+  not a worker skip. The intended identity contract and current gaps are in
+  [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md).
 - **The router records what it spent, and stops when it has spent it.** Each run
   manifest carries `items_routed` and `route_ms`, the stage total over the items
   the router reached. `route_ms` is null when the router never ran, which is a
@@ -83,14 +93,16 @@ Four invariants hold regardless of how the batches are sized:
 
 ## What one run leaves for the next
 
-There is no database (Rule #1), so anything a later run must read has to survive as a committed file. Five append-only ledgers under `state/` are the whole of the pipeline's memory:
+There is no database (Rule #1), so anything a later run must read has to survive
+as a committed file. Four live append-only ledgers plus one unwired fingerprint
+ledger contract sit under `state/`:
 
 | File | Written by | Answers |
 | --- | --- | --- |
 | `state/seen/<YYYY-MM>.csv` | Collect | How old is this article, when its feed gave no date? |
 | `state/published.csv` | Assemble | Have we already published this address? |
 | `state/feed-health/<YYYY-MM>.csv` | Collect | What did every feed do, on every run? |
-| `state/fingerprints.csv` | the workers | Did anything about this item actually change? |
+| `state/fingerprints.csv` | not wired; intended single writer is Assemble | Which observed pipeline identities have run? The committed file currently has only its header. |
 | `state/item-health/<YYYY-MM>.csv` | Assemble | What did every planned item do in this run? |
 
 Three rules hold for all of them:

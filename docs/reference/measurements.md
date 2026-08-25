@@ -90,57 +90,76 @@ measured 801 tokens at the time and now measures at most 879. The table uses the
 current maximum. A derived time now requires an explicit model-specific prompt
 count and truncation cap; without them the tool prints raw throughput only.
 
-**The shard timeout stays worst-case.** A 5-item shard drawing five long
-articles on the 8B is 5 x 342s = 29 minutes. `digest.yml` sets 330 minutes,
-which is generous - and a timeout should be. It must never be re-derived from
-the 229s blend, which would set it at 20 minutes and kill healthy shards that
-happened to draw long articles.
+**These figures do not size a production worker.** `run.shard_size = 5` is not
+enforced by `digest.yml`; the workflow divides the whole plan among four worker
+jobs. Run `32742672105` measured 34 to 41 items per worker. A current day can be
+larger. Size request and job bounds from a measured real worker population and
+its worst item, never from five-item arithmetic or the 229-second blend.
 
-### Candidate: Qwen3.5-9B-Q4_K_M (measured, not adopted)
+### Candidate: Qwen3.5-9B-Q4_K_M (measured; adoption work incomplete)
 
 **Measured 2026-08-23** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4 threads,
 llama.cpp `b10598` (`56db501e7`), 3 repeats, `llama-bench` at the same three
-input lengths. Taken to answer "can we use Qwen3.5-9B", so the model pick rests
-on a number rather than on a model card (Rule #10). **The pick did not change**;
-this row exists so the next person asking does not re-run the job.
+input lengths. Exact candidate:
+
+| Field | Value |
+| --- | --- |
+| Repository | `unsloth/Qwen3.5-9B-GGUF` |
+| Repository revision observed 2026-08-25 | `3885219b6810b007914f3a7950a8d1b469d598a5` |
+| File | `Qwen3.5-9B-Q4_K_M.gguf` |
+| Quantisation | `Q4_K_M` |
+| Bytes | 5,680,522,464 (5.29 GiB) |
+| SHA-256 / Hugging Face LFS oid | `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` |
+| Licence | Apache-2.0 |
+
+The repository revision is mutable metadata about the repository snapshot. The
+GGUF SHA-256 identifies the actual candidate bytes.
 
 | Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
 | --- | --- | --- | --- | --- |
 | Qwen3-8B-Q4_K_M (incumbent, b10580) | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
 | Qwen3.5-9B-Q4_K_M (candidate, b10598) | 10.14 +/- 0.01 | 10.06 +/- 0.01 | 9.84 +/- 0.01 | **6.01 +/- 0.11** |
 
-Derived by `backend/utilities/summarise_bench.py`: short 99s, medium 258s, long
-433s, **blended 222s**, worst long **639s** - against the 8B's 196s and 597s. A
-5-item shard of worst-case long articles is 53 minutes against the 330-minute
-`digest.yml` timeout.
+These rows were not taken in the same job or on the same CPU model, and the
+incumbent used `b10580`. They establish candidate throughput and fit. They do not
+establish an exact candidate-to-incumbent delta.
 
-**The prefill curve flattens, and that is the architecture showing up.** The 8B
-loses 14% from 730 to 4850 tokens (12.1 -> 10.4). The 9B loses **3.0%** (10.14
--> 9.84). Qwen3.5 is a hybrid: 24 of its 32 layers are Gated DeltaNet, which is
-linear in sequence length, and only 8 carry quadratic attention. Long articles
-cost it far less than they cost a dense model. `llama.cpp` reports the arch as
-`qwen35` and loads it without a flag.
+The old 99 / 258 / 433 / 222 / 639-second derived figures are withdrawn. They
+used the tool's former hardcoded 200-token prompt and did not apply the
+production truncation cap. The Qwen3.5 prompt and article-token counts have not
+been measured under its tokenizer, so no replacement derived time is valid yet.
 
-**Decode is the price, and bandwidth arithmetic under-predicted it.** 6.01
-against 7.28 tok/s is 1.21x slower. A pure memory-bandwidth estimate said 1.09x
-(6.7 tok/s) from the 248,320-token vocabulary streaming a larger LM head per
-token; the measurement is below that floor, so the DeltaNet state update costs
-more than bandwidth alone predicts. The estimate was labelled a floor and the
-floor held as a floor - it did not hold as a prediction.
+Within the candidate run, prefill fell 3.0% from 730 to 4850 tokens (10.14 ->
+9.84). Qwen3.5 is a hybrid Gated DeltaNet plus attention architecture, and
+llama.cpp reports `qwen35`. The separate incumbent observation fell 14%, but the
+two runs used different CPUs and runtime builds, so the difference cannot be
+attributed to architecture. The same limitation applies to the separate 6.01
+and 7.28 tok/s decode observations.
 
-**Weight download, cache miss:** 5.3 GB in **118s** - faster than the 8B's 4.7 GB
-in 180s. Download speed on this runner varies more than file size does; two
-observations 2.9x apart mean neither is a rate.
+**Weight download, cache miss:** 5.29 GiB in **118s**, `n=1`; spread unavailable.
+It may not be compared as a rate to the 8B's separate download observation.
 
-Three caveats this row cannot discharge:
+**Raw cache screen:** candidate plus the 4B router is 7.616 GiB of weight files.
+That is below the nominal 10 GB repository ceiling and is not proof that the
+Actions cache fits: runtime copies, metadata and archive representation are
+unmeasured. Candidate + incumbent + router is 12.299 GiB before runtime files,
+so even the raw transition cannot fit. Measure actual cache entries, delete only
+the old summary-model cache before the first production run, and keep the router
+cache.
 
-- `llama-bench` runs at its own `n_batch` 2048, not the pipeline's 512. That is
-  true of the incumbent rows too, so the comparison is fair and neither figure is
-  a production figure.
-- Throughput is not quality. Nothing here says the model summarizes faithfully;
-  that is `validate.yml` and the golden set, and it was not run.
-- `b10598` is not `b10580`. No workflow pins a llama.cpp build, so the incumbent
-  row and the candidate row were taken on different runtimes.
+What remains unmeasured:
+
+- candidate prompt tokens and article-token spread;
+- candidate-specific worst-case context and derived seconds per article;
+- schema-valid non-thinking output at the configured greedy sampler;
+- live prompt-injection canaries and deterministic repeated output;
+- quality on frozen Article payloads;
+- failure rate, counterweights and blind human review; and
+- recurrent-state prefix reuse.
+
+The model card publishes no summarization or faithfulness result. Its reasoning,
+instruction-following, coding and long-context tables are a prior and not
+evidence for this pipeline.
 
 ### On a laptop (kept only as a warning)
 
@@ -240,14 +259,19 @@ spread is two tokens. What went in the terseness pass was justification,
 restatement, and one line the decoder already enforced. See
 [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md).
 
-Against the 8192 `n_ctx` the pipeline runs at:
+The old nominal context arithmetic was:
 
 | Component | Tokens |
 | --- | --- |
 | System prompt | 879 |
 | Article, at the 2500-token truncation cap | 2500 |
 | Output budget | 900 |
-| **Worst case** | **4279 of 8192** |
+| **Nominal sum** | **4279; not a complete request measurement** |
+
+This is not a context-fit result. It omits chat-template tokens, source-form
+text, feed title, fences and generation suffix. The 2500 cap is applied through
+a words-to-tokens estimate before exact model tokenization, so exact article
+tokens can exceed it.
 
 Three notes worth keeping:
 
@@ -261,11 +285,10 @@ Three notes worth keeping:
   tok/s, or 66.2 s. Run `32648218952` measured the live digest path at 34.23
   tok/s median, so the same 801 tokens cost 23.4 s median. Use the prompt-cache
   table below for prompt-reorder decisions.
-- **`fits_context` over-reserves and does so on purpose.** It approximates the
-  current 658-word prompt as `words x 2`, which is 1316 against the measured
-  maximum of 879. It errs by 437 tokens in the safe direction, and the
-  alternative - tokenizing the prompt
-  per item to save context we are not short of - buys nothing.
+- **The `fits_context` margin is not fully measured.** It approximates the
+  658-word system prompt as 1316 tokens, 437 above the measured system-prompt
+  maximum of 879. That says nothing about omitted chat framing or exact
+  candidate article tokens. Tokenize the complete request before claiming fit.
 
 ## Prompt cache reuse
 
@@ -283,9 +306,9 @@ srv load_model: initializing, n_slots = 4, n_ctx_slot = 8192, kv_unified = 'true
 
 Current llama.cpp source names the same quantity `n_ctx_seq`: when `kv_unified`
 is true, `n_ctx_seq = n_ctx`; when it is false, `n_ctx_seq = n_ctx / n_seq_max`.
-This log uses the older `n_ctx_slot` name. The value is still 8192 per slot, so
-the run's then-current 4201-token worst case fit, and today's 4279-token worst
-case also fits. This is not a live defect in run `32648218952`.
+This log uses the older `n_ctx_slot` name. The value is 8192 per slot, so the run
+refutes context splitting. It does not prove the maximum complete request fits;
+that request has not been tokenized end to end.
 
 The run does **not** settle whether the prompt prefix was reused. The grep
 emitted no `kv cache rm [p0, end)` line. The only emitted instrument was
@@ -1039,14 +1062,16 @@ to justify a design decision.
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate; the cause is not recorded** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU, so the host difference has no name. The `route` job now prints `/proc/cpuinfo` model name, `nproc` and llama-server's `system_info`; read those against the next fast run and the next slow one. The `work` job wants the same three lines and does not have them. |
 | **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
-| **Whether the prompt prefix is reused at all** | **unmeasured, and currently unobservable** | a permanent instrument, not a one-off grep. `usage.prompt_tokens` reports the full prompt whether cached or not, and llama-server emits no `kv cache rm` line at our verbosity, so the question went blind again the moment row 3 closed. Log slot id, item id, band id, rendered system-prompt tokens, article tokens, full prompt tokens, evaluated prompt tokens, and `p0` or `n_past`. |
+| **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the candidate through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
+| Exact complete-request context for the configured summarizer | **unmeasured; 877-879 covers only the system prompt** | render system prompt + source form + title + fences + exact sanitized model-visible text through the embedded chat template, count the generation suffix, add output budget, and record the maximum by band |
 | Cache-restore time per job, cache-hit | ~90 s, asserted | the same artifact, on a second run |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | unmeasured | lands with the eval harness |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
-| Whether Qwen3.5-9B summarizes faithfully through our prompt | **throughput measured, quality unmeasured** | a `validate.yml` dispatch with `challenger_repo=unsloth/Qwen3.5-9B-GGUF`; needs 20 scored articles, and the gate has never yet reached that floor |
-| Whether prefix cache reuse survives a recurrent (Gated DeltaNet) model | inferred only; llama.cpp #24714 reports full re-processing | `/completion` timings for item 1 vs items 2..N of one shard, candidate model served |
+| Qwen3.5-9B complete-request tokens and worst-case context | **unmeasured; Qwen3 counts do not transfer** | render system prompt + source form + title + fences + exact sanitized model-visible text through the embedded chat template, count the generation suffix with `Qwen3.5-9B-Q4_K_M.gguf`, add output budget, and record the maximum by band |
+| Qwen3.5-9B live non-thinking, schema and canary compatibility | **unmeasured; parser controls exist, candidate behaviour does not** | serve the exact candidate under the configured greedy sampler; run short/medium/long/brief inputs plus all injection canaries; require empty reasoning channels, `finish_reason=stop`, valid schema and repeat-stable published words |
+| Whether Qwen3.5-9B summarizes faithfully through our prompt | **throughput measured, quality unmeasured** | first replace the current validation workflow with a cache-safe replay over frozen Article payloads; then require at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread and a pre-registered blind human selector |
 
 ## How to add a row here
 
@@ -1063,4 +1088,5 @@ happened three times on this page.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - the batch-size rule these numbers set.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - the prompt the token count above measures.
+- [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the procedure these measurements gate.
 - [../how-to/set-up-local-inference.md](../how-to/set-up-local-inference.md) - reproducing the local runs.
