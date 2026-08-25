@@ -347,12 +347,103 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 test('stage medians come from item health, not the score ledger', async ({ page }) => {
 	await page.goto('/console/');
 
-	await expect(page.getByText('Median seconds per item, by stage')).toBeVisible();
+	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	// The legend, not the axis: the largest median is printed in both places, so
 	// an unscoped match is ambiguous the moment one stage is the slowest.
 	await expect(page.locator('[data-stage="fetch"]')).toContainText('200 ms');
 	await expect(page.locator('[data-stage="extract"]')).toContainText('30 ms');
 	await expect(page.locator('[data-stage="summarize"]')).toContainText('700 ms');
+});
+
+test('the timing y axis is decades, and it crosses milliseconds to seconds', async ({ page }) => {
+	await page.goto('/console/');
+
+	const labels = await page
+		.locator('[data-timing="plot"] [data-decade]')
+		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''));
+
+	// Four stages spanning three decades cannot share a linear axis: the slowest
+	// sets the domain and the other three draw on the baseline.
+	expect(labels.length).toBeGreaterThanOrEqual(3);
+	expect(labels).toContain('10 ms');
+	expect(labels).toContain('100 ms');
+	expect(labels).toContain('1 s');
+	// One label in each unit, so the reader is told where the crossing is.
+	expect(labels.some((text) => text.endsWith(' ms'))).toBe(true);
+	expect(labels.some((text) => /\d s$/.test(text))).toBe(true);
+
+	// Zero has no position on a log axis, so the old baseline label is gone.
+	const printed = await page
+		.locator('[data-timing="plot"] text')
+		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''));
+	expect(printed).not.toContain('0');
+
+	// The eight steps inside each decade, unlabelled. Without them the axis
+	// reads as linear with odd numbers on it.
+	const stubs = await page.locator('[data-timing="plot"] [data-minor-tick]').count();
+	expect(stubs).toBeGreaterThanOrEqual(8 * (labels.length - 1));
+	for (const text of printed) expect(text).not.toBe('20');
+});
+
+test('the timing legend is sorted by the newest day, tallest first', async ({ page }) => {
+	await page.goto('/console/');
+
+	// Colour is one signal and never the only one. Matching the legend order to
+	// the plot's vertical order makes position the second signal, for free.
+	const entries = await page
+		.locator('[data-timing="chart"] [data-stage]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => ({
+				stage: node.getAttribute('data-stage') ?? '',
+				text: node.textContent?.trim() ?? ''
+			}))
+		);
+	expect(entries.length).toBeGreaterThan(1);
+
+	const asMs = (text: string): number => {
+		const match = text.match(/([\d.]+)\s(ms|s)$/);
+		if (!match) return -1;
+		return Number(match[1]) * (match[2] === 's' ? 1000 : 1);
+	};
+	const values = entries.map((entry) => asMs(entry.text));
+	for (let index = 1; index < values.length; index += 1) {
+		expect(values[index]).toBeLessThanOrEqual(values[index - 1]);
+	}
+	expect(entries[0].stage).toBe('summarize');
+});
+
+test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }) => {
+	await page.goto('/console/');
+
+	// The canary has no score ledger, so every score median is zero. A zero
+	// clamped onto a log axis would draw a line falling to the bottom of the
+	// plot, which says the stage got a thousand times faster.
+	await expect(page.locator('[data-stage-mark="score"]')).toHaveCount(0);
+	await expect(page.locator('[data-stage="score"]')).toHaveCount(0);
+	await expect(page.locator('[data-timing-gap="score"]')).toHaveText(
+		'No time recorded for score in this window.'
+	);
+
+	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
+		const floor = Math.max(
+			...[...svg.querySelectorAll('[data-decade-line]')].map((line) =>
+				Number(line.getAttribute('y1'))
+			)
+		);
+		const drawn = [...svg.querySelectorAll('[data-stage-mark]')].flatMap((mark) =>
+			mark.tagName === 'circle'
+				? [Number(mark.getAttribute('cy'))]
+				: (mark.getAttribute('points') ?? '')
+						.split(' ')
+						.filter(Boolean)
+						.map((pair) => Number(pair.split(',')[1]))
+		);
+		return { floor, lowest: Math.max(...drawn), marks: drawn.length };
+	});
+
+	expect(geometry.marks).toBeGreaterThan(0);
+	// Every stage is legible: no line sits flat on the floor of the plot.
+	expect(geometry.floor - geometry.lowest).toBeGreaterThan(4);
 });
 
 test('the timing chart draws one unit per CSS pixel at every width', async ({ page }) => {
@@ -730,7 +821,10 @@ test('a missing ledger costs the page a section, never the page', async ({ page 
 	// The canary build has no score ledger. The page says so and carries on:
 	// the timing chart, run grid and feed table still draw.
 	await expect(page.getByText('Nothing has been scored yet.')).toBeVisible();
-	await expect(page.getByText('Median seconds per item, by stage')).toBeVisible();
+	await expect(page.getByText('Time per item, by stage')).toBeVisible();
+	// The missing ledger costs the score line its numbers, and the chart names
+	// the loss rather than drawing a flat line at the bottom of the plot.
+	await expect(page.locator('[data-timing-gap="score"]')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 
