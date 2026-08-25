@@ -224,9 +224,8 @@ Require:
 Use three deterministic repeats for the adoption corpus, not one repeated
 example.
 
-Repair the current inline-think parser first. It checks only the first matched
-block for content, then removes all blocks; an empty first block can hide a
-non-empty second one.
+The inline-think parser reads every block, so an empty opening block no longer
+hides a second one that reasoned. It read only the first until 2026-08-25.
 
 The unit suite uses recorded completions. It proves the parser and controls, not
 that a new live model follows this chat template. A live candidate canary runner

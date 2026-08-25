@@ -691,6 +691,33 @@ def test_an_empty_think_block_is_accepted() -> None:
     assert thought == ""
 
 
+def test_an_empty_block_cannot_hide_a_second_one_that_reasoned() -> None:
+    """The guard asserts the absence of reasoning, so it has to read every block.
+
+    Reading only the first let an empty opening block wave a real one through,
+    and a flag that had stopped taking effect would still have looked like it
+    took. The body is a reply that would otherwise publish, so nothing but the
+    hidden block stands between this item and a reader.
+    """
+    raw = f"<think></think><think>weighing it up</think>{body()}"
+
+    content, thought = split_thinking(raw)
+    assert content == body()
+    assert thought is not None
+    assert thought.strip() == "weighing it up"
+
+    with pytest.raises(ValueError, match="reasoned anyway"):
+        parse_draft(raw)
+    assert replied(raw).status is SummaryStatus.FAILED
+
+
+def test_an_empty_block_in_front_of_a_real_reply_still_publishes() -> None:
+    """The other half of it: closing the hole must not fail a model that complied."""
+    result = replied(f"<think></think>{body()}")
+    assert result.status is SummaryStatus.OK
+    assert result.title == TITLE
+
+
 def test_a_model_that_reasoned_anyway_is_a_failure_not_a_curiosity() -> None:
     """Decision 3: a flag that silently stopped taking effect costs faithfulness for months."""
     result = summarised("reasoned-anyway")
