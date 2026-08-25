@@ -54,8 +54,7 @@ both into `PipelineInputs`. Until then, fingerprint rows do not prove weight or
 runtime identity.
 
 The remaining identity fields are also incomplete: `stage_work` uses the model
-id as chat-template identity and `local` as runner class, and `PipelineInputs`
-does not carry several behaviour-affecting optional runtime flags.
+id as chat-template identity and `local` as runner class.
 
 Article input is deliberately not a `PipelineInputs` field: that model answers
 "which pipeline configuration", and the same value must group many items. The
@@ -72,6 +71,29 @@ The Qwen3.5 adoption plan defers skip wiring. A future skip needs a separate
 typed per-item work identity containing both article-input digest and pipeline
 fingerprint. Article identity does not belong inside the configuration
 fingerprint.
+
+## Which inference knobs the stamp carries
+
+"A field that is not declared cannot be forgotten" holds only if somebody writes down what is not declared. `idhazh.fingerprint.NOT_DIGESTED` is that record, and a contract test holds it closed against `InferenceConfig`: each knob is either digested or named there with a reason. Add a knob but classify nothing, and the test fails. It names the knob.
+
+Ten of the nineteen knobs stay outside the stamp. Nine of the ten reach `server_argv`; the tenth is a request timeout. Five of the ten can move the words:
+
+| Knob | In the stamp? | Why |
+| --- | --- | --- |
+| `n_ctx`, `n_batch`, `n_ubatch`, `n_threads` | yes, under their own names | They change how the partial sums accumulate. |
+| `temperature`, `top_p`, `seed`, `max_output_tokens`, `thinking` | yes, folded into `sampling` | One canonical spelling of the decoding parameters. |
+| `cache_type_k`, `cache_type_v` | **no - blind spot** | A quantised KV cache changes the attention arithmetic. |
+| `flash_attention` | **no - blind spot** | Another kernel adds the same values in another order. |
+| `n_parallel` | **no - blind spot** | Slots divide the context, which changes the batch shapes. |
+| `n_threads_batch` | **no - blind spot** | Prompt threads change how the partial sums accumulate. |
+| `load_mode` | no, and safe | mmap and mlock move where the weights sit, not what they hold. |
+| `priority`, `poll` | no, and safe | Scheduler and wait behaviour. They calculate nothing. |
+| `startup_warmup` | no, and safe | A pass before the run. It decodes nothing that we keep. |
+| `request_timeout_minutes` | no, and safe | A clock bound on one POST. It stops a call, it does not reword one. |
+
+The five blind spots are real. Move one and a summary can change while the stamp holds still. They stay undigested here on purpose: row 4 of [`../../../TODO/20260825-qwen35-9b-swap-plan.md`](../../../TODO/20260825-qwen35-9b-swap-plan.md), "wire truthful fingerprint identity and model-separated drift", digests them, and that row resets every fingerprint anyway. Digesting them here would spend that reset twice.
+
+`server_argv` used to claim in its own docstring that every knob it passes is a fingerprint input. It never was. The docstring now points at `NOT_DIGESTED` rather than claim coverage nobody checked.
 
 ## `host_cpu` is recorded and never digested
 
@@ -125,6 +147,8 @@ Enumerating sixteen ways an output can move and finding that eleven are silent i
 
 Digesting the model's own serialization rather than a hand-written concatenation is the same move as generating schemas from models: it removes a second list that has to be kept in step by hand, and the class of bug where someone adds an input and forgets to stamp it stops existing. Authority: Fowler.
 
+The scope statement above is honest, so the defect was the `server_argv` docstring that claimed more coverage than the scope statement gave. Fixing the sentence alone would have left the gap unwritten, and digesting the five blind spots here would have burned the eval-clock reset that the model swap already pays for. The third option is what shipped: name the exclusions, say which ones matter, and make a contract test hold the list closed. The list now costs one line per knob and cannot go stale in silence. Authority: Fowler ([../../../.github/agents/fowler.agent.md](../../../.github/agents/fowler.agent.md)).
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -135,6 +159,10 @@ Digesting the model's own serialization rather than a hand-written concatenation
 | Hand-assemble the digest input from a list of names | A second enumeration to keep in step with the model, and forgetting an entry is silent by construction. | Fowler |
 | Store the prompt text on the ledger row | Puts text nothing downstream reads into a permanent committed record; the digest answers the only question asked of it. | Andre |
 | Write an eval row for an unchanged item | Makes every trend on the dashboard a function of how often the job ran rather than of how the summaries changed. | Andre |
+| Digest the five blind spots now | Every fingerprint resets when they enter the stamp, and row 4 of the Qwen3.5-9B swap plan resets them all anyway. Two resets buy one. | Fowler |
+| Put all ten undigested knobs on the ledger row the way `host_cpu` is | `host_cpu` earns its column because it explains a violation. A KV cache setting explains nothing on its own, and ten more columns cost every future row. | Fowler |
+| Correct the fields and leave the docstring | The fields were never the defect. The scope statement already said an undeclared field is not covered; only the docstring claimed otherwise. | Fowler |
+| Delete the false sentence and add nothing | The gap stays real and stays unwritten, so the next reader re-derives it from the argv list. | Fowler |
 
 ## See also
 
