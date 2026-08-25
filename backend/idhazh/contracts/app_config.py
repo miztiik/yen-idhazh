@@ -235,6 +235,14 @@ class InferenceConfig(Model):
         default=True,
         description="If false, emit --no-warmup. True lets llama-server warm at startup.",
     )
+    metrics: bool = Field(
+        default=True,
+        description=(
+            "If true, emit --metrics and llama-server serves its counters on "
+            "/metrics. On by default: without them a run cannot say how close it came "
+            "to n_ctx, and a concurrency result has no busy-slot number to read it by."
+        ),
+    )
     flash_attention: Literal["on", "off"] | None = Field(
         default=None,
         description="llama-server -fa. None omits the flag and leaves the runtime on auto.",
@@ -766,6 +774,20 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-25T19:30",
+            change="Added models.inference.metrics, on by default.",
+            why=(
+                "A run could not say how close it came to the context wall, and no "
+                "number said whether more than one slot was ever busy. llama-server "
+                "counts both already and only publishes them under --metrics. The flag "
+                "is a knob rather than a workflow literal (Rule #6), and the endpoint "
+                "it opens is llama-server's own loopback surface inside a CI job, so no "
+                "reader is served by it and Rule #1 is untouched. Additive with a "
+                "default, so an older config still validates and no read-side migration "
+                "is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-25T18:00",
             change="Added console.chart_width.",

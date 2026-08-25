@@ -80,12 +80,24 @@ thing at a time through config, not through workflow literals:
 - `n_ctx`, `n_threads`, `n_batch`, `n_ubatch`
 - `n_parallel`, `n_threads_batch`
 - `startup_warmup`
+- `metrics`
 - `flash_attention`
 - `load_mode`
 - `cache_type_k`, `cache_type_v`
 - `priority`, `poll`
 - `temperature`, `top_p`, `seed`, `thinking`, `max_output_tokens`
 - `request_timeout_minutes`
+
+`metrics` is on by default and emits `--metrics`, which makes llama-server
+publish its counters on `/metrics`. Two of them are what a run is read by:
+`llamacpp:n_tokens_max` is the highest context the server ever saw, so it says
+how close the day came to `n_ctx`; `llamacpp:n_busy_slots_per_decode` is the
+average number of slots busy per decode, so it says whether batching happened at
+all. Without the second, a concurrency measurement that shows no gain cannot
+separate "more slots did not help" from "more slots were never used". The
+endpoint is llama-server's own loopback surface inside a CI job. No reader
+reaches it, so Rule #1 is untouched. `digest.yml` reads it once at the end of
+each `work` job and keeps the raw body in that shard's runtime artifact.
 
 `n_parallel: null` and `n_parallel: 1` are not the same runtime. `null` omits
 `-np`, so llama.cpp picks its own slot count and reports unified KV; any

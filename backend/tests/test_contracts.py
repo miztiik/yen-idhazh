@@ -158,6 +158,22 @@ def test_a_fresh_clone_runs_on_the_defaults() -> None:
     assert minimal.retention.dry_run is True
 
 
+def test_the_runtime_counters_are_on_without_being_asked_for() -> None:
+    """A run that did not count is a run that cannot say how close it came.
+
+    `n_ctx` is 8192 and llama-server publishes the high watermark only under
+    `--metrics`. Off by default would mean the number exists on the runs nobody
+    thought to switch it on for, which is every ordinary day.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    models = committed.models.model_dump()
+    del models["inference"]
+    fresh = AppConfig.model_validate({"models": models})
+
+    assert fresh.models.inference.metrics is True, "a fresh clone must count"
+    assert committed.models.inference.metrics is True, "the committed config must count"
+
+
 def test_the_console_chart_width_is_a_knob_the_frontend_agrees_with() -> None:
     """A prerendered chart has no element to measure, so the width is given to it.
 

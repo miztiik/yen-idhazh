@@ -101,6 +101,9 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
         "load_mode": Undigested(
             False, "mmap and mlock move where the weights sit, not what they hold."
         ),
+        "metrics": Undigested(
+            False, "Exposes an endpoint. It counts the decode, it does not change one."
+        ),
         "poll": Undigested(
             False, "How the runtime waits for work. It calculates nothing."
         ),
