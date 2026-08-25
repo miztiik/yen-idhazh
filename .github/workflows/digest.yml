@@ -37,6 +37,10 @@ on:
           - '2'
           - '3'
           - '4'
+          - '5'
+          - '6'
+          - '7'
+          - '8'
       faithfulness:
         description: 'Run the faithfulness scorer (slow first run - downloads weights)'
         type: boolean
@@ -88,10 +92,16 @@ jobs:
           DATE="${{ inputs.date }}"
           [ -n "$DATE" ] || DATE=$(date -u +%F)
           SHARDS="${{ inputs.shards }}"
+          # The empty-input default is what every scheduled run gets, and it
+          # stays at four until an authorized eight-shard dispatch is measured.
+          # The ceiling below moved to eight; this line is the dispatch rule,
+          # not the ceiling, and an unmeasured number may not move it (Rule #10).
           [ -n "$SHARDS" ] || SHARDS=4
-          SHARD_PATTERN='^[1-4]$'
+          # Eight, not four. Rule #2 allows 20 concurrent jobs, so the old
+          # `^[1-4]$` was the only thing holding the fan-out down.
+          SHARD_PATTERN='^[1-8]$'
           if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
-            echo "shards must be an integer from 1 through 4" >&2
+            echo "shards must be an integer from 1 through 8" >&2
             exit 1
           fi
           # A scheduled run has no inputs at all, so every one of these is the
@@ -142,7 +152,10 @@ jobs:
     timeout-minutes: 330
     strategy:
       fail-fast: false
-      max-parallel: 4
+      # Matches the shard ceiling, so a dispatch at the ceiling runs every
+      # worker at once. Eight workers plus the router is well inside Rule #2's
+      # 20 concurrent jobs, and `route` waits on `work` rather than racing it.
+      max-parallel: 8
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
@@ -159,8 +172,9 @@ jobs:
           name: plan
           path: backend/var/run/${{ needs.plan.outputs.date }}/
 
-      # Restored once per JOB, not once per run. Four workers pay this four
-      # times, and it is the single largest fixed cost in the pipeline.
+      # Restored once per JOB, not once per run. Every worker pays it, and it is
+      # the single largest fixed cost in the pipeline. Every shard shares this
+      # one key, so raising the shard count adds restores, never cache bytes.
       #
       # The key names the build. The fetch below only runs on a miss, so without
       # the build in the key a cached binary stays frozen until the entry is
@@ -177,8 +191,9 @@ jobs:
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
         # One pinned build, checked against its digest before anything runs from
-        # it. Authenticated, because four shards and the router all ask at once
-        # and anonymous api.github.com allows 60 requests an hour.
+        # it. Authenticated, because every shard and the router ask at once and
+        # anonymous api.github.com allows 60 requests an hour - a ceiling of
+        # eight shards makes that nine askers on a cold cache, not five.
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
