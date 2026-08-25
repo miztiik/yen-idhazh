@@ -1,0 +1,92 @@
+{
+  "date": "2026-08-25",
+  "runs": [
+    {
+      "commit_sha": "2aa03f52b833b3baf88408da7295eb714df431fc",
+      "completed_at": "2026-08-25T06:05:32Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "6d2eaa815750e6100bc12c230a8045cf6e7dbfd58784449d28c20dee78be18bd"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "9d5cd6a5c08cf6d459b2d52799e8e7d698d8f94df1910ecb221061b144040c8d"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "8569e902b23790d66dac8b24135989013279a4b3805e5d64c1b5696272565f0c"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 55,
+      "items_planned": 200,
+      "items_prefiltered": 0,
+      "items_routed": 0,
+      "items_skipped": 0,
+      "items_succeeded": 145,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "sha256": null
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 1,
+      "note": null,
+      "pipeline_fingerprints": [
+        "969b1917d38f4b44344dc818559122547bcbaf1aa37c836fbfc2eec6d1d2b945"
+      ],
+      "route_ms": null,
+      "run_id": "2026-08-25-1",
+      "runner": "ubuntu-latest",
+      "site_bytes": 2642515,
+      "site_files": 29,
+      "source_list_stale": false,
+      "started_at": "2026-08-25T03:15:08Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 50,
+          "published": 41
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 35,
+          "published": 29
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 36,
+          "published": 17
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 45,
+          "published": 29
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 34,
+          "published": 29
+        }
+      ]
+    }
+  ],
+  "version": "2026-08-24T23:10"
+}
