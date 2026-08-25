@@ -19,6 +19,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | ESCALATE triggers | (1) Any HARD gate in row 10 fails - stop, leave the 8B configured, report the failing metric and its measured value. (2) The measured 9B worst-case shard exceeds 330 minutes after row 7 - stop (Rule #2); the lever is `run.safety_ceiling_per_run`, never `timeout-minutes`. (3) Row 12 rollout finds the served alias and the served bytes disagree. (4) Any row would rewrite a published payload. |
 | Chosen strategy | Land identity and capacity first, qualify on machine gates second, swap in one reversible value-only commit third. Ruled by Fowler (commit ordering) and Carmack (capacity), with Andre owning the gate set. |
 | Human quality comparison | Owner ruling 2026-08-25: Andre option (c). Ship on machine gates; `evaluation.spot_checks_per_week` is the standing alarm. No blind pairwise session is scheduled, no human selector is built, and row 13 records that no human comparison was made. |
+| Console audience | Owner correction 2026-08-25: the console is for the application developer and operator. The digest page is the only reader-facing surface. Plain, self-descriptive labels remain mandatory everywhere (`CLAUDE.md` section 0b) - that is house style, not an audience concession. Row 9 was re-ruled on the corrected premise. |
 | Shared-file rows | Rows 1, 4, 5, 6 and 7 all touch `backend/idhazh/cli.py`, `config/idhazh.json` or `.github/workflows/digest.yml` in different regions. The orchestrator rebases each branch on the advanced `main` before its merge rather than assuming a clean base. |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3. |
 
@@ -67,7 +68,7 @@ supersedes. Re-point those citations here when the collisions are resolved.
 | 6 | Truthful fingerprint inputs, and a ledger that has rows | 1 | B | PENDING | - | - | - |
 | 7 | Enforce `shard_size` and wire `--cap` | 1 | B | PENDING | - | - | - |
 | 8 | Console: the Charts table | 4 | C | PENDING | - | - | - |
-| 9 | Console: what the model did, in plain words | 8 | D | PENDING | - | - | - |
+| 9 | Console: what the model did | 8 | D | PENDING | - | - | - |
 | 10 | Qualify the candidate on machine gates | 2, 5, 6, 7 | C | PENDING | - | - | - |
 | 11 | Adopt the 9B and retire the 8B | 10 | E | PENDING | - | - | - |
 | 12 | Wipe the cache and verify the first 9B day | 11 | F | PENDING | - | - | - |
@@ -282,9 +283,10 @@ supersedes. Re-point those citations here when the collisions are resolved.
   | 2 | A model swap mark on the console charts now | The ledger must tell the truth before a chart draws it. Deferred to row 13's re-read | Andre |
   | 3 | A model filter or legend on the console | A filter over two values hides data and saves nobody any work | Jony |
 
-## Row #9 - Console: what the model did, in plain words
+## Row #9 - Console: what the model did
 
-- **Scope:** Report what the summarizer actually did on the day's own articles, under one heading, with every metric named so a non-technical person understands it.
+- **Scope:** Report what the summarizer actually did on the day's own articles, under one heading, in three blocks, with every label self-descriptive and free of jargon.
+- **Audience:** the application developer and operator. Not the digest reader. Labels stay plain because `CLAUDE.md` section 0b binds every string in this repo, not because the audience is non-technical.
 - **Files touched:**
   - `frontend/src/routes/console/+page.server.ts`
   - `frontend/src/routes/console/+page.svelte`
@@ -292,48 +294,74 @@ supersedes. Re-point those citations here when the collisions are resolved.
   - `frontend/tests/` - a browser assertion
   - `docs/architecture/publishing/telemetry-series.md`
   - `docs/concepts/design-system.md` - the label set, so the wording is settled once
-- **The columns.** Labels ruled by Reader, placement ruled by Jony. Every figure is the day's own articles.
+- **Structure.** The throughput candle stays first, unmoved. Below it, three tables under one heading, one row per day, day first. Each block carries one stamp line naming the model, the scorer version, and the first 12 characters of the fingerprint for the newest day.
 
-  | Label on screen | Line under it | Printed as | Source |
-  | --- | --- | --- | --- |
-  | Summaries today | - | count | `state/scores.csv` rows for the day |
-  | Marked "not sure" | How many of today's summaries we told you not to trust. | count out of the day | `band` |
-  | Numbers not in the article | The summary had a figure. The article did not. | count out of the day | `unsupported_numbers` |
-  | "Maybe" told as fact | The article said it might have happened. The summary said it did. | count out of the day | `hedge_dropped` |
-  | Article read only in part | The article was too long, so the machine read the start and stopped. | count out of the day | `truncation_flagged` |
-  | Copied, not rewritten | How much of a normal summary is lifted word for word. | whole percent, median item | `extractiveness`, `verbatim_run` |
-  | Time to write one | How long the machine takes on one article. | whole seconds, median item | `summarize_ms` |
-  | Model minutes | - | whole minutes | `summarize_ms` summed |
-  | Failed | - | count | `state/item-health/` outcome |
+  **Quality**
 
-- **Acceptance gates:** `svelte-check` 0/0; build; bundle gate; browser suite; the page renders with the score data absent (`CLAUDE.md` section 12 step 5); zero new console `[error]` and zero new `404`; a browser assertion that no 0-to-1 value and no internal column name appears under the heading.
-- **Oracle:** For the canary day, every printed cell equals the value computed directly from that day's committed `state/scores.csv` and `state/item-health/` rows, and no cell prints a decimal.
+  | Label on screen | Source | Printed as |
+  | --- | --- | --- |
+  | Summaries today | `state/scores.csv` rows for the day | count |
+  | Faithfulness, out of 100 | `hhem` | whole number out of 100 |
+  | Lost by reading only part | `hhem_delta` | whole number out of 100 |
+  | Marked "not sure" | `band` | count out of the day |
+  | Main point left out | `coverage` below `lead_coverage_min` | count out of the day |
+  | Numbers not in the article | `unsupported_numbers` | count out of the day |
+  | "Maybe" told as fact | `hedge_dropped` | count out of the day |
+  | Copied, not rewritten | `extractiveness`, `verbatim_run` | whole number out of 100, median item |
+  | Article read only in part | `truncation_flagged` | count out of the day |
+
+  **Cost**
+
+  | Label on screen | Source | Printed as |
+  | --- | --- | --- |
+  | Summaries today | row count | count |
+  | Time to write one | `summarize_ms` | whole seconds, median item |
+  | Reading speed, tokens a second | `input_tokens` over `prefill_ms` | rate |
+  | Writing speed, tokens a second | `output_tokens` over `decode_ms` | rate |
+  | Model minutes | `summarize_ms` summed | whole minutes |
+  | Time to check one | `score_ms` | whole seconds, median item |
+
+  **Went wrong**
+
+  | Label on screen | Source | Printed as |
+  | --- | --- | --- |
+  | Items planned | run manifest `items_planned` | count |
+  | Failed | `state/item-health/` outcome | count |
+  | Needed a second try | `attempt` above 1 | count |
+  | Same input, different words | `determinism_violation` | count |
+  | Text looked like page furniture | `extraction_suspect` | count |
+
+- **Acceptance gates:** `svelte-check` 0/0; build; bundle gate; browser suite; the page renders with the score data absent (`CLAUDE.md` section 12 step 5); zero new console `[error]` and zero new `404`; a browser assertion that **no raw 0-to-1 value and no internal column name** appears under the heading.
+- **Oracle:** For the canary day, every printed cell equals the value computed directly from that day's committed `state/scores.csv`, `state/item-health/` and run-manifest rows.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | One heading, `What the model did`, placed above the existing throughput candle. The score table moves under it. No fourth console section is added. | Jony |
-  | 2 | Every number is a count of today's items, not a score. No 0-to-1 value reaches the screen. No decimals. | Reader |
-  | 3 | `hhem` never prints. It cannot be said plainly, and a number a person cannot act on does not earn a column. It keeps deciding the "not sure" flag. | Reader |
-  | 4 | Quality is a table, never a line. A line invites a trend that is not there. | Jony |
-  | 5 | The `Summaries today` column is mandatory beside every quality column. A mean over four articles is not a measurement. | Jony |
-  | 6 | One line under the heading, in the reader's words: the articles change every day, so a dip can be the news, and every figure was measured the day it ran. | Reader, Jony |
+  | 1 | One heading, `What the model did`, above the existing throughput candle. Three tables under it: quality, cost, went wrong. Not three headings, not a fourth console section, not a separate page. | Jony |
+  | 2 | A raw 0-to-1 value never reaches the screen. A score prints as a whole number out of 100. | Jony |
+  | 3 | Counts print whole. Rates and times print whole, except a value below 10, which takes one decimal - `4.2` seconds is a signal and `4` hides it. | Jony |
+  | 4 | No mean prints without the item count beside it. A mean over four articles is not a measurement. | Jony |
+  | 5 | Quality is a table, never a line. A line invites a trend that is not there. | Jony |
+  | 6 | Reading rate and writing rate, never four raw token and millisecond fields. Two rates are the lever; the raw fields are not. | Jony |
   | 7 | Static benchmark figures never appear on the console. They stay in `docs/reference/measurements.md`, reached by a link. | Jony |
   | 8 | The throughput candle stays, unmoved, first inside the section. It is the only thing on the page that draws a spread, and the swap mark lands there and nowhere else. | Jony |
-  | 9 | A swap is one divider row in the table carrying the date and the new model id. No arrow, no delta, no claim of cause. Percent-shift text is suppressed across the boundary. | Jony |
-  | 10 | Degraded states: no summaries prints no row and a gap in the candle, never a zero; the scorer off prints `-` in quality cells while speed cells still print, never `0.000`; a one-item day prints one tick and no box. | Jony |
-  | 11 | `Copied, not rewritten` is kept over Jony's drop list. Reader ruled it answers a question a person can act on rather than exposing the scorer's working. | Reader, over Jony |
+  | 9 | Model identity appears twice: a divider row inside each table carrying the date and the new model id, and the per-block stamp line. No filter, no legend, no per-model split series. | Jony |
+  | 10 | Degraded states: no summaries prints no row and a gap in the candle, never a zero; the scorer off prints `-` in quality cells while cost cells still print, never `0.000`; a one-item day prints one tick and no box. | Jony |
+  | 11 | One line under the heading: the articles change every day, so a dip can be the news, and every figure was measured the day it ran. | Jony |
+  | 12 | Nothing in this section reaches the reader-facing digest page. | Jony |
 
+- **Overturned on 2026-08-25.** Reader ruled this row on the premise that the console is reader-facing. The owner corrected that premise; Jony re-ruled. Overturned: `hhem` never prints; no 0-to-1 value at all; `prefill_ms` and `decode_ms` dropped; `hhem_delta`, `scorer_version` and `score_ms` dropped as scorer-about-scorer; `determinism_violation` dropped as a build alarm. Newly admitted: `coverage`, `extraction_suspect`, `attempt`. Kept from Reader: no overall grade, quality as a table, the item count beside every quality figure, static numbers off the console, plain labels with no internal column names on screen, `Copied, not rewritten`, and nothing reaching the digest page.
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
-  | 1 | One overall score, such as "92 percent accurate" | Unfalsifiable to a reader, invites trust they cannot check, and worth nothing the day they catch one wrong summary. Six honest counts survive that; one grade does not | Reader |
+  | 1 | One overall grade, such as "92 percent accurate" | An average of faithfulness, cost and reliability moves under no single lever, so it names nothing an operator can pull | Reader, upheld by Jony |
   | 2 | A static-versus-production comparison, a dashed bench line on the candle, or an expected-against-actual column | Two machines and two workloads; any gap reads as a regression nobody measured | Jony |
-  | 3 | Separate reading-time and writing-time columns (`prefill_ms`, `decode_ms`) | For the person tuning the machine, not the person judging it. The candle already carries it | Reader |
-  | 4 | Length metrics on screen (`coverage`, `compression`, word counts) | The reader can see the length; it is on the page | Reader |
-  | 5 | `hhem_full`, `hhem_delta`, `evidential_density`, `speculative_density`, `scorer_version`, `score_ms` | Scores about the scorer, not about the digest | Reader, Jony |
-  | 6 | A `determinism_violation` column | A build alarm. When it fires it moves the "not sure" count, which is where a reader would look | Reader |
+  | 3 | A per-item table listing every item and its scores | The ledger is a committed CSV that better tools already read. A paginated copy duplicates the file and grows the bundle for nothing | Jony |
+  | 4 | `hhem_full` on its own, `compression`, and the word-count columns | Only the delta is a lever, and a bad length is already a failure code | Jony |
+  | 5 | `evidential_density`, `speculative_density` | No normal value exists for either yet, so a printed number could not be read (Rule #10) | Jony |
+  | 6 | `cached_tokens` | The two rates already show it | Jony |
+  | 7 | A model filter or legend on the console | A filter over two values hides data and saves nobody any work; the divider row and the stamp line already name the model | Jony |
 
 ## Row #10 - Qualify the candidate on machine gates
 
