@@ -1103,43 +1103,27 @@ after both. See [../architecture/publishing/layout.md](../architecture/publishin
 
 ## First-load JavaScript per route
 
-Hardware: Intel Core i7-1265U, Windows, Node 24.12. Date: 2026-08-25. Method:
-`npm run build`, then `frontend/scripts/bundle-gate.mjs` gzips each module a
-route declares `rel="modulepreload"` at level 9 and sums them. Each module is
-compressed on its own because that is how it arrives - one response, one
-encoding. The script is the gate, so the number that is quoted is the number
-that fails a build.
+Hardware: Intel Core i7-1265U, Windows. Date: 2026-08-25. Method: `npm run
+build`, then `frontend/scripts/bundle-gate.mjs` gzips each module a route
+declares `rel="modulepreload"` at level 9 and sums them - per file, never over a
+concatenation. A concatenation is order-sensitive, so the number would move when
+the bundler reorders the preloads, and it would under-report the wire cost. The
+script is the gate, so the number quoted is the number that fails a build.
 
-**The measurement has a floor of about 12 B.** Four builds of byte-identical
-source produced `/` at 49,193 / 49,198 / 49,198 / 49,205 B. SvelteKit stamps the
-app version into the entry chunk, so two builds of one tree are never quite the
-same bytes. A difference smaller than this is not a result.
+**The per-route bytes are deliberately not copied here.** They live in
+[frontend/bundle-baseline.json](../../frontend/bundle-baseline.json), one record
+per route class carrying the byte count, the date it was measured and a sentence
+saying what those bytes buy. Two copies of one number are free to drift
+(Rule #4), and the copy the gate reads is the one that decides a build. The
+toolchain is pinned in that file, because `gzip -9` is deterministic for given
+input bytes: the CPU is irrelevant and the Node major is not.
 
-Before is the tree at `8867518`. After adds `d3-scale`, `d3-array` and
-`frontend/src/lib/charts/frame.ts`. Both columns are one build; the spread is
-the range over four after-builds.
+| Quantity | Value | Basis |
+| --- | --- | --- |
+| Build-to-build spread, route `/` | **12 B** | Four builds of byte-identical source, 2026-08-25, this repo: 49,193 / 49,198 / 49,198 / 49,205 B. SvelteKit stamps the app version into the entry chunk, so two builds of one tree are never quite the same bytes. A difference smaller than this is not a result. |
+| Gate tolerance, every route, both directions | **64 B** | **Derived, not measured**: 5.3x the observed range. Four samples underestimate a true range, so the multiple is the margin. A build that ever fails inside 64 B re-derives this from more builds and more routes rather than nudging it. |
+| Node 22 against Node 24, same build | **0 B on all seven routes** | Measured 2026-08-25 on one build, i7-1265U, Windows. Node 22.23.2 (zlib `1.3.1-e00f703`) and Node 24.12.0 (zlib `1.3.1-470d3a2`) summed identically to the byte on every route class. The zlib build hashes differ and the output does not, so a baseline taken on a developer machine reproduces on the CI runner. This is two Node majors, not a proof about a third. |
 
-| Route class | Before | After | Spread over 4 builds | Verdict |
-| --- | --- | --- | --- | --- |
-| `/` | 49,201 B | 49,198 B | 12 B | unchanged |
-| `/<date>/` | 49,071 B | 49,068 B | 12 B | unchanged |
-| `/<date>/<topic>/` | 49,164 B | 49,161 B | 11 B | unchanged |
-| `/archive/` | 44,476 B | 44,474 B | 7 B | unchanged |
-| `/evals/` | 41,883 B | 41,881 B | 8 B | unchanged |
-| `/404` | 40,925 B | 40,923 B | 6 B | unchanged |
-| `/console/` | 54,180 B | 54,179 B | 6 B | unchanged |
-
-Every before-figure sits inside the after-range, so no route gained first-load
-JavaScript.
-
-**The console delta is zero by construction, not by arithmetic**: nothing draws
-through the frame yet, the module is tree-shaken out of every bundle, and
-`scaleLinear` appears in no built file. The dependency is declared, locked and
-priced; the bytes are spent by the row that draws through it, against the
-ceilings in `bundle-gate.mjs` - the measured baseline above plus 1 KB on a
-reader route and 10 KB on the console.
-
-The console's own route chunk is `nodes/4.*.js`: 38,308 B raw, 12,746 B gzipped.
 The whole build is 133.8 MB against the 1 GB Pages ceiling (Rule #2).
 
 ## Feed availability
