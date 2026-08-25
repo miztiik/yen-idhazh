@@ -210,17 +210,11 @@
 		</div>
 	{/if}
 
-	{#if data.timingDays.length === 0}
-		<p class="mt-10 text-[0.9375rem] text-text-secondary">
-			No item timing has been recorded yet. The item-health ledger fills as runs publish.
-		</p>
-	{:else}
-		<StageTimings
-			days={data.timingDays}
-			height={data.console.chart_height}
-			width={data.console.chart_width}
-		/>
-	{/if}
+	<StageTimings
+		days={data.timingDays}
+		height={data.console.chart_height}
+		width={data.console.chart_width}
+	/>
 
 	{#if data.throughputDays.length > 0}
 		<ThroughputTrend

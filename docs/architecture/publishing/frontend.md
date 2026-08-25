@@ -285,8 +285,11 @@ than a law. A chart whose domain is already decided by something else turns it
 off, because rounding a fixed domain outward moves every mark on the chart to
 buy a tick label that reads the same either way - which is how the compression
 scatter gains a labelled y axis and still puts every point where it already
-was. That chart's x axis is the only user of the log rule: whole decades, and
-the eight steps between them. The tick values come from `d3` either way, which
+was. The log rule has two users: the compression scatter's x axis and the
+stage-timing y axis, both drawing whole decades and the eight steps between
+them. Which rule a chart takes is decided by the extent it draws, and the
+threshold is stated under stage timings below. The tick values come from `d3`
+either way, which
 is the part hand-rolling gets wrong. Before the frame, each chart chose its own
 `viewBox` and let the browser fit it to the column, and a `viewBox` is a scale
 factor rather than a unit. Measured
@@ -322,12 +325,58 @@ Measured 2026-08-24 on the committed ledger: the console document went from
 
 **Stage timings are one trend chart, not a list per day.** Four polylines over a
 calendar x axis, oldest on the left, sharing the run strip's own sparse-label
-arithmetic. A day with no census breaks the line rather than closing the gap,
-because "no data" and "no time spent" are different facts, and a single day
-draws dots rather than lines. The legend prints the newest day's value per
-stage. The old block was one group of four bars per day - about 150 rows at a
-30-day window, and no trend - and "is it getting slower" is the only question
+arithmetic. The old block was one group of four bars per day - about 150 rows at
+a 30-day window, and no trend - and "is it getting slower" is the only question
 the section is asked.
+
+**Its y axis is decades, and that is where the domain rule has its threshold.**
+The padded, `.nice()`, non-zero-anchored linear domain above stands for series
+of comparable size. **It yields to a decade-rounded log domain when the drawn
+extent spans more than two decades.** Measured 2026-08-25 on the committed
+ledger, one linear axis over these four gave `summarize` 78.1% of the plot
+height, `score` 2.15%, `fetch` 0.38% and `extract` 0.03%: one stage set the
+domain and the other three drew flat on the baseline. The same four values on
+the decade axis are 81.4%, 50.2%, 35.2% and 12.9%, so a tenth added to `extract`
+and a tenth added to `summarize` are the same vertical move and the axis
+measures change at every size. The composition survives the change - `summarize`
+still sits on top, `extract` still at the bottom, and the gap still reads as
+about three decades - so one instrument answers both questions. Decade gridlines
+run full width and are labelled, crossing from milliseconds to seconds at
+1000 ms; the eight steps inside each decade are unlabelled stubs on the y axis
+only, because 32 full-width rules is a hatch rather than an axis, and without
+them a log axis reads as a linear one with odd numbers on it.
+
+**A series is deleted when it carries no information, never when the axis is
+failing to show the information it carries.** `extract` at 42 ms was worth
+deleting from the linear chart, where it was a flat line at the bottom. That was
+a fact about the axis, not about the stage: on the decade axis it gets the same
+vertical resolution as `summarize`, so a 3x extractor regression - what a source
+changing its markup looks like - is as visible as a 3x model regression, and
+nothing else on the console carries that signal.
+
+**Three facts about a missing number, three renderings, never collapsed.** A day
+with no census breaks the line, because "no data" and "no time spent" are
+different facts. A day whose value is zero or negative breaks it identically and
+is never clamped to the axis floor - a clamped point draws a plunge to the
+bottom of the plot, which states that the stage got a thousand times faster.
+Then the gap is named in type under the legend, one line per affected stage,
+because a hole in a line is a mystery: `No time recorded for extract on 3 days
+in this window.` A stage with no number anywhere in the window leaves the plot
+and the legend together and says so. A run of one day draws a dot, so a stage
+that runs on alternate days is drawn rather than absent. With no days at all the
+section is one line.
+
+**The legend prints the newest day's value per stage, sorted by that value,
+descending.** The number an operator acts on is today's; a window median moves
+when the operator pans, which is the same defect that rules out indexing each
+stage to its own median. Sorting by the newest day makes vertical position a
+second signal beside colour, for free, and it reorders only when two stages have
+changed places - which is when the operator wants to notice. **Colour stays
+bound to the stage and never to the rank**, so a reorder never repaints a line.
+The chart gains no linear/log toggle: a toggle is an admission that we could not
+decide which axis is correct.
+
+Authority: Jony, 2026-08-25.
 
 ## The bundle gate is a regression detector, not a performance budget
 

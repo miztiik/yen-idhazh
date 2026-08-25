@@ -7,9 +7,9 @@ health and evaluation work, plus the console charts. None was in the scope that
 found it. Defects 11 and 12 were found by running the gates and by opening the
 published day in a browser, not by reading code; 13 and 14 the same way.
 
-**Eleven are closed.** Defect 8 is closed on the item copy and on the day's band
+**Twelve are closed.** Defect 8 is closed on the item copy and on the day's band
 bar. Defect 2 has its instrument built and is waiting on human labels and
-calendar time, which no amount of engineering closes. Defect 13 is open.
+calendar time, which no amount of engineering closes. It is the only one open.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -28,10 +28,10 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 10 | The `route` job hits its 60-minute timeout | 3 | FIXED - 2026-08-24 |
 | 11 | A second run of a day overwrites the first run's charts | 3 | FIXED - 2026-08-24 |
 | 12 | One quantity could fill three bars of a published chart | 2 | FIXED - 2026-08-24 |
-| 13 | One stage is 2600x the others, so a linear timing axis answers for one of four | 2 | **OPEN** |
+| 13 | One stage is 2600x the others, so a linear timing axis answers for one of four | 2 | FIXED - 2026-08-25 |
 | 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | FIXED - 2026-08-25 |
 
-## 13 - One stage is 2600x the others, so a linear timing axis answers for one of four (OPEN)
+## 13 - One stage is 2600x the others, so a linear timing axis answers for one of four (FIXED)
 
 Found 2026-08-25 while putting the console charts on a real coordinate system
 (PR #93). Measured on the committed ledger: `summarize` runs 110.6 s, `score`
@@ -42,10 +42,22 @@ answer "is summarize getting slower" and cannot answer it for anything else.
 
 The padded linear domain was ruled deliberately for that chart and is correct
 for stages of comparable size, so this is not a regression to revert. The two
-candidate fixes are a log y axis - `logAxis` already exists in
+candidate fixes were a log y axis - `logAxis` already exists in
 `frontend/src/lib/charts/frame.ts` and the compression chart uses it - or one
-small multiple per stage. Choosing between them is a Jony call, because it is a
+small multiple per stage. Choosing between them was a Jony call, because it is a
 question about what the chart is for, not about the maths.
+
+**Fixed 2026-08-25 with the log y axis.** Jony ruled one chart, four lines, all
+four stages: the four series are the same quantity, in the same unit, over the
+same items, so small multiples would say every stage matters equally and could
+never show a crossing. Measured on the same four values after the change:
+`summarize` 81.4% of the plot height, `score` 50.2%, `fetch` 35.2%, `extract`
+12.9%, against 78.1 / 2.15 / 0.38 / 0.03 before. Deleting `extract` was refused,
+and the refusal is the rule that came out of the row: a series is deleted when it
+carries no information, never when the axis is failing to show the information
+it carries. `/console/` first-load JavaScript went from 63,943 B to 64,438 B,
+495 B for the decade furniture and the gap handling. Recorded in
+[`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md).
 
 ## 14 - The canary day has no scored item, so the compression chart is only ever tested empty (FIXED)
 
@@ -371,6 +383,7 @@ and the proof is an exhaustive test over every index subset.
 | 8 | `medium` printed "Mostly matches the source" - a grade a reader can do nothing with. Both things that cap an item at `medium` were computed and neither reached the page. | 2026-08-24. `score.verdict()` returns the band and the one reason together; `band()` is a wrapper with no logic. `DigestItem.band_reason` is a closed identifier and the site owns the sentence. A day published before this renders exactly as it did. Browser-smoked at 420px across `/`, a day, a vertical, the archive and the empty state. **Closed fully 2026-08-24** by deleting the day-level band bar, which still printed the retracted sentence at the top of the page - above the item that had abandoned it. Recorded in [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md). |
 | 9 | Both commit steps in `digest.yml` ran `git pull --rebase --autostash`. A rebase will not start on a dirty tree, and run `32671663130` lost a finished day to one CRLF file. | 2026-08-24. Each loop prints what is dirty and discards it before the rebase; untracked files are left alone; `--autostash` is gone. A workflow contract test pins the shape in both jobs. CI does not run `digest.yml`, so the next change there still needs a dispatched run. |
 | 10 | `route` lands between 51 and 60+ minutes against a 60-minute bound, and nothing recorded what it spent. | 2026-08-24. Measured on run `32742672105`: 47 s fixed cost, a 3155 s stage, 149 items at 21.0 s each, 15 charts and 134 nothings. Per-item inference owns the time and 90% of it produces nothing, so the router now decides an item on its own facts when no enabled kind could survive, gets a request timeout of its own instead of borrowing the summarizer's 150-minute one, and warns at `run.route_budget_minutes`. A live bug fell out of the ruling: `fact_index` was never deduplicated, so one quantity could fill three bars and publish a fabricated comparison. Recorded in [`docs/architecture/publishing/visuals.md`](../docs/architecture/publishing/visuals.md) and [`docs/reference/measurements.md`](../docs/reference/measurements.md). |
+| 13 | Four stage timings shared one linear y axis, so the slowest stage set the domain and the other three drew flat on the baseline. Measured: 78.1 / 2.15 / 0.38 / 0.03 percent of the plot height. | 2026-08-25. One chart, four lines, a decade y axis: 81.4 / 50.2 / 35.2 / 12.9 percent on the same values. Decade gridlines labelled across ms to s, unlabelled stubs at the eight steps inside each decade, a zero drawn as a gap and never clamped to the axis floor, and the legend sorted by the newest day descending. The padded linear rule stands for series of comparable size and yields at two decades of drawn extent. Recorded in [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md). |
 
 ## See also
 
