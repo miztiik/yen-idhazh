@@ -24,9 +24,11 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.export import CONTRACTS, expected_filenames, export
 from idhazh.contracts.item_health import (
+    FAILURE_CODE_STAGES,
     SOURCE_NEUTRAL_FAILURE_CODES,
     FailureCode,
     ItemHealthRow,
+    ItemStage,
 )
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
@@ -250,12 +252,37 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 12
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 13
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+def test_a_prompt_that_did_not_fit_is_our_budget_and_not_the_sources_fault() -> None:
+    """The article was long. The context window and the truncation cap are ours."""
+    assert FailureCode.CONTEXT_EXCEEDED in SOURCE_NEUTRAL_FAILURE_CODES
+    assert FAILURE_CODE_STAGES[FailureCode.CONTEXT_EXCEEDED] == frozenset({ItemStage.SUMMARIZE})
+
+
+def test_an_item_health_row_written_before_the_context_code_still_reads() -> None:
+    """Section 11's release blocker for an additive enum member.
+
+    A row this month's ledger already holds carries the previous schema stamp
+    and a code minted before today. It must still load, and it must still read
+    as source-neutral, or a committed ledger stops parsing on the day the
+    vocabulary grows.
+    """
+    row = ItemHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "summarize-model-unreachable.json")
+    )
+
+    assert row.version == "2026-08-24T18:30"
+    assert row.version != ItemHealthRow.schema_version()
+    assert row.code is FailureCode.MODEL_UNREACHABLE
+    assert row.counts_against_source is False
+    assert ItemHealthRow.from_csv_row(row.csv_row()) == row
 
 
 def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None:

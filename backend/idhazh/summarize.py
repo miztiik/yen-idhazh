@@ -57,6 +57,18 @@ _MAX_CHARS_PER_WORD: Final = 12
 _THINK = re.compile(r"<think>(.*?)</think>", re.DOTALL | re.IGNORECASE)
 _FENCED_JSON = re.compile(r"^```(?:json)?\s*(.*?)\s*```$", re.DOTALL)
 
+# Why there was no reply to parse. One sentence per cause, because the operator
+# reading a failed item needs to know whether to restart a process or shorten a
+# prompt, and those are different mornings.
+_NO_REPLY_DETAIL: Final[dict[FailureCode, str]] = {
+    FailureCode.MODEL_UNREACHABLE: (
+        "the model server was unreachable, so there was no reply to parse"
+    ),
+    FailureCode.CONTEXT_EXCEEDED: (
+        "the prompt did not fit the served context window, so the server refused it"
+    ),
+}
+
 
 class SummaryDraft(BaseModel):
     """What the decoder is constrained to emit, and what we agree to believe.
@@ -305,6 +317,7 @@ def to_summary(
     evaluation: EvaluationConfig | None = None,
     duration_ms: int = 0,
     attempt: int = 1,
+    no_reply: FailureCode = FailureCode.MODEL_UNREACHABLE,
 ) -> Summary:
     """One article plus one completion becomes exactly one payload, valid or failed."""
     ask = prompt_config or SummarizeConfig()
@@ -320,9 +333,9 @@ def to_summary(
         return _failed(
             article,
             model_id=model_id,
-            detail="the model server was unreachable, so there was no reply to parse",
+            detail=_NO_REPLY_DETAIL[no_reply],
             generated_at=generated_at,
-            failure_code=FailureCode.MODEL_UNREACHABLE,
+            failure_code=no_reply,
         )
     if completion.hit_the_budget:
         return _failed(

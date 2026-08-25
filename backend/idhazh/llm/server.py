@@ -23,6 +23,29 @@ from idhazh.contracts.app_config import InferenceConfig, ModelRef
 DEFAULT_ENDPOINT: Final = "http://127.0.0.1:8080/v1/chat/completions"
 DEFAULT_HEALTH: Final = "http://127.0.0.1:8080/health"
 
+# llama.cpp maps ERROR_TYPE_EXCEED_CONTEXT_SIZE to HTTP 400 and names it here.
+# The message beside it states the token counts and its wording moves between
+# builds; this identifier does not, so it is what we match on.
+CONTEXT_EXCEEDED_TYPE: Final = "exceed_context_size_error"
+
+
+def is_context_exceeded(body: str) -> bool:
+    """Did the runtime refuse this request because the prompt did not fit?
+
+    `body` is the error envelope of a non-2xx reply, which llama.cpp shapes as
+    `{"error": {"code": ..., "message": ..., "type": ...}}`. Anything that is
+    not that shape, or names another type, is not a recognised context error and
+    stays an unreachable server rather than becoming a new silent class.
+    """
+    try:
+        payload = json.loads(body)
+    except json.JSONDecodeError:
+        return False
+    error = payload.get("error") if isinstance(payload, dict) else None
+    if not isinstance(error, dict):
+        return False
+    return bool(error.get("type") == CONTEXT_EXCEEDED_TYPE)
+
 
 @dataclass(frozen=True, slots=True)
 class Completion:
@@ -76,6 +99,10 @@ def server_argv(
         model.id,
         "--ctx-size",
         str(inference.n_ctx),
+        # Without this the server silently drops the middle of an oversized
+        # prompt and answers about a document it no longer holds, which scores
+        # as a hallucination and names the wrong cause. Refusing is the signal.
+        "--no-context-shift",
         "--batch-size",
         str(inference.n_batch),
         "--ubatch-size",

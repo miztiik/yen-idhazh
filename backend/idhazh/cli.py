@@ -23,6 +23,7 @@ from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
 from pathlib import Path
 from typing import Final, NamedTuple
+from urllib.error import HTTPError
 from urllib.parse import urlsplit
 
 from pydantic import ValidationError
@@ -57,7 +58,7 @@ from idhazh.embed import Embedder
 from idhazh.evals import golden, metrics, score, validation, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
 from idhazh.fingerprint import build_inputs, text_digest
-from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, post
+from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post
 from idhazh.render import asset_relpath, highest_ordinal, render_route
 from idhazh.sanitize import SANITIZER_VERSION
 
@@ -527,8 +528,8 @@ def _fetch_one(
     return article, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
-def _log_model_unreachable(
-    article: Article, *, model_id: str, error: OSError, run_id: str | None
+def _log_no_reply(
+    article: Article, *, model_id: str, code: FailureCode, error: OSError, run_id: str | None
 ) -> None:
     event = {
         "ts": assemble.utc_now(),
@@ -543,7 +544,7 @@ def _log_model_unreachable(
             "model_id": model_id,
         },
         "data": {
-            "failure_code": FailureCode.MODEL_UNREACHABLE.value,
+            "failure_code": code.value,
             "error_type": type(error).__name__,
         },
     }
@@ -567,6 +568,8 @@ def _summarize_one(
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
     )
+    completion: Completion | None
+    no_reply = FailureCode.MODEL_UNREACHABLE
     try:
         request_timeout_seconds = settings.app.models.inference.request_timeout_minutes * 60
         completion = post(
@@ -574,9 +577,18 @@ def _summarize_one(
             endpoint=endpoint,
             timeout=request_timeout_seconds,
         )
+    except HTTPError as error:
+        # Before OSError, which HTTPError subclasses. A server that answered is
+        # not an unreachable one, and the body is the only place it says why it
+        # refused. It is a stream, so read it once.
+        completion = None
+        with error:
+            if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
+                no_reply = FailureCode.CONTEXT_EXCEEDED
+        _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
     except OSError as error:
         completion = None
-        _log_model_unreachable(article, model_id=model_id, error=error, run_id=run_id)
+        _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
     return summarize.to_summary(
         article,
         completion,
@@ -585,6 +597,7 @@ def _summarize_one(
         generated_at=assemble.utc_now(),
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
+        no_reply=no_reply,
     )
 
 

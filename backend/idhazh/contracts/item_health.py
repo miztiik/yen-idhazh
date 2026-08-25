@@ -63,6 +63,7 @@ class FailureCode(StrEnum):
     PAYWALLED = "paywalled"
     UNSUPPORTED_FORM = "unsupported_form"
     MODEL_UNREACHABLE = "model_unreachable"
+    CONTEXT_EXCEEDED = "context_exceeded"
     OUTPUT_TRUNCATED = "output_truncated"
     BAD_SHAPE = "bad_shape"
     LENGTH_OUT_OF_RANGE = "length_out_of_range"
@@ -86,6 +87,7 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.PAYWALLED: frozenset({ItemStage.EXTRACT}),
         FailureCode.UNSUPPORTED_FORM: frozenset({ItemStage.EXTRACT}),
         FailureCode.MODEL_UNREACHABLE: frozenset({ItemStage.SUMMARIZE}),
+        FailureCode.CONTEXT_EXCEEDED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.OUTPUT_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.BAD_SHAPE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LENGTH_OUT_OF_RANGE: frozenset({ItemStage.SUMMARIZE}),
@@ -102,6 +104,7 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.HTTP_RATE_LIMITED,
         FailureCode.TOO_SHORT,
         FailureCode.MODEL_UNREACHABLE,
+        FailureCode.CONTEXT_EXCEEDED,
         FailureCode.NOT_PROSE,
         FailureCode.BOILERPLATE,
         FailureCode.OUTPUT_TRUNCATED,
@@ -116,6 +119,17 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-25",
+            change="Added the context_exceeded summarize failure code.",
+            why=(
+                "A prompt the server refused for length answered with an HTTP 400, and the "
+                "worker recorded model_unreachable - so a running server read as a dead "
+                "one and the fix was sized as an outage instead of a context budget. The "
+                "code is additive and the vocabulary is closed, so a row an earlier run "
+                "wrote still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-24T18:30",
             change=(
