@@ -76,7 +76,7 @@ Live console at a 1057 px window, every `viewBox` read against its `getBoundingC
   | 4 | SSR fallback width comes from a new `console.chart_width` knob, so the prerendered SVG has a real width before any script runs; the client redraws at the measured width. | Jony |
   | 5 | `console.chart_width` is additive with a default: `version` stamped, `changelog` entry appended, no read-side migration needed. | CLAUDE.md section 11 |
   | 6 | New `--series-1` through `--series-4`, a categorical ramp distinct from the semantic `--band-*` ramp. `--source-swatch-*` is not reused: it is a set of pale background tints for `SourceMark`, not stroke colours. | Jony |
-  | 7 | `bundle-gate.mjs` grows a per-route gzipped ceiling beside its existing encoder string check. A repo with no byte gate has no defence against the next 336 KB request. | Carmack, as a condition of approving the dependency |
+  | 7 | `bundle-gate.mjs` grows a per-route gzipped ceiling **on first-load JS only**, beside its existing encoder string check. HTML weight is deliberately excluded: it is owned by the payload work, and a gate spanning both would make two independent workstreams collide. A repo with no byte gate has no defence against the next 336 KB request. | Carmack, as a condition of approving the dependency |
   | 8 | `design-system.md`'s "There is no chart library, on any surface" is amended, not deleted: it becomes "no chart library; a scale library is not a chart library", with the uplot removal left standing. | Jony |
 
 - **Rejected alternatives:**
