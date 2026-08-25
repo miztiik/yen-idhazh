@@ -30,9 +30,9 @@
       "why": "Runtime and shell plus the date-index route. It carries no reader item chunk, because the archive lists days rather than stories."
     },
     "/console/": {
-      "bytes": 63943,
+      "bytes": 64438,
       "measured": "2026-08-25",
-      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them - the console chart work, PR #89."
+      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them, now including the stage-timing decade axis that replaced the shared linear one - its decade list, its minor stubs, and the run splitting that draws a zero as a gap instead of a plunge to the axis floor (+495 B on 2026-08-25; logAxis itself was already on this route)."
     },
     "/evals/": {
       "bytes": 41860,
