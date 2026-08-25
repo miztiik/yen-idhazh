@@ -13,12 +13,12 @@ summary away from being a click target a stranger chose.
 Operator tooling. It never runs in the pipeline and never writes into the
 published tree.
 
-It also writes the run manifest and the feed-health rows that day would have
-produced, plus a run of earlier quiet days so the console's run strip has a real
-time axis to draw. The console draws both, and a console with no data to draw
-can only be tested for the empty state. These are fixtures under
-`backend/var/canary/`, reachable only because the build reads `DIGEST_ROOT` and
-`STATE_ROOT` - a fixture can never reach the real ledger.
+It also writes the run manifest, the feed-health rows and the score ledger that
+day would have produced, plus a run of earlier quiet days so the console's run
+strip has a real time axis to draw. The console draws all of them, and a console
+with no data to draw can only be tested for the empty state. These are fixtures
+under `backend/var/canary/`, reachable only because the build reads
+`DIGEST_ROOT` and `STATE_ROOT` - a fixture can never reach the real ledger.
 """
 
 from __future__ import annotations
@@ -27,19 +27,24 @@ import argparse
 import hashlib
 import json
 import shutil
+from collections.abc import Sequence
 from datetime import date as calendar_date
 from datetime import timedelta
 from pathlib import Path
+from typing import Final, NamedTuple
 
+from idhazh import config
 from idhazh.assemble import build_embeddings, day_dir, to_digest_visual, write_atomic
-from idhazh.contracts.app_config import ModelRef
+from idhazh.contracts.app_config import EvaluationConfig, ModelRef
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
-from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.route import Route, SpecFormat, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.taxonomy import SourceKind
 from idhazh.embed import Embedder
+from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
 from idhazh.render import asset_relpath, render_route
 
@@ -88,14 +93,130 @@ DIAGRAM_SPEC = (
     "    n0 --> n1\n    n1 --> n2"
 )
 
+#: What the model was given on an item the scorer says was cut short. A real run
+#: derives this from the token cap; a fixture day states it.
+SEEN_WORD_CAP: Final = 2100
 
-def canaries() -> list[dict[str, object]]:
+#: The places `EvalRow` rounds `hhem_delta` to before it re-checks it on read.
+_DELTA_PLACES: Final = 6
+
+#: The four counterweights no console surface reads back. Held flat across the
+#: fixture on purpose: varying them would put a measurement in the ledger that
+#: nobody made, and the columns that are varied below are varied because a page
+#: draws them.
+_EXTRACTIVENESS: Final = 0.22
+_VERBATIM_RUN: Final = 0.07
+_EVIDENTIAL_DENSITY: Final = 0.011
+_SPECULATIVE_DENSITY: Final = 0.004
+
+
+class _Measured(NamedTuple):
+    """What one item measured. Everything a rule can derive is derived from it.
+
+    The band, the truncation flag, the faithfulness delta and the compression
+    ratio all come out of these numbers through the same functions the pipeline
+    uses, so a fixture row cannot hold a combination a real run could not
+    produce.
+    """
+
+    source_words: int
+    summary_words: int
+    hhem: float
+    hhem_full: float
+    coverage: float
+    score_ms: int
+    unsupported_numbers: int = 0
+    hedge_dropped: bool = False
+
+
+#: One measured item per published canary, in the digest's own order.
+#:
+#: The console's compression plot draws source words against summary words on a
+#: log x axis, with the configured target zone behind the marks and a diamond on
+#: anything the scorer flagged as truncated. A day that scored eight items the
+#: same way would leave every one of those states undrawn and so untested.
+#:
+#: Read down the source-word column: 38 to 6100 words is four decades of x axis
+#: and at least one mark under each of the four configured target zones. Read
+#: down the faithfulness columns: all three confidence bands, and every reason
+#: an item can miss the top one.
+SCORED: Final[tuple[_Measured, ...]] = (
+    # A release note. Under the shortest target zone, and left of the 100-word
+    # floor the plot seeds its axis with - the one mark that can say whether the
+    # axis widened to hold it or clamped it onto the edge.
+    _Measured(
+        source_words=38, summary_words=31,
+        hhem=0.93, hhem_full=0.92, coverage=0.78, score_ms=180,
+    ),
+    # High confidence, second target zone.
+    _Measured(
+        source_words=140, summary_words=62,
+        hhem=0.86, hhem_full=0.84, coverage=0.61, score_ms=240,
+    ),
+    # Medium on faithfulness alone, and a second mark in that zone, so the zone
+    # is not a step drawn under a single point.
+    _Measured(
+        source_words=410, summary_words=78,
+        hhem=0.71, hhem_full=0.70, coverage=0.52, score_ms=290,
+    ),
+    # Faithful, but the lead's names and figures did not survive, so the band is
+    # capped at medium and the reason is the missing lead.
+    _Measured(
+        source_words=880, summary_words=96,
+        hhem=0.88, hhem_full=0.87, coverage=0.22, score_ms=330,
+    ),
+    # Faithful, but the article hedged and the summary asserted.
+    _Measured(
+        source_words=1320, summary_words=118,
+        hhem=0.90, hhem_full=0.89, coverage=0.64, score_ms=410,
+        hedge_dropped=True,
+    ),
+    # Low on faithfulness, in the widest target zone.
+    _Measured(
+        source_words=2450, summary_words=164,
+        hhem=0.44, hhem_full=0.43, coverage=0.48, score_ms=520,
+    ),
+    # Truncated: the gap between the two faithfulness scores is wider than the
+    # configured ceiling, so the plot draws a diamond rather than a dot.
+    _Measured(
+        source_words=4200, summary_words=205,
+        hhem=0.91, hhem_full=0.78, coverage=0.57, score_ms=610,
+    ),
+    # Truncated, and low whatever the scorer thought: the summary asserts two
+    # figures the article never gave, and nothing else in the row may outvote
+    # that.
+    _Measured(
+        source_words=6100, summary_words=190,
+        hhem=0.83, hhem_full=0.69, coverage=0.55, score_ms=640,
+        unsupported_numbers=2,
+    ),
+)
+
+
+def canaries(directory: Path = CANARY_DIR) -> list[dict[str, object]]:
     """Every canary, build-time and browser, in a stable order."""
-    paths = sorted(CANARY_DIR.glob("*.json")) + sorted((CANARY_DIR / "browser").glob("*.json"))
+    paths = sorted(directory.glob("*.json")) + sorted((directory / "browser").glob("*.json"))
     return [json.loads(path.read_text(encoding="utf-8")) for path in paths]
 
 
-def to_item(index: int, canary: dict[str, object], run_n: int) -> DigestItem:
+def verdict_for(measured: _Measured, evaluation: EvaluationConfig) -> score.Verdict:
+    """The band a reader sees and the reason under it, from the pipeline's own rule.
+
+    One call feeds both the published item and the ledger row, so the two files
+    cannot disagree about what the same item scored on the same day.
+    """
+    return score.verdict(
+        measured.hhem,
+        unsupported_numbers=measured.unsupported_numbers,
+        lead_coverage=measured.coverage,
+        hedge_dropped=measured.hedge_dropped,
+        config=evaluation,
+    )
+
+
+def to_item(
+    index: int, canary: dict[str, object], run_n: int, verdict: score.Verdict
+) -> DigestItem:
     raw_text = str(canary["raw_text"])
     return DigestItem(
         item_id=f"ai-{index + 1:02d}",
@@ -107,7 +228,8 @@ def to_item(index: int, canary: dict[str, object], run_n: int) -> DigestItem:
         source_kind=SourceKind.REPORTING,
         summary=raw_text,
         key_points=[line for line in raw_text.splitlines() if line.strip()][:3] or ["-"],
-        band=ConfidenceBand.LOW,
+        band=verdict.band,
+        band_reason=verdict.reason,
         introduced_by_run=run_n,
     )
 
@@ -143,8 +265,23 @@ def visual_for(index: int, item_id: str, target: Path) -> Route | None:
     )
 
 
-def build(target: Path) -> DigestDay:
-    items = [to_item(index, canary, 1) for index, canary in enumerate(canaries())]
+def published_items(
+    evaluation: EvaluationConfig, directory: Path = CANARY_DIR
+) -> list[DigestItem]:
+    """The day's items before their visuals, composed once.
+
+    A test reads the same list the day publishes rather than rebuilding it, so
+    a fixture the suite asserts about cannot be a different fixture from the one
+    the browser gets.
+    """
+    return [
+        to_item(index, canary, 1, verdict_for(measured, evaluation))
+        for index, (canary, measured) in enumerate(zip(canaries(directory), SCORED, strict=True))
+    ]
+
+
+def build(target: Path, evaluation: EvaluationConfig) -> DigestDay:
+    items = published_items(evaluation)
     items = [
         item.model_copy(
             update={"visual": to_digest_visual(visual_for(index, item.item_id, target))}
@@ -344,28 +481,118 @@ def health(state: Path) -> int:
     return len(rows)
 
 
+def _fixture_digest(*parts: str) -> str:
+    """A stable stand-in for a field a real run fills with a real digest."""
+    return hashlib.sha256("|".join(("canary", *parts)).encode("utf-8")).hexdigest()
+
+
+def _scorer_version(evaluation: EvaluationConfig) -> str:
+    """Spelled by the function the pipeline spells it with, and named `canary`.
+
+    Borrowing the real scorer's id would put a measurement in the ledger that no
+    model made, and every row after it would be uninterpretable.
+    """
+    return metrics.scorer_version(
+        scorer_id="canary",
+        scorer_revision=FIXTURE_SHA,
+        weights_sha256=FIXTURE_SHA,
+        evaluation=evaluation,
+    )
+
+
+def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfig) -> EvalRow:
+    """One ledger row, with every derivable column derived rather than typed."""
+    delta = round(measured.hhem - measured.hhem_full, _DELTA_PLACES)
+    truncated = delta > evaluation.truncation_gap_max
+    seen_words = min(measured.source_words, SEEN_WORD_CAP) if truncated else measured.source_words
+    return EvalRow(
+        version=EvalRow.schema_version(),
+        date=DATE,
+        # Run 1 is the run the manifest says added the items, so it is the run
+        # that had anything to score.
+        run_id=f"{DATE}-1",
+        item_id=item.item_id,
+        url_key=derive_url_key(item.source_url),
+        source_url=item.source_url,
+        title=item.title,
+        vertical=item.vertical,
+        model_id="canary",
+        attempt=1,
+        hhem=measured.hhem,
+        hhem_full=measured.hhem_full,
+        hhem_delta=delta,
+        truncation_flagged=truncated,
+        coverage=measured.coverage,
+        # Summary words over source words, which is the whole of what
+        # `metrics.compression` computes - done on the counts because a fixture
+        # day has counts and no article behind them.
+        compression=round(measured.summary_words / measured.source_words, _DELTA_PLACES),
+        extractiveness=_EXTRACTIVENESS,
+        verbatim_run=_VERBATIM_RUN,
+        unsupported_numbers=measured.unsupported_numbers,
+        hedge_dropped=measured.hedge_dropped,
+        evidential_density=_EVIDENTIAL_DENSITY,
+        speculative_density=_SPECULATIVE_DENSITY,
+        extraction_suspect=False,
+        band=item.band,
+        source_word_count=measured.source_words,
+        source_seen_word_count=seen_words,
+        summary_word_count=measured.summary_words,
+        pipeline_fingerprint=_fixture_digest("pipeline", DATE),
+        output_digest=_fixture_digest("summary", item.item_id),
+        determinism_violation=False,
+        scorer_version=_scorer_version(evaluation),
+        scored_at=f"{DATE}T06:12:00Z",
+        score_ms=measured.score_ms,
+    )
+
+
+def score_rows(items: Sequence[DigestItem], evaluation: EvaluationConfig) -> list[EvalRow]:
+    """The day's measurements, one row per published item.
+
+    The band is read off the published item rather than re-derived here, so the
+    ledger and the digest can only ever say the same thing about an item.
+    """
+    return [
+        _eval_row(item, measured, evaluation)
+        for item, measured in zip(items, SCORED, strict=True)
+    ]
+
+
+def scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfig) -> int:
+    """Append the day's rows through the writer the pipeline appends with.
+
+    Not a CSV written by hand: the contract validates every field, the writer
+    owns the column order and the header check, and a column added to `EvalRow`
+    lands here without this file being told about it.
+    """
+    return writer.append(writer.ledger_path(state), score_rows(items, evaluation))
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--out", type=Path, default=Path("backend/var/canary/digest"))
     parser.add_argument("--state", type=Path, default=Path("backend/var/canary/state"))
     args = parser.parse_args()
-    # The health ledgers are append-only, so a second local run stacks another
-    # copy of every row on the first. `canary-gone` is written once on purpose -
-    # one permanent failure, well under the quarantine count - and by the fifth
-    # run it has five and the console marks it rested. The browser suite then
-    # fails against a fixture nobody edited, on a developer machine, while CI
-    # stays green because its `backend/var/` is empty every time. Clearing here
-    # makes the canary day a function of this file rather than of how many times
-    # somebody has run it.
+    # The ledgers under `--state` are append-only, so a second local run stacks
+    # another copy of every row on the first. `canary-gone` is written once on
+    # purpose - one permanent failure, well under the quarantine count - and by
+    # the fifth run it has five and the console marks it rested. The browser
+    # suite then fails against a fixture nobody edited, on a developer machine,
+    # while CI stays green because its `backend/var/` is empty every time.
+    # Clearing here makes the canary day a function of this file rather than of
+    # how many times somebody has run it.
     if args.state.exists():
         shutil.rmtree(args.state)
 
+    evaluation = config.load().app.evaluation
     quiet = earlier_days()
     for date in quiet:
         quiet_day(args.out, date)
-    day = build(args.out)
+    day = build(args.out, evaluation)
     runs = manifest(args.out, len(day.items))
     checks = health(args.state)
+    scored = scores(args.state, day.items, evaluation)
     digest = hashlib.sha256(day.to_json().encode("utf-8")).hexdigest()[:12]
     visuals = sum(1 for item in day.items if item.visual is not None)
     print(f"canary day {DATE}: {len(day.items)} items, {visuals} visuals, payload {digest}")
@@ -373,6 +600,7 @@ def main() -> int:
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
+    print(f"wrote {writer.ledger_path(args.state).as_posix()}: {scored} scored items")
     return 0
 
 
