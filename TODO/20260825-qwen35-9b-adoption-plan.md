@@ -25,19 +25,20 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 ## Section 0a - Overlapping plans, resolve before dispatch
 
-Two other plan-docs were authored on 2026-08-25 and contend for the same
+Two other plan-docs were authored on 2026-08-25 and contended for the same
 surfaces. The console-charts work is on `main` (PRs #89, #92, #93, #94, #97).
-`20260825-runtime-and-publish-defects-plan.md` was untracked in the working tree
-when this plan was written. Resolve each collision before dispatching the
-affected row; do not dispatch two plans onto one file.
+The runtime and publish-defects plan **has since shipped in full and its
+plan-doc is deleted** (PRs #81 to #88, #91, #95, #96, #98, #100, #101, #110,
+#111; git history is the record). Every collision below is therefore resolved
+by reading what landed, not by negotiating with a live plan.
 
-| This plan | Contends with | Surface | Resolution owed |
+| This plan | What already landed | Surface | What this plan still owes |
 | --- | --- | --- | --- |
-| Row 5 - centralize the model ref | `20260825-runtime-and-publish-defects-plan.md` row 3, "Pin the llama.cpp build and name it in the cache key" | the `work` cache key in `.github/workflows/digest.yml` | One row owns the cache key. The build pin and the model ref both belong in it. |
-| Row 6 - truthful fingerprint inputs | Same plan, deferred item 2, "Stamping the observed llama.cpp build into `runtime_build`" | `runtime_build` at the `build_inputs` call site | Identical change. Collapse into whichever row dispatches first. |
-| Row 6 - truthful fingerprint inputs | Same plan, deferred item 1, widening `PipelineInputs` and adding the `require_matching_header` guard | `backend/idhazh/contracts/fingerprint.py` | Both reset every fingerprint. Land them in one commit or the stamp moves twice. |
-| Row 7 - enforce `shard_size` | Same plan, row 10, "Raise the shard ceiling from 4 to 8 and measure it" | the shard count in `.github/workflows/digest.yml` | Directly contradictory framings of the same knob. One ruling, from Carmack, before either dispatches. |
-| Row 1 - verify the model bytes | Same plan, row 5, "The `work` job names its host, its binary and its weights" | the `work` job identity steps | Overlapping intent. Merge the step lists. |
+| Row 5 - centralize the model ref | PR #82 pinned llama.cpp to `b10598` with a `sha256sum --check` and put `${{ env.LLAMA_CPP_BUILD }}` in the weights cache key (suffix `v3`) | the `work` cache key in `.github/workflows/digest.yml` | Add the model ref to the same key. The build pin is done; do not re-do it. |
+| Row 6 - truthful fingerprint inputs | Nothing. PR #82 deliberately left `runtime_build="llama-server-local"` hardcoded, because changing it moves every `pipeline_fingerprint` | `runtime_build` at the `build_inputs` call site | The whole change. It is still owed and still resets the stamp. |
+| Row 6 - truthful fingerprint inputs | PR #81 classified all of `InferenceConfig` as either digested or `NOT_DIGESTED`, and named the five knobs that can move the logits: `cache_type_k`, `cache_type_v`, `flash_attention`, `n_parallel`, `n_threads_batch` | `backend/idhazh/fingerprint.py` | Digest those five and add the `require_matching_header` guard. Land with the row above or the stamp moves twice. |
+| Row 7 - enforce `shard_size` | PR #100 raised the ceiling to 8 and PR #110 measured it: the slowest worker fell from 113.1 to 58.8 min. The scheduled default is still 4, on purpose | the shard count in `.github/workflows/digest.yml` | Enforcing `shard_size` is not contradictory any more - the ceiling moved, the dispatch rule did not. Read `docs/reference/measurements.md` before choosing a default. |
+| Row 1 - verify the model bytes | PR #87 gave both inference jobs a `What this runner is` step printing the CPU, `nproc`, `system_info`, `llama-server --version` and both sha256 digests | the `work` job identity steps | Verifying the bytes *before* the summarizer starts, which the identity step reports but does not enforce. |
 | Rows 8 and 9 - console sections | the console-charts work, PRs #89 and #92 | `frontend/src/routes/console/` and the throughput candle | The coordinate-frame rewrite has landed. New sections build on `frontend/src/lib/charts/frame.ts`, never on the old 360-unit canvas. |
 
 Both contending plans cite `20260825-qwen35-9b-swap-plan.md`, which this plan
