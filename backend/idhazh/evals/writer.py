@@ -21,10 +21,11 @@ from typing import Final
 
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.validation_row import ValidationRow
+from idhazh.ledger import STATE_DIRNAME, require_matching_header
 from idhazh.ledger import read_header as _read_header
-from idhazh.ledger import require_matching_header
 
-LEDGER_RELPATH: Final = "state/scores.csv"
+LEDGER_FILENAME: Final = "scores.csv"
+LEDGER_RELPATH: Final = f"{STATE_DIRNAME}/{LEDGER_FILENAME}"
 
 #: What makes two rows the same measurement. The address says which article, the
 #: fingerprint says which inputs produced it, the digest says which words came
@@ -32,6 +33,16 @@ LEDGER_RELPATH: Final = "state/scores.csv"
 #: and the row is a new measurement worth keeping. `item_id` is deliberately
 #: absent: it is a slot on a page, not an identity.
 OBSERVATION_KEY: Final = ("url_key", "pipeline_fingerprint", "output_digest", "scorer_version")
+
+
+def ledger_path(state_dir: Path) -> Path:
+    """The ledger inside a state directory, the way `ledger.py` locates its own files.
+
+    A caller passes the directory and never the file name, so a second writer -
+    the canary fixture builder is one - cannot spell the layout differently from
+    the pipeline and have both be right.
+    """
+    return state_dir / LEDGER_FILENAME
 
 
 def columns() -> tuple[str, ...]:
