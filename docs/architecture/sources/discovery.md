@@ -54,6 +54,8 @@ Measured 2026-08-26 over the six committed days under `frontend/public/digest/`:
 
 The three fields are declared on `Article`, copied onto `DigestItem`, exported to `schemas/article.schema.json` and `schemas/digest-day.schema.json`, and typed in the frontend's payload types. Nothing writes them. The tagging step this page describes was never built.
 
+**Lenses and events were built on 2026-08-26. Entities are still empty.** The rest of this section is the diagnosis that is now history; the rule that replaced it is the section below.
+
 **Where the value would have been set.** `to_article` in `backend/idhazh/extract.py` builds the only ok article and passes none of the three; `_failed` in the same file does the same for a failed one. All three are declared `default_factory=list` in `backend/idhazh/contracts/article.py`, so leaving them out is legal and silent. `to_digest_item` in `backend/idhazh/assemble.py` then copies the three empty lists onto the published item. No model is involved anywhere: neither `backend/idhazh/prompts/summarize.txt` nor `backend/idhazh/prompts/route.txt` contains the word lens, event or entity.
 
 **The entity half is worse than unwired.** `config/watchlist.json` declares `"entities": []`, so there is no registry to match a name against and the ceiling on items that could gain an entity today is zero, whatever the matcher. `backend/idhazh/cli.py` hands `plan_vertical` a hardcoded empty `watchlist_keys` for the same reason, so `watchlist_bonus` has never moved a score - the watchlist term of the ranking formula below is dead arithmetic. `EntityDef.aliases` is declared in `backend/idhazh/contracts/watchlist.py` and read nowhere, and it is the only name-matching surface any config contract has.
@@ -86,7 +88,40 @@ Whichever is chosen, one boundary rule holds. A matcher that reads article text 
 
 **There is a third outcome, and it is cheaper than either.** Fowler, consulted 2026-08-26: before asking how to build the tagger, ask whether the surface should exist. Three fields, two schemas, a frontend type and a config vocabulary are rent paid every day by a feature with no reader-facing consumer today. The consultation therefore weighs three options, not two - tag at Extract, tag in the plan job, or delete the three dimensions and their vocabularies and stop paying. Deleting is itself a breaking contract change needing a read-side migration (section 11), so it is the same class of work; it is not the cheap way out, only the honest third choice.
 
-Filed as defect 16 in [`../../../TODO/20260823-known-defects-plan.md`](../../../TODO/20260823-known-defects-plan.md).
+Filed as defect 17 in [`../../../TODO/20260823-known-defects-plan.md`](../../../TODO/20260823-known-defects-plan.md).
+
+## The match rule
+
+Settled 2026-08-26 by the owner: build lenses and events. This is the rule, and it is one sentence.
+
+> **A tag is assigned when one of its curated terms appears in the item's words as a whole-word phrase, case-folded. Nothing is derived from the tag's id or its display name.**
+
+The second sentence is the load-bearing half. Deriving terms from the id is what produced the 88.2 percent measured above, because `ai` sits inside `said`, `remains` and `chair`. `backend/idhazh/tag.py` derives nothing: the terms are curated in `config/taxonomy.json` under `keywords` on each lens and each event, and a vocabulary with no terms is never assigned. Punctuation is dropped on both sides before the comparison, so `ai-roi`, `AI/ROI` and `AI ROI` are one term. A term must be at least two characters, which the contract enforces.
+
+**Where it runs: on the extracted article, after `sanitize`.** `cli._fetch_one` calls `tag.tagged(article, taxonomy=...)` immediately after `extract.to_article`, so the matcher reads text that has already crossed the trust boundary exactly once, `Article` already holds the three fields, and nothing new is persisted. The alternative - tagging inside the plan job - was rejected: it sees the feed title alone, and it would need three new fields on `PlannedItem`, making `run-plan` a second persisted contract to version for a worse signal. The stage diagram in [`../../../TODO/20260815-digest-pipeline-plan.md`](../../../TODO/20260815-digest-pipeline-plan.md) said "rank + tag lens/entity" in the plan job and was corrected in the same commit.
+
+A failed article keeps its empty lists. It has no text, it never reaches a reader, and a tag on it would be a tag on a feed title.
+
+**The tagger is deliberately not a fingerprint input.** A tag does not change a summary, so adding the vocabulary to the stamp would re-summarize every past item to produce identical words ([../contracts/determinism.md](../contracts/determinism.md) already warns that a new `PipelineInputs` field resets every fingerprint). A vocabulary edit therefore re-tags what runs next and leaves the past alone.
+
+### Measured coverage
+
+Two corpora, because they answer different questions. Both measured 2026-08-26 on this checkout.
+
+**The real one: 121 article payloads with `status: ok`**, downloaded from the `items-0..3` artifacts of pipeline run `32986307407` (2026-08-26T15:54Z). This is the sanitized article text the tagger actually reads.
+
+| | Any tag | Highest single tag | Lowest single tag |
+| --- | --- | --- | --- |
+| Lenses | 31 of 121, **25.6 percent** | `china` 13.2 percent | `ai-roi` 0.8 percent |
+| Events | 70 of 121, **57.9 percent** | `release` 22.3 percent | `earnings` and `incident` 4.1 percent |
+
+Full event spread: `release` 22.3, `regulation` 19.0, `deal` 13.2, `research` 12.4, `capex` 7.4, `funding` 7.4, `acquisition` 5.8, `earnings` 4.1, `incident` 4.1 percent. Fifty-one of 121 items carry no event at all, and no item carries more than four.
+
+**The comparable one: the item's own published words** - title, summary and key points over all 2,121 committed items, which is the corpus the 8.8 / 88.2 percent spread above was measured on. Lenses reach 16.1 percent and events 39.9 percent. Article bodies are never committed (we publish a link and our own summary, never the source text), so this is the only corpus that reaches back over every published day.
+
+**The first draft was worse and the measurement is what caught it.** A candidate vocabulary using bare `research`, `study`, `revenue` and `profit` tagged `research` on 34.7 percent of articles and `earnings` on 14.9 percent - a filter taking one article in three is not a filter. Replacing them with `researchers`, `arxiv`, `preprint`, `quarterly results` and `fiscal quarter` moved those to 12.4 and 4.1 percent. No judgement about "good keywords" would have found that; running the list over 121 real articles did.
+
+**What is still zero: `entities`.** The watchlist declares no entity, so the ceiling on items that could gain one is zero whatever the matcher, and the retrieval eval's free query tier still builds nothing.
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 

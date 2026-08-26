@@ -2,63 +2,196 @@
   "events": [
     {
       "display_name": "Release",
-      "id": "release"
+      "id": "release",
+      "keywords": [
+        "released",
+        "launch",
+        "launched",
+        "unveiled",
+        "now available",
+        "general availability",
+        "rolled out",
+        "new version"
+      ]
     },
     {
       "display_name": "Deal",
-      "id": "deal"
+      "id": "deal",
+      "keywords": [
+        "partnership",
+        "agreement",
+        "signed a deal",
+        "joint venture",
+        "contract with",
+        "teamed up"
+      ]
     },
     {
       "display_name": "Acquisition",
-      "id": "acquisition"
+      "id": "acquisition",
+      "keywords": [
+        "acquired",
+        "acquisition",
+        "takeover",
+        "buyout",
+        "merger",
+        "to buy"
+      ]
     },
     {
       "display_name": "Funding",
-      "id": "funding"
+      "id": "funding",
+      "keywords": [
+        "funding round",
+        "series a",
+        "series b",
+        "series c",
+        "seed round",
+        "venture capital",
+        "raised",
+        "valuation"
+      ]
     },
     {
       "display_name": "Capital spending",
-      "id": "capex"
+      "id": "capex",
+      "keywords": [
+        "capital expenditure",
+        "capex",
+        "data centre",
+        "data center",
+        "gigawatt",
+        "build-out",
+        "megawatt"
+      ]
     },
     {
       "display_name": "Earnings",
-      "id": "earnings"
+      "id": "earnings",
+      "keywords": [
+        "earnings",
+        "quarterly results",
+        "fiscal quarter",
+        "operating income",
+        "earnings per share",
+        "quarterly revenue",
+        "full-year guidance"
+      ]
     },
     {
       "display_name": "Regulation",
-      "id": "regulation"
+      "id": "regulation",
+      "keywords": [
+        "regulator",
+        "regulators",
+        "regulation",
+        "regulatory",
+        "antitrust",
+        "lawsuit",
+        "legislation",
+        "sanctions"
+      ]
     },
     {
       "display_name": "Research",
-      "id": "research"
+      "id": "research",
+      "keywords": [
+        "researchers",
+        "arxiv",
+        "peer-reviewed",
+        "preprint",
+        "research paper",
+        "new study",
+        "the study",
+        "benchmark results"
+      ]
     },
     {
       "display_name": "Incident",
-      "id": "incident"
+      "id": "incident",
+      "keywords": [
+        "outage",
+        "data breach",
+        "security incident",
+        "recall",
+        "disruption",
+        "went down",
+        "took the site down"
+      ]
     }
   ],
   "lenses": [
     {
       "display_name": "China",
       "id": "china",
+      "keywords": [
+        "china",
+        "chinese",
+        "beijing",
+        "shanghai",
+        "shenzhen"
+      ],
       "retired_on": null,
       "status": "active"
     },
     {
       "display_name": "Return on AI investment",
       "id": "ai-roi",
+      "keywords": [
+        "ai spending",
+        "ai investment",
+        "ai roi",
+        "roi",
+        "return on investment",
+        "ai capex",
+        "monetise",
+        "monetize",
+        "ai revenue",
+        "payback",
+        "cost of inference",
+        "ai budget",
+        "ai costs"
+      ],
       "retired_on": null,
       "status": "active"
     },
     {
       "display_name": "Markets",
       "id": "markets",
+      "keywords": [
+        "stock market",
+        "share price",
+        "shares",
+        "equities",
+        "investors",
+        "nasdaq",
+        "s&p 500",
+        "bond yields",
+        "wall street",
+        "market cap",
+        "traders",
+        "shareholders"
+      ],
       "retired_on": null,
       "status": "active"
     },
     {
       "display_name": "Cyber",
       "id": "cyber",
+      "keywords": [
+        "cyberattack",
+        "cyber attack",
+        "cybersecurity",
+        "cyber security",
+        "ransomware",
+        "data breach",
+        "malware",
+        "phishing",
+        "hackers",
+        "zero-day",
+        "vulnerability",
+        "threat actor"
+      ],
       "retired_on": null,
       "status": "active"
     }

@@ -114,11 +114,23 @@ history forever. Anything that must not grow the repo must not be committed at a
 plan job                 worker jobs (matrix of SHARDS, fail-fast:false)  assemble job
  poll vertical feeds  ->  1 VM per shard of ~5 URLs, 4 vCPU each      ->   collect artifacts
  dedupe canonical URL     load model once per shard, then per URL:         render digest.json
- rank + tag lens/entity   fetch -> extract -> summarize -> route           append evals CSV
+ rank                     fetch -> extract -> tag -> summarize -> route    append evals CSV
  take top N per vertical  -> render -> eval                                commit once
  shard urls[]             write backend/var/run/<date>/<vertical>-<NN>.json
  (no model)                                                               publish frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json
 ```
+
+**Tagging is in the worker, not the plan job.** This diagram said "rank + tag
+lens/entity" in the plan job while
+[`docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md)
+said "a tag, applied after the fetch". The two imply different contracts, and
+the contradiction was corrected on 2026-08-26 in favour of the worker: the
+matcher runs on the extracted article, right after `sanitize`, where `Article`
+already carries `lenses`, `events` and `entities` and nothing new is persisted.
+Tagging in the plan job sees the feed title alone and would need three new
+fields on `PlannedItem`, making `run-plan` a second persisted contract to
+version for a worse signal. The tagger uses no model either way, which is the
+part this diagram had right.
 
 Shard rather than one-VM-per-URL: section 2.1 measured model load at roughly half of
 per-URL wall-clock. Per-item atomicity survives inside the shard via a temp-then-rename

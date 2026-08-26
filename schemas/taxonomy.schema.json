@@ -10,6 +10,16 @@
         },
         "id": {
           "$ref": "#/$defs/EventType"
+        },
+        "keywords": {
+          "description": "The curated terms that assign this event. Same rule as LensDef.keywords.",
+          "items": {
+            "minLength": 2,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 '/&.-]*$",
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
         }
       },
       "required": [
@@ -45,6 +55,16 @@
         },
         "id": {
           "$ref": "#/$defs/LensId"
+        },
+        "keywords": {
+          "description": "The curated terms that assign this lens. A lens is assigned when one of them appears in the item's words as a whole-word phrase, case-folded. Nothing is derived from the id or the display name: deriving from the id was measured at 88.2 percent of items, because `ai` sits inside `said`. An empty list means the lens is never assigned.",
+          "items": {
+            "minLength": 2,
+            "pattern": "^[A-Za-z0-9][A-Za-z0-9 '/&.-]*$",
+            "type": "string"
+          },
+          "title": "Keywords",
+          "type": "array"
         },
         "retired_on": {
           "anyOf": [
@@ -144,6 +164,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added keywords to LensDef and EventDef.",
+      "version": "2026-08-26",
+      "why": "Both vocabularies shipped with no way to say what assigns a tag, so nothing ever did: 0 of 2,121 committed items carried a lens or an event. The rule cannot be derived from the id - measured, deriving it tags 88.2 percent of items because `ai` sits inside `said` - so it has to be written down. Additive with an empty default, so a taxonomy written before this still validates and simply assigns nothing."
+    },
+    {
       "change": "Removed VerticalDef.daily_cap.",
       "version": "2026-08-22T11:00",
       "why": "It decided how big a vertical's day was before the ranking had a say. Supply and the score set the size now; max_per_source still stops one feed becoming the vertical."
@@ -171,7 +196,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-22T11:00",
+      "default": "2026-08-26",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -191,5 +216,5 @@
   ],
   "title": "Taxonomy",
   "type": "object",
-  "version": "2026-08-22T11:00"
+  "version": "2026-08-26"
 }
