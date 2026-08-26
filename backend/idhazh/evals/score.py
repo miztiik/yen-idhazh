@@ -117,6 +117,10 @@ def to_eval_row(
     The two densities take `full_text` alone. They are the only columns that
     score the article rather than the summary, and they are recorded and not
     banded: nothing here knows yet what a normal value looks like.
+
+    `self_repetition` takes the summary alone. It is the only column that reads
+    neither the article nor the pair, and it is recorded and not banded for the
+    same reason.
     """
     text = summary.summary or ""
     unsupported = metrics.unsupported_numbers(text, full_text)
@@ -155,6 +159,7 @@ def to_eval_row(
         hedge_dropped=hedge,
         evidential_density=metrics.evidential_density(full_text),
         speculative_density=metrics.speculative_density(full_text),
+        self_repetition=metrics.self_repetition(text),
         extraction_suspect=extraction_suspect,
         band=band(
             hhem,
