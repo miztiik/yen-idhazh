@@ -155,7 +155,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
-          URL=$(curl -sS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
             "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
             | jq -r --arg asset "$LLAMA_CPP_ASSET" \
               'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
@@ -337,6 +337,18 @@ jobs:
           chmod +x backend/bin/llama-server
           curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${MODEL_FILE}" \
             "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
+
+      # A throughput number is about a model only if it names the bytes that
+      # produced it (Rule #10).
+      - name: Verify the weights
+        run: |
+          set -euo pipefail
+          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["sha256"] or "")')
+          if [ -z "$EXPECTED" ]; then
+            echo "config records no sha256 for models.summarize" >&2
+            exit 1
+          fi
+          echo "${EXPECTED}  backend/models/${MODEL_FILE}" | sha256sum --check
 
       - name: Record input identity
         run: |
@@ -851,6 +863,19 @@ jobs:
             stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
             sha256sum "backend/models/${MODEL_FILE}"
           } | tee -a backend/var/batched-bench/hardware.txt
+
+      # The ratio this job publishes is a claim about one model. Checking the
+      # digest before the bench runs is what lets the number name it (Rule #10).
+      # `python3`, because this job installs no interpreter of its own.
+      - name: Verify the weights
+        run: |
+          set -euo pipefail
+          EXPECTED=$(python3 -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["sha256"] or "")')
+          if [ -z "$EXPECTED" ]; then
+            echo "config records no sha256 for models.summarize" >&2
+            exit 1
+          fi
+          echo "${EXPECTED}  backend/models/${MODEL_FILE}" | sha256sum --check
 
       - name: Benchmark parallel decode
         run: |
