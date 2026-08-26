@@ -58,6 +58,12 @@ export interface ConsoleConfig {
 	failure_list_max: number;
 }
 
+/** What on-device archive search keeps and how much of it it shows. */
+export interface AssistConfig {
+	similarity_floor: number;
+	result_limit: number;
+}
+
 const DEFAULTS: UiConfig = {
 	sections: ['notice', 'topics', 'items'],
 	theme_default: 'system',
@@ -92,6 +98,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	chart_width: 600,
 	failure_list_max: 25
 };
+const ASSIST_DEFAULTS: AssistConfig = { similarity_floor: 0.35, result_limit: 10 };
 
 interface RawConfig {
 	ui?: Partial<UiConfig>;
@@ -99,6 +106,7 @@ interface RawConfig {
 	collect?: Partial<CollectConfig>;
 	summarize?: Partial<SummarizeConfig>;
 	console?: Partial<ConsoleConfig>;
+	assist?: Partial<AssistConfig>;
 }
 
 /** The file, or nothing. A fresh clone runs on the defaults (section 1a). */
@@ -126,4 +134,8 @@ export function summarizeConfig(): SummarizeConfig {
 
 export function consoleConfig(): ConsoleConfig {
 	return { ...CONSOLE_DEFAULTS, ...(raw().console ?? {}) };
+}
+
+export function assistConfig(): AssistConfig {
+	return { ...ASSIST_DEFAULTS, ...(raw().assist ?? {}) };
 }

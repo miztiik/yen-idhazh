@@ -1,7 +1,10 @@
 {
   "assist": {
     "max_tokens": 256,
-    "min_readable_letter_share": 0.5
+    "min_readable_letter_share": 0.5,
+    "recall_min": 0.69,
+    "result_limit": 10,
+    "similarity_floor": 0.35
   },
   "collect": {
     "blocked_url_markers": [
@@ -183,7 +186,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-26T10:00",
+  "version": "2026-08-26T10:10",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

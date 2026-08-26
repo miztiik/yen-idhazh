@@ -1,0 +1,1618 @@
+{
+  "labelling": {
+    "how": "Candidates were gathered with a keyword sweep over title and summary, then each candidate was read and kept only if it answers the stated intent. The intent is recorded with every query so any judgement can be challenged.",
+    "limits": "A keyword sweep can miss a relevant item that shares no word with the query. A missed item is not counted as a right answer, so it can only depress the measured number - the bias is toward under-reporting, never toward flattery.",
+    "who": "Written by an agent reading the published titles and summaries, not by the summarizer that wrote them. No model scored, ranked or selected these items."
+  },
+  "note": "Hand-labelled relevance judgements over the committed archive. A query names an intent in a reader's words; the relevant set is every published item that answers it, addressed by (date, item_id) because an item_id is unique only within a day. Relevance is binary and a query has many right answers on purpose - a topic question does, and single-gold labelling makes a working system read as broken.",
+  "queries": [
+    {
+      "id": "iran-sanctions",
+      "intent": "Items reporting new or threatened US sanctions on Iran and Iran's response to them.",
+      "query": "United States tightening economic sanctions on Iran",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-1883034590"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "world-8490611421"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-4934880231"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-1069391798"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-2067727803"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-4909735877"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-2299499520"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-5967318105"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-7055015151"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-6465591775"
+        }
+      ]
+    },
+    {
+      "id": "hormuz-shipping",
+      "intent": "Items about tanker or cargo movement through the Strait of Hormuz and its disruption.",
+      "query": "shipping through the Strait of Hormuz",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-1743693623"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2459653458"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-9012994114"
+        }
+      ]
+    },
+    {
+      "id": "nvidia-ai-factory",
+      "intent": "Items about Nvidia building, powering or financing large AI compute sites.",
+      "query": "Nvidia AI factory power and compute capacity",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-9246616514"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-1232034201"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-3442981607"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-5065993306"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-6108142045"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1477277427"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1978550311"
+        }
+      ]
+    },
+    {
+      "id": "solar-plant-build",
+      "intent": "Items announcing construction or completion of a utility-scale solar generating plant.",
+      "query": "a new solar power plant being built",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "energy-3477489467"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-1642827344"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-4439953382"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-9854715601"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2280927476"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-7520990047"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-3790874052"
+        }
+      ]
+    },
+    {
+      "id": "battery-storage-project",
+      "intent": "Items announcing a battery energy storage project, its financing or its capacity.",
+      "query": "grid-scale battery storage project",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "energy-8014538298"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-5008120592"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2950865210"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-5897146946"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-1492388457"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2564241788"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2145108446"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-1823697388"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-0055659964"
+        }
+      ]
+    },
+    {
+      "id": "offshore-wind",
+      "intent": "Items about building, licensing or operating an offshore wind farm.",
+      "query": "offshore wind farm construction",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-8427043262"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-3292664016"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-5548338238"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-1908750274"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-5146409177"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-6103174903"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-6879699747"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-5823589058"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-7325650023"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-7788399456"
+        }
+      ]
+    },
+    {
+      "id": "nuclear-reactor",
+      "intent": "Items about building, testing or supplying a nuclear reactor, including SMRs.",
+      "query": "new nuclear reactors and small modular reactors",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-6836361699"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-9103215974"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-3614302968"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-3211913067"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-8563375718"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-8183190086"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-0143846781"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-5048789318"
+        }
+      ]
+    },
+    {
+      "id": "uranium-supply",
+      "intent": "Items about uranium extraction, uranium projects or uranium demand.",
+      "query": "uranium mining and the uranium market",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-4245558700"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-4854062097"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-0606394591"
+        }
+      ]
+    },
+    {
+      "id": "federal-reserve-policy",
+      "intent": "Items reporting Federal Reserve officials on monetary policy, inflation or rates.",
+      "query": "Federal Reserve view on inflation and interest rates",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "business-economy-6855497048"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-5366614390"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-7237243724"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-9969180929"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-9816919888"
+        }
+      ]
+    },
+    {
+      "id": "fed-enforcement",
+      "intent": "Items about a Federal Reserve enforcement action over misconduct at a bank.",
+      "query": "Federal Reserve enforcement action against bank staff",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-3007975874"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-4716748214"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-7511560814"
+        }
+      ]
+    },
+    {
+      "id": "bank-merger-approval",
+      "intent": "Items where a supervisor approves one bank buying or merging with another.",
+      "query": "regulator approves a bank merger or acquisition",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-1690495331"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-3423527298"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-3632879634"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-4455081399"
+        }
+      ]
+    },
+    {
+      "id": "canada-us-tariffs",
+      "intent": "Items about US-Canada tariffs, retaliation and the collapse of their trade talks.",
+      "query": "trade war between the United States and Canada",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-7281878237"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "world-9646888259"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "business-economy-1431236703"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "india-6613457118"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-9851726229"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-8915425299"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-2556599115"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-8502907231"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-2677948996"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-7011778859"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-8360871995"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-2552023715"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-3596637497"
+        }
+      ]
+    },
+    {
+      "id": "ontario-electricity-threat",
+      "intent": "Items about Ontario using electricity or critical minerals as trade leverage.",
+      "query": "Ontario threatens to cut electricity exports to the United States",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "world-8415939617"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-4340572812"
+        }
+      ]
+    },
+    {
+      "id": "india-transshipment",
+      "intent": "Items about the transshipment allegations between the US, India and China.",
+      "query": "United States accuses India of helping China avoid tariffs",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "india-01"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "india-02"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-8008981289"
+        }
+      ]
+    },
+    {
+      "id": "indian-ipo",
+      "intent": "Items about an Indian IPO opening, being subscribed, or debuting on an exchange.",
+      "query": "Indian company share listing and IPO subscription",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "india-1750406809"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-2127927362"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-2297936392"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-4209268973"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-7873604471"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-7949226767"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-6080256694"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-7502180323"
+        }
+      ]
+    },
+    {
+      "id": "shein-ipo",
+      "intent": "Items about Shein's Hong Kong flotation and its valuation.",
+      "query": "Shein listing in Hong Kong",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-6725986776"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-4984234579"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-2581906239"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "world-5647269693"
+        }
+      ]
+    },
+    {
+      "id": "rupee-dollar",
+      "intent": "Items reporting the rupee's daily move against the US dollar.",
+      "query": "the Indian rupee against the dollar",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "india-4677283822"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-3855364754"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-1407861231"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-7881516633"
+        }
+      ]
+    },
+    {
+      "id": "gold-price",
+      "intent": "Items reporting a move in the gold price or its effect on buyers.",
+      "query": "the price of gold",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "india-6191767543"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "business-economy-0219087363"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "business-economy-4289454145"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-2681362013"
+        },
+        {
+          "date": "2026-08-26",
+          "item_id": "business-economy-2985619454"
+        }
+      ]
+    },
+    {
+      "id": "supreme-court-india",
+      "intent": "Items reporting an order or direction from India's Supreme Court.",
+      "query": "a ruling by the Supreme Court of India",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "india-4460025131"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-9150438249"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-6028267941"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-1104011445"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-5277436941"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-0025500656"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-1347569986"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-4155000415"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-7366785603"
+        }
+      ]
+    },
+    {
+      "id": "us-mail-voting",
+      "intent": "Items about the US Supreme Court order on mail-in ballot restrictions.",
+      "query": "United States court decision on mail-in voting",
+      "relevant": [
+        {
+          "date": "2026-08-25",
+          "item_id": "world-3602759167"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "world-7014567709"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "world-3662218064"
+        }
+      ]
+    },
+    {
+      "id": "nist-measurement",
+      "intent": "Items reporting a NIST measurement, standard or laboratory technique.",
+      "query": "NIST measurement and materials research",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-2996791100"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-0204648921"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-2328095739"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-9542031931"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2215474916"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-3042368883"
+        }
+      ]
+    },
+    {
+      "id": "building-collapse",
+      "intent": "Items about the engineering investigation into a collapsed or failed building.",
+      "query": "investigation into a building collapse",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-3851443449"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-9483101651"
+        },
+        {
+          "date": "2026-08-26",
+          "item_id": "ai-1786350638"
+        }
+      ]
+    },
+    {
+      "id": "ai-agent-benchmark",
+      "intent": "Items introducing or discussing a benchmark for agent behaviour.",
+      "query": "a benchmark that evaluates AI agents",
+      "relevant": [
+        {
+          "date": "2026-08-21",
+          "item_id": "ai-05"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-1817077249"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1382643581"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-9582713942"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-6320577285"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1797274144"
+        }
+      ]
+    },
+    {
+      "id": "mistral-releases",
+      "intent": "Items announcing a Mistral model, agent or developer product.",
+      "query": "Mistral launches a new AI product",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-6524923842"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-3940481835"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-6383318080"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-7728004308"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2185307482"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-3665433144"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-3949698695"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-4068267556"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-3247513168"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-4859991201"
+        }
+      ]
+    },
+    {
+      "id": "mistral-partnership",
+      "intent": "Items about Mistral's industrial partnerships and acquisitions.",
+      "query": "Mistral partners with or buys an industrial company",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-8873518453"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1647882848"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2840585007"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-8668431173"
+        }
+      ]
+    },
+    {
+      "id": "openai-safety",
+      "intent": "Items about OpenAI's safety position, safety incidents or safety regulation.",
+      "query": "OpenAI on AI safety and misuse",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-4956348321"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1597255773"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-4228419661"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-5649632289"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-3799995637"
+        }
+      ]
+    },
+    {
+      "id": "gemini-model-launch",
+      "intent": "Items announcing a Gemini model or a Gemini capability.",
+      "query": "Google launches a new Gemini model",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-9431337572"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-2607835043"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-6739283876"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2913292143"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-7682985837"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-0084106813"
+        }
+      ]
+    },
+    {
+      "id": "gemini-robotics",
+      "intent": "Items about the Gemini Robotics models for controlling robots.",
+      "query": "robot control models from Google DeepMind",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-7508966046"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-3353510818"
+        }
+      ]
+    },
+    {
+      "id": "quantum-computing-ibm",
+      "intent": "Items about IBM's quantum programme: hardware, software or acquisitions.",
+      "query": "IBM quantum computing research and hardware",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-7756598748"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-8676441356"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-9208210396"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-3407932979"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-4752390179"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-9551069409"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-7863098572"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2880326373"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2785493360"
+        }
+      ]
+    },
+    {
+      "id": "humanoid-robots-china",
+      "intent": "Items about Chinese humanoid robot makers and robot competitions.",
+      "query": "humanoid robots in China",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "business-economy-6165086849"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "world-3483020808"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-0719925748"
+        }
+      ]
+    },
+    {
+      "id": "meta-infrastructure",
+      "intent": "Items about Meta's own recommendation, ads and GPU infrastructure work.",
+      "query": "Meta engineering for ads ranking and GPU infrastructure",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-3505556047"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-4782060312"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-6678113714"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-2965578605"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-0413281723"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1331275310"
+        }
+      ]
+    },
+    {
+      "id": "formal-verification",
+      "intent": "Items about formal verification and proof-based assurance of software.",
+      "query": "formally verified software and mathematical proof of correctness",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-7896475908"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-7839978925"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-0228667139"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-8540657006"
+        },
+        {
+          "date": "2026-08-26",
+          "item_id": "ai-2476065455"
+        }
+      ]
+    },
+    {
+      "id": "surveillance-privacy",
+      "intent": "Items about tracking people or selling their data, and the objections raised.",
+      "query": "surveillance and the sale of personal data",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-3847112234"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-1033742226"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-8121699061"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-7464320083"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2293150390"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-0931607616"
+        }
+      ]
+    },
+    {
+      "id": "tiktok-privacy-fines",
+      "intent": "Items about financial penalties on TikTok for privacy breaches.",
+      "query": "TikTok penalised over data privacy",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-0689546990"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "world-4288980375"
+        }
+      ]
+    },
+    {
+      "id": "ukraine-air-defence",
+      "intent": "Items about Ukraine seeking air defence support and allied meetings on it.",
+      "query": "Ukraine asks its allies for air defence",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-3510327339"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-1404416346"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2317967918"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "world-9117085673"
+        }
+      ]
+    },
+    {
+      "id": "uk-missile-ukraine",
+      "intent": "Items about the UK sharing missile components or blueprints with Ukraine.",
+      "query": "United Kingdom shares missile technology with Ukraine",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "world-3527245307"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-0751583515"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-6390150574"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-6191057378"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-4835559239"
+        }
+      ]
+    },
+    {
+      "id": "strikes-russian-fuel",
+      "intent": "Items about Ukrainian attacks on Russian refineries, fuel supply or logistics.",
+      "query": "Ukrainian strikes on Russian fuel and logistics sites",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-0416732307"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "world-3383952516"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-9462745892"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-6913437961"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-9023735229"
+        }
+      ]
+    },
+    {
+      "id": "ukraine-wartime-elections",
+      "intent": "Items about the argument over whether Ukraine should vote while at war.",
+      "query": "holding elections in Ukraine during the war",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-4769671143"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "world-1297427045"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-3478635553"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-0008733780"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-6743936766"
+        }
+      ]
+    },
+    {
+      "id": "kazakhstan-election",
+      "intent": "Items about the Kazakh parliamentary vote and its political effect.",
+      "query": "Kazakhstan parliamentary election",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-01"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-9285920107"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-8614946483"
+        }
+      ]
+    },
+    {
+      "id": "india-china-talks",
+      "intent": "Items about Indian and Chinese officials meeting ahead of a summit or visit.",
+      "query": "India and China diplomatic talks",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-03"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "india-3315568350"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "india-2446582727"
+        }
+      ]
+    },
+    {
+      "id": "crude-oil-price",
+      "intent": "Items about crude output, crude imports or the crude price.",
+      "query": "crude oil production and prices",
+      "relevant": [
+        {
+          "date": "2026-08-22",
+          "item_id": "energy-03"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "energy-03"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-3977753360"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-8654380215"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-7336820403"
+        }
+      ]
+    },
+    {
+      "id": "lng-exports",
+      "intent": "Items about LNG terminals, LNG export volumes and gas production records.",
+      "query": "liquefied natural gas exports",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-5579480922"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-4900689342"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-7625588420"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-9012994114"
+        }
+      ]
+    },
+    {
+      "id": "data-centre-power",
+      "intent": "Items about the power a data centre draws and how a grid or state responds.",
+      "query": "data centre electricity demand and the rules imposed on it",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "ai-9656456999"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-5852657010"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-6167950896"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-6167249830"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-0223586839"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-4567348803"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-8218902285"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-3098740293"
+        }
+      ]
+    },
+    {
+      "id": "hydrogen-projects",
+      "intent": "Items about making, moving or buying hydrogen.",
+      "query": "hydrogen production and hydrogen demand",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "energy-4797315234"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-7311081315"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-5490417269"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-4764440098"
+        },
+        {
+          "date": "2026-08-26",
+          "item_id": "energy-9599959730"
+        }
+      ]
+    },
+    {
+      "id": "geothermal-power",
+      "intent": "Items about geothermal plants, geothermal drilling and geothermal financing.",
+      "query": "next generation geothermal power",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "energy-9321499877"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-3643317910"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-6240086152"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-8293138176"
+        }
+      ]
+    },
+    {
+      "id": "tesla-products",
+      "intent": "Items about a Tesla vehicle, recall, factory or discontinued product.",
+      "query": "Tesla vehicles and Tesla product decisions",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "energy-6841865102"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-9674230977"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-0610964238"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-7892895884"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-0944436919"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-0313032802"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-2002180596"
+        }
+      ]
+    },
+    {
+      "id": "ev-charging",
+      "intent": "Items about charging infrastructure for electric vehicles.",
+      "query": "electric vehicle charging network",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-6643116910"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2835641414"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-9135493365"
+        }
+      ]
+    },
+    {
+      "id": "climate-adaptation",
+      "intent": "Items about adaptation to climate change rather than about emissions alone.",
+      "query": "cities and countries adapting to a hotter climate",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "world-7915128858"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "india-5764897330"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-1567427100"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-8392764134"
+        }
+      ]
+    },
+    {
+      "id": "drought-and-heat",
+      "intent": "Items where heat or drought reduces a harvest, a water level or generation.",
+      "query": "drought and heatwaves hitting crops and power supply",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "world-6310030356"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "energy-2885064116"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "business-economy-1195191564"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-3048908716"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-2500752782"
+        },
+        {
+          "date": "2026-08-26",
+          "item_id": "energy-8587034660"
+        }
+      ]
+    },
+    {
+      "id": "india-monsoon",
+      "intent": "Items about monsoon rain in India and its effect on people and crops.",
+      "query": "the Indian monsoon and its rainfall",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "india-1071444772"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-0614245375"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "india-9612648443"
+        }
+      ]
+    },
+    {
+      "id": "typhoon-flooding",
+      "intent": "Items about Typhoon Narra's rain and flooding.",
+      "query": "typhoon flooding in Asia",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "business-economy-6360595379"
+        },
+        {
+          "date": "2026-08-26",
+          "item_id": "world-6143461622"
+        }
+      ]
+    },
+    {
+      "id": "power-plant-hack",
+      "intent": "Items about the cyber attack that stopped a UK power plant.",
+      "query": "hackers shut down a power plant",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "business-economy-3811932104"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "energy-9640656191"
+        }
+      ]
+    },
+    {
+      "id": "chip-smuggling",
+      "intent": "Items about the prosecution of AI server smuggling out of Taiwan.",
+      "query": "smuggling AI servers to China",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "world-7688076090"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-9232919897"
+        }
+      ]
+    },
+    {
+      "id": "openai-inference-chip",
+      "intent": "Items about the Jalapeno chip and how it compares with existing systems.",
+      "query": "OpenAI's own inference chip",
+      "relevant": [
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-5800822714"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "world-1424162200"
+        }
+      ]
+    },
+    {
+      "id": "india-space-programme",
+      "intent": "Items about ISRO, Indian launch vehicles and Indian space startups.",
+      "query": "India's space programme and ISRO",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "india-03"
+        },
+        {
+          "date": "2026-08-23",
+          "item_id": "india-5356211956"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-9999744697"
+        }
+      ]
+    },
+    {
+      "id": "trump-spacex-stake",
+      "intent": "Items about Trump buying or disclosing SpaceX shares.",
+      "query": "Trump's shareholding in SpaceX",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "india-9314564098"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-8383852769"
+        }
+      ]
+    },
+    {
+      "id": "softbank-openai-bond",
+      "intent": "Items about SoftBank's retail bond issue for its OpenAI investment.",
+      "query": "SoftBank raising money to invest in OpenAI",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "world-7607671794"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-0479381940"
+        }
+      ]
+    },
+    {
+      "id": "alibaba-capital-raise",
+      "intent": "Items about Alibaba's share placement and the money it raised for AI.",
+      "query": "Alibaba raising capital for AI",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "india-1999484225"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "world-4462638645"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-7548721530"
+        }
+      ]
+    },
+    {
+      "id": "open-weights-release",
+      "intent": "Items announcing or arguing about openly released model weights.",
+      "query": "an open weights model release",
+      "relevant": [
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-4973868294"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-9054626131"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "ai-8170493098"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-1357564976"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-2636513345"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-3583048896"
+        },
+        {
+          "date": "2026-08-25",
+          "item_id": "ai-3154487509"
+        }
+      ]
+    },
+    {
+      "id": "india-police-arrests",
+      "intent": "Items reporting an Indian police arrest in a criminal case.",
+      "query": "police arrest a suspect in India",
+      "relevant": [
+        {
+          "date": "2026-08-23",
+          "item_id": "india-0272493709"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-9524943488"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-0115858189"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-6376366544"
+        },
+        {
+          "date": "2026-08-24",
+          "item_id": "india-9131639089"
+        }
+      ]
+    }
+  ]
+}
