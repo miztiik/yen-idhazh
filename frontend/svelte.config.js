@@ -1,4 +1,5 @@
 import adapter from '@sveltejs/adapter-static';
+import { handleUnseenRoutes } from './prerender-guard.js';
 
 // Every page is prerendered, so the reading path makes zero runtime requests
 // (Rule #1) and there is no loading state to design.
@@ -6,7 +7,10 @@ export default {
 	kit: {
 		adapter: adapter({ fallback: '404.html', strict: false }),
 		paths: { base: process.env.BASE_PATH ?? '' },
-		prerender: { handleHttpError: 'warn' },
+		// A dated route has no page until a day is published, and a clone has to
+		// build before its first run. The guard tells that apart from a page that
+		// went missing - see `prerender-guard.js`.
+		prerender: { handleHttpError: 'warn', handleUnseenRoutes },
 		// GitHub Pages serves no headers we control, so this ships as a meta tag
 		// in every prerendered page. `connect-src 'self'` is the one that matters:
 		// it makes exfiltration from a planted instruction a browser-level
