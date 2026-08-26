@@ -28,6 +28,7 @@ from typing import Final
 
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.taxonomy import Taxonomy
+from idhazh.contracts.watchlist import Watchlist
 
 _WORD: Final = re.compile(r"[a-z0-9]+")
 
@@ -59,8 +60,8 @@ def tags[Tag: str](vocabulary: Mapping[Tag, Sequence[str]], *parts: str | None) 
     )
 
 
-def tagged(article: Article, *, taxonomy: Taxonomy) -> Article:
-    """The same article, carrying the lenses and events its own words earn.
+def tagged(article: Article, *, taxonomy: Taxonomy, watchlist: Watchlist) -> Article:
+    """The same article, carrying the lenses, events and entities its own words earn.
 
     Article in, article out, so this is testable on a file and orderable in the
     worker loop without knowing anything else about it. It runs on the extract
@@ -82,5 +83,6 @@ def tagged(article: Article, *, taxonomy: Taxonomy) -> Article:
         update={
             "lenses": tags(taxonomy.lens_terms(), article.title, article.text),
             "events": tags(taxonomy.event_terms(), article.title, article.text),
+            "entities": tags(watchlist.entity_terms(), article.title, article.text),
         }
     )

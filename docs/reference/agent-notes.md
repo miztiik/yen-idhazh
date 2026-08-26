@@ -242,6 +242,29 @@ gh api "repos/<owner>/<repo>/actions/runs/<id>/artifacts" --jq '[.artifacts[].na
 A count that disagrees is a truncated download, not a missing artifact.
 Re-run the download; do not conclude the run produced less than it did.
 
+### The `items-*` artifacts are the only corpus of real article text
+
+Nothing commits an article body - we publish a link and our own summary, never
+the source text - so a rule that reads `Article.text` cannot be measured against
+`frontend/public/digest/` at all. The measurable corpus is a completed pipeline
+run's artifacts:
+
+```powershell
+gh run list --repo <owner>/<repo> --workflow digest.yml --limit 5 --json databaseId,conclusion
+foreach ($n in 0,1,2,3) { gh run download <run-id> --repo <owner>/<repo> --name "items-$n" --dir "$env:TEMP\corpus\items-$n" }
+(Get-ChildItem "$env:TEMP\corpus" -Recurse -Filter '*.article.json').Count
+```
+
+Two things bite. **Filter on `status == "ok"`**: a failed article is a real
+payload with no `text`, and it deflates every percentage silently - 160 files
+were 121 usable articles on the run measured 2026-08-26, a 24 percent
+difference. And **artifacts expire**, so a number measured this way carries its
+run id, not just its date, or nobody can reproduce it.
+
+Used on 2026-08-26 to tune the lens and event vocabularies before wiring them.
+It changed the answer: a candidate list that looked reasonable put one event on
+34.7 percent of articles.
+
 ## The Actions cache
 
 **A cache key that does not name what it holds freezes that thing silently.**

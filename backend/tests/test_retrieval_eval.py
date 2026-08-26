@@ -16,6 +16,7 @@ committed under `frontend/static/` and the archive is committed under
 from __future__ import annotations
 
 import math
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -433,18 +434,23 @@ def test_the_report_says_how_much_of_the_list_nobody_judged(
     )
 
 
-def test_the_entity_tier_reports_its_own_emptiness(corpus: Corpus) -> None:
-    """Tier one is built to spec and yields nothing, because nothing writes entities.
+def test_the_entity_tier_builds_one_query_per_slug_that_clears_the_floor(corpus: Corpus) -> None:
+    """Tier one: one query per entity slug carried by enough items, no labeller.
 
-    `DigestItem.entities` is copied from `Article.entities` and no stage ever
-    fills that field, so the free deterministic tier has no slugs to work from.
-    That is a defect in the pipeline, not in this tier, and it is recorded here
-    rather than hidden: when entities start being written this assertion is what
-    tells somebody to delete it and read the tier's number instead.
+    Until 2026-08-26 this asserted the tier's own **emptiness**, because nothing
+    wrote `entities` and the free tier had no slugs to work from. A
+    deterministic tagger writes them now. No committed payload was rewritten, so
+    the count climbs as new days land - which is exactly why this can no longer
+    assert a number. It asserts the behaviour instead, and holds whether the
+    corpus carries no slug or a hundred.
     """
-    slugs = {slug for item in corpus.items for slug in item.entities}
-    assert slugs == set(), (
-        "entities are populated now - tier one has become the free instrument it was "
-        "designed to be. Remove this assertion and gate on its recall."
-    )
-    assert retrieval.entity_queries(corpus, min_items=3) == ()
+    counts = Counter(slug for item in corpus.items for slug in item.entities)
+    expected = sorted(slug for slug, carried in counts.items() if carried >= 3)
+    queries = retrieval.entity_queries(corpus, min_items=3)
+
+    assert [query.id for query in queries] == [f"entity-{slug}" for slug in expected]
+    for query in queries:
+        slug = query.id.removeprefix("entity-")
+        assert len(query.relevant) >= 3, "a query below the floor must not be built"
+        assert len(query.relevant) == counts[slug], "the relevant set is every item carrying it"
+        assert query.query == slug.replace("-", " ")

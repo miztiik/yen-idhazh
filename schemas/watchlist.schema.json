@@ -51,6 +51,7 @@
       "description": "One named organisation.",
       "properties": {
         "aliases": {
+          "description": "Every name this entity is called. An item is tagged with the entity when one of these appears in its words as a whole-word phrase, case-folded, and the same set decides the watchlist ranking bonus against a candidate's feed title. Nothing is derived from the id or the display name. An entity with no alias is never matched and never lifts a score.",
           "items": {
             "type": "string"
           },
@@ -189,6 +190,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Stated the match rule on EntityDef.aliases.",
+      "version": "2026-08-26",
+      "why": "The field was declared on day one and read nowhere, so entities were empty on every committed item and the watchlist ranking bonus had never moved a score. The rule is now written where the terms live. Description-only, so no payload changes and none needs a migration."
+    },
+    {
       "change": "Initial shape: entities with their own feeds, plus the EDGAR policy.",
       "version": "2026-08-21",
       "why": "Contracts before logic - the entity bonus is computed against a fixed shape."
@@ -207,7 +213,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-21",
+      "default": "2026-08-26",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -218,5 +224,5 @@
   ],
   "title": "Watchlist",
   "type": "object",
-  "version": "2026-08-21"
+  "version": "2026-08-26"
 }
