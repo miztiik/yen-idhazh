@@ -80,9 +80,10 @@ npm run bundle-gate
 `check` is `svelte-check`. `build` is the strongest of the three: every route is
 prerendered, so a contract-invalid payload fails the build rather than the page.
 
-`bundle-gate` does two things. It asserts no encoder lands on the first-load
-path, and it compares every route's first-load JavaScript against the weight
-recorded for it in `frontend/bundle-baseline.json`.
+`bundle-gate` does three things. It asserts no encoder lands on the first-load
+path, it compares every route's first-load JavaScript against the weight
+recorded for it in `frontend/bundle-baseline.json`, and it holds every page that
+renders no day under the ceiling configured for it in `config/idhazh.json`.
 
 **That comparison is a two-sided ratchet, not a budget.** A route that grew past
 the recorded weight fails, and so does one that shrank past it - an unclaimed
@@ -106,6 +107,34 @@ written most of it:
 Nothing writes that file but a person. There is no `--update` flag and no
 environment variable that skips the check, because a gate whose own tooling
 updates its baseline cannot fail.
+
+**The page ceiling is one-sided, and it bounds the document rather than the
+script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
+`gzip -9` size each route's prerendered HTML may reach. A page that got lighter
+needs no permission, so there is no lower bound. Only routes that render no day
+are bounded - `/404`, `/archive/`, `/console/` and `/evals/` today. A day page
+weighs what the day published, so a number over it would cap the news instead of
+catching a regression; those routes are covered by the marker count in
+`frontend/tests/payload-weight.spec.ts`, which runs in the browser suite.
+
+Two failures are worth telling apart:
+
+- **A page took on bytes it does not render.** A day payload inlined by a layout
+  is how this last happened, and it cost 313,000 bytes. Remove them.
+- **The page genuinely carries more.** Raise the number in `config/idhazh.json`
+  **and** in the `PageWeightConfig` default in
+  `backend/idhazh/contracts/app_config.py` together, in the commit that earned
+  the bytes, and say in the message what they buy. Two copies that disagree fail
+  a backend test, so neither can move alone.
+
+**`/archive/` grows about 170 KB gzipped per published day**, because it inlines
+every committed day to feed the on-device search, and `/console/` grows with the
+ledger its charts read. Their ceilings are therefore countdowns rather than
+steady bounds: they fail on a published day, and the answer that day is the
+archive plan under `TODO/`, not a bigger number. Watched happening on
+2026-08-26 - a re-run of that day moved `/archive/` 102,222 bytes and
+`/console/` 9,105, and the gate failed on both
+([../reference/measurements.md](../reference/measurements.md)).
 
 ## The browser suite
 
