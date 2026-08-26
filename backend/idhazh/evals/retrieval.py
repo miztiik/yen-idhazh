@@ -23,6 +23,13 @@ beside it so nothing is hidden.
 **A miss and an absence are different failures.** An item with no vector cannot
 be retrieved at any threshold, and counting that as a ranking failure would
 blame the encoder for a gap in coverage. Every result carries both.
+
+**The number is a lower bound, not recall.** The labels were pooled from an
+index that could see 44.5 percent of the corpus, so a right answer that carried
+no vector on labelling day could not be labelled. It can be retrieved now, and
+this metric counts it as a wrong answer. Every result therefore also carries
+`unlabelled` - how many of the slots a query filled with an item nobody judged.
+That is the blindness, printed rather than argued about.
 """
 
 from __future__ import annotations
@@ -109,6 +116,8 @@ class QueryOutcome:
     found: int
     slots: int
     reciprocal_rank: float
+    #: Slots filled by an item no labeller ever judged. Not a failure - a blind spot.
+    unlabelled: int = 0
 
     @property
     def recall(self) -> float:
@@ -211,6 +220,19 @@ class RetrievalReport:
             return 0.0
         return sum(o.gold_with_vector for o in self.outcomes) / gold
 
+    @property
+    def unlabelled_share(self) -> float:
+        """Share of filled slots holding an item nobody judged either way.
+
+        Every one of them is counted as a wrong answer, and some of them are
+        right answers the labeller could not see. This is how far the number
+        below could be from the truth, in the direction of too low.
+        """
+        filled = sum(o.found + o.unlabelled for o in self.outcomes)
+        if not filled:
+            return 0.0
+        return sum(o.unlabelled for o in self.outcomes) / filled
+
     def summary(self) -> str:
         return (
             f"recall@{self.result_limit} {self.recall:.3f} "
@@ -220,6 +242,8 @@ class RetrievalReport:
             f"{self.unanswerable} queries have no embedded answer at all; "
             f"MRR {self.mean_reciprocal_rank:.3f} (diagnostic); "
             f"gold coverage {self.gold_coverage:.1%}; "
+            f"{self.unlabelled_share:.1%} of filled slots hold an unjudged item, "
+            f"so this is a lower bound; "
             f"corpus {self.corpus_searchable}/{self.corpus_items} items carry a vector; "
             f"floor {self.similarity_floor}"
         )
@@ -368,6 +392,7 @@ def evaluate(
                 found=len(found),
                 slots=limit,
                 reciprocal_rank=1.0 / found[0] if found else 0.0,
+                unlabelled=len(hits) - len(found),
             )
         )
     return RetrievalReport(

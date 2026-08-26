@@ -886,14 +886,17 @@ class AssistConfig(Model):
         le=1.0,
         description=(
             "Cosine similarity a result must reach to be shown at all. A SELECTOR, "
-            "never reported to a reader as a quality signal. Measured 2026-08-26 on the "
-            "committed archive (580 embedded items, 60 labelled queries, 34,715 "
-            "non-answer pairs): non-answers score a mean of 0.074 and a p95 of 0.269, "
-            "right answers a p10 of 0.371. The two overlap, so there is no clean cut. "
-            "0.35 cuts surviving non-answers from 11.4% to 1.9% and costs 0.035 of "
-            "reachable recall@10 - about one standard error, so not a measurable loss. "
-            "The floor it replaced was 0.20, at which all eight off-domain probe queries "
-            "returned results (up to 18 of them) and the empty state could never fire."
+            "never reported to a reader as a quality signal. Re-measured 2026-08-26 on "
+            "the backfilled archive (Windows 11, 12 logical CPUs, onnxruntime 1.29.0; "
+            "2,119 embedded items, 60 labelled queries, 126,843 same-domain non-answer "
+            "pairs): non-answers score a mean of 0.0761, a p95 of 0.2716 and a p99 of "
+            "0.3992; the 297 right answers score a p10 of 0.3753 and a median of 0.5314. "
+            "The noise distribution did not move when the corpus grew 3.7x - the earlier "
+            "reading over 34,715 pairs was mean 0.074, p95 0.269, p99 0.399 - so the "
+            "floor does not move either. 0.35 sits at the p98.12 of same-domain noise, "
+            "keeps 93.6% of right answers, and lets 1.88% of non-answers survive. 0.45 "
+            "would cut noise to 0.50% and cost 0.073 of recall@10, which is two standard "
+            "errors and so a measurable loss."
         ),
     )
     result_limit: int = Field(
@@ -901,11 +904,13 @@ class AssistConfig(Model):
         ge=1,
         description=(
             "How many results the flat list shows. The list carries no rank cue, so "
-            "this is also the denominator the recall bar is measured against."
+            "this is also the denominator the recall bar is measured against - the "
+            "denominator is min(right answers, this), because more right answers than "
+            "slots cannot all be shown."
         ),
     )
     recall_min: float = Field(
-        default=0.85,
+        default=0.69,
         ge=0.0,
         le=1.0,
         description=(
@@ -914,7 +919,13 @@ class AssistConfig(Model):
             "purpose: an item the pipeline never embedded cannot be retrieved at any "
             "threshold, so counting it here would fail this gate for a defect in "
             "another stage. Set two standard errors below the 2026-08-26 baseline of "
-            "0.931 +/- 0.030 (n=47)."
+            "0.767 +/- 0.036 (n=60), measured on Windows 11, 12 logical CPUs, "
+            "onnxruntime 1.29.0 against the fully backfilled archive. That baseline is a "
+            "LOWER BOUND: 55.5% of the unlabelled items now holding a slot were "
+            "unembedded when the labels were pooled, so the labeller could not have "
+            "judged them, and every one of them is counted as a wrong answer. Until the "
+            "labels are completed against the whole corpus this bar can drift down for a "
+            "reason that is not a regression - see docs/concepts/evaluation.md."
         ),
     )
 
@@ -924,6 +935,32 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26T11:20",
+            change=(
+                "assist.recall_min default moved from 0.85 to 0.69. "
+                "assist.similarity_floor keeps 0.35 and carries a re-measured description."
+            ),
+            why=(
+                "0.85 was calibrated against an archive where only 44.5% of items carried "
+                "a vector, and the backfill took that to 99.9%. On the same 47 queries, "
+                "the same labels and the same ranker, the number went 0.902 +/- 0.036 to "
+                "0.743 +/- 0.042. That is not a ranking regression: holding the corpus to "
+                "the same 944 items and swapping in the re-encoded vectors gives 0.910 "
+                "+/- 0.034, so the vectors improved by 0.007. The whole effect is 1,175 "
+                "items that the index could not see competing for the same ten slots "
+                "(-0.142) plus a denominator that grew with coverage (-0.018). The new "
+                "baseline over all 60 queries is 0.767 +/- 0.036 and the bar is two "
+                "standard errors below it. It is a lower bound: 55.5% of the unlabelled "
+                "items now holding a slot were unembedded when the labels were pooled, so "
+                "nobody could have judged them, and they are counted as wrong answers. "
+                "The floor does not move because the measurement says not to - the "
+                "same-domain noise distribution is unchanged at 3.7x the pair count "
+                "(p95 0.269 -> 0.2716, p99 0.399 -> 0.3992). Same fields, same types: an "
+                "older config still validates and a committed config that names 0.85 "
+                "still loads. A changed default, so it is stamped here (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26T10:10",
             change="Added the assist search knobs: similarity_floor, result_limit and recall_min.",

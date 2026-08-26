@@ -176,6 +176,37 @@ def test_the_standard_error_needs_more_than_one_query() -> None:
     assert single.standard_error == 0.0
 
 
+def test_the_unjudged_share_is_counted_over_filled_slots_not_over_slots() -> None:
+    """A query the floor cut short did not fail to judge the slots it never used."""
+    report = RetrievalReport(
+        outcomes=(
+            QueryOutcome(
+                query_id="full",
+                gold=4,
+                gold_with_vector=4,
+                found=4,
+                slots=10,
+                reciprocal_rank=1.0,
+                unlabelled=6,
+            ),
+            QueryOutcome(
+                query_id="cut-short",
+                gold=2,
+                gold_with_vector=2,
+                found=2,
+                slots=10,
+                reciprocal_rank=1.0,
+                unlabelled=0,
+            ),
+        ),
+        corpus_items=100,
+        corpus_searchable=100,
+        result_limit=10,
+        similarity_floor=0.35,
+    )
+    assert report.unlabelled_share == 0.5
+
+
 def test_the_entity_tier_needs_a_slug_on_enough_items() -> None:
     corpus = Corpus(
         items=(
@@ -326,15 +357,23 @@ def test_the_floor_lets_the_empty_state_fire(corpus: Corpus, config: AppConfig) 
     """A question the archive cannot answer must return nothing.
 
     'Nothing in the archive is close to that' is a promise, and a floor below the
-    same-domain noise makes it one the selector cannot keep. These probes are
-    deliberately far from a technology-and-world digest; at the floor this
-    replaced most of them returned a full list.
+    same-domain noise makes it one the selector cannot keep. At the floor this
+    replaced, 0.20, every one of these returned a full list.
+
+    A probe is only a probe while it stays off-domain, and the corpus decides
+    that, not the person who wrote it. 'restoring a 1960s mechanical wristwatch
+    movement' was one of these until 2026-08-26, when the vector backfill made
+    the archive's smartwatch items reachable; it then matched a Pebble Time 2
+    review at 0.413 and a Garmin deal at 0.360, which are wristwatches and not
+    noise. It is retired here rather than deleted quietly, and replaced by a
+    probe with more room: the four below scored 0.235, 0.295, 0.258 and 0.194
+    against this corpus on 2026-08-26, so the tightest has 0.055 of margin.
     """
     probes = [
         "recipe for sourdough starter using rye flour",
         "baroque counterpoint in the fugues of Buxtehude",
-        "restoring a 1960s mechanical wristwatch movement",
         "grammar of the Basque ergative case",
+        "hand-stitching a leather saddle",
     ]
     embedder = Embedder(REPO_ROOT)
     if not embedder.available:
@@ -351,6 +390,47 @@ def test_the_floor_lets_the_empty_state_fire(corpus: Corpus, config: AppConfig) 
     }
     noisy = {text: len(hits) for text, hits in answered.items() if hits}
     assert noisy == {}, f"the floor {config.assist.similarity_floor} let noise through: {noisy}"
+
+
+def test_the_floor_sits_above_the_measured_noise(
+    corpus: Corpus, queries: tuple[LabelledQuery, ...], config: AppConfig
+) -> None:
+    """The floor's real justification, asserted on the corpus rather than argued.
+
+    The probe test above can be weakened by choosing gentle probes. This one
+    cannot: it scores every real question against every real item that does not
+    answer it, and requires the floor to clear the 95th percentile of that.
+    Measured 2026-08-26 over 126,843 pairs the p95 is 0.2716, so 0.35 has room;
+    if the archive ever grows noisier than the selector, this says so first.
+    """
+    embedded = retrieval.embed_queries(REPO_ROOT, queries)
+    noise = retrieval.null_scores(corpus, queries, embedded)
+    assert len(noise) > 10_000
+    p95 = retrieval.quantile(noise, 0.95)
+    assert config.assist.similarity_floor >= p95, (
+        f"the floor {config.assist.similarity_floor} is under the p95 of same-domain "
+        f"noise ({p95:.4f} over {len(noise)} pairs), so the empty state cannot fire"
+    )
+
+
+def test_the_report_says_how_much_of_the_list_nobody_judged(
+    report: RetrievalReport,
+) -> None:
+    """The gate metric is a lower bound, and this is the size of the gap.
+
+    Every slot held by an unjudged item counts as a wrong answer. Some of them
+    are right answers: the labels were pooled from an index that could see 44.5
+    percent of the corpus, and 55.5 percent of the unlabelled slot-holders were
+    unembedded on labelling day (2026-08-26). No bar is set on this number - it
+    is printed so that nobody reads the recall figure as the truth, and it falls
+    when the labels are completed.
+    """
+    print(f"\nunjudged slot share {report.unlabelled_share:.1%}")
+    assert 0.0 <= report.unlabelled_share <= 1.0
+    assert report.unlabelled_share > 0.0, (
+        "every filled slot is now a labelled answer - the label set has caught up "
+        "with the corpus and the lower-bound caveat can come out of the docs"
+    )
 
 
 def test_the_entity_tier_reports_its_own_emptiness(corpus: Corpus) -> None:
