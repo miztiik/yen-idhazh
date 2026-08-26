@@ -570,12 +570,12 @@ class RetentionConfig(Model):
         default=800,
         ge=1,
         description=(
-            "Opens an issue above this, and does nothing else: it never fails a build "
+            "Logs a warning above this, and does nothing else: it never fails a build "
             "and never deletes. Sized in days of warning, not in round numbers. It sits "
             "224 MB below the platform's 1 GB ceiling, which is 26 days of warning at "
             "the fastest growth this project has measured (a PNG on every item, "
             "8,537 KB/day, 2026-08-23), against a 14-day target. The target is a "
-            "judgement about one maintainer reading one issue, not a measurement "
+            "judgement about one maintainer acting on one warning, not a measurement "
             "(Rule #10). The arithmetic and its inputs are in "
             "docs/reference/measurements.md, 'Where the alarm fires, and what it buys'."
         ),
@@ -798,47 +798,35 @@ class UiConfig(Model):
 
 
 class PageWeightConfig(Model):
-    """The most a prerendered page may weigh on the wire, gzipped.
+    """A gzip-size ceiling per prerendered route, enforced by
+    `frontend/scripts/bundle-gate.mjs`.
 
-    A limit, not a record. `frontend/bundle-baseline.json` holds measurements of
-    first-load JavaScript and is rewritten whenever the bundler moves; these are
-    numbers a person chose and raises on purpose, which is what a knob is
-    (Rule #6).
+    The gate reads `config/idhazh.json`, never this model, so a number here
+    would be a second copy of what the file already holds, free to drift from
+    the one the gate enforces. The default is empty for that reason: the
+    committed config is the single source, and this model owns only the shape
+    and the validation (Rule #6).
 
-    Only a route that renders no day is bounded. A day page weighs what the day
-    published, so a number over it would cap the news instead of catching a
-    regression. Those routes are covered by the marker count in
-    `frontend/tests/payload-weight.spec.ts`, which is the same assertion stated
-    in a unit that does not move when the pipeline publishes.
+    Only a route whose HTML does not grow with the published corpus is worth a
+    fixed ceiling. `/404` and `/evals/` render no day and no ledger, so their
+    weight is a function of source alone. `/archive/` inlines every committed
+    day and `/console/` grows with the ledger its charts read, so a byte ceiling
+    on either fails on an ordinary publish rather than catching a regression;
+    the marker count in `frontend/tests/payload-weight.spec.ts` covers the class
+    those two belong to, and a route the config does not name is reported by the
+    gate without failing it.
     """
 
     ceilings_bytes: dict[str, int] = Field(
-        default_factory=lambda: {
-            "/404": 1_127,
-            "/archive/": 1_676_110,
-            "/console/": 137_567,
-            "/evals/": 2_475,
-        },
+        default_factory=dict,
         description=(
             "Route class -> the largest gzip -9 size that route's prerendered HTML may "
-            "reach. Every prerendered route that renders no day needs one, and a "
-            "ceiling naming no route in the build fails the gate. Each default is the "
-            "heaviest of three builds of one tree on 2026-08-26, six published days, "
-            "plus the 64-byte noise floor in frontend/bundle-baseline.json - and "
-            "nothing beyond it, because a ceiling above today's weight is a gate that "
-            "never fires. /console/ was re-measured later that day, over the seven "
-            "published days and on the tree that added its 'What the model did' "
-            "section. /archive/ was re-measured later still, on the tree that put the "
-            "search box on that page: the same tree built with main's frontend renders "
-            "1,675,988 bytes and with the search box 1,676,050, so the box costs 62 "
-            "bytes and the old 1,676,048 had 60 of headroom. The regression these catch "
-            "is a day "
-            "payload inlined again, which was 313,000 bytes when it last happened, so "
-            "the noise floor costs the gate nothing. /archive/ and /console/ also grow "
-            "as the pipeline publishes, so those two fire on a published day, and the "
-            "answer that day is the archive plan rather than a bigger number - the one "
-            "exception being the backfill that plan itself waits on, which is why "
-            "/archive/ reads 1.68 MB here."
+            "reach. The committed values live in config/idhazh.json, which the gate "
+            "reads; this default is empty so the numbers are not duplicated here where "
+            "they could drift from the file the gate enforces (Rule #6). A route the "
+            "object does not name is measured and reported by the gate but not failed, "
+            "so only routes whose weight does not grow with the published corpus - "
+            "/404 and /evals/ today - carry a ceiling."
         ),
     )
 
@@ -947,6 +935,23 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26T21:45",
+            change=(
+                "page_weight.ceilings_bytes default is now empty, and /archive/ and "
+                "/console/ are dropped from the committed config."
+            ),
+            why=(
+                "The default duplicated the four numbers the gate reads from "
+                "config/idhazh.json, so raising a ceiling meant editing two files a test "
+                "then forced to agree - config is the single source now (Rule #6). "
+                "/archive/ grows with every committed day and /console/ with the ledger "
+                "its charts read, so their fixed ceilings failed on ordinary publishes "
+                "rather than catching regressions; the gate now reports an unnamed route "
+                "without failing it. Older config still validates and the empty default "
+                "changes no committed value, so no read-side migration (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26T20:00",
             change="ModelRef gained an optional revision: the hub commit the weights are at.",

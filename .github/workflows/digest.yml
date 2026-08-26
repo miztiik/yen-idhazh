@@ -735,6 +735,28 @@ jobs:
             --commit "${{ github.sha }}" \
             --runner ubuntu-latest
 
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install the site
+        working-directory: frontend
+        run: npm ci
+
+      # The day just written rides inside frontend/public, and /archive/ inlines
+      # every committed day for the on-device search - so this job is the one
+      # that can push a page past its ceiling or a payload the build rejects.
+      # Proving the site builds and holds its weight BEFORE the commit is the
+      # difference between a run that publishes nothing and one that breaks main
+      # (Rule #2). It is the guard backfill.yml already runs.
+      - name: Build the site and hold it to its weight ceilings
+        working-directory: frontend
+        run: |
+          npm run build
+          npm run bundle-gate
+
       # The checkout above carries main's tip at TRIGGER time, and this run has
       # been going for two to three hours by now. So the day was just built on a
       # base that old, and the push below is the first thing to find out.

@@ -1214,6 +1214,16 @@ These are the numbers behind `page_weight.ceilings_bytes` in
 `config/idhazh.json`, which
 [../how-to/run-the-gates.md](../how-to/run-the-gates.md) explains.
 
+**Superseded 2026-08-26: only `/404` and `/evals/` are still enforced.** The
+`/archive/` and `/console/` ceilings below were removed from the committed
+config after they behaved as the countdowns this section already documents -
+firing on ordinary publishes and being raised to silence them rather than
+catching any regression. Both routes grow with the published corpus and the
+ledger, so their growth is covered by the marker count in
+`frontend/tests/payload-weight.spec.ts` and, for `/archive/`, by its own plan.
+The tables that follow stay as the dated record of what those ceilings were and
+why a fixed byte number could not hold them (Rule #10).
+
 | Route | Build 1 | Build 2 | Build 3 | Range | Ceiling committed |
 | --- | ---: | ---: | ---: | ---: | ---: |
 | `/404` | 1,060 | 1,062 | 1,062 | 2 | **1,127** |
@@ -1464,7 +1474,7 @@ after both. See [../architecture/publishing/layout.md](../architecture/publishin
 
 ### Where the alarm fires, and what it buys
 
-`retention.site_budget_mb` is the size at which a run opens an issue. It is an
+`retention.site_budget_mb` is the size at which a run logs a warning. It is an
 alarm and not a gate: it fails no build and deletes nothing
 ([../concepts/config.md](../concepts/config.md)). This section is the only home
 for why it sits where it does.
