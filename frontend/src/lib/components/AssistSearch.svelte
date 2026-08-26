@@ -22,8 +22,10 @@
 	let searched = $state(false);
 
 	// Truthiness, not `!== null`. A payload written before the embeddings block
-	// existed has no key at all, and `undefined !== null` would offer a reader a
-	// 33 MB download that could not search anything.
+	// existed has no key at all, and `undefined !== null` would offer a reader the
+	// whole download for an archive that could not be searched. No figure in this
+	// sentence on purpose: it said 33 MB while the offer below said 43, and
+	// `DOWNLOAD_MB` is the one that is measured against the committed files.
 	const available = $derived(days.some((day) => Boolean(day.embeddings)));
 
 	async function enable() {
