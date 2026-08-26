@@ -1422,12 +1422,38 @@ still holds for any raster we ever add. **Since 2026-08-23 the live scenario is
 the last row**: images do not fit the runner, so no run produces one
 ([Images do not fit the runner](#images-do-not-fit-the-runner)).
 
+Every row divides 1 GiB (1,048,576 KB) by that scenario's daily bytes, starting
+from an empty site. The image rows are unmeasured arithmetic from 2026-08-21.
+The last row is measured.
+
 | Scenario | KB/day | days to 1 GB |
 | --- | --- | --- |
 | PNG, an image on every item | 8,537 | 123 (4 months) |
 | WebP, an image on every item | 1,567 | 669 (22 months) |
 | WebP, an image on one item in three | 547 | 1,917 (5.25 years) |
-| **no images - what actually ships** | **37** | **28,340** |
+| **no images - what actually ships** | **1,767** | **593** |
+
+**Measured 2026-08-25** on a developer machine (i7-1265U, Windows), by summing
+every file in `frontend/public/digest/2026/08/24/`, the largest committed day.
+That is 1,809,818 B: `digest.json` at 1,570,461 B (1,533.7 KB), 20 rendered
+SVGs at 227,711 B, and `run.json`. n=1. The four other committed days measure
+15.8, 40.4, 387.1 and 1,466.3 KB, so the spread across days is the day itself -
+4 items against 731 - and not measurement error.
+
+**The old 37 KB/day and 28,340 days were wrong by 48x.** 37 KB was a 17-item day
+priced from the 2.2 KB-per-item fixture estimate, and the day has since grown to
+731 items. 28,340 days was 77 years of headroom; the measured figure is under
+two.
+
+Two corrections a reader of that row needs:
+
+- **The site is not empty.** The whole build measured 133.8 MB on 2026-08-25
+  ([First-load JavaScript per route](#first-load-javascript-per-route)), most of
+  it the committed sentence-encoder under `frontend/static/` at 45.3 MB. Against
+  the remaining headroom, 1,767 KB/day is **516 days**, not 593.
+- **1,767 KB/day is not a growth rate yet.** It is one day's bytes, and days
+  have run 4, 10, 147, 731 and 581 items. Quote it as the current worst day, and
+  re-measure over a longer stretch before anyone plans against it.
 
 The ordering of the levers falls straight out of this: encoding buys 5.6x,
 honouring the visual rule buys another 2.9x, and retention is what remains
@@ -1483,6 +1509,86 @@ be said to cover it.
 whether the alarm sits below 1,024 MB passes at 1,023 MB, which is the last row
 of the table and zero days of warning. `backend/tests/test_retention.py` pins the
 days instead, against the rates above.
+
+## The published ledger
+
+**Measured 2026-08-25** on a developer machine (i7-1265U, Windows, CPython
+3.14), over the committed `state/published.csv`. This is deterministic file
+arithmetic, so the spread is zero and the hardware matters only for the
+in-memory figure at the end.
+
+| Quantity | Value | Method |
+| --- | --- | --- |
+| Rows | 1,449 | `csv.DictReader` |
+| Bytes | 311,325 (304.0 KB) | `stat` |
+| Mean row | **214.9 B** | bytes / rows |
+| `version` share | 24,633 B, 7.9% | field-width sum, one separator per cell |
+| `url_key` share | 94,185 B, 30.3% | same |
+| **`canonical_url` share** | **150,937 B, 48.5%** | same |
+| `published_on` share | 15,939 B, 5.1% | same |
+| `item_id` share | 25,580 B, 8.2% | same |
+
+Projected forward at 214.9 B a row:
+
+| Rows a day | A year of rows | A year of bytes |
+| --- | --- | --- |
+| 295, the observed mean over five committed days | 107,675 | **23.1 MB** |
+| 1,000, the structural ceiling below | 365,000 | **78.4 MB** |
+| 200, one run's worth | 73,000 | **15.7 MB** |
+
+The observed mean is 1,473 items over the five committed days of
+`frontend/public/digest/2026/08/`: 4, 10, 147, 731 and 581. A five-day mean over
+a corpus that went from 4 items to 731 inside it is a description, not a
+forecast. The ceiling row is the one to design against.
+
+**What it costs to read.** `ledger.load_published` parses the whole file into a
+list of dicts and then folds it into one map. `tracemalloc` peak over the
+committed ledger is **1,037,214 B**, 716 B a row, for 1,449 rows. At the
+365,000-row structural ceiling that is **261 MB**, or 1.6 percent of the
+runner's 16 GB (Rule #2). The per-row figure is CPython 3.14 string and dict
+overhead on this machine and will differ on the runner's interpreter build; the
+conclusion - that a year of this file is a rounding error against 16 GB - does
+not depend on which side of 300 MB it lands.
+
+The plan stage is also the job that loads no model, so this allocation never
+sits beside 4.68 GiB of weights.
+
+**`canonical_url` is read by nothing on the read path.** `load_published` reads
+`url_key` and `published_on` by name; no other reader exists. It is 104.2 B of
+the 214.9 B row, so removing it would save about **11 MB a year** at the
+observed mean and 38 MB at the structural ceiling. It is recoverable forever by
+joining `item_id` and `published_on` against the day payload's `source_url`.
+What it buys is that a person can grep the ledger by address. What that means
+for the contract, and why the column stays, is
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+
+## The safety ceiling fires on every run
+
+**Measured 2026-08-25** by reading `items_planned` out of every run record in
+the five committed `run.json` files under `frontend/public/digest/2026/08/`.
+Deterministic; no spread.
+
+| Digest day | Runs | `items_planned` per run |
+| --- | --- | --- |
+| 2026-08-21 | 2 | 5, 5 |
+| 2026-08-22 | 1 | 17 |
+| 2026-08-23 | 3 | 17, 17, **200** |
+| 2026-08-24 | 5 | **200, 200, 200, 200, 200** |
+| 2026-08-25 | 4 | **200, 200, 200, 200** |
+
+`run.safety_ceiling_per_run` moved from 17 to 200 on 2026-08-23. **Every one of
+the ten runs since has planned exactly 200**, which is the ceiling value.
+`cli._within_ceiling` drops the lowest-scoring stories across every vertical
+when the pool is larger, so a plan that lands on the ceiling ten times running
+is a plan that was cut ten times running. The job log's
+`safety ceiling reached planned=N ceiling=200` line names the pool size directly
+and is the reading to take next.
+
+**This is a fact about the guard, not a proposal about the number.** What it
+costs the reader, and whether 200 should move, is a `config/` question that this
+page does not answer - see
+[../concepts/config.md](../concepts/config.md) on why a guard sitting in the
+working range stops being a guard.
 
 ## First-load JavaScript per route
 
@@ -2079,6 +2185,8 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Whether a day at eight work shards publishes** | **the work phase is measured, the day was not published** | run `32869125768` halved the slowest worker and then lost the day when `assemble` hit an asset-name conflict ([Eight work shards](#eight-work-shards)). A second dispatch at `shards = 8`, after the asset-name fix, that reaches `assemble` and commits its day. |
+| **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
+| **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate, and now to the CPU part; one observation per part** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names). The first run to use them narrows it further: in run `32869125768` the two `work` shards on Intel Xeon parts prefilled at 37.5 and 37.7 tok/s while the six on AMD EPYC parts prefilled at 10.7 to 11.3, same day, same build, same weights, same prompt, with decode again moving the other way ([Eight work shards](#eight-work-shards)). That is one observation per CPU model, so it names a suspect rather than proving a cause; a `route` job on each part, on the same day, would settle it. |
 | **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
@@ -2107,6 +2215,8 @@ happened three times on this page.
 - [../../CLAUDE.md](../../CLAUDE.md) - Rule #2 (the runner is the architecture) and #10 (measured, not estimated).
 - [github-actions.md](github-actions.md) - the workflows that print and upload the lines above, take these measurements, and how to dispatch one.
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - the published-size arithmetic these numbers feed.
+- [../architecture/sources/freshness.md](../architecture/sources/freshness.md) - the published ledger these ledger figures size, and the per-run ceiling.
+- [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the rule that decides which ledgers shard.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - the batch-size rule these numbers set.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - the prompt the token count above measures.
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the procedure these measurements gate.

@@ -372,11 +372,15 @@ def _first_sights(
 
 
 def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedItem]:
-    """The crash guard. A normal day never reaches it.
+    """The crash guard. Measured 2026-08-25, it fires on every run.
 
     It drops the lowest-scoring stories across every vertical rather than
     truncating the list, so a mis-parsed feed costs the weakest items and not
     whichever vertical happened to sort last.
+
+    Supply has overtaken it: every run since the ceiling moved to 200 has
+    planned exactly 200, so this is currently what decides the size of a run.
+    See `docs/architecture/sources/freshness.md`.
     """
     if len(items) <= ceiling:
         return items

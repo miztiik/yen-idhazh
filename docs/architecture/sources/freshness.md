@@ -62,6 +62,39 @@ So the assemble stage appends to `state/published.csv`, and the planning step sk
 
 Neither ledger is ever rewritten. A mutable `published` flag on a seen row would turn an append into a read-modify-write over the whole file, and two runs racing on that would lose rows.
 
+### The published ledger is one file, and the read has no window
+
+`state/seen/` and `state/feed-health/` shard by month. `state/published.csv` does
+not, and its dedupe read is not windowed either. Both follow from the question
+it answers: **published is forever.** "Have we ever published this address?" has
+no time bound, so every row has to be read on every run. Sharding a file you
+always read whole adds file opens and removes nothing, and filtering rows after
+reading them saves no I/O at all. The general rule is in
+[../contracts/schemas.md](../contracts/schemas.md).
+
+The bound this costs, measured 2026-08-25 and recorded in
+[../../reference/measurements.md](../../reference/measurements.md): 1,449 rows
+at 214.9 B, so 78.4 MB a year at the structural ceiling of 1,000 rows a day.
+`load_published` peaks at 716 B a row while it reads, which is 261 MB at that
+ceiling - 1.6 percent of the runner's 16 GB, in the one job that loads no model.
+
+**`canonical_url` is 48.5 percent of the row and no code reads it.**
+`load_published` reads `url_key` and `published_on` by name, and nothing else
+opens the file. The address is recoverable forever by joining `item_id` and
+`published_on` against that day's payload, where it is already published as
+`source_url`. What the column actually buys is that a person can grep the ledger
+for an address and get the day and the item id back. Without it the same
+question needs the sha256 of the canonicalised URL computed first, which is a
+tool run rather than a look
+([../../how-to/troubleshoot-one-url.md](../../how-to/troubleshoot-one-url.md)
+shows how much canonicalisation sits between a pasted URL and its key).
+
+The column stays. Dropping it is a breaking change to a persisted contract
+(`CLAUDE.md` section 11) that unblocks no behaviour and saves about 11 MB a year
+at the observed rate. It needs its own plan, its own migration and its own
+rewrite of the committed ledger. It is recorded here so nobody re-derives the
+byte arithmetic, and so nobody removes the column believing it costs nothing.
+
 ## An item's name comes from its address
 
 `item_id` is `<vertical>-<ten digits>`, derived from the URL key and nothing else.
@@ -88,6 +121,11 @@ morning because age is a weight and not a gate.
 The daily cap was removed because it was answering a question nobody had asked. It decided in advance that twenty articles was the right number of good articles for a day, which is not a thing that can be known in advance - some days have thirty worth reading and some have six. The score already orders them; a cap only truncates the order at an arbitrary point. Supply and the score are the honest answer, and the ceiling catches the failure mode a cap was accidentally also catching.
 
 **Reader dissented, and the dissent stays on the record.** Their case: 146 feeds produce roughly 60 fresh items a day, AI holds about a third of them, and with no per-vertical ceiling AI eats the page. They named this the one change in the set that cannot be patched later, and they brought evidence rather than a worry - the 2026-08-21 page published four items, all AI, and the words Energy, India, World and Business do not appear on it. The counter is that `max_per_source` and each vertical's own `min_feeds` floor already spread a day, and that if the prediction holds the correction is a number in `config/taxonomy.json` rather than a code change. The test is falsifiable and worth running: **if most days come out one-vertical, Reader was right, and the fix belongs in the source list rather than in a cap.**
+
+The supply premise in that dissent is superseded. It was written when a day was
+four items. On 2026-08-24 the day published 731 and every run planned 200, so
+"roughly 60 fresh items a day" is now low by an order of magnitude. Read the
+dissent for its argument about vertical mix, not for its volume figure.
 
 The age rule went the same way for the same reason. A 24-hour cutoff and a decay curve agree on every ordinary day, and disagree exactly on the days that matter: the quiet ones, where the cutoff empties a vertical and the curve publishes the best thing available. Losing a good item to a rule that was meant to protect quality is the worst outcome available.
 
@@ -145,10 +183,16 @@ and guessing it is what this refusal is about.
 | Writing the published ledger at plan time | A run that dies mid-way would leave behind a claim it published something it did not, and the article would never be publishable again. |
 | A per-run reading budget at the planning step | Refused 2026-08-25 by Carmack and Fowler. The bound already exists one stage later and is a clock; the artifact loss it answered already carries `if: always()`; its value came from a measurement taken before `diagram` was switched off; and it deletes about 436 items from a 731-item day. See the design rationale above. |
 | A score floor set now rather than measured | A floor is the right control and the wrong thing to guess. It waits on the retrieval eval, which is the instrument that can say what a score is worth. |
+| Sharding `state/published.csv` by month | The question has no time bound, so every shard is opened on every run. It adds file opens and removes nothing. |
+| Windowing the dedupe read without sharding the file | Filtering rows after reading them saves no I/O. A window pays only when it can decide which files to skip. |
+| Pruning the published ledger | It is the only record of what a digest carried. Pruning makes a re-publish look new, which is the exact failure the ledger exists to stop. |
+| Dropping `canonical_url` to shrink the row | A breaking change to a persisted contract for about 11 MB a year, unblocking no behaviour. It needs its own plan and its own migration. |
 
 ## See also
 
 - [discovery.md](discovery.md) - what the sources are, how they are tiered, and how the score is built.
+- [../contracts/schemas.md](../contracts/schemas.md) - the row contracts under `state/`, and the rule that decides when a ledger shards.
+- [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes, the read cost, and the ceiling measurement quoted above.
 - [health.md](health.md) - the record of what every feed did, and the quarantine that reads it.
 - [../contracts/determinism.md](../contracts/determinism.md) - the fingerprint that makes "this re-run changed nothing" checkable.
 - [../publishing/visuals.md](../publishing/visuals.md) - the route stage clock, and the router-side version of the budget refused above.

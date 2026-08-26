@@ -33,5 +33,5 @@
 		</ul>
 	{/if}
 
-	<AssistSearch days={data.payloads} />
+	<AssistSearch days={data.payloads} assist={data.assist} />
 </section>

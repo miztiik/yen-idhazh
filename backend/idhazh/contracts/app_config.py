@@ -815,7 +815,7 @@ class PageWeightConfig(Model):
     ceilings_bytes: dict[str, int] = Field(
         default_factory=lambda: {
             "/404": 1_127,
-            "/archive/": 1_676_048,
+            "/archive/": 1_676_110,
             "/console/": 137_567,
             "/evals/": 2_475,
         },
@@ -828,7 +828,11 @@ class PageWeightConfig(Model):
             "nothing beyond it, because a ceiling above today's weight is a gate that "
             "never fires. /console/ was re-measured later that day, over the seven "
             "published days and on the tree that added its 'What the model did' "
-            "section. The regression these catch is a day "
+            "section. /archive/ was re-measured later still, on the tree that put the "
+            "search box on that page: the same tree built with main's frontend renders "
+            "1,675,988 bytes and with the search box 1,676,050, so the box costs 62 "
+            "bytes and the old 1,676,048 had 60 of headroom. The regression these catch "
+            "is a day "
             "payload inlined again, which was 313,000 bytes when it last happened, so "
             "the noise floor costs the gate nothing. /archive/ and /console/ also grow "
             "as the pipeline publishes, so those two fire on a published day, and the "
@@ -849,10 +853,12 @@ class PageWeightConfig(Model):
 
 
 class AssistConfig(Model):
-    """On-device search: the runner embeds the day, the reader's tab embeds a query.
+    """On-device archive search: what the encoder reads, and what the list shows.
 
-    Both knobs describe how much of an item the encoder is allowed to read, so
-    they are set from what the encoder can do rather than from taste.
+    Every value here was a literal with no override path (Rule #6). The first two
+    describe how much of an item the encoder is allowed to read; the rest describe
+    what the reader's list keeps. All five are set from measurement rather than
+    from taste.
     """
 
     max_tokens: int = Field(
@@ -886,6 +892,54 @@ class AssistConfig(Model):
             "0.01 and 0.99 selects the same three items."
         ),
     )
+    similarity_floor: float = Field(
+        default=0.35,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Cosine similarity a result must reach to be shown at all. A SELECTOR, "
+            "never reported to a reader as a quality signal. Re-measured 2026-08-26 on "
+            "the backfilled archive (Windows 11, 12 logical CPUs, onnxruntime 1.29.0; "
+            "2,119 embedded items, 60 labelled queries, 126,843 same-domain non-answer "
+            "pairs): non-answers score a mean of 0.0761, a p95 of 0.2716 and a p99 of "
+            "0.3992; the 297 right answers score a p10 of 0.3753 and a median of 0.5314. "
+            "The noise distribution did not move when the corpus grew 3.7x - the earlier "
+            "reading over 34,715 pairs was mean 0.074, p95 0.269, p99 0.399 - so the "
+            "floor does not move either. 0.35 sits at the p98.12 of same-domain noise, "
+            "keeps 93.6% of right answers, and lets 1.88% of non-answers survive. 0.45 "
+            "would cut noise to 0.50% and cost 0.073 of recall@10, which is two standard "
+            "errors and so a measurable loss."
+        ),
+    )
+    result_limit: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "How many results the flat list shows. The list carries no rank cue, so "
+            "this is also the denominator the recall bar is measured against - the "
+            "denominator is min(right answers, this), because more right answers than "
+            "slots cannot all be shown."
+        ),
+    )
+    recall_min: float = Field(
+        default=0.69,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "The regression bar for recall@result_limit over the committed query set, "
+            "counted over right answers that carry a vector. Coverage is excluded on "
+            "purpose: an item the pipeline never embedded cannot be retrieved at any "
+            "threshold, so counting it here would fail this gate for a defect in "
+            "another stage. Set two standard errors below the 2026-08-26 baseline of "
+            "0.767 +/- 0.036 (n=60), measured on Windows 11, 12 logical CPUs, "
+            "onnxruntime 1.29.0 against the fully backfilled archive. That baseline is a "
+            "LOWER BOUND: 55.5% of the unlabelled items now holding a slot were "
+            "unembedded when the labels were pooled, so the labeller could not have "
+            "judged them, and every one of them is counted as a wrong answer. Until the "
+            "labels are completed against the whole corpus this bar can drift down for a "
+            "reason that is not a regression - see docs/concepts/evaluation.md."
+        ),
+    )
 
 
 class AppConfig(Contract):
@@ -906,6 +960,66 @@ class AppConfig(Contract):
                 "and the adoption target names one, so it has readers. Optional with a "
                 "null default, so the published run manifests that carry no revision "
                 "still validate and no read-side migration is needed (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-26T11:45",
+            change="page_weight.ceilings_bytes['/archive/'] moved from 1,676,048 to 1,676,110.",
+            why=(
+                "The archive page now carries the search box, and a box costs bytes. "
+                "Measured by building one tree twice on the same machine, same day "
+                "payloads: with main's frontend /archive/ gzips to 1,675,988 and with "
+                "the search box to 1,676,050, so the box costs 62 bytes against 60 of "
+                "headroom. The new ceiling keeps the same 60-byte allowance the other "
+                "three routes carry rather than rounding up to a number that would stop "
+                "the gate firing. What the bytes buy is the input, its label and its "
+                "empty state on the one page that can search the whole archive. Same "
+                "field, same type: an older config still validates. A changed default, "
+                "so it is stamped here (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-26T11:20",
+            change=(
+                "assist.recall_min default moved from 0.85 to 0.69. "
+                "assist.similarity_floor keeps 0.35 and carries a re-measured description."
+            ),
+            why=(
+                "0.85 was calibrated against an archive where only 44.5% of items carried "
+                "a vector, and the backfill took that to 99.9%. On the same 47 queries, "
+                "the same labels and the same ranker, the number went 0.902 +/- 0.036 to "
+                "0.743 +/- 0.042. That is not a ranking regression: holding the corpus to "
+                "the same 944 items and swapping in the re-encoded vectors gives 0.910 "
+                "+/- 0.034, so the vectors improved by 0.007. The whole effect is 1,175 "
+                "items that the index could not see competing for the same ten slots "
+                "(-0.142) plus a denominator that grew with coverage (-0.018). The new "
+                "baseline over all 60 queries is 0.767 +/- 0.036 and the bar is two "
+                "standard errors below it. It is a lower bound: 55.5% of the unlabelled "
+                "items now holding a slot were unembedded when the labels were pooled, so "
+                "nobody could have judged them, and they are counted as wrong answers. "
+                "The floor does not move because the measurement says not to - the "
+                "same-domain noise distribution is unchanged at 3.7x the pair count "
+                "(p95 0.269 -> 0.2716, p99 0.399 -> 0.3992). Same fields, same types: an "
+                "older config still validates and a committed config that names 0.85 "
+                "still loads. A changed default, so it is stamped here (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-26T10:10",
+            change="Added the assist search knobs: similarity_floor, result_limit and recall_min.",
+            why=(
+                "Archive search had no measurement at all, and its two behavioural "
+                "constants were literals in the ranking module with no override path "
+                "(Rule #6). The floor was 0.20 and is now 0.35, which is a measured "
+                "change rather than a preference: at 0.20 every one of eight off-domain "
+                "probe queries returned results - one of them eighteen - so 'Nothing in "
+                "the archive is close to that' was a promise the selector could not keep. "
+                "Measured 2026-08-26 on the committed archive over 60 hand-labelled "
+                "queries: the floor cuts surviving non-answers from 11.4% to 1.9% and "
+                "costs 0.035 of reachable recall@10, which is inside one standard error. "
+                "recall_min is the regression bar the new backend eval enforces. All "
+                "three are additive with defaults, so an older config still validates and "
+                "no read-side migration is needed (section 11)."
             ),
         ),
         ChangelogEntry(
@@ -1248,9 +1362,9 @@ class AppConfig(Contract):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
+    assist: AssistConfig = Field(default_factory=AssistConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
-    assist: AssistConfig = Field(default_factory=AssistConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @model_validator(mode="after")
