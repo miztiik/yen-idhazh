@@ -2,16 +2,18 @@
 
 **Last Updated**: 2026-08-26
 
-Fifteen defects found while shipping and re-reading the freshness, identity,
+Sixteen defects found while shipping and re-reading the freshness, identity,
 health and evaluation work, plus the console charts. None was in the scope that
 found it. Defects 11 and 12 were found by running the gates and by opening the
-published day in a browser, not by reading code; 13 and 14 the same way, and 15
-by redrawing a chart that had to work around it.
+published day in a browser, not by reading code; 13 and 14 the same way, 15 by
+redrawing a chart that had to work around it, and 16 by asking what could ever
+make the new embeddings merge rule fire.
 
 **Twelve are closed.** Defect 8 is closed on the item copy and on the day's band
-bar. **Two are open.** Defect 2 has its instrument built and is waiting on human
-labels and calendar time, which no amount of engineering closes. Defect 15 costs
-a reader nothing today, so it was filed rather than fixed.
+bar. **Three are open.** Defect 2 has its instrument built and is waiting on
+human labels and calendar time, which no amount of engineering closes. Defect 15
+costs a reader nothing today, so it was filed rather than fixed. Defect 16 is a
+question for a person, not a task for an agent, so it is recorded and left.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -33,6 +35,88 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 13 | One stage is 2600x the others, so a linear timing axis answers for one of four | 2 | FIXED - 2026-08-25 |
 | 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | FIXED - 2026-08-25 |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 4 | **OPEN - no reader-facing symptom** |
+| 16 | The published item carries revision machinery no run can trigger | 5 | **OPEN - a decision, not a task** |
+
+## 16 - The published item carries revision machinery no run can trigger (OPEN)
+
+Found 2026-08-26 while asking what could ever make the new embeddings merge rule
+fire. PR #114 made a day prefer a re-summarized item's newer vector. That rule is
+right, and it is unreachable, because the text the vector tracks cannot change.
+
+**Three things, each checked against the code.**
+
+`backend/idhazh/contracts/digest_day.py` lines 112 to 123 declare `updated_at`
+and `updated_by_run`; lines 131 to 137 bind the two together, and line 257 checks
+that a revising run was recorded. Nothing in `backend/idhazh/` or
+`frontend/src/` ever sets either one. `frontend/src/lib/payload/types.ts` lines
+49 to 51 declare both and no component reads them.
+`backend/idhazh/assemble.py` line 370 `run_that_wrote()` is the join the fields
+exist for, and its only callers are `backend/tests/test_pipeline.py` lines 1089
+to 1103.
+
+`backend/idhazh/assemble.py` line 248 is
+`fresh = [item for item in items if item.item_id not in already]`. An item the
+day already holds is dropped whole, so the day keeps run 1's words.
+
+That line is the second gate, not the first. `backend/idhazh/cli.py` line 220
+loads `state/published.csv` and line 234 hands it to the plan;
+`backend/idhazh/rank.py` line 246 drops any candidate whose address is already
+published. So the producer has no path to a revision at all. The plan stage
+refuses to re-plan the item, and assemble would drop it if it arrived by some
+other route.
+
+**Measured on this checkout, 2026-08-26.** Six committed day payloads, 2001
+items. All 2001 carry the `updated_at` key and 1109 carry `updated_by_run`. **Not
+one has ever been non-null.** The fields have never held a value.
+
+**The doc is not the defect.**
+[`docs/architecture/publishing/layout.md`](../docs/architecture/publishing/layout.md)
+line 56 says "A revision is visible or it does not happen." Beside its
+neighbours - "Membership only grows", "An item is never removed, demoted or
+hidden because someone read it" - it reads as a design rule rather than a claim
+about shipped code, and the rule holds: the system never revises, so it never
+revises silently. What is wrong is narrower. A published contract carries two
+fields, an invariant and a join helper for an event the producer cannot emit,
+and one of those fields now sits in 2001 committed items forever.
+
+**Level 5** (CLAUDE.md section 6), so it is recorded and not fixed. The two ways
+out are not two implementations of one fix. They are two answers to one product
+question: will yen-idhazh ever rewrite words a reader may already have read?
+
+- **Make revision real.** This reverses the published-ledger skip rule, which is
+  load-bearing in three places: `rank.plan_vertical` uses it to stop a repeat
+  that a freshness window cannot stop, `cli.py` line 1192 writes it, and
+  [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md) line 338 rests
+  the eval denominator on it - the four duplicate rows of 2026-08-23 exist
+  because that ledger was empty. It also changes what a shared link shows after
+  it was shared.
+- **Delete the two fields.** Measured: `DigestItem` is `extra="forbid"`, so a
+  model with the two fields removed rejects **all 2001** committed items -
+  `extra_forbidden` on `updated_at`, and on `updated_by_run` for the 1109 that
+  carry it. That needs a read-side migration stripping two keys from every day
+  forever, for a field that never carried a value, or a rewrite of six committed
+  payloads.
+
+**Rulings.**
+
+Reader, asked whether a shared link may change after it was shared: the answer
+is not "never". It is that a reader must not be made to doubt their own memory.
+A page that revises and says so is fine. A page that never revises is fine. A
+page that improves the wording quietly is the one that costs the trust. The
+system is in the second state today, so nothing is being taken from a reader
+while this sits open.
+
+Fowler, asked for the contract shape: two rulings that both hold, which is why
+this is a decision and not a task. Name the consumer (worldview 14) - there is no
+writer, no reader and no dashboard, so the delete-first instinct says the fields
+should not exist. But contract is the last step of expand-migrate-contract
+(worldview 5), available only once no live payload carries the field, and here
+every one does. The right shape is known and the sequence that reaches it is
+blocked by 2001 committed items.
+
+**What to do meanwhile: nothing.** The cost of leaving it open is not paid by a
+reader. It is that the next person reads the contract, sees an invariant about
+revisions, and believes the pipeline can produce one.
 
 ## 13 - One stage is 2600x the others, so a linear timing axis answers for one of four (FIXED)
 
