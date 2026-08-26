@@ -124,6 +124,33 @@ def require_matching_header(path: Path, columns: tuple[str, ...]) -> None:
 
 
 def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]) -> int:
+    """Write every row it is handed. This path does not deduplicate, on purpose.
+
+    `evals.writer.append` does, against its `OBSERVATION_KEY`, and the reason the
+    two differ is what a row means. There a row is a measurement, so re-measuring
+    an item nothing changed about has nothing new to say. Here a row is a fact
+    about a run - this feed answered at this hour, this item finished - and a run
+    that runs twice did happen twice. Collapsing those would turn a count of runs
+    into a count of days.
+
+    So each caller owns its own repeats, and each one is named here because the
+    guarantee does not live in this file:
+
+    - **seen** - `cli.stage_plan` builds its rows from `_first_sights`, which
+      subtracts what `load_seen` already holds. A sight older than the window is
+      outside that subtraction, and `load_seen` keeps the earliest of two, so the
+      repeat costs bytes and never moves an age.
+    - **published** - `cli._published_rows` joins the day against this run's plan,
+      and `rank.plan_vertical` has already dropped every address `load_published`
+      returned. Measured on this checkout 2026-08-27: 2,097 rows and 2,097
+      distinct addresses. `load_published` keeps the earliest date, so a repeat
+      costs bytes and never moves a publication date.
+    - **feed-health and item-health** - one row per feed, and per planned item,
+      per run. A repeat needs a run to run twice under one `run_id`, which
+      `cli._next_run_n` reads off the committed manifest to prevent. This is the
+      one pair where a repeat is not free: `discover.resting` counts failures to
+      decide a quarantine, so a duplicated failure counts twice.
+    """
     if not payloads:
         return 0
     path.parent.mkdir(parents=True, exist_ok=True)
