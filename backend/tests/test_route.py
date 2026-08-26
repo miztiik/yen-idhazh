@@ -10,14 +10,17 @@ from __future__ import annotations
 
 import itertools
 import json
+import socket
+import threading
 from collections.abc import Mapping
 from decimal import Decimal
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
 from pydantic import ValidationError
 
-from idhazh import assemble, config
+from idhazh import assemble, cli, config
 from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
@@ -48,6 +51,8 @@ ARTICLE_TEXT = (
     "February and 2,900 megawatt hours in January. Costs fell 12 percent. The operator "
     "employs 48 people and expects 1.4 billion dollars in revenue by 2030."
 )
+
+LLM_ERRORS = FIXTURES_DIR / "completions" / "errors"
 
 
 def _draft_completion(draft: Mapping[str, object]) -> Completion:
@@ -795,3 +800,118 @@ class TestChartDrafts:
         )
         record = manifest.runs[-1]
         assert (record.charts_drafted, record.items_routed, record.items_prefiltered) == (4, 6, 1)
+
+
+# --- A router that answered is not a router that is down ---------------------
+
+
+class RecordedErrorEndpoint:
+    """A real local server that replays one recorded llama-server error reply.
+
+    Nothing is mocked: the router makes its ordinary POST over a loopback
+    socket, and the bytes it reads back are the ones a llama-server wrote
+    (Rule #7). The stdlib server owns the framing, so the test is about the
+    body and not about HTTP.
+    """
+
+    def __init__(self, status: int, body: bytes) -> None:
+        class Handler(BaseHTTPRequestHandler):
+            protocol_version = "HTTP/1.1"
+
+            def do_POST(self) -> None:
+                self.rfile.read(int(self.headers.get("Content-Length") or 0))
+                self.send_response(status)
+                self.send_header("Content-Type", "application/json")
+                self.send_header("Content-Length", str(len(body)))
+                self.end_headers()
+                self.wfile.write(body)
+
+        self._server = ThreadingHTTPServer(("127.0.0.1", 0), Handler)
+        self._thread = threading.Thread(target=self._server.serve_forever, daemon=True)
+
+    @property
+    def endpoint(self) -> str:
+        return f"http://127.0.0.1:{self._server.server_port}/v1/chat/completions"
+
+    def __enter__(self) -> RecordedErrorEndpoint:
+        self._thread.start()
+        return self
+
+    def __exit__(self, *_exc: object) -> None:
+        self._server.shutdown()
+        self._server.server_close()
+        self._thread.join(timeout=5.0)
+
+
+def refused_endpoint() -> str:
+    """A loopback port that refused a real socket before the test used it."""
+    with socket.socket() as reserved:
+        reserved.bind(("127.0.0.1", 0))
+        port = int(reserved.getsockname()[1])
+    return f"http://127.0.0.1:{port}/v1/chat/completions"
+
+
+def routed_against(endpoint: str, article: Article, summary: Summary) -> tuple[Route, bool]:
+    """One routing decision made against `endpoint`, over facts that reach the model.
+
+    The article text is replaced because `_route_one` never posts when no
+    enabled kind could survive `to_route`. A fixture whose numbers hold no unit
+    group three bars wide would exercise the skip and report it as a pass, so
+    every test below also asserts the model was asked.
+    """
+    return cli._route_one(
+        article.model_copy(update={"text": ARTICLE_TEXT}),
+        summary,
+        config.load(CONFIG_DIR),
+        endpoint=endpoint,
+    )
+
+
+def test_a_router_prompt_the_server_refused_for_length_says_so(
+    article_ok: Article, summary_ok: Summary, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The oracle: a running router that refused is never reported as a dead one."""
+    caplog.set_level("WARNING", logger="idhazh")
+    body = (LLM_ERRORS / "context-exceeded.json").read_bytes()
+
+    with RecordedErrorEndpoint(400, body) as server:
+        decision, asked = routed_against(server.endpoint, article_ok, summary_ok)
+
+    assert asked is True, "the fixture has to reach the model, or this proves nothing"
+    assert "router prompt did not fit the context window" in caplog.text
+    assert "router unreachable" not in caplog.text
+    assert decision.item_id == summary_ok.item_id
+    assert decision.kind is VisualKind.NONE
+    assert decision.rationale, "degrade, do not fail: the item is still decided"
+
+
+def test_a_refused_router_connection_is_still_an_unreachable_router(
+    article_ok: Article, summary_ok: Summary, caplog: pytest.LogCaptureFixture
+) -> None:
+    """The other half of it: naming one cause must not rename the other."""
+    caplog.set_level("WARNING", logger="idhazh")
+
+    decision, asked = routed_against(refused_endpoint(), article_ok, summary_ok)
+
+    assert asked is True
+    assert "router unreachable" in caplog.text
+    assert "context window" not in caplog.text
+    assert decision.item_id == summary_ok.item_id
+    assert decision.kind is VisualKind.NONE
+    assert decision.rationale, "degrade, do not fail: the item is still decided"
+
+
+def test_a_router_error_the_transport_does_not_recognise_stays_unreachable(
+    article_ok: Article, summary_ok: Summary, caplog: pytest.LogCaptureFixture
+) -> None:
+    """An unrecognised status must not become a new silent class."""
+    caplog.set_level("WARNING", logger="idhazh")
+    body = (LLM_ERRORS / "server-unavailable.json").read_bytes()
+
+    with RecordedErrorEndpoint(503, body) as server:
+        decision, asked = routed_against(server.endpoint, article_ok, summary_ok)
+
+    assert asked is True
+    assert "router unreachable" in caplog.text
+    assert "context window" not in caplog.text
+    assert decision.kind is VisualKind.NONE
