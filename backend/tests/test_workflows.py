@@ -22,6 +22,8 @@ import yaml  # type: ignore[import-untyped]
 from conftest import CONFIG_DIR, REPO_ROOT, read_text
 
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
+from utilities.measure_llm import ModelRef as MeasureModelRef
+from utilities.measure_llm import parse_model_refs
 
 WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
 SCRIPTS_DIR: Final = REPO_ROOT / ".github" / "scripts"
@@ -73,13 +75,30 @@ LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256su
 LLAMA_PINNED_ENDPOINT: Final = (
     "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}"
 )
-# The four refs the daily run needs and the one place they are written. The
+# The refs the daily run needs and the one place they are written. The
 # `plan` job reads `config/idhazh.json` and republishes them, so the workflow
-# holds no model repo and no weights filename of its own.
-MODEL_REF_OUTPUTS: Final = ("summarize_repo", "summarize_file", "route_repo", "route_file")
+# holds no model repo, no weights filename and no upload of those weights.
+MODEL_REF_OUTPUTS: Final = (
+    "summarize_repo",
+    "summarize_revision",
+    "summarize_file",
+    "route_repo",
+    "route_revision",
+    "route_file",
+)
+MODEL_REF_FIELDS: Final = ("repo", "revision", "file")
 # What the daily run used to call them at workflow scope. Named here so the
 # defect cannot come back under its own name at any scope.
-MODEL_ENV_NAMES: Final = frozenset({"MODEL_REPO", "MODEL_FILE", "ROUTE_REPO", "ROUTE_FILE"})
+MODEL_ENV_NAMES: Final = frozenset(
+    {
+        "MODEL_REPO",
+        "MODEL_REVISION",
+        "MODEL_FILE",
+        "ROUTE_REPO",
+        "ROUTE_REVISION",
+        "ROUTE_FILE",
+    }
+)
 # The weights cache jobs, and the config role each one serves.
 WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "route": "route"}
 # Bumped from v3 when the weights half of the key moved off the workflow `env`
@@ -1355,6 +1374,49 @@ def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
         assert not named, f"{scope} names a model through env: {sorted(named)}"
 
 
+def test_no_workflow_that_loads_weights_writes_a_model_ref_or_a_moving_one() -> None:
+    """The Oracle, widened to every workflow that downloads weights.
+
+    `digest.yml` had already been cleaned; `measure.yml` still carried the two
+    production refs as job `env` and a third copy as a dispatch default, and
+    `validate.yml` carried a candidate's repo and filename as defaults. Each was
+    a second answer to a question config already answers, and each one drifts
+    silently the day config moves (Rule #6).
+
+    Every download also names an immutable commit. A branch hands back whatever
+    was uploaded last, so a measurement taken from one describes bytes nobody
+    can fetch again (Rule #10).
+
+    A dispatch INPUT is not a hardcode and is deliberately left alone: it is how
+    an operator points the measurement harness at a model config does not name.
+    What this test forbids is a literal written into the file.
+    """
+    hub = re.compile(r"huggingface\.co/(?!\$\{)")
+    branch = re.compile(r"(?:resolve|tree|blob|raw)/(?:main|master)\b")
+    # A weights repository is `<publisher>/<name>GGUF` by convention, so the
+    # shape catches the next one; the two publishers that were written into
+    # these files are named outright, so a repository that breaks the
+    # convention is still caught.
+    repo_shape = re.compile(r"[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]*GGUF\b")
+    publishers = re.compile(r"\b(?:Qwen|unsloth|bartowski|TheBloke)\b")
+
+    for filename in sorted(LLAMA_RUNTIME_WORKFLOWS):
+        text = read_text(WORKFLOWS_DIR / filename)
+        assert ".gguf" not in text, f"{filename}: a weights filename belongs in config"
+        assert not hub.search(text), f"{filename}: a repository literal belongs in config"
+        assert not repo_shape.search(text), f"{filename}: a repository literal belongs in config"
+        assert not publishers.search(text), f"{filename}: a model publisher belongs in config"
+        assert not branch.search(text), f"{filename}: a download must name an immutable commit"
+
+        for scope, env in _every_env(_load_workflows()[filename]):
+            for name, value in env.items():
+                if name not in MODEL_ENV_NAMES:
+                    continue
+                assert isinstance(value, str) and value.startswith("${{"), (
+                    f"{filename}: {scope} writes {name} as a literal"
+                )
+
+
 def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Path) -> None:
     """`needs` resolves before a job's first step. `steps` does not.
 
@@ -1376,7 +1438,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     assert _run_the_models_step(script, REPO_ROOT) == {
         f"{role}_{field}": models[role][field]
         for role in ("summarize", "route")
-        for field in ("repo", "file")
+        for field in MODEL_REF_FIELDS
     }
 
     # Every ref is substituted straight into a shell command downstream, so the
@@ -1391,13 +1453,117 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
         _run_the_models_step(script, tmp_path)
 
 
-def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
-    """Both halves of what the entry holds, and both from one source.
+def test_the_measurement_harness_defaults_to_the_configured_models(tmp_path: Path) -> None:
+    """The default comes from config; a dispatch input still wins over it.
 
-    The fetch step runs only on a cache miss, so a key that omits either half
-    turns that step into dead code and serves the wrong bytes silently. The
-    composed string is asserted too: an expression that does not resolve leaves
-    a literal `${{` in the key, and Actions would key the cache on that text.
+    This harness exists to benchmark a model config does not name, so the input
+    stays. What was removed is the literal DEFAULT - three copies of the
+    production refs, in a dispatch default and in two job `env` blocks, each
+    free to drift the day config moves (Rule #6).
+
+    The `models` job carries no `if:`. A `needs` on a skipped job skips the
+    dependent, so gating it on the target would skip whichever target was asked
+    for.
+    """
+    workflow = _load_workflows()["measure.yml"]
+    job = _job(workflow, "models")
+    assert "if" not in job, "gating this job would skip every target that needs it"
+
+    outputs = _mapping(job.get("outputs"), "models outputs")
+    for name in ("summarize_repo", "summarize_revision", "summarize_file", "configured_refs"):
+        assert outputs.get(name) == _expression(f"steps.models.outputs.{name}")
+
+    step = _step(workflow, "models", "id", "models")
+    script = _script(step, "measure.yml/models/models")
+    assert "config/idhazh.json" in script, "the refs come from config"
+
+    models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
+    produced = _run_the_models_step(script, REPO_ROOT)
+    assert produced == {
+        **{
+            f"{role}_{field}": models[role][field]
+            for role in ("route", "summarize")
+            for field in MODEL_REF_FIELDS
+        },
+        "configured_refs": ",".join(
+            f"{models[role]['repo']}@{models[role]['revision']}:{models[role]['file']}"
+            for role in ("route", "summarize")
+        ),
+    }
+    assert parse_model_refs(produced["configured_refs"]) == [
+        MeasureModelRef(models[role]["repo"], models[role]["revision"], models[role]["file"])
+        for role in ("route", "summarize")
+    ], "the default must parse as the harness's own reference grammar"
+
+    bench = _step(workflow, "llm", "name", "Download and benchmark exact models")
+    env = _mapping(bench.get("env"), "llm bench env")
+    assert env.get("MODEL_REFS") == _expression(
+        "inputs.models || needs.models.outputs.configured_refs"
+    ), "an input wins; config is only the default"
+
+    # Every ref is substituted into a shell command or a URL downstream, so the
+    # one step that writes them is where a value that is not one bare word has
+    # to stop.
+    (tmp_path / "config").mkdir()
+    models["summarize"]["revision"] = "7c41481f57cb95916b40956ab2f0b139b296d974 --output /etc"
+    (tmp_path / "config" / "idhazh.json").write_text(
+        json.dumps({"models": models}), encoding="utf-8"
+    )
+    with pytest.raises(AssertionError, match=re.escape("models.summarize.revision")):
+        _run_the_models_step(script, tmp_path)
+
+
+def test_the_qualification_candidate_is_decided_once(tmp_path: Path) -> None:
+    """An empty dispatch qualifies the configured model, not a broken pair.
+
+    The repo, the revision, the filename, the id, the quantisation and the
+    sha256 all fall back together. Resolving only some of them from config would
+    hand the runner one model's bytes and another model's checksum, and the run
+    would die at a check nobody had changed.
+    """
+    workflow = _load_workflows()["validate.yml"]
+    outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
+    fields = ("repo", "revision", "file", "id", "quantisation", "sha256")
+    for field in fields:
+        assert outputs.get(f"candidate_{field}") == _expression(
+            f"steps.candidate.outputs.{field}"
+        )
+
+    step = _step(workflow, "plan", "id", "candidate")
+    script = _script(step, "validate.yml/plan/candidate")
+    assert "config/idhazh.json" in script, "the fallback comes from config"
+
+    # The inputs reach the program through `env`, never as an expression pasted
+    # into its source, so a dispatched value cannot rewrite the program.
+    env = _mapping(step.get("env"), "candidate step env")
+    assert env == {
+        f"CANDIDATE_{field.upper()}": _expression(f"inputs.candidate_{field}")
+        for field in fields
+    }
+
+    summarize = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]["summarize"]
+    assert _run_the_models_step(script, REPO_ROOT) == {
+        field: summarize[field] for field in fields
+    }
+
+    (tmp_path / "config").mkdir()
+    (tmp_path / "config" / "idhazh.json").write_text(
+        json.dumps({"models": {"summarize": {**summarize, "file": ""}}}), encoding="utf-8"
+    )
+    with pytest.raises(AssertionError, match="candidate file"):
+        _run_the_models_step(script, tmp_path)
+
+
+def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
+    """Every part of what the entry holds, and all of them from one source.
+
+    The fetch step runs only on a cache miss, so a key that omits any part turns
+    that step into dead code and serves the wrong bytes silently. The revision
+    is one of those parts: two uploads share a filename, so without it a
+    repinned config gets a hit whose bytes then fail the checksum on every run
+    until the entry expires. The composed string is asserted too: an expression
+    that does not resolve leaves a literal `${{` in the key, and Actions would
+    key the cache on that text.
     """
     workflow = _load_workflows()["digest.yml"]
     keys = dict(_runtime_cache_keys(workflow))
@@ -1406,15 +1572,22 @@ def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
     models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
     for job_name, role in WEIGHTS_CACHE_ROLES.items():
         weights = _plan_output(f"{role}_file")
+        revision = _plan_output(f"{role}_revision")
         build = _expression("env.LLAMA_CPP_BUILD")
-        assert keys[job_name] == f"llm-{weights}-{build}-{WEIGHTS_CACHE_SUFFIX}", job_name
+        assert keys[job_name] == (
+            f"llm-{weights}-{revision}-{build}-{WEIGHTS_CACHE_SUFFIX}"
+        ), job_name
 
-        composed = keys[job_name].replace(weights, models[role]["file"]).replace(
-            build, PINNED_LLAMA_BUILD
+        composed = (
+            keys[job_name]
+            .replace(weights, models[role]["file"])
+            .replace(revision, models[role]["revision"])
+            .replace(build, PINNED_LLAMA_BUILD)
         )
         assert "${{" not in composed, f"{job_name}: every half of the key must resolve"
         assert composed == (
-            f"llm-{models[role]['file']}-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
+            f"llm-{models[role]['file']}-{models[role]['revision']}"
+            f"-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
         ), job_name
 
     assert keys["work"] != keys["route"], "one entry cannot hold two sets of weights"
@@ -1467,7 +1640,7 @@ def test_llm_measurement_does_not_cache_or_glob_candidate_weights() -> None:
     script = benchmark.get("run")
     assert isinstance(script, str)
     assert benchmark.get("env") == {
-        "MODEL_REFS": "${{ inputs.models }}",
+        "MODEL_REFS": "${{ inputs.models || needs.models.outputs.configured_refs }}",
         "THREAD_COUNTS": "${{ inputs.threads }}",
     }
     assert "backend/utilities/measure_llm.py" in script
@@ -1489,17 +1662,21 @@ def test_batched_bench_measures_one_host_against_itself() -> None:
 
     Prefill spans 3.4x across runner hosts, so a matrix member per level would
     compare hardware and report it as batching. The arm also asks config for the
-    context and threading knobs: a literal copied into the workflow stops
-    describing production the day config moves (Rule #6).
+    context and threading knobs, and for the model: a literal copied into the
+    workflow stops describing production the day config moves (Rule #6).
     """
     workflow = _load_workflows()["measure.yml"]
     job = _job(workflow, "batched")
-    summarize = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]["summarize"]
 
     assert "strategy" not in job, "every parallel level must share one host"
+    assert job.get("needs") == "models", "the refs come from the models job"
     env = _mapping(job.get("env"), "job batched env")
-    assert env.get("MODEL_FILE") == summarize["file"]
-    assert env.get("MODEL_REPO") == summarize["repo"]
+    for name, field in (
+        ("MODEL_REPO", "repo"),
+        ("MODEL_REVISION", "revision"),
+        ("MODEL_FILE", "file"),
+    ):
+        assert env.get(name) == _expression(f"needs.models.outputs.summarize_{field}"), name
     for name, value in BATCHED_BENCH_SETTINGS.items():
         assert env.get(name) == value, name
 
@@ -1815,9 +1992,10 @@ def test_the_qualification_runs_exactly_one_model() -> None:
     assert "incumbent" not in text.lower(), "there is no incumbent arm"
     assert "challenger" not in text.lower(), "there is no challenger arm"
     assert "MODEL_REPO" not in text and "MODEL_FILE" not in text
-    # One `.gguf` literal in the whole file, and it is the dispatch default a
-    # human overrides. A second one is a second model.
-    assert text.count(".gguf") == 1
+    # No `.gguf` literal at all any more. The dispatch default that used to hold
+    # one now resolves from config, so a second model cannot be named here even
+    # by accident.
+    assert text.count(".gguf") == 0
     assert "leaderboard" not in text.lower(), (
         "the candidate publishes no faithfulness result; provenance stays not_reported"
     )
@@ -1846,14 +2024,14 @@ def test_the_qualification_never_replans_or_refetches_per_model() -> None:
 
 
 def test_the_candidate_weights_come_from_an_immutable_revision() -> None:
-    """`resolve/main` hands back whatever the branch points at today, and a
-    candidate nobody can fetch again is a candidate nobody can reproduce."""
+    """A branch hands back whatever it points at today, and a candidate nobody
+    can fetch again is a candidate nobody can reproduce."""
     workflow = _load_workflows()["validate.yml"]
     where = "validate.yml/qualify/Fetch the runtime and the candidate"
     fetch = _step(workflow, "qualify", "name", "Fetch the runtime and the candidate")
     script = _uncommented(_script(fetch, where))
     assert "resolve/main" not in script
-    assert "resolve/${{ inputs.candidate_revision }}" in script
+    assert f"resolve/{_plan_output('candidate_revision')}" in script
 
 
 def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:

@@ -19,8 +19,10 @@ on:
           - runtime
           - batched
       models:
-        description: 'Comma-separated HF GGUF refs (repo:file)'
-        default: 'Qwen/Qwen3-4B-GGUF:Qwen3-4B-Q4_K_M.gguf,Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf'
+        description: >-
+          Comma-separated GGUF refs, each repo@revision:file. Leave empty to
+          measure the two models config/idhazh.json names.
+        default: ''
       threads:
         description: 'Comma-separated llama-bench thread counts, for example 4,8'
         default: '4'
@@ -59,8 +61,54 @@ env:
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
 
 jobs:
+  # The model refs, read once from config and published to every target that
+  # loads weights. Same step, same guard and same reason as the `models` step in
+  # digest.yml: `needs` resolves before a job's first step and `steps` does not,
+  # which is what lets a job-scoped `env` name the model at all.
+  #
+  # This job is not gated on the target. A `needs` on a skipped job skips the
+  # dependent, so gating it would skip whichever target was dispatched. It reads
+  # one file and finishes in seconds.
+  #
+  # A target may still measure a model config does not name - that is what this
+  # harness is for. The `models` input carries the candidates and wins whenever
+  # it is set; only the DEFAULT comes from here (Rule #6).
+  models:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    outputs:
+      summarize_repo: ${{ steps.models.outputs.summarize_repo }}
+      summarize_revision: ${{ steps.models.outputs.summarize_revision }}
+      summarize_file: ${{ steps.models.outputs.summarize_file }}
+      configured_refs: ${{ steps.models.outputs.configured_refs }}
+    steps:
+      - uses: actions/checkout@v6
+
+      # Each value is asserted to be one bare word at the one point that writes
+      # them, so an expression that substitutes one into a shell command below
+      # cannot carry a space, a quote or a newline into it.
+      - id: models
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+
+          models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
+          refs = []
+          for role in ("route", "summarize"):
+              for field in ("repo", "revision", "file"):
+                  value = models[role].get(field) or ""
+                  if value.split() != [value]:
+                      raise SystemExit(f"models.{role}.{field} is empty or not one word")
+                  print(f"{role}_{field}={value}")
+              ref = models[role]
+              refs.append(f"{ref['repo']}@{ref['revision']}:{ref['file']}")
+          print("configured_refs=" + ",".join(refs))
+          PY
+
   llm:
     if: ${{ inputs.target == 'llm' }}
+    needs: models
     runs-on: ubuntu-latest
     timeout-minutes: 330
     steps:
@@ -135,7 +183,7 @@ jobs:
 
       - name: Download and benchmark exact models
         env:
-          MODEL_REFS: ${{ inputs.models }}
+          MODEL_REFS: ${{ inputs.models || needs.models.outputs.configured_refs }}
           THREAD_COUNTS: ${{ inputs.threads }}
         run: |
           set -euo pipefail
@@ -228,11 +276,13 @@ jobs:
 
   runtime:
     if: ${{ inputs.target == 'runtime' }}
+    needs: models
     runs-on: ubuntu-latest
     timeout-minutes: 330
     env:
-      MODEL_REPO: Qwen/Qwen3-8B-GGUF
-      MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+      MODEL_REPO: ${{ needs.models.outputs.summarize_repo }}
+      MODEL_REVISION: ${{ needs.models.outputs.summarize_revision }}
+      MODEL_FILE: ${{ needs.models.outputs.summarize_file }}
     steps:
       - uses: actions/checkout@v6
 
@@ -286,7 +336,7 @@ jobs:
           cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
           curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${MODEL_FILE}" \
-            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
+            "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
 
       - name: Record input identity
         run: |
@@ -295,6 +345,8 @@ jobs:
             echo "llama_cpp_build=${LLAMA_CPP_BUILD}"
             echo "llama_cpp_archive_sha256=${LLAMA_CPP_SHA256}"
             sha256sum backend/bin/llama-server
+            echo "model_repo=${MODEL_REPO}"
+            echo "model_revision=${MODEL_REVISION}"
             stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
             sha256sum "backend/models/${MODEL_FILE}"
           } | tee backend/var/runtime-sweep/cache-state.txt
@@ -681,6 +733,7 @@ jobs:
 
   batched:
     if: ${{ inputs.target == 'batched' }}
+    needs: models
     # Does decoding more than one sequence at a time pay for itself on 4 vCPU?
     # `llama-batched-bench` answers it in one table: `S_TG t/s` is aggregate
     # decode throughput at a parallel level, so the ratio between two rows is
@@ -694,8 +747,9 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 180
     env:
-      MODEL_REPO: Qwen/Qwen3-8B-GGUF
-      MODEL_FILE: Qwen3-8B-Q4_K_M.gguf
+      MODEL_REPO: ${{ needs.models.outputs.summarize_repo }}
+      MODEL_REVISION: ${{ needs.models.outputs.summarize_revision }}
+      MODEL_FILE: ${{ needs.models.outputs.summarize_file }}
       # Fixed here rather than dispatchable, so a later reading stays
       # comparable to the recorded one. The lengths round the medians of the
       # 293 requests behind docs/reference/measurements.md's one-slot
@@ -789,10 +843,11 @@ jobs:
           set -euo pipefail
           mkdir -p backend/models
           curl -fsSL --retry 3 --retry-all-errors -o "backend/models/${MODEL_FILE}" \
-            "https://huggingface.co/${MODEL_REPO}/resolve/main/${MODEL_FILE}?download=true"
+            "https://huggingface.co/${MODEL_REPO}/resolve/${MODEL_REVISION}/${MODEL_FILE}?download=true"
           {
             echo "gguf_cache_hit=false"
             echo "model_repo=${MODEL_REPO}"
+            echo "model_revision=${MODEL_REVISION}"
             stat -c 'model_bytes=%s' "backend/models/${MODEL_FILE}"
             sha256sum "backend/models/${MODEL_FILE}"
           } | tee -a backend/var/batched-bench/hardware.txt

@@ -17,23 +17,38 @@ from utilities.measure_llm import (
 
 def test_model_refs_are_validated_before_they_become_paths_or_urls() -> None:
     refs = parse_model_refs(
-        "Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf,unsloth/Qwen3.5-9B-GGUF:Qwen3.5-9B-Q4_K_M.gguf"
+        "Qwen/Qwen3-8B-GGUF@" + "a" * 40 + ":Qwen3-8B-Q4_K_M.gguf,"
+        "unsloth/Qwen3.5-9B-GGUF@" + "b" * 40 + ":Qwen3.5-9B-Q4_K_M.gguf"
     )
 
     assert refs == [
-        ModelRef("Qwen/Qwen3-8B-GGUF", "Qwen3-8B-Q4_K_M.gguf"),
-        ModelRef("unsloth/Qwen3.5-9B-GGUF", "Qwen3.5-9B-Q4_K_M.gguf"),
+        ModelRef("Qwen/Qwen3-8B-GGUF", "a" * 40, "Qwen3-8B-Q4_K_M.gguf"),
+        ModelRef("unsloth/Qwen3.5-9B-GGUF", "b" * 40, "Qwen3.5-9B-Q4_K_M.gguf"),
     ]
+
+
+def test_a_reference_reaches_hugging_face_only_at_a_pinned_commit() -> None:
+    """A branch is re-pointed on every upload, so a bench that names one cannot
+    be repeated: the bytes move and no recorded number says they did (Rule #10).
+    """
+    ref = ModelRef("owner/repo", "c" * 40, "model.gguf")
+
+    assert ref.url == f"https://huggingface.co/owner/repo/resolve/{'c' * 40}/model.gguf"
+    assert ref.tree_url == f"https://huggingface.co/api/models/owner/repo/tree/{'c' * 40}"
+    assert "/main" not in ref.url + ref.tree_url
 
 
 @pytest.mark.parametrize(
     "value",
     [
-        "../owner/repo:model.gguf",
-        "owner/repo:../model.gguf",
-        "owner/repo:model.bin",
-        "owner/repo:model.gguf,other/repo:model.gguf",
-        "owner/repo",
+        "../owner/repo@" + "a" * 40 + ":model.gguf",
+        "owner/repo@" + "a" * 40 + ":../model.gguf",
+        "owner/repo@" + "a" * 40 + ":model.bin",
+        "owner/repo@" + "a" * 40 + ":model.gguf,other/repo@" + "b" * 40 + ":model.gguf",
+        "owner/repo@" + "a" * 40,
+        "owner/repo:model.gguf",
+        "owner/repo@main:model.gguf",
+        "owner/repo@" + "a" * 39 + ":model.gguf",
     ],
 )
 def test_model_refs_reject_unsafe_or_ambiguous_values(value: str) -> None:
@@ -90,7 +105,7 @@ def test_external_paths_are_reduced_before_they_leave_the_process(tmp_path: Path
 
 
 def test_remote_file_uses_the_lfs_identity() -> None:
-    ref = ModelRef("owner/repo", "model.gguf")
+    ref = ModelRef("owner/repo", "a" * 40, "model.gguf")
 
     assert remote_file_from_tree(
         ref,
@@ -115,7 +130,7 @@ def test_existing_file_must_match_the_requested_remote_identity(tmp_path: Path) 
 
     with pytest.raises(ValueError, match="existing file does not match"):
         download(
-            ModelRef("owner/repo", "model.gguf"),
+            ModelRef("owner/repo", "a" * 40, "model.gguf"),
             RemoteFile(bytes=17, sha256="0" * 64),
             tmp_path,
         )

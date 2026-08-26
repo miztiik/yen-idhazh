@@ -48,6 +48,20 @@
           "title": "Repo",
           "type": "string"
         },
+        "revision": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The hub commit the weights are fetched at. A download that names a branch gets whatever was uploaded last, so the bytes can change under a config that still records the old sha256.",
+          "title": "Revision"
+        },
         "sha256": {
           "anyOf": [
             {
@@ -331,6 +345,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded ModelRef gained an optional revision.",
+      "version": "2026-08-26T20:00",
+      "why": "A manifest says which model ran. Until now it could not say which upload of that model, because the weights were fetched from a branch. The reason for the field is on the app-config schema; this entry exists because the manifest embeds the same shape and its own document changed with it. Optional, so every published manifest still validates (section 11)."
+    },
+    {
       "change": "Added optional charts_drafted to a run.",
       "version": "2026-08-25",
       "why": "On 2026-08-25 the router drafted 17 charts and published 9, and no committed row said where the other 8 went. Without the drafted count a model that stops asking for charts and a set of checks that starts refusing them look identical, so the chart arm's kill line cannot be read from anything the run leaves behind. Defaults to zero on a manifest written before it existed."
@@ -377,7 +396,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-25",
+      "default": "2026-08-26T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -389,5 +408,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-25"
+  "version": "2026-08-26T20:00"
 }

@@ -13,13 +13,14 @@ policy a decision rather than a reaction (Rule #10 applied to storage).
 from __future__ import annotations
 
 from enum import StrEnum
-from typing import Annotated, ClassVar, Self
+from typing import ClassVar, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import Field, model_validator
 
 from idhazh.contracts.app_config import ModelRef
 from idhazh.contracts.base import (
     ChangelogEntry,
+    CommitSha,
     Contract,
     DateStamp,
     Model,
@@ -29,8 +30,6 @@ from idhazh.contracts.base import (
     Slug,
     Timestamp,
 )
-
-CommitSha = Annotated[str, StringConstraints(pattern=r"^[0-9a-f]{40}$")]
 
 
 class RunStatus(StrEnum):
@@ -156,6 +155,18 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26T20:00",
+            change="The embedded ModelRef gained an optional revision.",
+            why=(
+                "A manifest says which model ran. Until now it could not say which upload "
+                "of that model, because the weights were fetched from a branch. The "
+                "reason for the field is on the app-config schema; this entry exists "
+                "because the manifest embeds the same shape and its own document changed "
+                "with it. Optional, so every published manifest still validates "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-25",
             change="Added optional charts_drafted to a run.",

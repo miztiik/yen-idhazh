@@ -18,16 +18,27 @@ from typing import Any
 
 REPO_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*/[A-Za-z0-9][A-Za-z0-9._-]*$")
 GGUF_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]*\.gguf$")
+# A full commit. A branch is re-pointed on every upload, so a benchmark that
+# names one cannot be repeated: the bytes move and nothing says they did.
+REVISION_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 @dataclass(frozen=True, slots=True)
 class ModelRef:
     repo: str
+    revision: str
     file: str
 
     @property
     def url(self) -> str:
-        return f"https://huggingface.co/{self.repo}/resolve/main/{self.file}"
+        return f"https://huggingface.co/{self.repo}/resolve/{self.revision}/{self.file}"
+
+    @property
+    def tree_url(self) -> str:
+        return f"https://huggingface.co/api/models/{self.repo}/tree/{self.revision}"
+
+    def __str__(self) -> str:
+        return f"{self.repo}@{self.revision}:{self.file}"
 
 
 @dataclass(frozen=True, slots=True)
@@ -41,16 +52,21 @@ def parse_model_refs(value: str) -> list[ModelRef]:
     filenames: set[str] = set()
     for raw in value.split(","):
         if raw.count(":") != 1:
-            raise ValueError(f"model reference must be repo:file: {raw}")
-        repo, file = raw.split(":", maxsplit=1)
+            raise ValueError(f"model reference must be repo@revision:file: {raw}")
+        source, file = raw.split(":", maxsplit=1)
+        if source.count("@") != 1:
+            raise ValueError(f"model reference must be repo@revision:file: {raw}")
+        repo, revision = source.split("@", maxsplit=1)
         if not REPO_RE.fullmatch(repo):
             raise ValueError(f"invalid Hugging Face repository: {repo}")
+        if not REVISION_RE.fullmatch(revision):
+            raise ValueError(f"revision must be a 40-character commit: {revision}")
         if not GGUF_RE.fullmatch(file):
             raise ValueError(f"invalid GGUF filename: {file}")
         if file in filenames:
             raise ValueError(f"duplicate GGUF filename: {file}")
         filenames.add(file)
-        refs.append(ModelRef(repo=repo, file=file))
+        refs.append(ModelRef(repo=repo, revision=revision, file=file))
     if not refs:
         raise ValueError("at least one model reference is required")
     return refs
@@ -117,15 +133,14 @@ def remote_file_from_tree(ref: ModelRef, entries: list[dict[str, Any]]) -> Remot
         if isinstance(oid, str) and re.fullmatch(r"[0-9a-f]{64}", oid) and isinstance(size, int):
             return RemoteFile(bytes=size, sha256=oid)
         break
-    raise ValueError(f"Hugging Face returned no LFS identity for {ref.repo}:{ref.file}")
+    raise ValueError(f"Hugging Face returned no LFS identity for {ref}")
 
 
 def resolve_remote_file(ref: ModelRef) -> RemoteFile:
-    url = f"https://huggingface.co/api/models/{ref.repo}/tree/main"
-    with urllib.request.urlopen(url, timeout=30) as response:
+    with urllib.request.urlopen(ref.tree_url, timeout=30) as response:
         payload = json.loads(response.read().decode("utf-8"))
     if not isinstance(payload, list):
-        raise ValueError(f"Hugging Face returned an invalid tree for {ref.repo}")
+        raise ValueError(f"Hugging Face returned an invalid tree for {ref}")
     return remote_file_from_tree(ref, payload)
 
 
@@ -135,7 +150,7 @@ def download(ref: ModelRef, remote: RemoteFile, models_dir: Path) -> tuple[Path,
         local_sha = sha256(destination)
         if destination.stat().st_size != remote.bytes or local_sha != remote.sha256:
             raise ValueError(
-                f"existing file does not match {ref.repo}:{ref.file}; "
+                f"existing file does not match {ref}; "
                 f"delete {display_path(destination)} and retry"
             )
         return destination, 0.0
@@ -167,7 +182,7 @@ def download(ref: ModelRef, remote: RemoteFile, models_dir: Path) -> tuple[Path,
     local_sha = sha256(destination)
     if destination.stat().st_size != remote.bytes or local_sha != remote.sha256:
         destination.unlink()
-        raise ValueError(f"downloaded file failed identity check: {ref.repo}:{ref.file}")
+        raise ValueError(f"downloaded file failed identity check: {ref}")
     return destination, time.monotonic() - started
 
 
@@ -287,7 +302,9 @@ def run_benchmarks(
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser()
-    parser.add_argument("--models", required=True, help="Comma-separated repo:file references")
+    parser.add_argument(
+        "--models", required=True, help="Comma-separated repo@revision:file references"
+    )
     parser.add_argument("--threads", default="4", help="Comma-separated worker counts")
     parser.add_argument("--binary", type=Path)
     parser.add_argument("--models-dir", type=Path, default=Path("backend/models"))
@@ -324,9 +341,7 @@ def main() -> int:
         models.append(path)
         source = "local" if elapsed == 0.0 else f"download {elapsed:.1f}s"
         with args.weights_report.open("a", encoding="utf-8", newline="\n") as report:
-            report.write(
-                f"{ref.repo}:{ref.file} {source} bytes={remote.bytes} sha256={remote.sha256}\n"
-            )
+            report.write(f"{ref} {source} bytes={remote.bytes} sha256={remote.sha256}\n")
     run_benchmarks(
         binary=binary,
         models=models,
