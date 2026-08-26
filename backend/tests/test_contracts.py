@@ -17,7 +17,7 @@ import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, SCHEMAS_DIR, read_text
 
 from idhazh.contracts import canonical_json, derive_url_key
-from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.app_config import AppConfig, PageWeightConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
@@ -194,6 +194,27 @@ def test_the_console_chart_width_is_a_knob_the_frontend_agrees_with() -> None:
 def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
     with pytest.raises(ValueError):
         AppConfig.model_validate({"console": {"chart_width": 0}})
+
+
+def test_the_committed_config_bounds_every_page_the_gate_bounds() -> None:
+    """`frontend/scripts/bundle-gate.mjs` reads the file, never the model.
+
+    So a block missing from `config/idhazh.json` would not fall back to the
+    default - it would leave the gate with nothing to check while every other
+    knob still read correctly.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    minimal = AppConfig.model_validate({"models": committed.models.model_dump()})
+
+    assert committed.page_weight.ceilings_bytes == minimal.page_weight.ceilings_bytes
+
+
+def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:
+    """A ceiling of zero passes nothing and a key that is not a route bounds nothing."""
+    with pytest.raises(ValueError, match="above zero"):
+        PageWeightConfig(ceilings_bytes={"/evals/": 0})
+    with pytest.raises(ValueError, match="is not a route"):
+        PageWeightConfig(ceilings_bytes={"evals": 2475})
 
 
 def test_every_configured_feed_names_a_declared_vertical() -> None:
