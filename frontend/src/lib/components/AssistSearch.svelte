@@ -10,7 +10,8 @@
 	 * unchanged, and so is every digest assertion on the page.
 	 */
 	import { DOWNLOAD_MB, embedQuery, supported, type AssistState } from '$lib/assist/loader';
-	import { rank, type SearchHit } from '$lib/assist/search';
+	import { ENCODER_DIMENSIONS } from '$lib/assist/encoder';
+	import { rank, searchable, type SearchHit } from '$lib/assist/search';
 	import type { DigestDay } from '$lib/payload/types';
 	import { base } from '$app/paths';
 
@@ -31,6 +32,18 @@
 	async function enable() {
 		if (!supported()) {
 			assist = { status: 'unavailable', reason: 'this browser cannot run the encoder' };
+			return;
+		}
+		// Before the download rather than after it. A reader whose days were
+		// written by a different encoder cannot be helped by fetching this one, so
+		// they get the sentence instead of the bytes. One line, in place of the
+		// offer - there is nothing here for a reader to do, so there is nothing to
+		// prompt them about.
+		if (!days.some((day) => searchable(day, ENCODER_DIMENSIONS))) {
+			assist = {
+				status: 'unavailable',
+				reason: 'these days were written by a different encoder'
+			};
 			return;
 		}
 		assist = { status: 'loading' };

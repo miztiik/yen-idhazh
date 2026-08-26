@@ -43,3 +43,12 @@ export const ENCODER_VERSION = '2026-08-22';
  * `org/name`.
  */
 export const ENCODER_PATH = `${ENCODER_ID}/${ENCODER_VERSION}`;
+
+/** The width the runner writes, so the guard can run before a query exists.
+ *
+ * `rank` takes the width from the query vector it was handed, which is the
+ * stronger check because it measures what actually arrived. This constant is
+ * for the one moment there is no query yet: deciding whether to start the
+ * download at all.
+ */
+export const ENCODER_DIMENSIONS = 384;

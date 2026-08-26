@@ -157,6 +157,13 @@ class TestOneEncoderTwoRuntimes:
         """A rename that missed the weights is a 404 nothing else would catch."""
         assert (REPO_ROOT / MODEL_RELDIR).is_dir()
 
+    def test_the_browser_guards_against_the_width_the_runner_writes(self) -> None:
+        """The browser refuses a day before downloading, so it needs the width."""
+        source = (REPO_ROOT / ENCODER_TS_RELPATH).read_text(encoding="utf-8")
+        found = re.search(r"^export const ENCODER_DIMENSIONS = (\d+);$", source, re.MULTILINE)
+        assert found is not None, f"{ENCODER_TS_RELPATH} no longer declares ENCODER_DIMENSIONS"
+        assert int(found.group(1)) == DIMENSIONS
+
 
 class TestEncoder:
     def test_the_committed_model_is_the_one_the_browser_fetches(self) -> None:
