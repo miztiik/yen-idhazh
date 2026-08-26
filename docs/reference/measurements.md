@@ -1471,7 +1471,7 @@ after both. See [../architecture/publishing/layout.md](../architecture/publishin
 
 ### Where the alarm fires, and what it buys
 
-`retention.site_budget_mb` is the size at which a run opens an issue. It is an
+`retention.site_budget_mb` is the size at which a run logs a warning. It is an
 alarm and not a gate: it fails no build and deletes nothing
 ([../concepts/config.md](../concepts/config.md)). This section is the only home
 for why it sits where it does.

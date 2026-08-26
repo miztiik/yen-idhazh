@@ -16,6 +16,7 @@ from idhazh.contracts.app_config import RetentionConfig
 from idhazh.retention import (
     BYTES_PER_MB,
     PAGES_HARD_CAP_MB,
+    budget_alarm,
     cutoff,
     headroom_mb,
     measure,
@@ -109,6 +110,18 @@ def test_the_alarm_only_reports(tmp_path: Path) -> None:
 def test_a_small_site_is_not_over_budget(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a.webp"]})
     assert not over_budget(measure(root), RetentionConfig())
+
+
+def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
+    """The words the run logs: None below the budget, a headroom line above it."""
+    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    (root / "2026" / "08" / "21" / "big.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
+    over = measure(root)
+    assert budget_alarm(over, RetentionConfig()) is None
+    line = budget_alarm(over, RetentionConfig(site_budget_mb=1))
+    assert line is not None
+    assert "alarm point" in line
+    assert "Pages cap" in line
 
 
 def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:

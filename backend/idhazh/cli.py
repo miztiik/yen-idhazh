@@ -41,6 +41,7 @@ from idhazh import (
     ledger,
     publish_telemetry,
     rank,
+    retention,
     route,
     summarize,
     telemetry,
@@ -1743,6 +1744,11 @@ def stage_assemble(
     assemble.write_atomic(target / "digest.json", day.to_json())
 
     site_bytes, site_files = assemble.site_size(PUBLIC_ROOT)
+    site_alarm = retention.budget_alarm(
+        retention.SiteSize(site_bytes, site_files), settings.app.retention
+    )
+    if site_alarm is not None:
+        LOG.warning("%s", site_alarm)
     manifest = assemble.build_manifest(
         plan=plan,
         day=day,
