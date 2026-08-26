@@ -16,6 +16,7 @@
  */
 
 import { base } from '$app/paths';
+import { ENCODER_PATH } from './encoder';
 
 /** What a reader is told before a single byte moves.
  *
@@ -35,8 +36,6 @@ import { base } from '$app/paths';
  * WASM-only path again.
  */
 export const DOWNLOAD_MB = 43;
-
-export const MODEL_ID = 'all-MiniLM-L6-v2';
 
 /** The token cap the runner truncates at, repeated here because it is not shared yet.
  *
@@ -91,12 +90,15 @@ export async function load(): Promise<Extractor> {
 			transformers.env.backends.onnx.wasm.numThreads = 1;
 		}
 
-		const pipe = await transformers.pipeline('feature-extraction', MODEL_ID, {
+		const pipe = await transformers.pipeline('feature-extraction', ENCODER_PATH, {
 			dtype: 'q8',
-			// WASM only, explicitly. Left to itself the runtime reaches for the
-			// WebGPU-capable build, whose binary is 21.6 MB against 11.1 MB for the
-			// plain one - and WebGPU is not the baseline anyway. Naming the device
-			// here is what stops that 10 MB reaching a reader.
+			// WASM, not WebGPU. WebGPU is not the baseline.
+			//
+			// This does not pick the binary. The only runtime committed under
+			// `static/assist/wasm/` is `ort-wasm-simd-threaded.jsep.wasm` - the
+			// WebGPU-capable build, 21,596,019 bytes measured 2026-08-26 - and the
+			// header comment above says why the lighter one is not there. This line
+			// used to claim it stopped that 10 MB reaching a reader. It never did.
 			device: 'wasm'
 		});
 		// The feature-extraction pipeline hardcodes `truncation: true` and passes
