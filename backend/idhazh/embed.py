@@ -12,6 +12,12 @@ that agree until one of them is updated.
 
 The vectors are a rendering. They are regenerable from committed text at any
 time, so they carry none of the retention promises that protect the ledger.
+
+Regenerable only helps if a regeneration lands on the same bytes, so the
+arithmetic is pinned rather than hoped for: one thread, sequential execution,
+one sequence per forward pass, and no padding. A vector is then a function of
+its own text and the weights - not of the host's core count, and not of which
+items happened to share its batch.
 """
 
 from __future__ import annotations
@@ -45,10 +51,48 @@ DIMENSIONS: Final = 384
 DTYPE: Final = "int8"
 
 # The encoder's own limit. Longer input is truncated rather than rejected: a
-# summary that runs long still deserves a vector.
+# summary that runs long still deserves a vector. It is also the browser's cap,
+# because a query read further than the items it is matched against is a
+# different question. Row #8 of the plan moves this into `config/`; the browser
+# twin is `MAX_TOKENS` in `frontend/src/lib/assist/loader.ts`.
 MAX_TOKENS: Final = 256
 
 _SCALE: Final = 127.0
+
+
+def session_options() -> Any:
+    """The pinned arithmetic, in one place so a test reads the object `load` uses.
+
+    Contract, not configuration. Float addition is not associative, so the
+    thread count picks the order the partial sums accumulate in - and left
+    alone onnxruntime takes that count from the host's cores. A knob here is a
+    way for a vector to start depending on the machine that made it.
+    """
+    import onnxruntime
+
+    options = onnxruntime.SessionOptions()
+    options.intra_op_num_threads = 1
+    options.inter_op_num_threads = 1
+    options.execution_mode = onnxruntime.ExecutionMode.ORT_SEQUENTIAL
+    return options
+
+
+def build_tokenizer(root: Path) -> Any:
+    """Truncated at the cap and padded to nothing, which is what the browser does.
+
+    Padding is not free of meaning here. The encoder is dynamically quantised,
+    so a pad token's own activations widen the range every real token is then
+    measured against. Measured 2026-08-25 (Windows 11, 8 vCPU, onnxruntime
+    1.29.0): padding one sentence out to the 256-token cap moves its vector by
+    up to 1.6e-2 per component. The browser pads a lone query to nothing, so the
+    runner does too.
+    """
+    from tokenizers import Tokenizer
+
+    tokenizer = Tokenizer.from_file(str(root / TOKENIZER_RELPATH))
+    tokenizer.enable_truncation(max_length=MAX_TOKENS)
+    tokenizer.no_padding()
+    return tokenizer
 
 
 class Embedder:
@@ -65,38 +109,51 @@ class Embedder:
 
     def load(self) -> None:
         import onnxruntime
-        from tokenizers import Tokenizer
 
-        self._session = onnxruntime.InferenceSession(str(self._root / ONNX_RELPATH))
-        tokenizer = Tokenizer.from_file(str(self._root / TOKENIZER_RELPATH))
-        tokenizer.enable_truncation(max_length=MAX_TOKENS)
-        tokenizer.enable_padding()
-        self._tokenizer = tokenizer
+        # Naming the provider stops a machine with a second one installed from
+        # quietly answering with different kernels.
+        self._session = onnxruntime.InferenceSession(
+            str(self._root / ONNX_RELPATH),
+            session_options(),
+            providers=["CPUExecutionProvider"],
+        )
+        self._tokenizer = build_tokenizer(self._root)
 
     def encode(self, texts: list[str]) -> list[list[float]]:
-        """Mean-pooled, L2-normalised sentence vectors, in input order."""
+        """Mean-pooled, L2-normalised sentence vectors, in input order.
+
+        One sequence per forward pass, whatever the caller hands over. That is
+        the whole determinism story: a dynamically quantised encoder reads its
+        activation scales off the tensor it is given, so sixteen sentences in
+        one call each set the range the other fifteen are measured against.
+        Measured 2026-08-25 (Windows 11, 8 vCPU, onnxruntime 1.29.0): two
+        batches of sixteen that shared one sentence disagreed about it by up to
+        1.5e-2 per component, which survives the int8 round trip and lands in
+        the committed bytes.
+        """
         if self._session is None or self._tokenizer is None:
             raise RuntimeError("the embedder was used before it was loaded")
-        if not texts:
-            return []
 
         import numpy as np
 
-        encodings = self._tokenizer.encode_batch(texts)
-        ids = np.array([item.ids for item in encodings], dtype=np.int64)
-        mask = np.array([item.attention_mask for item in encodings], dtype=np.int64)
-        hidden = self._session.run(
-            None,
-            {
-                "input_ids": ids,
-                "attention_mask": mask,
-                "token_type_ids": np.zeros_like(ids),
-            },
-        )[0]
-        weights = mask[..., None].astype(np.float32)
-        pooled = (hidden * weights).sum(axis=1) / np.clip(weights.sum(axis=1), 1e-9, None)
-        normalised = pooled / np.clip(np.linalg.norm(pooled, axis=1, keepdims=True), 1e-9, None)
-        return [row.tolist() for row in normalised]
+        vectors: list[list[float]] = []
+        for text in texts:
+            encoding = self._tokenizer.encode(text)
+            ids = np.array([encoding.ids], dtype=np.int64)
+            mask = np.array([encoding.attention_mask], dtype=np.int64)
+            hidden = self._session.run(
+                None,
+                {
+                    "input_ids": ids,
+                    "attention_mask": mask,
+                    "token_type_ids": np.zeros_like(ids),
+                },
+            )[0]
+            weights = mask[..., None].astype(np.float32)
+            pooled = (hidden * weights).sum(axis=1) / np.clip(weights.sum(axis=1), 1e-9, None)
+            unit_length = np.clip(np.linalg.norm(pooled, axis=1, keepdims=True), 1e-9, None)
+            vectors.append((pooled / unit_length)[0].tolist())
+        return vectors
 
 
 def text_for(item: DigestItem) -> str:

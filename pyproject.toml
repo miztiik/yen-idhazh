@@ -30,7 +30,12 @@ dependencies = [
     # torch plus transformers, which is roughly 800 MB of wheels for weights
     # that would then have to agree with a second copy. Measured 2026-08-22
     # (Windows 11, 8 vCPU): 16 ms to embed three summaries. Beneficiary: Row #19.
-    "onnxruntime>=1.20",
+    #
+    # Pinned exactly, not floored. A committed vector is a claim that the same
+    # text re-encodes to the same bytes, and a kernel rewrite in a patch release
+    # can break that claim without breaking anything an API test would notice.
+    # A range here means two runners may disagree about the same day.
+    "onnxruntime==1.29.0",
     "tokenizers>=0.21",
 ]
 
