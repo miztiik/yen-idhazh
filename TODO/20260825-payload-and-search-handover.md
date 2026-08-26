@@ -1,8 +1,10 @@
 # Handover - what the published site loads, and what should index the search
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 Research brief. Non-authoritative working material (`CLAUDE.md` section 3). This is NOT an execution-ready plan: it carries findings, open questions and the measurement that would settle each. The next agent researches, then authors a plan per [`../docs/how-to/author-a-plan.md`](../docs/how-to/author-a-plan.md).
+
+**Two of the three cheap wins in section 3 have shipped, and every vector figure below has been re-measured.** Cause A closed in PR #119 and cause C in PR #121. The vector share this brief called 8.9 percent was measured while most items were missing a vector; the merge defect behind that shipped fixed in PR #114 and the closed days were repaired in PR #133. The corrected figures are in section 1 and section 6. What remains open is cause B (the archive is still eager), cause D (retention) and the whole of section 4.
 
 Run the bootstrap ritual in [`../docs/agents/bootstrap.md`](../docs/agents/bootstrap.md) first. If this file and `docs/` disagree, `docs/` wins (Rule #4).
 
@@ -43,17 +45,19 @@ Measured over the five published days, 1182 items: **520.7 KB raw / 140.6 KB gz 
 
 Linear, on one page, paid by every visitor on every visit.
 
-Per-day detail, because one number hides the shape:
+Per-day detail, because one number hides the shape. **Re-measured 2026-08-26** over the six committed `digest.json` files, after the merge fix (PR #114) and the backfill (PR #133); the raw size is the file on disk and the vector bytes are the base64 payloads plus their keys and separators:
 
-| Day | raw KB | gz KB | items | vectors KB | vector share |
-| --- | --- | --- | --- | --- | --- |
-| 2026-08-21 | 11.3 | 4.2 | 4 | 2.1 | 18.2% |
-| 2026-08-22 | 27.3 | 10.5 | 10 | 5.2 | 18.9% |
-| 2026-08-23 | 369.6 | 117.3 | 147 | 71.8 | 19.4% |
-| 2026-08-24 | 1533.7 | 386.8 | 731 | 76.0 | 5.0% |
-| 2026-08-25 | 661.8 | 184.3 | 290 | 76.0 | 11.5% |
+| Day | raw B | items | vectors | vector B | vector share |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 2026-08-21 | 11,547 | 4 | 4 | 2,092 | 18.1% |
+| 2026-08-22 | 27,985 | 10 | 10 | 5,263 | 18.8% |
+| 2026-08-23 | 400,241 | 147 | 147 | 78,507 | 19.6% |
+| 2026-08-24 | 1,929,583 | 731 | 730 | 390,317 | 20.2% |
+| 2026-08-25 | 1,908,570 | 724 | 723 | 386,553 | 20.3% |
+| 2026-08-26 | 1,339,713 | 505 | 505 | 270,012 | 20.2% |
+| **total** | **5,617,639** | **2,121** | **2,119** | **1,132,744** | **20.2%** |
 
-**The embedding vectors are not the problem.** 8.9% of the bytes overall, and they plateau near 76 KB a day. The items are the weight, and a day accumulates items across its five runs - 2026-08-24 holds 731.
+**The items are still the weight, but the vectors are not the rounding error this brief first called them.** The earlier reading - 8.9 percent overall, plateauing near 76 KB a day - was the merge defect wearing a plateau: a day that ran five times kept only its last run's vectors, so the two biggest days carried 145 vectors for 731 and 724 items. With every item that earns one carrying one, a full day is about 20 percent vectors and a vector costs about 532 B. Removing them would save a fifth of the payload and cost the search its only input, so the trade in section 6 is unchanged and its price is now five times what it was written at.
 
 **Cause C - the console receives its telemetry rows twice.** [`frontend/src/routes/console/+page.server.ts`](../frontend/src/routes/console/+page.server.ts) returns `telemetryRows: publicRows`, [`+page.svelte`](../frontend/src/routes/console/+page.svelte) passes them as `initialRows={data.telemetryRows}`, and [`Viewport.svelte`](../frontend/src/lib/components/Viewport.svelte) also fetches the monthly telemetry CSVs at runtime.
 
@@ -68,7 +72,7 @@ Per-day detail, because one number hides the shape:
 | The console never reads `data.day` | grep of `frontend/src/routes/console/+page.svelte` - only `data.ui` |
 | The archive ships whole payloads for search only | `archive/+page.server.ts` returns `payloads`, `+page.svelte` uses `data.days` for the list and `data.payloads` for `<AssistSearch>` |
 | The search is a dot product, not SQL | [`frontend/src/lib/assist/search.ts`](../frontend/src/lib/assist/search.ts) - base64 int8 to unit vector, then dot products. Vectors computed on the runner and committed in the day payload |
-| The encoder is 43 MB and reader-initiated | `DOWNLOAD_MB = 43`, `MODEL_ID = 'all-MiniLM-L6-v2'` in [`frontend/src/lib/assist/loader.ts`](../frontend/src/lib/assist/loader.ts); `allowRemoteModels = false`, served same-origin |
+| The encoder is 43 MB and reader-initiated | `DOWNLOAD_MB = 43` in [`frontend/src/lib/assist/loader.ts`](../frontend/src/lib/assist/loader.ts); `allowRemoteModels = false`, served same-origin. Since PR #120 the identifier and its version live in `frontend/src/lib/assist/encoder.ts` as `all-minilm-l6-v2-quantized`, which is the string a payload can carry |
 | Heavy things are already kept off the first-load path | [`frontend/scripts/bundle-gate.mjs`](../frontend/scripts/bundle-gate.mjs) greps `entry/` and `nodes/` for `@huggingface/transformers`, `onnxruntime-web`, `ort-wasm`. It has no byte ceiling |
 | No CDN is possible | [`frontend/svelte.config.js`](../frontend/svelte.config.js) ships `script-src: ['self', 'wasm-unsafe-eval']`; and the HTTP cache is partitioned by top-level site in Chrome 86+, Firefox 85+ and Safari, so a cross-site cache hit cannot happen |
 | DuckDB-WASM costs 34.1 MB raw / 7.8 MB gzipped | `gzip -9` over `duckdb-eh.wasm` in yen-gov's `node_modules`. Siblings: `duckdb-mvp.wasm` 39.2 MB, `duckdb-coi.wasm` 33.8 MB |
@@ -79,9 +83,9 @@ Per-day detail, because one number hides the shape:
 
 These are deletions. They can ship before any of the questions below are answered, and they should.
 
-1. **Stop inlining `day` into routes that do not read it.** Either move it out of the root layout into the routes that use it, or make it lazy. This is the single largest byte win on the site.
-2. **Stop sending the console its telemetry rows twice.** Pick the inline copy or the runtime fetch; the viewport already merges what it fetches.
-3. **Decide whether `retention.dry_run` stays true.** Every projection above assumes nothing is ever pruned, which is the current behaviour.
+1. **SHIPPED in PR #119.** Stop inlining `day` into routes that do not read it. The root layout hands the footer four scalars and the home page loads its own day; `/console/` went 406.3 KB gz to 93.0 KB and `/evals/` 315.6 KB to 2.4 KB.
+2. **SHIPPED in PR #121.** Stop sending the console its telemetry rows twice. The server load seeds one `console.default_window_days` window instead of every committed month, and panning back fetches the older shards that were already on disk.
+3. **Still open.** Decide whether `retention.dry_run` stays true. Every projection above assumes nothing is ever pruned, which is the current behaviour.
 
 ---
 
@@ -128,7 +132,7 @@ Everything else follows from that answer. If the search has its own index, the a
 | --- | --- |
 | No library from a public CDN | Partitioned cache since 2020 makes a cross-site hit impossible, and our CSP blocks it before the cache is consulted |
 | No canvas charting library | Cannot prerender, cannot inherit a CSS custom property. `uplot` was carried and removed in #57 |
-| The embedding vectors stay in the day payload | They are 8.9% of the weight; removing them saves 9% and costs the search its only input |
+| The embedding vectors stay in the day payload | Measured 2026-08-26 they are 20.2% of the weight, not the 8.9% this brief first recorded; removing them saves a fifth of the payload and costs the search its only input |
 
 ---
 

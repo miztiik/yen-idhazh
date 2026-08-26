@@ -1,6 +1,6 @@
 # How to distill a plan-doc
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-26
 
 The procedure for lifting durable findings out of a `TODO/<date>-<slug>.md` plan-doc into the right canonical home under `docs/`. The plan-doc is the work ledger; once a row closes, anything worth keeping past the merge belongs somewhere else.
 
@@ -92,6 +92,8 @@ Private memory is a cache of what `docs/` already says (CLAUDE.md section 5).
 When the last live row closes and every finding is distilled (steps 1-4), DELETE the plan-doc. Git history - the merge commits, the branch names, `git log --follow <path>` - is the durable "what was tried, in what order, by which PR" record; a finished plan-doc left in `TODO/` is stale clutter a future reader mistakes for live work. The distilled findings in `docs/` are the live knowledge, and this repo is authored by AI agents against git, so the version-control history IS the tree-ring artifact - a second copy in `TODO/` earns nothing.
 
 Before deleting, confirm every durable finding has a canonical home (step 2) and repoint any code comment or doc that cited a plan-doc section to that home, so the deletion leaves no dangling reference.
+
+Confirm the plan-doc is tracked before you plan the deletion as work. A plan-doc that was authored but never committed cannot be deleted by a pull request, and every git question about it answers as though it never existed - which reads like somebody already closed it. `git ls-files --error-unmatch <path>` gives the answer in one line. The distillation is still owed either way; only the deletion becomes a no-op.
 
 ## Anti-patterns
 
