@@ -340,6 +340,47 @@ contends with the first.
   rule below: re-issue it only after checking whether the first one is running.
   `frontend/build` is one shared directory, so two builds in it is not a slow
   gate - it is a wrong number that looks like a right one.
+- **The bundle gate's CI step used to be named after one of its three checks.**
+  Until 2026-08-26 the step read `Bundle gate - no encoder on the first-load
+  path`, and any CI run from before that date still shows that name. It runs
+  three independent checks with three different answers: the encoder must stay
+  behind a dynamic import, each route's first-load JavaScript must match its
+  recorded weight in `frontend/bundle-baseline.json`, and each page that renders
+  no day must stay under its ceiling in `config/idhazh.json`. A page-weight
+  failure therefore appeared under a heading about the encoder, which cost three
+  people a diagnosis on 2026-08-26. **Read the gate's own output, never the step
+  name** - it prints which of the three failed and what to do about it. The step
+  is now named for all three.
+- **A page-weight failure is often not yours.** `/archive/` and `/console/` grow
+  every time the pipeline publishes, so a red bundle gate on your branch may be
+  red on `origin/main` too. Check before you change a number:
+
+  ```powershell
+  gh api "repos/miztiik/yen-idhazh/commits/$(git rev-parse origin/main)/check-runs" --jq '.check_runs[]|"\(.name)=\(.conclusion)"'
+  ```
+
+  And when the number really is yours, a raise needs a control build of the old
+  payload under the new source. See
+  [../how-to/run-the-gates.md](../how-to/run-the-gates.md).
+- **The first-load ratchet fails locally for `origin/main` too, so build the
+  control before you record a baseline.** On 2026-08-26 `npm run bundle-gate`
+  reported `/`, `/<date>/` and `/<date>/<topic>/` 65 to 68 bytes under their
+  recorded weights and printed three replacement lines ready to paste. Building
+  `origin/main`'s own `frontend/src` on the same tree, the same node and the
+  same `node_modules` gave 67 to 70 bytes under - worse - while the `site` job
+  on that exact commit was green. A local Windows build does not reproduce CI's
+  `npm ci` on Linux closely enough for a 64-byte tolerance, on node 22 or node
+  24. Pasting those lines would have recorded somebody else's bytes under your
+  name and moved a baseline CI was happy with. The control is one build:
+
+  ```powershell
+  git checkout origin/main -- frontend/src frontend/bundle-baseline.json
+  npm run build; npm run bundle-gate
+  git checkout HEAD -- frontend/src frontend/bundle-baseline.json
+  ```
+
+  Read the *difference between the two runs*, never the delta against the
+  record. Mine was +2 to +4 bytes on those routes, which is the real answer.
 
 ## PowerShell
 

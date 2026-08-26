@@ -1356,6 +1356,64 @@ earned and were therefore skipped.
 Encode cost: 0.16 s an item, one sequence per forward pass. 1,602 items in
 511 s, single-threaded, on a loaded machine.
 
+#### The console section, on top of that raise
+
+Two more runs of 2026-08-26 landed after PR #126 set the first ceilings, and the
+console draws the ledger they append to. Six builds, same hardware, same method,
+`origin/main` at `85fbc16`:
+
+| Tree | `/console/` | `/archive/` |
+| --- | ---: | ---: |
+| `origin/main` source over the payload at `bd1b3c9` | 123,265 | 1,124,600 |
+| `origin/main` minus the Charts table (#122) | 135,784 | 1,306,343 |
+| `origin/main` | 136,704 | 1,306,339 |
+| `What the model did`, build 1 | **137,501** | 1,306,338 |
+| `What the model did`, build 2 | 137,494 | 1,306,343 |
+| `What the model did`, build 3 | 137,496 | 1,306,341 |
+
+**The first row is the control.** It puts `origin/main`'s frontend source over
+the payload as it stood at `bd1b3c9` - the commit that set the ceilings - and
+reads 123,265 against the 123,266 recorded above, one byte apart. The frontend
+source is byte-identical between `bd1b3c9` and `origin/main`, so that row varies
+the payload and nothing else. Without a control that reproduces the number being
+replaced, a re-measurement cannot be told apart from a different measurement.
+
+The 14,235 bytes between the ceiling #126 set and the one this measurement asks
+for split two ways:
+
+| What the bytes buy | Bytes | Share |
+| --- | ---: | ---: |
+| Two further runs of 2026-08-26 in the ledger the console draws | 13,439 | 94.4% |
+| The `What the model did` section | 797 | 5.6% |
+| The Charts table (#122) | 0 | already inside the old ceiling |
+
+**The Charts table is not part of the raise.** It costs 920 bytes at that
+payload, and none of them are new: #122 landed before #126 measured 123,266, so
+the old ceiling already carried it. Between that measurement and this one,
+`run.json` for 2026-08-26 went from 2 runs to 4, `telemetry/2026-08.csv` from
+2,393 rows to 2,713, and that day's item count from 273 to 505. The console
+draws a mark per item, so its document grows with the day's own re-runs, which
+is what the fourteen kilobytes are.
+
+**Re-measured after the final rebase**, over the seven published days and the
+backfilled vectors, on the tree that carries both:
+
+| Tree | `/console/` | `/archive/` |
+| --- | ---: | ---: |
+| `origin/main` source, same payload | 136,707 | 1,675,980 |
+| `What the model did`, build 1 | 137,502 | 1,675,978 |
+| `What the model did`, build 2 | **137,503** | 1,675,982 |
+| `What the model did`, build 3 | 137,496 | 1,675,982 |
+
+The committed ceiling is 137,503 + 64 = **137,567**. The section costs 796 bytes
+here against 797 on the tree before the rebase, so its own figure is stable
+while everything under it moved by fourteen kilobytes - which is the point of
+measuring the two separately.
+
+**`/archive/` is untouched by the section.** It reads within 2 bytes of the
+`origin/main` build over the same payload, inside the spread over three builds
+of one tree, and stays under the 1,676,048 the backfill row set.
+
 ### Days to the 1 GB Pages ceiling
 
 The image rows below are historical. They were the arithmetic that made Row #9's
