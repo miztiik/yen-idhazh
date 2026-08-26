@@ -1092,6 +1092,46 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     assert second.runs[-1].items_added == 0, "an item already published is not published twice"
 
 
+def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
+    """The gate that makes `updated_at` and `updated_by_run` reserved rather than live.
+
+    An item the day already holds is dropped whole, so a second run carrying
+    different words for the same address changes nothing a reader can see. If
+    this ever stops holding, docs/architecture/publishing/layout.md is wrong and
+    has to be corrected in the same commit.
+    """
+    settings = config.load(CONFIG_DIR)
+    original = digest_item(run_n=1)
+    first = assemble.build_day(
+        plan=plan(),
+        items=[original],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    rewritten = original.model_copy(
+        update={"summary": "Different words for the same address.", "key_points": ["Rewritten."]}
+    )
+    second = assemble.build_day(
+        plan=plan(),
+        items=[rewritten],
+        previous=first,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T19:00:00Z",
+        retention_window_months=-1,
+    )
+
+    kept = second.items[0]
+    assert kept.summary == original.summary
+    assert kept.key_points == original.key_points
+    assert kept.introduced_by_run == 1
+    assert kept.updated_at is None
+    assert kept.updated_by_run is None
+
+
 def test_the_run_that_wrote_an_item_resolves_to_a_recorded_run() -> None:
     """The join to the manifest that names the model lands on a run the day recorded."""
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))

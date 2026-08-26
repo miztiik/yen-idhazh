@@ -410,6 +410,29 @@ def test_a_vertical_below_its_feed_floor_plans_nothing() -> None:
     assert summary.considered > 0, "it is still counted - the desk is being built in the open"
 
 
+def test_a_published_address_is_never_planned_again() -> None:
+    """The first of the three gates that make an item's words final.
+
+    This is what stops a repeat that a freshness window cannot stop, and it is
+    also why no run can revise: a published address never reaches the summarizer
+    a second time. See docs/architecture/publishing/layout.md.
+    """
+    every = all_candidates()
+    _, planned = plan_vertical(AI, every, config=CollectConfig(), live_feeds=3, now=NOW)
+    assert planned, "the fixture feeds must offer something to drop"
+
+    published = frozenset(item.url_key for item in planned)
+    _, replanned = plan_vertical(
+        AI,
+        every,
+        config=CollectConfig(),
+        live_feeds=3,
+        now=NOW,
+        already_published=published,
+    )
+    assert published.isdisjoint(item.url_key for item in replanned)
+
+
 def test_an_item_id_is_the_address_not_the_rank_position() -> None:
     """Run 2 of a day must recognise the work run 1 did, so the id cannot move."""
     every = all_candidates()

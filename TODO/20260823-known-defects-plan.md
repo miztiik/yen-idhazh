@@ -36,10 +36,10 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 13 | One stage is 2600x the others, so a linear timing axis answers for one of four | 2 | FIXED - 2026-08-25 |
 | 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | FIXED - 2026-08-25 |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 4 | **OPEN - no reader-facing symptom** |
-| 16 | The published item carries revision machinery no run can trigger | 5 | **OPEN - a decision, not a task** |
+| 16 | The published item carries revision machinery no run can trigger | 5 | **DECIDED 2026-08-26 - the fields stay reserved, PR #141** |
 | 17 | Three declared taxonomy dimensions are empty on every published item | 5 | **OPEN - design consultation** |
 
-## 16 - The published item carries revision machinery no run can trigger (OPEN)
+## 16 - The published item carries revision machinery no run can trigger (DECIDED)
 
 Found 2026-08-26 while asking what could ever make the new embeddings merge rule
 fire. PR #114 made a day prefer a re-summarized item's newer vector. That rule is
@@ -119,6 +119,27 @@ blocked by 2001 committed items.
 **What to do meanwhile: nothing.** The cost of leaving it open is not paid by a
 reader. It is that the next person reads the contract, sees an invariant about
 revisions, and believes the pipeline can produce one.
+
+**Decided 2026-08-26 by the owner: the fields stay, and the promise is corrected
+instead (PR #141).** Neither way out was taken, because the row's own evidence
+says deletion buys a reader nothing and costs a read-side migration plus a
+rewrite of 2,121 committed items. What was actually wrong is the sentence, so
+that is what changed. `layout.md` now says an item's words are written once, by
+the run that introduced it, and keeps "a revision is visible" as the rule a
+revision would have to meet. `updated_at` and `updated_by_run` say "reserved" in
+their own descriptions and name the three gates. The named trigger that would
+revive revision is a summarizer model swap
+([`20260825-qwen35-9b-adoption-plan.md`](20260825-qwen35-9b-adoption-plan.md)) -
+a better summarizer is the one event that makes published words worth
+rewriting.
+
+Two tests now pin it, because prose is what drifted: a published address is
+never planned again, and a second run carrying different words for an item the
+day already holds changes neither the words nor either field. The first gate had
+no test at all before this.
+
+Recorded in
+[`docs/architecture/publishing/layout.md`](../docs/architecture/publishing/layout.md).
 
 ## 13 - One stage is 2600x the others, so a linear timing axis answers for one of four (FIXED)
 
