@@ -188,7 +188,12 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
-    "assemble": ["frontend/public/digest", "frontend/public/telemetry", "state"],
+    "assemble": [
+        "frontend/public/digest",
+        "frontend/public/telemetry",
+        "frontend/public/assist/index",
+        "state",
+    ],
 }
 COMMIT_IDENTITY: Final = (
     "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
@@ -214,6 +219,7 @@ COMMIT_REFRESH_PATHS: Final = {
         f"{SUBSTITUTED_DAY_DIR}/digest.json",
         f"{SUBSTITUTED_DAY_DIR}/run.json",
         "frontend/public/telemetry",
+        "frontend/public/assist/index",
         "state/published.csv",
         "state/scores.csv",
         "state/item-health",

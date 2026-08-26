@@ -166,6 +166,15 @@ tests, utilities and modules the change had nothing to do with. Run
 format pass has already happened, `git restore --` the specific unrelated paths
 rather than the tree.
 
+**A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
+Windows filenames are case-insensitive, so a gate script that writes
+`ruff check` output to `$out\ruff.txt` and then a sentinel to `$out\RUFF.txt`
+silently overwrites the result with the word `RUFF-DONE`. The run looks like it
+passed - the sentinel is there, the file exists, and nothing errored - and the
+exit code you needed is gone. On 2026-08-26 this destroyed the ruff and mypy
+output of a full gate run and cost a second one. Give a sentinel a name that is
+not the stem of any output file, such as `SENTINEL.txt`.
+
 ## GitHub CLI
 
 **A `workflow_dispatch` cannot reach a workflow that is not on the default

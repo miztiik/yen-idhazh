@@ -23,6 +23,10 @@ JSON_SCHEMA_DIALECT: Final = "https://json-schema.org/draft/2020-12/schema"
 # than one revision lands on the same day (CLAUDE.md section 11).
 SCHEMA_VERSION_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}(?:T\d{2}:\d{2}(?::\d{2})?)?$"
 DATE_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}$"
+# `<YYYY>-<MM>`: a shard period. The same stem `state/seen/` and
+# `frontend/public/telemetry/` already file by, so a payload that names its own
+# month spells it the one way the directories do.
+MONTH_PATTERN: Final = r"^\d{4}-\d{2}$"
 # UTC, second precision, no offset spelling. A payload timestamp leaves the
 # process as text, so it is pinned as text: one spelling means a re-serialized
 # payload is byte-identical to the one that was read.
@@ -49,6 +53,7 @@ REL_PATH_PATTERN: Final = rf"^{_PATH_SEGMENT}(?:/{_PATH_SEGMENT})*$"
 
 SchemaVersion = Annotated[str, StringConstraints(pattern=SCHEMA_VERSION_PATTERN)]
 DateStamp = Annotated[str, StringConstraints(pattern=DATE_PATTERN)]
+MonthStamp = Annotated[str, StringConstraints(pattern=MONTH_PATTERN)]
 Timestamp = Annotated[str, StringConstraints(pattern=TIMESTAMP_PATTERN)]
 Slug = Annotated[str, StringConstraints(pattern=SLUG_PATTERN)]
 ItemId = Annotated[str, StringConstraints(pattern=ITEM_ID_PATTERN)]
@@ -80,6 +85,24 @@ def canonical_json(payload: Any) -> str:
     reshuffled dict.
     """
     return json.dumps(payload, indent=2, sort_keys=True, ensure_ascii=True) + "\n"
+
+
+def compact_json(payload: Any) -> str:
+    """The same serialization with the whitespace taken out.
+
+    Sorted keys, ASCII-escaped and one trailing newline, exactly as
+    `canonical_json` - so a payload that is read and re-written is still
+    byte-identical, and the drift gate can still compare bytes. Only the indent
+    and the separator spaces are gone.
+
+    A payload uses this when a reader downloads it whole and its entries are
+    counted in thousands rather than in tens. Pretty-printing the month search
+    index roughly doubles it for whitespace nobody reads, and that index is
+    already the largest thing this project asks a browser to fetch. Every other
+    persisted payload stays pretty-printed, because being able to review a
+    committed diff by eye is worth more than its bytes.
+    """
+    return json.dumps(payload, separators=(",", ":"), sort_keys=True, ensure_ascii=True) + "\n"
 
 
 def derive_output_digest(

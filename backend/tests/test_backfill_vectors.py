@@ -22,6 +22,7 @@ from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 from idhazh import assemble, cli
 from idhazh.contracts.app_config import AssistConfig
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
+from idhazh.contracts.search_index import SearchIndex
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, to_base64
 
 # A headline written in Devanagari. `readable_share` counts no Latin letter in
@@ -78,6 +79,13 @@ def write_day(root: Path, payload: DigestDay) -> Path:
 def needs_encoder() -> None:
     if not embedder().available:
         pytest.skip("the encoder is not committed in this checkout")
+
+
+def backfill(root: Path, today: str, encoder: Embedder) -> int:
+    """The command as the CLI invokes it, with the index beside the days."""
+    return cli.stage_backfill_vectors(
+        root=root, index_root=root / "index", today=today, embedder=encoder
+    )
 
 
 
@@ -143,9 +151,7 @@ class TestTheBackfill:
         needs_encoder()
         path = write_day(tmp_path, with_block(block({})))
 
-        assert (
-            cli.stage_backfill_vectors(root=tmp_path, today="2026-08-22", embedder=embedder()) == 0
-        )
+        assert backfill(tmp_path, "2026-08-22", embedder()) == 0
 
         repaired = DigestDay.from_json(path.read_text(encoding="utf-8"))
         assert repaired.embeddings is not None
@@ -156,7 +162,7 @@ class TestTheBackfill:
         needs_encoder()
         path = write_day(tmp_path, with_one_unreadable_item(block({})))
 
-        cli.stage_backfill_vectors(root=tmp_path, today="2026-08-22", embedder=embedder())
+        backfill(tmp_path, "2026-08-22", embedder())
 
         repaired = DigestDay.from_json(path.read_text(encoding="utf-8"))
         assert repaired.embeddings is not None
@@ -168,7 +174,7 @@ class TestTheBackfill:
         every = block({item.item_id: vector(0.25) for item in day().items})
         path = write_day(tmp_path, with_one_unreadable_item(every))
 
-        cli.stage_backfill_vectors(root=tmp_path, today="2026-08-22", embedder=embedder())
+        backfill(tmp_path, "2026-08-22", embedder())
 
         repaired = DigestDay.from_json(path.read_text(encoding="utf-8"))
         assert repaired.embeddings is not None
@@ -186,7 +192,7 @@ class TestTheBackfill:
         stale = vector(0.25)
         path = write_day(tmp_path, with_block(block({"ai-01": stale})))
 
-        cli.stage_backfill_vectors(root=tmp_path, today="2026-08-22", embedder=embedder())
+        backfill(tmp_path, "2026-08-22", embedder())
 
         repaired = DigestDay.from_json(path.read_text(encoding="utf-8"))
         assert repaired.embeddings is not None
@@ -196,12 +202,25 @@ class TestTheBackfill:
     def test_running_it_again_changes_nothing(self, tmp_path: Path) -> None:
         needs_encoder()
         path = write_day(tmp_path, with_block(block({})))
-        cli.stage_backfill_vectors(root=tmp_path, today="2026-08-22", embedder=embedder())
+        backfill(tmp_path, "2026-08-22", embedder())
         once = path.read_bytes()
 
-        cli.stage_backfill_vectors(root=tmp_path, today="2026-08-22", embedder=embedder())
+        backfill(tmp_path, "2026-08-22", embedder())
 
         assert path.read_bytes() == once
+
+    def test_a_repaired_day_takes_its_month_index_with_it(self, tmp_path: Path) -> None:
+        """A shard left naming the old vectors would rank against bytes the day dropped."""
+        needs_encoder()
+        write_day(tmp_path, with_block(block({})))
+
+        backfill(tmp_path, "2026-08-22", embedder())
+
+        built = SearchIndex.from_json(
+            (tmp_path / "index" / "2026-08.json").read_text(encoding="utf-8")
+        )
+        assert built.vector_bytes == (tmp_path / "index" / "2026-08.bin").stat().st_size
+        assert built.vector_bytes > 0
 
     def test_the_live_day_is_left_alone(self, tmp_path: Path) -> None:
         """It is being written by the run that owns it, and a payload has no union merge."""
@@ -209,9 +228,7 @@ class TestTheBackfill:
         path = write_day(tmp_path, with_block(block({})))
         before = path.read_bytes()
 
-        assert (
-            cli.stage_backfill_vectors(root=tmp_path, today="2026-08-21", embedder=embedder()) == 0
-        )
+        assert backfill(tmp_path, "2026-08-21", embedder()) == 0
 
         assert path.read_bytes() == before
 
@@ -220,11 +237,6 @@ class TestTheBackfill:
         path = write_day(tmp_path, with_block(block({})))
         before = path.read_bytes()
 
-        assert (
-            cli.stage_backfill_vectors(
-                root=tmp_path, today="2026-08-22", embedder=embedder(tmp_path / "empty")
-            )
-            == 1
-        )
+        assert backfill(tmp_path, "2026-08-22", embedder(tmp_path / "empty")) == 1
 
         assert path.read_bytes() == before
