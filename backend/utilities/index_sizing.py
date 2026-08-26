@@ -75,10 +75,14 @@ DAYS_PER_MONTH: Final = 30
 # The scopes a search-scope default has to be chosen from.
 REPORTED_SCOPES_MONTHS: Final = (1, 3, 12)
 
-# The two sizes the archive plan escalates on: a month browse index over 300 KB
-# gzipped, or a month vector file over 4 MB transferred.
-BROWSE_TRIGGER_BYTES: Final = 300 * 1024
-VECTOR_TRIGGER_BYTES: Final = 4 * 1024 * 1024
+# The two sizes a month shard is judged against. Both were estimates when this
+# tool was written - 300 KB and 4 MB - and both were already busted by the
+# numbers below. They now carry the budget derived from those numbers in
+# `docs/architecture/publishing/layout.md`: 1.5 MB is 30 percent above what the
+# structural ceiling projects for the browse index, and 8 MB is half of the
+# encoder download a searcher has already accepted.
+BROWSE_TRIGGER_BYTES: Final = 1_500_000
+VECTOR_TRIGGER_BYTES: Final = 8 * 1024 * 1024
 
 # A reference line, so a transfer figure has a unit a reader feels. This is a
 # parameter, not a measurement of anybody's connection; `--line-mbit` moves it.
@@ -493,10 +497,10 @@ def main() -> int:
     for row in months:
         print(f"  {row['rate']:<9} {row['items_per_month']:>7} items  "
               f"browse {row['browse_gzip_bytes']:>9} B "
-              f"({'OVER' if row['browse_over_trigger'] else 'under'} 300 KB, "
+              f"({'OVER' if row['browse_over_trigger'] else 'under'} 1.5 MB, "
               f"{row['browse_seconds']}s)  "
               f"vectors {row['vector_gzip_bytes']:>9} B "
-              f"({'OVER' if row['vector_over_trigger'] else 'under'} 4 MB, "
+              f"({'OVER' if row['vector_over_trigger'] else 'under'} 8 MB, "
               f"{row['vector_seconds']}s)")
 
     if report["rank"]:

@@ -113,6 +113,7 @@ QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualificatio
 #: The planted attacks, run live against a candidate before it is adopted.
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
+INDEX_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "assist" / "index"
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
@@ -1855,6 +1856,12 @@ def stage_assemble(
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 
+    # The month shard is a projection of the days on disk, so it is rebuilt after
+    # the day is written and never patched in place.
+    index = assemble.rebuild_search_index(
+        digest_root=PUBLIC_ROOT, index_root=INDEX_ROOT, month=assemble.month_of(plan.date)
+    )
+
     site_bytes, site_files = assemble.site_size(PUBLIC_ROOT)
     site_alarm = retention.budget_alarm(
         retention.SiteSize(site_bytes, site_files), settings.app.retention
@@ -1887,7 +1894,7 @@ def stage_assemble(
     publish_telemetry.publish(state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry")
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
-        "new_fingerprints=%s",
+        "new_fingerprints=%s search_index=%s/%s",
         plan.date,
         len(day.items),
         day.partial,
@@ -1895,6 +1902,8 @@ def stage_assemble(
         published,
         item_health,
         [row.pipeline_fingerprint[:12] for row in stamps],
+        len(index.entries),
+        index.vector_bytes // index.dimensions,
     )
     return day
 
@@ -2026,7 +2035,9 @@ def needs_backfill(day: DigestDay, embedder: Embedder) -> bool:
     return set(block.vectors) != earns_a_vector(day, embedder)
 
 
-def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int:
+def stage_backfill_vectors(
+    *, root: Path, index_root: Path, today: str, embedder: Embedder
+) -> int:
     """Re-encode every closed day whose vectors are not the set its items earned.
 
     `build_day` replaced a day's embeddings block instead of merging it, so a
@@ -2053,6 +2064,10 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
     dispatch twice. A day it does rewrite is written whole, which also lifts an
     older payload to the current schema shape.
 
+    Rewriting a day makes its month's search index stale, so every month this
+    touched is rebuilt before it returns. That is the same obligation assemble
+    carries, and this is the only other writer of a committed day payload.
+
     This one fails rather than degrades. `build_embeddings` returns nothing
     when the encoder is missing because a day that cannot be searched still
     publishes; here there is no digest at risk and the vectors are the entire
@@ -2063,6 +2078,7 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
         return 1
 
     repaired = 0
+    months: set[str] = set()
     for path in published_days(root):
         day = DigestDay.from_json(path.read_text(encoding="utf-8"))
         if not is_closed(day.date, today=today):
@@ -2088,6 +2104,7 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
         )
         assemble.write_atomic(path, repaired_day.to_json())
         repaired += 1
+        months.add(assemble.month_of(day.date))
         LOG.info(
             "backfilled date=%s items=%s earned=%s vectors_before=%s vectors_after=%s",
             day.date,
@@ -2095,6 +2112,17 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
             len(earned),
             before,
             len(fresh.vectors),
+        )
+
+    for month in sorted(months):
+        index = assemble.rebuild_search_index(
+            digest_root=root, index_root=index_root, month=month
+        )
+        LOG.info(
+            "rebuilt search index month=%s entries=%s vectors=%s",
+            month,
+            len(index.entries),
+            index.vector_bytes // index.dimensions,
         )
 
     LOG.info("backfill complete days_rewritten=%s", repaired)
@@ -2276,6 +2304,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # day is the one the scheduled pipeline is appending to.
         return stage_backfill_vectors(
             root=PUBLIC_ROOT,
+            index_root=INDEX_ROOT,
             today=min(date, _today()),
             embedder=Embedder(config.REPO_ROOT, settings.app.assist),
         )

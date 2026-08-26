@@ -12,9 +12,10 @@ So this is a real program doing real file I/O with `stage_assemble`'s shape:
 read the previous day, drop the items it already carries, replace this run's
 entry in the run list, copy each route's asset path into the day the way
 `to_digest_visual` does, blind-append the two ledgers that blind-append,
-deduplicate the one that deduplicates, and rewrite the telemetry projection
-whole. It decides nothing - no model, no scorer, no contracts - because the
-thing under test is the loop, not the digest.
+deduplicate the one that deduplicates, rewrite the telemetry projection whole,
+and rebuild the month search index from the days on disk. It decides nothing -
+no model, no scorer, no contracts - because the thing under test is the loop,
+not the digest.
 
 Usage: rebuild_day.py --date YYYY-MM-DD, from the root of a checkout. This run's
 artifacts are read from `backend/var/run/<date>/items.json`, which stands in for
@@ -133,6 +134,18 @@ def rebuild(root: Path, date: str) -> None:
     _write_rows(
         root / "frontend" / "public" / "telemetry" / f"{month}.csv", HEALTH_COLUMNS, health
     )
+
+    # The month search index is derived from the days on disk, so it is rebuilt
+    # rather than merged - which is what lets the loop hand it back to origin
+    # and rerun this producer against origin's tip.
+    index_dir = root / "frontend" / "public" / "assist" / "index"
+    month_dir = root / "frontend" / "public" / "digest" / date[:4] / date[5:7]
+    entries: list[dict[str, object]] = []
+    for payload_path in sorted(month_dir.glob("*/digest.json")):
+        payload = json.loads(payload_path.read_text(encoding="utf-8"))
+        entries += [{"date": payload["date"], "item_id": item} for item in payload["items"]]
+    _write_json(index_dir / f"{month}.json", {"month": month, "entries": entries})
+    (index_dir / f"{month}.bin").write_bytes(bytes(len(entries)))
 
 
 def main() -> None:
