@@ -6,6 +6,7 @@ import csv
 from pathlib import Path
 
 import pytest
+from conftest import FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.base import derive_url_key
@@ -13,6 +14,7 @@ from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.seen import PublishedRow, SeenRow
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
+STATE_FIXTURES = FIXTURES_DIR / "state"
 DATE = "2026-08-23"
 RUN_ID = "2026-08-23-1"
 STAMP = "2026-08-23T06:00:00Z"
@@ -84,6 +86,30 @@ def test_feed_health_ledger_rejects_stale_committed_header(tmp_path: Path) -> No
 
     with pytest.raises(ValueError, match="Migrate the ledger before appending to it"):
         ledger.append_health(state, DATE, [health_row()])
+
+
+def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> None:
+    """The reader maps cells by name, so a column nothing reads can leave without it.
+
+    Both fixtures hold the same eleven rows copied out of `state/published.csv`;
+    the second has no `canonical_url`. The header check guards the writer only -
+    `require_matching_header` is called from `_append` and from nothing on the
+    read path - and this is what makes narrowing the row one commit rather than
+    an expand-migrate-contract sequence (CLAUDE.md section 11).
+    """
+    wide, narrow = tmp_path / "wide", tmp_path / "narrow"
+    for state, fixture in ((wide, "published-v1.csv"), (narrow, "published-v2.csv")):
+        state.mkdir()
+        ledger.published_path(state).write_bytes((STATE_FIXTURES / fixture).read_bytes())
+
+    wide_header = ledger.read_header(ledger.published_path(wide))
+    narrow_header = ledger.read_header(ledger.published_path(narrow))
+    assert set(wide_header) - set(narrow_header) == {"canonical_url"}
+    assert {"url_key", "published_on"} <= set(narrow_header)
+
+    published = ledger.load_published(wide)
+    assert len(published) == 11, "an empty or trimmed ledger would pass the comparison while proving nothing"
+    assert published == ledger.load_published(narrow)
 
 
 def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: Path) -> None:
