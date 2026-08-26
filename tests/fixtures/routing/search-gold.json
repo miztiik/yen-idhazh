@@ -1,15 +1,16 @@
 {
-  "note": "Hand-labelled relevance set for on-device search, run against the canary day. Each query names the CANARY it must retrieve, not an item id and not a rank: an id shifts when a canary is added, a rank shifts when a sibling changes, a canary name is stable. The test resolves the name to an item through that fixture's own title.",
+  "known_miss": "The fourth query is a real miss at assist.similarity_floor. Its right answer scores 0.326 on this eight-item day, below the 0.35 floor measured against the 580-item archive. That is the floor doing its job on a corpus too small to hold a close match, not a retrieval defect, and it is why the bar tolerates one miss.",
+  "note": "A WIRING CHECK, not an instrument. It proves the encoder loads, the committed vectors decode, a query returns a ranked list and a nonsense query returns the empty state. Five queries cannot measure retrieval quality - at n=5 the standard error at recall 0.8 is 0.18 - so the bar here is deliberately loose and stays loose. The quality measurement is tests/fixtures/search/retrieval-queries.json, run by backend/tests/test_retrieval_eval.py over the real archive. Each query names the CANARY it must retrieve rather than an item id or a rank: an id shifts when a canary is added, a rank shifts when a sibling changes, a canary name is stable. The test resolves the name to an item through that fixture's own title.",
   "pass_bar": {
     "metric": "top_3_recall",
     "minimum": 0.8,
-    "why": "Four of five. A missed result costs a reader a convenience, so the bar is deliberately loose; the tight bars belong on the canaries, where a failure costs trust."
+    "why": "Four of five. A missed result costs a reader a convenience, so the bar is deliberately loose; the tight bars belong on the canaries, where a failure costs trust. It is not raised when the quality instrument improves - a five-query bar that moves is noise pretending to be a signal."
   },
   "queries": [
     {
       "expect_canary": "encoded-payload",
-      "query": "base64 encoded payload hidden inside an article",
-      "why": "The only item about encoding."
+      "query": "how much power will the new interconnector carry",
+      "why": "The only item about an interconnector. The query this replaced - 'base64 encoded payload hidden inside an article' - described the canary's INJECTION, which is sanitized and never published. It was asking for text no reader can ever see, so it could not retrieve its item on merit at any floor: its best match on this day scored 0.174, against a different item."
     },
     {
       "expect_canary": "markup-into-the-page",
