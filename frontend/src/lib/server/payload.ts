@@ -8,6 +8,9 @@
 
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+// Relative, not `$lib`: the browser suite imports this module in plain Node,
+// where no Vite alias exists to resolve one.
+import { dayKey, toDay } from '../charts/viewport';
 import type { DigestDay } from '$lib/payload/types';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
@@ -173,14 +176,62 @@ export function telemetryMonths(root: string = TELEMETRY_ROOT): string[] {
 		.sort();
 }
 
-/** Initial telemetry for the SSR fallback. Runtime panning fetches the same files. */
-export function telemetryRows(root: string = TELEMETRY_ROOT): CsvTable {
+const DAY_MS = 86_400_000;
+
+/** The oldest day the seed keeps, or null when no month holds a dated row.
+ *
+ * Anchored on the newest day on record rather than on today, because that is
+ * what the viewport anchors its opening window on. Anchored on today instead,
+ * a corpus that stopped last month would seed an empty page.
+ */
+function seedCutoff(
+	months: string[],
+	read: (month: string) => CsvTable,
+	windowDays: number
+): string | null {
+	for (const month of [...months].reverse()) {
+		const dates = read(month)
+			.rows.map((row) => row.date ?? '')
+			.filter((date) => date !== '');
+		if (dates.length === 0) continue;
+		const newest = dates.reduce((later, date) => (date > later ? date : later));
+		return dayKey(new Date(toDay(newest).getTime() - (windowDays - 1) * DAY_MS));
+	}
+	return null;
+}
+
+/** Initial telemetry for the SSR fallback. Runtime panning fetches the same files.
+ *
+ * `windowDays` bounds the seed to the window the viewport opens on. Without it
+ * every committed month is concatenated and inlined into the prerendered HTML,
+ * so the page a reader downloads grows for as long as the pipeline runs. The
+ * month shards are untouched, so panning back still reaches the dropped days -
+ * the browser fetches the same files it always did.
+ *
+ * A window is a count of days, so it can straddle a month boundary. Reading is
+ * still bounded: the shards are monthly, so the worst case is two of them.
+ */
+export function telemetryRows(root: string = TELEMETRY_ROOT, windowDays?: number): CsvTable {
+	const months = telemetryMonths(root);
+	const shards = new Map<string, CsvTable>();
+	const read = (month: string): CsvTable => {
+		let table = shards.get(month);
+		if (!table) {
+			table = readCsv(join(root, `${month}.csv`));
+			shards.set(month, table);
+		}
+		return table;
+	};
+
+	const cutoff =
+		windowDays !== undefined && windowDays > 0 ? seedCutoff(months, read, windowDays) : null;
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
-	for (const month of telemetryMonths(root)) {
-		const table = readCsv(join(root, `${month}.csv`));
+	for (const month of months) {
+		if (cutoff !== null && month < cutoff.slice(0, 7)) continue;
+		const table = read(month);
 		if (columns.length === 0 && table.columns.length > 0) columns = table.columns;
-		rows.push(...table.rows);
+		rows.push(...table.rows.filter((row) => cutoff === null || (row.date ?? '') >= cutoff));
 	}
 	return { rows, columns };
 }

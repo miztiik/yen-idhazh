@@ -2,6 +2,8 @@ import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
+import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
+import { telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -45,6 +47,21 @@ const FAILURE_LIST_MAX = (
 		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
 	) as { console?: { failure_list_max?: number } }
 ).console?.failure_list_max ?? 25;
+
+/** The window the viewport opens on, read from the same knob the page reads. */
+const DEFAULT_WINDOW_DAYS = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
+	) as { console?: { default_window_days?: number } }
+).console?.default_window_days ?? 30;
+
+/** A telemetry corpus deliberately longer than the window, for the seed tests.
+ *
+ * The canary day carries two days, which is shorter than any window this knob
+ * can hold. A window asserted against a corpus it cannot cut passes without
+ * cutting anything, so the seed tests read this instead.
+ */
+const TELEMETRY_FIXTURE = resolve(process.cwd(), 'tests', 'fixtures', 'telemetry');
 
 /** Every day the fixture wrote a manifest for, oldest first, with its run count.
  *
@@ -895,4 +912,54 @@ test('an empty section costs the page that section, never the page', async ({ pa
 
 	expect(errors).toEqual([]);
 	expect(missing).toEqual([]);
+});
+
+test('the seed carries one window, however many months are committed', () => {
+	const all = telemetryRows(TELEMETRY_FIXTURE);
+	const seeded = telemetryRows(TELEMETRY_FIXTURE, DEFAULT_WINDOW_DAYS);
+	const dates = all.rows.map((row) => row.date).sort();
+	const newest = dates.at(-1) as string;
+
+	// A corpus shorter than the window is windowed to itself, so everything
+	// below would pass with no window in the code at all. The fixture has to
+	// outlast the window or this test proves nothing.
+	expect(span(dates[0], newest)).toBeGreaterThan(DEFAULT_WINDOW_DAYS);
+
+	const cutoff = dayKey(new Date(toDay(newest).getTime() - (DEFAULT_WINDOW_DAYS - 1) * 86_400_000));
+	expect(all.rows.some((row) => row.date < cutoff)).toBe(true);
+	expect(seeded.rows.every((row) => row.date >= cutoff)).toBe(true);
+	expect(seeded.rows.length).toBeLessThan(all.rows.length);
+
+	// The seed still reaches the newest day, and still reads as the same table.
+	expect(seeded.rows.some((row) => row.date === newest)).toBe(true);
+	expect(seeded.columns).toEqual(all.columns);
+
+	// A window is a count of days, so it straddles a month boundary and reads
+	// two shards. Every older shard is skipped unread, which is the bound: two,
+	// however many months the pipeline has committed.
+	expect(monthsInWindow({ start: cutoff, end: newest }).length).toBeLessThanOrEqual(2);
+	expect(telemetryMonths(TELEMETRY_FIXTURE).length).toBeGreaterThan(
+		monthsInWindow({ start: cutoff, end: newest }).length
+	);
+});
+
+test('the days the seed drops stay on disk for a pan to reach', () => {
+	const seeded = telemetryRows(TELEMETRY_FIXTURE, DEFAULT_WINDOW_DAYS);
+	const dates = seeded.rows.map((row) => row.date).sort();
+	const back = panWindow(
+		{ start: dates[0], end: dates.at(-1) as string },
+		-DEFAULT_WINDOW_DAYS
+	);
+
+	// Bounding the seed must not put a day out of reach. Every month the pan
+	// lands on is still a shard the browser can fetch by name.
+	const shards = telemetryMonths(TELEMETRY_FIXTURE);
+	expect(monthsInWindow(back).filter((month) => shards.includes(month)).length).toBeGreaterThan(0);
+
+	const older = telemetryRows(TELEMETRY_FIXTURE).rows.filter(
+		(row) => row.date >= back.start && row.date <= back.end
+	);
+	const seededIds = new Set(seeded.rows.map((row) => row.item_id));
+	expect(older.length).toBeGreaterThan(0);
+	expect(older.every((row) => !seededIds.has(row.item_id))).toBe(true);
 });
