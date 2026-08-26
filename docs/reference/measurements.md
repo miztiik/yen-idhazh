@@ -1715,12 +1715,12 @@ a good indirect read and is not the one to quote.
 ## The published ledger
 
 **Re-measured 2026-08-26** on a developer machine (i7-1265U, Windows 11, CPython
-3.12.12) at commit `da22f4cf89ce1c36d8b3e9e6b069103e3f141752`, immediately
-before and after `backend/utilities/migrate_published_ledger.py` rewrote the
-file. This is deterministic file arithmetic, so the spread is zero and the
-hardware matters only for the in-memory figure at the end. It supersedes a
-2026-08-25 reading of 1,449 rows at 214.9 B, which was taken before the column
-below was dropped.
+3.12.12), over the ledger as `831fdac0ec36b3c7d38dd7cd26e3a8d2ba2a4755` holds
+it, immediately before and after
+`backend/utilities/migrate_published_ledger.py` rewrote the file. This is
+deterministic file arithmetic, so the spread is zero and the hardware matters
+only for the in-memory figure at the end. It supersedes a 2026-08-25 reading of
+1,449 rows at 214.9 B, which was taken before the column below was dropped.
 
 The row lost `canonical_url` in that commit. Nothing on the read path opened it,
 and the address it carried is still recoverable - the join, and what it cost, is
@@ -1728,17 +1728,17 @@ and the address it carried is still recoverable - the join, and what it cost, is
 
 | Quantity | Before | After | Method |
 | --- | --- | --- | --- |
-| Rows | 2,097 | 2,097 | `csv.DictReader` |
-| Bytes | 451,509 (441.0 KB) | **232,114 (226.7 KB)** | `stat` |
-| Mean row | 215.3 B | **110.7 B** | bytes / rows |
-| `version` share | 35,657 B, 7.9% | 35,657 B, 15.4% | field-width sum, one separator per cell |
-| `url_key` share | 136,313 B, 30.2% | 136,313 B, 58.7% | same |
-| **`canonical_url` share** | **219,395 B, 48.6%** | **gone** | same |
-| `published_on` share | 23,080 B, 5.1% | 23,080 B, 9.9% | same |
-| `item_id` share | 37,064 B, 8.2% | 37,064 B, 16.0% | same |
+| Rows | 2,213 | 2,213 | `csv.DictReader` |
+| Bytes | 476,809 (465.6 KB) | **244,910 (239.2 KB)** | `stat` |
+| Mean row | 215.5 B | **110.7 B** | bytes / rows |
+| `version` share | 37,629 B, 7.9% | 37,629 B, 15.4% | field-width sum, one separator per cell |
+| `url_key` share | 143,853 B, 30.2% | 143,853 B, 58.7% | same |
+| **`canonical_url` share** | **231,899 B, 48.6%** | **gone** | same |
+| `published_on` share | 24,356 B, 5.1% | 24,356 B, 9.9% | same |
+| `item_id` share | 39,072 B, 8.2% | 39,072 B, 16.0% | same |
 
-The rewrite removed 219,395 bytes - 48.6 percent of the file, and 104.6 bytes
-off every row. Nothing else moved: the same 2,097 rows carry the same 2,097
+The rewrite removed 231,899 bytes - 48.6 percent of the file, and 104.8 bytes
+off every row. Nothing else moved: the same 2,213 rows carry the same 2,213
 `(url_key, published_on)` pairs, in the same order, and those two cells are the
 whole of what the skip read opens.
 
@@ -1746,20 +1746,20 @@ Projected forward at the two mean rows above:
 
 | Rows a day | A year of rows | Was | Now | Saved |
 | --- | --- | --- | --- | --- |
-| 524, the ledger's own rate over the four days it holds | 191,260 | 41.2 MB | **21.2 MB** | 20.0 MB |
+| 553, the ledger's own rate over the four days it holds | 201,936 | 43.5 MB | **22.3 MB** | 21.2 MB |
 | 1,000, the structural ceiling below | 365,000 | 78.6 MB | **40.4 MB** | 38.2 MB |
 | 200, one run's worth | 73,000 | 15.7 MB | 8.1 MB | 7.6 MB |
 
 The ledger spans 2026-08-23 to 2026-08-26 and records only what a run
-introduced, so 2,097 over four days is the real publish rate rather than a count
+introduced, so 2,213 over four days is the real publish rate rather than a count
 of what the days carry. It reads slightly low: the last of those four days was
 still running when the file was measured. The ceiling row is the one to design
 against.
 
 **What it costs to read.** `ledger.load_published` parses the whole file into a
 list of dicts and then folds it into one map. `tracemalloc` peak over the
-narrowed ledger is **1,049,493 B**, 500.5 B a row, for 2,097 rows. At the
-365,000-row structural ceiling that is **183 MB**, or 1.1 percent of the
+narrowed ledger is **1,102,193 B**, 498.1 B a row, for 2,213 rows. At the
+365,000-row structural ceiling that is **182 MB**, or 1.1 percent of the
 runner's 16 GB (Rule #2). The 2026-08-25 reading was 716 B a row, so the
 narrowing took about 30 percent off the read - but that reading was on CPython
 3.14 and this one is on 3.12.12, so the interpreter is not held constant and the
@@ -1769,7 +1769,7 @@ year of this file is a rounding error against 16 GB.
 The plan stage is also the job that loads no model, so this allocation never
 sits beside 4.68 GiB of weights.
 
-**The address survived the column.** Every one of the 2,097 committed rows joins
+**The address survived the column.** Every one of the 2,213 committed rows joins
 to a `source_url`: `published_on` picks the day directory and `item_id` picks
 the item inside `digest.json`, with no absent day and no absent item (measured
 2026-08-26 over the whole file). What the column bought was a grep by address,

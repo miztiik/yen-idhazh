@@ -73,9 +73,9 @@ reading them saves no I/O at all. The general rule is in
 [../contracts/schemas.md](../contracts/schemas.md).
 
 The bound this costs, measured 2026-08-26 and recorded in
-[../../reference/measurements.md](../../reference/measurements.md): 2,097 rows
+[../../reference/measurements.md](../../reference/measurements.md): 2,213 rows
 at 110.7 B, so 40.4 MB a year at the structural ceiling of 1,000 rows a day.
-`load_published` peaks at 500.5 B a row while it reads, which is 183 MB at that
+`load_published` peaks at 498.1 B a row while it reads, which is 182 MB at that
 ceiling - 1.1 percent of the runner's 16 GB, in the one job that loads no model.
 
 **`canonical_url` was 48.6 percent of the row, and it is gone.**
@@ -83,9 +83,9 @@ ceiling - 1.1 percent of the runner's 16 GB, in the one job that loads no model.
 opens the file, so the column was paying for a lookup no run ever made. It left
 on 2026-08-26: the contract narrowed, and
 `backend/utilities/migrate_published_ledger.py` rewrote the committed ledger in
-the same commit. The file went from 451,509 B to 232,114 B - 219,395 B and
-104.6 B off every row - on a ledger that has no time bound and therefore never
-stops growing. That is 20.0 MB a year at the rate the ledger itself records and
+the same commit. The file went from 476,809 B to 244,910 B - 231,899 B and
+104.8 B off every row - on a ledger that has no time bound and therefore never
+stops growing. That is 21.2 MB a year at the rate the ledger itself records and
 38.2 MB at the structural ceiling. The saving was worth taking only because the
 ledger is unbounded and the migration was one file and one pass; the same
 arithmetic over a file that stops growing would not have earned a contract
@@ -118,7 +118,7 @@ Worked, on a real row:
 -> https://newslaundry.com/2026/08/26/knives-pistols-and-aura-farming-inside-delhis-teen-gangs
 ```
 
-The join holds for the whole ledger rather than in principle: all 2,097
+The join holds for the whole ledger rather than in principle: all 2,213
 committed rows resolve to a `source_url`, with no absent day and no absent item
 (measured 2026-08-26). It keeps holding because retention may never touch a
 day's JSON payload ([../publishing/layout.md](../publishing/layout.md)) - it
@@ -219,7 +219,7 @@ and guessing it is what this refusal is about.
 | Sharding `state/published.csv` by month | The question has no time bound, so every shard is opened on every run. It adds file opens and removes nothing. |
 | Windowing the dedupe read without sharding the file | Filtering rows after reading them saves no I/O. A window pays only when it can decide which files to skip. |
 | Pruning the published ledger | It is the only record of what a digest carried. Pruning makes a re-publish look new, which is the exact failure the ledger exists to stop. |
-| Keeping `canonical_url` on the published row for forensics | Dropped 2026-08-26. It was 48.6 percent of a row on a ledger with no time bound, no reader ever opened it, and all 2,097 committed rows recover their address by joining `item_id` and `published_on` against a day payload retention may not touch. |
+| Keeping `canonical_url` on the published row for forensics | Dropped 2026-08-26. It was 48.6 percent of a row on a ledger with no time bound, no reader ever opened it, and all 2,213 committed rows recover their address by joining `item_id` and `published_on` against a day payload retention may not touch. |
 
 ## See also
 
