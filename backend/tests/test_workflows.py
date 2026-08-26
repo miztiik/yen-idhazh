@@ -1582,7 +1582,7 @@ def test_the_runtime_cache_key_names_the_build_it_holds() -> None:
     newest when the entry was written, and nothing records which one that was.
     """
     workflows = _load_workflows()
-    expected_cache_jobs = {"digest.yml": {"work", "route"}, "validate.yml": {"validate"}}
+    expected_cache_jobs = {"digest.yml": {"work", "route"}, "validate.yml": {"qualify"}}
 
     for filename, job_names in expected_cache_jobs.items():
         keys = _runtime_cache_keys(workflows[filename])
@@ -1786,3 +1786,136 @@ def test_every_work_shard_records_how_hard_the_server_was_pushed() -> None:
     path = with_block.get("path")
     assert isinstance(path, str), "work runtime-log upload path must be a string"
     assert METRICS_FILE in path.splitlines(), "the runtime artifact must carry the raw counters"
+
+
+# --- The qualification arm (Row #10) ----------------------------------------
+
+
+def _uncommented(text: str) -> str:
+    """The lines a runner acts on, without the ones explaining why.
+
+    A comment that says "there is no incumbent arm" is documentation worth
+    keeping; an assertion that greps the whole file cannot tell it apart from
+    an incumbent arm.
+    """
+    return "\n".join(
+        line for line in text.splitlines() if not line.lstrip().startswith("#")
+    )
+
+
+def test_the_qualification_runs_exactly_one_model() -> None:
+    """The Oracle for the 2026-08-26 owner ruling: the candidate is judged alone.
+
+    The arm used to serve two models from one cache entry and call the
+    difference "only the weights". There is no second arm now, so nothing this
+    file executes may name a second model or a second set of weights.
+    """
+    text = _uncommented(read_text(WORKFLOWS_DIR / "validate.yml"))
+    assert "incumbent" not in text.lower(), "there is no incumbent arm"
+    assert "challenger" not in text.lower(), "there is no challenger arm"
+    assert "MODEL_REPO" not in text and "MODEL_FILE" not in text
+    # One `.gguf` literal in the whole file, and it is the dispatch default a
+    # human overrides. A second one is a second model.
+    assert text.count(".gguf") == 1
+    assert "leaderboard" not in text.lower(), (
+        "the candidate publishes no faithfulness result; provenance stays not_reported"
+    )
+
+
+def test_the_qualification_never_replans_or_refetches_per_model() -> None:
+    """Capture once, replay N. The old arm replanned and refetched for each
+    model, so two numbers could differ because a publisher edited a page."""
+    workflow = _load_workflows()["validate.yml"]
+
+    plan_scripts = " ".join(
+        script
+        for step in _steps(workflow, "plan")
+        if isinstance(script := step.get("run"), str)
+    )
+    assert "idhazh plan" in plan_scripts, "the addresses are read once, in the plan job"
+
+    for job_name in ("qualify", "decide"):
+        for step in _steps(workflow, job_name):
+            script = step.get("run")
+            if isinstance(script, str):
+                assert "idhazh plan" not in script, f"{job_name} must not replan"
+
+    download = _step(workflow, "qualify", "uses", "actions/download-artifact@v8")
+    assert _mapping(download.get("with"), "qualify download 'with'").get("name") == "plan"
+
+
+def test_the_candidate_weights_come_from_an_immutable_revision() -> None:
+    """`resolve/main` hands back whatever the branch points at today, and a
+    candidate nobody can fetch again is a candidate nobody can reproduce."""
+    workflow = _load_workflows()["validate.yml"]
+    where = "validate.yml/qualify/Fetch the runtime and the candidate"
+    fetch = _step(workflow, "qualify", "name", "Fetch the runtime and the candidate")
+    script = _uncommented(_script(fetch, where))
+    assert "resolve/main" not in script
+    assert "resolve/${{ inputs.candidate_revision }}" in script
+
+
+def test_the_candidate_bytes_are_verified_before_the_server_starts() -> None:
+    """Wrong weights must cost one step, not a whole shard of measurements filed
+    under a model that never ran (Rule #10)."""
+    workflow = _load_workflows()["validate.yml"]
+    names = [step.get("name") for step in _steps(workflow, "qualify")]
+    verify = names.index("Verify the candidate bytes")
+    assert verify < names.index("Start the candidate")
+    assert verify < names.index("Freeze the corpus and replay it")
+
+    step = _step(workflow, "qualify", "name", "Verify the candidate bytes")
+    script = _script(step, "validate.yml/qualify/Verify the candidate bytes")
+    assert "sha256sum --check" in script
+    assert "inputs.candidate_bytes" in script, "the declared byte count is checked too"
+    assert step.get("if") is None, "a restored cache entry is checked as well"
+
+
+def test_the_qualification_uploads_no_article_body() -> None:
+    """This repository is public. A frozen corpus is hashes and measurements;
+    the article text stays on the runner that captured it and dies with it."""
+    workflow = _load_workflows()["validate.yml"]
+    upload = _step(workflow, "qualify", "uses", "actions/upload-artifact@v7")
+    path = _mapping(upload.get("with"), "qualify upload 'with'").get("path")
+    assert path == "backend/var/qualification/shard-*.json"
+    assert "items" not in str(path)
+
+
+def test_the_qualification_config_differs_from_committed_config_only_in_the_model() -> None:
+    """Every control the gates hold fixed - prompt, schema, sampler, context,
+    threads, truncation cap - is the committed one, by construction."""
+    workflow = _load_workflows()["validate.yml"]
+    step = _step(workflow, "qualify", "name", "Build the candidate config")
+    script = _uncommented(_script(step, "validate.yml/qualify/Build the candidate config"))
+    assert "cp -a config backend/var/candidate-config" in script
+    assert '["models"]["summarize"]' in script
+    assert script.count('config["models"]') == 1, "nothing else may be rewritten"
+    assert "git checkout -- config" not in read_text(WORKFLOWS_DIR / "validate.yml"), (
+        "an experiment never edits the committed config, so it never restores it"
+    )
+
+
+def test_the_qualification_job_bound_is_the_bound_the_gate_measures() -> None:
+    """A timeout that disagrees with the gate's threshold makes the gate a
+    guess: the job would be killed before the number it reports (Rule #2)."""
+    workflow = _load_workflows()["validate.yml"]
+    assert _job(workflow, "qualify").get("timeout-minutes") == (
+        "${{ fromJSON(inputs.job_budget_minutes) }}"
+    )
+    step = _step(workflow, "decide", "name", "Run the gates")
+    script = _script(step, "validate.yml/decide/Run the gates")
+    assert "--job-budget-minutes" in script
+    assert "inputs.job_budget_minutes" in script
+
+
+def test_a_failed_gate_fails_the_run() -> None:
+    """A verdict nobody reads is not a gate. `continue-on-error` keeps the
+    ledger commit reachable; the final step is what turns red."""
+    workflow = _load_workflows()["validate.yml"]
+    gates = _step(workflow, "decide", "name", "Run the gates")
+    assert str(gates.get("continue-on-error")).lower() == "true"
+    fail = _step(workflow, "decide", "name", "Fail the run when a gate failed")
+    assert _normalize_condition(fail.get("if"), "decide fail if") == (
+        "steps.gates.outcome == 'failure'"
+    )
+    assert "exit 1" in _script(fail, "validate.yml/decide/Fail the run when a gate failed")

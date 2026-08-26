@@ -54,6 +54,10 @@ class PipelineInputs(Model):
     sampling: str = Field(
         min_length=1, description="One canonical spelling of the decoding parameters."
     )
+    runtime_flags: str = Field(
+        min_length=1,
+        description="One canonical spelling of the runtime knobs that move the arithmetic.",
+    )
     n_ctx: int = Field(ge=1)
     n_batch: int = Field(ge=1)
     n_ubatch: int = Field(ge=1)
@@ -74,6 +78,17 @@ class FingerprintRow(Contract):
 
     __schema_stem__: ClassVar[str] = "fingerprint-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26",
+            change="Digest the five runtime knobs that move the logits, as `runtime_flags`.",
+            why=(
+                "cache_type_k, cache_type_v, flash_attention, n_parallel and n_threads_batch "
+                "each change the arithmetic the runtime does, so one of them could rewrite a "
+                "summary while the stamp held still. Every fingerprint moves, which is why it "
+                "rides the model swap's reset rather than spending a second one. The ledger "
+                "carried a header and no rows, so nothing written before this had to migrate."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: the stamp, the inputs it digests, and the host as diagnostic.",
