@@ -13,12 +13,14 @@ from __future__ import annotations
 
 import base64
 import math
+import re
 from pathlib import Path
 from typing import Any
 
 import pytest
 from conftest import REPO_ROOT
 
+from idhazh.contracts.base import SLUG_PATTERN
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.embed import (
     DIMENSIONS,
@@ -37,6 +39,10 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
+
+# The browser's half of the same contract. POSIX and relative, per CLAUDE.md
+# section 2.
+ENCODER_TS_RELPATH = "frontend/src/lib/assist/encoder.ts"
 
 CORPUS = [
     "India added 15,400 megawatts of solar capacity, its biggest year yet.",
@@ -106,6 +112,39 @@ class TestQuantisation:
     def test_base64_decodes_to_exactly_one_byte_per_dimension(self) -> None:
         encoded = to_base64(unit([0.1] * DIMENSIONS))
         assert len(base64.b64decode(encoded)) == DIMENSIONS
+
+
+class TestOneEncoderTwoRuntimes:
+    """The browser's copy of the encoder constants, checked against this one.
+
+    A drift gate, not an import. `backend/` never imports frontend code; it
+    reads that file as text, the same way the schema gate compares generated
+    artifacts across the boundary.
+
+    The gate is needed because `search.ts` now refuses a payload whose
+    `model_id` is not the browser's copy of `EMBEDDER_ID`. Let the two strings
+    separate and the failure is total and silent: either every committed day
+    stops being searchable, or a foreign payload is accepted and ranked. Neither
+    shows up in a type check, a lint, or a build.
+    """
+
+    def constant(self, name: str) -> str:
+        source = (REPO_ROOT / ENCODER_TS_RELPATH).read_text(encoding="utf-8")
+        found = re.search(rf"^export const {name} = '([^']*)';$", source, re.MULTILINE)
+        assert found is not None, f"{ENCODER_TS_RELPATH} no longer declares {name}"
+        return found.group(1)
+
+    def test_the_browser_names_the_identifier_the_runner_stamps(self) -> None:
+        assert self.constant("ENCODER_ID") == EMBEDDER_ID
+
+    def test_the_identifier_is_writable_into_a_payload(self) -> None:
+        """`model_id` is a slug, so the upstream mixed-case name cannot win.
+
+        This is the whole reason the runner's string is the reconciled one. A
+        reconciliation that picked the other name would fail here rather than
+        at the moment a day is published.
+        """
+        assert re.fullmatch(SLUG_PATTERN, EMBEDDER_ID) is not None
 
 
 class TestEncoder:
