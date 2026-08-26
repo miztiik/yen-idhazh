@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -153,7 +153,7 @@ The shapes carry rules a JSON Schema cannot express, and each one is a defect cl
 ## Four things that bite when you change a model
 
 - **Adding a field - even an optional one with a default - breaks every fixture of that model.** The serializer emits the new key, so the byte-identical round-trip test fails on every committed fixture at once. Update them in the same commit, respecting sorted key order. A run of fixture failures right after an additive change is the expected signal, not a regression to hunt.
-- **A same-day second revision stamps `version` to the minute**, `YYYY-MM-DDTHH:MM`. That string sorts *after* the bare `YYYY-MM-DD` of the same day, which is exactly what the newest-first `changelog` needs - the revision lands at the top rather than under the entry it supersedes.
+- **A same-day second revision stamps `version` to the minute**, `YYYY-MM-DDTHH:MM`. That string sorts *after* the bare `YYYY-MM-DD` of the same day, which is exactly what the newest-first `changelog` needs - the revision lands at the top rather than under the entry it supersedes. The base model enforces newest-first **and distinct** at class definition, so two branches that both stamp today's bare date on one contract produce a module that raises `TypeError` on import and takes the whole suite with it. When several branches will touch one contract, stamp to the minute from the first of them.
 - **pydantic-core's regex engine has no look-around.** It is the Rust engine, not Python's `re`. A `StringConstraints(pattern=...)` containing `(?!` or `(?<=` raises `SchemaError` when the class is built, so the failure arrives at import time rather than at validation. Spell an explicit segment grammar instead of a negative lookahead.
 - **Generate the schema in validation mode, not serialization mode.** `model_json_schema(mode="serialization")` marks every field required, which would make "a config file may omit a knob" a lie in the published schema. The exporter uses validation mode and post-processes only `version`.
 
