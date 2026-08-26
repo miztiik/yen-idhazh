@@ -285,6 +285,18 @@ export interface RunRecord {
 	skipped: number;
 	startedAt: string;
 	sourceListStale: boolean;
+	/** Items the router posted to the model. */
+	routed: number;
+	/** Items the router decided without posting, because no enabled kind could survive its checks. */
+	prefiltered: number;
+	/** Items whose routing reply asked for a chart, whatever the decision became. */
+	chartsDrafted: number;
+	/** What the router spent, or null where the run wrote no time down at all.
+	 *
+	 * Null and zero are different facts: a route job that never ran spent no
+	 * measured time, and printing that as zero minutes reads as a stage that was
+	 * free rather than one that is missing. */
+	routeMs: number | null;
 }
 
 export interface RunSummary {
@@ -326,7 +338,13 @@ export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 				failed: Number(run.items_failed ?? 0) || 0,
 				skipped: Number(run.items_skipped ?? 0) || 0,
 				startedAt: String(run.started_at ?? ''),
-				sourceListStale: run.source_list_stale === true
+				sourceListStale: run.source_list_stale === true,
+				routed: Number(run.items_routed ?? 0) || 0,
+				prefiltered: Number(run.items_prefiltered ?? 0) || 0,
+				chartsDrafted: Number(run.charts_drafted ?? 0) || 0,
+				// The manifest writes an integer or a literal null. `Number(null)` is 0,
+				// so coercing here would turn "never measured" into "measured zero".
+				routeMs: typeof run.route_ms === 'number' ? run.route_ms : null
 			}));
 			const last = runs.at(-1) ?? {};
 			const models = runs.flatMap((run) =>
@@ -345,6 +363,27 @@ export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 		} catch {
 			// A manifest that will not parse costs the console one row, never the page.
 		}
+	}
+	return found;
+}
+
+/** Charts a reader can actually see on each published day.
+ *
+ * Counted from the day payload rather than from the manifest, because the
+ * manifest records what the router decided and this records what survived to
+ * the page. A chart whose render failed, and a diagram, are both visuals and
+ * neither is a published chart.
+ */
+export function publishedCharts(root: string = DIGEST_ROOT): Map<string, number> {
+	const found = new Map<string, number>();
+	for (const date of publishedDates(root)) {
+		const day = loadDay(date, root);
+		if (day === null) continue;
+		found.set(
+			date,
+			day.items.filter((item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered')
+				.length
+		);
 	}
 	return found;
 }

@@ -266,6 +266,35 @@ venv. Use the shared checkout's interpreter with `PYTHONPATH` set to your own
 worktree's `backend` - the same escape as the `.pth` trap above, and it needs
 the same `import idhazh` check before any result is worth reading.
 
+## The editor's own search tools
+
+**A workspace search reads the folder VS Code has open, not your worktree.**
+`grep_search` and `file_search` are scoped to the workspace root. Given an
+absolute path into a worktree outside it they return nothing at all - not an
+error, an empty result - and an absolute path into the main checkout silently
+answers about a different revision of the file you meant. The tell is a symbol
+you know exists reported as absent, or a line number tens of lines off. Read the
+file by absolute path instead, or search from a terminal in your own worktree.
+
+## npm
+
+**`npm ci` in a fresh worktree can stop making progress after the tree is
+complete.** Observed 2026-08-26 with five agents on one machine: the dependency
+tree finished extracting, then the process sat at a constant CPU time for ten
+minutes and never wrote its summary. The install is usable long before it exits.
+Check before you wait any longer:
+
+```powershell
+Test-Path frontend\node_modules\.package-lock.json
+(Get-ChildItem frontend\node_modules -Recurse -File | Measure-Object).Count
+```
+
+A `.package-lock.json` on disk and a file count at or above the main checkout's
+means reification finished. Every tool then runs through `node`
+`node_modules/<pkg>/<entry>.js` directly, which needs nothing from `npm`. Do not
+conclude the environment is broken, and do not re-run `npm ci` - a second one
+contends with the first.
+
 ## Running the gates
 
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives

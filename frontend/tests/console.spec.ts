@@ -909,6 +909,7 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'Confidence and size' })).toBeVisible();
+	await expect(page.locator('[data-charts="table"]')).toBeVisible();
 
 	expect(errors).toEqual([]);
 	expect(missing).toEqual([]);
@@ -962,4 +963,117 @@ test('the days the seed drops stay on disk for a pan to reach', () => {
 	const seededIds = new Set(seeded.rows.map((row) => row.item_id));
 	expect(older.length).toBeGreaterThan(0);
 	expect(older.every((row) => !seededIds.has(row.item_id))).toBe(true);
+});
+
+/** What the fixture's own files say the Charts table has to print for a day.
+ *
+ * Derived here from `run.json` and `digest.json` rather than typed as constants,
+ * because the oracle is that every printed cell equals the value computed
+ * directly from the day's committed record. A constant would only prove the
+ * page still says what it said last week.
+ */
+function chartCells(date: string): Record<string, string> {
+	const [year, month, day] = date.split('-');
+	const at = join(CANARY, 'digest', year, month, day);
+	type Run = {
+		items_routed?: number;
+		items_prefiltered?: number;
+		charts_drafted?: number;
+		route_ms?: number | null;
+	};
+	const runs = (JSON.parse(readFileSync(join(at, 'run.json'), 'utf8')) as { runs: Run[] }).runs;
+	const items = (
+		JSON.parse(readFileSync(join(at, 'digest.json'), 'utf8')) as {
+			items: { visual?: { kind: string; state: string } | null }[];
+		}
+	).items;
+
+	const sum = (of: (run: Run) => number) => runs.reduce((total, run) => total + of(run), 0);
+	const timed = runs.map((run) => run.route_ms).filter((ms): ms is number => typeof ms === 'number');
+	const minutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
+	// A diagram is a visual and is not a chart, and a chart that failed to render
+	// is not one a reader ever saw.
+	const published = items.filter(
+		(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
+	).length;
+	const printed = (value: number | null) => (value === null ? '-' : value.toFixed(1));
+
+	return {
+		reached: String(sum((run) => (run.items_routed ?? 0) + (run.items_prefiltered ?? 0))),
+		asked: String(sum((run) => run.items_routed ?? 0)),
+		drafted: String(sum((run) => run.charts_drafted ?? 0)),
+		published: String(published),
+		minutes: printed(minutes),
+		'per-chart': printed(minutes === null || published === 0 ? null : minutes / published)
+	};
+}
+
+test('every chart cell equals what the day committed', async ({ page }) => {
+	await page.goto('/console/');
+
+	const dates = await page
+		.locator('[data-chart-day]')
+		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-chart-day') ?? ''));
+	// Newest first, and every day the manifest covers, so a day the router never
+	// reached still counts towards the arm's fourteen-day window.
+	expect(dates).toEqual(
+		manifestDays()
+			.map((day) => day.date)
+			.reverse()
+	);
+
+	for (const date of dates) {
+		const row = page.locator(`[data-chart-day="${date}"]`);
+		for (const [cell, expected] of Object.entries(chartCells(date))) {
+			await expect(row.locator(`[data-charts-cell="${cell}"]`)).toHaveText(expected);
+		}
+	}
+});
+
+test('the measured day prints rates, and the day with no router prints dashes', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// The attack day is the one the fixture gives router counts to. Asserting it
+	// is not all zeros is what stops the oracle above passing on an empty table.
+	const measured = page.locator(`[data-chart-day="${DAY}"]`);
+	const cells = chartCells(DAY);
+	expect(Number(cells.reached)).toBeGreaterThan(Number(cells.asked));
+	expect(Number(cells.drafted)).toBeGreaterThan(Number(cells.published));
+	expect(Number(cells.published)).toBeGreaterThan(0);
+	await expect(measured.locator('[data-charts-cell="minutes"]')).not.toHaveText('-');
+	await expect(measured.locator('[data-charts-cell="per-chart"]')).not.toHaveText('-');
+
+	// A quiet day ran and published nothing, so its router never started. Zero
+	// items reached is a measurement; zero minutes would be an invention, and a
+	// per-chart cost over no charts is not a number at all.
+	const quiet = page.locator(`[data-chart-day="${manifestDays()[0].date}"]`);
+	await expect(quiet.locator('[data-charts-cell="reached"]')).toHaveText('0');
+	await expect(quiet.locator('[data-charts-cell="published"]')).toHaveText('0');
+	await expect(quiet.locator('[data-charts-cell="minutes"]')).toHaveText('-');
+	await expect(quiet.locator('[data-charts-cell="per-chart"]')).toHaveText('-');
+});
+
+test('a diagram is a visual and is not a published chart', async ({ page }) => {
+	await page.goto('/console/');
+
+	const [year, month, day] = DAY.split('-');
+	const items = (
+		JSON.parse(
+			readFileSync(join(CANARY, 'digest', year, month, day, 'digest.json'), 'utf8')
+		) as { items: { visual?: { kind: string; state: string } | null }[] }
+	).items;
+	const visuals = items.filter((item) => item.visual != null).length;
+	const charts = items.filter(
+		(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
+	).length;
+
+	// The fixture publishes a chart and a diagram. A count that read "visuals"
+	// would put the diagram in the chart arm's bill, and the arm would look twice
+	// as productive as it is.
+	expect(visuals).toBeGreaterThan(charts);
+	await expect(
+		page.locator(`[data-chart-day="${DAY}"] [data-charts-cell="published"]`)
+	).toHaveText(String(charts));
 });

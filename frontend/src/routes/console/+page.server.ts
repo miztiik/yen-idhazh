@@ -5,11 +5,13 @@ import {
 	feedResults,
 	itemHealthRows,
 	loadManifests,
+	publishedCharts,
 	telemetryMonths,
 	telemetryRows,
 	TELEMETRY_ROOT,
 	type FeedResult,
-	type RunRecord
+	type RunRecord,
+	type RunSummary
 } from '$lib/server/payload';
 
 export const prerender = true;
@@ -55,6 +57,51 @@ export interface FeedTrouble {
 	lastDetail: string;
 	lastDate: string;
 	nearQuarantine: boolean;
+}
+
+/** What one day's chart arm cost and what it produced.
+ *
+ * Four counts and one division. Two gaps carry the whole story: reached against
+ * asked is the check that runs before the model, drafted against published is
+ * the pair of checks that run after it.
+ *
+ * `routerMinutes` and `minutesPerChart` are null rather than zero wherever the
+ * number does not exist - a day whose route job never ran measured no time, and
+ * a day with no chart has no per-chart cost. Zero would read as free.
+ */
+export interface ChartDay {
+	date: string;
+	reached: number;
+	asked: number;
+	drafted: number;
+	published: number;
+	routerMinutes: number | null;
+	minutesPerChart: number | null;
+}
+
+/** One row per published day, from the day's own manifest and payload.
+ *
+ * Nothing here is stored as a rate. The manifest carries counts and one
+ * millisecond total; the division happens at read time, so a ratio can never
+ * disagree with the counts printed beside it.
+ */
+function chartDays(days: RunSummary[], charts: Map<string, number>): ChartDay[] {
+	return days.map((day) => {
+		const sum = (of: (run: RunRecord) => number) =>
+			day.records.reduce((total, run) => total + of(run), 0);
+		const timed = day.records.map((run) => run.routeMs).filter((ms): ms is number => ms !== null);
+		const routerMinutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
+		const published = charts.get(day.date) ?? 0;
+		return {
+			date: day.date,
+			reached: sum((run) => run.routed + run.prefiltered),
+			asked: sum((run) => run.routed),
+			drafted: sum((run) => run.chartsDrafted),
+			published,
+			routerMinutes,
+			minutesPerChart: routerMinutes === null || published === 0 ? null : routerMinutes / published
+		};
+	});
 }
 
 function median(values: number[]): number {
@@ -371,6 +418,7 @@ export function load() {
 		throughputReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/architecture/summarize/throughput.md`,
 		scoreDays,
 		manifests,
+		charts: chartDays(manifests, publishedCharts()),
 		totalRows: rows.length,
 		itemHealthRows: itemRows.length,
 		grid,
