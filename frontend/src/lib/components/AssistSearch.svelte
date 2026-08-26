@@ -11,11 +11,21 @@
 	 */
 	import { DOWNLOAD_MB, embedQuery, supported, type AssistState } from '$lib/assist/loader';
 	import { ENCODER_DIMENSIONS } from '$lib/assist/encoder';
-	import { rank, searchable, type SearchHit } from '$lib/assist/search';
+	import { rank, searchable, type RankOptions, type SearchHit } from '$lib/assist/search';
 	import type { DigestDay } from '$lib/payload/types';
 	import { base } from '$app/paths';
 
-	let { days }: { days: DigestDay[] } = $props();
+	// The two knobs come from `config/idhazh.json` through the route's load, so
+	// nothing here decides how many results to show or how close is close enough.
+	let {
+		days,
+		assist: settings
+	}: { days: DigestDay[]; assist: { similarity_floor: number; result_limit: number } } = $props();
+
+	const ranking: RankOptions = $derived({
+		limit: settings.result_limit,
+		minScore: settings.similarity_floor
+	});
 
 	let assist = $state<AssistState>({ status: 'idle' });
 	let query = $state('');
@@ -61,7 +71,7 @@
 		const text = query.trim();
 		if (!text || assist.status !== 'ready') return;
 		try {
-			hits = rank(days, await embedQuery(text));
+			hits = rank(days, await embedQuery(text), ranking);
 			searched = true;
 		} catch (error) {
 			console.error('[assist] the search did not run', error);
