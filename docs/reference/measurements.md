@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -1100,6 +1100,57 @@ the last row**: images do not fit the runner, so no run produces one
 The ordering of the levers falls straight out of this: encoding buys 5.6x,
 honouring the visual rule buys another 2.9x, and retention is what remains
 after both. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md).
+
+### Where the alarm fires, and what it buys
+
+`retention.site_budget_mb` is the size at which a run opens an issue. It is an
+alarm and not a gate: it fails no build and deletes nothing
+([../concepts/config.md](../concepts/config.md)). This section is the only home
+for why it sits where it does.
+
+**Derived from the table above, not measured separately.** Days of warning is
+`(1024 - alarm_mb) * 1024 / KB_per_day`, on the same binary megabyte the code
+uses. Whole days, rounded down - a partial day is not a day of warning.
+
+| Alarm point | Headroom | PNG every item (8,537) | WebP every item (1,567) | WebP one in three (547) | no images (37) |
+| --- | --- | --- | --- | --- | --- |
+| 600 MB | 424 MB | 50 | 277 | 793 | 11,734 |
+| 700 MB | 324 MB | 38 | 211 | 606 | 8,966 |
+| **800 MB (shipped)** | **224 MB** | **26** | **146** | **419** | **6,199** |
+| 900 MB | 124 MB | 14 | 81 | 232 | 3,431 |
+| 1000 MB | 24 MB | 2 | 15 | 44 | 664 |
+| 1023 MB | 1 MB | 0 | 0 | 1 | 27 |
+
+**The target is 14 days under the fastest measured growth, and the target is a
+judgement (Rule #10).** Nothing here measures how long one maintainer takes to
+read one issue, so nothing here can ground it. Two things around it are
+measured, and they bound the window rather than set it: the pipeline runs five
+times a day, so the site is measured every four hours and the alarm is never
+more than a few hours late, and the fix - a config edit and a redeploy - costs
+about 25 minutes of CI ([CI and publish wall-clock](#ci-and-publish-wall-clock)).
+Every remaining day in the window is a person noticing. Fourteen days is chosen
+so a maintainer can be away for a week and still have a week to act. That is a
+statement about a person, and it is labelled as one.
+
+**The shipped 800 MB clears the target 1.9x, so the number stays.** It buys 26
+days at 8,537 KB/day, and the two neighbours say why it is not moved: 900 MB
+lands exactly on the target with no margin under a rate observed once, and
+600 MB buys 24 more days in a scenario that does not exist while reading as
+"nearly full" on a site that is not.
+
+**Derive against the fastest measured growth, not the live one.** The live rate
+is 37 KB/day, which puts the alarm 18,438 days away from the current 133.8 MB
+build - about fifty years. An alarm sized on that rate would be sized on the
+assumption that nothing ever changes, which is the one day an alarm exists for.
+The reverse limit is just as real: 8,537 KB/day is the fastest rate that has
+been measured, not the fastest that is possible, and a growth faster than any
+row above needs a new measurement and a re-derivation before the alarm point can
+be said to cover it.
+
+**Why the alarm point cannot be checked by size alone.** A test that only asks
+whether the alarm sits below 1,024 MB passes at 1,023 MB, which is the last row
+of the table and zero days of warning. `backend/tests/test_retention.py` pins the
+days instead, against the rates above.
 
 ## First-load JavaScript per route
 
