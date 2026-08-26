@@ -1,4 +1,8 @@
 {
+  "assist": {
+    "max_tokens": 320,
+    "min_readable_letter_share": 0.6
+  },
   "collect": {
     "blocked_url_markers": [],
     "front_page_bonus": 0.25,
