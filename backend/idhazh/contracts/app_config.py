@@ -807,7 +807,7 @@ class PageWeightConfig(Model):
     ceilings_bytes: dict[str, int] = Field(
         default_factory=lambda: {
             "/404": 1_127,
-            "/archive/": 1_676_048,
+            "/archive/": 1_676_110,
             "/console/": 137_567,
             "/evals/": 2_475,
         },
@@ -820,7 +820,11 @@ class PageWeightConfig(Model):
             "nothing beyond it, because a ceiling above today's weight is a gate that "
             "never fires. /console/ was re-measured later that day, over the seven "
             "published days and on the tree that added its 'What the model did' "
-            "section. The regression these catch is a day "
+            "section. /archive/ was re-measured later still, on the tree that put the "
+            "search box on that page: the same tree built with main's frontend renders "
+            "1,675,988 bytes and with the search box 1,676,050, so the box costs 62 "
+            "bytes and the old 1,676,048 had 60 of headroom. The regression these catch "
+            "is a day "
             "payload inlined again, which was 313,000 bytes when it last happened, so "
             "the noise floor costs the gate nothing. /archive/ and /console/ also grow "
             "as the pipeline publishes, so those two fire on a published day, and the "
@@ -935,6 +939,22 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26T11:45",
+            change="page_weight.ceilings_bytes['/archive/'] moved from 1,676,048 to 1,676,110.",
+            why=(
+                "The archive page now carries the search box, and a box costs bytes. "
+                "Measured by building one tree twice on the same machine, same day "
+                "payloads: with main's frontend /archive/ gzips to 1,675,988 and with "
+                "the search box to 1,676,050, so the box costs 62 bytes against 60 of "
+                "headroom. The new ceiling keeps the same 60-byte allowance the other "
+                "three routes carry rather than rounding up to a number that would stop "
+                "the gate firing. What the bytes buy is the input, its label and its "
+                "empty state on the one page that can search the whole archive. Same "
+                "field, same type: an older config still validates. A changed default, "
+                "so it is stamped here (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26T11:20",
             change=(
