@@ -19,6 +19,8 @@ Coupling them means a change of mind about URL aesthetics rewrites every committ
 frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, every item
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
 frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.svg    optional visual
+frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
+frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
 state/scores.csv                                        the ledger - one path, never published twice
 ```
 
@@ -68,6 +70,45 @@ The consequence worth protecting: **rendering any page costs at most two request
 **Sharding by month does not by itself bound the browse index.** At 45.5 bytes an entry, 300 KB buys about 6,700 entries - a fortnight at the observed rate and eight days at the structural ceiling. A month shard is over 300 KB at every rate measured, so a shard granularity and an index budget have to be chosen together rather than one after the other.
 
 **The gzip window settles long before a shard does.** Over the same corpus, per-item gzipped bytes barely move between a quarter of the blob and all of it: 249.6 to 249.8 for the vectors, and 47.3 down to 45.5 for the browse entries. So the compression argument above is about a per-item body of hundreds of bytes, not about a shard of hundreds of kilobytes - any shard past about 70 KB already gets the full ratio.
+
+## The month search index
+
+`frontend/public/assist/index/<YYYY-MM>.json` is one month of published items in published order, and `<YYYY-MM>.bin` is that month's vectors laid end to end as raw int8. The contract is `backend/idhazh/contracts/search_index.py`; the writer is `assemble.rebuild_search_index`. **Nothing reads either file yet.** They ship unconsumed so the shape can be inspected, measured and reverted before a page depends on it.
+
+**A month shard does not break the bounded-request rule above, and here is why.** That rule rejects a scheme whose request count or index size grows with *total history*. A month shard's size is a function of one month, and the month ends; the hundredth month costs a reader exactly what the first one did. Request count is bounded the same way: a page reads the months it shows, which is one for a day page and a fixed pan for an archive view, not one per published day and never one per item. What the rule forbids is the file that has to get bigger every day forever, which is the global index in the rejected-alternatives table - measured at 12.7 MB of browse entries for a single year at the structural ceiling.
+
+**An entry carries the item id, the date, the title and the vertical. Nothing else.** In particular no summary, no source and no band. Carrying the summary takes an entry from about 151 bytes to about 850 and a month from 471 KB to roughly 2.7 MB gzipped - nine times a budget that has already fired - and it charges every browsing visitor the full text of every item in the month. A search result renders by fetching the day payload it names: ten results spanning ten days cost at most ten fetches, a day already open is reused, and the result then renders through the existing item component. Whoever builds the result list inherits that decision rather than re-taking it.
+
+**`vector` is an explicit byte offset into the `.bin`, or null.** Never a position in the entry list, never a padded zero vector, and the item is never left out. Two of the 2,121 committed items carry no vector today (0.09 percent), and the token-budget work will add more on purpose. Leaving them out would take them out of the browse list as well as out of search, which is the larger loss; a zero vector would be worse still, because it scores against every query. The offsets are dense and in entry order, which is what makes a rebuild byte-identical rather than merely correct.
+
+**The vectors are a sibling file rather than base64 inside the JSON, and the margin is 22.5 percent.** 249.82 gzipped bytes an item against 322.55, measured over 2,119 committed vectors ([../../reference/measurements.md](../../reference/measurements.md#sizing-the-archive-index)) - not the 40 percent this was planned against. The real argument for the split is who pays: every visitor browsing a month pays the JSON, only a reader who searches pays the vectors, and a searcher has already accepted the encoder download. That makes the browse index the only ceiling that matters. **No `DecompressionStream` fallback is needed**: GitHub Pages compresses `application/octet-stream` at gzip level 5, measured directly against the live origin, so a raw `.bin` already transfers compressed. It never serves brotli.
+
+**The JSON is compact - no indent, no separator spaces.** Every other committed payload is pretty-printed because reviewing its diff by eye is worth the bytes. This one is thousands of entries a reader downloads whole, and the indent would roughly double it.
+
+**The header states its own quantisation `scale` from the first commit.** It is `1/127` today, which is the step the committed vectors were made with, and the index cannot tighten it: it projects bytes that are already int8, and re-scaling an integer adds rounding rather than recovering precision. A tighter corpus-wide scale is worth about four times less score noise at zero extra bytes an item, and it has to be applied where the floats still exist - in the encoder, in the commit that re-dates every vector. The field is here now so that change is additive instead of breaking.
+
+### When to reconsider the month
+
+A ceiling with no revisit point is how the last one was set wrong. These are the three, and each names the number that fires it:
+
+| Quantity | Today | Revisit at | What changes |
+| --- | ---: | ---: | --- |
+| Browse index, one month, `gzip -5` | 471 KB observed, 1.04 MB at the structural ceiling | **1.5 MB** | Shorten the period to `<YYYY-Www>`, exactly as an over-large ledger shard does ([../sources/item-health.md](../sources/item-health.md)). The readers glob the directory, so the period is a layout change and not a contract change. |
+| Vector file, one month, `gzip -5` | 2.53 MB observed, 5.72 MB at the ceiling | **8 MB** | Same period change, and only for the vectors - they are a separate file and can be scoped separately at no cost. |
+| Items a month | 10,605 observed, 24,000 at the ceiling | **50,000** | Revisit the dtype before the period. Binary quantisation is 32 bytes a vector against 384, and the question is what it costs recall, which is a measurement nobody has taken. |
+
+**The 300 KB figure this was planned against is retired.** It was written before anything was measured, and the measurement says no shape gets under it: the leanest entry that still browses - date lifted to a key, vertical dropped because it is already the item id's prefix - is 41.51 bytes, and a month is still over at every rate. 300 KB buys about 6,750 entries, which is 19 days at the observed rate and 8 at the ceiling. The numbers above replace it.
+
+### The shard is derived, so retention needs nothing
+
+A month shard is rebuilt whole from the day payloads that are on disk at the time. There is no incremental path, so there is no read-modify-write for two runs of a day to race on and no repair command for when they do. **Deleting a day and re-running assemble regenerates a correct shard**, because the rebuild simply does not find the day it used to name. That is the entire retention obligation, and it is discharged by construction rather than by a rule somebody has to remember.
+
+The obligation that does need stating: **every writer of a committed day payload owes its month a rebuild.** There are two - the assemble stage and the one-shot `backfill-vectors` command - and both call it. A third would have to.
+
+### Nothing serves it yet
+
+`frontend/public/` is where `backend/` writes and the site reads **through the filesystem at build time**. Only `frontend/static/` is copied into the served bundle, which is why `frontend/scripts/copy-visuals.mjs` stages rendered images and the telemetry projection across. The index has no such staging step, so a browser cannot fetch it today. Whoever makes a page read it adds the staging there, in the commit that earns it.
+
 ## Retention
 
 Retention exists to bound the **published site**, which has a hard ceiling. It does nothing for repository size: deleting a committed file leaves the blob in history forever, and rewriting history is forbidden ([../../../CLAUDE.md](../../../CLAUDE.md) section 8). Anything that must not grow the repository must not be committed at all.

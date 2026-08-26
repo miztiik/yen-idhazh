@@ -1,0 +1,118 @@
+{
+  "$defs": {
+    "SearchIndexEntry": {
+      "additionalProperties": false,
+      "description": "One published item, as browsing and searching need it.\n\nNo summary, no source, no band. Carrying the summary would take an entry\nfrom about 151 bytes to about 850 and a month from 471 KB to roughly 2.7 MB\ngzipped, and it would charge every browsing visitor the full text of every\nitem in the month. A result renders by fetching the day payload it names -\nat most one fetch per distinct day on screen, and days already open are\nreused.",
+      "properties": {
+        "date": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "title": "Date",
+          "type": "string"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "vector": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Byte offset of this item's vector in the sibling `.bin`, or null when the item has none. An offset rather than a position, so a reader slices the file directly instead of counting how many entries above it were skipped.",
+          "title": "Vector"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        }
+      },
+      "required": [
+        "date",
+        "item_id",
+        "title",
+        "vertical"
+      ],
+      "title": "SearchIndexEntry",
+      "type": "object"
+    }
+  },
+  "$id": "search-index.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one month of published items in published order, each naming a byte offset into a sibling int8 vector file or null.",
+      "version": "2026-08-26",
+      "why": "The archive page inlines every committed day so on-device search can see the whole corpus, which grows about 170 KB gzipped a day and has no bound. A month shard bounds it. Contracts before logic, so the shape is fixed before anything reads it - and nothing does yet, which is what makes this revertible."
+    }
+  ],
+  "description": "`frontend/public/assist/index/<YYYY-MM>.json`.",
+  "properties": {
+    "dimensions": {
+      "description": "Components a vector. At int8 this is also its length in bytes.",
+      "minimum": 1,
+      "title": "Dimensions",
+      "type": "integer"
+    },
+    "dtype": {
+      "const": "int8",
+      "title": "Dtype",
+      "type": "string"
+    },
+    "entries": {
+      "items": {
+        "$ref": "#/$defs/SearchIndexEntry"
+      },
+      "title": "Entries",
+      "type": "array"
+    },
+    "model_id": {
+      "description": "The encoder that wrote every vector in the sibling file. One index, one encoder: two encoders in one space score as plausible nonsense rather than failing.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "month": {
+      "pattern": "^\\d{4}-\\d{2}$",
+      "title": "Month",
+      "type": "string"
+    },
+    "scale": {
+      "description": "Multiply a stored byte by this to get a component. Stated rather than assumed, so a later encoder can quantise against the range unit vectors actually reach without a breaking change to this file.",
+      "exclusiveMinimum": 0.0,
+      "title": "Scale",
+      "type": "number"
+    },
+    "version": {
+      "default": "2026-08-26",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "month",
+    "model_id",
+    "dimensions",
+    "dtype",
+    "scale",
+    "entries"
+  ],
+  "title": "SearchIndex",
+  "type": "object",
+  "version": "2026-08-26"
+}
