@@ -761,6 +761,31 @@ def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
         assert {"pull_request", "push"}.isdisjoint(_triggers(workflows[filename]))
 
 
+def test_assemble_holds_the_site_to_its_weight_before_it_pushes() -> None:
+    """A day rides inside `frontend/public`, and `/archive/` inlines every
+    committed day for the on-device search, so the assemble job is the one that
+    can push a page past its ceiling or a payload the build rejects. It builds
+    the site and runs the bundle gate before the commit that publishes it - the
+    same guard `backfill.yml` runs.
+    """
+    steps = _steps(_load_workflows()["digest.yml"], "assemble")
+    names = [step.get("name") for step in steps]
+
+    gate = next(
+        index
+        for index, step in enumerate(steps)
+        if "npm run bundle-gate" in str(step.get("run", ""))
+    )
+    before_gate = steps[:gate]
+    assert any(
+        str(step.get("uses", "")).startswith("actions/setup-node@") for step in before_gate
+    ), "node must be set up before the gate"
+    assert any(
+        "npm ci" in str(step.get("run", "")) for step in before_gate
+    ), "the site must be installed before it is built"
+    assert gate < names.index("Commit the day"), "the site is gated before the day is pushed"
+
+
 def test_ci_and_pages_keep_their_push_boundaries() -> None:
     workflows = _load_workflows()
 
