@@ -140,7 +140,7 @@
           "type": "string"
         },
         "full_text_sha256": {
-          "description": "The sanitized whole article, before the cap.",
+          "description": "The sanitized article the scorer read. Extract does not keep the pre-cap text, so on a truncated item this equals seen_text_sha256 and says so.",
           "pattern": "^[0-9a-f]{64}$",
           "title": "Full Text Sha256",
           "type": "string"
