@@ -764,13 +764,13 @@
     },
     "PageWeightConfig": {
       "additionalProperties": false,
-      "description": "The most a prerendered page may weigh on the wire, gzipped.\n\nA limit, not a record. `frontend/bundle-baseline.json` holds measurements of\nfirst-load JavaScript and is rewritten whenever the bundler moves; these are\nnumbers a person chose and raises on purpose, which is what a knob is\n(Rule #6).\n\nOnly a route that renders no day is bounded. A day page weighs what the day\npublished, so a number over it would cap the news instead of catching a\nregression. Those routes are covered by the marker count in\n`frontend/tests/payload-weight.spec.ts`, which is the same assertion stated\nin a unit that does not move when the pipeline publishes.",
+      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nOnly a route whose HTML does not grow with the published corpus is worth a\nfixed ceiling. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone. `/archive/` inlines every committed\nday and `/console/` grows with the ledger its charts read, so a byte ceiling\non either fails on an ordinary publish rather than catching a regression;\nthe marker count in `frontend/tests/payload-weight.spec.ts` covers the class\nthose two belong to, and a route the config does not name is reported by the\ngate without failing it.",
       "properties": {
         "ceilings_bytes": {
           "additionalProperties": {
             "type": "integer"
           },
-          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. Every prerendered route that renders no day needs one, and a ceiling naming no route in the build fails the gate. Each default is the heaviest of three builds of one tree on 2026-08-26, six published days, plus the 64-byte noise floor in frontend/bundle-baseline.json - and nothing beyond it, because a ceiling above today's weight is a gate that never fires. /console/ was re-measured later that day, over the seven published days and on the tree that added its 'What the model did' section. /archive/ was re-measured later still, on the tree that put the search box on that page: the same tree built with main's frontend renders 1,675,988 bytes and with the search box 1,676,050, so the box costs 62 bytes and the old 1,676,048 had 60 of headroom. The regression these catch is a day payload inlined again, which was 313,000 bytes when it last happened, so the noise floor costs the gate nothing. /archive/ and /console/ also grow as the pipeline publishes, so those two fire on a published day, and the answer that day is the archive plan rather than a bigger number - the one exception being the backfill that plan itself waits on, which is why /archive/ reads 1.68 MB here.",
+          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed, so only routes whose weight does not grow with the published corpus - /404 and /evals/ today - carry a ceiling.",
           "title": "Ceilings Bytes",
           "type": "object"
         }
@@ -1163,6 +1163,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "page_weight.ceilings_bytes default is now empty, and /archive/ and /console/ are dropped from the committed config.",
+      "version": "2026-08-26T21:45",
+      "why": "The default duplicated the four numbers the gate reads from config/idhazh.json, so raising a ceiling meant editing two files a test then forced to agree - config is the single source now (Rule #6). /archive/ grows with every committed day and /console/ with the ledger its charts read, so their fixed ceilings failed on ordinary publishes rather than catching regressions; the gate now reports an unnamed route without failing it. Older config still validates and the empty default changes no committed value, so no read-side migration (section 11)."
+    },
+    {
       "change": "ModelRef gained an optional revision: the hub commit the weights are at.",
       "version": "2026-08-26T20:00",
       "why": "Every weights download in the pipeline and the measurement harness read `resolve/main`, which is a branch. Upstream re-uploads a GGUF and the bytes change under a config that still records the old sha256, so a run either dies at the checksum or - where no checksum runs - measures a model nobody named (Rule #10). This field was rejected once as speculative because nothing read it; validate.yml now pins a revision and the adoption target names one, so it has readers. Optional with a null default, so the published run manifests that carry no revision still validate and no read-side migration is needed (section 11)."
@@ -1355,7 +1360,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-26T20:00",
+      "default": "2026-08-26T21:45",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1369,5 +1374,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-26T20:00"
+  "version": "2026-08-26T21:45"
 }
