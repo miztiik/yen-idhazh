@@ -1904,9 +1904,17 @@ def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
 
     The digest item knows the item id and the plan knows the address, so the
     two are joined here rather than widening the published payload with a hash
-    no reader will ever look at. Only what this run introduced is recorded: a
-    day carries yesterday's items forward, and re-recording them would move
-    their published date every morning.
+    no reader will ever look at.
+
+    That join is also the filter, and it is load-bearing: `ledger._append`
+    writes every row it is handed, so nothing downstream would collapse a
+    repeat. A day carries yesterday's items forward, and re-recording them would
+    move their published date every morning. They do not survive the join
+    because `rank.plan_vertical` has already dropped every address
+    `load_published` returned, and an item id comes from its address - so a
+    carried item's id is absent from this run's plan and it is skipped. The
+    filter reads as "everything the day holds" and behaves as "what this run
+    added", and the two only agree while those upstream facts hold.
     """
     addresses = {item.item_id: item for item in plan.items}
     rows: list[PublishedRow] = []
