@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -22,6 +22,7 @@ Knobs, by the surface they tune:
 - **Summarize** - the length bands, title range, key-point range and quote cap.
 - **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the brief compression ceiling, the word gate, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
+- **Retention** - the image age window, the dry-run switch, the deletion fuse, and the published-site alarm point ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
 - **Logging** - the level, and which events emit ([telemetry.md](telemetry.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
@@ -168,12 +169,13 @@ The distinction matters because a value in `config/` reads as an invitation to c
 
 ## A guard is not a limit, and its name has to say so
 
-Some numbers in `config/` are not there to be tuned. They are there to stop a bug running for six hours. A guard and a limit look identical in JSON, so the name and the comment carry the whole difference:
+Some numbers in `config/` are not there to be tuned. They are there to stop a bug running for six hours, or to say out loud that something has changed. A guard, an alarm and a limit look identical in JSON, so the name and the comment carry the whole difference:
 
 - `run.safety_ceiling_per_run` (200) is a **crash guard**. A normal run is nowhere near it. If a canonicalisation bug ever produces thousands of candidates, the run stops instead of discovering that slowly. Hitting it means find the bug, not raise the number. It replaced a daily item cap, which was a limit pretending to be a guard - see [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
 - `models.inference.max_output_tokens` (900) is a **crash guard**. It stops a runaway decode from burning a shard's whole timeout. It is not a length target: the length a summary should be is set by the word bands in `summarize.bands`, which is the knob a person actually wants ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). It was 250, and at 250 the reply ran out of budget mid-object and failed as a *shape* error - which named the wrong cause and sent the reader of that failure looking at the decoder. It now sits well above any summary we would want.
 - `models.inference.request_timeout_minutes` (22.1) is a **per-request guard**. It limits one summarizer POST, not the shard. It protects the day from one local model request that accepts a connection and never replies: that item records `model_unreachable`, and the worker continues. The default is sized from the authoritative runner measurements in [../reference/measurements.md](../reference/measurements.md): the worst 8B long article plus one cold prompt prefix, doubled. `run.shard_timeout_minutes` stays the outer bound for the whole shard.
 - `run.route_budget_minutes` (40) is a **stage budget**, and it is the one number here that a person is meant to move. It says how long the route stage may spend before it stops asking the model and leaves the rest of the day unrouted. It is sized *below* the route job's 50-minute timeout on purpose: a job killed at its timeout skips its upload step, so the run loses every decision it had already made rather than the tail it could not reach. The 10 minutes between the two are the fixed cost the stage clock never sees. Measured 2026-08-24/25, the per-item cost is 20.7 s on a fast runner host and 40.3 s on a slow one, so what fits inside the budget changes run to run - which is exactly why the bound is a clock rather than an item count ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
+- `retention.site_budget_mb` (800) is an **alarm**, which is weaker than a guard because it stops nothing. Above it a run opens an issue, and that is the whole effect: no build fails, and no byte is deleted. It sits 224 MB below the platform's own 1 GB Pages ceiling, and the size of that gap is the entire design - 224 MB is 26 days of warning at the fastest growth this project has measured, against a 14-day target. The target is a judgement about one maintainer reading one issue, not a measurement, and it is labelled as one where it is derived. The arithmetic, the growth rates it rests on, and why the number is neither 900 nor 600 are in [../reference/measurements.md](../reference/measurements.md#where-the-alarm-fires-and-what-it-buys). Deleting anything is a different knob and ships off: `retention.image_months` is -1 and `retention.dry_run` is true ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 
 A guard set near the working range is the worst of both. It fires on good runs, gets raised to stop the noise, and stops guarding anything. That is the failure the token cap actually had.
 

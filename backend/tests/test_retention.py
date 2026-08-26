@@ -14,6 +14,7 @@ import pytest
 
 from idhazh.contracts.app_config import RetentionConfig
 from idhazh.retention import (
+    BYTES_PER_MB,
     PAGES_HARD_CAP_MB,
     cutoff,
     headroom_mb,
@@ -35,6 +36,21 @@ def site(root: Path, days: dict[str, list[str]]) -> Path:
     return root
 
 
+#: The fastest published-site growth this project has measured: a PNG on every
+#: item, 2026-08-23. Source and the rest of the table:
+#: docs/reference/measurements.md, "Days to the 1 GB Pages ceiling".
+FASTEST_MEASURED_KB_PER_DAY = 8_537
+#: Days the alarm must buy at that rate. A judgement about one maintainer
+#: reading one issue, not a measurement (Rule #10), and derived as one in
+#: docs/reference/measurements.md, "Where the alarm fires, and what it buys".
+WARNING_DAYS_REQUIRED = 14
+
+
+def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
+    """Whole days from the alarm to the wall. A partial day is not a day."""
+    return (PAGES_HARD_CAP_MB - budget_mb) * 1024 // kb_per_day
+
+
 # --- The alarm, on from the first run ---------------------------------------
 
 
@@ -53,6 +69,41 @@ def test_the_alarm_fires_below_the_platform_ceiling(tmp_path: Path) -> None:
     """There has to be room to act between the alarm and the wall."""
     config = RetentionConfig()
     assert config.site_budget_mb < PAGES_HARD_CAP_MB
+
+
+def test_the_alarm_buys_the_days_it_was_derived_to_buy() -> None:
+    """Below the ceiling is not the property that matters. Days of warning is.
+
+    An alarm at 1,023 MB is below the ceiling and buys nobody anything, so the
+    inequality above cannot be the whole check.
+    """
+    config = RetentionConfig()
+    bought = days_of_warning(config.site_budget_mb, FASTEST_MEASURED_KB_PER_DAY)
+    assert bought >= WARNING_DAYS_REQUIRED, (
+        f"{config.site_budget_mb} MB buys {bought} days at "
+        f"{FASTEST_MEASURED_KB_PER_DAY} KB/day; re-derive it in "
+        f"docs/reference/measurements.md before changing it here"
+    )
+
+
+def test_the_shipped_alarm_point_is_the_derived_one() -> None:
+    """The derivation, not the round number. 800 MB buys 26 days at the fastest rate."""
+    assert RetentionConfig().site_budget_mb == 800
+    assert days_of_warning(800, FASTEST_MEASURED_KB_PER_DAY) == 26
+
+
+def test_a_ceiling_hugging_alarm_would_fail_this_check() -> None:
+    """The case a bare `< PAGES_HARD_CAP_MB` assertion lets through."""
+    assert days_of_warning(PAGES_HARD_CAP_MB - 1, FASTEST_MEASURED_KB_PER_DAY) == 0
+
+
+def test_the_alarm_only_reports(tmp_path: Path) -> None:
+    """It is an alarm, not a gate: it says yes and deletes nothing."""
+    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    (root / "2026" / "08" / "21" / "big.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
+    before = measure(root)
+    assert over_budget(before, RetentionConfig(site_budget_mb=1)) is True
+    assert measure(root) == before
 
 
 def test_a_small_site_is_not_over_budget(tmp_path: Path) -> None:
