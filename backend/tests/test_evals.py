@@ -14,6 +14,7 @@ import pytest
 
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.evals.hhem import HHEM_REVISION, HhemScorer, is_pinned, weights_digest
 from idhazh.evals.metrics import (
     EVIDENTIAL_TERMS,
     HEDGE_TERMS,
@@ -297,3 +298,24 @@ def test_a_moved_lead_floor_moves_the_scorer_version() -> None:
     assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
         evaluation=EvaluationConfig(lead_coverage_min=0.40), **args
     )
+
+
+# --- The instrument is pinned, and says so -----------------------------------
+
+
+def test_the_configured_scorer_revision_is_immutable() -> None:
+    """It was the branch name `main` until 2026-08-26. A branch moves, and a
+    faithfulness floor read off a moving instrument measures nothing (Rule #10)."""
+    assert is_pinned(HHEM_REVISION)
+
+
+@pytest.mark.parametrize("revision", ["main", "v2.1", "refs/heads/main", ""])
+def test_a_pointer_is_not_a_pin(revision: str) -> None:
+    assert not is_pinned(revision)
+
+
+def test_a_scorer_that_never_loaded_cannot_name_its_weights() -> None:
+    """The old fallback hashed the name it was asked for, which validated and
+    said nothing about the bytes that ran."""
+    with pytest.raises(RuntimeError, match="has not loaded"):
+        weights_digest(HhemScorer())

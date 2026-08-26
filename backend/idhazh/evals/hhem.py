@@ -22,6 +22,8 @@ with a readable message rather than shipping unscored summaries.
 
 from __future__ import annotations
 
+import hashlib
+import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Protocol
@@ -29,9 +31,19 @@ from typing import Any, Final, Protocol
 #: Pinned to an immutable revision, not to a branch. The model card requires
 #: remote code, which is code executed on the build machine, so "latest" is a
 #: supply-chain decision nobody made.
+#:
+#: This was the literal string `main` until 2026-08-26, which is the branch and
+#: not a revision - it moved on 2025-10-20 and could move again tonight. The
+#: value below is the revision `main` resolved to when it was read from the
+#: Hugging Face model API on 2026-08-26. A faithfulness floor measured against
+#: a branch measures an instrument nobody can name afterwards (Rule #10).
 HHEM_MODEL: Final = "vectara/hallucination_evaluation_model"
-HHEM_REVISION: Final = "main"
+HHEM_REVISION: Final = "8e4a2e6e96c708cc76c2344f7e4757df2515292c"
 HHEM_SCORER_ID: Final = "hhem-2.1-open"
+
+#: A revision is immutable when it is a full 40-character git object name. A
+#: branch or a tag is not: it names wherever that pointer happens to be today.
+_IMMUTABLE_REVISION: Final = re.compile(r"^[0-9a-f]{40}$")
 
 #: Words per chunk and the overlap between them. Attention is quadratic in the
 #: premise, so a whole long article in one pass is the expensive shape.
@@ -87,15 +99,38 @@ class HhemScorer:
         return float(predicted[0])
 
 
+def is_pinned(revision: str = HHEM_REVISION) -> bool:
+    """Whether the scorer revision names bytes rather than a moving pointer."""
+    return bool(_IMMUTABLE_REVISION.fullmatch(revision))
+
+
 def weights_digest(scorer: HhemScorer) -> str:
-    """What actually loaded, for the derived `scorer_version`.
+    """The weights that loaded, digested tensor by tensor.
 
-    Falls back to the revision string when the weight file cannot be located,
-    which is honest about being weaker rather than pretending to a digest.
+    Until 2026-08-26 this hashed the string `name@revision`, which is the label
+    the loader was handed and not the bytes it came back with - two different
+    checkpoints behind one branch name produced one digest, and the derived
+    `scorer_version` said the instrument had not changed. It now walks the
+    loaded state dict in key order and digests the actual parameter bytes, so
+    the value is an observation (Rule #10).
+
+    Raises when nothing is loaded. A scorer that cannot name its own weights
+    cannot support a faithfulness gate, and a fallback string here is what let
+    that be true quietly for four months.
     """
-    import hashlib
-
-    return hashlib.sha256(f"{HHEM_MODEL}@{scorer.revision}".encode()).hexdigest()
+    if scorer.model is None:
+        raise RuntimeError(
+            "the scorer has not loaded, so there are no weights to digest; "
+            "call HhemScorer.load() first"
+        )
+    digest = hashlib.sha256()
+    state = scorer.model.state_dict()
+    for name in sorted(state):
+        tensor = state[name].detach().to("cpu").contiguous()
+        digest.update(name.encode("utf-8"))
+        digest.update(str(tensor.dtype).encode("utf-8"))
+        digest.update(tensor.numpy().tobytes())
+    return digest.hexdigest()
 
 
 def dual_score(

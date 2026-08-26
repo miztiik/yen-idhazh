@@ -136,6 +136,16 @@ Write new files LF explicitly:
 The same CRLF also breaks a byte-identical round trip, so the contract drift
 gate reports a diff in a file whose content never changed.
 
+## Gate commands
+
+**`ruff format` is not a gate here, and running it rewrites files you never
+touched.** CI runs `ruff check .` only. The tree is not `ruff format` clean, so
+`ruff format backend` reformatted 24 unrelated files in one pass on 2026-08-26 -
+tests, utilities and modules the change had nothing to do with. Run
+`ruff check --fix` for the lint autofixes and leave formatting alone. If a
+format pass has already happened, `git restore --` the specific unrelated paths
+rather than the tree.
+
 ## GitHub CLI
 
 **`gh pr checks --watch` and a bare `gh run watch` open an alternate terminal

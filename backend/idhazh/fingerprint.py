@@ -54,6 +54,12 @@ UNRECORDED_BUILD: Final = "build-not-recorded"
 #: The same, for a chat template no server was there to hand over.
 UNRECORDED_TEMPLATE: Final = "chat-template-not-recorded"
 
+#: How the stamp spells a runtime knob config left null. Null means "whatever
+#: the runtime picks", which is a real and different choice from pinning a
+#: value, so it gets its own spelling rather than being folded into one of the
+#: values it might resolve to.
+RUNTIME_DEFAULT: Final = "runtime-default"
+
 #: Where Linux names the processor. `platform.processor()` answers `x86_64`
 #: there, which is the same string on every runner and so explains nothing.
 CPUINFO: Final = Path("/proc/cpuinfo")
@@ -142,6 +148,34 @@ def sampling_spelling(inference: InferenceConfig) -> str:
     )
 
 
+def runtime_flags_spelling(inference: InferenceConfig) -> str:
+    """One canonical spelling of the runtime knobs that move the arithmetic.
+
+    These five were enumerated as known blind spots and left out of the stamp
+    until 2026-08-26, so they could be moved without moving a fingerprint. A
+    quantised KV cache, another attention kernel, a second slot or a different
+    prompt-thread count each change how the partial sums accumulate, and a
+    summary that changed for one of those reasons used to stamp identical to
+    the one before it.
+
+    They arrive folded into one field for the same reason `sampling` is one
+    field: `state/fingerprints.csv` is a flat table, and five columns that are
+    null on almost every row is five columns nobody reads.
+    """
+    return ";".join(
+        (
+            f"cache_type_k={inference.cache_type_k or RUNTIME_DEFAULT}",
+            f"cache_type_v={inference.cache_type_v or RUNTIME_DEFAULT}",
+            f"flash_attention={inference.flash_attention or RUNTIME_DEFAULT}",
+            f"n_parallel={inference.n_parallel if inference.n_parallel else RUNTIME_DEFAULT}",
+            (
+                "n_threads_batch="
+                f"{inference.n_threads_batch if inference.n_threads_batch else RUNTIME_DEFAULT}"
+            ),
+        )
+    )
+
+
 class Undigested(NamedTuple):
     """Why one inference knob sits outside the stamp."""
 
@@ -151,40 +185,22 @@ class Undigested(NamedTuple):
 
 #: Every `InferenceConfig` knob the stamp does not carry, and why each one is out.
 #:
-#: `moves_logits=True` marks a known blind spot, not a claim that the knob is
-#: safe: those five change the arithmetic the runtime does, so moving one can
-#: rewrite a summary while the stamp holds still. Adding a field here resets
-#: every fingerprint, and `TODO/20260825-qwen35-9b-adoption-plan.md` already
-#: spends one reset on the model swap, so they ride that one.
+#: Every knob left here is one that cannot move an output. The five that could -
+#: `cache_type_k`, `cache_type_v`, `flash_attention`, `n_parallel` and
+#: `n_threads_batch` - were listed here as known blind spots until 2026-08-26
+#: and are now folded into `runtime_flags`.
 #:
 #: The set is closed: a knob that is neither here nor digested fails the
 #: contract test in `backend/tests/test_fingerprint.py`.
 NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
     {
-        "cache_type_k": Undigested(
-            True, "A quantised K cache changes the attention arithmetic."
-        ),
-        "cache_type_v": Undigested(
-            True, "A quantised V cache changes the attention arithmetic."
-        ),
-        "flash_attention": Undigested(
-            True, "Another kernel adds the same values in another order."
-        ),
-        "n_parallel": Undigested(
-            True, "Slots divide the context, which changes the batch shapes."
-        ),
-        "n_threads_batch": Undigested(
-            True, "Prompt threads change how the partial sums accumulate."
-        ),
         "load_mode": Undigested(
             False, "mmap and mlock move where the weights sit, not what they hold."
         ),
         "metrics": Undigested(
             False, "Exposes an endpoint. It counts the decode, it does not change one."
         ),
-        "poll": Undigested(
-            False, "How the runtime waits for work. It calculates nothing."
-        ),
+        "poll": Undigested(False, "How the runtime waits for work. It calculates nothing."),
         "priority": Undigested(
             False, "Scheduler priority changes when work runs, not what it produces."
         ),
@@ -202,10 +218,12 @@ def digested_inference_fields() -> frozenset[str]:
     """The `InferenceConfig` knobs the stamp carries, read back from the stamp itself.
 
     Four reach `PipelineInputs` under their own name. The rest arrive folded
-    into the sampling spelling, so the names come out of that spelling rather
-    than out of a second list somebody has to keep in step.
+    into one of the two canonical spellings, so the names come out of those
+    spellings rather than out of a third list somebody has to keep in step.
     """
-    folded = (pair.split("=", 1)[0] for pair in sampling_spelling(InferenceConfig()).split(";"))
+    defaults = InferenceConfig()
+    spellings = (sampling_spelling(defaults), runtime_flags_spelling(defaults))
+    folded = {pair.split("=", 1)[0] for spelling in spellings for pair in spelling.split(";")}
     reaches_the_digest = frozenset(PipelineInputs.model_fields) | frozenset(folded)
     return frozenset(InferenceConfig.model_fields) & reaches_the_digest
 
@@ -248,6 +266,7 @@ def build_inputs(
         output_schema_sha256=text_digest(output_schema),
         truncation_cap_tokens=truncation_cap_tokens,
         sampling=sampling_spelling(inference),
+        runtime_flags=runtime_flags_spelling(inference),
         n_ctx=inference.n_ctx,
         n_batch=inference.n_batch,
         n_ubatch=inference.n_ubatch,

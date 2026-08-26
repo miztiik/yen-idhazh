@@ -151,6 +151,70 @@ so even the raw transition cannot fit. Measure actual cache entries, delete only
 the old summary-model cache before the first production run, and keep the router
 cache.
 
+### The qualification budget, derived 2026-08-26
+
+Derived, not measured, and the design is built so the verdict does not depend on
+the derivation being right.
+
+The starting point is a live production observation, not a bench: run
+`32742672105` on 2026-08-24 spent 232.7 minutes in prefill and 135.7 in decode
+across four workers over roughly 150 articles, which is **147 s of model time an
+article** on the incumbent, with the shared system prompt already cached.
+
+Scaling that to the candidate uses the two `llama-bench` rows above - prefill
+12.1 -> 10.14 tok/s and decode 7.28 -> 6.01 tok/s, so 1.193x and 1.211x the
+time. Those rows were taken on different CPUs and runtime builds, so the ratio
+is an estimate and is labelled one:
+
+```text
+147 s x (0.632 x 1.193 + 0.368 x 1.211) = 176 s an article
+```
+
+`.github/workflows/validate.yml` runs three capture-and-replay shards of ten
+frozen articles at three repeats, which is 30 inference calls a shard:
+
+| Cost, per shard | Derived |
+| --- | --- |
+| 30 replay calls at 176 s | 88 min |
+| 5 injection canaries, shard 0 only | 15 min |
+| Checkout, Python, `pip install -e ".[faithfulness]"` | 4 min |
+| llama.cpp plus 5.29 GiB of weights on a cache miss | 3 min |
+| Server start and health | 1 min |
+| Fetch and extract up to 30 addresses | 2 min |
+| HHEM load and 10 items scored | 2 min |
+| **Worst shard** | **115 min against a 330-minute bound** |
+
+Margin 215 minutes, 65 percent of the bound. **At twice the derived per-item
+cost the worst shard is 218 minutes and still inside**, which is the point of
+sharding it: the design survives the estimate being wrong by 100 percent
+(Rule #2, Rule #10).
+
+The production projection uses the same 176 s. `digest.yml` derives workers as
+`min(ceil(items / run.shard_size), run.max_parallel)`, so at
+`run.safety_ceiling_per_run` a worst worker draws `160 / 4 = 40` items:
+40 x 176 s = 117 minutes of model time, about 130 minutes with the fixed costs,
+against the `work` job's 330. For comparison, the measured incumbent worst
+worker was 58.8 minutes after PR #110.
+
+### The faithfulness scorer, pinned 2026-08-26
+
+| Field | Value |
+| --- | --- |
+| Model | `vectara/hallucination_evaluation_model` |
+| Revision | `8e4a2e6e96c708cc76c2344f7e4757df2515292c` |
+| Read from | the Hugging Face model API, 2026-08-26 |
+| Repository last modified | 2025-10-20 |
+| Parameters | 109,630,082, all F32 |
+| Licence | Apache-2.0 |
+
+`HHEM_REVISION` was the literal string `main` until this date, and
+`weights_digest` hashed `name@revision` - the label the loader was handed, not
+the bytes it came back with. Two different checkpoints behind one branch name
+produced one digest, and the derived `scorer_version` said the instrument had
+not changed. It now walks the loaded state dict in key order and digests the
+actual parameter bytes. Every faithfulness number taken before this date was
+measured with an instrument nobody can name afterwards.
+
 What remains unmeasured:
 
 - candidate prompt tokens and article-token spread;
@@ -161,9 +225,14 @@ What remains unmeasured:
 - failure rate, counterweights and blind human review; and
 - recurrent-state prefix reuse.
 
+Every line above except the last two is what `.github/workflows/validate.yml`
+was rebuilt to measure on 2026-08-26. They stay on this list until a dispatched
+run answers them; an instrument that exists is not a measurement.
+
 The model card publishes no summarization or faithfulness result. Its reasoning,
 instruction-following, coding and long-context tables are a prior and not
-evidence for this pipeline.
+evidence for this pipeline. That absence is recorded as a `not_reported`
+leaderboard provenance on the validation row, never as `0.0`.
 
 #### Estimate: what one work shard costs on the candidate
 

@@ -22,6 +22,21 @@ class ValidationVerdict(StrEnum):
     CONFIRMED = "confirmed"
     RESCORE_CANDIDATES = "rescore_candidates"
     SWITCH_AND_PAUSE = "switch_and_pause"
+    QUALIFIED = "qualified"
+    NOT_QUALIFIED = "not_qualified"
+
+
+class LeaderboardProvenance(StrEnum):
+    """Whether anybody published a number for this model, on this task.
+
+    `not_reported` is not zero. A model whose card publishes no summarization or
+    faithfulness result has an unknown prior, and recording that as `0.0` would
+    put a fabricated worst case into every mean, chart and comparison that ever
+    reads the column (Rule #10).
+    """
+
+    REPORTED = "reported"
+    NOT_REPORTED = "not_reported"
 
 
 class ValidationRow(Contract):
@@ -29,6 +44,19 @@ class ValidationRow(Contract):
 
     __schema_stem__: ClassVar[str] = "validation-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26",
+            change=(
+                "leaderboard_hhem may be null beside a leaderboard_provenance of "
+                "not_reported, and the verdict set gained qualified and not_qualified."
+            ),
+            why=(
+                "A single-model qualification has no incumbent to compare against, and the "
+                "candidate's model card publishes no summarization or faithfulness result. "
+                "Recording that absence as 0.0 invents a worst case. Older rows carry a "
+                "float and read as reported, which is the read-side migration."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22",
             change="Initial shape: the incumbent and its challengers, measured and predicted.",
@@ -46,10 +74,15 @@ class ValidationRow(Contract):
     selected: bool = Field(
         description="The model this run would run with. On a confirmed run, the incumbent."
     )
-    leaderboard_hhem: float = Field(
+    leaderboard_hhem: float | None = Field(
+        default=None,
         ge=0.0,
         le=1.0,
         description="What the published leaderboard says. A prior, never evidence about us.",
+    )
+    leaderboard_provenance: LeaderboardProvenance = Field(
+        default=LeaderboardProvenance.REPORTED,
+        description="Whether a published number exists at all. Missing stays missing.",
     )
     measured_hhem: float = Field(
         ge=0.0, le=1.0, description="Mean HHEM over the golden set, through our own pipeline."
@@ -77,6 +110,15 @@ class ValidationRow(Contract):
             and (self.is_incumbent)
         ):
             raise ValueError("a switch that selects the incumbent is not a switch")
+        return self
+
+    @model_validator(mode="after")
+    def _provenance_and_value_agree(self) -> Self:
+        reported = self.leaderboard_provenance is LeaderboardProvenance.REPORTED
+        if reported and self.leaderboard_hhem is None:
+            raise ValueError("a reported leaderboard score has to carry the score")
+        if not reported and self.leaderboard_hhem is not None:
+            raise ValueError("a score recorded as not_reported cannot also carry a number")
         return self
 
     @classmethod
