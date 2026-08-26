@@ -1,0 +1,130 @@
+{
+  "candidate": {
+    "bytes_expected": 5680522464,
+    "bytes_observed": 5680522464,
+    "file": "Qwen3.5-9B-Q4_K_M.gguf",
+    "model_id": "qwen3-5-9b-q4-k-m",
+    "quantisation": "Q4_K_M",
+    "repo": "unsloth/Qwen3.5-9B-GGUF",
+    "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+    "runtime_build": "b10598",
+    "sha256_expected": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8",
+    "sha256_observed": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+  },
+  "commit_sha": "0000000000000000000000000000000000000000",
+  "corpus_digest": "8b39747f9a599262b1caa3bdca3ccf10f1a421ee4fb58c7fa1878ca61bb27ed3",
+  "corpus_items": 30,
+  "date": "2026-08-26",
+  "detail": "every gate passed on 30 frozen articles",
+  "diagnostics": [
+    {
+      "denominator": 27,
+      "name": "hhem_mean",
+      "value": "0.7912"
+    }
+  ],
+  "gates": [
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "reasoning_leakage",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "schema_validity",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "injection_canaries",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "determinism",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "publishable_length",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "context_fit",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "identity",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "budget",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "scored_denominator",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "faithfulness_floor",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    },
+    {
+      "detail": "recorded from the merged shards",
+      "gate": "brief_copying_ceiling",
+      "measured": "see the run log",
+      "source": "config/idhazh.json",
+      "status": "passed",
+      "threshold": "see the row"
+    }
+  ],
+  "pipeline_fingerprint": "5555555555555555555555555555555555555555555555555555555555555555",
+  "planned": 30,
+  "qualified": true,
+  "repeats": 3,
+  "runner": "ubuntu-latest",
+  "scored": 27,
+  "scorer": {
+    "pinned": true,
+    "revision": "8e4a2e6e96c708cc76c2344f7e4757df2515292c",
+    "scorer_id": "hhem-2.1-open",
+    "scorer_version": "hhem-2.1-open@8e4a2e6e;weights-44444444;metrics-3;bands=0.80/0.50;lead=0.30",
+    "weights_sha256": "4444444444444444444444444444444444444444444444444444444444444444"
+  },
+  "version": "2026-08-26"
+}

@@ -20,36 +20,54 @@ What exists:
 - `.github/workflows/measure.yml`, target `llm`, runs the same raw measurement on
   `ubuntu-latest`;
 - `llama_server_argv.py` builds the server command from config;
-- `work` can exercise the real fetch, extract, sanitize and summarize path; and
-- `validate` can score model output with HHEM.
+- `work` can exercise the real fetch, extract, sanitize and summarize path;
+- `validate` can score model output with HHEM; and
+- `.github/workflows/validate.yml` plus `idhazh qualify` and
+  `idhazh qualify-decide` freeze a corpus, replay it, run the live canaries and
+  evaluate eleven absolute gates. Rebuilt 2026-08-26.
 
-What is missing:
+What the qualification arm now does, which the old exploratory one did not:
 
-- a candidate-config generator;
-- a live candidate canary command;
-- a replay command that runs two models over the **same captured Article
-  payloads**;
-- a deterministic, stratified adoption-corpus selector;
-- a pairwise blind-human label contract and CLI;
-- an honest `not_reported` representation for missing leaderboard scores;
-- a candidate-aware runtime-shard measurement; and
-- a validation workflow that is generic, cache-safe and controlled.
+- builds a candidate config under gitignored `backend/var/candidate-config`, a
+  copy of committed `config/` with `models.summarize` replaced and nothing else,
+  so it never edits the committed config and never has to restore it;
+- fetches the candidate from an **immutable repository revision**, checks its
+  SHA-256 and its byte count against the adoption target, and does both before
+  the server starts;
+- keys the weights cache on the GGUF digest rather than the filename, and holds
+  one model per entry;
+- plans the addresses once, in one job, and carries the date forward, so a run
+  that crosses UTC midnight is still one run;
+- freezes each shard's slice exactly once, hashes the model-visible truncated
+  text and the sanitized full text, writes the hashes down **before** the first
+  inference call, and replays those bytes;
+- interleaves the repeats - every item once, then every item again - so a repeat
+  never lands on a warm prompt cache and skips its own prefill;
+- runs every injection canary on live candidate calls; and
+- records every failed call in the denominator, and every diagnostic with the
+  denominator it was taken over.
 
-The current `.github/workflows/validate.yml` is exploratory, not an adoption
-gate. It:
+What is still missing:
 
-- hardcodes the Qwen3-8B incumbent and server arguments;
-- caches the incumbent, challenger and runtime together;
-- keys that cache by challenger filename and runtime build, not by GGUF bytes;
-- plans whatever the live feeds provide, not an exact scored corpus;
-- fetches live pages again for each model, so the input bytes can move; and
-- decides from article count and mean HHEM only;
-- requires `challenger_leaderboard` as a float even when no score was reported.
+- a pairwise blind-human label contract and CLI; and
+- a candidate-aware runtime-shard measurement.
 
-The evaluator is not fully pinned either: `HHEM_REVISION` is `main`, and the
-current digest hashes that name rather than the loaded weight bytes.
+Two capability gaps were closed on 2026-08-26 and are worth naming because
+anything measured before then inherits them:
 
-Do not write "the only difference is the weights" while those conditions hold.
+- `HHEM_REVISION` was the branch name `main`, and `weights_digest` hashed that
+  name rather than the loaded weight bytes. It is now pinned to
+  `8e4a2e6e96c708cc76c2344f7e4757df2515292c` and the digest walks the loaded
+  state dict. A faithfulness number from before this date was measured with an
+  instrument nobody can name.
+- `leaderboard_hhem` was a required float, so a model with no published result
+  had to be recorded as `0.0`. It is now nullable beside a
+  `leaderboard_provenance` of `not_reported`.
+
+`measure_llm.py` still resolves Hugging Face `main` and cannot request an
+immutable revision or accept an expected SHA. That is sufficient for an
+exploratory measurement and not for reproducing an adoption candidate; the
+qualification arm does not use it.
 
 ## The evidence package
 

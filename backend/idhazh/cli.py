@@ -41,24 +41,48 @@ from idhazh import (
     summarize,
     telemetry,
 )
-from idhazh.contracts.app_config import RunConfig
+from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, RunConfig
 from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.contracts.item_health import FailureCode
+from idhazh.contracts.qualification import (
+    CanaryObservation,
+    CandidateIdentity,
+    CorpusItem,
+    GateStatus,
+    ItemObservation,
+    ItemScore,
+    QualificationReport,
+    QualificationShard,
+    ScorerIdentity,
+    corpus_digest,
+)
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceKind
-from idhazh.contracts.validation_row import ValidationVerdict
+from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.contracts.validation_row import (
+    LeaderboardProvenance,
+    ValidationRow,
+    ValidationVerdict,
+)
 from idhazh.embed import Embedder
-from idhazh.evals import golden, metrics, score, validation, writer
-from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
+from idhazh.evals import golden, metrics, qualify, score, validation, writer
+from idhazh.evals.hhem import (
+    HHEM_REVISION,
+    HHEM_SCORER_ID,
+    HhemScorer,
+    dual_score,
+    is_pinned,
+    weights_digest,
+)
 from idhazh.fingerprint import (
     LEDGER_RELPATH as FINGERPRINT_RELPATH,
 )
@@ -66,6 +90,7 @@ from idhazh.fingerprint import (
     UNRECORDED_TEMPLATE,
     append_new,
     build_inputs,
+    file_digest,
     host_cpu,
     runner_class,
     runtime_build,
@@ -73,11 +98,18 @@ from idhazh.fingerprint import (
 )
 from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post, props
 from idhazh.render import asset_relpath, highest_ordinal, render_route
-from idhazh.sanitize import SANITIZER_VERSION
+from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
+QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
+#: The planted attacks, run live against a candidate before it is adopted.
+CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
+#: How many articles a qualification shard extracts for every one it replays.
+#: Extraction costs seconds and inference costs minutes, so a wider pool buys
+#: the length spread the corpus definition asks for at almost no cost.
+_POOL_MULTIPLE: Final = 3
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
@@ -432,9 +464,7 @@ class _FetchedWorkItem(NamedTuple):
     original_index: int
 
 
-def _summarize_band_sort_key(
-    work: _FetchedWorkItem, settings: config.Settings
-) -> tuple[int, int]:
+def _summarize_band_sort_key(work: _FetchedWorkItem, settings: config.Settings) -> tuple[int, int]:
     band = settings.app.summarize.band_for(work.article.word_count)
     return band.min_source_words, work.original_index
 
@@ -470,7 +500,7 @@ def stage_work(
     fingerprint = inputs.fingerprint()
     scorer_version = metrics.scorer_version(
         scorer_id=HHEM_SCORER_ID,
-        scorer_revision=text_digest(HHEM_SCORER_ID),
+        scorer_revision=HHEM_REVISION,
         weights_sha256=weights_digest(scorer) if isinstance(scorer, HhemScorer) else "0" * 64,
         evaluation=settings.app.evaluation,
     )
@@ -578,9 +608,7 @@ def _write_stamp(items_dir: Path, *, inputs: PipelineInputs, run_id: str) -> Fin
         inputs=inputs,
         host_cpu=host_cpu(),
     )
-    assemble.write_atomic(
-        items_dir / f"{row.pipeline_fingerprint}.fingerprint.json", row.to_json()
-    )
+    assemble.write_atomic(items_dir / f"{row.pipeline_fingerprint}.fingerprint.json", row.to_json())
     return row
 
 
@@ -867,9 +895,7 @@ def stage_route(
         )
 
 
-def _route_one(
-    article: Article, summary: Summary, settings: config.Settings
-) -> tuple[Route, bool]:
+def _route_one(article: Article, summary: Summary, settings: config.Settings) -> tuple[Route, bool]:
     """One routing decision, and whether the model was asked for it.
 
     The model is skipped when no enabled visual kind could survive `to_route`'s
@@ -1032,6 +1058,547 @@ def stage_decide(*, settings: config.Settings, date: str, commit_sha: str, runne
     return 0
 
 
+# --- qualify (Row #10) --------------------------------------------------------
+
+
+def _candidate_identity(settings: config.Settings, args: argparse.Namespace) -> CandidateIdentity:
+    """Which bytes are about to run, read off the disk rather than off config.
+
+    Config states an expectation and the file states a fact. The identity gate
+    exists because those two can disagree - a mirror can serve a same-named file
+    with different bytes - so the digest here is taken from the file the runtime
+    will open (Rule #10).
+    """
+    model = settings.app.models.summarize
+    weights = args.weights or (config.REPO_ROOT / "backend" / "models" / model.file)
+    if not weights.exists():
+        raise SystemExit(f"the candidate weights are not on disk: {model.file}")
+    if not model.sha256:
+        raise SystemExit(f"{model.id} declares no sha256, so nothing can verify what ran")
+    return CandidateIdentity(
+        model_id=model.id,
+        repo=model.repo,
+        revision=args.candidate_revision or "revision-not-recorded",
+        file=model.file,
+        quantisation=model.quantisation,
+        sha256_expected=model.sha256,
+        sha256_observed=file_digest(weights),
+        bytes_expected=args.candidate_bytes or weights.stat().st_size,
+        bytes_observed=weights.stat().st_size,
+        runtime_build=runtime_build(),
+    )
+
+
+class _Frozen(NamedTuple):
+    """One captured article and the row that describes it."""
+
+    row: CorpusItem
+    item: PlannedItem
+    article: Article
+    full_text: str
+
+
+def _freeze(
+    items: Sequence[PlannedItem], settings: config.Settings, read_url: Fetcher, *, keep: int
+) -> tuple[list[_Frozen], int]:
+    """Fetch, extract and sanitize once, then hash what came back.
+
+    Once, and never again: the three deterministic repeats have to see identical
+    bytes, and a publisher rewriting a page between two of them would read as a
+    decoding drift. The bytes stay on this job's own disk - only the hashes and
+    the measurements travel, because an article body is not ours to move
+    (`CLAUDE.md` section 0a).
+
+    Returns the selected corpus and how many addresses were consumed to build
+    it. The second number is the honest attempted denominator: an address that
+    would not fetch measured nothing, and dropping it from the record would let
+    a bad day look like a good one.
+    """
+    pool: list[_Frozen] = []
+    attempted = 0
+    # Capture more than is needed so the selection below has something to
+    # stratify over. Bounded, because extraction is cheap next to inference but
+    # is not free.
+    for item in items:
+        if len(pool) >= keep * _POOL_MULTIPLE:
+            break
+        attempted += 1
+        article, _, _ = _fetch_one(item, settings, read_url)
+        if article.status is not ArticleStatus.OK or not article.text:
+            LOG.info("corpus item unavailable url=%s", item.canonical_url)
+            continue
+        seen = article.text
+        pool.append(
+            _Frozen(
+                row=CorpusItem(
+                    item_id=item.item_id,
+                    url_key=item.url_key,
+                    canonical_url=item.canonical_url,
+                    source_id=item.source_id,
+                    vertical=item.vertical,
+                    band_index=qualify.band_index(article.word_count, settings.app.summarize),
+                    brief=article.brief,
+                    truncated=article.truncated,
+                    source_word_count=article.word_count,
+                    seen_word_count=len(seen.split()),
+                    seen_token_count=article.token_count,
+                    seen_text_sha256=text_digest(seen),
+                    full_text_sha256=text_digest(seen),
+                ),
+                item=item,
+                article=article,
+                full_text=seen,
+            )
+        )
+    return _stratified(pool, keep=keep, bands=len(settings.app.summarize.bands)), attempted
+
+
+def _stratified(pool: Sequence[_Frozen], *, keep: int, bands: int) -> list[_Frozen]:
+    """Take one from each length tier in turn, until the corpus is full.
+
+    Deterministic, and it needs to be: the corpus is registered by hash before
+    any output is looked at, so a selection that varied would let somebody
+    re-roll a corpus until the answer improved.
+
+    Within a tier the scarce shapes go first. A brief item and an over-cap item
+    each exercise a path nothing else reaches, and both are rarer than an
+    ordinary article, so a rule that took plan order would drop them first.
+    """
+    buckets: dict[int, list[_Frozen]] = {index: [] for index in range(bands)}
+    for entry in pool:
+        buckets.setdefault(entry.row.band_index, []).append(entry)
+    for bucket in buckets.values():
+        bucket.sort(key=lambda entry: (not entry.row.brief, not entry.row.truncated))
+    chosen: list[_Frozen] = []
+    while len(chosen) < keep and any(buckets.values()):
+        for index in sorted(buckets):
+            if len(chosen) >= keep:
+                break
+            if buckets[index]:
+                chosen.append(buckets[index].pop(0))
+    return chosen
+
+
+def _canary_article(payload: dict[str, object], *, fetched_at: str) -> Article:
+    """One planted attack, shaped like an article so it takes the real path.
+
+    The fixture's raw text is handed over unsanitized on purpose: `user_turn`
+    fences and sanitizes what it is given, so this exercises the boundary
+    instead of stepping around it (Rule #11).
+    """
+    url = str(payload["source_url"])
+    return Article(
+        version=Article.schema_version(),
+        item_id="canary-01",
+        url_key=derive_url_key(url),
+        source_url=url,
+        canonical_url=url,
+        source_id="canary",
+        tier=SourceTier.INSTITUTION,
+        vertical="canary",
+        rank_score=0.0,
+        title=str(payload["raw_title"]),
+        text=str(payload["raw_text"]),
+        word_count=len(str(payload["raw_text"]).split()),
+        token_count=len(str(payload["raw_text"]).split()) * 2,
+        fetched_at=fetched_at,
+        status=ArticleStatus.OK,
+        extractor_version=extract.EXTRACTOR_VERSION,
+        sanitizer_version=SANITIZER_VERSION,
+    )
+
+
+def _observe(
+    article: Article,
+    summary: Summary,
+    completion: Completion | None,
+    *,
+    repeat: int,
+    inference: InferenceConfig,
+    seconds: float,
+) -> ItemObservation:
+    reply = completion or Completion(content="")
+    inline = summarize.split_thinking(reply.content)[1] or ""
+    return ItemObservation(
+        item_id=article.item_id,
+        repeat=repeat,
+        ok=summary.status is SummaryStatus.OK,
+        failure_code=summary.failure_code.value if summary.failure_code else None,
+        finish_reason=reply.finish_reason,
+        reasoning_channel_used=bool(reply.reasoning.strip()),
+        think_block_words=len(inline.split()),
+        schema_valid=summary.status is SummaryStatus.OK,
+        # One call, one reply. The gate wants zero repair attempts, so the
+        # column exists to be asserted rather than to be filled in later.
+        repaired=summary.attempt > 1,
+        output_digest=summary.output_digest,
+        summary_word_count=len((summary.summary or "").split()),
+        prompt_tokens=reply.prompt_tokens,
+        completion_tokens=reply.completion_tokens,
+        fits_context_predicted=summarize.fits_context(article, inference),
+        summarize_seconds=seconds,
+    )
+
+
+def _score_item(
+    frozen: _Frozen, summary: Summary, scorer: object, evaluation: EvaluationConfig
+) -> ItemScore:
+    text = summary.summary or ""
+    hhem, hhem_full = dual_score(
+        scorer,  # type: ignore[arg-type]
+        seen_text=frozen.full_text,
+        full_text=frozen.full_text,
+        summary=text,
+    )
+    return ItemScore(
+        item_id=frozen.row.item_id,
+        brief=frozen.article.brief,
+        hhem=hhem,
+        hhem_full=hhem_full,
+        verbatim_run=metrics.verbatim_run(text, frozen.full_text),
+        extractiveness=metrics.extractiveness(text, frozen.full_text),
+        compression=metrics.compression(text, frozen.full_text),
+        lead_coverage=metrics.lead_coverage(text, frozen.full_text),
+        unsupported_numbers=metrics.unsupported_numbers(text, frozen.full_text),
+        hedge_dropped=metrics.hedge_dropped(text, frozen.full_text),
+        evidential_density=metrics.evidential_density(frozen.full_text),
+        speculative_density=metrics.speculative_density(frozen.full_text),
+        title_fell_back=summary.title is None,
+    )
+
+
+def _one_call(
+    article: Article, settings: config.Settings, fingerprint: str, *, endpoint: str
+) -> tuple[Summary, Completion | None, float]:
+    """One live inference call, timed, with the reply kept for the gates."""
+    inference = settings.app.models.inference
+    model_id = settings.app.models.summarize.id
+    payload = summarize.build_request(
+        article,
+        model_id=model_id,
+        inference=inference,
+        prompt_config=settings.app.summarize,
+        evaluation=settings.app.evaluation,
+    )
+    started = time.monotonic()
+    completion: Completion | None
+    no_reply = FailureCode.MODEL_UNREACHABLE
+    try:
+        completion = post(
+            payload, endpoint=endpoint, timeout=inference.request_timeout_minutes * 60
+        )
+    except HTTPError as error:
+        body = error.read().decode("utf-8", errors="replace")
+        completion = None
+        no_reply = (
+            FailureCode.CONTEXT_EXCEEDED
+            if is_context_exceeded(body)
+            else FailureCode.MODEL_UNREACHABLE
+        )
+    except OSError:
+        completion = None
+    seconds = time.monotonic() - started
+    summary = summarize.to_summary(
+        article,
+        completion,
+        model_id=model_id,
+        pipeline_fingerprint=fingerprint,
+        generated_at=assemble.utc_now(),
+        prompt_config=settings.app.summarize,
+        evaluation=settings.app.evaluation,
+        no_reply=no_reply,
+    )
+    return summary, completion, seconds
+
+
+def _run_canaries(
+    settings: config.Settings, fingerprint: str, *, endpoint: str
+) -> list[CanaryObservation]:
+    """Every planted attack, through the live candidate.
+
+    The unit suite proves these against recorded completions. It cannot prove
+    that a model nobody has served before honours this chat template, so the
+    attacks run again on real calls before the model is adopted.
+    """
+    observations: list[CanaryObservation] = []
+    for path in sorted(CANARY_DIR.glob("*.json")):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        article = _canary_article(payload, fetched_at=assemble.utc_now())
+        summary, completion, _ = _one_call(article, settings, fingerprint, endpoint=endpoint)
+        reply = " ".join([summary.title or "", summary.summary or "", *(summary.key_points or [])])
+        cleaned = sanitize(str(payload["raw_text"]))
+        raw = completion.content if completion else ""
+        observations.append(
+            CanaryObservation(
+                name=str(payload["name"]),
+                replied=summary.status is SummaryStatus.OK and bool(summary.summary),
+                markers_present=[m for m in payload["must_not_survive"] if str(m) in reply],
+                facts_missing=[f for f in payload["must_survive"] if str(f) not in cleaned],
+                forbidden_keys_present=[k for k in payload["forbidden_output"] if str(k) in raw],
+            )
+        )
+        LOG.info("canary run name=%s replied=%s", payload["name"], observations[-1].replied)
+    return observations
+
+
+def stage_qualify(
+    *,
+    settings: config.Settings,
+    date: str,
+    shard: int,
+    shards: int,
+    repeats: int,
+    corpus_per_shard: int,
+    candidate: CandidateIdentity,
+    scorer: object,
+    commit_sha: str,
+    runner: str,
+    fetcher: Fetcher | None = None,
+    model_endpoint: str = DEFAULT_ENDPOINT,
+) -> QualificationShard:
+    """Freeze this shard's slice of the corpus, then replay it N times.
+
+    Capture once and replay is the whole design. The old validation arm replanned
+    and refetched for every model it scored, so two numbers could differ because
+    a publisher edited a page rather than because the weights differed. There is
+    only one model here now, and the same argument still holds against the three
+    repeats.
+    """
+    if scorer is None:
+        raise SystemExit("a qualification without a faithfulness scorer measures nothing")
+    if not isinstance(scorer, HhemScorer):
+        raise SystemExit("the faithfulness gate needs the pinned HHEM scorer")
+
+    started = time.monotonic()
+    read_url = fetcher or live_fetcher(settings)
+    inference = settings.app.models.inference
+    model = settings.app.models.summarize
+    observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
+    inputs = build_inputs(
+        model=model,
+        model_sha256=candidate.sha256_observed,
+        inference=inference,
+        truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
+        runtime_build=candidate.runtime_build,
+        chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
+        prompt=summarize.prompt_inputs(settings.app.summarize),
+        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
+        runner_class=runner_class(),
+        extractor_version=extract.EXTRACTOR_VERSION,
+        sanitizer_version=SANITIZER_VERSION,
+    )
+    fingerprint = inputs.fingerprint()
+
+    plan = _load_plan(date)
+    mine = shard_of(plan, shard=shard, shards=shards)
+    frozen, attempted = _freeze(mine, settings, read_url, keep=corpus_per_shard)
+
+    root = QUALIFICATION_ROOT / date / f"shard-{shard}"
+    for entry in frozen:
+        assemble.write_atomic(
+            root / "items" / f"{entry.row.item_id}.article.json", entry.article.to_json()
+        )
+    registered_at = assemble.utc_now()
+    assemble.write_atomic(
+        root / "corpus.json",
+        canonical_json([entry.row.model_dump(mode="json") for entry in frozen]),
+    )
+    LOG.info(
+        "corpus frozen shard=%s items=%s attempted=%s handed=%s registered_at=%s",
+        shard,
+        len(frozen),
+        attempted,
+        len(mine),
+        registered_at,
+    )
+
+    scorer_identity = ScorerIdentity(
+        scorer_id=HHEM_SCORER_ID,
+        revision=HHEM_REVISION,
+        pinned=is_pinned(HHEM_REVISION),
+        weights_sha256=weights_digest(scorer),
+        scorer_version=metrics.scorer_version(
+            scorer_id=HHEM_SCORER_ID,
+            scorer_revision=HHEM_REVISION,
+            weights_sha256=weights_digest(scorer),
+            evaluation=settings.app.evaluation,
+        ),
+    )
+
+    observations: list[ItemObservation] = []
+    scores: list[ItemScore] = []
+    # Repeats on the outside, items on the inside. The other order would let
+    # each repeat land on a warm prompt cache, and an identical reply that
+    # skipped its own prefill is weaker evidence of determinism than one that
+    # did the arithmetic again.
+    for repeat in range(1, repeats + 1):
+        for entry in frozen:
+            summary, completion, seconds = _one_call(
+                entry.article, settings, fingerprint, endpoint=model_endpoint
+            )
+            observations.append(
+                _observe(
+                    entry.article,
+                    summary,
+                    completion,
+                    repeat=repeat,
+                    inference=inference,
+                    seconds=seconds,
+                )
+            )
+            LOG.info(
+                "qualify call item=%s repeat=%s ok=%s seconds=%.1f",
+                entry.row.item_id,
+                repeat,
+                summary.status is SummaryStatus.OK,
+                seconds,
+            )
+            if repeat == 1 and summary.status is SummaryStatus.OK:
+                scores.append(_score_item(entry, summary, scorer, settings.app.evaluation))
+
+    canaries = _run_canaries(settings, fingerprint, endpoint=model_endpoint) if shard == 0 else []
+
+    result = QualificationShard(
+        version=QualificationShard.schema_version(),
+        date=date,
+        commit_sha=commit_sha,
+        runner=runner,
+        shard=shard,
+        shards=shards,
+        repeats=repeats,
+        candidate=candidate,
+        scorer=scorer_identity,
+        pipeline_fingerprint=fingerprint,
+        corpus_registered_at=registered_at,
+        planned=attempted,
+        corpus=[entry.row for entry in frozen],
+        observations=observations,
+        scores=scores,
+        canaries=canaries,
+        elapsed_seconds=time.monotonic() - started,
+    )
+    assemble.write_atomic(QUALIFICATION_ROOT / f"shard-{shard}.json", result.to_json())
+    LOG.info(
+        "qualification shard done shard=%s frozen=%s calls=%s scored=%s minutes=%.1f",
+        shard,
+        len(frozen),
+        len(observations),
+        len(scores),
+        result.elapsed_seconds / 60.0,
+    )
+    return result
+
+
+def stage_qualify_decide(
+    *, settings: config.Settings, date: str, job_budget_minutes: float, runner: str
+) -> int:
+    """Merge the shards, run the eleven gates, and say which number failed.
+
+    Returns non-zero when a gate fails. The verdict is an ESCALATE either way -
+    adopting a model changes a persisted contract - so this writes the evidence
+    and stops rather than switching anything itself.
+    """
+    paths = sorted(QUALIFICATION_ROOT.glob("shard-*.json"))
+    shards = [QualificationShard.from_json(path.read_text(encoding="utf-8")) for path in paths]
+    if not shards:
+        raise SystemExit("no qualification shard was written, so there is nothing to decide")
+
+    evaluation = settings.app.evaluation
+    corpus, outcomes = qualify.gates(
+        shards,
+        evaluation=evaluation,
+        inference=settings.app.models.inference,
+        run=settings.app.run,
+        budget_=qualify.Budget(
+            job_budget_minutes=job_budget_minutes,
+            slowest_shard_seconds=max(shard.elapsed_seconds for shard in shards),
+            slowest_item_seconds=max(
+                (o.summarize_seconds for shard in shards for o in shard.observations), default=0.0
+            ),
+        ),
+        required_canaries=len(sorted(CANARY_DIR.glob("*.json"))),
+    )
+    shortfalls = qualify.corpus_shortfalls(corpus.items, summarize=settings.app.summarize)
+    if shortfalls:
+        # Not a gate. These describe the measuring stick, and a thin corpus is a
+        # run to repeat rather than a model to reject.
+        for shortfall in shortfalls:
+            LOG.error("corpus is not adequate: %s", shortfall)
+        raise SystemExit("the frozen corpus does not meet the registered definition")
+
+    failed = [outcome for outcome in outcomes if outcome.status is GateStatus.FAILED]
+    report = QualificationReport(
+        version=QualificationReport.schema_version(),
+        date=date,
+        commit_sha=shards[0].commit_sha,
+        runner=runner,
+        candidate=shards[0].candidate,
+        scorer=shards[0].scorer,
+        pipeline_fingerprint=shards[0].pipeline_fingerprint,
+        corpus_digest=corpus_digest(corpus.items),
+        corpus_items=len(corpus.items),
+        planned=corpus.planned,
+        repeats=corpus.repeats,
+        scored=len(corpus.scores),
+        gates=outcomes,
+        diagnostics=[
+            *qualify.stratification(corpus.items, summarize=settings.app.summarize),
+            *qualify.diagnostics(corpus, evaluation=evaluation),
+        ],
+        qualified=not failed,
+        detail=(
+            "; ".join(f"{o.gate.value} measured {o.measured} against {o.threshold}" for o in failed)
+            or f"every gate passed on {len(corpus.items)} frozen articles"
+        ),
+    )
+    assemble.write_atomic(QUALIFICATION_ROOT / "report.json", report.to_json())
+
+    mean_hhem = (
+        sum(score.hhem for score in corpus.scores) / len(corpus.scores) if corpus.scores else 0.0
+    )
+    writer.append_validation(
+        config.REPO_ROOT / golden.ledger_relpath(date),
+        [
+            ValidationRow(
+                version=ValidationRow.schema_version(),
+                model_id=report.candidate.model_id,
+                is_incumbent=report.candidate.model_id == settings.app.models.summarize.id,
+                selected=report.qualified,
+                leaderboard_hhem=None,
+                leaderboard_provenance=LeaderboardProvenance.NOT_REPORTED,
+                measured_hhem=mean_hhem,
+                articles=max(len(corpus.scores), 1),
+                measured_on=date,
+                commit_sha=report.commit_sha,
+                runner=runner,
+                verdict=(
+                    ValidationVerdict.QUALIFIED
+                    if report.qualified
+                    else ValidationVerdict.NOT_QUALIFIED
+                ),
+                detail=report.detail,
+            )
+        ],
+    )
+
+    for outcome in outcomes:
+        LOG.info(
+            "gate %s %s measured=%s threshold=%s source=%s",
+            outcome.gate.value,
+            outcome.status.value,
+            outcome.measured,
+            outcome.threshold,
+            outcome.source,
+        )
+    for diagnostic in report.diagnostics:
+        LOG.info("diagnostic %s=%s n=%s", diagnostic.name, diagnostic.value, diagnostic.denominator)
+    if failed:
+        LOG.error("ESCALATE: %s", report.detail)
+        return 2
+    LOG.info("qualified model=%s corpus=%s", report.candidate.model_id, report.corpus_digest[:12])
+    return 0
+
+
 # --- assemble ----------------------------------------------------------------
 
 
@@ -1191,9 +1758,7 @@ def stage_assemble(
     stamps = append_new(FINGERPRINTS, _stamps(items_dir))
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
-    publish_telemetry.publish(
-        state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry"
-    )
+    publish_telemetry.publish(state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry")
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
         "new_fingerprints=%s",
@@ -1319,7 +1884,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
     parser.add_argument(
         "stage",
-        choices=("plan", "shards", "work", "route", "assemble", "run", "validate", "decide"),
+        choices=(
+            "plan",
+            "shards",
+            "work",
+            "route",
+            "assemble",
+            "run",
+            "validate",
+            "decide",
+            "qualify",
+            "qualify-decide",
+        ),
     )
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
@@ -1357,6 +1933,41 @@ def main(argv: Sequence[str] | None = None) -> int:
             "measurement needs."
         ),
     )
+    parser.add_argument(
+        "--repeats",
+        type=int,
+        default=3,
+        help="Deterministic repeats per frozen article. The determinism gate reads them.",
+    )
+    parser.add_argument(
+        "--corpus-per-shard",
+        type=int,
+        default=10,
+        help="How many frozen articles one qualification shard replays.",
+    )
+    parser.add_argument(
+        "--candidate-revision",
+        default="",
+        help="The immutable repository revision the candidate weights were taken from.",
+    )
+    parser.add_argument(
+        "--candidate-bytes",
+        type=int,
+        default=0,
+        help="The byte count the adoption target declares for the candidate GGUF.",
+    )
+    parser.add_argument(
+        "--weights",
+        type=Path,
+        default=None,
+        help="The GGUF the runtime opened. Its bytes are digested, not the config's claim.",
+    )
+    parser.add_argument(
+        "--job-budget-minutes",
+        type=float,
+        default=330.0,
+        help="The dispatch's own per-job bound. The budget gate is measured against it.",
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -1383,6 +1994,30 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "decide":
         return stage_decide(
             settings=settings, date=date, commit_sha=args.commit, runner=args.runner
+        )
+
+    if args.stage == "qualify":
+        stage_qualify(
+            settings=settings,
+            date=date,
+            shard=args.shard,
+            shards=args.shards,
+            repeats=args.repeats,
+            corpus_per_shard=args.corpus_per_shard,
+            candidate=_candidate_identity(settings, args),
+            scorer=_scorer(not args.no_faithfulness),
+            commit_sha=args.commit,
+            runner=args.runner,
+            fetcher=read_url,
+        )
+        return 0
+
+    if args.stage == "qualify-decide":
+        return stage_qualify_decide(
+            settings=settings,
+            date=date,
+            job_budget_minutes=args.job_budget_minutes,
+            runner=args.runner,
         )
 
     if args.stage == "shards":

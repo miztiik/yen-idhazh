@@ -366,13 +366,33 @@ supersedes. Re-point those citations here when the collisions are resolved.
 
 ## Row #10 - Qualify the candidate on machine gates
 
-- **Scope:** Run the registered machine gate set against Qwen3.5-9B-Q4_K_M on a deterministic paired corpus, and commit the evidence.
+- **Owner ruling 2026-08-26 (`CLAUDE.md` section 0):** "no need of comparison
+  against identical sources for 9b". There is no paired replay, no side-by-side
+  8B/9B run, and no incumbent number anywhere in the arithmetic. The candidate
+  is qualified alone. This row is amended to match; the gate table below
+  replaces the paired one it superseded.
+- **Andre ruled the consequence, 2026-08-26.** Re-basing the dropped gates on
+  the already-committed 8B rows in `state/scores.csv` is confounded and is
+  forbidden. Counted the same day: 1177 data rows, every one at
+  `qwen3-8b-q4-k-m`, across three `scorer_version` blocks; the largest
+  fixed-scorer fixed-fingerprint segment is 1021 rows over **two** distinct
+  run-days. Every one of those metrics moves with article mix, `HHEM_REVISION`
+  was the mutable string `main` so `scorer_version` does not prove one
+  instrument, and the rows were written while the fingerprint still digested
+  placeholders. So the surviving gates are absolute, and every threshold is
+  read from something already committed.
+- **Scope:** Freeze a corpus of Article payloads once, replay it three times
+  through one model, run the live injection canaries, and commit the evidence.
 - **Files touched:**
-  - `.github/workflows/validate.yml` - capture once and replay both models against identical input hashes; preserve failures in the denominator; pin the scorer
+  - `.github/workflows/validate.yml` - plan once, capture once per shard, replay N, decide on the merged evidence; one model; weights from an immutable revision
+  - `backend/idhazh/contracts/qualification.py` - the shard payload and the report
+  - `backend/idhazh/evals/qualify.py` - the eleven gates and the diagnostics
+  - `backend/idhazh/cli.py` - the `qualify` and `qualify-decide` stages
   - `backend/idhazh/contracts/validation_row.py` - `not_reported` leaderboard provenance
+  - `backend/idhazh/contracts/fingerprint.py`, `backend/idhazh/fingerprint.py` - the five deferred logit movers
+  - `backend/idhazh/evals/hhem.py` - the scorer pin and the observed weights digest
   - `state/validation-<date>.csv` - the committed result
-  - `tests/fixtures/` - the paired corpus and the live canaries
-  - `docs/reference/measurements.md`
+  - `docs/reference/measurements.md`, `docs/how-to/evaluate-new-summarizer-model.md`
 - **Acceptance gates:** every HARD gate below passes; `ruff`; `mypy --strict`; full backend suite; contract drift gate.
 - **HARD gates (block the merge):**
 
@@ -382,34 +402,60 @@ supersedes. Re-point those citations here when the collisions are resolved.
   | Schema validity | `finish_reason = stop`, schema-valid JSON, no repair path, 100% of attempts | Andre |
   | Injection canaries | every `must_not_survive` marker absent and every `must_survive` fact present, on live candidate calls | Andre, Rule #11 |
   | Determinism | `determinism_violation = 0` over three repeats; identical `output_digest` | Andre |
-  | Publishable length | every `summary_word_count` inside [`summary_words_min`, `summary_words_max`] | Andre |
-  | Paired denominator | at least 20 common successful pairs on identical input hashes; full attempted denominator recorded | Andre |
-  | Unsupported numbers | paired total must not exceed the incumbent. Tolerance zero | Andre |
-  | Hedges and lead coverage | `hedge_dropped` and the share below `lead_coverage_min` do not rise above the incumbent's paired value | Andre |
-  | Copying | `extractiveness` and `verbatim_run` must not rise while `hhem` holds flat or up | Andre |
-  | Faithfulness floor | mean `hhem` not below the incumbent by more than `validation_drop_max` | Andre |
+  | Publishable length | every `summary_word_count` inside [`summary_words_min`, `summary_words_max`], read from config | `config/idhazh.json` |
   | Context fit | complete chat-templated request plus `max_output_tokens` fits `n_ctx`; `fits_context` over-reserves | Carmack |
-  | Identity | GGUF SHA-256 equals the target digest at the pinned revision | Carmack |
+  | Identity | GGUF SHA-256 `03b74727...52b7e8` at revision `3885219b...d598a5`, repo `unsloth/Qwen3.5-9B-GGUF`, file `Qwen3.5-9B-Q4_K_M.gguf`, 5,680,522,464 bytes | `docs/reference/measurements.md` |
   | Budget | every qualification and production job inside 330 minutes with measured worst-case margin | Carmack, Rule #2 |
+  | Scored denominator | >= `evaluation.validation_articles` items summarized and scored from the frozen corpus; the full attempted denominator recorded; success rate >= `run.success_floor_pct` | `config/idhazh.json` |
+  | Faithfulness floor | mean `hhem` over the scored items >= `evaluation.band_medium_min`. **Precondition:** HHEM pinned to an immutable revision with the observed weight digest on every row - without that this gate measures an unknown instrument | `config/idhazh.json` |
+  | Brief copying ceiling | every brief-band item's `verbatim_run` <= `evaluation.brief_compression_ceiling` | `config/idhazh.json` |
 
-- **DIAGNOSTIC (recorded, does not block):** `compression`, `hhem_delta`, `evidential_density`, `speculative_density`, generated-title fallback rate, band adherence, decode throughput.
-- **Oracle:** Both models score the identical list of input hashes, and one candidate failure remains in the denominator rather than vanishing from it.
+- **DIAGNOSTIC (recorded with a denominator, never blocks):** unsupported-number
+  count and rate; `hedge_dropped` count and rate; share below
+  `lead_coverage_min`; mean and median extractiveness and `verbatim_run` on
+  non-brief items; the `hhem` distribution, spread and band counts;
+  `compression`; `hhem_delta`; `evidential_density`; `speculative_density`;
+  generated-title fallback rate; band adherence; decode throughput.
+- **Corpus definition (frozen Article payloads, not URLs and not a live day's plan):**
+  - Fetch, extract and sanitize once at one commit; hash the model-visible truncated text and the sanitized full text; persist under gitignored `backend/var/`; replay those exact bytes.
+  - Pairing is gone; refetching is still forbidden. The three deterministic repeats see identical bytes.
+  - Pre-registered by hash before any output is viewed - the ordering is enforced inside the stage, not promised in a document.
+  - Stratified across all four `summarize.bands` tiers, >= 3 items per tier, plus >= 2 items over `extract.truncation_cap_tokens` and >= 2 brief-path items. A corpus that misses this is a run to repeat, not a model to reject, so the shortfall is named and no gate is evaluated.
+  - 30 attempted so a success floor still clears 20 scored; 3 deterministic repeats per item; the canary set once. Every failure stays in the denominator.
+  - One model runs.
+- **Controls held fixed:** prompt, output schema, `temperature: 0.0`,
+  `top_p: 1.0`, `seed: 0`, thinking off, truncation cap 2500, `n_ctx` 8192,
+  `n_batch`/`n_ubatch` 512, `n_threads` 4, Q4_K_M, no vision projector. The
+  workflow copies committed `config/` and rewrites `models.summarize` only, so
+  every control is the committed one by construction.
+- **Oracle:** A failing run names the gate, its measured value, its threshold
+  and where the threshold was read from. A passing run reports the corpus digest
+  and every diagnostic with its denominator.
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | `validation_switch_margin` decides nothing. HHEM is the alarm, not the selector. | Andre |
   | 2 | No LLM judge, at any point (`CLAUDE.md` section 0a). | Andre |
-  | 3 | Controls held fixed across the comparison: prompt, output schema, `temperature: 0.0`, `top_p: 1.0`, `seed: 0`, thinking off, truncation cap 2500, `n_ctx` 8192, `n_batch`/`n_ubatch` 512, `n_threads` 4, Q4_K_M, no vision projector. | Andre |
-  | 4 | The candidate is never made to pass by moving a threshold, enabling thinking, adopting vendor sampling, taking a lower quant, or raising a timeout. | Andre |
+  | 3 | The candidate is never made to pass by moving a threshold, enabling thinking, adopting vendor sampling, taking a lower quant, or raising a timeout. | Andre |
+  | 4 | The relative gates are demoted to diagnostics rather than re-based on committed 8B history. Two run-days against a `label_min_run_days` of 10, a different article mix each day, and a scorer whose revision could move - that is not a baseline. | Andre |
+  | 5 | The five deferred logit movers are digested in this row, folded into one `runtime_flags` spelling, so the qualification stamps with the complete input set and rides row 11's reset. | Fowler |
+  | 6 | HHEM pins to revision `8e4a2e6e96c708cc76c2344f7e4757df2515292c` and `weights_digest` hashes the loaded tensors, not the name they were asked for. | Andre |
+  | 7 | Missing leaderboard provenance stays `not_reported`, never zero. | Fowler |
+  | 8 | The success rate is taken over the frozen corpus, not over the addresses the capture consumed. A dead link is recorded as `planned` beside the rate; failing a candidate for it would make the gate a weather report. | Andre |
+  | 9 | The qualification shards. Three jobs of ten frozen articles keeps the worst job near a third of its bound, so the verdict does not depend on the precision of a derived per-item cost (Rule #10). | Carmack |
 
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
   | 1 | A pre-registered blind human selector with a pass threshold and tie handling | Owner approval already selected the model. A human session records a comparison; it does not choose | Andre |
-  | 2 | Refetch each URL per model | Two models would score different bytes and the comparison would measure the web | Andre |
+  | 2 | Refetch each URL per repeat | Three repeats would score different bytes and the determinism gate would measure the web | Andre |
   | 3 | `leaderboard_hhem` as a required float | The candidate has no reported value. Missing provenance stays `not_reported`, never zero | Fowler |
+  | 4 | Re-base the dropped gates on `state/scores.csv` | Two run-days, a moving article mix and an unpinned scorer. A threshold from that is a number dressed as a baseline | Andre |
+  | 5 | Repeat each item three times back to back | Repeats two and three would land on a warm prompt cache and skip their own prefill, which is weaker evidence of determinism than doing the arithmetic again | Andre |
+  | 6 | Upload the frozen article payloads as a cross-job artifact | The repository is public and the pipeline does not republish article bodies (`CLAUDE.md` section 0a). Only hashes and measurements travel | Fowler |
+  | 7 | One job for all thirty articles | Ninety inference calls at a derived 176 s is 264 minutes against a 330-minute bound, and the 176 s is an estimate with no measured spread. Sharding removes the dependence on it | Carmack |
 
 ## Row #11 - Adopt the 9B and retire the 8B
 

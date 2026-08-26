@@ -15,10 +15,11 @@
     "quantisation": "Q4_K_M",
     "runner_class": "ubuntu-latest-4vcpu",
     "runtime_build": "llama.cpp-b4200",
+    "runtime_flags": "cache_type_k=runtime-default;cache_type_v=runtime-default;flash_attention=runtime-default;n_parallel=1;n_threads_batch=runtime-default",
     "sampling": "temperature=0.0000;top_p=1.0000;seed=0;max_output_tokens=250;thinking=off",
     "sanitizer_version": "idhazh-sanitizer-1",
     "truncation_cap_tokens": 2500
   },
-  "pipeline_fingerprint": "6a00f4e0743f0dbc3346b9c84546c845305a2a67726cc33f449c88a137a967da",
+  "pipeline_fingerprint": "517e817be6d719645bdc177efea5e15f3e64bf6da5685de1bbd87bd0e9332c93",
   "version": "2026-08-21T02:00"
 }
