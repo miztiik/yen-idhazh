@@ -25,9 +25,9 @@
       "why": "Runtime and app shell and nothing route-specific. This is the floor every other route sits on."
     },
     "/archive/": {
-      "bytes": 44451,
-      "measured": "2026-08-25",
-      "why": "Runtime and shell plus the date-index route. It carries no reader item chunk, because the archive lists days rather than stories."
+      "bytes": 44554,
+      "measured": "2026-08-26",
+      "why": "Runtime and shell plus the date-index route, now carrying the encoder guard: the archive refuses a day whose vectors name a different encoder, which costs the identifier, the version, the width and the comparison that reads them (+103 B on 2026-08-26). It still carries no reader item chunk, because the archive lists days rather than stories."
     },
     "/console/": {
       "bytes": 64438,

@@ -32,13 +32,22 @@ if TYPE_CHECKING:
 
 EMBEDDER_ID: Final = "all-minilm-l6-v2-quantized"
 
-# Relative to the repository root, and the same file the published page fetches.
-# `frontend/static/` rather than `frontend/public/`: the latter is where the
-# pipeline writes its payloads, which the site reads at BUILD time through the
-# filesystem. Only `static/` is copied into the served bundle, so a vendored
-# asset a browser fetches at runtime has to live there. POSIX and digest-free,
-# per CLAUDE.md section 2.
-MODEL_RELDIR: Final = "frontend/static/assist/models/all-MiniLM-L6-v2"
+# The date PROVENANCE.md records these weights were fetched, carried in the path
+# the browser loads them from. Different weights are then a different URL, so a
+# cached copy of the old encoder can never answer vectors the new one wrote.
+# Moving it costs every returning searcher the whole download again, so it moves
+# when the weights move and at no other time. The browser's copy is
+# `ENCODER_VERSION` in `frontend/src/lib/assist/encoder.ts`.
+ENCODER_VERSION: Final = "2026-08-22"
+
+# Relative to the repository root, and the same directory the published page
+# fetches. `frontend/static/` rather than `frontend/public/`: the latter is where
+# the pipeline writes its payloads, which the site reads at BUILD time through
+# the filesystem. Only `static/` is copied into the served bundle, so a vendored
+# asset a browser fetches at runtime has to live there. Built from the two
+# constants above so the path cannot disagree with the identifier it serves.
+# POSIX and digest-free, per CLAUDE.md section 2.
+MODEL_RELDIR: Final = f"frontend/static/assist/models/{EMBEDDER_ID}/{ENCODER_VERSION}"
 ONNX_RELPATH: Final = f"{MODEL_RELDIR}/onnx/model_quantized.onnx"
 TOKENIZER_RELPATH: Final = f"{MODEL_RELDIR}/tokenizer.json"
 
