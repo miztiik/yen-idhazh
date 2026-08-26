@@ -66,6 +66,23 @@ def headroom_mb(size: SiteSize) -> float:
     return PAGES_HARD_CAP_MB - size.megabytes
 
 
+def budget_alarm(size: SiteSize, config: RetentionConfig) -> str | None:
+    """The alarm's words for the run log, or None when the site is inside budget.
+
+    The alarm only reports - it fails no build and deletes nothing - so the run
+    that meets it needs a line it can act on: the size, the alarm point it
+    crossed, and the headroom left to the platform cap. Promoting this line to a
+    GitHub issue is a workflow step not yet built.
+    """
+    if not over_budget(size, config):
+        return None
+    return (
+        f"published site is {size.megabytes:.0f} MB, past the "
+        f"{config.site_budget_mb} MB alarm point, with {headroom_mb(size):.0f} MB "
+        f"left to the {PAGES_HARD_CAP_MB} MB Pages cap"
+    )
+
+
 def cutoff(today: date, months: int) -> date | None:
     """None means retention is off, which is what ships."""
     if months < 0:
