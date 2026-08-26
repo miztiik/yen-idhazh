@@ -2,7 +2,7 @@
   "$defs": {
     "SearchIndexEntry": {
       "additionalProperties": false,
-      "description": "One published item, as browsing and searching need it.\n\nNo summary, no source, no band. Carrying the summary would take an entry\nfrom about 151 bytes to about 850 and a month from 471 KB to roughly 2.7 MB\ngzipped, and it would charge every browsing visitor the full text of every\nitem in the month. A result renders by fetching the day payload it names -\nat most one fetch per distinct day on screen, and days already open are\nreused.",
+      "description": "One published item, as browsing and searching need it.\n\nNo summary, no source, no band. Measured 2026-08-26 over 2,237 committed\nitems: adding the summary takes an entry from 50.03 gzipped bytes to 317.52,\nwhich is 6.35 times, and a 30-day month at the observed rate from 518 KB to\n3.21 MB. It also charges every browsing visitor the full text of every item\nin the month. A result renders by fetching the day payload it names - at\nmost one fetch per distinct day on screen, and days already open are reused.",
       "properties": {
         "date": {
           "pattern": "^\\d{4}-\\d{2}-\\d{2}$",

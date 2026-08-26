@@ -1712,6 +1712,127 @@ same base64-in-JSON shape - 2.4 percent apart, which is the page's own markup
 between them. Use 322.55 for a JSON shape and 249.82 for a `.bin`; the 315 was
 a good indirect read and is not the one to quote.
 
+## The month search index, as written
+
+The section above sized a shape nobody had built. This one measures the file
+that now exists: `frontend/public/assist/index/2026-08.json` and its sibling
+`2026-08.bin`, written by `assemble.rebuild_search_index`.
+
+Hardware: Intel Core i7-1265U, Windows 11, 12 logical CPUs, CPython 3.12.12.
+Date: 2026-08-26. Corpus: the six committed days at commit `d0fd926` -
+**2,237 items, 2,235 of which carry a vector**. Method: rebuild the shard from
+the committed day payloads, then measure the bytes on disk with the same
+`gzipped` helper `backend/utilities/index_sizing.py` uses, so both sections are
+on one unit. `gzip -5` is what the Pages edge serves; `gzip -9` is the unit
+every page-weight number elsewhere on this page uses.
+
+**The sha is part of the measurement.** The scheduled pipeline rewrites a day
+and pushes it, so a byte count against `frontend/public/` is stale within the
+hour. These numbers were taken again after the last merge of `origin/main`, and
+they moved: the same run at `e4affe6` had 2,121 items and a 106,365-byte index.
+The per-entry rate barely moved with it, 50.15 to 50.03, which is the useful
+part.
+
+### The bijection holds
+
+Deterministic file arithmetic, so the spread is zero and n=1.
+
+| Quantity | Count |
+| --- | ---: |
+| Committed items in 2026-08 | 2,237 |
+| Entries in the index | **2,237** |
+| Entries carrying a byte offset | 2,235 |
+| Entries carrying an explicit null | 2 |
+| Vectors in the day payloads | 2,235 |
+| Offsets whose bytes were dequantised and compared | 2,235 |
+| **Mismatches** | **0** |
+
+Every offset's 384 bytes dequantise to the same unit vector `from_base64` gives
+for that item's committed base64. The `.bin` is exactly 858,240 bytes, which is
+2,235 times 384 with nothing over. Rebuilding the shard twice produces
+byte-identical `.json` and `.bin`, which is the guarantee that lets there be one
+code path instead of an incremental one and a repair one.
+
+### What it costs on the wire
+
+| File | Raw | `gzip -5` | `gzip -9` | Per entry at `gzip -5` |
+| --- | ---: | ---: | ---: | ---: |
+| `2026-08.json` | 378,869 | **111,927** (109.3 KB) | 109,196 | **50.03** |
+| `2026-08.bin` | 858,240 | **558,278** (545 KB) | 558,278 | 249.79 |
+
+**An entry costs 50.03 gzipped bytes, 10 percent more than the 45.5 the shape
+study priced.** The study used one-letter keys and had no vector field; a real
+entry spells `date`, `item_id`, `title`, `vertical` and `vector`. gzip absorbs
+most of the repetition - the raw difference is 169.36 against 133.31, which is
+27 percent - so the honest reading is that real key names cost about a third of
+what they look like they cost.
+
+**The vector file confirms the earlier number to two decimal places**: 249.79
+here against 249.82 there, and `gzip -5` and `gzip -9` are the same byte count
+because quantised embedding bytes are close enough to random that the extra
+search finds nothing.
+
+Projected onto a 30-day month at the two rates
+([Sizing the archive index](#sizing-the-archive-index) has where the rates come
+from):
+
+| Rate | Items a month | Browse index | Vector file |
+| --- | ---: | ---: | ---: |
+| observed, 353.5 items a day | 10,605 | **518 KB** | 2.53 MB |
+| structural ceiling, 800 a day | 24,000 | **1.15 MB** | 5.72 MB |
+
+Both sit under the triggers written down in
+[../architecture/publishing/layout.md](../architecture/publishing/layout.md#when-to-reconsider-the-month):
+1.5 MB for the browse index and 8 MB for the vectors.
+
+### What the summary would have cost
+
+The question was whether a search result could render straight out of the index
+instead of fetching the day payload it names. Same 2,237 entries, same
+serializer, with `summary` added to each:
+
+| Shape | Raw | `gzip -5` | Per entry | A month, observed | A month, at the ceiling |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| As shipped | 378,869 | 111,927 | 50.03 | 518 KB | 1.15 MB |
+| With the summary | 1,976,870 | 710,301 | **317.52** | **3.21 MB** | **7.27 MB** |
+
+**Carrying the summary is 6.35 times the entry**, and it puts a month past the
+1.5 MB trigger at the observed rate, never mind the ceiling. It also charges
+every visitor who only browses the full text of every item in the month. Ten
+results spanning ten days cost at most ten day-payload fetches instead, and a
+day already open is reused.
+
+### What the rebuild costs
+
+Answer 4 of the plan made the rebuild the only path, so the cost is paid on
+every assemble run. Seven repeats per row on a shared developer machine with
+four other agents building and testing on it, so take the fastest as the
+uncontended cost and the median as what a busy machine does to it.
+
+| Days | Items | Fastest | Median | Fastest, microseconds an item |
+| ---: | ---: | ---: | ---: | ---: |
+| 1 | 4 | 6.4 ms | 7.9 ms | 1,600 |
+| 2 | 14 | 6.8 ms | 8.3 ms | 489 |
+| 3 | 161 | 12.5 ms | 14.6 ms | 77.5 |
+| 4 | 892 | 42.8 ms | 47.0 ms | 48.0 |
+| 5 | 1,616 | 68.7 ms | 92.5 ms | 42.5 |
+| 6 | 2,237 | **122.0 ms** | 224.2 ms | 54.5 |
+
+A separate timed run of the whole month on the same corpus got **88 ms fastest,
+112 ms median, 142 ms slowest** over seven repeats, which is 39.3 microseconds
+an item. Take the two runs together: **about 40 to 55 microseconds an item once
+past a few hundred**, holding across a 2.5x range of month size. The tiny days
+are fixed per-file cost, not a different rate.
+
+**So a month at the structural ceiling - 24,000 items - projects to about one
+second, and to 1.3 seconds on the contended readings.** That is a projection
+from a measured rate, not a measurement.
+
+Against the assemble job's 20-minute timeout that is **0.1 percent of the
+budget** (Rule #2). Five runs a day spend about five seconds a day on it at the
+ceiling. The payloads it reads are the same ones assemble already opens, so the
+cost is a second parse rather than a second download.
+
 ## The published ledger
 
 **Measured 2026-08-25** on a developer machine (i7-1265U, Windows, CPython

@@ -16,12 +16,12 @@ load, which the published layout rejects on sight. A month shard stops growing
 when the month ends, and a page still costs a bounded number of requests.
 
 **The vectors are raw bytes in a sibling `<YYYY-MM>.bin`, not base64 in here.**
-Measured 2026-08-26 over 2,119 committed vectors: raw int8 transfers at 249.82
+Measured 2026-08-26 over 2,235 committed vectors: raw int8 transfers at 249.79
 gzipped bytes an item against 322.55 for base64 inside JSON, which is 22.5
 percent less. The split also decides who pays - every visitor browsing the month
 downloads this JSON, and only a reader who searches downloads the vectors.
 
-**`vector` is a byte offset or null, never a position.** Two of the 2,121
+**`vector` is a byte offset or null, never a position.** Two of the 2,237
 committed items carry no vector, and after the token-budget work some items will
 deliberately have none. Omitting them would take them out of the browse list as
 well as out of search, which is a bigger loss than not being searchable. A
@@ -54,12 +54,12 @@ VectorOffset = Annotated[int, Field(ge=0)]
 class SearchIndexEntry(Model):
     """One published item, as browsing and searching need it.
 
-    No summary, no source, no band. Carrying the summary would take an entry
-    from about 151 bytes to about 850 and a month from 471 KB to roughly 2.7 MB
-    gzipped, and it would charge every browsing visitor the full text of every
-    item in the month. A result renders by fetching the day payload it names -
-    at most one fetch per distinct day on screen, and days already open are
-    reused.
+    No summary, no source, no band. Measured 2026-08-26 over 2,237 committed
+    items: adding the summary takes an entry from 50.03 gzipped bytes to 317.52,
+    which is 6.35 times, and a 30-day month at the observed rate from 518 KB to
+    3.21 MB. It also charges every browsing visitor the full text of every item
+    in the month. A result renders by fetching the day payload it names - at
+    most one fetch per distinct day on screen, and days already open are reused.
     """
 
     date: DateStamp

@@ -348,7 +348,7 @@ class TestTheWriter:
         assert built.dimensions == DIMENSIONS
 
     def test_an_entry_carries_no_summary(self) -> None:
-        """Carrying it would take a month from 471 KB to about 2.7 MB gzipped."""
+        """Measured 2026-08-26: carrying it is 6.35 times the entry."""
         assert "summary" not in SearchIndexEntry.model_fields
         assert set(SearchIndexEntry.model_fields) == {
             "date",
