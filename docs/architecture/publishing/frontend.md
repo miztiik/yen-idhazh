@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -15,6 +15,8 @@ Three consequences, and each one removes a whole class of problem:
 - **The reading path makes zero runtime requests.** One document and it is done - well inside the two-request budget, and the page works with JavaScript off.
 - **There is no loading state to design**, and therefore no spinner to be tempted by. The payload loader still exists as exactly one module; it runs in Node instead of in a browser.
 - **A payload that fails its contract fails the build.** What would have been a runtime error a reader discovers becomes a build error nobody ships.
+
+**Two pages fetch, and both fetch a month.** The console reads older telemetry shards when an operator pans back, and the archive reads the month index behind its story list. Neither is on the reading path: a day page, a topic page and the home page still make no request at all. The rule is about what a reader waits for to read the news, and it is unchanged.
 
 The loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives.
 
@@ -144,6 +146,36 @@ The owner asked for it. What ships is the narrow defensible version, which is a 
 - The query is untrusted reader input matched against untrusted payload text: compared with a lowercased substring test, and never interpolated into a selector, a class, a URL or markup.
 
 Real cross-day search belongs on the archive, later, where the question "where was that thing about the reactor?" is genuinely unanswerable by scrolling.
+
+## The archive lists stories, and fetches them a month at a time
+
+`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on this checkout at `3a38497`, six committed days and 2,237 items: **1,766,580 gzipped bytes**, growing 140 to 170 KB with every published day. The page a reader opened to find one story carried all of them.
+
+What it renders now, top to bottom:
+
+- The counts and the retention promise: "6 days, 2237 stories. Nothing here is deleted."
+- **The days as one compact row** of short dates. "The whole of Tuesday" is still a real request, and the row grows about 60 bytes a day, but a full date per line is an index rather than reading.
+- **The stories**, newest day first, each a link to its own anchor on the day that published it, with the date and the topic beneath.
+- **`Show 25 more`** - the same explicit control the day list and the console's failure list already use, sized by `ui.archive_page_size`.
+
+**The stories are fetched, not inlined**, from `assist/index/<YYYY-MM>.json` staged into `static/`. [layout.md](layout.md) owns why, and the short version is that inlining them would leave the page growing per story, which is the defect the index exists to end. Paging back into an older month fetches that month; a month already in hand is not fetched twice.
+
+Four rulings behind the shape, all Jony's:
+
+- **No sort control.** Per-reader ordering is forbidden by [layout.md](layout.md) - two people at one URL see one order.
+- **No infinite scroll.** It takes the footer away from the reader and has no resting state.
+- **The header states the retention window**, which the page did not do and which [layout.md](layout.md) requires before anything is deleted.
+- **The per-day story count and the partial flag left the day row.** A count beside every date is what turns a compact row back into a wall, and a day page states its own count. Run health belongs to the console.
+
+The degraded states, and each one is designed rather than discovered:
+
+| State | What ships |
+| --- | --- |
+| No index, or a month that will not load | The day row, and one line: "The story list could not be loaded. Open a day above to read it." |
+| JavaScript off | The day row, and a `<noscript>` line saying the list needs it. The day links are prerendered, so navigation still works |
+| Nothing published at all | "Nothing has been published yet.", as before |
+
+**Search is untouched by this and still eager.** The whole day payloads are still on the page for it. They leave in their own commit, so reverting the list leaves search working and reverting search leaves the list working.
 
 ## The archive names its encoder, and refuses vectors from any other
 

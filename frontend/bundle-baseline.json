@@ -25,9 +25,9 @@
       "why": "Runtime and app shell and nothing route-specific. This is the floor every other route sits on."
     },
     "/archive/": {
-      "bytes": 44554,
-      "measured": "2026-08-26",
-      "why": "Runtime and shell plus the date-index route, now carrying the encoder guard: the archive refuses a day whose vectors name a different encoder, which costs the identifier, the version, the width and the comparison that reads them (+103 B on 2026-08-26). It still carries no reader item chunk, because the archive lists days rather than stories."
+      "bytes": 45719,
+      "measured": "2026-08-27",
+      "why": "Runtime and shell plus the archive route, which now lists stories instead of dates: the month-index fetch and decode, the newest-first regrouping, the paged list and its Show-more control, and the encoder guard it already carried. What the bytes buy is a page that stops growing with every published story - it fetches one month at a time instead of inlining the corpus. Derived, not pasted: an untouched origin/main build on this tree read /archive/ at 44,543 B and the changed one at 45,708 B, so the change is +1,165 B and 44,554 + 1,165 is what CI should see. A local Windows build reads 10 to 73 B under CI's Linux npm ci on every route, which is why the delta is the measurement and the absolute is not."
     },
     "/console/": {
       "bytes": 66158,

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
- * Stage the pipeline's rendered visuals and public telemetry into `static/`
- * before the build.
+ * Stage the pipeline's rendered visuals, public telemetry and month indexes
+ * into `static/` before the build.
  *
  * `frontend/public/` is where `backend/` writes, and the page reads those
  * payloads through the filesystem at build time - so the JSON never needs
@@ -21,7 +21,9 @@
  *
  * Only image files are copied from digest payloads. The JSON payloads stay
  * unserved on purpose. Telemetry is different: the console fetches a projected
- * CSV that has already dropped URL keys, canonical URLs and free text.
+ * CSV that has already dropped URL keys, canonical URLs and free text. The
+ * month index is different for the same reason the telemetry shard is - the
+ * archive fetches a month at a time so its page stops growing with the corpus.
  */
 
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -39,11 +41,39 @@ const telemetrySource = process.env.TELEMETRY_ROOT
 	? resolve(process.env.TELEMETRY_ROOT)
 	: join('public', 'telemetry');
 const telemetryTarget = join('static', 'telemetry');
+// Derived from the digest root rather than given its own switch, because the
+// index is a projection of exactly those days. One switch cannot leave a
+// canary build serving the real archive's stories.
+const indexSource = resolve(source, '..', 'assist', 'index');
+const indexTarget = join('static', 'assist', 'index');
 
 // Generated, so it is rebuilt rather than accumulated. A stale visual from a
 // previous build would be served beside a payload that no longer names it.
 rmSync(target, { recursive: true, force: true });
 rmSync(telemetryTarget, { recursive: true, force: true });
+// Only the index directory. `static/assist/` also holds the committed encoder
+// and its wasm, which are authored files rather than staged ones.
+rmSync(indexTarget, { recursive: true, force: true });
+
+function stageIndexes() {
+	if (!existsSync(indexSource)) {
+		console.log(`month index: no index tree at ${indexSource}, nothing to stage.`);
+		return;
+	}
+	let staged = 0;
+	for (const name of readdirSync(indexSource)) {
+		// The browse list reads the JSON. The sibling `.bin` carries the vectors
+		// and nothing fetches it yet, so staging it would be megabytes a reader
+		// downloads for nothing.
+		if (!/^\d{4}-\d{2}\.json$/.test(name)) continue;
+		mkdirSync(indexTarget, { recursive: true });
+		cpSync(join(indexSource, name), join(indexTarget, name));
+		staged += 1;
+	}
+	console.log(`month index: staged ${staged} month(s) into static/assist/index.`);
+}
+
+stageIndexes();
 
 if (!existsSync(source)) {
 	console.log(`rendered visuals: no payload tree at ${source}, nothing to stage.`);

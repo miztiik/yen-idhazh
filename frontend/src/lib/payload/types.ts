@@ -83,3 +83,30 @@ export interface DigestDay {
 	items: DigestItem[];
 	embeddings: DigestEmbeddings | null;
 }
+
+/** One published story as the archive's list reads it, mirroring
+ * `schemas/search-index.schema.json`.
+ *
+ * No summary, no source and no band: the entry is what a list needs to name a
+ * story, and everything else is one click away on the day page it links to.
+ */
+export interface SearchIndexEntry {
+	date: string;
+	item_id: string;
+	title: string;
+	vertical: string;
+	/** Byte offset into the sibling vector file, or null when the story has none.
+	 * Nothing reads it yet - the archive list browses, it does not search. */
+	vector: number | null;
+}
+
+/** `assist/index/<YYYY-MM>.json` - one month of published stories. */
+export interface SearchIndex {
+	version: string;
+	month: string;
+	model_id: string;
+	dimensions: number;
+	dtype: 'int8';
+	scale: number;
+	entries: SearchIndexEntry[];
+}

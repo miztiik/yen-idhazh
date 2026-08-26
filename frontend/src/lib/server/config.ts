@@ -23,6 +23,7 @@ export interface UiConfig {
 	site_title: string;
 	tagline: string;
 	read_mark_days: number;
+	archive_page_size: number;
 }
 
 /** What the console needs to say whether a run went well. */
@@ -74,7 +75,8 @@ const DEFAULTS: UiConfig = {
 	repo_url: 'https://github.com/miztiik/yen-idhazh',
 	site_title: 'yen-idhazh',
 	tagline: 'A daily digest that checks its own work.',
-	read_mark_days: 7
+	read_mark_days: 7,
+	archive_page_size: 25
 };
 
 const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70 };
