@@ -40,6 +40,7 @@ from idhazh.fingerprint import (
     read_ledger,
     runner_class,
     runtime_build,
+    runtime_flags_spelling,
     sampling_spelling,
     text_digest,
 )
@@ -48,10 +49,9 @@ FIXTURE = CONTRACT_FIXTURES_DIR / "fingerprint-row" / "first-seen.json"
 HEX64 = re.compile(r"[0-9a-f]{64}")
 
 #: Ruled on 2026-08-25: these five change the arithmetic, so leaving them out
-#: of the stamp is a blind spot. They ride the model swap in
-#: `TODO/20260825-qwen35-9b-adoption-plan.md`, which resets every fingerprint
-#: anyway. Until then each one stays flagged, and this list is what stops a
-#: quiet downgrade to "safe".
+#: of the stamp was a blind spot. Row #10 digested them on 2026-08-26, folded
+#: into `runtime_flags`, riding the model swap's fingerprint reset rather than
+#: spending a second one. This list is what stops a quiet reversal.
 RULED_LOGIT_MOVERS: Final[frozenset[str]] = frozenset(
     {"cache_type_k", "cache_type_v", "flash_attention", "n_parallel", "n_threads_batch"}
 )
@@ -193,10 +193,48 @@ def test_a_ruled_blind_spot_is_digested_or_still_flagged(knob: str) -> None:
     )
 
 
-def test_the_sampling_knobs_are_digested_through_the_spelling() -> None:
-    """They reach the stamp folded into one field, not under their own names."""
+def test_the_folded_knobs_are_digested_through_their_spellings() -> None:
+    """They reach the stamp folded into two fields, not under their own names."""
     folded = digested_inference_fields() - frozenset(PipelineInputs.model_fields)
-    assert folded == {"temperature", "top_p", "seed", "max_output_tokens", "thinking"}
+    assert folded == {
+        "temperature",
+        "top_p",
+        "seed",
+        "max_output_tokens",
+        "thinking",
+        *RULED_LOGIT_MOVERS,
+    }
+
+
+def test_every_ruled_logit_mover_now_reaches_the_stamp() -> None:
+    assert RULED_LOGIT_MOVERS <= digested_inference_fields()
+    assert not RULED_LOGIT_MOVERS & frozenset(NOT_DIGESTED)
+
+
+@pytest.mark.parametrize(
+    "moved",
+    [
+        InferenceConfig(cache_type_k="q8_0"),
+        InferenceConfig(cache_type_v="q8_0"),
+        InferenceConfig(flash_attention="on"),
+        InferenceConfig(n_parallel=2),
+        InferenceConfig(n_threads_batch=8),
+    ],
+    ids=sorted(RULED_LOGIT_MOVERS),
+)
+def test_a_moved_runtime_knob_moves_the_stamp(moved: InferenceConfig) -> None:
+    """The whole point of digesting them: a quantised cache or a second slot can
+    rewrite a summary, and the stamp used to hold still while it did."""
+    assert runtime_flags_spelling(moved) != runtime_flags_spelling(InferenceConfig())
+
+
+def test_a_null_runtime_knob_spells_apart_from_a_pinned_one() -> None:
+    """Null means the runtime picks, which is a different choice from pinning a
+    value - so it gets its own spelling rather than one of the values it may
+    resolve to."""
+    spelling = runtime_flags_spelling(InferenceConfig())
+    assert "cache_type_k=runtime-default" in spelling
+    assert "n_threads_batch=runtime-default" in spelling
 
 
 # --- What a prior stamp means ----------------------------------------------

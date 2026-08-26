@@ -1,0 +1,575 @@
+{
+  "$defs": {
+    "CanaryObservation": {
+      "additionalProperties": false,
+      "description": "One planted attack, run live against the candidate.\n\nThe unit suite proves the sanitizer and the schema against recorded\ncompletions. It cannot prove that a model nobody has served before follows\nthis chat template, so the canaries run again here on live calls (Rule #11).",
+      "properties": {
+        "facts_missing": {
+          "description": "`must_survive` facts the boundary ate.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Facts Missing",
+          "type": "array"
+        },
+        "forbidden_keys_present": {
+          "description": "`forbidden_output` keys the raw reply carried.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Forbidden Keys Present",
+          "type": "array"
+        },
+        "markers_present": {
+          "description": "`must_not_survive` strings that reached the reply.",
+          "items": {
+            "type": "string"
+          },
+          "title": "Markers Present",
+          "type": "array"
+        },
+        "name": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Name",
+          "type": "string"
+        },
+        "replied": {
+          "description": "A schema-valid, non-blank reply came back.",
+          "title": "Replied",
+          "type": "boolean"
+        }
+      },
+      "required": [
+        "name",
+        "replied"
+      ],
+      "title": "CanaryObservation",
+      "type": "object"
+    },
+    "CandidateIdentity": {
+      "additionalProperties": false,
+      "description": "Which bytes ran. A model-card name identifies nothing.",
+      "properties": {
+        "bytes_expected": {
+          "minimum": 1,
+          "title": "Bytes Expected",
+          "type": "integer"
+        },
+        "bytes_observed": {
+          "minimum": 1,
+          "title": "Bytes Observed",
+          "type": "integer"
+        },
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "repo": {
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "An immutable repository revision, not a branch.",
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "runtime_build": {
+          "minLength": 1,
+          "title": "Runtime Build",
+          "type": "string"
+        },
+        "sha256_expected": {
+          "description": "What the adoption target declares.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256 Expected",
+          "type": "string"
+        },
+        "sha256_observed": {
+          "description": "What the runtime actually opened.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256 Observed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "repo",
+        "revision",
+        "file",
+        "quantisation",
+        "sha256_expected",
+        "sha256_observed",
+        "bytes_expected",
+        "bytes_observed",
+        "runtime_build"
+      ],
+      "title": "CandidateIdentity",
+      "type": "object"
+    },
+    "CorpusItem": {
+      "additionalProperties": false,
+      "description": "One frozen article: what it is, and the hashes that prove it did not move.",
+      "properties": {
+        "band_index": {
+          "description": "Which `summarize.bands` tier the extracted length fell in.",
+          "minimum": 0,
+          "title": "Band Index",
+          "type": "integer"
+        },
+        "brief": {
+          "title": "Brief",
+          "type": "boolean"
+        },
+        "canonical_url": {
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Canonical Url",
+          "type": "string"
+        },
+        "full_text_sha256": {
+          "description": "The sanitized whole article, before the cap.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Full Text Sha256",
+          "type": "string"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "seen_text_sha256": {
+          "description": "The exact bytes the model was shown.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Seen Text Sha256",
+          "type": "string"
+        },
+        "seen_token_count": {
+          "minimum": 0,
+          "title": "Seen Token Count",
+          "type": "integer"
+        },
+        "seen_word_count": {
+          "minimum": 0,
+          "title": "Seen Word Count",
+          "type": "integer"
+        },
+        "source_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_word_count": {
+          "minimum": 0,
+          "title": "Source Word Count",
+          "type": "integer"
+        },
+        "truncated": {
+          "description": "The extracted text passed `extract.truncation_cap_tokens` and was cut.",
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "url_key": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Url Key",
+          "type": "string"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "url_key",
+        "canonical_url",
+        "source_id",
+        "vertical",
+        "band_index",
+        "brief",
+        "truncated",
+        "source_word_count",
+        "seen_word_count",
+        "seen_token_count",
+        "seen_text_sha256",
+        "full_text_sha256"
+      ],
+      "title": "CorpusItem",
+      "type": "object"
+    },
+    "ItemObservation": {
+      "additionalProperties": false,
+      "description": "One inference call: one corpus item at one repeat.\n\nEvery call is recorded, including the ones that failed. A failure that\nvanishes from the record takes the denominator with it, and the success rate\nthen describes the survivors rather than the run.",
+      "properties": {
+        "completion_tokens": {
+          "minimum": 0,
+          "title": "Completion Tokens",
+          "type": "integer"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Failure Code"
+        },
+        "finish_reason": {
+          "minLength": 1,
+          "title": "Finish Reason",
+          "type": "string"
+        },
+        "fits_context_predicted": {
+          "description": "What `summarize.fits_context` said before the call.",
+          "title": "Fits Context Predicted",
+          "type": "boolean"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "ok": {
+          "title": "Ok",
+          "type": "boolean"
+        },
+        "output_digest": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Output Digest",
+          "type": "string"
+        },
+        "prompt_tokens": {
+          "description": "The complete chat-templated request, as counted by the runtime.",
+          "minimum": 0,
+          "title": "Prompt Tokens",
+          "type": "integer"
+        },
+        "reasoning_channel_used": {
+          "description": "The runtime split a reasoning channel off the content.",
+          "title": "Reasoning Channel Used",
+          "type": "boolean"
+        },
+        "repaired": {
+          "description": "A second attempt was needed. The gate allows none.",
+          "title": "Repaired",
+          "type": "boolean"
+        },
+        "repeat": {
+          "minimum": 1,
+          "title": "Repeat",
+          "type": "integer"
+        },
+        "schema_valid": {
+          "title": "Schema Valid",
+          "type": "boolean"
+        },
+        "summarize_seconds": {
+          "minimum": 0.0,
+          "title": "Summarize Seconds",
+          "type": "number"
+        },
+        "summary_word_count": {
+          "minimum": 0,
+          "title": "Summary Word Count",
+          "type": "integer"
+        },
+        "think_block_words": {
+          "description": "Words inside inline `<think>` blocks. Any is a leak.",
+          "minimum": 0,
+          "title": "Think Block Words",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "item_id",
+        "repeat",
+        "ok",
+        "finish_reason",
+        "reasoning_channel_used",
+        "think_block_words",
+        "schema_valid",
+        "repaired",
+        "output_digest",
+        "summary_word_count",
+        "prompt_tokens",
+        "completion_tokens",
+        "fits_context_predicted",
+        "summarize_seconds"
+      ],
+      "title": "ItemObservation",
+      "type": "object"
+    },
+    "ItemScore": {
+      "additionalProperties": false,
+      "description": "What the scorer and the counterweights read on one item.\n\nScored once per item, on the first repeat. Two more repeats of identical\nwords would add three identical rows and no information.",
+      "properties": {
+        "brief": {
+          "title": "Brief",
+          "type": "boolean"
+        },
+        "compression": {
+          "minimum": 0.0,
+          "title": "Compression",
+          "type": "number"
+        },
+        "evidential_density": {
+          "minimum": 0.0,
+          "title": "Evidential Density",
+          "type": "number"
+        },
+        "extractiveness": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Extractiveness",
+          "type": "number"
+        },
+        "hedge_dropped": {
+          "title": "Hedge Dropped",
+          "type": "boolean"
+        },
+        "hhem": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Hhem",
+          "type": "number"
+        },
+        "hhem_full": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Hhem Full",
+          "type": "number"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "lead_coverage": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Lead Coverage",
+          "type": "number"
+        },
+        "speculative_density": {
+          "minimum": 0.0,
+          "title": "Speculative Density",
+          "type": "number"
+        },
+        "title_fell_back": {
+          "description": "The drafted title missed its range and was dropped.",
+          "title": "Title Fell Back",
+          "type": "boolean"
+        },
+        "unsupported_numbers": {
+          "minimum": 0,
+          "title": "Unsupported Numbers",
+          "type": "integer"
+        },
+        "verbatim_run": {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Verbatim Run",
+          "type": "number"
+        }
+      },
+      "required": [
+        "item_id",
+        "brief",
+        "hhem",
+        "hhem_full",
+        "verbatim_run",
+        "extractiveness",
+        "compression",
+        "lead_coverage",
+        "unsupported_numbers",
+        "hedge_dropped",
+        "evidential_density",
+        "speculative_density",
+        "title_fell_back"
+      ],
+      "title": "ItemScore",
+      "type": "object"
+    },
+    "ScorerIdentity": {
+      "additionalProperties": false,
+      "description": "Which instrument read the summaries.\n\n`pinned` is false when the revision is a branch name. The faithfulness gate\nrefuses to run on an unpinned scorer: a floor measured with an instrument\nthat can move overnight measures an unknown instrument.",
+      "properties": {
+        "pinned": {
+          "title": "Pinned",
+          "type": "boolean"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "scorer_id": {
+          "minLength": 1,
+          "title": "Scorer Id",
+          "type": "string"
+        },
+        "scorer_version": {
+          "minLength": 1,
+          "title": "Scorer Version",
+          "type": "string"
+        },
+        "weights_sha256": {
+          "description": "Digest of the weights that loaded, never of the name they were asked for.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Weights Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scorer_id",
+        "revision",
+        "pinned",
+        "weights_sha256",
+        "scorer_version"
+      ],
+      "title": "ScorerIdentity",
+      "type": "object"
+    }
+  },
+  "$id": "qualification-shard.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the frozen corpus, every call, every score and the canaries.",
+      "version": "2026-08-26",
+      "why": "Row #10 qualifies one model on absolute gates, so the evidence a shard hands the decider is a persisted contract rather than a log line."
+    }
+  ],
+  "description": "What one capture-and-replay job uploads.\n\nThe corpus is hashed and written before the first inference call, so the\npre-registration is an ordering the code enforces rather than a promise in a\ndocument.",
+  "properties": {
+    "canaries": {
+      "items": {
+        "$ref": "#/$defs/CanaryObservation"
+      },
+      "title": "Canaries",
+      "type": "array"
+    },
+    "candidate": {
+      "$ref": "#/$defs/CandidateIdentity"
+    },
+    "commit_sha": {
+      "minLength": 7,
+      "title": "Commit Sha",
+      "type": "string"
+    },
+    "corpus": {
+      "items": {
+        "$ref": "#/$defs/CorpusItem"
+      },
+      "title": "Corpus",
+      "type": "array"
+    },
+    "corpus_registered_at": {
+      "description": "When the hashes were written. Before any output was viewed.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Corpus Registered At",
+      "type": "string"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "elapsed_seconds": {
+      "description": "Wall-clock this shard spent inside the stage.",
+      "minimum": 0.0,
+      "title": "Elapsed Seconds",
+      "type": "number"
+    },
+    "observations": {
+      "items": {
+        "$ref": "#/$defs/ItemObservation"
+      },
+      "title": "Observations",
+      "type": "array"
+    },
+    "pipeline_fingerprint": {
+      "description": "The stamp the controls produced. One value across every shard.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "planned": {
+      "description": "Addresses this shard was handed.",
+      "minimum": 0,
+      "title": "Planned",
+      "type": "integer"
+    },
+    "repeats": {
+      "minimum": 1,
+      "title": "Repeats",
+      "type": "integer"
+    },
+    "runner": {
+      "minLength": 1,
+      "title": "Runner",
+      "type": "string"
+    },
+    "scorer": {
+      "$ref": "#/$defs/ScorerIdentity"
+    },
+    "scores": {
+      "items": {
+        "$ref": "#/$defs/ItemScore"
+      },
+      "title": "Scores",
+      "type": "array"
+    },
+    "shard": {
+      "minimum": 0,
+      "title": "Shard",
+      "type": "integer"
+    },
+    "shards": {
+      "minimum": 1,
+      "title": "Shards",
+      "type": "integer"
+    },
+    "version": {
+      "default": "2026-08-26",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "commit_sha",
+    "runner",
+    "shard",
+    "shards",
+    "repeats",
+    "candidate",
+    "scorer",
+    "pipeline_fingerprint",
+    "corpus_registered_at",
+    "planned",
+    "elapsed_seconds"
+  ],
+  "title": "QualificationShard",
+  "type": "object",
+  "version": "2026-08-26"
+}

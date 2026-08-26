@@ -1,11 +1,22 @@
 {
   "$defs": {
+    "LeaderboardProvenance": {
+      "description": "Whether anybody published a number for this model, on this task.\n\n`not_reported` is not zero. A model whose card publishes no summarization or\nfaithfulness result has an unknown prior, and recording that as `0.0` would\nput a fabricated worst case into every mean, chart and comparison that ever\nreads the column (Rule #10).",
+      "enum": [
+        "reported",
+        "not_reported"
+      ],
+      "title": "LeaderboardProvenance",
+      "type": "string"
+    },
     "ValidationVerdict": {
       "description": "What the decision rule concluded. Never a free-text judgement.",
       "enum": [
         "confirmed",
         "rescore_candidates",
-        "switch_and_pause"
+        "switch_and_pause",
+        "qualified",
+        "not_qualified"
       ],
       "title": "ValidationVerdict",
       "type": "string"
@@ -15,6 +26,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "leaderboard_hhem may be null beside a leaderboard_provenance of not_reported, and the verdict set gained qualified and not_qualified.",
+      "version": "2026-08-26",
+      "why": "A single-model qualification has no incumbent to compare against, and the candidate's model card publishes no summarization or faithfulness result. Recording that absence as 0.0 invents a worst case. Older rows carry a float and read as reported, which is the read-side migration."
+    },
     {
       "change": "Initial shape: the incumbent and its challengers, measured and predicted.",
       "version": "2026-08-22",
@@ -55,11 +71,24 @@
       "type": "boolean"
     },
     "leaderboard_hhem": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
       "description": "What the published leaderboard says. A prior, never evidence about us.",
-      "maximum": 1.0,
-      "minimum": 0.0,
-      "title": "Leaderboard Hhem",
-      "type": "number"
+      "title": "Leaderboard Hhem"
+    },
+    "leaderboard_provenance": {
+      "$ref": "#/$defs/LeaderboardProvenance",
+      "default": "reported",
+      "description": "Whether a published number exists at all. Missing stays missing."
     },
     "measured_hhem": {
       "description": "Mean HHEM over the golden set, through our own pipeline.",
@@ -94,7 +123,7 @@
       "description": "What the run concluded. A run-level fact, identical on every row."
     },
     "version": {
-      "default": "2026-08-22",
+      "default": "2026-08-26",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -104,7 +133,6 @@
     "model_id",
     "is_incumbent",
     "selected",
-    "leaderboard_hhem",
     "measured_hhem",
     "articles",
     "measured_on",
@@ -115,5 +143,5 @@
   ],
   "title": "ValidationRow",
   "type": "object",
-  "version": "2026-08-22"
+  "version": "2026-08-26"
 }

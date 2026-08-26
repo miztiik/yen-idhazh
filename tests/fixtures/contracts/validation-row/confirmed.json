@@ -4,6 +4,7 @@
   "detail": "qwen3-8b-q4-k-m measured 0.720 against a leaderboard 0.750, and no challenger cleared the 0.05 margin",
   "is_incumbent": true,
   "leaderboard_hhem": 0.75,
+  "leaderboard_provenance": "reported",
   "measured_hhem": 0.72,
   "measured_on": "2026-08-22",
   "model_id": "qwen3-8b-q4-k-m",
