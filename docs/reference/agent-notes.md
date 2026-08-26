@@ -330,6 +330,12 @@ contends with the first.
 - **Write every long gate to a uniquely named file and read the file back.**
   `... *> "$env:TEMP\yi_<row>_pytest.txt"`, then read that file. The terminal
   pane shows whoever spoke last, which may not be you.
+- **Read that file through the shell, not through the editor's file reader.**
+  The editor serves a cached copy of a path a detached process is still
+  writing. On 2026-08-26 a `mypy.txt` the directory listing gave as 160 bytes
+  read back as empty three times, which looks exactly like a gate that has not
+  finished. Poll for completion by listing the directory for a sentinel the
+  script writes last, then `Get-Content <absolute path>`.
 - **`pwsh -NoProfile -File <script>.ps1` can exit 1 and do nothing at all** - no
   output, no side effects, no file written. Invoke the script as
   `& '<absolute path>.ps1'` instead.

@@ -17,6 +17,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
 from urllib import request
+from urllib.parse import urlsplit, urlunsplit
 
 from idhazh.contracts.app_config import InferenceConfig, ModelRef
 
@@ -200,7 +201,7 @@ def parse_completion(body: str) -> Completion:
 def post(
     payload: dict[str, Any], *, endpoint: str = DEFAULT_ENDPOINT, timeout: float
 ) -> Completion:
-    """The one function here that opens a socket. Loopback only, by construction."""
+    """The only place an item is sent for summarizing. Loopback only, by construction."""
     outbound = request.Request(
         endpoint,
         data=json.dumps(payload).encode("utf-8"),
@@ -209,3 +210,34 @@ def post(
     )
     with request.urlopen(outbound, timeout=timeout) as response:
         return parse_completion(response.read().decode("utf-8"))
+
+
+def props_url(endpoint: str = DEFAULT_ENDPOINT) -> str:
+    """The `/props` address on the server a chat-completions endpoint names.
+
+    Derived rather than configured, so a caller that points the run at another
+    port cannot ask one server for a template and another for an answer.
+    """
+    parts = urlsplit(endpoint)
+    return urlunsplit((parts.scheme, parts.netloc, "/props", "", ""))
+
+
+def props(endpoint: str = DEFAULT_ENDPOINT, *, timeout: float) -> dict[str, Any]:
+    """What the running server says about itself, including its chat template.
+
+    The template is the model's own Jinja source, which the server applies to
+    every request. Reading it here is what makes the stamp's template digest an
+    observation of the runtime rather than a restatement of config.
+
+    A server that does not answer yields nothing rather than raising. The caller
+    records the absence, because a run that stops over an unread diagnostic is
+    worse than one that says the diagnostic was unread (`CLAUDE.md` section 1a).
+    Bounded by the same configured clock as a completion, so a hung server costs
+    the stage a knob somebody can turn rather than a number in this file.
+    """
+    try:
+        with request.urlopen(props_url(endpoint), timeout=timeout) as response:
+            payload = json.loads(response.read().decode("utf-8"))
+    except (OSError, ValueError):
+        return {}
+    return payload if isinstance(payload, dict) else {}

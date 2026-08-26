@@ -46,6 +46,7 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
@@ -58,8 +59,19 @@ from idhazh.contracts.validation_row import ValidationVerdict
 from idhazh.embed import Embedder
 from idhazh.evals import golden, metrics, score, validation, writer
 from idhazh.evals.hhem import HHEM_SCORER_ID, HhemScorer, dual_score, weights_digest
-from idhazh.fingerprint import build_inputs, text_digest
-from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post
+from idhazh.fingerprint import (
+    LEDGER_RELPATH as FINGERPRINT_RELPATH,
+)
+from idhazh.fingerprint import (
+    UNRECORDED_TEMPLATE,
+    append_new,
+    build_inputs,
+    host_cpu,
+    runner_class,
+    runtime_build,
+    text_digest,
+)
+from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post, props
 from idhazh.render import asset_relpath, highest_ordinal, render_route
 from idhazh.sanitize import SANITIZER_VERSION
 
@@ -69,6 +81,7 @@ VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
+FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
 
 
 def _run_dir(date: str) -> Path:
@@ -440,16 +453,17 @@ def stage_work(
     read_url = fetcher or live_fetcher(settings)
     inference = settings.app.models.inference
     model = settings.app.models.summarize
+    observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
     inputs = build_inputs(
         model=model,
         model_sha256=model.sha256,
         inference=inference,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
-        runtime_build="llama-server-local",
-        chat_template=model.id,
+        runtime_build=runtime_build(),
+        chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
         prompt=summarize.prompt_inputs(settings.app.summarize),
         output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
-        runner_class="local",
+        runner_class=runner_class(),
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
     )
@@ -462,8 +476,15 @@ def stage_work(
     )
 
     items_dir = _run_dir(plan.date) / "items"
+    _write_stamp(items_dir, inputs=inputs, run_id=plan.run_id)
     mine = shard_of(plan, shard=shard, shards=shards)
-    LOG.info("working shard=%s/%s items=%s", shard, shards, len(mine))
+    LOG.info(
+        "working shard=%s/%s items=%s fingerprint=%s",
+        shard,
+        shards,
+        len(mine),
+        fingerprint[:12],
+    )
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
         started = time.monotonic()
@@ -536,6 +557,39 @@ def stage_work(
             summarize_ms,
             score_ms,
         )
+
+
+def _write_stamp(items_dir: Path, *, inputs: PipelineInputs, run_id: str) -> FingerprintRow:
+    """Leave the expansion of this run's stamp beside the items it produced.
+
+    The work stage is the only one that can observe these inputs, and its
+    checkout is thrown away when the shard ends - the artifact it uploads is
+    this directory. So the stamp travels as a payload and `stage_assemble`,
+    which owns every committed ledger, is what appends it (section 1a).
+
+    Named by the stamp, so eight shards observing one configuration leave one
+    file rather than eight that have to be reconciled.
+    """
+    row = FingerprintRow(
+        version=FingerprintRow.schema_version(),
+        pipeline_fingerprint=inputs.fingerprint(),
+        first_seen_run=run_id,
+        first_seen_at=assemble.utc_now(),
+        inputs=inputs,
+        host_cpu=host_cpu(),
+    )
+    assemble.write_atomic(
+        items_dir / f"{row.pipeline_fingerprint}.fingerprint.json", row.to_json()
+    )
+    return row
+
+
+def _stamps(items_dir: Path) -> list[FingerprintRow]:
+    """Every stamp the shards left behind, in a stable order."""
+    return [
+        FingerprintRow.from_json(path.read_text(encoding="utf-8"))
+        for path in sorted(items_dir.glob("*.fingerprint.json"))
+    ]
 
 
 def _fetch_one(
@@ -1132,19 +1186,22 @@ def stage_assemble(
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
+    stamps = append_new(FINGERPRINTS, _stamps(items_dir))
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)
     publish_telemetry.publish(
         state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry"
     )
     LOG.info(
-        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s",
+        "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
+        "new_fingerprints=%s",
         plan.date,
         len(day.items),
         day.partial,
         landed,
         published,
         item_health,
+        [row.pipeline_fingerprint[:12] for row in stamps],
     )
     return day
 
