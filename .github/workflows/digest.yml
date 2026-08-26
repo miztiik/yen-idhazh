@@ -782,6 +782,7 @@ jobs:
             ${{ needs.plan.outputs.day_dir }}/digest.json
             ${{ needs.plan.outputs.day_dir }}/run.json
             frontend/public/telemetry
+            frontend/public/assist/index
             state/published.csv
             state/scores.csv
             state/item-health
@@ -793,4 +794,4 @@ jobs:
             --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh
-          frontend/public/digest frontend/public/telemetry state
+          frontend/public/digest frontend/public/telemetry frontend/public/assist/index state

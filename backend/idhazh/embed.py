@@ -73,6 +73,11 @@ MAX_TOKENS: Final = AssistConfig().max_tokens
 
 _SCALE: Final = 127.0
 
+# What a stored byte is multiplied by to get a component. The published month
+# index states it in its header rather than letting a reader assume it
+# (`idhazh/contracts/search_index.py`).
+VECTOR_SCALE: Final = 1.0 / _SCALE
+
 
 def session_options() -> Any:
     """The pinned arithmetic, in one place so a test reads the object `load` uses.
