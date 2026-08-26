@@ -22,13 +22,14 @@ from pathlib import Path
 from typing import Any, Final
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, STATE_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, STATE_DIR, read_text
 
-from idhazh.contracts.app_config import InferenceConfig, ModelRef
+from idhazh.contracts.app_config import AppConfig, InferenceConfig, ModelRef
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.fingerprint import (
     LEDGER_RELPATH,
     NOT_DIGESTED,
+    PLACEHOLDER_DIGEST,
     Observation,
     append_new,
     build_inputs,
@@ -49,6 +50,33 @@ HEX64 = re.compile(r"[0-9a-f]{64}")
 RULED_LOGIT_MOVERS: Final[frozenset[str]] = frozenset(
     {"cache_type_k", "cache_type_v", "flash_attention", "n_parallel", "n_threads_batch"}
 )
+
+#: `sha256` here is what config expected. What the runtime opened is the
+#: separate `model_sha256` argument, and the two are deliberately unequal.
+CONFIGURED_MODEL: Final = ModelRef(
+    id="qwen3-8b-q4-k-m",
+    repo="Qwen/Qwen3-8B-GGUF",
+    file="Qwen3-8B-Q4_K_M.gguf",
+    quantisation="Q4_K_M",
+    sha256="a" * 64,
+)
+
+
+def stamp_with(model_sha256: str | None) -> PipelineInputs:
+    """`build_inputs` with everything but the observed weights digest held still."""
+    return build_inputs(
+        model=CONFIGURED_MODEL,
+        model_sha256=model_sha256,
+        inference=InferenceConfig(),
+        truncation_cap_tokens=2500,
+        runtime_build="llama.cpp-b4200",
+        chat_template="{{ messages }}",
+        prompt="Summarize the delimited article.",
+        output_schema='{"type":"object"}',
+        runner_class="ubuntu-latest-4vcpu",
+        extractor_version="trafilatura-2.0.0",
+        sanitizer_version="idhazh-sanitizer-1",
+    )
 
 
 def committed_row() -> FingerprintRow:
@@ -266,27 +294,26 @@ def test_a_moved_decoding_knob_moves_the_sampling_spelling() -> None:
 
 def test_the_stamp_digests_the_weights_that_loaded_not_the_ones_configured() -> None:
     """Config records an expectation; the stamp records what the runtime opened."""
-    configured = ModelRef(
-        id="qwen3-8b-q4-k-m",
-        repo="Qwen/Qwen3-8B-GGUF",
-        file="Qwen3-8B-Q4_K_M.gguf",
-        quantisation="Q4_K_M",
-        sha256="a" * 64,
-    )
-    inputs = build_inputs(
-        model=configured,
-        model_sha256="b" * 64,
-        inference=InferenceConfig(),
-        truncation_cap_tokens=2500,
-        runtime_build="llama.cpp-b4200",
-        chat_template="{{ messages }}",
-        prompt="Summarize the delimited article.",
-        output_schema='{"type":"object"}',
-        runner_class="ubuntu-latest-4vcpu",
-        extractor_version="trafilatura-2.0.0",
-        sanitizer_version="idhazh-sanitizer-1",
-    )
-    assert inputs.model_sha256 == "b" * 64
+    assert CONFIGURED_MODEL.sha256 == "a" * 64
+    assert stamp_with("b" * 64).model_sha256 == "b" * 64
+
+
+@pytest.mark.parametrize("unmeasured", [None, "", PLACEHOLDER_DIGEST])
+def test_an_unmeasured_weights_digest_raises_rather_than_stamping_zeros(
+    unmeasured: str | None,
+) -> None:
+    """Sixty-four zeroes satisfy `Sha256`, so the old placeholder validated and lied."""
+    with pytest.raises(ValueError, match="no measured weights digest"):
+        stamp_with(unmeasured)
+
+
+@pytest.mark.parametrize("role", ["summarize", "route"])
+def test_the_committed_config_records_a_measured_digest_for_every_model(role: str) -> None:
+    """An expectation the run has to meet, and the CI gate checks the bytes against it."""
+    models = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).models
+    recorded = getattr(models, role).sha256
+    assert recorded is not None, f"config records no sha256 for models.{role}"
+    assert recorded != PLACEHOLDER_DIGEST, f"models.{role} carries the placeholder"
 
 
 def test_the_prompt_and_the_schema_are_digested_not_stored() -> None:

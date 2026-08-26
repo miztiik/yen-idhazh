@@ -30,6 +30,10 @@ from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 # (CLAUDE.md section 2).
 LEDGER_RELPATH: Final = "state/fingerprints.csv"
 
+#: Sixty-four zeroes. It satisfies `Sha256`, so a stamp built on it validates,
+#: publishes, and still says nothing about which weights ran (Rule #10).
+PLACEHOLDER_DIGEST: Final = "0" * 64
+
 _READ_CHUNK: Final = 1024 * 1024
 
 
@@ -135,7 +139,7 @@ def digested_inference_fields() -> frozenset[str]:
 def build_inputs(
     *,
     model: ModelRef,
-    model_sha256: str,
+    model_sha256: str | None,
     inference: InferenceConfig,
     truncation_cap_tokens: int,
     runtime_build: str,
@@ -151,7 +155,16 @@ def build_inputs(
     `model_sha256` is the digest of the file the runtime actually opened.
     `ModelRef.sha256` is what config expected, and the two disagreeing is the
     exact event this stamp exists to make visible.
+
+    An absent digest stops the stamp. The caller used to substitute
+    `PLACEHOLDER_DIGEST`, which turned "nobody measured the weights" into a
+    fingerprint that looked measured.
     """
+    if not model_sha256 or model_sha256 == PLACEHOLDER_DIGEST:
+        raise ValueError(
+            f"{model.id} has no measured weights digest. Record the sha256 of "
+            f"{model.file} in config before the stamp is built."
+        )
     return PipelineInputs(
         model_sha256=model_sha256,
         quantisation=model.quantisation,
