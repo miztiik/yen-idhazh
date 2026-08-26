@@ -413,7 +413,7 @@ def stage_work(
     model = settings.app.models.summarize
     inputs = build_inputs(
         model=model,
-        model_sha256=model.sha256 or "0" * 64,
+        model_sha256=model.sha256,
         inference=inference,
         truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
         runtime_build="llama-server-local",

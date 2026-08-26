@@ -1173,6 +1173,38 @@ def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path)
     assert not _mid_rebase(runner)
 
 
+def test_the_work_job_checks_the_weights_before_it_starts_the_server() -> None:
+    """The Oracle. Wrong bytes fail here, not five hours later as wrong summaries.
+
+    The check has no `if:` on purpose. A restored cache entry is the one case
+    where nobody watched the bytes arrive, so it is the case that most needs it.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    names = [step.get("name") for step in _steps(workflow, "work")]
+
+    assert names.index("Fetch runtime and weights") < names.index("Verify the weights")
+    assert names.index("Verify the weights") < names.index("Start the model")
+
+    verify = _step(workflow, "work", "name", "Verify the weights")
+    assert "if" not in verify, "a restored cache is what most needs checking"
+    script = verify.get("run")
+    assert isinstance(script, str)
+    assert '["models"]["summarize"]["sha256"]' in script, "read the expectation from config"
+    assert "sha256sum --check" in script
+
+
+def test_the_health_check_names_the_weights_that_answered() -> None:
+    """Healthy says a server replied. It does not say which weights replied."""
+    health = _step(_load_workflows()["digest.yml"], "work", "name", "Check model health")
+    script = health.get("run")
+    assert isinstance(script, str)
+
+    assert '["models"]["summarize"]["id"]' in script, "the alias comes from config"
+    assert "/v1/models" in script, "assert the served alias"
+    assert "/props" in script, "assert the loaded path"
+    assert "${MODEL_FILE}" in script
+
+
 def test_measurements_dispatch_selects_exactly_one_target() -> None:
     workflow = _load_workflows()["measure.yml"]
     target = _mapping(_dispatch_inputs(workflow).get("target"), "target input")

@@ -56,6 +56,14 @@ not enforce `config.run.shard_size` or `shard_timeout_minutes`; the work job use
 a 330-minute workflow timeout. A model-fit claim must use the measured worker
 population or first wire those config values.
 
+Each worker checks its weights before it starts the server. `sha256sum` compares
+the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a
+cache hit as well as a miss, because a restored cache entry is the one case where
+nobody watched the bytes arrive. The health check then asserts that
+`GET /v1/models` returns the configured alias and that `GET /props` names the
+configured filename. A shard that fails either one stops before it summarizes
+anything.
+
 Route uses the worker outputs. Assemble runs even after a worker or route
 failure, then commits the digest and state.
 
