@@ -1,20 +1,33 @@
 """Read and append the committed ledgers under `state/`.
 
-Three files, all append-only, all written by CI and read by a later run. They
+Four files, all append-only, all written by CI and read by a later run. They
 exist because the pipeline has no memory of its own: every run starts on a
 fresh machine with a fresh checkout, so anything one run needs to tell the next
 has to be committed (Rule #1).
 
-`state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
-carried no date. Sharded by month, so a plan run reads a few small files rather
-than one file that grows for the life of the project.
+A ledger shards by month only when the read that consumes it carries a time
+window. A window lets `_shards_in_window` skip whole files; without one, every
+shard is opened anyway and splitting the file buys nothing. The rule is in
+`docs/architecture/contracts/schemas.md`.
 
-`state/published.csv` answers "have we already run this?" One file, because one
-row per published item is a few thousand rows a year.
+`state/seen/<YYYY-MM>.csv` answers "how old is this?" for an article whose feed
+carried no date. Read through `collect.seen_window_days`, so it shards.
+
+`state/published.csv` answers "have we already run this?" Read whole, because
+published is forever and the question has no time bound - so it is one file.
+Size it from the ceiling, not from today: a run plans at most
+`run.safety_ceiling_per_run` items and the schedule fires five times a day, so
+a day writes at most 1000 rows and a year at most about 365,000. At the
+measured 214.9 B a row that is 78.4 MB on disk, and `load_published` peaks
+around 261 MB reading it - in the one job that loads no model, on a 16 GB
+runner. See `docs/reference/measurements.md`.
 
 `state/feed-health/<YYYY-MM>.csv` answers "is this source still working?" One
-row per feed per run, sharded like the seen store for the same reason: it is
-the fastest-growing of the three.
+row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
+
+`state/item-health/<YYYY-MM>.csv` answers "what did every planned item do?" One
+row per planned item per run - the fastest-growing of the four. The console
+reads it a month at a time through the published projection, so it shards.
 
 No reader fails on a missing file. A fresh clone has no history, and a run with
 no history is a run where nothing was seen, nothing was published and no feed
