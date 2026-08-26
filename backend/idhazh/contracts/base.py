@@ -36,6 +36,9 @@ ITEM_ID_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$"
 RUN_ID_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}-[0-9]+$"
 URL_PATTERN: Final = r"^https?://[^\s\"'<>\\]+$"
 SHA256_PATTERN: Final = r"^[0-9a-f]{64}$"
+# A full git commit. Nothing shorter is a pin: an abbreviation can become
+# ambiguous as a repository grows, and a branch or a tag is re-pointed.
+COMMIT_SHA_PATTERN: Final = r"^[0-9a-f]{40}$"
 # Relative, POSIX-separated, minimal reconstructable form (CLAUDE.md section 2).
 # Spelled as an explicit segment grammar rather than with negative lookahead,
 # because the regex engine behind the contracts has no look-around. Each segment
@@ -52,6 +55,7 @@ ItemId = Annotated[str, StringConstraints(pattern=ITEM_ID_PATTERN)]
 RunId = Annotated[str, StringConstraints(pattern=RUN_ID_PATTERN)]
 Url = Annotated[str, StringConstraints(pattern=URL_PATTERN, max_length=2048)]
 Sha256 = Annotated[str, StringConstraints(pattern=SHA256_PATTERN)]
+CommitSha = Annotated[str, StringConstraints(pattern=COMMIT_SHA_PATTERN)]
 RelPath = Annotated[str, StringConstraints(pattern=REL_PATH_PATTERN, max_length=512)]
 UrlKey = Annotated[str, StringConstraints(pattern=SHA256_PATTERN)]
 

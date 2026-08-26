@@ -320,23 +320,48 @@ fetch path, and the build inside every runtime cache key.
 
 ## One place writes a production model ref, and it is config
 
-`config/idhazh.json` holds `models.summarize` and `models.route`. `digest.yml`
-holds no model repository and no weights filename of its own - grepping it for a
-`.gguf` name or a Hugging Face repository returns nothing, and a workflow
-contract test asserts that.
+`config/idhazh.json` holds `models.summarize` and `models.route`. None of the
+three workflows that load weights - `digest.yml`, `measure.yml`, `validate.yml` -
+holds a model repository, a weights filename or a publisher name of its own.
+Grepping all three for a `.gguf` name, a Hugging Face repository or a branch in a
+download path returns nothing, and a workflow contract test asserts exactly that.
 
-The `plan` job reads config in a `models` step and publishes four job outputs:
-`summarize_repo`, `summarize_file`, `route_repo` and `route_file`. `work` and
-`route` already `needs: plan`, and **the `needs` context resolves before a job's
-first step while `steps` does not**. That is the whole reason the refs travel as
-job outputs: it is what lets a cache key name the weights it holds. A step
-cannot, which is why the key had to be told by a second copy until now.
+Each one reads config in a `models` step and publishes job outputs. `digest.yml`
+does it inside `plan`, which `work` and `route` already need; `measure.yml` has
+a small `models` job of its own that every target depends on; `validate.yml`
+resolves the candidate once inside `plan`. **The `needs` context resolves before
+a job's first step while `steps` does not**, which is the whole reason the refs
+travel as job outputs: it is what lets a cache key and a job-scoped `env` name
+the weights they hold. A step cannot.
 
 That second copy was the defect. The alias came from config while the repository
 and the filename came from workflow `env`, so editing one served the old bytes
 under the new alias and filed every eval row under a model that never ran
 (Rule #10). Changing the model is now one edit to config, and the cache key moves
 with it.
+
+### A dispatch input is not a copy
+
+`measure.yml` exists to benchmark a model config does not name, and `validate.yml`
+exists to qualify one. Both keep their inputs, and an input always wins. What was
+removed is the literal DEFAULT behind it. A dispatch that fills nothing in now
+measures, or re-qualifies, the model config names.
+
+The values for a model under adoption live in
+[measurements.md](measurements.md), where a target is declared - not in a
+workflow file, where nothing would ever check them against the run.
+
+### Every download names a commit
+
+Each ref carries a `revision`, and every fetch path uses it. A branch hands back
+whatever was uploaded last, so the bytes can move under a config that still
+records the old `sha256`; the run would then fail a check nobody had changed, or
+in `measure.yml`, which had no checksum step, quietly measure a different model.
+
+The revision is in the weights cache key for the same reason the build is. The
+fetch step runs only on a cache miss, so a key that cannot tell two uploads of
+one filename apart would hold a repinned config on a hit whose bytes fail the
+checksum on every run until the entry expires.
 
 The `models` step asserts each value is one bare word before it writes it. Every
 ref is substituted straight into a shell command downstream, and that step is the

@@ -88,19 +88,19 @@ file with different bytes, and records the runtime and model hashes:
 
 ```bash
 python backend/utilities/measure_llm.py \
-  --models "owner/repository:model-Q4_K_M.gguf" \
+  --models "owner/repository@<40-character commit>:model-Q4_K_M.gguf" \
   --threads "4"
 ```
 
 The files under `backend/models/` are local, gitignored files. The ad hoc
 measurement job does not put them in the repository Actions cache.
 
-Current `measure_llm.py` resolves Hugging Face `main` and verifies the LFS
-identity it observes there. It cannot request an immutable revision or accept an
-expected SHA. That is sufficient for an exploratory measurement and not for
-reproducing an adoption candidate. Add revision and expected-SHA inputs, or use
-an immutable commit URL plus mandatory digest verification, before the final
-qualification run.
+`measure_llm.py` requires the commit and reads the file listing at it, so two
+runs of one reference compare the same bytes. It still verifies only the LFS
+identity it observes there rather than a SHA the caller declares, so it will
+download a candidate whose bytes disagree with an adoption target and say
+nothing. `validate.yml` is what checks a declared SHA, and it is the arm that
+qualifies a candidate.
 
 ## 1. Freeze the control
 
