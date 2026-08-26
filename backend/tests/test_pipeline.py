@@ -26,6 +26,7 @@ from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.fingerprint import FingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
@@ -37,6 +38,7 @@ from idhazh.evals import writer
 from idhazh.evals.hhem import chunks, score_over_chunks
 from idhazh.evals.score import band, to_eval_row, verdict
 from idhazh.fetch import FetchResult
+from idhazh.fingerprint import read_ledger, text_digest
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -653,10 +655,123 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
         for item in run_plan.items
     ]
 
-    assert server.accepted == len(run_plan.items)
+    assert server.accepted == len(run_plan.items) + 1, "one post per item, plus the props read"
     assert len(summaries) == len(run_plan.items)
     assert {summary.status for summary in summaries} == {SummaryStatus.FAILED}
     assert {summary.failure_code for summary in summaries} == {FailureCode.MODEL_UNREACHABLE}
+
+
+# --- The stamp ledger ---------------------------------------------------------
+
+
+def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
+    """Point every output root and every committed ledger at the test's own tree."""
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
+    monkeypatch.setattr(cli, "FINGERPRINTS", tmp_path / "state" / "fingerprints.csv")
+
+
+def work_then_assemble(run_plan: RunPlan, settings: config.Settings) -> None:
+    """One whole run over captured pages, with no model and no network (Rule #7).
+
+    The summaries fail, which is the point: the stamp describes the pipeline
+    rather than the words, so it has to reach the ledger on a day the model was
+    unreachable too.
+    """
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+
+
+def score_one_item(items_dir: Path, run_plan: RunPlan) -> str:
+    """Stand in for the scorer, which needs weights this suite does not download.
+
+    The stamp is the one the work stage has just observed, so the summary and
+    the eval payload carry exactly what a scored run would have put on them.
+    Returns that stamp.
+    """
+    stamp_path = next(iter(sorted(items_dir.glob("*.fingerprint.json"))))
+    stamp = FingerprintRow.from_json(read_text(stamp_path)).pipeline_fingerprint
+    item = run_plan.items[0]
+    scored = summary().model_copy(
+        update={"item_id": item.item_id, "url_key": item.url_key, "pipeline_fingerprint": stamp}
+    )
+    (items_dir / f"{item.item_id}.summary.json").write_text(scored.to_json(), encoding="utf-8")
+    evaluated = row(url_key=item.url_key, pipeline_fingerprint=stamp)
+    (items_dir / f"{item.item_id}.eval.json").write_text(evaluated.to_json(), encoding="utf-8")
+    return stamp
+
+
+def test_a_run_records_its_stamp_in_the_committed_ledger_exactly_once(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The oracle: every stamp in the committed scores expands to one ledger row."""
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+    stamp = score_one_item(items_dir, run_plan)
+    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+
+    committed = tmp_path / "state" / "fingerprints.csv"
+    expansions = read_ledger(committed)
+    with (tmp_path / "state" / "scores.csv").open(encoding="utf-8", newline="") as handle:
+        scored = {record["pipeline_fingerprint"] for record in csv.DictReader(handle)}
+
+    assert scored == {stamp}
+    assert set(expansions) == {stamp}
+    assert expansions[stamp].first_seen_run == run_plan.run_id
+    assert ledger.read_header(committed) == FingerprintRow.csv_columns()
+
+
+def test_a_second_run_with_the_same_inputs_appends_no_stamp(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The ledger records what a stamp meant, never how often the job ran."""
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    work_then_assemble(run_plan, settings)
+    committed = tmp_path / "state" / "fingerprints.csv"
+    after_one_run = committed.read_bytes()
+
+    work_then_assemble(run_plan, settings)
+
+    assert committed.read_bytes() == after_one_run
+    assert len(read_ledger(committed)) == 1
+
+
+def test_the_stamp_records_the_run_and_never_a_placeholder(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The three fields this row replaced were two literals and a model slug."""
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    work_then_assemble(run_plan, settings)
+
+    stamped = next(iter(read_ledger(tmp_path / "state" / "fingerprints.csv").values()))
+
+    assert stamped.inputs.runtime_build != "llama-server-local"
+    assert stamped.inputs.runner_class != "local"
+    assert stamped.inputs.chat_template_sha256 != text_digest(settings.app.models.summarize.id)
+    assert stamped.host_cpu.strip()
+    assert stamped.first_seen_run == run_plan.run_id
 
 
 class SteppingClock:

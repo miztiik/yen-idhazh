@@ -5,18 +5,28 @@ determinism given identical logits. Eleven of the sixteen enumerated ways an
 output can move are silent without a stamp, including a publisher rewriting an
 article at the same URL.
 
-Two consequences run through this module. Skip-if-exists becomes
-skip-if-fingerprint-matches: identical inputs do no work and write no eval row,
-because a re-run that changed nothing measured nothing. And a matching stamp
-with different words is recorded as a `determinism_violation`, never raised - a
-gate that fires across runner CPU classes for reasons unrelated to a regression
-gets switched off within a month.
+Every input is read from the thing it describes rather than from a literal
+beside the call: the build from the environment the job pinned, the chat
+template from the server that will apply it, the runner class from the runner.
+A source that does not answer is recorded as unanswered, which stamps apart
+from every run whose source did answer (Rule #10).
+
+Two consequences are intended and only one is wired. `classify` and `SKIPPABLE`
+describe the skip - identical inputs do no work and write no eval row, because
+a re-run that changed nothing measured nothing - and nothing calls them yet;
+`docs/architecture/contracts/determinism.md` says what a safe skip still needs.
+The violation half is settled: a matching stamp with different words is
+recorded as a `determinism_violation`, never raised, because a gate that fires
+across runner CPU classes for reasons unrelated to a regression gets switched
+off within a month.
 """
 
 from __future__ import annotations
 
 import csv
 import hashlib
+import os
+import platform
 from collections.abc import Iterable, Mapping
 from enum import StrEnum
 from pathlib import Path
@@ -25,6 +35,7 @@ from typing import Final, NamedTuple
 
 from idhazh.contracts.app_config import InferenceConfig, ModelRef
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
+from idhazh.ledger import require_matching_header
 
 # Relative and POSIX-separated, because it is quoted in logs and manifests
 # (CLAUDE.md section 2).
@@ -33,6 +44,21 @@ LEDGER_RELPATH: Final = "state/fingerprints.csv"
 #: Sixty-four zeroes. It satisfies `Sha256`, so a stamp built on it validates,
 #: publishes, and still says nothing about which weights ran (Rule #10).
 PLACEHOLDER_DIGEST: Final = "0" * 64
+
+#: What the stamp records when the runtime did not name the build that decoded
+#: the weights. It is not a llama.cpp release tag and cannot be read as one, so
+#: a run whose build went unrecorded fingerprints apart from every run whose
+#: build is known. Declaring the ignorance is the point (Rule #10).
+UNRECORDED_BUILD: Final = "build-not-recorded"
+
+#: The same, for a chat template no server was there to hand over.
+UNRECORDED_TEMPLATE: Final = "chat-template-not-recorded"
+
+#: Where Linux names the processor. `platform.processor()` answers `x86_64`
+#: there, which is the same string on every runner and so explains nothing.
+CPUINFO: Final = Path("/proc/cpuinfo")
+
+_CPU_MODEL_KEY: Final = "model name"
 
 _READ_CHUNK: Final = 1024 * 1024
 
@@ -48,6 +74,54 @@ def file_digest(path: Path) -> str:
         while chunk := handle.read(_READ_CHUNK):
             digest.update(chunk)
     return digest.hexdigest()
+
+
+def runtime_build(environ: Mapping[str, str] | None = None) -> str:
+    """The llama.cpp release that decoded the weights, as the job pinned it.
+
+    `.github/workflows/digest.yml` sets `LLAMA_CPP_BUILD` beside the download it
+    checks against a recorded sha256, so the tag the stamp carries and the bytes
+    that ran are named in one place.
+
+    A developer machine usually pins nothing. That degrades to `UNRECORDED_BUILD`
+    rather than inventing a tag: the whole reason this argument stopped being the
+    literal `llama-server-local` is that a stamp naming a build nobody checked
+    validates and lies (Rule #10).
+    """
+    env = os.environ if environ is None else environ
+    return env.get("LLAMA_CPP_BUILD", "").strip() or UNRECORDED_BUILD
+
+
+def runner_class(environ: Mapping[str, str] | None = None) -> str:
+    """Which class of machine ran the work, in that machine's own words.
+
+    A class, never a host. `host_cpu` carries the individual processor and is
+    deliberately undigested; the class is a choice somebody made and belongs in
+    the digest, while which CPU that choice drew is luck and does not.
+
+    GitHub Actions publishes all three parts. A machine that publishes none of
+    them is a developer machine, and says so.
+    """
+    env = os.environ if environ is None else environ
+    inside_actions = env.get("GITHUB_ACTIONS") == "true"
+    where = env.get("RUNNER_ENVIRONMENT") or ("github" if inside_actions else "local")
+    system = env.get("RUNNER_OS") or platform.system() or "unknown"
+    arch = env.get("RUNNER_ARCH") or platform.machine() or "unknown"
+    return f"{where}/{system}/{arch}".lower()
+
+
+def host_cpu(cpuinfo: Path = CPUINFO) -> str:
+    """The processor this run drew. Recorded on the ledger row, never digested.
+
+    It is the only field that explains a determinism violation, which is why it
+    has to name the part rather than the architecture.
+    """
+    if cpuinfo.exists():
+        for line in cpuinfo.read_text(encoding="utf-8", errors="replace").splitlines():
+            name, _, value = line.partition(":")
+            if name.strip() == _CPU_MODEL_KEY and value.strip():
+                return value.strip()
+    return platform.processor() or platform.machine() or "unknown"
 
 
 def sampling_spelling(inference: InferenceConfig) -> str:
@@ -79,9 +153,9 @@ class Undigested(NamedTuple):
 #:
 #: `moves_logits=True` marks a known blind spot, not a claim that the knob is
 #: safe: those five change the arithmetic the runtime does, so moving one can
-#: rewrite a summary while the stamp holds still. Row 4 of
-#: `TODO/20260825-qwen35-9b-swap-plan.md` digests them, because it resets every
-#: fingerprint already and doing that twice spends the reset twice.
+#: rewrite a summary while the stamp holds still. Adding a field here resets
+#: every fingerprint, and `TODO/20260825-qwen35-9b-adoption-plan.md` already
+#: spends one reset on the model swap, so they ride that one.
 #:
 #: The set is closed: a knob that is neither here nor digested fails the
 #: contract test in `backend/tests/test_fingerprint.py`.
@@ -118,7 +192,7 @@ NOT_DIGESTED: Final[Mapping[str, Undigested]] = MappingProxyType(
             False, "A pass before the run. It decodes nothing that we keep."
         ),
         "request_timeout_minutes": Undigested(
-            False, "A clock bound on one POST. It stops a call, it does not reword one."
+            False, "A clock bound on one call. It stops a call, it does not reword one."
         ),
     }
 )
@@ -235,10 +309,23 @@ def append_new(path: Path, rows: Iterable[FingerprintRow]) -> list[FingerprintRo
 
     Returns what was written, so a caller can log the new stamps rather than
     re-read the file to find out.
+
+    A header that no longer matches the contract stops the run. The file is
+    append-only and its header is written once, so a new input would otherwise
+    put more cells on a row than the header names, and every reader that maps by
+    position would read one input under another input's name.
     """
+    pending = list(rows)
+    if not pending:
+        return []
+
+    columns = FingerprintRow.csv_columns()
+    if path.exists():
+        require_matching_header(path, columns)
+
     known = set(read_ledger(path))
     fresh: list[FingerprintRow] = []
-    for row in rows:
+    for row in pending:
         if row.pipeline_fingerprint not in known:
             known.add(row.pipeline_fingerprint)
             fresh.append(row)
@@ -248,9 +335,7 @@ def append_new(path: Path, rows: Iterable[FingerprintRow]) -> list[FingerprintRo
     path.parent.mkdir(parents=True, exist_ok=True)
     exists = path.exists()
     with path.open("a", encoding="utf-8", newline="") as handle:
-        writer = csv.DictWriter(
-            handle, fieldnames=FingerprintRow.csv_columns(), lineterminator="\n"
-        )
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
         if not exists:
             writer.writeheader()
         for row in fresh:

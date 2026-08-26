@@ -1,6 +1,6 @@
 # Determinism and the Pipeline Fingerprint
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 How the pipeline proves a re-run changed nothing, and how it records the times that claim turns out to be false. This page owns the stamp, the ledger that expands it, the skip rule built on it, and the violation policy.
 
@@ -39,45 +39,45 @@ The declared inputs are the weights digest, the quantisation, the runtime build,
 
 **Prompts and templates are digested, never stored.** A prompt in a committed ledger would put text into a persisted payload that nothing downstream needs, and the digest answers the only question anyone asks of it: did it move?
 
+### Where each input comes from
+
+Every field is read from the thing it describes, not from a literal beside the call:
+
+| Field | Read from | When that source is silent |
+| --- | --- | --- |
+| `model_sha256` | `models.summarize.sha256` in config, which is not yet the observation the contract asks for - see the gap below | Raises. A run without a recorded weights digest stops rather than stamping one that validates and says nothing. |
+| `runtime_build` | `LLAMA_CPP_BUILD`, set by `digest.yml` beside the download it checks against a recorded sha256 | `build-not-recorded`. It is not a llama.cpp release tag and cannot be read as one. |
+| `chat_template_sha256` | the Jinja source `llama-server` returns from `GET /props` - the template it will apply to every request | a digest of `chat-template-not-recorded`. |
+| `runner_class` | `RUNNER_ENVIRONMENT` / `RUNNER_OS` / `RUNNER_ARCH` | `local/<system>/<machine>` from `platform`. A machine that publishes none of the three is a developer machine and says so. |
+| `host_cpu` (not digested) | the `model name` line of `/proc/cpuinfo` | `platform.processor()`, then the architecture. |
+
+Degrading is not the same as inventing. A degraded run stamps a value nothing else can produce, so its rows sit apart from every run whose runtime was named, and a reader can see which is which without being told (Rule #10, section 1a).
+
 ### Current implementation gap
 
-The contract above is not fully implemented. `stage_work` passes
-`ModelRef.sha256` - what config expected, not what the server opened - and
-records the literal `llama-server-local` as the runtime build. It does not
-observe the GGUF file the server opened or the production llama.cpp build.
+Two things the contract above describes are still not observed.
 
-The zero-digest half of that gap is closed. `build_inputs` raises on a missing
-or placeholder digest instead of substituting sixty-four zeroes, so a run
-without a recorded weight digest stops rather than stamping one that validates
-and says nothing (Rule #10). The `work` job checks the file on disk against
-`models.summarize.sha256` with `sha256sum` before `llama-server` starts, on a
-cache hit as well as a miss, and its health check asserts the server serves the
-configured alias and loaded the configured filename. That gate is what lets the
-config value stand in for the observed one until the observation is wired.
+`model_sha256` is what config expected, not what the server opened. The `work`
+job checks the file on disk against `models.summarize.sha256` with `sha256sum`
+before `llama-server` starts, on a cache hit as well as a miss, and its health
+check asserts the server serves the configured alias and loaded the configured
+filename. That gate is what lets the config value stand in for the observed one.
+`/props` names the file the server opened; it does not digest it, and digesting
+five gigabytes in every shard is a cost nobody has measured against the gate it
+would replace.
 
-What remains matters most during a model swap: a changed runtime can still look
-unchanged. The work command must receive the observed GGUF SHA-256 and runtime
-build from the process that downloaded and started them, compare the GGUF digest
-with config, and carry both into `PipelineInputs`. Until then, fingerprint rows
-do not prove runtime identity.
-
-The remaining identity fields are also incomplete: `stage_work` uses the model
-id as chat-template identity and `local` as runner class.
+The five blind spots below are still outside the stamp.
 
 Article input is deliberately not a `PipelineInputs` field: that model answers
 "which pipeline configuration", and the same value must group many items. The
 missing article digest belongs in a separate per-item work identity used by a
 future skip key.
 
-The ledger and skip path are not wired into production. `stage_work` computes a
-fingerprint but never reads `state/fingerprints.csv` or calls `classify`;
-`assemble` never calls `append_new`; and the committed ledger has only its
-header. The sections below describe the intended contract and tested helpers,
-not current run behaviour.
-
-The Qwen3.5 adoption plan defers skip wiring. A future skip needs a separate
-typed per-item work identity containing both article-input digest and pipeline
-fingerprint. Article identity does not belong inside the configuration
+The skip path is not wired. `stage_work` computes a fingerprint and records it,
+and nothing reads `state/fingerprints.csv` back to call `classify`. The Qwen3.5
+adoption plan defers that on purpose: a safe skip needs a separate typed
+per-item work identity carrying both the article-input digest and the pipeline
+fingerprint, and article identity does not belong inside the configuration
 fingerprint.
 
 ## Which inference knobs the stamp carries
@@ -99,7 +99,7 @@ Ten of the nineteen knobs stay outside the stamp. Nine of the ten reach `server_
 | `startup_warmup` | no, and safe | A pass before the run. It decodes nothing that we keep. |
 | `request_timeout_minutes` | no, and safe | A clock bound on one POST. It stops a call, it does not reword one. |
 
-The five blind spots are real. Move one and a summary can change while the stamp holds still. They stay undigested here on purpose: row 4 of [`../../../TODO/20260825-qwen35-9b-swap-plan.md`](../../../TODO/20260825-qwen35-9b-swap-plan.md), "wire truthful fingerprint identity and model-separated drift", digests them, and that row resets every fingerprint anyway. Digesting them here would spend that reset twice.
+The five blind spots are real. Move one and a summary can change while the stamp holds still. They stay undigested here on purpose: adding a field to `PipelineInputs` resets every fingerprint, and [`../../../TODO/20260825-qwen35-9b-adoption-plan.md`](../../../TODO/20260825-qwen35-9b-adoption-plan.md) already spends one reset on the model swap. Digesting them apart from that swap spends the reset twice.
 
 `server_argv` used to claim in its own docstring that every knob it passes is a fingerprint input. It never was. The docstring now points at `NOT_DIGESTED` rather than claim coverage nobody checked.
 
@@ -109,15 +109,25 @@ It sits on the ledger row, outside `PipelineInputs`, so exclusion is structural 
 
 Including it would make every runner a different fingerprint, which would hide the one failure the stamp exists to catch: the same inputs producing different words on different hardware. It is the only field that *explains* a violation, so it has to be recorded and it must not be digested.
 
-## The ledger contract (not wired)
+## The ledger contract
 
-`state/fingerprints.csv` is intended to be **append-only and never pruned**, one
-row the first time a stamp is seen. Each row expands the digest into every
-component that produced it, plus the host.
+`state/fingerprints.csv` is **append-only and never pruned**, one row the first
+time a stamp is seen. Each row expands the digest into every component that
+produced it, plus the host.
 
 Without it a fingerprint is meaningless hex three years from now - it would prove two runs differed while saying nothing about how.
 
-The column order is defined once, by the contract, and flattened one level so every cell is a scalar. The committed header is asserted against that definition, because a hand-edited header would silently reorder every future row.
+The column order is defined once, by the contract, and flattened one level so every cell is a scalar. The committed header is asserted against that definition, because a hand-edited header would silently reorder every future row. `append_new` re-checks that header before it writes, so a contract that gained an input and a ledger that did not stops the run instead of putting the new input in the previous input's column.
+
+### Two stages, one row
+
+The stamp is observed in `work` and committed in `assemble`:
+
+1. `stage_work` is the only stage that can see the runtime, so it builds the row and writes it into the run's items directory as `<fingerprint>.fingerprint.json`.
+2. That directory is what a shard uploads, so the row survives a runner whose checkout is thrown away when the job ends.
+3. `stage_assemble` reads whatever stamps the shards left and calls `append_new`, which drops the ones the ledger already holds. Every shard of a run observes the same inputs, so a run of eight shards contributes one row.
+
+A second run over unchanged inputs writes nothing at all. The ledger records what a stamp meant, never how often the job ran.
 
 ## Future skip uses work identity, not fingerprint alone
 
@@ -157,6 +167,12 @@ Digesting the model's own serialization rather than a hand-written concatenation
 
 The scope statement above is honest, so the defect was the `server_argv` docstring that claimed more coverage than the scope statement gave. Fixing the sentence alone would have left the gap unwritten, and digesting the five blind spots here would have burned the eval-clock reset that the model swap already pays for. The third option is what shipped: name the exclusions, say which ones matter, and make a contract test hold the list closed. The list now costs one line per knob and cannot go stale in silence. Authority: Fowler ([../../../.github/agents/fowler.agent.md](../../../.github/agents/fowler.agent.md)).
 
+The three identity fields were a literal, a model slug and a second literal, and every one of them held still while the thing it named moved. `pipeline_fingerprint` - not `model_id` - is the attribution key on an eval row, so a slug that does not move when the prompt, the truncation cap or the llama.cpp build moves attributes a changed score to an unchanged pipeline. Reading each field from the thing it describes is what makes the key mean what the ledger says it means. Authority: Andre, with Carmack on the two runtime fields.
+
+The chat template is read from the running server rather than reconstructed. The template ships inside the GGUF and the server applies it, so the pipeline never renders one and had nothing local to digest that was not either the model id, which never moves, or an invented restatement of the request shape. `GET /props` returns the Jinja source the server will use, which is the same doctrine as the weights digest: the stamp is an observation of the runtime, and the runtime disagreeing with config is the event the stamp exists to expose. Authority: Andre.
+
+The row is written in `work` and appended in `assemble` because a work shard's checkout does not survive its job. Four to eight shards run the same inputs on disposable runners and upload one directory each; only `assemble` has a checkout that is committed. An `append_new` inside `stage_work` would write a row that is thrown away with the runner, and the oracle - every fingerprint in `state/scores.csv` resolves to a row in `state/fingerprints.csv` - would fail in CI while passing on a laptop. Carrying the row as a payload keeps the observation where it is observable and the commit where commits happen (section 1a). Authority: Fowler.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -171,6 +187,13 @@ The scope statement above is honest, so the defect was the `server_argv` docstri
 | Put all ten undigested knobs on the ledger row the way `host_cpu` is | `host_cpu` earns its column because it explains a violation. A KV cache setting explains nothing on its own, and ten more columns cost every future row. | Fowler |
 | Correct the fields and leave the docstring | The fields were never the defect. The scope statement already said an undeclared field is not covered; only the docstring claimed otherwise. | Fowler |
 | Delete the false sentence and add nothing | The gap stays real and stays unwritten, so the next reader re-derives it from the argv list. | Fowler |
+| Keep `model_id` as the attribution key and leave the three identity fields alone | A slug does not move when the prompt, the truncation cap or the runtime build moves, and all three move the score. | Andre |
+| Digest the request envelope instead of asking the server for its template | The envelope is our own shape and the prompt and output-schema digests already carry it. Reconstructing a template the server owns restates config under a name that promises an observation. | Andre |
+| Raise when `LLAMA_CPP_BUILD` is absent, the way a missing weights digest raises | It would stop every developer run and every test that composes the stages, to protect a field that explains a run rather than gating one. A recorded absence stamps apart from every pinned run, says the same thing, and still runs. | Carmack |
+| Call `append_new` from `stage_work` | A shard's checkout is discarded when the job ends, so the row would never reach the committed ledger and the oracle would fail in CI while passing locally. | Fowler |
+| Have `assemble` rebuild the stamp from config | It runs on another machine after the server is gone, so it would record its own runner class and its own host as the ones that summarized nothing. | Carmack |
+| Backfill the stamps already in `state/scores.csv` | They predate any recorded runtime, so expanding them means manufacturing a measurement nobody took (Rule #10). They stay unexpandable, and that is the honest record. | Andre |
+| A `reason` or `superseded_by` column on the ledger row | Nothing parses a sentence in a CSV, and the machine-readable "why" already lives in `state/validation-<date>.csv`. | Fowler |
 
 ## See also
 

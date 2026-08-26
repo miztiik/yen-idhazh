@@ -30,12 +30,16 @@ from idhazh.fingerprint import (
     LEDGER_RELPATH,
     NOT_DIGESTED,
     PLACEHOLDER_DIGEST,
+    UNRECORDED_BUILD,
     Observation,
     append_new,
     build_inputs,
     classify,
     digested_inference_fields,
+    host_cpu,
     read_ledger,
+    runner_class,
+    runtime_build,
     sampling_spelling,
     text_digest,
 )
@@ -44,9 +48,10 @@ FIXTURE = CONTRACT_FIXTURES_DIR / "fingerprint-row" / "first-seen.json"
 HEX64 = re.compile(r"[0-9a-f]{64}")
 
 #: Ruled on 2026-08-25: these five change the arithmetic, so leaving them out
-#: of the stamp is a blind spot. Row 4 of `TODO/20260825-qwen35-9b-swap-plan.md`
-#: digests them. Until then each one stays flagged, and this list is what stops
-#: a quiet downgrade to "safe".
+#: of the stamp is a blind spot. They ride the model swap in
+#: `TODO/20260825-qwen35-9b-adoption-plan.md`, which resets every fingerprint
+#: anyway. Until then each one stays flagged, and this list is what stops a
+#: quiet downgrade to "safe".
 RULED_LOGIT_MOVERS: Final[frozenset[str]] = frozenset(
     {"cache_type_k", "cache_type_v", "flash_attention", "n_parallel", "n_threads_batch"}
 )
@@ -272,6 +277,27 @@ def test_the_committed_ledger_carries_the_declared_columns() -> None:
     assert tuple(header) == FingerprintRow.csv_columns()
 
 
+def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
+    """A new input would otherwise land in the column an older input named."""
+    ledger = tmp_path / LEDGER_RELPATH
+    first = committed_row()
+    append_new(ledger, [first])
+
+    kept = ledger.read_text(encoding="utf-8").split("\n")
+    kept[0] = ",".join(FingerprintRow.csv_columns()[:-1])
+    ledger.write_text("\n".join(kept), encoding="utf-8")
+
+    widened = restamp(first.inputs, truncation_cap_tokens=first.inputs.truncation_cap_tokens * 2)
+    with pytest.raises(ValueError, match="Migrate the ledger"):
+        append_new(ledger, [widened])
+
+
+def test_appending_nothing_creates_nothing(tmp_path: Path) -> None:
+    ledger = tmp_path / LEDGER_RELPATH
+    assert append_new(ledger, []) == []
+    assert not ledger.exists()
+
+
 def test_every_column_is_a_scalar() -> None:
     row = committed_row()
     assert set(row.csv_row()) == set(FingerprintRow.csv_columns())
@@ -322,3 +348,64 @@ def test_the_prompt_and_the_schema_are_digested_not_stored() -> None:
     assert HEX64.fullmatch(inputs.prompt_sha256)
     assert HEX64.fullmatch(inputs.output_schema_sha256)
     assert HEX64.fullmatch(inputs.chat_template_sha256)
+
+
+# --- What the run observes about the machine it ran on ----------------------
+
+
+def test_the_runtime_build_is_the_one_the_job_pinned() -> None:
+    """`digest.yml` sets it beside the download it checks against a sha256."""
+    assert runtime_build({"LLAMA_CPP_BUILD": "b10598"}) == "b10598"
+
+
+@pytest.mark.parametrize("environ", [{}, {"LLAMA_CPP_BUILD": ""}, {"LLAMA_CPP_BUILD": "   "}])
+def test_an_unpinned_build_records_the_absence_rather_than_inventing_a_tag(
+    environ: dict[str, str],
+) -> None:
+    """The literal this replaced named a build nobody checked (Rule #10)."""
+    assert runtime_build(environ) == UNRECORDED_BUILD
+
+
+def test_an_unpinned_build_stamps_apart_from_a_pinned_one() -> None:
+    """Degrading honestly is only honest if the degraded run is distinguishable."""
+    inputs = committed_row().inputs
+    unpinned = inputs.model_copy(update={"runtime_build": UNRECORDED_BUILD})
+    pinned = inputs.model_copy(update={"runtime_build": "b10598"})
+    assert unpinned.fingerprint() != pinned.fingerprint()
+
+
+def test_the_runner_class_comes_from_the_runner_and_not_from_a_literal() -> None:
+    environ = {
+        "GITHUB_ACTIONS": "true",
+        "RUNNER_ENVIRONMENT": "github-hosted",
+        "RUNNER_OS": "Linux",
+        "RUNNER_ARCH": "X64",
+    }
+    assert runner_class(environ) == "github-hosted/linux/x64"
+
+
+def test_a_developer_machine_is_a_class_of_its_own() -> None:
+    """It has to be, or a laptop's summaries file under the runner's stamp."""
+    assert runner_class({}).startswith("local/")
+
+
+def test_a_runner_that_did_not_name_its_class_is_not_called_a_laptop() -> None:
+    """Inside Actions and unnamed is a third answer, not the local one."""
+    assert runner_class({"GITHUB_ACTIONS": "true"}).startswith("github/")
+
+
+def test_the_host_cpu_names_the_part_and_not_the_architecture(tmp_path: Path) -> None:
+    """`x86_64` is the same string on every runner, so it explains no violation."""
+    cpuinfo = tmp_path / "cpuinfo"
+    cpuinfo.write_text(
+        "processor\t: 0\nvendor_id\t: GenuineIntel\n"
+        "model name\t: Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz\n"
+        "cache size\t: 49152 KB\n",
+        encoding="utf-8",
+    )
+    assert host_cpu(cpuinfo) == "Intel(R) Xeon(R) Platinum 8370C CPU @ 2.80GHz"
+
+
+def test_a_host_that_names_no_processor_still_answers(tmp_path: Path) -> None:
+    """The field is required, and an empty one would fail the row it explains."""
+    assert host_cpu(tmp_path / "absent").strip()
