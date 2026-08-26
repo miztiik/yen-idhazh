@@ -243,6 +243,14 @@ def build_day(
     An item already published keeps its place. That is not politeness: the
     order is part of what a shared link shows, so moving it would change what
     the recipient sees relative to the sender.
+
+    A run can come back as itself. `cli.stage_assemble` writes the day, then
+    builds the manifest, then writes it, so a run that dies in that gap leaves a
+    day holding its items and a manifest that never heard of it - and the next
+    run reads the same number off the manifest. Replacing the reference rather
+    than adding a second one is what makes that replay one run, and the count on
+    it is every item the number introduced rather than what this attempt added,
+    because that is what `DigestDay` validates it against.
     """
     already = {item.item_id for item in (previous.items if previous else [])}
     fresh = [item for item in items if item.item_id not in already]
@@ -250,7 +258,13 @@ def build_day(
 
     runs = list(previous.runs) if previous else []
     runs = [run for run in runs if run.n != run_n]
-    runs.append(DigestRunRef(n=run_n, at=generated_at, items_added=len(fresh)))
+    runs.append(
+        DigestRunRef(
+            n=run_n,
+            at=generated_at,
+            items_added=sum(1 for item in combined if item.introduced_by_run == run_n),
+        )
+    )
     runs.sort(key=lambda run: run.n)
 
     names = vertical_names(taxonomy)
@@ -308,7 +322,18 @@ def build_manifest(
     item_health_rows: Sequence[ItemHealthRow] | None = None,
     routes: Sequence[Route] | None = None,
 ) -> RunManifest:
-    """What ran, against which model, at which commit - appended, never rewritten."""
+    """What ran, against which model, at which commit - appended, never rewritten.
+
+    This appends where `build_day` replaces, and the difference is not an
+    oversight. `RunManifest` refuses a `runs` list that is not numbered from 1
+    without gaps, so `runs[-1].n` is `len(runs)` and the next number cannot
+    already be taken. A second record for one run is not a duplicate this
+    function has to filter out - it is a payload the contract will not build.
+    A guard here would be a branch nothing can reach.
+
+    The day is the surface that needs the replace, because its items land on
+    disk one write before this one does.
+    """
     run_n = (previous.runs[-1].n + 1) if previous else 1
     if item_health_rows is not None:
         succeeded = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.OK)
