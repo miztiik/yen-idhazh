@@ -82,8 +82,8 @@ class Watchlist(Contract):
             change="Stated the match rule on EntityDef.aliases.",
             why=(
                 "The field was declared on day one and read nowhere, so entities were "
-                "empty on all 2,121 committed items and the watchlist ranking bonus had "
-                "never moved a score. The rule is now written where the terms live. "
+                "empty on every committed item and the watchlist ranking bonus had never "
+                "moved a score. The rule is now written where the terms live. "
                 "Description-only, so no payload changes and none needs a migration."
             ),
         ),

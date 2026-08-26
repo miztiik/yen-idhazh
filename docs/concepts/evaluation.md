@@ -343,15 +343,15 @@ encoder or the committed vectors break.
 It produced **zero queries** for its first five days, because no published item
 carried an entity slug. `DigestItem.entities` is copied from `Article.entities`
 and no stage in the pipeline ever wrote that field - nor `lenses`, nor `events`.
-Three declared taxonomy dimensions were empty on all 2,121 committed items.
+Three declared taxonomy dimensions were empty on every committed item.
 
 **A deterministic tagger now writes all three (2026-08-26).** The rule and its
 measured coverage live in
 [`../architecture/sources/discovery.md`](../architecture/sources/discovery.md).
 What it means for this tier, measured on the committed corpus by running the
 real `entity_queries` over items the matcher had tagged: **0 queries becomes
-25**, covering **585 of 2,121 items**, from `entity-asml` at 3 items to
-`entity-google` at 99.
+25**, covering **616 of 2,237 items**, from `entity-asml` at 3 items to
+`entity-google` at 105.
 
 **That is what the corpus supports, not what the tier reports today.** The
 tagger only touches items published from now on; no committed payload was

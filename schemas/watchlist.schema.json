@@ -192,7 +192,7 @@
     {
       "change": "Stated the match rule on EntityDef.aliases.",
       "version": "2026-08-26",
-      "why": "The field was declared on day one and read nowhere, so entities were empty on all 2,121 committed items and the watchlist ranking bonus had never moved a score. The rule is now written where the terms live. Description-only, so no payload changes and none needs a migration."
+      "why": "The field was declared on day one and read nowhere, so entities were empty on every committed item and the watchlist ranking bonus had never moved a score. The rule is now written where the terms live. Description-only, so no payload changes and none needs a migration."
     },
     {
       "change": "Initial shape: entities with their own feeds, plus the EDGAR policy.",

@@ -132,9 +132,9 @@ Full event spread: `release` 22.3, `regulation` 19.0, `deal` 13.2, `research` 12
 | Corpus | Items with an entity | Entities carried by >= 3 items |
 | --- | --- | --- |
 | 121 real articles (the Extract site) | 38, **31.4 percent** | 7 |
-| 2,121 committed items, own words | 472, **22.3 percent** | 25 |
+| 2,237 committed items, own words | 495, **22.1 percent** | 25 |
 
-**The number this was for: the retrieval eval's free query tier goes from 0 queries to 25**, covering 585 of 2,121 items, from `entity-asml` at 3 to `entity-google` at 99. Measured by running the eval's own `entity_queries` over a corpus the matcher had tagged ([../../concepts/evaluation.md](../../concepts/evaluation.md)). That is what the corpus **supports**: no committed payload was rewritten, so the tier reports zero until new days land.
+**The number this was for: the retrieval eval's free query tier goes from 0 queries to 25**, covering 616 of 2,237 items, from `entity-asml` at 3 to `entity-google` at 105. Measured by running the eval's own `entity_queries` over a corpus the matcher had tagged ([../../concepts/evaluation.md](../../concepts/evaluation.md)). That is what the corpus **supports**: no committed payload was rewritten, so the tier reports zero until new days land.
 
 **`watchlist_bonus` was dead arithmetic and is now live.** `cli` handed `plan_vertical` a hardcoded empty `watchlist_keys`, so `PlannedItem.watchlist_hit` was false on every item ever planned and the 0.5 bonus never reached a score. It is now the set of candidates whose **feed title** matches an entity alias.
 
