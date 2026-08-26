@@ -548,6 +548,17 @@ contends with the first.
   per worktree before running the browser suite. Two agents on one port do not
   collide loudly: `reuseExistingServer` is on outside CI, so the second one
   silently tests the first one's bytes.
+- **`vite preview --outDir build` still serves static assets out of
+  `.svelte-kit/output/client`.** So the section 12 step-5 check - delete the
+  page's data file and confirm it degrades - fails to prove anything if you only
+  remove the file from `build/`: the page loads it anyway and the smoke reads as
+  a pass. On 2026-08-27 that took two attempts to spot, because the served copy
+  came back HTTP 200 with the directory renamed. Hide every copy -
+  `build/`, `.svelte-kit/output/client/` and `static/` - and clear the browser
+  cache through CDP (`Network.clearBrowserCache` plus
+  `Network.setCacheDisabled`), or the second reload is served from memory.
+  Expect `vite preview` to die with an unhandled `ENOENT` when a file it is
+  streaming disappears; that is the server, not the page.
 
 ## Measuring with the committed encoder
 
