@@ -22,6 +22,7 @@
   "source_form": "article",
   "source_id": "example-lab-blog",
   "source_url": "https://blog.example-lab.org/2026/08/model-release",
+  "source_word_count": 1320,
   "status": "ok",
   "text": "Example Lab published a smaller model today and said inference cost fell by about a third against the model it replaces. The post gives two numbers: 34 percent lower cost per million tokens, and a 2.1x throughput gain on commodity CPUs.",
   "tier": 1,

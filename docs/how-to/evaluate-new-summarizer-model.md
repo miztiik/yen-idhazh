@@ -41,6 +41,16 @@ What the qualification arm now does, which the old exploratory one did not:
 - freezes each shard's slice exactly once, hashes the model-visible truncated
   text and the sanitized full text, writes the hashes down **before** the first
   inference call, and replays those bytes;
+- keeps walking its slice until the slice has offered every length tier the
+  corpus definition asks for, instead of stopping at a fixed pool size. A long
+  read is the scarce shape - 3 of 109 extracted articles on 2026-08-26 - so a
+  walk sized on the item count alone met that count every time while the top
+  tier stayed empty. The extra addresses cost fetch seconds, never model
+  minutes ([../reference/measurements.md](../reference/measurements.md));
+- picks the length tier from the source body rather than from the post-cap text,
+  because the post-cap count cannot pass 1923 words and the top tier starts at
+  2000, so it never fired
+  ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md));
 - interleaves the repeats - every item once, then every item again - so a repeat
   never lands on a warm prompt cache and skips its own prefill;
 - runs every injection canary on live candidate calls; and
