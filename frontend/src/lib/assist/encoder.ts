@@ -24,9 +24,22 @@
  */
 export const ENCODER_ID = 'all-minilm-l6-v2-quantized';
 
+/** The date `PROVENANCE.md` records these weights were fetched.
+ *
+ * It is in the URL so that different weights are a different URL. Without it a
+ * browser holding the old encoder in its HTTP cache would answer a new day's
+ * vectors with it, and the only symptom is worse ranking.
+ *
+ * Moving it makes every returning searcher pay the whole download again, so it
+ * moves when the weights move and at no other time.
+ */
+export const ENCODER_VERSION = '2026-08-22';
+
 /** The directory under `assist/models/` that transformers.js loads.
  *
- * Separate from the identifier because one constant was doing both jobs, and a
- * path pinned to an identifier is a path nobody can version.
+ * Built from the two constants above rather than written out, so the path
+ * cannot disagree with the identifier it is named for. transformers.js reads
+ * this as a model id, and a slash in one is ordinary - upstream ids are
+ * `org/name`.
  */
-export const ENCODER_PATH = 'all-MiniLM-L6-v2';
+export const ENCODER_PATH = `${ENCODER_ID}/${ENCODER_VERSION}`;

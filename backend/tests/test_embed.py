@@ -26,7 +26,9 @@ from idhazh.embed import (
     DIMENSIONS,
     DTYPE,
     EMBEDDER_ID,
+    ENCODER_VERSION,
     MAX_TOKENS,
+    MODEL_RELDIR,
     ONNX_RELPATH,
     TOKENIZER_RELPATH,
     Embedder,
@@ -145,6 +147,15 @@ class TestOneEncoderTwoRuntimes:
         at the moment a day is published.
         """
         assert re.fullmatch(SLUG_PATTERN, EMBEDDER_ID) is not None
+
+    def test_the_browser_loads_the_directory_the_runner_reads(self) -> None:
+        """A version in the path is a cache boundary only if both sides use it."""
+        assert self.constant("ENCODER_VERSION") == ENCODER_VERSION
+        assert MODEL_RELDIR.endswith(f"{EMBEDDER_ID}/{ENCODER_VERSION}")
+
+    def test_the_versioned_directory_is_the_one_on_disk(self) -> None:
+        """A rename that missed the weights is a 404 nothing else would catch."""
+        assert (REPO_ROOT / MODEL_RELDIR).is_dir()
 
 
 class TestEncoder:
