@@ -196,17 +196,21 @@ def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
         AppConfig.model_validate({"console": {"chart_width": 0}})
 
 
-def test_the_committed_config_bounds_every_page_the_gate_bounds() -> None:
-    """`frontend/scripts/bundle-gate.mjs` reads the file, never the model.
-
-    So a block missing from `config/idhazh.json` would not fall back to the
-    default - it would leave the gate with nothing to check while every other
-    knob still read correctly.
+def test_the_committed_config_carries_the_capped_routes() -> None:
+    """`frontend/scripts/bundle-gate.mjs` reads the file, never the model, and
+    the model default is empty - so the committed config is the only place the
+    capped routes live. If it lost them the gate would check nothing while every
+    other knob still read correctly, and a route that grows with the corpus is
+    deliberately absent so a fixed ceiling never fails on an ordinary publish.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    minimal = AppConfig.model_validate({"models": committed.models.model_dump()})
+    ceilings = committed.page_weight.ceilings_bytes
 
-    assert committed.page_weight.ceilings_bytes == minimal.page_weight.ceilings_bytes
+    assert PageWeightConfig().ceilings_bytes == {}, "the model default must stay empty"
+    assert ceilings["/404"] > 0
+    assert ceilings["/evals/"] > 0
+    assert "/archive/" not in ceilings, "a route that grows with the corpus is not capped"
+    assert "/console/" not in ceilings, "a route that grows with the ledger is not capped"
 
 
 def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:
