@@ -253,7 +253,20 @@ def stage_plan(
     ledger.append_health(state, date, health)
     already_published = frozenset(ledger.load_published(state))
 
-    watchlist_keys: frozenset[str] = frozenset()
+    # The bonus is decided on the feed title, because that is all a plan has: the
+    # page has not been fetched yet. An article whose body names an entity its
+    # title does not still earns the published tag at Extract - the tag says what
+    # the item is about, the bonus says what we were already watching for.
+    entity_terms = settings.watchlist.entity_terms()
+    watchlist_keys = frozenset(
+        candidate.url_key for candidate in candidates if tag.tags(entity_terms, candidate.title)
+    )
+    LOG.info(
+        "watchlist matched candidates=%s of %s entities=%s",
+        len(watchlist_keys),
+        len(candidates),
+        len(entity_terms),
+    )
     verticals = []
     items: list[PlannedItem] = []
     for vertical in settings.taxonomy.verticals:
@@ -642,7 +655,7 @@ def _fetch_one(
     article = extract.to_article(
         item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
     )
-    article = tag.tagged(article, taxonomy=settings.taxonomy)
+    article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)
     return article, fetch_ms, int((time.monotonic() - started) * 1000)
 
 

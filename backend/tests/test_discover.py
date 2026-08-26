@@ -35,6 +35,7 @@ from idhazh.discover import (
     split_blocked,
 )
 from idhazh.rank import ITEM_ID_DIGITS, merge, plan_vertical, score, tier_weight
+from idhazh.tag import tags
 
 FEEDS = FIXTURES_DIR / "feeds"
 
@@ -377,6 +378,40 @@ def test_a_watchlist_hit_and_a_front_page_vote_both_lift_the_score() -> None:
     base = rate(carried)
     assert rate(carried, watchlist_hit=True) > base
     assert rate(carried, front_page=True) > base
+
+
+def test_the_scoring_formula_is_exactly_its_four_terms() -> None:
+    """Pins the arithmetic, so a term cannot go quiet without a test saying so.
+
+    The watchlist term was dead for five days - `watchlist_hit` was computed
+    against a hardcoded empty set, so `watchlist_bonus` never reached a score
+    and nothing failed. A test that only asserts "the bonus lifts the score"
+    passes on a term that never fires in production, because it supplies the
+    flag itself. This one pins the size of every term against its config knob.
+    """
+    config = CollectConfig()
+    one = all_candidates()[:1]
+    base = rate(one)
+
+    assert rate(one, watchlist_hit=True) == pytest.approx(base + config.watchlist_bonus)
+    assert rate(one, front_page=True) == pytest.approx(base + config.front_page_bonus)
+    assert rate(one, watchlist_hit=True, front_page=True) == pytest.approx(
+        base + config.watchlist_bonus + config.front_page_bonus
+    )
+
+    # Reach multiplies authority; the bonuses are added after, never scaled by it.
+    two = [one[0], replace(one[0], source_id="trade-press", canonical_url=one[0].canonical_url)]
+    assert rate(two) == pytest.approx(base * (1.0 + config.repetition_weight))
+    assert rate(two, watchlist_hit=True) == pytest.approx(rate(two) + config.watchlist_bonus)
+
+
+def test_a_populated_watchlist_can_actually_move_a_planned_item() -> None:
+    """The end of the dead arithmetic: the flag now comes from the vocabulary."""
+    watched = [c for c in all_candidates() if c.source_id == "lab-blog"][:1]
+    assert watched
+    terms = {"example-lab": ["Example Lab"]}
+    hit = bool(tags(terms, watched[0].title or ""))
+    assert rate(watched, watchlist_hit=hit) >= rate(watched)
 
 
 def test_a_weighted_down_feed_scores_below_a_full_one_of_the_same_tier() -> None:

@@ -6,6 +6,381 @@
     "requests_per_second": 10,
     "submissions_url_template": "https://data.sec.gov/submissions/CIK{cik}.json"
   },
-  "entities": [],
-  "version": "2026-08-21"
+  "entities": [
+    {
+      "aliases": [
+        "Adani Group",
+        "Gautam Adani"
+      ],
+      "cik": null,
+      "display_name": "Adani",
+      "feeds": [],
+      "id": "adani",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Alibaba",
+        "Qwen",
+        "Alicloud"
+      ],
+      "cik": null,
+      "display_name": "Alibaba",
+      "feeds": [],
+      "id": "alibaba",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Amazon",
+        "AWS",
+        "Amazon Web Services",
+        "Andy Jassy"
+      ],
+      "cik": null,
+      "display_name": "Amazon",
+      "feeds": [],
+      "id": "amazon",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "AMD",
+        "Advanced Micro Devices"
+      ],
+      "cik": null,
+      "display_name": "AMD",
+      "feeds": [],
+      "id": "amd",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Anthropic",
+        "Claude"
+      ],
+      "cik": null,
+      "display_name": "Anthropic",
+      "feeds": [],
+      "id": "anthropic",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Apple",
+        "iPhone",
+        "Tim Cook"
+      ],
+      "cik": null,
+      "display_name": "Apple",
+      "feeds": [],
+      "id": "apple",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "ASML"
+      ],
+      "cik": null,
+      "display_name": "ASML",
+      "feeds": [],
+      "id": "asml",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "ByteDance",
+        "TikTok"
+      ],
+      "cik": null,
+      "display_name": "ByteDance",
+      "feeds": [],
+      "id": "bytedance",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "DeepSeek"
+      ],
+      "cik": null,
+      "display_name": "DeepSeek",
+      "feeds": [],
+      "id": "deepseek",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "European Central Bank",
+        "ECB"
+      ],
+      "cik": null,
+      "display_name": "European Central Bank",
+      "feeds": [],
+      "id": "ecb",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Federal Reserve",
+        "the Fed",
+        "FOMC",
+        "Jerome Powell"
+      ],
+      "cik": null,
+      "display_name": "US Federal Reserve",
+      "feeds": [],
+      "id": "federal-reserve",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Federal Trade Commission",
+        "FTC"
+      ],
+      "cik": null,
+      "display_name": "US Federal Trade Commission",
+      "feeds": [],
+      "id": "ftc",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Google",
+        "Alphabet",
+        "DeepMind",
+        "Gemini",
+        "Sundar Pichai"
+      ],
+      "cik": null,
+      "display_name": "Google",
+      "feeds": [],
+      "id": "google",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Huawei"
+      ],
+      "cik": null,
+      "display_name": "Huawei",
+      "feeds": [],
+      "id": "huawei",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "IBM"
+      ],
+      "cik": null,
+      "display_name": "IBM",
+      "feeds": [],
+      "id": "ibm",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "International Energy Agency",
+        "IEA"
+      ],
+      "cik": null,
+      "display_name": "International Energy Agency",
+      "feeds": [],
+      "id": "iea",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Infosys"
+      ],
+      "cik": null,
+      "display_name": "Infosys",
+      "feeds": [],
+      "id": "infosys",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Intel"
+      ],
+      "cik": null,
+      "display_name": "Intel",
+      "feeds": [],
+      "id": "intel",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Meta Platforms",
+        "Facebook",
+        "Instagram",
+        "WhatsApp",
+        "Llama",
+        "Mark Zuckerberg"
+      ],
+      "cik": null,
+      "display_name": "Meta",
+      "feeds": [],
+      "id": "meta",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Microsoft",
+        "Azure",
+        "Copilot",
+        "Satya Nadella"
+      ],
+      "cik": null,
+      "display_name": "Microsoft",
+      "feeds": [],
+      "id": "microsoft",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Mistral AI",
+        "Mistral"
+      ],
+      "cik": null,
+      "display_name": "Mistral AI",
+      "feeds": [],
+      "id": "mistral",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Nvidia",
+        "NVDA",
+        "Jensen Huang"
+      ],
+      "cik": null,
+      "display_name": "Nvidia",
+      "feeds": [],
+      "id": "nvidia",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "OpenAI",
+        "ChatGPT",
+        "GPT-4",
+        "GPT-5",
+        "Sam Altman"
+      ],
+      "cik": null,
+      "display_name": "OpenAI",
+      "feeds": [],
+      "id": "openai",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Oracle"
+      ],
+      "cik": null,
+      "display_name": "Oracle",
+      "feeds": [],
+      "id": "oracle",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Reserve Bank of India",
+        "RBI"
+      ],
+      "cik": null,
+      "display_name": "Reserve Bank of India",
+      "feeds": [],
+      "id": "rbi",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Reliance Industries",
+        "Reliance Jio",
+        "Mukesh Ambani"
+      ],
+      "cik": null,
+      "display_name": "Reliance Industries",
+      "feeds": [],
+      "id": "reliance",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Samsung"
+      ],
+      "cik": null,
+      "display_name": "Samsung",
+      "feeds": [],
+      "id": "samsung",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Tata Group",
+        "Tata Consultancy",
+        "TCS",
+        "Tata Motors"
+      ],
+      "cik": null,
+      "display_name": "Tata",
+      "feeds": [],
+      "id": "tata",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "Tesla",
+        "Elon Musk"
+      ],
+      "cik": null,
+      "display_name": "Tesla",
+      "feeds": [],
+      "id": "tesla",
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "aliases": [
+        "xAI",
+        "Grok"
+      ],
+      "cik": null,
+      "display_name": "xAI",
+      "feeds": [],
+      "id": "xai",
+      "retired_on": null,
+      "status": "active"
+    }
+  ],
+  "version": "2026-08-26"
 }

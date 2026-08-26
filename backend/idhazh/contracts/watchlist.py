@@ -16,7 +16,7 @@ from typing import Annotated, ClassVar, Self
 from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, Model, Slug, Url
-from idhazh.contracts.taxonomy import Lifecycled, SourceTier
+from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceTier
 
 Cik = Annotated[str, StringConstraints(pattern=r"^[0-9]{10}$")]
 ContactEmail = Annotated[str, StringConstraints(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
@@ -36,7 +36,16 @@ class EntityDef(Lifecycled):
 
     id: Slug
     display_name: str = Field(min_length=1)
-    aliases: list[str] = Field(default_factory=list)
+    aliases: list[str] = Field(
+        default_factory=list,
+        description=(
+            "Every name this entity is called. An item is tagged with the entity when "
+            "one of these appears in its words as a whole-word phrase, case-folded, and "
+            "the same set decides the watchlist ranking bonus against a candidate's feed "
+            "title. Nothing is derived from the id or the display name. An entity with "
+            "no alias is never matched and never lifts a score."
+        ),
+    )
     cik: Cik | None = Field(
         default=None,
         description="Ten-digit, zero-padded SEC filer id. Null for a non-US entity.",
@@ -69,6 +78,16 @@ class Watchlist(Contract):
     __schema_stem__: ClassVar[str] = "watchlist"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-26",
+            change="Stated the match rule on EntityDef.aliases.",
+            why=(
+                "The field was declared on day one and read nowhere, so entities were "
+                "empty on every committed item and the watchlist ranking bonus had never "
+                "moved a score. The rule is now written where the terms live. "
+                "Description-only, so no payload changes and none needs a migration."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-21",
             change="Initial shape: entities with their own feeds, plus the EDGAR policy.",
             why="Contracts before logic - the entity bonus is computed against a fixed shape.",
@@ -77,6 +96,14 @@ class Watchlist(Contract):
 
     entities: list[EntityDef]
     edgar: EdgarPolicy = Field(default_factory=EdgarPolicy)
+
+    def entity_terms(self) -> dict[str, list[str]]:
+        """The entity match surface. A retired entity keeps its tombstone and stops matching."""
+        return {
+            entity.id: entity.aliases
+            for entity in self.entities
+            if entity.status is not LifecycleStatus.RETIRED
+        }
 
     @model_validator(mode="after")
     def _ids_are_distinct(self) -> Self:
