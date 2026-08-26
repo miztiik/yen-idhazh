@@ -94,10 +94,13 @@ jobs:
         working-directory: frontend
         run: npm run build
 
-      # The on-device encoder must stay behind a dynamic import. A static import
-      # would put a multi-megabyte library on every reader's first load, and
-      # nothing about that edit looks wrong in review.
-      - name: Bundle gate - no encoder on the first-load path
+      # Three checks under one step. The on-device encoder must stay behind a
+      # dynamic import; a static import would put a multi-megabyte library on
+      # every reader's first load, and nothing about that edit looks wrong in
+      # review. Each route's first-load JavaScript must match its recorded
+      # weight. Each page that renders no day must stay under its ceiling in
+      # config/idhazh.json. Read which one failed - they have different answers.
+      - name: Bundle gate - encoder, first-load weight, page ceilings
         working-directory: frontend
         run: npm run bundle-gate
 

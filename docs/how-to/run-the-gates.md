@@ -144,6 +144,16 @@ for the countdown that had already fired underneath it - the numbers, and which
 cause owns which bytes, are in
 [../reference/measurements.md](../reference/measurements.md#the-vector-backfill-and-the-one-raise-the-archive-plan-cannot-absorb).
 
+**Raising one is a measurement, not a decision, and it needs a control.** The
+`/console/` ceiling went from 123,330 to 137,567 on 2026-08-26. What made
+that defensible was a build of the *old* payload under the *new* source, which
+reproduced the number being replaced to within one byte and so proved the rest
+of the rise was the payload rather than the change asking for it. It also showed
+the split: 13,439 bytes of the first 14,235 were the pipeline running that day
+twice more, and 796 were the section that raised the ceiling
+([../reference/measurements.md](../reference/measurements.md#the-console-section-on-top-of-that-raise)).
+Without that control, a raise is only a bigger number with a sentence beside it.
+
 ## The browser suite
 
 The browser gate runs against the **canary day**, not the real digest, so it

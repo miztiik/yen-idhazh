@@ -71,6 +71,19 @@
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 	const previous = $derived(ordered.length > 1 ? ordered[ordered.length - 2] : null);
 
+	/** The two newest days ran on models the ledger names, and they differ.
+	 *
+	 * A percent shift across that boundary would read as the swap's doing, and
+	 * nothing committed says it was: the articles changed too. An unknown model
+	 * ends the comparison rather than inventing a swap. */
+	const swapped = $derived(
+		newest !== null &&
+			previous !== null &&
+			newest.model !== null &&
+			previous.model !== null &&
+			newest.model !== previous.model
+	);
+
 	/** Candles thin as the window widens. */
 	const candle = $derived(
 		Math.max(
@@ -122,7 +135,7 @@
 	}
 </script>
 
-<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Model tokens per second</h2>
+<h3 class="mt-6 text-[0.9375rem] font-semibold text-text">Model tokens per second</h3>
 <p class="mt-1 text-[0.8125rem] text-text-tertiary">
 	<em>Read</em> is the model taking an article in, <em>write</em> is it producing the summary. Writing
 	is slower because it goes one token at a time. Each candle is one day: the line spans the slowest
@@ -256,7 +269,12 @@
 			from {newest.items}
 			{newest.items === 1 ? 'item' : 'items'} across {newest.runs.length}
 			{newest.runs.length === 1 ? 'run' : 'runs'}.
-			{#if previous}
+				{#if swapped}
+					<span data-throughput="swap"
+						>{previous?.date} ran on {previous?.model} and this day ran on {newest.model}, so the
+						two are not compared.</span
+					>
+				{:else if previous}
 				Read is {shift(newest.readTps, previous.readTps)} and write is {shift(
 					newest.writeTps,
 					previous.writeTps

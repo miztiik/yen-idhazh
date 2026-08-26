@@ -3,7 +3,8 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
-import { telemetryMonths, telemetryRows } from '../src/lib/server/payload';
+import { modelWork } from '../src/lib/server/model-work';
+import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 
 /**
  * The console says whether the runs worked and which feeds are broken.
@@ -908,7 +909,7 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'Confidence and size' })).toBeVisible();
+	await expect(page.getByRole('heading', { name: 'What the model did' })).toBeVisible();
 	await expect(page.locator('[data-charts="table"]')).toBeVisible();
 
 	expect(errors).toEqual([]);
@@ -1076,4 +1077,248 @@ test('a diagram is a visual and is not a published chart', async ({ page }) => {
 	await expect(
 		page.locator(`[data-chart-day="${DAY}"] [data-charts-cell="published"]`)
 	).toHaveText(String(charts));
+});
+
+/** The canary's own score rows and item-health rows for one date. */
+function ledgers(date: string): {
+	scores: Record<string, string>[];
+	health: Record<string, string>[];
+} {
+	const health = join(CANARY, 'state', 'item-health');
+	return {
+		scores: readCsv(join(CANARY, 'state', 'scores.csv')).rows.filter((row) => row.date === date),
+		health: readdirSync(health)
+			.filter((name) => name.endsWith('.csv'))
+			.flatMap((name) => readCsv(join(health, name)).rows)
+			.filter((row) => row.date === date)
+	};
+}
+
+function middle(values: number[]): number {
+	const sorted = [...values].sort((a, b) => a - b);
+	const at = Math.floor(sorted.length / 2);
+	return sorted.length % 2 ? sorted[at] : (sorted[at - 1] + sorted[at]) / 2;
+}
+
+/** Every day the fixture gave the model work on, newest first. */
+function modelDays(): string[] {
+	const health = join(CANARY, 'state', 'item-health');
+	const scored = readCsv(join(CANARY, 'state', 'scores.csv')).rows.map((row) => row.date);
+	const ran = readdirSync(health)
+		.filter((name) => name.endsWith('.csv'))
+		.flatMap((name) => readCsv(join(health, name)).rows)
+		.filter((row) => Number(row.summarize_ms) > 0)
+		.map((row) => row.date);
+	return [...new Set([...scored, ...ran])].sort().reverse();
+}
+
+/** What the fixture's own ledgers say the model table has to print for a day.
+ *
+ * Computed here from the committed CSVs rather than typed as constants, and
+ * deliberately not through the page's own module: the oracle is that a printed
+ * cell equals the value a second reading of the ledger produces.
+ */
+function modelCells(date: string): Record<string, string> {
+	const { scores, health } = ledgers(date);
+	const times = health.map((row) => Number(row.summarize_ms)).filter((ms) => ms > 0);
+	const truthy = (value: string) => value === 'True' || value === 'true';
+	const tally = (of: (row: Record<string, string>) => boolean) =>
+		scores.length === 0 ? '-' : String(scores.filter(of).length);
+	// Whole units, and a measurement that rounds away prints `<1` rather than the
+	// `0` that would say the model ran for nothing.
+	const units = (ms: number, per: number) => {
+		const value = Math.round(ms / per);
+		return value === 0 && ms > 0 ? '<1' : String(value);
+	};
+	const copied = scores.map((row) =>
+		Math.max(Number(row.extractiveness), Number(row.verbatim_run))
+	);
+
+	return {
+		summaries: scores.length === 0 ? '-' : String(scores.length),
+		'not-sure': tally((row) => row.band === 'low'),
+		unsupported: tally((row) => Number(row.unsupported_numbers) > 0),
+		hedge: tally((row) => truthy(row.hedge_dropped)),
+		part: tally((row) => truthy(row.truncation_flagged)),
+		copied: scores.length === 0 ? '-' : `${Math.round(middle(copied) * 100)}%`,
+		'per-item': times.length === 0 ? '-' : units(middle(times), 1000),
+		minutes:
+			times.length === 0 ? '-' : units(times.reduce((total, ms) => total + ms, 0), 60_000),
+		failed:
+			health.length === 0
+				? '-'
+				: String(health.filter((row) => row.outcome === 'failed').length)
+	};
+}
+
+test('every model cell equals what the day committed', async ({ page }) => {
+	await page.goto('/console/');
+
+	const dates = await page
+		.locator('[data-model-day]')
+		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-model-day') ?? ''));
+	// A day the pipeline found no article on gets no row at all. A row of zeroes
+	// would read as a day that went badly rather than a day with nothing in it.
+	expect(dates).toEqual(modelDays());
+
+	for (const date of dates) {
+		const row = page.locator(`[data-model-day="${date}"]`);
+		for (const [cell, expected] of Object.entries(modelCells(date))) {
+			await expect(row.locator(`[data-model-cell="${cell}"]`)).toHaveText(expected);
+		}
+	}
+});
+
+test('a day the scorer never reached prints dashes, and still prints its speed', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// The attack day is the only day the fixture scored, so the day before it is
+	// the scorer-off state: the model wrote summaries and nothing measured them.
+	const unscored = modelDays().find((date) => ledgers(date).scores.length === 0);
+	expect(unscored, 'the fixture has no day with model work and no score row').toBeDefined();
+
+	const row = page.locator(`[data-model-day="${unscored}"]`);
+	for (const cell of ['summaries', 'not-sure', 'unsupported', 'hedge', 'part', 'copied']) {
+		await expect(row.locator(`[data-model-cell="${cell}"]`)).toHaveText('-');
+	}
+	// Speed is measured by the runtime, not by the scorer, so it still prints.
+	await expect(row.locator('[data-model-cell="per-item"]')).not.toHaveText('-');
+	await expect(row.locator('[data-model-cell="minutes"]')).not.toHaveText('-');
+
+	// And the scored day is not all dashes, which is what stops the oracle above
+	// passing on a table that prints nothing.
+	const scored = page.locator(`[data-model-day="${DAY}"]`);
+	await expect(scored.locator('[data-model-cell="summaries"]')).toHaveText(String(scoredItems()));
+	await expect(scored.locator('[data-model-cell="copied"]')).not.toHaveText('-');
+});
+
+test('nothing under the heading is a score or an internal column name', async ({ page }) => {
+	await page.goto('/console/');
+
+	const section = await page.locator('[data-model-section]').innerText();
+
+	// A value between zero and one is what the scorer emits, and none of them may
+	// reach an operator: a number nobody can pull a lever on is not a report. A
+	// token rate that low would itself be the failure, so this cannot misfire on
+	// the candle above the table.
+	expect(section).not.toMatch(/\b[01]\.\d/);
+
+	// A ledger column name on screen makes a reader open the schema to read the
+	// page. Every one of these is a real column of `state/scores.csv` or
+	// `state/item-health/`.
+	for (const name of [
+		'hhem',
+		'coverage',
+		'compression',
+		'extractiveness',
+		'verbatim_run',
+		'unsupported_numbers',
+		'hedge_dropped',
+		'truncation_flagged',
+		'extraction_suspect',
+		'determinism_violation',
+		'evidential_density',
+		'speculative_density',
+		'scorer_version',
+		'score_ms',
+		'summarize_ms',
+		'prefill_ms',
+		'decode_ms',
+		'input_tokens',
+		'output_tokens',
+		'cached_tokens'
+	]) {
+		expect(section.toLowerCase(), `${name} is printed under the heading`).not.toContain(name);
+	}
+
+	// No cell prints a decimal at all. Every figure is a count of the day's items.
+	const printed = await page
+		.locator('[data-model-cell]')
+		.evaluateAll((cells) => cells.map((cell) => cell.textContent ?? ''));
+	expect(printed.length).toBeGreaterThan(0);
+	expect(printed.filter((text) => /\d\.\d/.test(text))).toEqual([]);
+});
+
+test('the candle stays first inside the section, above the table', async ({ page }) => {
+	await page.goto('/console/');
+
+	const order = await page
+		.locator('[data-model-section] [data-throughput="chart"], [data-model-section] [data-model="table"]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-throughput') ?? 'table'));
+	expect(order).toEqual(['chart', 'table']);
+
+	// One heading for the whole section. The candle keeps its own name, one level
+	// down, so a fourth console section is not what this became.
+	await expect(page.getByRole('heading', { level: 2, name: 'What the model did' })).toBeVisible();
+	await expect(
+		page.getByRole('heading', { level: 3, name: 'Model tokens per second' })
+	).toBeVisible();
+});
+
+test('a model change is one divider row, under the days that ran on it', () => {
+	// The fixture ran one model, so the swap is asserted over the function that
+	// places it. A divider drawn from a fixture that cannot change models would
+	// only prove the fixture.
+	const scored = (date: string, model: string) => ({
+		date,
+		model_id: model,
+		band: 'high',
+		extractiveness: '0.2',
+		verbatim_run: '0.1',
+		unsupported_numbers: '0',
+		hedge_dropped: 'False',
+		truncation_flagged: 'False'
+	});
+
+	const rows = modelWork(
+		[scored('2026-08-26', 'new'), scored('2026-08-25', 'new'), scored('2026-08-24', 'old')],
+		[]
+	);
+
+	expect(
+		rows.map((row) => (row.kind === 'swap' ? `swap ${row.date} ${row.model}` : row.day.date))
+	).toEqual(['2026-08-26', '2026-08-25', 'swap 2026-08-25 new', '2026-08-24']);
+
+	// One model over every day is no divider at all.
+	expect(
+		modelWork([scored('2026-08-26', 'one'), scored('2026-08-25', 'one')], []).filter(
+			(row) => row.kind === 'swap'
+		)
+	).toEqual([]);
+});
+
+test('a day with no summaries gets no row, and a day with no health row gets no failure count', () => {
+	const health = (date: string, ms: string, outcome: string) => ({
+		date,
+		summarize_ms: ms,
+		outcome
+	});
+
+	const rows = modelWork(
+		[{ date: '2026-08-26', model_id: 'one', band: 'low' }],
+		[
+			health('2026-08-26', '2000', 'failed'),
+			health('2026-08-25', '1500', 'ok'),
+			// Fetched and thrown away before the model saw it. No summary, no row.
+			health('2026-08-24', '', 'failed')
+		]
+	);
+
+	const days = rows.filter((row) => row.kind === 'day').map((row) => row.day);
+	expect(days.map((day) => day.date)).toEqual(['2026-08-26', '2026-08-25']);
+	expect(days[0].failed).toBe(1);
+	expect(days[0].notSure).toBe(1);
+	// Model work, no score row: every quality figure is unknown, not zero.
+	expect(days[1].summaries).toBeNull();
+	expect(days[1].notSure).toBeNull();
+	expect(days[1].copiedPct).toBeNull();
+	expect(days[1].totalMs).toBe(1500);
+
+	// A day with score rows and no health row cannot count failures.
+	const scoredOnly = modelWork([{ date: '2026-08-26', model_id: 'one', band: 'high' }], []);
+	expect(scoredOnly).toHaveLength(1);
+	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.failed).toBeNull();
+	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.perItemMs).toBeNull();
 });

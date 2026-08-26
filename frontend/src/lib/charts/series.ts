@@ -85,6 +85,9 @@ export interface ThroughputDay {
 	writeTps: number;
 	cacheHitPct: number;
 	runs: ThroughputRun[];
+	/** What wrote the day, where a ledger says. Two days on different models are
+	 * two measurements, so nothing compares them. */
+	model: string | null;
 }
 
 export interface StageFailureDay {
