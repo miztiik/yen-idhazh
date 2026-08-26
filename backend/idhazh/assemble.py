@@ -182,6 +182,33 @@ def build_embeddings(
     )
 
 
+def merge_embeddings(
+    previous: DigestEmbeddings | None, current: DigestEmbeddings | None
+) -> DigestEmbeddings | None:
+    """Carry the day's earlier vectors forward instead of replacing them.
+
+    Each run only encodes the items it summarized, so a block that replaced its
+    predecessor left a day searchable over its last run alone. The committed
+    2026-08-24 day carried 145 vectors for 731 items.
+
+    The newer vector wins a collision, because it was encoded from the newer
+    text. A block that names another model, width or dtype is not merged at
+    all: one map holding two widths is the failure the self-describing block
+    exists to prevent, and the reader-side decoder cannot tell them apart.
+    """
+    if previous is None:
+        return current
+    if current is None:
+        return previous
+    if (previous.model_id, previous.dimensions, previous.dtype) != (
+        current.model_id,
+        current.dimensions,
+        current.dtype,
+    ):
+        return current
+    return current.model_copy(update={"vectors": {**previous.vectors, **current.vectors}})
+
+
 def build_day(
     *,
     plan: RunPlan,
@@ -241,7 +268,7 @@ def build_day(
             for vertical_id in present
         ],
         items=combined,
-        embeddings=embeddings,
+        embeddings=merge_embeddings(previous.embeddings if previous else None, embeddings),
     )
 
 

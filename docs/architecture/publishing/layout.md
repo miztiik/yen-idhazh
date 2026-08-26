@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-26
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -52,6 +52,7 @@ never depend on who has read what.
 - **Read-state is a client-side mark and nothing more.** It may change how an item looks. It may never change where an item sits, whether it appears, or how it ranks. The only exception is a filter the reader switches on themselves, and it is off by default.
 - **"New" is a property of the item, not of the reader.** An item is new because a later run introduced it, which is true for everybody and needs no storage to assert. It is never a diff against a remembered last-visit time, which would be a claim that evaporates the moment a browser is cleared.
 - **Membership only grows.** The runs of a day append to one day payload rather than replacing it, so the day grows through the day. That is only safe because an item's id comes from its address: run 2 recognises what run 1 already published instead of renumbering it. There is no daily item cap - what a day carries is what supply and the ranking produced ([../sources/freshness.md](../sources/freshness.md)).
+- **The day's vectors grow with it.** A run encodes only the items it summarized, so it merges its block into the one the day already carried instead of replacing it. Replacing left a day searchable over its last run alone: the committed 2026-08-24 day held 145 vectors for 731 items, which is 19.8 percent of them. A newer vector wins a collision, because it was encoded from the newer text. A block that names another model, width or dtype replaces the old one whole rather than joining it.
 - **A revision is visible or it does not happen.** If a later run changes an item's summary text, that item says so. Silently improving wording under someone who already read it makes them doubt their own memory, and their trust in the summaries is the entire product.
 - **No run identifier appears in any data path or any reader URL.** It lives in the run manifest and in the page footer.
 
@@ -110,6 +111,7 @@ Retention was demoted to third lever after the byte arithmetic showed that encod
 | One file per vertical per day | Several sources for one fact, to avoid a trivial client-side filter. |
 | A global index of every item ever published | Unbounded growth on the hot path of every page load. |
 | Re-ranking a day on a later run | Contradicts the memory of a reader who already read it. |
+| Merging a day's vectors across a model, width or dtype change | One map holding two widths, which is what the self-describing block exists to prevent. The reader-side decoder cannot tell the entries apart, so it would score half the day as plausible nonsense instead of failing. |
 | A run identifier in the path | One item at two addresses, so the same item is reachable two ways and neither is canonical. |
 | A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. |
 | A title-derived slug in a URL | Titles originate in fetched text, and fetched text never becomes a URL (Rule #11). |
