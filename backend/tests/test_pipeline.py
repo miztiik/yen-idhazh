@@ -91,11 +91,17 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
     settings = config.load(CONFIG_DIR)
     items = plan().items
     base = article()
+
+    def sized(words: int) -> Article:
+        # Both counts, because the band follows the source body and the sort
+        # has to agree with the prompt it is grouping.
+        return base.model_copy(update={"word_count": words, "source_word_count": words})
+
     candidates = [
-        cli._FetchedWorkItem(items[0], base.model_copy(update={"word_count": 2000}), 0, 0, 0.0, 0),
-        cli._FetchedWorkItem(items[1], base.model_copy(update={"word_count": 10}), 0, 0, 0.0, 1),
-        cli._FetchedWorkItem(items[2], base.model_copy(update={"word_count": 800}), 0, 0, 0.0, 2),
-        cli._FetchedWorkItem(items[3], base.model_copy(update={"word_count": 100}), 0, 0, 0.0, 3),
+        cli._FetchedWorkItem(items[0], sized(2000), 0, 0, 0.0, 0),
+        cli._FetchedWorkItem(items[1], sized(10), 0, 0, 0.0, 1),
+        cli._FetchedWorkItem(items[2], sized(800), 0, 0, 0.0, 2),
+        cli._FetchedWorkItem(items[3], sized(100), 0, 0, 0.0, 3),
     ]
 
     ordered = sorted(candidates, key=lambda candidate: cli._summarize_band_sort_key(candidate, settings))

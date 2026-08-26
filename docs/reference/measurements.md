@@ -2011,6 +2011,54 @@ Two consequences, stated before anyone re-derives them:
 Caveat, stated rather than buried: n=20, one sample, one day. It settles that
 the old buckets were wrong. It does not settle what the right ones are.
 
+## The length tier a qualification corpus can actually reach
+
+**Measured 2026-08-26**, one developer machine (Windows, 4 cores), over the
+first 150 addresses of that day's run plan - 160 items, itself capped from 206
+by `run.safety_ceiling_per_run`. Each address was fetched and extracted exactly
+as the pipeline does; **109 extracted, 41 did not** (dead links, robots, no
+prose). Bodies counted before `extract.truncation_cap_tokens` cut them.
+
+| Statistic | Words in the source body |
+| --- | --- |
+| p50 | 548 |
+| p90 | 1278 |
+| max | 3449 |
+| mean | 674 |
+
+Which `summarize.bands` tier those 109 landed in, under each rule:
+
+| Rule the band came from | band 0 (0) | band 1 (60) | band 2 (700) | band 3 (2000) |
+| --- | --- | --- | --- | --- |
+| post-cap count, shipped until this date | 5 | 67 | 37 | **0** |
+| source body, from 2026-08-26 | 5 | 67 | 34 | **3** |
+
+**The top tier was unreachable, and not because of the day.** The post-cap count
+cannot pass `int(2500 / 1.3) = 1923` words, so no article of any length could
+enter a band that starts at 2000. That is what emptied it in qualification run
+32998603233, which died on `band 3 (min_source_words 2000) has 0, needs 3`
+before a single quality or safety gate ran.
+
+**The top tier is real but thin: 3 in 109, under 3 in 100.** A whole 160-address
+plan yields about 116 extracted articles and so about **3.2 items in the top
+tier, against the 3 the corpus definition asks for**. That margin is a quarter of
+one article. A qualification run can still come up short on supply, and when it
+does the corpus adequacy check names the tier and the run is repeated - which is
+what Row #10 says a thin corpus is. It is not a reason to move the boundary.
+
+One address costs **2.1 s** to fetch and extract (317 s over 150). Walking a
+whole 160-address plan therefore costs about **5.6 minutes**, or **1.9 minutes
+per shard at three shards**, against a 330-minute job bound and a worst shard
+measured at 115 minutes. Model calls do not move: the corpus is still
+`corpus_per_shard` articles replayed `repeats` times.
+
+**This does not agree with the 2026-08-22 row above, and both are right.** That
+one sampled 20 links taken straight off the feeds and found 25 percent above
+2000 words. This one sampled 150 addresses of the ranked, deduplicated plan and
+found 2.8 percent. They measure different populations - the plan is what a
+qualification run draws from, so it is the number that sizes the corpus, and n=20
+against n=109 is the other half of the gap.
+
 ## The image measurement killed the runner
 
 **Attempted 2026-08-22**, `ubuntu-latest`, the `image` job timing Z-Image-Turbo
