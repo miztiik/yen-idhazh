@@ -292,6 +292,48 @@ script runs and stays complete if none does. If a telemetry month is absent or
 cannot be parsed, that month is a gap in the charts. It is not interpolated, and
 it never white-screens the console.
 
+**The prerendered seed carries that same window, and no more.** The server used
+to concatenate every committed month and inline all of it, so the console
+document grew for as long as the pipeline ran - a reader downloaded four months
+to look at thirty days, and would have downloaded a year by next summer. It now
+reads `console.default_window_days` back from the newest day on record, which is
+the window the viewport opens on, so the two cannot disagree.
+
+Measured 2026-08-26 on one Windows dev machine, against four months of real row
+volume - the committed August shard (2,000 rows, 171 KB) plus three copies of it
+shifted back a month each, 8,000 rows in all:
+
+| | Raw HTML | Gzipped | Rows from the three older months |
+| --- | --- | --- | --- |
+| Before | 3,461,576 | 600,925 | 6,000 |
+| After | 2,252,783 | 490,912 | 0 |
+
+That is 18% off the gzipped document and 35% off the raw one, and the saving
+grows with every month committed. One build per arm; a prerender is
+deterministic, and a control pair that the window could not affect differed by
+7 gzipped bytes, which is the noise floor here.
+
+**On the corpus committed today it changes nothing**, because that corpus is
+two days long and a corpus shorter than the window is already inside it. The
+defect was one of growth, and it was measured before it arrived rather than
+after.
+
+Two consequences worth stating, because both are the reason this is safe:
+
+- **Nothing became unreachable.** The monthly shards are untouched. Panning back
+  fetches `telemetry/<YYYY-MM>.csv` exactly as it always did, so the dropped
+  days are one arrow key away rather than gone. That fetch path already existed
+  and was dead code: with every month in the seed, there was never a month left
+  to fetch.
+- **The cutoff is anchored on the newest committed day, never on the build
+  clock.** Anchored on today, a corpus that stopped last month would seed an
+  empty console - the page would go blank precisely when the pipeline broke,
+  which is when an operator needs it.
+
+The read is bounded too. A window is a count of days, so it straddles a month
+boundary and reads two shards at worst; every older shard is skipped unopened,
+however many the repository has accumulated.
+
 **Every chart draws through one coordinate frame, in CSS pixels.**
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
 owns the width, the margin box and the two domain rules - linear, rounded

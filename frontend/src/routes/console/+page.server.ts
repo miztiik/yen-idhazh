@@ -7,6 +7,7 @@ import {
 	loadManifests,
 	telemetryMonths,
 	telemetryRows,
+	TELEMETRY_ROOT,
 	type FeedResult,
 	type RunRecord
 } from '$lib/server/payload';
@@ -352,7 +353,12 @@ export function load() {
 	}));
 
 	const results = feedResults();
-	const publicRows = telemetryRows().rows.map(publicTelemetry);
+	// Seeded to the window the viewport opens on, not to every committed month:
+	// this list is inlined into the prerendered HTML, so an unbounded seed makes
+	// the page grow for as long as the pipeline runs.
+	const publicRows = telemetryRows(TELEMETRY_ROOT, console.default_window_days).rows.map(
+		publicTelemetry
+	);
 	const compression = rows
 		.map(compressionPoint)
 		.filter((point): point is CompressionPoint => point !== null)
