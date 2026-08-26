@@ -293,6 +293,7 @@ def to_article(
         title=item.title,
         text=text,
         word_count=len(text.split()),
+        source_word_count=total_words,
         token_count=approx_tokens(len(text.split())),
         brief=(
             item.source_form is SourceForm.ABSTRACT
