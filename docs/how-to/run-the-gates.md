@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -13,11 +13,21 @@ as a target.
 
 ## Set up the backend environment
 
+Python 3.12, 3.13 or 3.14. CI installs 3.12.
+
 ```powershell
 python -m venv .venv
+.\.venv\Scripts\python.exe -c "import sys; print(sys.version)"
 .\.venv\Scripts\python.exe -m ensurepip --upgrade
 .\.venv\Scripts\python.exe -m pip install -e ".[dev]"
 ```
+
+**Read that second line before you install.** `python -m venv` takes whatever
+`python` resolves to, which is often not the one you meant. `pyproject.toml`
+declares `requires-python = ">=3.12,<3.15.0a0"`, so pip refuses an interpreter
+outside the range instead of hanging on it -
+[../reference/agent-notes.md](../reference/agent-notes.md) has the symptom that
+used to show instead, and the escape when the machine has nothing else.
 
 **`uv pip install` does not work here.** It fails with a `HandshakeFailure`
 against `files.pythonhosted.org` (observed 2026-08-21). `ensurepip` then `pip`

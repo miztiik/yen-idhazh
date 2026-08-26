@@ -12,6 +12,7 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tomllib
 from collections.abc import Mapping, Sequence
 from pathlib import Path
 from typing import Final, cast
@@ -331,6 +332,20 @@ def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
             assert isinstance(key, str), f"job {job_name} cache key must be a string"
             keys.append((job_name, key))
     return keys
+
+
+def _setup_python_versions(workflow: dict[str, object]) -> list[tuple[str, str]]:
+    versions: list[tuple[str, str]] = []
+    for job_name in _mapping(workflow.get("jobs"), "jobs"):
+        for step in _steps(workflow, job_name):
+            uses = step.get("uses")
+            if not (isinstance(uses, str) and uses.startswith("actions/setup-python@")):
+                continue
+            with_block = _mapping(step.get("with"), f"job {job_name} setup-python 'with'")
+            version = with_block.get("python-version")
+            assert isinstance(version, str), f"job {job_name} must pin python-version"
+            versions.append((job_name, version))
+    return versions
 
 
 def _script(step: dict[str, object], description: str) -> str:
@@ -1397,6 +1412,40 @@ def test_every_action_is_pinned_to_an_approved_major() -> None:
             assert action in APPROVED_ACTION_MAJORS, f"{where} uses unapproved {action}"
             expected = APPROVED_ACTION_MAJORS[action]
             assert version == expected, f"{where} must use {action}@{expected}, not {uses}"
+
+
+def test_every_setup_python_pin_is_inside_the_declared_interpreter_range() -> None:
+    """`requires-python` is the only thing that refuses an interpreter early.
+
+    Without it pip does not stop - it falls back to a source build and hangs
+    with no error at all. The bound is therefore load-bearing, and it has to
+    agree with what CI installs in both directions: a CI pin above the ceiling
+    installs an environment nobody can reproduce locally, and a ceiling below
+    the pin breaks every run. Neither file mentions the other, so only this
+    test keeps them together.
+    """
+    document = tomllib.loads(read_text(REPO_ROOT / "pyproject.toml"))
+    declared = _mapping(document.get("project"), "pyproject [project]").get("requires-python")
+    assert isinstance(declared, str), "pyproject must declare requires-python"
+
+    bounds = re.fullmatch(r">=(\d+)\.(\d+),<(\d+)\.(\d+)(?:\.0a0)?", declared)
+    assert bounds is not None, f"requires-python must carry both bounds: {declared}"
+    floor = (int(bounds.group(1)), int(bounds.group(2)))
+    ceiling = (int(bounds.group(3)), int(bounds.group(4)))
+
+    pins = [
+        (filename, job_name, version)
+        for filename, workflow in _load_workflows().items()
+        for job_name, version in _setup_python_versions(workflow)
+    ]
+    assert pins, "no workflow sets Python up"
+
+    for filename, job_name, version in pins:
+        where = f"{filename}/{job_name}"
+        match = re.fullmatch(r"(\d+)\.(\d+)", version)
+        assert match is not None, f"{where} must pin a major.minor, not {version}"
+        minor = (int(match.group(1)), int(match.group(2)))
+        assert floor <= minor < ceiling, f"{where} pins {version}, outside {declared}"
 
 
 def test_every_inference_job_names_its_host_binary_and_weights() -> None:
