@@ -112,6 +112,8 @@ Pills rather than tabs. Tabs assert a fixed exhaustive set of panels; the vertic
 
 Each pill is a link to a prerendered route, so middle-click, share and back all work. Lenses and events are not on the pill row: thirteen mostly-zero controls above seventeen items is a control bar longer than some days.
 
+"Mostly-zero" understates it. All thirteen are zero, on all 1889 published items, because nothing in the pipeline assigns a lens or an event - measured 2026-08-26 and diagnosed in [../sources/discovery.md](../sources/discovery.md). The ruling holds either way, and it would still hold if the fields were populated tomorrow.
+
 ## The read mark is held per day, and it expires
 
 A reader can mark an item read. The mark lives in `localStorage` and nowhere else - never a cookie, because a cookie is sent on every request and would put a reading history into the host's access logs.
