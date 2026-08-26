@@ -91,7 +91,7 @@ function place(root) {
 	if (where === '') return '.';
 	// An override points outside the repo, and the traversal out to it is
 	// neither minimal nor allowed to be printed absolute. Name the switch.
-	return where.startsWith('..') ? 'the tree DIGEST_ROOT names' : where;
+	return where.startsWith('..') ? 'the DIGEST_ROOT tree' : where;
 }
 
 /**
