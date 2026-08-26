@@ -25,6 +25,7 @@
             "id": "qwen3-8b-q4-k-m",
             "quantisation": "Q4_K_M",
             "repo": "Qwen/Qwen3-8B-GGUF",
+            "revision": null,
             "sha256": null
           },
           "role": "summarize"
@@ -35,6 +36,7 @@
             "id": "qwen3-4b-q4-k-m",
             "quantisation": "Q4_K_M",
             "repo": "Qwen/Qwen3-4B-GGUF",
+            "revision": null,
             "sha256": null
           },
           "role": "route"
@@ -98,6 +100,7 @@
             "id": "qwen3-8b-q4-k-m",
             "quantisation": "Q4_K_M",
             "repo": "Qwen/Qwen3-8B-GGUF",
+            "revision": null,
             "sha256": null
           },
           "role": "summarize"

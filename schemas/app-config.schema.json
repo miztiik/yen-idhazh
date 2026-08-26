@@ -681,6 +681,20 @@
           "title": "Repo",
           "type": "string"
         },
+        "revision": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The hub commit the weights are fetched at. A download that names a branch gets whatever was uploaded last, so the bytes can change under a config that still records the old sha256.",
+          "title": "Revision"
+        },
         "sha256": {
           "anyOf": [
             {
@@ -1126,6 +1140,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "ModelRef gained an optional revision: the hub commit the weights are at.",
+      "version": "2026-08-26T20:00",
+      "why": "Every weights download in the pipeline and the measurement harness read `resolve/main`, which is a branch. Upstream re-uploads a GGUF and the bytes change under a config that still records the old sha256, so a run either dies at the checksum or - where no checksum runs - measures a model nobody named (Rule #10). This field was rejected once as speculative because nothing read it; validate.yml now pins a revision and the adoption target names one, so it has readers. Optional with a null default, so the published run manifests that carry no revision still validate and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "Added the assist block: max_tokens and min_readable_letter_share.",
       "version": "2026-08-26T10:05",
       "why": "The encoder's token cap was a literal in embed.py, which is exactly the kind of tunable Rule #6 puts in config. The second knob is new behaviour: an item the encoder cannot read used to get a confident vector no query could retrieve, and now gets no vector and a logged reason. Both defaults are measured, not chosen - see the field descriptions. Additive with defaults, so an older config still validates and no read-side migration is needed (section 11)."
@@ -1298,7 +1317,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-26T10:05",
+      "default": "2026-08-26T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1312,5 +1331,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-26T10:05"
+  "version": "2026-08-26T20:00"
 }

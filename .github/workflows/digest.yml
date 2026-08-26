@@ -76,8 +76,10 @@ jobs:
       matrix: ${{ steps.fanout.outputs.matrix }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
+      summarize_revision: ${{ steps.models.outputs.summarize_revision }}
       summarize_file: ${{ steps.models.outputs.summarize_file }}
       route_repo: ${{ steps.models.outputs.route_repo }}
+      route_revision: ${{ steps.models.outputs.route_revision }}
       route_file: ${{ steps.models.outputs.route_file }}
     steps:
       - uses: actions/checkout@v6
@@ -127,8 +129,8 @@ jobs:
 
           models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
           for role in ("summarize", "route"):
-              for field in ("repo", "file"):
-                  value = models[role][field]
+              for field in ("repo", "revision", "file"):
+                  value = models[role].get(field) or ""
                   if value.split() != [value]:
                       raise SystemExit(f"models.{role}.{field} is empty or not one word")
                   print(f"{role}_{field}={value}")
@@ -222,13 +224,17 @@ jobs:
       # the single largest fixed cost in the pipeline. Every shard shares this
       # one key, so raising the shard count adds restores, never cache bytes.
       #
-      # The key names both halves of what it holds. The fetch below only runs on
+      # The key names every part of what it holds. The fetch below only runs on
       # a miss, so a key that omits one of them turns a fetch step into dead code
       # and serves the old bytes: without the build a cached binary stays frozen
-      # until the entry is evicted, and without the weights a config change to
-      # `models.summarize` restores the previous model under the new alias.
-      # `v4` because the weights half moved from a workflow `env` copy to the
-      # plan job's output, so the first run after this refetches once.
+      # until the entry is evicted, without the weights a config change to
+      # `models.summarize` restores the previous model under the new alias, and
+      # without the revision two uploads of one filename share an entry - which
+      # would leave a repinned config stuck on a hit whose bytes fail the check
+      # below on every run until the entry expires.
+      # `v4` because the weights part moved from a workflow `env` copy to the
+      # plan job's output. Adding the revision changes the key again, so the
+      # first run after this refetches once.
       - name: Cache weights and runtime
         id: weights
         uses: actions/cache@v6
@@ -236,7 +242,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ needs.plan.outputs.summarize_file }}-${{ env.LLAMA_CPP_BUILD }}-v4
+          key: llm-${{ needs.plan.outputs.summarize_file }}-${{ needs.plan.outputs.summarize_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
 
       - name: Fetch runtime and weights
         if: steps.weights.outputs.cache-hit != 'true'
@@ -267,8 +273,12 @@ jobs:
           SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
           cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
+          # The pinned commit, never a branch. A branch hands back whatever was
+          # uploaded last, so the bytes can move under a config that still
+          # records the old sha256 - and the check below would then fail a run
+          # nobody changed.
           curl -sSL -o "backend/models/${{ needs.plan.outputs.summarize_file }}" \
-            "https://huggingface.co/${{ needs.plan.outputs.summarize_repo }}/resolve/main/${{ needs.plan.outputs.summarize_file }}?download=true"
+            "https://huggingface.co/${{ needs.plan.outputs.summarize_repo }}/resolve/${{ needs.plan.outputs.summarize_revision }}/${{ needs.plan.outputs.summarize_file }}?download=true"
 
       # No `if:`. This runs on a cache hit as well as a miss, because a restored
       # entry is the one case where nobody watched the bytes arrive. It sits
@@ -525,7 +535,8 @@ jobs:
           cache-dependency-path: pyproject.toml
 
       # Same key shape as the work job, and the same reason: the fetch below runs
-      # only on a miss, so the key is what dates both the binary and the weights.
+      # only on a miss, so the key is what dates the binary, the weights and the
+      # upload of those weights.
       - name: Cache the router weights and runtime
         id: router
         uses: actions/cache@v6
@@ -533,7 +544,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: llm-${{ needs.plan.outputs.route_file }}-${{ env.LLAMA_CPP_BUILD }}-v4
+          key: llm-${{ needs.plan.outputs.route_file }}-${{ needs.plan.outputs.route_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
 
       - name: Fetch runtime and router weights
         if: steps.router.outputs.cache-hit != 'true'
@@ -557,7 +568,7 @@ jobs:
           cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
           curl -sSL -o "backend/models/${{ needs.plan.outputs.route_file }}" \
-            "https://huggingface.co/${{ needs.plan.outputs.route_repo }}/resolve/main/${{ needs.plan.outputs.route_file }}?download=true"
+            "https://huggingface.co/${{ needs.plan.outputs.route_repo }}/resolve/${{ needs.plan.outputs.route_revision }}/${{ needs.plan.outputs.route_file }}?download=true"
 
       - name: Start the router
         run: |

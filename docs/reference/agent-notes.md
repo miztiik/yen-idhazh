@@ -296,6 +296,31 @@ answers about a different revision of the file you meant. The tell is a symbol
 you know exists reported as absent, or a line number tens of lines off. Read the
 file by absolute path instead, or search from a terminal in your own worktree.
 
+## Hugging Face
+
+**The `ETag` on a weights download is not the SHA-256, and it looks exactly
+like one.** Pinning the two configured models on 2026-08-26 meant proving the
+bytes at a commit still matched the `sha256` in `config/idhazh.json`. A `HEAD`
+on `https://huggingface.co/<repo>/resolve/<commit>/<file>` answers with a
+64-character hex `ETag` and the right `Content-Length` - and that hex disagrees
+with the recorded digest, because repositories on Xet-backed storage return a
+Xet content hash there. Read as a mismatch it says the weights moved, which
+would stop a change that is fine.
+
+Ask the pointer instead. `/raw/` at a commit returns the git-LFS pointer text,
+and `oid sha256:` in it is the digest of the bytes that URL serves:
+
+```powershell
+curl.exe -sS "https://huggingface.co/<repo>/raw/<commit>/<file>"
+```
+
+The repository-scoped API answers the same question for the default branch -
+`https://huggingface.co/api/models/<repo>?blobs=true` carries `sha` (the head
+commit) and each file's `lfs.oid`. **Its revision-scoped form does not**:
+`/api/models/<repo>/revision/<commit>?blobs=true` returns `lfs.size` with
+`lfs.oid` null, so a check written against it silently compares against
+`None`.
+
 ## npm
 
 **`npm ci` in a fresh worktree can stop making progress after the tree is

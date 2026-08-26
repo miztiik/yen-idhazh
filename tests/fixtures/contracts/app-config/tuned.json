@@ -109,6 +109,7 @@
       "id": "qwen3-4b-q4-k-m",
       "quantisation": "Q4_K_M",
       "repo": "Qwen/Qwen3-4B-GGUF",
+      "revision": "bc640142c66e1fdd12af0bd68f40445458f3869b",
       "sha256": "8ad0bb17d5132ae71f91fb1a8a922bad0a7c36ec09ce97498f494e82d4e935bb"
     },
     "summarize": {
@@ -116,6 +117,7 @@
       "id": "qwen3-8b-q4-k-m",
       "quantisation": "Q4_K_M",
       "repo": "Qwen/Qwen3-8B-GGUF",
+      "revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
       "sha256": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da"
     }
   },
