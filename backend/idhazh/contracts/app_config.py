@@ -841,10 +841,12 @@ class PageWeightConfig(Model):
 
 
 class AssistConfig(Model):
-    """On-device search: the runner embeds the day, the reader's tab embeds a query.
+    """On-device archive search: what the encoder reads, and what the list shows.
 
-    Both knobs describe how much of an item the encoder is allowed to read, so
-    they are set from what the encoder can do rather than from taste.
+    Every value here was a literal with no override path (Rule #6). The first two
+    describe how much of an item the encoder is allowed to read; the rest describe
+    what the reader's list keeps. All five are set from measurement rather than
+    from taste.
     """
 
     max_tokens: int = Field(
@@ -878,6 +880,43 @@ class AssistConfig(Model):
             "0.01 and 0.99 selects the same three items."
         ),
     )
+    similarity_floor: float = Field(
+        default=0.35,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Cosine similarity a result must reach to be shown at all. A SELECTOR, "
+            "never reported to a reader as a quality signal. Measured 2026-08-26 on the "
+            "committed archive (580 embedded items, 60 labelled queries, 34,715 "
+            "non-answer pairs): non-answers score a mean of 0.074 and a p95 of 0.269, "
+            "right answers a p10 of 0.371. The two overlap, so there is no clean cut. "
+            "0.35 cuts surviving non-answers from 11.4% to 1.9% and costs 0.035 of "
+            "reachable recall@10 - about one standard error, so not a measurable loss. "
+            "The floor it replaced was 0.20, at which all eight off-domain probe queries "
+            "returned results (up to 18 of them) and the empty state could never fire."
+        ),
+    )
+    result_limit: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "How many results the flat list shows. The list carries no rank cue, so "
+            "this is also the denominator the recall bar is measured against."
+        ),
+    )
+    recall_min: float = Field(
+        default=0.85,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "The regression bar for recall@result_limit over the committed query set, "
+            "counted over right answers that carry a vector. Coverage is excluded on "
+            "purpose: an item the pipeline never embedded cannot be retrieved at any "
+            "threshold, so counting it here would fail this gate for a defect in "
+            "another stage. Set two standard errors below the 2026-08-26 baseline of "
+            "0.931 +/- 0.030 (n=47)."
+        ),
+    )
 
 
 class AppConfig(Contract):
@@ -885,6 +924,24 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26T10:10",
+            change="Added the assist search knobs: similarity_floor, result_limit and recall_min.",
+            why=(
+                "Archive search had no measurement at all, and its two behavioural "
+                "constants were literals in the ranking module with no override path "
+                "(Rule #6). The floor was 0.20 and is now 0.35, which is a measured "
+                "change rather than a preference: at 0.20 every one of eight off-domain "
+                "probe queries returned results - one of them eighteen - so 'Nothing in "
+                "the archive is close to that' was a promise the selector could not keep. "
+                "Measured 2026-08-26 on the committed archive over 60 hand-labelled "
+                "queries: the floor cuts surviving non-answers from 11.4% to 1.9% and "
+                "costs 0.035 of reachable recall@10, which is inside one standard error. "
+                "recall_min is the regression bar the new backend eval enforces. All "
+                "three are additive with defaults, so an older config still validates and "
+                "no read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26T10:05",
             change="Added the assist block: max_tokens and min_readable_letter_share.",
@@ -1225,6 +1282,7 @@ class AppConfig(Contract):
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
+    assist: AssistConfig = Field(default_factory=AssistConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
     assist: AssistConfig = Field(default_factory=AssistConfig)

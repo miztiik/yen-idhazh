@@ -68,16 +68,22 @@ export function searchable(day: DigestDay, dimensions: number): boolean {
 	);
 }
 
+/** How the archive is searched. Both values come from `config/idhazh.json`.
+ *
+ * They were literals here with no override path, which is what Rule #6 forbids.
+ * The floor in particular is a measured quantity - see `assist.similarity_floor`
+ * in the contract for the null distribution it was cut from.
+ */
+export interface RankOptions {
+	/** How many results the flat list shows. */
+	limit: number;
+	/** Below this a result is noise wearing a number. A selector, never a grade. */
+	minScore: number;
+}
+
 /** Rank items across every day that carries vectors. */
-export function rank(
-	days: DigestDay[],
-	query: number[],
-	options: { limit?: number; minScore?: number } = {}
-): SearchHit[] {
-	const limit = options.limit ?? 10;
-	// Below this a result is noise wearing a number. Showing it would imply the
-	// archive holds an answer it does not hold.
-	const minScore = options.minScore ?? 0.2;
+export function rank(days: DigestDay[], query: number[], options: RankOptions): SearchHit[] {
+	const { limit, minScore } = options;
 
 	const hits: SearchHit[] = [];
 	for (const day of days) {

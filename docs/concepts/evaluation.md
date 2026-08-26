@@ -1,8 +1,8 @@
 # Evaluation
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
-How a summary is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
+How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
 ## The problem being solved
 
@@ -318,6 +318,162 @@ all of it.
 
 **One thing to do regardless:** the reader-facing confidence signal is driven by the counterweights, which are a census by construction and cost nothing. The faithfulness score is the operator-facing instrument that calibrates the bands. That split keeps a reader-facing promise off the most expensive metric in the system.
 
+## Retrieval: does archive search find the right thing?
+
+Everything above scores a summary. This section scores a different promise: that
+a reader who searches the archive on their own device gets back the items they
+were looking for. Until 2026-08-26 nothing measured it at all, and the only
+thing that looked like a measurement - five hand-written queries driven through
+a browser - is a wiring check. At n=5 the standard error at recall 0.8 is 0.18,
+so it cannot see a ten-point regression. It stays exactly what it is and its bar
+is never raised.
+
+The instrument is [`backend/idhazh/evals/retrieval.py`](../../backend/idhazh/evals/retrieval.py),
+run by the backend test suite. It is not a browser test. The quality question
+has nothing to do with a browser, and the browser path pays the whole encoder
+download on every run.
+
+### Two tiers, and only one of them exists today
+
+**Tier one is free and needs no labeller.** One query per entity slug carried by
+three or more items; the relevant set is exactly the items carrying that slug.
+Nobody's judgement is in it, so nothing can bias it, and it fires the moment the
+encoder or the committed vectors break.
+
+It produces **zero queries**, because no published item carries an entity slug.
+`DigestItem.entities` is copied from `Article.entities` and no stage in the
+pipeline ever writes that field - nor `lenses`, nor `events`. Three declared
+taxonomy dimensions are empty on all 1,757 committed items. The tier is built to
+its specification anyway, so that it becomes the instrument it was designed to be
+on the day entities are populated, and a test asserts the emptiness by name so
+that the day it stops being true somebody is told.
+
+**Tier two is 60 hand-labelled intent queries** in
+[`tests/fixtures/search/retrieval-queries.json`](../../tests/fixtures/search/retrieval-queries.json),
+carrying 297 relevance judgements. A query is a question in a reader's words; the
+relevant set is every published item that answers it, addressed by
+`(date, item_id)` because an item id is unique only within a day and is reused
+across days. Relevance is binary and a query has many right answers on purpose: a
+topic question does, and single-gold labelling makes a working system read as
+broken.
+
+No model wrote, ranked or selected those queries. The digest's own summarizer is
+the thing being retrieved, so letting it generate the query set would be
+LLM-as-judge under another name (`CLAUDE.md` section 0a).
+
+### recall@10 is the gate; reciprocal rank is a diagnostic
+
+The surface is a flat capped list with no rank cue. Rewarding first place would
+measure a claim the product does not make, so mean reciprocal rank is computed,
+reported, and never gated on.
+
+**The denominator is capped at the ten slots that exist.** A topic query has more
+right answers than a ten-item list can hold, so `found / len(gold)` would report
+a retriever that filled every slot correctly as a failure, and would move the
+score whenever a labeller was generous. `found / min(gold, 10)` asks the question
+the surface can answer: of the right answers you could have shown in the slots
+you have, how many did you show. The uncapped figure is reported beside it.
+
+**A miss and an absence are different failures, and conflating them makes the
+instrument lie.** An item with no vector cannot be retrieved at any threshold.
+Every result therefore carries two numbers: the reader-facing one over all
+labelled answers, and the ranking one over the answers that carry a vector. Only
+the second is gated (`assist.recall_min`), because failing this gate for a gap in
+the embedding stage would point at the wrong code.
+
+### The baseline, 2026-08-26
+
+Measured on Windows 11, 8 vCPU, `onnxruntime` 1.29.0, against the committed
+archive at `d20fee84` - 1,889 published items of which 712 carry a vector
+(37.7%), 60 queries, floor 0.35, ten slots.
+
+| Number | Value | What it says |
+| --- | --- | --- |
+| recall@10, all labelled answers | **0.273 +/- 0.029** (n=60) | What a reader gets today. |
+| recall@10, answers that carry a vector | **0.913 +/- 0.035** (n=47) | The ranking itself works. |
+| Queries with no embedded answer at all | 13 of 60 | Unanswerable at any threshold. |
+| Coverage of labelled answers | 28.6% | The gap between the two rows above. |
+| Mean reciprocal rank | 0.630 | Diagnostic. A found answer is usually first. |
+
+**The reader-facing number is below 0.5 and that is the finding, not a tuning
+problem.** It is a coverage failure, not a retrieval failure, and the two numbers
+above are what let anyone say so with confidence rather than by assertion. Most
+of the archive was never embedded: cross-run vector merging was broken until
+recently, so 2026-08-24 and 2026-08-25 carry vectors for 145 and 143 of their 731
+and 724 items. Backfilling those days is a separate piece of work. Nothing here
+was tuned to make the number look better, and the query set was not trimmed to
+the items that happen to be reachable.
+
+**The number drifts down as the archive grows, and that is correct.** The labels
+are frozen and published days are immutable, so a new day can only add
+distractors - which is exactly what it does to a reader. Between two measurements
+four hours apart the archive gained 132 vectors and the reachable figure moved
+from 0.931 to 0.913. `assist.recall_min` is a floor with about two standard
+errors of headroom, so it will eventually fire; when it does, the question to ask
+is whether ten slots are still enough for an archive that size, not how to move
+the bar.
+
+### The similarity floor is a selector, measured
+
+Below the floor a result is not shown at all. It is never reported to a reader as
+a quality signal, and no page prints a score.
+
+Measured 2026-08-26 against the archive at `bfeed8ca` (1,757 items, 580 with a
+vector): 34,715 same-domain non-answer pairs (a real question against a real item
+that does not answer it) score a mean of 0.074, a p95 of 0.269 and a p99 of 0.399.
+The 85 embedded right answers score a p10 of 0.371 and a median of 0.536. The two
+distributions overlap, so there is no clean cut, and any floor trades a right
+answer against a wrong one.
+
+| Floor | Non-answers surviving | Right answers kept | recall@10 (reachable) |
+| --- | --- | --- | --- |
+| 0.20 (was shipped) | 11.36% | 98.8% | 0.966 |
+| 0.30 | 3.34% | 95.3% | 0.956 |
+| **0.35 (shipped)** | **1.86%** | **90.6%** | **0.931** |
+| 0.40 | 0.98% | 84.7% | 0.892 |
+| 0.45 | 0.47% | 75.3% | 0.814 |
+
+**0.20 could not keep the empty state's promise.** Eight off-domain probes -
+sourdough, Basque grammar, a 1960s wristwatch movement - all returned results at
+0.20, one of them eighteen of them. "Nothing in the archive is close to that" was
+a sentence the selector could never reach. At 0.35 six of the eight return
+nothing and the other two return exactly one item each; one near miss a reader
+can read and dismiss is a different thing from a full page of them.
+
+0.35 costs 0.035 of reachable recall against 0.20, which is about one standard
+error on this instrument and so is not a measurable loss. 0.40 would buy the last
+two empties for another 0.039, which is a measurable one.
+
+### Design rationale
+
+**The eval lives in the backend suite (2026-08-26).** The browser test that
+existed measured whether search runs, not whether it works, and it paid a 43 MB
+encoder download to do it. Retrieval quality is arithmetic over committed vectors
+and needs no page. Authority: Andre.
+
+**The gate is on the reachable number, and the reader-facing number is reported
+beside it every run (2026-08-26).** A gate that fires on another stage's defect
+teaches people to ignore gates. A report that hides the reader's experience is
+worse. Both are printed by the same test on every run. Authority: Andre.
+
+**The floor moved on evidence, not on taste (2026-08-26).** The estimate before
+measuring was 0.35 to 0.45. The measurement put it at the bottom of that range
+and said why: past 0.35 the cost in right answers becomes larger than this
+instrument's own spread. Authority: Andre, Rule #10.
+
+### Rejected alternatives
+
+| Option | Why rejected | Authority |
+| --- | --- | --- |
+| Raise the five-query browser fixture's bar and call it the instrument | At n=5 the standard error at recall 0.8 is 0.18. It cannot see a ten-point regression, so raising its bar would buy noise. | Andre |
+| Gate on mean reciprocal rank | The result list is flat and capped and carries no rank cue. Rewarding first place would measure a claim the product does not make. | Andre, Jony |
+| One right answer per query | A topic query has many. Single-gold labelling reports a working system as broken and makes the number a function of which answer the labeller happened to pick. | Andre |
+| `found / len(gold)` with no cap | Twenty right answers cannot fit in ten slots, so a perfect retriever would score 0.5 and a stingy labeller would score higher than a thorough one. | Andre |
+| Substitute the vertical for the missing entity slug in tier one | A vertical holds 72 to 168 items, which caps recall@10 at 0.06 and measures nothing. Substituting a different grouping would also manufacture a green number from a dimension the product does not use. | Andre |
+| Use an item's own key points as a free query | The summarizer wrote them. A query generated by the model whose output is being retrieved shares its failure modes, which is the LLM-as-judge ban in `CLAUDE.md` section 0a. | Andre |
+| Freeze a corpus snapshot into the fixture so the number never moves | It would duplicate 300 KB of already-committed vectors and would stop the eval from noticing the archive. Published days are immutable, so a labelled answer cannot vanish - and a separate test says so loudly if one does. | Fowler |
+| Lower the labels or raise the floor until recall passes 0.5 | The brief for this work said not to, and it was right: an instrument that reports bad news is doing its job. | owner |
+
 ## The ledger
 
 Every item produces one row, appended to a committed CSV. It is appended by CI, read by the dashboard, and never recomputed at read time (Rule #1). The row shape is a contract like any other, versioned and changelogged ([../../CLAUDE.md](../../CLAUDE.md) section 11).
@@ -415,4 +571,5 @@ later: was the runner-up close?
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - what the prompt asks for, including the hedges these metrics check.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the eval-row contract.
 - [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - the stamp every row carries, and why an unchanged item writes none.
+- [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md) - the published surface, including the search the retrieval section measures.
 - [../../.github/agents/andre.agent.md](../../.github/agents/andre.agent.md) - the persona who owns metric choice.

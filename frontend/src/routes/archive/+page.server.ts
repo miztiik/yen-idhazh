@@ -1,4 +1,5 @@
 import { loadDay, publishedDates } from '$lib/server/payload';
+import { assistConfig } from '$lib/server/config';
 import type { DigestDay } from '$lib/payload/types';
 
 export const prerender = true;
@@ -18,6 +19,7 @@ export function load() {
 		// page's prerendered data - no extra request, which is the constraint the
 		// layout row fixed - and the vectors inside them are what makes the search
 		// possible without the browser embedding anything but a query.
-		payloads: loaded
+		payloads: loaded,
+		assist: assistConfig()
 	};
 }
