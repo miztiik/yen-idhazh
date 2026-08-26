@@ -20,6 +20,7 @@ from typing import Any
 import pytest
 from conftest import REPO_ROOT
 
+from idhazh.contracts.app_config import AssistConfig
 from idhazh.contracts.base import SLUG_PATTERN
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.embed import (
@@ -37,14 +38,17 @@ from idhazh.embed import (
     dequantise,
     from_base64,
     quantise,
+    readable_share,
     session_options,
     text_for,
     to_base64,
 )
+from utilities.token_budget import digest_paths, measure_day, percentile, raw_tokenizer
 
 # The browser's half of the same contract. POSIX and relative, per CLAUDE.md
 # section 2.
 ENCODER_TS_RELPATH = "frontend/src/lib/assist/encoder.ts"
+LOADER_TS_RELPATH = "frontend/src/lib/assist/loader.ts"
 
 CORPUS = [
     "India added 15,400 megawatts of solar capacity, its biggest year yet.",
@@ -164,6 +168,23 @@ class TestOneEncoderTwoRuntimes:
         assert found is not None, f"{ENCODER_TS_RELPATH} no longer declares ENCODER_DIMENSIONS"
         assert int(found.group(1)) == DIMENSIONS
 
+    def test_the_browser_reads_a_query_exactly_as_far_as_the_runner_read_the_items(
+        self,
+    ) -> None:
+        """The cap moved into `config/`, and the browser's copy is still a literal.
+
+        A query read further than the items it is matched against is a different
+        question, and nothing about that failure is visible: no error, no 404,
+        just worse results. The browser cannot import `config/idhazh.json` -
+        that reader is server-only - so until it can, this gate is what stops
+        the two numbers separating. It fails the moment `assist.max_tokens`
+        moves without `loader.ts` following.
+        """
+        source = (REPO_ROOT / LOADER_TS_RELPATH).read_text(encoding="utf-8")
+        found = re.search(r"^export const MAX_TOKENS = (\d+);$", source, re.MULTILINE)
+        assert found is not None, f"{LOADER_TS_RELPATH} no longer declares MAX_TOKENS"
+        assert int(found.group(1)) == MAX_TOKENS
+
 
 class TestEncoder:
     def test_the_committed_model_is_the_one_the_browser_fetches(self) -> None:
@@ -272,6 +293,127 @@ class TestPinnedArithmetic:
         short = tokenizer.encode("Solar capacity rose.")
         assert len(short.ids) < MAX_TOKENS
         assert set(short.attention_mask) == {1}
+
+    def test_the_cap_is_the_configured_one_and_not_a_literal(self) -> None:
+        """The knob has to reach the tokenizer, or it is decoration (Rule #6)."""
+        if not (REPO_ROOT / TOKENIZER_RELPATH).exists():
+            pytest.skip("the tokenizer is not committed in this checkout")
+        narrow = build_tokenizer(REPO_ROOT, max_tokens=64)
+        assert len(narrow.encode(" ".join(["word"] * 5000)).ids) == 64
+
+
+class TestTokenBudget:
+    """The cap against the text it has to read. See `backend/utilities/token_budget.py`.
+
+    The distribution itself is an operator sweep, not a test - there is no
+    assertion a tier can defend about a p50. What is assertable is the relation
+    the cap has to hold to the corpus, so that is all this asserts.
+    """
+
+    def test_the_oracle_the_cap_sits_at_or_above_the_p95_of_what_it_reads(self) -> None:
+        """The cap may truncate a tail. It may not truncate the ordinary case.
+
+        Measured 2026-08-26 (Windows 11, 8 vCPU, Python 3.12.12) over the 1886
+        embedded items of the six committed days: p95 217 tokens, p99 243, max
+        280. The 18 percent over-cap figure this row started from came from a
+        character-count proxy; the encoder's own count says 0.58 percent.
+
+        This is also the gate that says when to revisit the cap. If a day
+        arrives whose items are half again as long, it fails here rather than
+        in a reader's search results.
+        """
+        if not (REPO_ROOT / TOKENIZER_RELPATH).exists():
+            pytest.skip("the tokenizer is not committed in this checkout")
+        paths = digest_paths(REPO_ROOT)
+        if not paths:
+            pytest.skip("no day is committed in this checkout")
+
+        tokenizer = raw_tokenizer(REPO_ROOT)
+        floor = AssistConfig().min_readable_letter_share
+        lengths = [
+            int(row["tokens"])
+            for path in paths
+            for row in measure_day(path, tokenizer)
+            if float(row["readable_share"]) >= floor
+        ]
+        assert lengths, "the committed days hold no embeddable item"
+        assert MAX_TOKENS >= percentile(lengths, 0.95)
+
+
+class TestWhatTheEncoderCannotRead:
+    """An item in another alphabet gets no vector, rather than an unretrievable one."""
+
+    def test_english_is_fully_readable(self) -> None:
+        assert readable_share("India added 15,400 megawatts of solar capacity.") == 1.0
+
+    def test_a_headline_of_numbers_alone_is_readable(self) -> None:
+        """No alphabet, nothing to be illiterate in. The tokenizer reads digits."""
+        assert readable_share("15,400 (2026) - 99.9%") == 1.0
+
+    def test_another_script_is_not_readable(self) -> None:
+        assert readable_share("\u0b87\u0ba8\u0bcd\u0ba4\u0bbf\u0baf \u0bae\u0bbf\u0ba9\u0bcd") == 0.0
+
+    def test_a_mostly_english_item_stays_readable(self) -> None:
+        """One foreign name in an English summary must not cost it its vector."""
+        share = readable_share(
+            "The plant is live, said Reliance chair \u0bae\u0bc1\u0b95\u0bc7\u0bb7\u0bcd, on Monday."
+        )
+        assert share > 0.8
+
+    def test_the_gate_reads_the_configured_share(self) -> None:
+        tamil = "\u0b87\u0ba8\u0bcd\u0ba4\u0bbf\u0baf. \u0bae\u0bbf\u0b95\u0baa\u0bcd\u0baa\u0bc6\u0bb0\u0bbf\u0baf \u0b86\u0ba3\u0bcd\u0b9f\u0bc1."
+        assert Embedder(REPO_ROOT, AssistConfig()).readable(tamil) is False
+        assert Embedder(REPO_ROOT, AssistConfig(min_readable_letter_share=0.0)).readable(tamil)
+
+    def test_the_oracle_an_unreadable_item_carries_no_vector(
+        self, embedder: Embedder, digest_day_ok: DigestDay
+    ) -> None:
+        """The encoder answers anything, confidently. That is the whole problem.
+
+        Left alone it returns a well-formed unit vector for text whose letters
+        it never learned - one that says where `[UNK]` and a run of single
+        characters sit in the embedding space, not what the story was. No query
+        a reader types retrieves it, and nothing about the payload says so.
+        """
+        from idhazh.assemble import build_embeddings
+
+        readable, unreadable = digest_day_ok.items[0], digest_day_ok.items[1]
+        unreadable = unreadable.model_copy(
+            update={
+                "title": "\u0b9a\u0bc2\u0bb0\u0bbf\u0baf \u0bae\u0bbf\u0ba9\u0bcd \u0ba4\u0bbf\u0bb1\u0ba9\u0bcd",
+                "summary": (
+                    "\u0b87\u0ba8\u0bcd\u0ba4\u0bbf\u0baf\u0bbe \u0b87\u0ba8\u0bcd\u0ba4 "
+                    "\u0b86\u0ba3\u0bcd\u0b9f\u0bbf\u0bb2\u0bcd \u0bae\u0bbf\u0b95\u0baa\u0bcd\u0baa\u0bc6\u0bb0\u0bbf\u0baf "
+                    "\u0b85\u0bb3\u0bb5\u0bbf\u0bb2\u0bcd \u0b9a\u0bc2\u0bb0\u0bbf\u0baf \u0bae\u0bbf\u0ba9\u0bcd "
+                    "\u0ba4\u0bbf\u0bb1\u0ba9\u0bc8\u0b9a\u0bcd \u0b9a\u0bc7\u0bb0\u0bcd\u0ba4\u0bcd\u0ba4\u0ba4\u0bc1."
+                ),
+            }
+        )
+
+        block = build_embeddings([readable, unreadable], embedder)
+
+        assert block is not None
+        assert readable.item_id in block.vectors
+        assert unreadable.item_id not in block.vectors
+
+    def test_an_unreadable_day_publishes_with_an_empty_block(
+        self, embedder: Embedder, digest_day_ok: DigestDay
+    ) -> None:
+        """Degrade, do not fail. A day nobody can search still reaches a reader."""
+        from idhazh.assemble import build_embeddings
+
+        only = digest_day_ok.items[0].model_copy(
+            update={
+                "title": "\u0b9a\u0bc2\u0bb0\u0bbf\u0baf \u0bae\u0bbf\u0ba9\u0bcd",
+                "summary": "\u0b87\u0ba8\u0bcd\u0ba4\u0bbf\u0baf\u0bbe \u0b9a\u0bc7\u0bb0\u0bcd\u0ba4\u0bcd\u0ba4\u0ba4\u0bc1.",
+            }
+        )
+
+        block = build_embeddings([only], embedder)
+
+        assert block is not None
+        assert block.vectors == {}
+        assert block.model_id == EMBEDDER_ID
 
 
 class TestDayPayload:

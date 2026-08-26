@@ -24,8 +24,11 @@ from __future__ import annotations
 
 import base64
 import math
+import unicodedata
 from pathlib import Path
 from typing import TYPE_CHECKING, Any, Final
+
+from idhazh.contracts.app_config import AssistConfig
 
 if TYPE_CHECKING:
     from idhazh.contracts.digest_day import DigestItem
@@ -59,12 +62,14 @@ TOKENIZER_RELPATH: Final = f"{MODEL_RELDIR}/tokenizer.json"
 DIMENSIONS: Final = 384
 DTYPE: Final = "int8"
 
-# The encoder's own limit. Longer input is truncated rather than rejected: a
-# summary that runs long still deserves a vector. It is also the browser's cap,
-# because a query read further than the items it is matched against is a
-# different question. Row #8 of the plan moves this into `config/`; the browser
-# twin is `MAX_TOKENS` in `frontend/src/lib/assist/loader.ts`.
-MAX_TOKENS: Final = 256
+# The cap a run uses when nobody configured one, read off the contract so the
+# number exists once. The knob is `assist.max_tokens`; it is not a safety guard
+# but a statement of how far into an item the encoder reads, and the encoder's
+# own position table stops it at 512. Measured 2026-08-26 over the 1886 embedded
+# items of the six committed days: p95 is 217 tokens, so 256 reads 99.95 percent
+# of everything published. The browser twin is `MAX_TOKENS` in
+# `frontend/src/lib/assist/loader.ts`, and a test here fails if the two separate.
+MAX_TOKENS: Final = AssistConfig().max_tokens
 
 _SCALE: Final = 127.0
 
@@ -86,8 +91,14 @@ def session_options() -> Any:
     return options
 
 
-def build_tokenizer(root: Path) -> Any:
+def build_tokenizer(root: Path, *, max_tokens: int = MAX_TOKENS) -> Any:
     """Truncated at the cap and padded to nothing, which is what the browser does.
+
+    Both settings are overrides, not requests. The committed `tokenizer.json`
+    carries `truncation: 128` and a fixed `padding: 128` of its own, so a
+    tokenizer built without these two lines silently reads half the text and
+    pads the rest - and reports 128 tokens for every input, which is what makes
+    the mistake hard to see.
 
     Padding is not free of meaning here. The encoder is dynamically quantised,
     so a pad token's own activations widen the range every real token is then
@@ -99,7 +110,7 @@ def build_tokenizer(root: Path) -> Any:
     from tokenizers import Tokenizer
 
     tokenizer = Tokenizer.from_file(str(root / TOKENIZER_RELPATH))
-    tokenizer.enable_truncation(max_length=MAX_TOKENS)
+    tokenizer.enable_truncation(max_length=max_tokens)
     tokenizer.no_padding()
     return tokenizer
 
@@ -107,14 +118,26 @@ def build_tokenizer(root: Path) -> Any:
 class Embedder:
     """Lazily loaded, because most runs of most stages never embed anything."""
 
-    def __init__(self, root: Path) -> None:
+    def __init__(self, root: Path, assist: AssistConfig | None = None) -> None:
         self._root = root
+        self._assist = assist or AssistConfig()
         self._session: Any | None = None
         self._tokenizer: Any | None = None
 
     @property
     def available(self) -> bool:
         return (self._root / ONNX_RELPATH).exists()
+
+    def readable(self, text: str) -> bool:
+        """Whether this text is worth a vector at all.
+
+        The encoder answers every input, including one written in a script its
+        vocabulary does not carry. The answer is a unit vector like any other -
+        confident, well-formed, and about the characters rather than the story,
+        so no query a reader types will ever retrieve it. Degrade, do not fail:
+        the item publishes, it simply is not searchable.
+        """
+        return readable_share(text) >= self._assist.min_readable_letter_share
 
     def load(self) -> None:
         import onnxruntime
@@ -126,7 +149,7 @@ class Embedder:
             session_options(),
             providers=["CPUExecutionProvider"],
         )
-        self._tokenizer = build_tokenizer(self._root)
+        self._tokenizer = build_tokenizer(self._root, max_tokens=self._assist.max_tokens)
 
     def encode(self, texts: list[str]) -> list[list[float]]:
         """Mean-pooled, L2-normalised sentence vectors, in input order.
@@ -168,6 +191,30 @@ class Embedder:
 def text_for(item: DigestItem) -> str:
     """What a reader is actually searching: the headline and what we said about it."""
     return f"{item.title}. {item.summary}"
+
+
+def readable_share(text: str) -> float:
+    """The share of the text's letters that are in the alphabet the encoder learned.
+
+    Letters, not tokens. The obvious test - how many tokens came back `[UNK]` -
+    does not work, and it fails in the direction that looks fine: the vocabulary
+    holds single Devanagari, Arabic and Cyrillic characters as subword pieces,
+    so a Hindi sentence spells out one character at a time and reports an
+    unknown share of 0.008 (measured 2026-08-26 with the committed tokenizer).
+    What the vocabulary lacks is the words, not the letters, so counting `[UNK]`
+    would call every one of those items readable.
+
+    Text with no letters at all - a headline of numbers and punctuation - scores
+    1.0. There is no alphabet to be illiterate in, and the tokenizer reads
+    digits and punctuation the same way whatever language surrounds them.
+    """
+    letters = [character for character in text if character.isalpha()]
+    if not letters:
+        return 1.0
+    latin = sum(
+        1 for character in letters if unicodedata.name(character, "").startswith("LATIN")
+    )
+    return latin / len(letters)
 
 
 def quantise(vector: list[float]) -> bytes:
