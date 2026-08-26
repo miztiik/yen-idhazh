@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -98,6 +98,57 @@ so a page is complete before any script runs. A canvas cannot inherit a CSS
 custom property inside the drawn pixels, so a canvas chart has to resolve the
 token values in JavaScript at mount and again after every theme change - which
 means the token file stops being the only place a colour is decided.
+
+## A console figure says what it counts, in words
+
+The console is read by the developer and the operator, not by a digest reader.
+That sets who it is for; it does not relax how it is written. `CLAUDE.md`
+section 0b binds every string in this repo, so a figure on this page is labelled
+in words a person can act on and never in the name of the column behind it.
+
+Five rules hold for every number the console prints:
+
+- **A count of that day's items, not a score.** No value between zero and one
+  reaches the screen, and no cell prints a decimal. A share prints as whole
+  percent.
+- **No ledger column name on screen.** `hhem`, `hedge_dropped` and
+  `truncation_flagged` are how the file spells it. The page spells what it
+  means.
+- **A dash where the ledger holds no answer.** Null and zero are different
+  facts, and a zero that was really an absence is the one number nobody checks.
+- **`<1` where a real measurement rounds away.** A `0` there would say the work
+  was free.
+- **The item count sits beside every quality figure.** A share over four
+  articles is not a measurement, and a column that hides its denominator
+  invites a trend that is not there.
+
+The label set for `What the model did`, with the sentence each one carries:
+
+| Label | The line under it |
+| --- | --- |
+| Summaries today | - |
+| Marked "not sure" | How many of today's summaries we told you not to trust. |
+| Numbers not in the article | The summary had a figure. The article did not. |
+| "Maybe" told as fact | The article said it might have happened. The summary said it did. |
+| Article read only in part | The article was too long, so the machine read the start and stopped. |
+| Copied, not rewritten | How much of a normal summary is lifted word for word. |
+| Time to write one | How long the machine takes on one article. |
+| Model minutes | - |
+| Failed | - |
+
+Where each figure is read from is in
+[../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
+
+**Quality is a table, never a line.** A line invites a trend across days whose
+articles have nothing in common. The one thing on the page that draws a spread
+is the throughput candle, because a spread is a property of a day's article mix
+and a single number cannot carry it.
+
+**A fixed benchmark figure never appears on the console.** It was taken on
+another machine against another workload, so a gap between it and a run reads as
+a regression nobody measured. Those numbers stay in
+[../reference/measurements.md](../reference/measurements.md) and the page links
+to them.
 
 ## Design rationale
 
