@@ -264,10 +264,17 @@ def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
     return references
 
 
-def _evaluate_shard_matrix(script: str, requested_shards: str) -> list[int] | None:
+def _evaluate_shard_matrix(script: str, requested_shards: str, derived: int) -> list[int] | None:
+    """Read the fan-out step's shell and answer what matrix it writes.
+
+    The step takes two inputs, so the harness does too: what an operator typed,
+    and what the derivation printed when nobody typed anything.
+    """
     lines = [line.strip() for line in script.splitlines()]
-    default_line = f'[ -n "$SHARDS" ] || SHARDS={CONTENT_REFRESH_SHARD_DEFAULT}'
     pattern_line = "SHARD_PATTERN='^[1-8]$'"
+    input_line = 'SHARDS="${{ inputs.shards }}"'
+    derive_line = 'SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}")'
+    clamp_line = 'while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do'
     guard_block = [
         'if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then',
         'echo "shards must be an integer from 1 through 8" >&2',
@@ -279,19 +286,34 @@ def _evaluate_shard_matrix(script: str, requested_shards: str) -> list[int] | No
         '>> "$GITHUB_OUTPUT"'
     )
 
-    assert lines.count(default_line) == 1
     assert [line for line in lines if line.startswith("SHARD_PATTERN=")] == [pattern_line]
+    assert lines.count(input_line) == 1
+    assert lines.count(derive_line) == 1, "the count comes from the plan, not from a literal"
+    assert lines.count(clamp_line) == 1, "a derived count is clamped, never fatal"
+    assert not [line for line in lines if line.startswith('[ -n "$SHARDS" ]')], (
+        "the fixed default is what the derivation replaces"
+    )
     assert [line for line in lines if line.startswith('echo "matrix=')] == [matrix_line]
     guard_index = lines.index(guard_block[0])
     assert lines[guard_index : guard_index + len(guard_block)] == guard_block
-    assert lines.index(default_line) < lines.index(pattern_line) < guard_index < lines.index(matrix_line)
+    assert (
+        lines.index(pattern_line)
+        < lines.index(input_line)
+        < lines.index(derive_line)
+        < lines.index(clamp_line)
+        < guard_index
+        < lines.index(matrix_line)
+    )
 
-    default_match = re.fullmatch(r'\[ -n "\$SHARDS" \] \|\| SHARDS=(\d+)', default_line)
     pattern_match = re.fullmatch(r"SHARD_PATTERN='([^']+)'", pattern_line)
-    assert default_match is not None
     assert pattern_match is not None
-    shards = requested_shards or default_match.group(1)
-    if re.fullmatch(pattern_match.group(1), shards) is None:
+    pattern = pattern_match.group(1)
+    shards = requested_shards
+    if not shards:
+        shards = str(derived)
+        while int(shards) > 1 and re.fullmatch(pattern, shards) is None:
+            shards = str(int(shards) - 1)
+    if re.fullmatch(pattern, shards) is None:
         return None
     return list(range(int(shards)))
 
@@ -669,22 +691,48 @@ def test_content_refresh_has_eight_total_work_shards_at_most() -> None:
     assert strategy.get("max-parallel") == "8"
 
 
-def test_content_refresh_decide_step_caps_total_jobs_by_behavior() -> None:
+def test_content_refresh_derives_the_shard_count_after_the_plan() -> None:
+    """The matrix was written before the plan existed, so `run.shard_size` could not reach it.
+
+    `shards` and `matrix` therefore move to their own step behind `Plan the day`,
+    and the job outputs move with them. A relocated step id that nothing
+    re-points is a silent break no shell assertion catches.
+    """
     workflow = _load_workflows()["digest.yml"]
-    decide = _step(workflow, "plan", "id", "decide")
-    script = decide.get("run")
+    outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
+    assert outputs.get("shards") == "${{ steps.fanout.outputs.shards }}"
+    assert outputs.get("matrix") == "${{ steps.fanout.outputs.matrix }}"
+
+    steps = _steps(workflow, "plan")
+    assert [step.get("id") for step in steps].index("fanout") > (
+        [step.get("name") for step in steps].index("Plan the day")
+    )
+    decide_script = _step(workflow, "plan", "id", "decide").get("run")
+    assert isinstance(decide_script, str)
+    assert "SHARDS" not in decide_script, "the fan-out no longer rides on the date step"
+
+
+def test_content_refresh_caps_total_jobs_by_behavior() -> None:
+    workflow = _load_workflows()["digest.yml"]
+    fanout = _step(workflow, "plan", "id", "fanout")
+    script = fanout.get("run")
     assert isinstance(script, str)
 
-    default_matrix = list(range(int(CONTENT_REFRESH_SHARD_DEFAULT)))
+    # Nobody asked, so the day decides. A day that needs fewer workers gets
+    # fewer, and every extra worker restores the weights again.
+    for derived in sorted(int(shards) for shards in CONTENT_REFRESH_SHARDS):
+        assert _evaluate_shard_matrix(script, "", derived) == list(range(derived))
+    # A config that outruns the ceiling costs the tail of the fan-out, never the
+    # day: the feeds have already been read when this step runs.
+    assert _evaluate_shard_matrix(script, "", 12) == list(range(int(max(CONTENT_REFRESH_SHARDS))))
+
+    # An operator's own value still wins, and is still checked rather than clamped.
     expected = {shards: list(range(int(shards))) for shards in sorted(CONTENT_REFRESH_SHARDS)}
-    # A scheduled run passes no inputs at all, so the empty string is the case
-    # that decides what a reader actually gets.
-    expected[""] = default_matrix
     for requested_shards, matrix in expected.items():
-        assert _evaluate_shard_matrix(script, requested_shards) == matrix
-    # Both edges of the new ceiling, plus the shapes that are not an integer.
+        assert _evaluate_shard_matrix(script, requested_shards, 1) == matrix
+    # Both edges of the ceiling, plus the shapes that are not an integer.
     for invalid_shards in ("0", "9", "10", "-1", "1.5", "text", "04", " 4"):
-        assert _evaluate_shard_matrix(script, invalid_shards) is None
+        assert _evaluate_shard_matrix(script, invalid_shards, 4) is None
 
 
 def test_no_rebase_in_the_daily_run_starts_on_a_dirty_tree() -> None:
