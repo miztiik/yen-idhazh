@@ -17,6 +17,7 @@ from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.taxonomy import EventType, LensId, LifecycleStatus, SourceTier
 
 TAXONOMY = config.load(CONFIG_DIR).taxonomy
+WATCHLIST = config.load(CONFIG_DIR).watchlist
 
 
 # --- The match rule ---------------------------------------------------------
@@ -78,6 +79,12 @@ def test_every_lens_and_event_carries_terms() -> None:
     """An empty list is legal and silent, which is exactly how this shipped unwired."""
     assert [lens.id for lens in TAXONOMY.lenses if not lens.keywords] == []
     assert [event.id for event in TAXONOMY.events if not event.keywords] == []
+
+
+def test_every_watchlist_entity_carries_an_alias() -> None:
+    """An entity with no alias is never matched and never lifts a score."""
+    assert WATCHLIST.entities, "an empty watchlist caps entity coverage at zero"
+    assert [entity.id for entity in WATCHLIST.entities if not entity.aliases] == []
 
 
 def test_the_committed_terms_are_all_matchable() -> None:
@@ -144,32 +151,79 @@ def article(status: ArticleStatus, text: str | None) -> Article:
 
 
 def test_an_extracted_article_carries_the_tags_its_own_words_earn() -> None:
-    tagged = tag.tagged(article(ArticleStatus.OK, "Researchers in China shipped it."), taxonomy=TAXONOMY)
+    tagged = tag.tagged(
+        article(ArticleStatus.OK, "Researchers in China shipped it."),
+        taxonomy=TAXONOMY,
+        watchlist=WATCHLIST,
+    )
     assert tagged.lenses == [LensId.CHINA]
     assert EventType.RELEASE in tagged.events
     assert EventType.RESEARCH in tagged.events
 
 
+def test_an_article_naming_a_watched_entity_carries_its_slug() -> None:
+    tagged = tag.tagged(
+        article(ArticleStatus.OK, "Anthropic and Nvidia both commented."),
+        taxonomy=TAXONOMY,
+        watchlist=WATCHLIST,
+    )
+    assert tagged.entities == ["anthropic", "nvidia"]
+
+
+def test_an_entity_is_matched_by_any_of_its_aliases() -> None:
+    """The alias list is the match surface, so a product name reaches its owner."""
+    by_product = tag.tagged(
+        article(ArticleStatus.OK, "Claude answered the question."),
+        taxonomy=TAXONOMY,
+        watchlist=WATCHLIST,
+    )
+    assert by_product.entities == ["anthropic"]
+
+
+def test_a_retired_entity_stops_matching_but_keeps_its_tombstone() -> None:
+    retired = WATCHLIST.model_copy(
+        update={
+            "entities": [
+                entity.model_copy(
+                    update={"status": LifecycleStatus.RETIRED, "retired_on": "2026-08-26"}
+                )
+                if entity.id == "nvidia"
+                else entity
+                for entity in WATCHLIST.entities
+            ]
+        }
+    )
+    assert "nvidia" not in retired.entity_terms()
+    assert "nvidia" in {entity.id for entity in retired.entities}
+
+
 def test_a_failed_article_keeps_its_empty_lists() -> None:
     """No text, never published - a tag would only be a tag on a feed title."""
-    failed = tag.tagged(article(ArticleStatus.FETCH_FAILED, None), taxonomy=TAXONOMY)
+    failed = tag.tagged(
+        article(ArticleStatus.FETCH_FAILED, None), taxonomy=TAXONOMY, watchlist=WATCHLIST
+    )
     assert failed.lenses == []
     assert failed.events == []
+    assert failed.entities == []
 
 
 def test_tagging_changes_nothing_else_about_the_payload() -> None:
     before = article(ArticleStatus.OK, "Researchers in China shipped it.")
-    after = tag.tagged(before, taxonomy=TAXONOMY)
-    assert after.model_dump(exclude={"lenses", "events"}) == before.model_dump(
-        exclude={"lenses", "events"}
-    )
+    after = tag.tagged(before, taxonomy=TAXONOMY, watchlist=WATCHLIST)
+    fields = {"lenses", "events", "entities"}
+    assert after.model_dump(exclude=fields) == before.model_dump(exclude=fields)
 
 
 def test_the_same_text_tags_the_same_way_twice() -> None:
-    once = tag.tagged(article(ArticleStatus.OK, "A data breach in Beijing."), taxonomy=TAXONOMY)
-    twice = tag.tagged(once, taxonomy=TAXONOMY)
+    once = tag.tagged(
+        article(ArticleStatus.OK, "A data breach in Beijing."),
+        taxonomy=TAXONOMY,
+        watchlist=WATCHLIST,
+    )
+    twice = tag.tagged(once, taxonomy=TAXONOMY, watchlist=WATCHLIST)
     assert once.lenses == twice.lenses
     assert once.events == twice.events
+    assert once.entities == twice.entities
 
 
 def test_no_prompt_asks_a_model_for_a_tag() -> None:

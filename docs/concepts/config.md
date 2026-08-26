@@ -241,6 +241,8 @@ The fix, on 2026-08-26, was a `keywords` list on each lens and each event, holdi
 
 The lesson generalises past this file: **a config entry that declares a thing must also declare how the thing is decided, or it is decoration.** An id and a display name describe a label. They never describe a rule.
 
+The same day found the third shape of the same failure, and it is the worst of them: **a knob that is read, but always against an empty input.** `collect.watchlist_bonus` was read on every planned item and added to the score under `if watchlist_hit`, and it could never fire, because `watchlist_hit` was tested against a `watchlist_keys` the caller hardcoded to the empty set. Nothing here was dead code and nothing was unread config, and the term still never moved a number. A test asserting "the bonus lifts the score" passed the whole time, because the test supplied the flag itself. Fixed 2026-08-26: `config/watchlist.json` carries 30 entities and the flag comes from their aliases. The test now pins each term's **size** against its knob rather than only its direction, which is the check that would have caught it.
+
 ## A knob nothing reads is deleted
 
 A knob that no code path reads is worse than clutter. It reads as a control, so the next person to open the file sizes the system by what the knobs claim - and eventually somebody changes one and waits for an effect that never arrives.
