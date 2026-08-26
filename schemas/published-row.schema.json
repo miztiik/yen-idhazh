@@ -4,19 +4,18 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed canonical_url. The row is url_key, published_on and item_id.",
+      "version": "2026-08-26",
+      "why": "Nothing on the read path opened it: load_published maps url_key to published_on by name. It was 48.6 percent of a row on a ledger with no time bound. The address is recoverable by joining item_id and published_on against that day's payload, which retention may not touch."
+    },
+    {
       "change": "Initial shape: the address, the day it ran, and the item it ran as.",
       "version": "2026-08-22T11:00",
       "why": "A freshness window cannot stop a repeat on its own. Late-evening articles are still inside the window the next morning."
     }
   ],
-  "description": "One row of `state/published.csv`, appended when an item reaches a committed digest.",
+  "description": "One row of `state/published.csv`, appended when an item reaches a committed digest.\n\nIt carries no address. `item_id` and `published_on` join to that day's\ncommitted payload, where the address is already published as `source_url` -\nsee `docs/architecture/sources/freshness.md` for the worked recovery.",
   "properties": {
-    "canonical_url": {
-      "maxLength": 2048,
-      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
-      "title": "Canonical Url",
-      "type": "string"
-    },
     "item_id": {
       "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
       "title": "Item Id",
@@ -34,7 +33,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-22T11:00",
+      "default": "2026-08-26",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -42,11 +41,10 @@
   },
   "required": [
     "url_key",
-    "canonical_url",
     "published_on",
     "item_id"
   ],
   "title": "PublishedRow",
   "type": "object",
-  "version": "2026-08-22T11:00"
+  "version": "2026-08-26"
 }

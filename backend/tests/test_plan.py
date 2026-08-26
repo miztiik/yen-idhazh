@@ -624,7 +624,6 @@ def test_a_published_address_is_never_planned_again() -> None:
             PublishedRow(
                 version=PublishedRow.schema_version(),
                 url_key=ran.url_key,
-                canonical_url=ran.canonical_url,
                 published_on=DATE,
                 item_id=ran.item_id,
             )

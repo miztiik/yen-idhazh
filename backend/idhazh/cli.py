@@ -1790,11 +1790,11 @@ def stage_assemble(
 def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
     """What this digest actually carried, as addresses a later run can skip.
 
-    The digest item knows the item id and the plan knows the address, so the
-    two are joined here rather than widening the published payload with a hash
-    no reader will ever look at. Only what this run introduced is recorded: a
-    day carries yesterday's items forward, and re-recording them would move
-    their published date every morning.
+    The digest item knows the item id and the plan knows the key, so the two are
+    joined here rather than widening the published payload with anything the
+    skip read does not open. Only what this run introduced is recorded: a day
+    carries yesterday's items forward, and re-recording them would move their
+    published date every morning.
     """
     addresses = {item.item_id: item for item in plan.items}
     rows: list[PublishedRow] = []
@@ -1806,7 +1806,6 @@ def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
             PublishedRow(
                 version=PublishedRow.schema_version(),
                 url_key=planned.url_key,
-                canonical_url=planned.canonical_url,
                 published_on=day.date,
                 item_id=item.item_id,
             )

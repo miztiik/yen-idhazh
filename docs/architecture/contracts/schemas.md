@@ -102,6 +102,14 @@ Authority: Carmack (cache and shard economics), 2026-08-25.
 
 The eval ledger and source-state CSV ledgers compare the committed header to the row contract before writing. A mismatch stops the append and tells the operator to migrate the ledger. Padding is forbidden: readers map cells by header position, so a stale header would put correct-looking names over the wrong values.
 
+### Narrowing a row ledger is one commit, not three
+
+A reader built on `csv.DictReader` maps cells by name off the file's own header, so dropping a column nothing reads changes no answer the reader gives. What refuses is the append: `require_matching_header` compares the committed header to the contract's columns and raises rather than write. That is called from `_append` and from nothing on the read path, so the model change and the file rewrite have to land together - and once they do there is no read-side transition left to stage, which is what removes the expand-migrate-contract sequence a breaking change usually needs.
+
+The rewrite is a committed one-shot utility rather than an ad-hoc script, so a fork or a stale branch can reproduce the same migration. `backend/utilities/migrate_published_ledger.py` is the worked example: it refuses a ledger that is already narrow, and it refuses to write at all unless the rewritten file carries the same rows, in the same order, with the same values in the cells the read path opens. `PublishedRow` lost `canonical_url` this way on 2026-08-26 ([../sources/freshness.md](../sources/freshness.md)).
+
+A migrated row keeps the `version` cell it was written with. The base contract accepts an older stamp on purpose, so a later read-side migration has something to branch on; restamping every row would erase the only marker of which rows predate the change.
+
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 
 ## Every contract carries version and changelog
@@ -152,7 +160,7 @@ The shapes carry rules a JSON Schema cannot express, and each one is a defect cl
 
 ## Four things that bite when you change a model
 
-- **Adding a field - even an optional one with a default - breaks every fixture of that model.** The serializer emits the new key, so the byte-identical round-trip test fails on every committed fixture at once. Update them in the same commit, respecting sorted key order. A run of fixture failures right after an additive change is the expected signal, not a regression to hunt.
+- **Adding or removing a field - even an optional one with a default - breaks every fixture of that model.** The serializer emits exactly the model's keys, so the byte-identical round-trip test fails on every committed fixture at once, and a removed field additionally fails validation because the models forbid unknown keys. Update them in the same commit, respecting sorted key order. A run of fixture failures right after a field change is the expected signal, not a regression to hunt.
 - **A same-day second revision stamps `version` to the minute**, `YYYY-MM-DDTHH:MM`. That string sorts *after* the bare `YYYY-MM-DD` of the same day, which is exactly what the newest-first `changelog` needs - the revision lands at the top rather than under the entry it supersedes. The base model enforces newest-first **and distinct** at class definition, so two branches that both stamp today's bare date on one contract produce a module that raises `TypeError` on import and takes the whole suite with it. When several branches will touch one contract, stamp to the minute from the first of them.
 - **pydantic-core's regex engine has no look-around.** It is the Rust engine, not Python's `re`. A `StringConstraints(pattern=...)` containing `(?!` or `(?<=` raises `SchemaError` when the class is built, so the failure arrives at import time rather than at validation. Spell an explicit segment grammar instead of a negative lookahead.
 - **Generate the schema in validation mode, not serialization mode.** `model_json_schema(mode="serialization")` marks every field required, which would make "a config file may omit a knob" a lie in the published schema. The exporter uses validation mode and post-processes only `version`.
