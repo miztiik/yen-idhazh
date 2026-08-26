@@ -550,7 +550,16 @@ class RetentionConfig(Model):
     site_budget_mb: int = Field(
         default=800,
         ge=1,
-        description="Opens an issue above this. The platform's hard ceiling is 1 GB.",
+        description=(
+            "Opens an issue above this, and does nothing else: it never fails a build "
+            "and never deletes. Sized in days of warning, not in round numbers. It sits "
+            "224 MB below the platform's 1 GB ceiling, which is 26 days of warning at "
+            "the fastest growth this project has measured (a PNG on every item, "
+            "8,537 KB/day, 2026-08-23), against a 14-day target. The target is a "
+            "judgement about one maintainer reading one issue, not a measurement "
+            "(Rule #10). The arithmetic and its inputs are in "
+            "docs/reference/measurements.md, 'Where the alarm fires, and what it buys'."
+        ),
     )
 
 
