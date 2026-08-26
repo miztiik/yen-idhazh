@@ -71,8 +71,8 @@ jobs:
     outputs:
       date: ${{ steps.decide.outputs.date }}
       day_dir: ${{ steps.decide.outputs.day_dir }}
-      shards: ${{ steps.decide.outputs.shards }}
-      matrix: ${{ steps.decide.outputs.matrix }}
+      shards: ${{ steps.fanout.outputs.shards }}
+      matrix: ${{ steps.fanout.outputs.matrix }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
     steps:
       - uses: actions/checkout@v6
@@ -91,19 +91,6 @@ jobs:
           set -euo pipefail
           DATE="${{ inputs.date }}"
           [ -n "$DATE" ] || DATE=$(date -u +%F)
-          SHARDS="${{ inputs.shards }}"
-          # The empty-input default is what every scheduled run gets, and it
-          # stays at four until an authorized eight-shard dispatch is measured.
-          # The ceiling below moved to eight; this line is the dispatch rule,
-          # not the ceiling, and an unmeasured number may not move it (Rule #10).
-          [ -n "$SHARDS" ] || SHARDS=4
-          # Eight, not four. Rule #2 allows 20 concurrent jobs, so the old
-          # `^[1-4]$` was the only thing holding the fan-out down.
-          SHARD_PATTERN='^[1-8]$'
-          if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
-            echo "shards must be an integer from 1 through 8" >&2
-            exit 1
-          fi
           # A scheduled run has no inputs at all, so every one of these is the
           # empty string and every one needs its default here. `faithfulness`
           # is normalized to a STRING for the same reason: read as a boolean,
@@ -116,14 +103,44 @@ jobs:
           # to name `digest.json` and `run.json` one file at a time.
           echo "day_dir=frontend/public/digest/${DATE//-//}" >> "$GITHUB_OUTPUT"
           echo "date=$DATE" >> "$GITHUB_OUTPUT"
-          echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
           echo "faithfulness=$FAITH" >> "$GITHUB_OUTPUT"
-          echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
       # No weights load here. The plan job is feed reads and arithmetic, and it
       # finishes in seconds - which is what makes fanning out afterwards cheap.
       - name: Plan the day
         run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
+
+      # The day decides the fan-out, so this runs after the plan rather than
+      # beside the date. `run.shard_size` is what one worker is sized to carry,
+      # so a small day spends fewer jobs and restores the weights fewer times
+      # (Rule #2). The derivation is bounded by `run.max_parallel`, which is
+      # four, so a scheduled run still never asks for more workers than the four
+      # it has always had - the eight below is the ceiling an operator may
+      # dispatch to, and moving the automatic path onto it needs the three
+      # conditions in docs/reference/measurements.md, not this step. A dispatch
+      # input still wins, which is why the guard stays a hard failure there.
+      - id: fanout
+        run: |
+          set -euo pipefail
+          SHARD_PATTERN='^[1-8]$'
+          SHARDS="${{ inputs.shards }}"
+          if [ -z "$SHARDS" ]; then
+            SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}")
+            # The derivation is bounded by run.max_parallel, which this pattern
+            # does not read. Walk a derived count down into what the pattern
+            # accepts instead of exiting: the feeds have already been read by
+            # now, and a config the pattern disagrees with must cost the tail of
+            # the fan-out rather than the whole day.
+            while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do
+              SHARDS=$((SHARDS - 1))
+            done
+          fi
+          if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
+            echo "shards must be an integer from 1 through 8" >&2
+            exit 1
+          fi
+          echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
 
       # The plan job writes the sight and health ledgers, so the plan job commits
       # them - not assemble. A run that dies in the worker still saw what it saw,

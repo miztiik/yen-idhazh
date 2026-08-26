@@ -51,12 +51,14 @@ class TierWeights(Model):
 
 class RunConfig(Model):
     safety_ceiling_per_run: int = Field(
-        default=200,
+        default=160,
         ge=1,
         description=(
             "A crash guard, not an editorial choice. Supply and the ranking decide how "
             "big a day is; this only stops a mis-parsed feed from publishing hundreds "
-            "of items in one run. A normal day never reaches it."
+            "of items in one run. A normal day never reaches it. It is also what sizes "
+            "the worst case a work shard and the route stage have to finish, so it is "
+            "bounded by the slower of those two."
         ),
     )
     shard_size: int = Field(
@@ -64,7 +66,16 @@ class RunConfig(Model):
         ge=1,
         description="URLs per worker VM. Set by measured model-load amortization, not by taste.",
     )
-    max_parallel: int = Field(default=4, ge=1)
+    max_parallel: int = Field(
+        default=4,
+        ge=1,
+        description=(
+            "The most workers a run may derive for itself. It is four rather than the "
+            "eight digest.yml lets an operator dispatch, because eight has never "
+            "published a day; the three conditions that would move it are in "
+            "docs/reference/measurements.md."
+        ),
+    )
     shard_timeout_minutes: int = Field(
         default=150,
         ge=1,
@@ -783,6 +794,33 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26",
+            change=(
+                "run.safety_ceiling_per_run default moved from 200 to 160. "
+                "run.max_parallel gained a description."
+            ),
+            why=(
+                "The ceiling is the worst case every downstream bound has to clear, and "
+                "200 cleared neither of them. digest.yml now derives the automatic work "
+                "fan-out as min(ceil(items / run.shard_size), run.max_parallel), so at "
+                "the ceiling a worker draws 50 items across the four workers a scheduled "
+                "run gets. Against the Qwen3.5-9B candidate that is 318 derived minutes "
+                "by length interpolation and 345 by decode ratio, over a 330-minute work "
+                "timeout that nobody may raise (Rule #2); at 160 the same arithmetic "
+                "gives 40 items, 254 and 276 minutes. The route stage says the same "
+                "thing from the other side: its measured slow-host ceiling is 166 items "
+                "at a 50-minute budget (2026-08-25, six runs, 703 items), so 200 and the "
+                "router never agreed and 160 does. The largest day ever planned is 149 "
+                "items (run 32742672105, 2026-08-24), so 160 removes nothing that has "
+                "ever been read. run.max_parallel had no description at all while being "
+                "the bound the derivation clamps by, and it is deliberately four while "
+                "digest.yml lets an operator dispatch eight. Same fields, same types, "
+                "same units: an older config still validates, and a committed config "
+                "that names 200 still loads. A changed default, so it is stamped here "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-25T19:30",
             change="Added models.inference.metrics, on by default.",

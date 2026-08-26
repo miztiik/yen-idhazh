@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -132,9 +132,10 @@ The rest ends on its own after five skips. Nothing here ever edits
 
 `.github/workflows/digest.yml`, displayed as `Content refresh`, starts at 02:20,
 06:20, 10:20, 14:20, and 18:20 UTC. A plan job loads no weights. A matrix of
-worker jobs each restores the weights once and works a shard. Scheduled runs
-create four total worker jobs. Manual runs accept one to eight and default to
-four; the plan rejects any other value before it creates the matrix. Route uses
+worker jobs each restores the weights once and works a shard. A scheduled run
+derives its own worker count from the day it just planned - at most four, and
+fewer on a small day. Manual runs accept one to eight and default to four; the
+plan rejects any other dispatched value before it creates the matrix. Route uses
 their output, and assemble runs **even when a worker failed** - a run that publishes nothing
 on a bad day is a run whose bad days are invisible. Each run appends to the
 day's payload rather than replacing it, so the day grows through the day. The
