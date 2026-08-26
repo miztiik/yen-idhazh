@@ -18,6 +18,10 @@ Three consequences, and each one removes a whole class of problem:
 
 The loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives.
 
+**A tree with no day in it still builds.** The dated routes are prerendered and their entries come from the committed digest tree, so on a clone that has never run the pipeline they produce no page and SvelteKit exits 1 on `/[date], /[date]/[vertical] not found while crawling`. That made building the site wait on a pipeline run, against [../../../CLAUDE.md](../../../CLAUDE.md) section 1a - a fresh clone runs on the defaults. One published day with no item did the same to `/[date]/[vertical]` on its own.
+
+`handleUnseenRoutes: 'ignore'` clears both and hides every later prerender defect with them, so the build asks the tree instead. [../../../frontend/prerender-guard.js](../../../frontend/prerender-guard.js) excuses `/[date]` only when no day is published, and `/[date]/[vertical]` only when no published day names a topic. Any other unseen route still fails, and so do those two when the tree says they had a page to build. The guard asks a smaller question than `entries()` does - `entries()` lists the days, the guard only asks whether any day is there at all - so the two can disagree, and a disagreement fails the build. [../../../frontend/tests/prerender-guard.spec.ts](../../../frontend/tests/prerender-guard.spec.ts) drives the real handler off the real config, so the wiring is under test with the rule.
+
 **Whatever the root layout's load returns is inlined into every page beneath it**, so the root layout returns the four facts the footer prints and never the day they were read from. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB.
 
 [frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. `/archive/` is the single exclusion, because it inlines every committed day on purpose to feed the on-device search, and a second assertion fails on the day that stops being true - so the exclusion cannot outlive its reason.
@@ -27,6 +31,7 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 | Ready | Normal | Prerendered HTML with the items in it |
 | Empty | Payload exists, no items | "Nothing was published for *date*", with plain copy that does not point at a notice that may not be on the page |
 | Missing | No payload for that date | A 404 that names the date and offers the archive. **Never a redirect to today** - a reader who cannot tell a dead link from a live one has lost the ability to trust any link |
+| Unpublished | No day published at all - a fresh clone | The build succeeds. `/` says "No digest has been published yet" and `/archive/` says "Nothing has been published yet". There is no dated page to link to, so neither offers one |
 | Invalid | Payload breaks its contract | The build fails |
 | Degraded | Low band, source-limit sentence, no visual | The common case, rendered inline. Not an error |
 
