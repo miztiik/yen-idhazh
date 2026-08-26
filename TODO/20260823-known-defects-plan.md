@@ -1,15 +1,17 @@
 # Known defects
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
-Fourteen defects found while shipping and re-reading the freshness, identity,
+Fifteen defects found while shipping and re-reading the freshness, identity,
 health and evaluation work, plus the console charts. None was in the scope that
 found it. Defects 11 and 12 were found by running the gates and by opening the
-published day in a browser, not by reading code; 13 and 14 the same way.
+published day in a browser, not by reading code; 13 and 14 the same way, and 15
+by redrawing a chart that had to work around it.
 
 **Twelve are closed.** Defect 8 is closed on the item copy and on the day's band
-bar. Defect 2 has its instrument built and is waiting on human labels and
-calendar time, which no amount of engineering closes. It is the only one open.
+bar. **Two are open.** Defect 2 has its instrument built and is waiting on human
+labels and calendar time, which no amount of engineering closes. Defect 15 costs
+a reader nothing today, so it was filed rather than fixed.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -30,6 +32,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 12 | One quantity could fill three bars of a published chart | 2 | FIXED - 2026-08-24 |
 | 13 | One stage is 2600x the others, so a linear timing axis answers for one of four | 2 | FIXED - 2026-08-25 |
 | 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | FIXED - 2026-08-25 |
+| 15 | A stage that did not run and a stage that took no time arrive as the same zero | 4 | **OPEN - no reader-facing symptom** |
 
 ## 13 - One stage is 2600x the others, so a linear timing axis answers for one of four (FIXED)
 
@@ -93,6 +96,70 @@ three consecutive runs produced a byte-identical `scores.csv`
 `backend/tests/test_canary_day.py` pins both halves of that - a fresh state
 directory writes the same bytes every time, and a second append to a directory
 that survived the clear adds nothing.
+
+## 15 - A stage that did not run and a stage that took no time arrive as the same zero (OPEN)
+
+Found 2026-08-25 while redrawing the stage timings on a decade axis (PR #109).
+`frontend/src/routes/console/+page.server.ts` builds one `StageTimingDay` per
+day, and its median helper answers an empty sample with a number:
+`if (values.length === 0) return 0;`. So a day the scorer never ran on arrives
+as `scoreMs: 0` - the same value that field carries when the scorer did run and
+took no measurable time. Two facts become one number, and nothing downstream can
+separate them again.
+
+**It is wider than the score line.** All four stages call that helper:
+`fetchMs: median(nums('fetch_ms'))`, and the same for `extract_ms`,
+`summarize_ms` and `score_ms`. Each one turns "not measured" into zero.
+
+The score line has a second way in. `nums()` drops a null before the median is
+taken; the score list does not. `Number(row.score_ms ?? 0) || 0` keeps a missing
+measurement in the sample as a zero, so a day of scored rows carrying no
+`score_ms` medians to zero without passing through an empty sample at all.
+
+The day filter inherits the blindness. `day.fetchMs > 0 || ...` drops a day
+where nothing was measured, and cannot tell that day from one where all four
+stages genuinely finished inside half a millisecond.
+
+**Neither ledger is at fault.** `ItemHealthRow.fetch_ms`, `extract_ms` and
+`summarize_ms` are `int | None` with a null default, so an item-health row says
+"not measured" exactly. An item the scorer skipped writes no eval row at all, so
+`state/scores.csv` says it by the row's absence. Both persisted layers keep the
+distinction. The loader spends it.
+
+**No reader sees this today, and nobody should re-fix that.** PR #109 made the
+chart treat a non-positive value as a gap: the line breaks, it is never clamped
+to the axis floor, and the loss is named in type under the legend - `No time
+recorded for score on 1 day in this window.` Before that, a zero on a decade
+axis drew a plunge saying the stage got a thousand times faster, which is a
+false statement made by the chart itself. That symptom is closed. See
+[`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md).
+
+So this is a contract weakness, not a visible bug. The chart rebuilds a
+distinction the payload threw away, and it only succeeds because a real stage
+timing is never zero in practice. The next reader of that field has to rebuild
+it from the same clue, and will probably forget.
+
+**The shape of the fix, recorded and not implemented.** Give the four fields the
+type the ledgers already have. `median()` returns `null` on an empty sample,
+`StageTimingDay` carries `number | null`, the loader passes the null through, and
+the chart reads it instead of inferring absence from `<= 0`. Absence then
+survives the whole path instead of being guessed at every stop.
+
+**The cost, checked rather than assumed.** `StageTimingDay` is hand-written in
+`frontend/src/lib/charts/series.ts`. It is not a Pydantic model, nothing
+generates it into `schemas/`, and the console route is prerendered, so no
+committed payload carries it. CLAUDE.md section 11 does not reach it: the fix
+needs no `version` date-stamp, no `changelog` entry and no read-side migration.
+What it does cost is four files and a rule every later consumer must follow, and
+that is why it was filed instead of folded into the chart work that found it.
+
+**Level 4** (CLAUDE.md section 6). The fix touches `series.ts`,
+`+page.server.ts`, `StageTimings.svelte` and `frontend/tests/console.spec.ts`,
+plus the rendering paragraph in
+[`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md).
+Four files and structural: it changes how absence travels, not one call site.
+Not Level 5 - no persisted contract moves and no reader-facing promise moves.
+Not Level 3 - every consumer reads that shape, so it is not a local fix.
 
 ## 2 - The faithfulness thresholds have no labelled error rate (INSTRUMENT BUILT)
 
