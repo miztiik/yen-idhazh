@@ -27,6 +27,7 @@ WORKFLOWS_DIR: Final = REPO_ROOT / ".github" / "workflows"
 SCRIPTS_DIR: Final = REPO_ROOT / ".github" / "scripts"
 
 EXPECTED_WORKFLOWS: Final = {
+    "backfill.yml": ("Vector backfill", frozenset({"workflow_dispatch"})),
     "ci.yml": ("CI", frozenset({"pull_request", "push", "workflow_dispatch"})),
     "digest.yml": ("Content refresh", frozenset({"schedule", "workflow_dispatch"})),
     "drift.yml": ("Drift review", frozenset({"schedule", "workflow_dispatch"})),
@@ -737,7 +738,7 @@ def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
 def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
     workflows = _load_workflows()
 
-    for filename in ("digest.yml", "measure.yml", "validate.yml"):
+    for filename in ("backfill.yml", "digest.yml", "measure.yml", "validate.yml"):
         assert {"pull_request", "push"}.isdisjoint(_triggers(workflows[filename]))
 
 

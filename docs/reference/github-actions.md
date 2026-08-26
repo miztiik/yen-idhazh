@@ -15,6 +15,7 @@ times are UTC.
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
 | `measure.yml` | `Measurements` | none | yes |
+| `backfill.yml` | `Vector backfill` | none | yes |
 
 An ordinary pull request starts CI only. A merge or direct push to `main`
 starts CI, and starts Pages publication only when its path filter matches.
@@ -180,13 +181,16 @@ needs a dispatched run to verify end to end.
 
 Model validation and measurements never run on a pull request, push, or
 schedule. A person dispatches them. Drift review is a separate weekly or manual
-workflow; it does not run inside Content refresh.
+workflow; it does not run inside Content refresh. Vector backfill is dispatched
+too, and the reason it is never scheduled is in
+[Vector backfill](#vector-backfill).
 
 ```mermaid
 flowchart LR
     PERSON["manual dispatch"] --> VALIDATE["Model validation"]
     PERSON --> MEASURE["Measurements"]
     PERSON --> DRIFT["Drift review"]
+    PERSON --> BACKFILL["Vector backfill"]
     WEEKLY["Sunday 08:00 UTC"] --> DRIFT
 ```
 
@@ -214,11 +218,41 @@ Pages publication builds only committed data and uploads a static bundle. It
 does not run the producer or a model, and the published site has no runtime
 backend.
 
+## Vector backfill
+
+`python -m idhazh backfill-vectors` re-encodes every closed committed day whose
+vectors are not exactly the set its items earned. The workflow runs it, prints
+the resulting coverage, builds the site, and commits only when the `commit`
+input is on - so the first dispatch reports and the second one publishes.
+
+Three things about it are decisions rather than details.
+
+**It excludes the current UTC day.** A day payload is one JSON file with no
+union merge, and the scheduled pipeline appends to the live day several times an
+hour. Two producers writing that file do not interleave: one wins whole and the
+other one's run is gone.
+
+**It re-encodes a wrong day whole rather than topping it up.** Measured
+2026-08-26 over the 439 vectors the five closed days carried: a re-encode
+reproduces them at a median cosine of 0.9936 and moves the top-10 neighbour list
+of 413 of them. The same measurement against the day CI had written hours
+earlier returns a median cosine of 1.000000. Every closed day predates
+`fix(embed): make a vector a function of its own text, not of its batch`, so its
+vectors carry an arithmetic the browser's query encoder no longer uses. Topping
+such a day up would leave one block holding two arithmetics for a single query
+to rank against.
+
+**It builds the site before it commits.** The vectors ride inside the day
+payloads, and `/archive/` inlines every committed day, so this is the one job
+that can push that page past the ceiling in `config/idhazh.json`. Proving the
+site still fits before the commit is the difference between a dispatch that does
+nothing and a dispatch that breaks `main` (Rule #2).
+
 ## Display names and files
 
 A workflow display name is the label shown in the Actions UI. Its filename is
 the stable automation interface for repository paths, API calls, and CLI
-dispatch. Keep the six filenames stable when a UI label changes.
+dispatch. Keep the seven filenames stable when a UI label changes.
 
 GitHub's `workflow_run.workflows` selector is the exception: it matches a
 display name. `pages.yml` therefore names `Content refresh` in that selector.

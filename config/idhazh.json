@@ -121,8 +121,8 @@
   "page_weight": {
     "ceilings_bytes": {
       "/404": 1127,
-      "/archive/": 1124663,
-      "/console/": 123330,
+      "/archive/": 1676048,
+      "/console/": 136772,
       "/evals/": 2475
     }
   },
