@@ -198,7 +198,7 @@
             }
           ],
           "default": null,
-          "description": "A later run changed this text; a revision is visible or it does not happen.",
+          "description": "Reserved. Null in every payload ever written, because no run can revise an item: `rank.plan_vertical` drops a candidate already in `state/published.csv`, `cli` supplies that set, and `assemble.build_day` drops an item the day already holds. If a run ever does revise, the rule it must keep is that the item says so.",
           "title": "Updated At"
         },
         "updated_by_run": {
@@ -212,7 +212,7 @@
             }
           ],
           "default": null,
-          "description": "The run that wrote the words this item now carries. Null until a run revises the item, and on every day published before this existed.",
+          "description": "Reserved, and null everywhere for the same reason as `updated_at`. It would name the run that wrote the words this item carries, so the join to the run manifest answers with the right model. Until then `assemble.run_that_wrote` answers with `introduced_by_run`.",
           "title": "Updated By Run"
         },
         "vertical": {
@@ -421,6 +421,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Marked updated_at and updated_by_run reserved in their descriptions.",
+      "version": "2026-08-26",
+      "why": "Both read as machinery a run could use, and no run can: three gates stop a published address being planned, summarized or appended a second time. Measured on this checkout 2026-08-26 - 2,121 committed items, 2,121 carry updated_at, 2,107 carry updated_by_run, zero carry a value in either. Description-only, so no payload changes and none needs a migration."
+    },
+    {
       "change": "Added optional updated_by_run to published items.",
       "version": "2026-08-25",
       "why": "An item's words are joined to the run manifest that names the model that wrote them. That join read introduced_by_run, which is the wrong run once a later run rewrites the text, so it answered with the wrong model rather than with nothing. Null until a run revises an item, and on every day published before this, so no committed payload had to be rewritten."
@@ -512,7 +517,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-25",
+      "default": "2026-08-26",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -537,5 +542,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-25"
+  "version": "2026-08-26"
 }

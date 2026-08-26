@@ -1316,7 +1316,10 @@ is already wrong.**
 370,488 bytes for 1,175 vectors is 315 bytes a vector on the wire, against 512
 base64 characters raw - so gzip returns about 38 percent of what base64 costs.
 That figure sizes the archive plan's shards and replaces its 35 percent
-estimate.
+estimate. **It has since been measured directly**, over the vectors themselves
+rather than inferred from how much the page around them grew: 322.55 bytes for
+the same base64 shape and 249.82 for a raw `.bin`
+([Sizing the archive index](#sizing-the-archive-index)). Quote those.
 
 **A day page carries its own vectors and never reads them.** `/<date>/` went
 from 396,997 to 581,552 bytes gzipped over the same backfill - 184,555 bytes a
@@ -1519,6 +1522,195 @@ be said to cover it.
 whether the alarm sits below 1,024 MB passes at 1,023 MB, which is the last row
 of the table and zero days of warning. `backend/tests/test_retention.py` pins the
 days instead, against the rates above.
+
+## Sizing the archive index
+
+Four numbers the archive plan needs before it can choose a shape. All four were
+estimates. These replace them, and two of them change what the plan assumed.
+
+Hardware: Intel Core i7-1265U, Windows 11, 12 logical CPUs, CPython 3.12.12,
+node 24.12.0. Date: 2026-08-26. Method: `backend/utilities/index_sizing.py`,
+which reads every committed day under `frontend/public/digest/`, plus one
+`curl` pass against the live Pages origin for the compression question. Corpus:
+the six committed days at digest-tree commit `d0eed4e` (`HEAD` `6ae7128`) -
+**2,121 items, 2,119 of which carry a vector, 99.91 percent.** Days ran 4, 10,
+147, 731, 724 and 505 items, so items a day is 353.5 +/- 342.2 and the spread
+is the corpus growing, not measurement error.
+
+**The sha is part of the measurement.** A byte count taken against
+`frontend/public/digest/` goes stale within the hour, because the scheduled
+pipeline rewrites a day and pushes it.
+
+### GitHub Pages compresses an octet-stream, and it never sends brotli
+
+The question was whether a raw `.bin` sibling file transfers at raw size. It
+does not. Each row is one `curl` GET against `https://miztiik.github.io/yen-idhazh/`,
+once with `Accept-Encoding: gzip, br, zstd` and once with `identity`, on
+HTTP/1.1. Deterministic bytes, so no spread; n=1 per row.
+
+| Asset | `Content-Type` | `identity` bytes | Bytes with encodings offered | Returned | Saved |
+| --- | ---: | ---: | ---: | --- | ---: |
+| `/` | `text/html` | 1,237,958 | 418,637 | `gzip` | 66.2% |
+| `tokenizer.json` | `application/json` | 711,661 | 209,932 | `gzip` | 70.5% |
+| **`model_quantized.onnx`** | **`application/octet-stream`** | **22,972,370** | **16,222,259** | **`gzip`** | **29.4%** |
+| `ort-wasm-simd-threaded.jsep.wasm` | `application/wasm` | 21,596,019 | 5,179,184 | `gzip` | 76.0% |
+
+**Brotli is never served.** `Accept-Encoding: br` on its own returned all
+711,661 bytes with no `Content-Encoding` header at all; `br, gzip` returned
+gzip. So the fallback the plan reserved - a committed pre-compressed file
+decoded with `DecompressionStream` - is not needed for an octet-stream, and
+brotli figures below are for the record rather than for the wire.
+
+**The edge compresses at level 5, and that is now the unit these numbers use.**
+Fastly served the 22,972,370-byte encoder as 16,222,259 bytes. Local `gzip -5`
+of the same file gives **16,222,259 - the same number to the byte** (`-1` gives
+16,638,186, `-6` gives 16,217,077, `-9` gives 16,212,805). Every page-weight
+figure elsewhere on this page is `gzip -9`, which is the gate's unit; a transfer
+figure has to be level 5, and both are reported below so the two can be read
+against each other.
+
+### What the committed int8 vectors actually compress to
+
+Deterministic file arithmetic over the 2,119 committed vectors, so the spread is
+zero. Both shapes are built from the same bytes: `.bin` is raw int8 laid end to
+end, and `json` is the same vectors as base64 inside a JSON object keyed by
+date and item id, which is what a day payload carries today.
+
+| Shape | Raw bytes | Raw per item | `gzip -5` | Per item | `gzip -9` per item | brotli-11 per item |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| **`.bin`, raw int8** | 813,696 | 384.00 | **529,365** | **249.82** | 249.82 | 229.00 |
+| base64 inside JSON | 1,156,054 | 545.57 | 683,493 | 322.55 | 322.35 | 301.29 |
+
+**The vectors compress by 34.9 percent, and the plan's "about 35 percent" was
+right.** 813,696 raw becomes 529,365 on the wire. The plan's earlier claim that
+they do not compress at all was wrong by a third of the file.
+
+**gzip level does not matter for the `.bin` and does for the text.** `-5` and
+`-9` give 529,365 bytes for the raw int8 either way - quantised embedding bytes
+are close enough to random that the extra search finds nothing - while the
+browse entries below cost about 2.7 percent more at level 5 than at level 9.
+
+**The decision this settles: a raw `.bin` transfers 22.5 percent less than
+base64 inside JSON, not 40 percent.** 249.82 bytes an item against 322.55. On a
+month at the structural ceiling below that is 5.72 MB against 7.38 MB, so the
+saving is 1.66 MB.
+
+**And the plan's stated failure mode was backwards.** It expected compression to
+protect the `.bin` margin and feared the margin would collapse to about 10
+percent without it. Uncompressed the gap is 29.6 percent (384.00 against
+545.57); compressed it is 22.5 percent. gzip claws back part of what base64
+wastes, so compression **shrinks** the advantage rather than creating it. The
+margin never approaches 10 percent and never reaches 40.
+
+**The comparison is fair on keys.** The JSON form pays for its own keys because
+it needs them; the `.bin` pays for none because the browse index already names
+every item in order, and an ordinal costs nothing.
+
+**The per-item rate holds as the blob grows**, which is what lets it be applied
+to a month larger than the whole archive. Over a quarter, a half and all of the
+corpus: 249.56, 249.65 and 249.82 gzipped bytes a vector - a drift of 0.1
+percent across a 4x range.
+
+### Items a month, observed and at the structural ceiling
+
+Two rates, because only one of them is a design input. The observed rate is what
+six committed days did. The structural ceiling is the cron in
+`.github/workflows/digest.yml` - `20 2,6,10,14,18 * * *`, **five slots a day** -
+times `run.safety_ceiling_per_run` in `config/idhazh.json`, currently **160**.
+The ceiling is a crash guard rather than an editorial cap
+([../architecture/sources/freshness.md](../architecture/sources/freshness.md)),
+so it bounds a month without describing one.
+
+A month is 30 days. A browse entry is the real thing, built from real committed
+items - item id, date, vertical, title - not an estimated field width.
+
+| Rate | Items a day | Items a month | Browse index (`gzip -5`) | Over 300 KB? | Vector file (`gzip -5`) | Over 4 MB? |
+| --- | ---: | ---: | ---: | --- | ---: | --- |
+| observed | 353.5 | 10,605 | **482,421** (471 KB) | **yes, 1.57x** | 2,649,341 (2.53 MB) | no, 0.63x |
+| structural ceiling | 800 | 24,000 | **1,091,760** (1.04 MB) | **yes, 3.55x** | **5,995,680** (5.72 MB) | **yes, 1.43x** |
+
+Per item, over the whole corpus: a browse entry is **45.49** gzipped bytes flat
+(133.31 raw, 44.29 at `gzip -9`, 33.64 brotli). Lifting the date to a key and
+dropping the vertical - which is already the item id's own prefix - gives 41.51,
+which is 8.7 percent less and still over the trigger at every rate.
+
+**A month browse index is over 300 KB at both rates, and no shape measured gets
+under it.** 300 KB buys about 6,750 entries at 45.49 bytes each, which is 19
+days at the observed rate and 8 days at the ceiling. So a month shard and a
+300 KB index budget cannot both hold; one of the two has to move, and that is a
+question for whoever chooses the shard granularity rather than a fact this page
+can settle.
+
+**A month vector file clears 4 MB at the observed rate and busts it at the
+ceiling.** 2.53 MB against 5.72 MB. The trigger is crossed by the guard's
+arithmetic, not by anything six days have done.
+
+**Browse entries and vectors are not the same problem, and the numbers say so.**
+A month of browse entries is 471 KB and a month of vectors is 2.53 MB - 5.5
+times more - so a design that gives them one shared scope is sized by the
+vectors and pays for it in the index. They can be scoped separately at no cost,
+because they are separate files either way.
+
+### What the ranking loop costs
+
+Search ranks by an exhaustive dot product over int8 vectors, decoding each one
+inside the loop and dropping it (`frontend/src/lib/assist/search.ts`). The
+measurement runs `decodeVector` and `cosine` unchanged on **node 24.12.0**,
+which is the same V8 a Chromium browser runs.
+
+**Method, and what it does not cover.** Six runs of seven timed repeats, so 42
+samples per scope, on a shared developer machine with other agents working. The
+committed vectors are indexed modulo the corpus to reach a scope larger than the
+archive; per-item work is identical because the loop decodes and scores exactly
+one vector per iteration regardless of its content. Not covered: a real browser,
+a phone-class CPU, a live DOM competing for the main thread, and the per-day
+`searchable` check, the map lookup and the final sort that the real `rank` also
+does. **So this is the ranking arithmetic and a lower bound on the whole call.**
+
+| Scope | Vectors | Fastest sample | Slowest sample | Fastest, microseconds a vector |
+| --- | ---: | ---: | ---: | ---: |
+| 1 month, observed | 10,605 | **74.2 ms** | 219.0 ms | 7.00 |
+| 3 months, observed | 31,815 | 224.2 ms | 2,031.2 ms | 7.05 |
+| 12 months, observed | 127,260 | 890.1 ms | 2,568.0 ms | 6.99 |
+| 1 month, ceiling | 24,000 | **158.9 ms** | 646.8 ms | 6.62 |
+| 3 months, ceiling | 72,000 | 476.1 ms | 1,783.2 ms | 6.61 |
+| 12 months, ceiling | 288,000 | **1,971.1 ms** | 6,401.9 ms | 6.84 |
+
+**The cost is linear and it is about 6.9 microseconds a vector.** The fastest
+per-vector figure varies only between 6.61 and 7.05 across a 27x range of scope
+sizes, which is the check that the loop has no term that grows faster than the
+count.
+
+**The spread is the machine, not the code.** The slowest sample at each scope is
+2.9 to 9.1 times the fastest, and the machine had four other agents building and
+testing on it throughout. Take the fastest sample as the uncontended cost and
+the slowest as what a busy CPU does to it; every conclusion below survives
+either.
+
+**The download is what a reader waits for, by 9x to 30x.** At a 10 Mbit line -
+a chosen reference, not a measurement of anybody's connection - the vector file
+alone costs:
+
+| Scope | Vector bytes | Fetch at 10 Mbit | Ranking, fastest | Fetch is larger by |
+| --- | ---: | ---: | ---: | ---: |
+| 1 month, observed | 2.53 MB | 2.1 s | 74 ms | 29x |
+| 1 month, ceiling | 5.72 MB | 4.8 s | 159 ms | 30x |
+| 3 months, ceiling | 17.2 MB | 14.4 s | 476 ms | 30x |
+| 12 months, ceiling | 68.6 MB | 57.6 s | 1,971 ms | 29x |
+
+Even against the slowest contended ranking sample the fetch is still 9x larger
+at 12 months. **So a search-scope knob buys download seconds, not compute
+seconds**, and one month is the only scope in this table whose first search
+starts inside about five seconds on that line.
+
+### What these numbers replace
+
+The `/archive/` page arithmetic further up this section put a vector at 315
+bytes on the wire, inferred from how much the whole prerendered page grew when
+1,175 vectors landed in it. The direct measurement here is 322.55 bytes for the
+same base64-in-JSON shape - 2.4 percent apart, which is the page's own markup
+between them. Use 322.55 for a JSON shape and 249.82 for a `.bin`; the 315 was
+a good indirect read and is not the one to quote.
 
 ## The published ledger
 
@@ -1830,6 +2022,54 @@ Two consequences, stated before anyone re-derives them:
 
 Caveat, stated rather than buried: n=20, one sample, one day. It settles that
 the old buckets were wrong. It does not settle what the right ones are.
+
+## The length tier a qualification corpus can actually reach
+
+**Measured 2026-08-26**, one developer machine (Windows, 4 cores), over the
+first 150 addresses of that day's run plan - 160 items, itself capped from 206
+by `run.safety_ceiling_per_run`. Each address was fetched and extracted exactly
+as the pipeline does; **109 extracted, 41 did not** (dead links, robots, no
+prose). Bodies counted before `extract.truncation_cap_tokens` cut them.
+
+| Statistic | Words in the source body |
+| --- | --- |
+| p50 | 548 |
+| p90 | 1278 |
+| max | 3449 |
+| mean | 674 |
+
+Which `summarize.bands` tier those 109 landed in, under each rule:
+
+| Rule the band came from | band 0 (0) | band 1 (60) | band 2 (700) | band 3 (2000) |
+| --- | --- | --- | --- | --- |
+| post-cap count, shipped until this date | 5 | 67 | 37 | **0** |
+| source body, from 2026-08-26 | 5 | 67 | 34 | **3** |
+
+**The top tier was unreachable, and not because of the day.** The post-cap count
+cannot pass `int(2500 / 1.3) = 1923` words, so no article of any length could
+enter a band that starts at 2000. That is what emptied it in qualification run
+32998603233, which died on `band 3 (min_source_words 2000) has 0, needs 3`
+before a single quality or safety gate ran.
+
+**The top tier is real but thin: 3 in 109, under 3 in 100.** A whole 160-address
+plan yields about 116 extracted articles and so about **3.2 items in the top
+tier, against the 3 the corpus definition asks for**. That margin is a quarter of
+one article. A qualification run can still come up short on supply, and when it
+does the corpus adequacy check names the tier and the run is repeated - which is
+what Row #10 says a thin corpus is. It is not a reason to move the boundary.
+
+One address costs **2.1 s** to fetch and extract (317 s over 150). Walking a
+whole 160-address plan therefore costs about **5.6 minutes**, or **1.9 minutes
+per shard at three shards**, against a 330-minute job bound and a worst shard
+measured at 115 minutes. Model calls do not move: the corpus is still
+`corpus_per_shard` articles replayed `repeats` times.
+
+**This does not agree with the 2026-08-22 row above, and both are right.** That
+one sampled 20 links taken straight off the feeds and found 25 percent above
+2000 words. This one sampled 150 addresses of the ranked, deduplicated plan and
+found 2.8 percent. They measure different populations - the plan is what a
+qualification run draws from, so it is the number that sizes the corpus, and n=20
+against n=109 is the other half of the gap.
 
 ## The image measurement killed the runner
 
@@ -2206,6 +2446,7 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
+| **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Whether a day at eight work shards publishes** | **the work phase is measured, the day was not published** | run `32869125768` halved the slowest worker and then lost the day when `assemble` hit an asset-name conflict ([Eight work shards](#eight-work-shards)). A second dispatch at `shards = 8`, after the asset-name fix, that reaches `assemble` and commits its day. |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |

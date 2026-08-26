@@ -111,10 +111,6 @@ VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
 #: The planted attacks, run live against a candidate before it is adopted.
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
-#: How many articles a qualification shard extracts for every one it replays.
-#: Extraction costs seconds and inference costs minutes, so a wider pool buys
-#: the length spread the corpus definition asks for at almost no cost.
-_POOL_MULTIPLE: Final = 3
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
@@ -474,7 +470,7 @@ class _FetchedWorkItem(NamedTuple):
 
 
 def _summarize_band_sort_key(work: _FetchedWorkItem, settings: config.Settings) -> tuple[int, int]:
-    band = settings.app.summarize.band_for(work.article.word_count)
+    band = settings.app.summarize.band_for(work.article.band_source_words)
     return band.min_source_words, work.original_index
 
 
@@ -904,7 +900,13 @@ def stage_route(
         )
 
 
-def _route_one(article: Article, summary: Summary, settings: config.Settings) -> tuple[Route, bool]:
+def _route_one(
+    article: Article,
+    summary: Summary,
+    settings: config.Settings,
+    *,
+    endpoint: str = DEFAULT_ENDPOINT,
+) -> tuple[Route, bool]:
     """One routing decision, and whether the model was asked for it.
 
     The model is skipped when no enabled visual kind could survive `to_route`'s
@@ -915,7 +917,10 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
     settled question.
 
     A skipped item still writes a `Route`. Silence is what turns a skip into a
-    quiet descope of the feature.
+    quiet descope of the feature. So does an item the model never answered for,
+    and the two ways it can go unanswered are logged apart: a server that
+    refused the prompt for length is running, and a run log that calls it
+    unreachable sends whoever reads it to look for a process that never died.
     """
     visuals = settings.app.visuals
     facts = route.numeric_facts(article.text or "", limit=visuals.max_facts)
@@ -938,11 +943,22 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
         inference=settings.app.models.inference,
         visuals=visuals,
     )
+    completion: Completion
+    cause = "router unreachable"
     try:
-        completion = post(payload, timeout=visuals.request_timeout_minutes * 60)
+        completion = post(payload, endpoint=endpoint, timeout=visuals.request_timeout_minutes * 60)
+    except HTTPError as error:
+        # Before OSError, which HTTPError subclasses. A server that answered is
+        # not an unreachable one, and the body is the only place it says why it
+        # refused. It is a stream, so read it once.
+        completion = Completion(content="")
+        with error:
+            if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
+                cause = "router prompt did not fit the context window"
+        LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
     except OSError as error:
         completion = Completion(content="")
-        LOG.warning("router unreachable id=%s reason=%s", article.item_id, type(error).__name__)
+        LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
     return (
         route.to_route(
             article,
@@ -1107,9 +1123,58 @@ class _Frozen(NamedTuple):
     full_text: str
 
 
+class _Share(NamedTuple):
+    """What ONE shard tries to find, so the shards together meet the definition.
+
+    Every shard runs in its own job and cannot see a sibling's corpus, so each
+    one aims at the whole requirement rather than at a fraction of it. Aiming at
+    a fraction is what loses a tier: a shard that stopped at its 1-in-3 share
+    would walk away from the second long read in its slice, and a sibling whose
+    slice held none could not make it up. Aiming high costs nothing - the corpus
+    is still `corpus_per_shard` articles, and a tier nobody found is named
+    rather than replaced.
+    """
+
+    per_band: int
+    over_cap: int
+    brief: int
+
+
+def corpus_share() -> _Share:
+    """The registered definition, as one shard's target."""
+    return _Share(
+        per_band=qualify.MIN_PER_BAND,
+        over_cap=qualify.MIN_OVER_CAP,
+        brief=qualify.MIN_BRIEF,
+    )
+
+
+def _unmet(offered: Sequence[_Frozen], *, share: _Share, bands: int) -> list[str]:
+    """Which tiers this slice could not offer. The union is decided elsewhere."""
+    short = []
+    for index in range(bands):
+        found = sum(1 for entry in offered if entry.row.band_index == index)
+        if found < share.per_band:
+            short.append(f"band {index}: {found}, the definition asks for {share.per_band}")
+    over_cap = sum(1 for entry in offered if entry.row.truncated)
+    if over_cap < share.over_cap:
+        short.append(
+            f"over the truncation cap: {over_cap}, the definition asks for {share.over_cap}"
+        )
+    briefs = sum(1 for entry in offered if entry.row.brief)
+    if briefs < share.brief:
+        short.append(f"brief-path items: {briefs}, the definition asks for {share.brief}")
+    return short
+
+
 def _freeze(
-    items: Sequence[PlannedItem], settings: config.Settings, read_url: Fetcher, *, keep: int
-) -> tuple[list[_Frozen], int]:
+    items: Sequence[PlannedItem],
+    settings: config.Settings,
+    read_url: Fetcher,
+    *,
+    keep: int,
+    share: _Share,
+) -> tuple[list[_Frozen], int, list[str]]:
     """Fetch, extract and sanitize once, then hash what came back.
 
     Once, and never again: the three deterministic repeats have to see identical
@@ -1118,18 +1183,26 @@ def _freeze(
     the measurements travel, because an article body is not ours to move
     (`CLAUDE.md` section 0a).
 
-    Returns the selected corpus and how many addresses were consumed to build
-    it. The second number is the honest attempted denominator: an address that
-    would not fetch measured nothing, and dropping it from the record would let
-    a bad day look like a good one.
+    The walk stops at the LATER of two floors: a pool wide enough to choose from
+    at all, and a pool that already holds every tier the definition asks for.
+    Otherwise it walks the whole slice. A long read is the scarce shape -
+    measured on 2026-08-26 at 3 of 109 extracted articles, under 3 in 100 - so a
+    walk that stopped at the first floor met its item count every time while the
+    tier that decides whether the corpus can speak at all stayed empty. Walking
+    further costs fetch seconds and never model minutes: the model still sees
+    `keep` articles, and one address measured 2.1 s over 150 of them.
+
+    Returns the selected corpus, how many addresses were consumed, and the tiers
+    this slice could not offer. The second number is the honest attempted
+    denominator: an address that would not fetch measured nothing, and dropping
+    it from the record would let a bad day look like a good one.
     """
+    bands = len(settings.app.summarize.bands)
+    floor = keep * settings.app.evaluation.qualification_pool_multiple
     pool: list[_Frozen] = []
     attempted = 0
-    # Capture more than is needed so the selection below has something to
-    # stratify over. Bounded, because extraction is cheap next to inference but
-    # is not free.
     for item in items:
-        if len(pool) >= keep * _POOL_MULTIPLE:
+        if len(pool) >= floor and not _unmet(pool, share=share, bands=bands):
             break
         attempted += 1
         article, _, _ = _fetch_one(item, settings, read_url)
@@ -1145,10 +1218,12 @@ def _freeze(
                     canonical_url=item.canonical_url,
                     source_id=item.source_id,
                     vertical=item.vertical,
-                    band_index=qualify.band_index(article.word_count, settings.app.summarize),
+                    band_index=qualify.band_index(
+                        article.band_source_words, settings.app.summarize
+                    ),
                     brief=article.brief,
                     truncated=article.truncated,
-                    source_word_count=article.word_count,
+                    source_word_count=article.band_source_words,
                     seen_word_count=len(seen.split()),
                     seen_token_count=article.token_count,
                     seen_text_sha256=text_digest(seen),
@@ -1159,26 +1234,42 @@ def _freeze(
                 full_text=seen,
             )
         )
-    return _stratified(pool, keep=keep, bands=len(settings.app.summarize.bands)), attempted
+    chosen = _stratified(pool, keep=keep, bands=bands, share=share)
+    return chosen, attempted, _unmet(pool, share=share, bands=bands)
 
 
-def _stratified(pool: Sequence[_Frozen], *, keep: int, bands: int) -> list[_Frozen]:
-    """Take one from each length tier in turn, until the corpus is full.
+def _stratified(
+    pool: Sequence[_Frozen], *, keep: int, bands: int, share: _Share
+) -> list[_Frozen]:
+    """Reserve the scarce tiers first, then fill the rest in turn.
 
     Deterministic, and it needs to be: the corpus is registered by hash before
     any output is looked at, so a selection that varied would let somebody
     re-roll a corpus until the answer improved.
 
-    Within a tier the scarce shapes go first. A brief item and an over-cap item
+    Scarcest tier first, and one at a time. A plain round-robin spends its early
+    slots on whichever tier the index order reaches first, and taking a whole
+    tier's quota before moving on starves the last tier when `keep` is smaller
+    than every tier's quota added up. Measured on 2026-08-26 over 109 extracted
+    articles, the long-read tier held 3 and the 60-to-699-word tier held 67, so
+    the order is not a detail. Ties break on the band index, so two tiers of
+    equal size always resolve the same way.
+
+    Within a tier the scarce shapes go first: a brief item and an over-cap item
     each exercise a path nothing else reaches, and both are rarer than an
-    ordinary article, so a rule that took plan order would drop them first.
+    ordinary article.
     """
     buckets: dict[int, list[_Frozen]] = {index: [] for index in range(bands)}
     for entry in pool:
         buckets.setdefault(entry.row.band_index, []).append(entry)
     for bucket in buckets.values():
         bucket.sort(key=lambda entry: (not entry.row.brief, not entry.row.truncated))
+    scarcest = sorted(buckets, key=lambda key: (len(buckets[key]), key))
     chosen: list[_Frozen] = []
+    for _ in range(share.per_band):
+        for index in scarcest:
+            if len(chosen) < keep and buckets[index]:
+                chosen.append(buckets[index].pop(0))
     while len(chosen) < keep and any(buckets.values()):
         for index in sorted(buckets):
             if len(chosen) >= keep:
@@ -1400,7 +1491,8 @@ def stage_qualify(
 
     plan = _load_plan(date)
     mine = shard_of(plan, shard=shard, shards=shards)
-    frozen, attempted = _freeze(mine, settings, read_url, keep=corpus_per_shard)
+    share = corpus_share()
+    frozen, attempted, unmet = _freeze(mine, settings, read_url, keep=corpus_per_shard, share=share)
 
     root = QUALIFICATION_ROOT / date / f"shard-{shard}"
     for entry in frozen:
@@ -1412,6 +1504,11 @@ def stage_qualify(
         root / "corpus.json",
         canonical_json([entry.row.model_dump(mode="json") for entry in frozen]),
     )
+    # Loud here, decided at `decide`. A shard cannot see its siblings, so it
+    # never rules on the union - it only says which tier its own slice never
+    # offered, while the addresses are still in this job's log.
+    for shortfall in unmet:
+        LOG.error("shard %s was offered no such tier: %s", shard, shortfall)
     LOG.info(
         "corpus frozen shard=%s items=%s attempted=%s handed=%s registered_at=%s",
         shard,

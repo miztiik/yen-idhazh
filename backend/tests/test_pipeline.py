@@ -91,11 +91,17 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
     settings = config.load(CONFIG_DIR)
     items = plan().items
     base = article()
+
+    def sized(words: int) -> Article:
+        # Both counts, because the band follows the source body and the sort
+        # has to agree with the prompt it is grouping.
+        return base.model_copy(update={"word_count": words, "source_word_count": words})
+
     candidates = [
-        cli._FetchedWorkItem(items[0], base.model_copy(update={"word_count": 2000}), 0, 0, 0.0, 0),
-        cli._FetchedWorkItem(items[1], base.model_copy(update={"word_count": 10}), 0, 0, 0.0, 1),
-        cli._FetchedWorkItem(items[2], base.model_copy(update={"word_count": 800}), 0, 0, 0.0, 2),
-        cli._FetchedWorkItem(items[3], base.model_copy(update={"word_count": 100}), 0, 0, 0.0, 3),
+        cli._FetchedWorkItem(items[0], sized(2000), 0, 0, 0.0, 0),
+        cli._FetchedWorkItem(items[1], sized(10), 0, 0, 0.0, 1),
+        cli._FetchedWorkItem(items[2], sized(800), 0, 0, 0.0, 2),
+        cli._FetchedWorkItem(items[3], sized(100), 0, 0, 0.0, 3),
     ]
 
     ordered = sorted(candidates, key=lambda candidate: cli._summarize_band_sort_key(candidate, settings))
@@ -1084,6 +1090,46 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     )
     assert [item.item_id for item in second.items] == [item.item_id for item in first.items]
     assert second.runs[-1].items_added == 0, "an item already published is not published twice"
+
+
+def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
+    """The gate that makes `updated_at` and `updated_by_run` reserved rather than live.
+
+    An item the day already holds is dropped whole, so a second run carrying
+    different words for the same address changes nothing a reader can see. If
+    this ever stops holding, docs/architecture/publishing/layout.md is wrong and
+    has to be corrected in the same commit.
+    """
+    settings = config.load(CONFIG_DIR)
+    original = digest_item(run_n=1)
+    first = assemble.build_day(
+        plan=plan(),
+        items=[original],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    rewritten = original.model_copy(
+        update={"summary": "Different words for the same address.", "key_points": ["Rewritten."]}
+    )
+    second = assemble.build_day(
+        plan=plan(),
+        items=[rewritten],
+        previous=first,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T19:00:00Z",
+        retention_window_months=-1,
+    )
+
+    kept = second.items[0]
+    assert kept.summary == original.summary
+    assert kept.key_points == original.key_points
+    assert kept.introduced_by_run == 1
+    assert kept.updated_at is None
+    assert kept.updated_by_run is None
 
 
 def test_the_run_that_wrote_an_item_resolves_to_a_recorded_run() -> None:
