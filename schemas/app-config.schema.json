@@ -701,6 +701,22 @@
       "title": "ModelsConfig",
       "type": "object"
     },
+    "PageWeightConfig": {
+      "additionalProperties": false,
+      "description": "The most a prerendered page may weigh on the wire, gzipped.\n\nA limit, not a record. `frontend/bundle-baseline.json` holds measurements of\nfirst-load JavaScript and is rewritten whenever the bundler moves; these are\nnumbers a person chose and raises on purpose, which is what a knob is\n(Rule #6).\n\nOnly a route that renders no day is bounded. A day page weighs what the day\npublished, so a number over it would cap the news instead of catching a\nregression. Those routes are covered by the marker count in\n`frontend/tests/payload-weight.spec.ts`, which is the same assertion stated\nin a unit that does not move when the pipeline publishes.",
+      "properties": {
+        "ceilings_bytes": {
+          "additionalProperties": {
+            "type": "integer"
+          },
+          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. Every prerendered route that renders no day needs one, and a ceiling naming no route in the build fails the gate. Each default is the heaviest of three builds of one tree on 2026-08-26, six published days, plus the 64-byte noise floor in frontend/bundle-baseline.json - and nothing beyond it, because a ceiling above today's weight is a gate that never fires. The regression these catch is a day payload inlined again, which was 313,000 bytes when it last happened, so the noise floor costs the gate nothing. /archive/ and /console/ also grow as the pipeline publishes, so those two fire on a published day as well; the answer that day is the archive plan, not a bigger number.",
+          "title": "Ceilings Bytes",
+          "type": "object"
+        }
+      },
+      "title": "PageWeightConfig",
+      "type": "object"
+    },
     "RetentionConfig": {
       "additionalProperties": false,
       "description": "Ships disabled. A default is a promise, not a placeholder.",
@@ -1086,6 +1102,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the page_weight block.",
+      "version": "2026-08-26T10:00",
+      "why": "A prerendered page could grow without limit and nothing said so. The marker count in payload-weight.spec.ts catches a day payload inlined where no day is rendered; it cannot see /archive/, which inlines every day on purpose, and it cannot see growth that carries no marker. A ceiling per route catches both. It is a knob rather than a literal in the gate script (Rule #6). Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "run.safety_ceiling_per_run default moved from 200 to 160. run.max_parallel gained a description.",
       "version": "2026-08-26",
       "why": "The ceiling is the worst case every downstream bound has to clear, and 200 cleared neither of them. digest.yml now derives the automatic work fan-out as min(ceil(items / run.shard_size), run.max_parallel), so at the ceiling a worker draws 50 items across the four workers a scheduled run gets. Against the Qwen3.5-9B candidate that is 318 derived minutes by length interpolation and 345 by decode ratio, over a 330-minute work timeout that nobody may raise (Rule #2); at 160 the same arithmetic gives 40 items, 254 and 276 minutes. The route stage says the same thing from the other side: its measured slow-host ceiling is 166 items at a 50-minute budget (2026-08-25, six runs, 703 items), so 200 and the router never agreed and 160 does. The largest day ever planned is 149 items (run 32742672105, 2026-08-24), so 160 removes nothing that has ever been read. run.max_parallel had no description at all while being the bound the derivation clamps by, and it is deliberately four while digest.yml lets an operator dispatch eight. Same fields, same types, same units: an older config still validates, and a committed config that names 200 still loads. A changed default, so it is stamped here (section 11)."
@@ -1229,6 +1250,9 @@
     "models": {
       "$ref": "#/$defs/ModelsConfig"
     },
+    "page_weight": {
+      "$ref": "#/$defs/PageWeightConfig"
+    },
     "retention": {
       "$ref": "#/$defs/RetentionConfig"
     },
@@ -1242,7 +1266,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-08-26T10:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1256,5 +1280,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-08-26T10:00"
 }

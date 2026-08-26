@@ -789,11 +789,71 @@ class UiConfig(Model):
     )
 
 
+class PageWeightConfig(Model):
+    """The most a prerendered page may weigh on the wire, gzipped.
+
+    A limit, not a record. `frontend/bundle-baseline.json` holds measurements of
+    first-load JavaScript and is rewritten whenever the bundler moves; these are
+    numbers a person chose and raises on purpose, which is what a knob is
+    (Rule #6).
+
+    Only a route that renders no day is bounded. A day page weighs what the day
+    published, so a number over it would cap the news instead of catching a
+    regression. Those routes are covered by the marker count in
+    `frontend/tests/payload-weight.spec.ts`, which is the same assertion stated
+    in a unit that does not move when the pipeline publishes.
+    """
+
+    ceilings_bytes: dict[str, int] = Field(
+        default_factory=lambda: {
+            "/404": 1_127,
+            "/archive/": 1_124_663,
+            "/console/": 123_330,
+            "/evals/": 2_475,
+        },
+        description=(
+            "Route class -> the largest gzip -9 size that route's prerendered HTML may "
+            "reach. Every prerendered route that renders no day needs one, and a "
+            "ceiling naming no route in the build fails the gate. Each default is the "
+            "heaviest of three builds of one tree on 2026-08-26, six published days, "
+            "plus the 64-byte noise floor in frontend/bundle-baseline.json - and "
+            "nothing beyond it, because a ceiling above today's weight is a gate that "
+            "never fires. The regression these catch is a day payload inlined again, "
+            "which was 313,000 bytes when it last happened, so the noise floor costs "
+            "the gate nothing. /archive/ and /console/ also grow as the pipeline "
+            "publishes, so those two fire on a published day as well; the answer that "
+            "day is the archive plan, not a bigger number."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _a_ceiling_bounds_a_route(self) -> Self:
+        for route, ceiling in self.ceilings_bytes.items():
+            if not route.startswith("/"):
+                raise ValueError(f"page_weight ceiling {route!r} is not a route")
+            if ceiling <= 0:
+                raise ValueError(f"page_weight ceiling for {route} must be above zero")
+        return self
+
+
 class AppConfig(Contract):
     """`config/idhazh.json` - every tunable, schema-validated."""
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26T10:00",
+            change="Added the page_weight block.",
+            why=(
+                "A prerendered page could grow without limit and nothing said so. The "
+                "marker count in payload-weight.spec.ts catches a day payload inlined "
+                "where no day is rendered; it cannot see /archive/, which inlines every "
+                "day on purpose, and it cannot see growth that carries no marker. A "
+                "ceiling per route catches both. It is a knob rather than a literal in "
+                "the gate script (Rule #6). Additive with a default, so an older config "
+                "still validates and no read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26",
             change=(
@@ -1109,6 +1169,7 @@ class AppConfig(Contract):
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
+    page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @model_validator(mode="after")

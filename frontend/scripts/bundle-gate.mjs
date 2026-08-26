@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Two checks over a finished build: no encoder on the first-load path, and no
- * route whose first-load JavaScript has left its recorded weight.
+ * Three checks over a finished build: no encoder on the first-load path, no
+ * route whose first-load JavaScript has left its recorded weight, and no page
+ * that renders no day over its configured weight ceiling.
  *
  * The encoder rule is that nothing downloads or executes before a reader
  * clicks. A dynamic `import()` is what keeps that true, and a dynamic import is
@@ -18,7 +19,10 @@
  * the noise floor - in either direction, because an unclaimed saving left in
  * the record is slack the next regression lands inside.
  *
- * So both promises are checked mechanically rather than remembered.
+ * The document rule is a ceiling rather than a ratchet, because a page that got
+ * lighter needs no permission. It bounds only the routes that render no day.
+ *
+ * So all three promises are checked mechanically rather than remembered.
  */
 
 import { readdirSync, readFileSync, statSync } from 'node:fs';
@@ -85,9 +89,9 @@ console.log('bundle gate: the first-load bundle carries no encoder.');
  * mixes a logic diff and a measurement diff in one review and pollutes the
  * history of the numbers.
  *
- * HTML weight is deliberately not gated here. The document is owned by the
- * payload work, and one gate spanning both would make two workstreams fail each
- * other's builds.
+ * The document's ceilings are the mirror-image case and do live in `config/`:
+ * a ceiling is a limit somebody chose, not a number the bundler moves. They are
+ * read further down.
  */
 let baseline;
 try {
@@ -170,6 +174,9 @@ function firstLoadBytes(page) {
 // Every date route preloads the same module set, so one instance stands for the
 // whole class: take the heaviest and compare that.
 const heaviest = new Map();
+// The document is measured over the same walk. A route class holds one page per
+// published day, so again the heaviest instance stands for the class.
+const heaviestPage = new Map();
 for (const page of pagesUnder(BUILD)) {
 	const route = `/${relative(BUILD, page).split(sep).slice(0, -1).join(posix.sep)}`.replace(
 		/\/$/,
@@ -179,6 +186,10 @@ for (const page of pagesUnder(BUILD)) {
 	const { bytes, modules } = firstLoadBytes(page);
 	const worst = heaviest.get(name);
 	if (!worst || bytes > worst.bytes) heaviest.set(name, { bytes, modules, page });
+
+	const html = gzipSync(readFileSync(page), { level: 9 }).length;
+	const worstPage = heaviestPage.get(name);
+	if (!worstPage || html > worstPage.bytes) heaviestPage.set(name, { bytes: html, page });
 }
 
 const commas = (value) => String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
@@ -314,6 +325,110 @@ if (moved.length > 0) {
 	console.error('\nThe "why" above is the old one. Replace it when the cause changed.');
 }
 
+/**
+ * The document, against the ceilings in `config/idhazh.json`.
+ *
+ * A ceiling is a limit somebody chose, so it is a knob and lives with the other
+ * knobs (Rule #6). The JavaScript record above is the opposite - a measurement
+ * the bundler moves - which is why the two numbers are kept in two files.
+ *
+ * Only a route that renders no day is bounded. A day page weighs what the day
+ * published, so a ceiling over it would cap the news rather than catch a
+ * regression; `tests/payload-weight.spec.ts` covers those by counting a marker,
+ * which is the same promise in a unit that does not move when the pipeline
+ * publishes. This gate is what that count cannot see: `/archive/` inlines every
+ * day on purpose and is excluded there, and growth that carries no marker is
+ * invisible to a count of markers.
+ */
+const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
+
+let ceilings;
+try {
+	ceilings = JSON.parse(readFileSync(CONFIG, 'utf8')).page_weight?.ceilings_bytes;
+} catch (error) {
+	console.error(`bundle gate: ${CONFIG} could not be read - ${error.message}`);
+	process.exit(1);
+}
+if (ceilings === null || typeof ceilings !== 'object' || Array.isArray(ceilings)) {
+	console.error('bundle gate: config/idhazh.json needs a "page_weight.ceilings_bytes" object.');
+	process.exit(1);
+}
+
+/** A page renders a day when it is the home page or a dated route. */
+const rendersADay = (name) => name === '/' || name.startsWith('/<date>');
+
+const kb = (value) => `${(value / 1000).toFixed(1)} KB`;
+const unbounded = [];
+const over = [];
+const namesNothing = [];
+
+for (const name of Object.keys(ceilings)) {
+	if (!heaviestPage.has(name)) {
+		namesNothing.push(
+			`${name} is capped at ${kb(ceilings[name])}, and no page in the build is that route`
+		);
+	}
+}
+
+console.log('\nprerendered HTML, gzip -9, against page_weight.ceilings_bytes in config/idhazh.json:');
+for (const [name, { bytes, page }] of [...heaviestPage].sort()) {
+	const measured = `  ${name.padEnd(18)} ${commas(bytes).padStart(9)} B  ${kb(bytes).padStart(9)}`;
+	if (rendersADay(name)) {
+		console.log(`${measured}  (renders a day - counted, not capped)`);
+		continue;
+	}
+	const ceiling = ceilings[name];
+	if (!Number.isInteger(ceiling) || ceiling <= 0) {
+		unbounded.push({ name, bytes, page });
+		console.log(`${measured}  (no ceiling)`);
+		continue;
+	}
+	const headroom = ceiling - bytes;
+	const verdict = headroom < 0 ? `${commas(-headroom)} OVER` : `${commas(headroom)} spare`;
+	console.log(`${measured}  (ceiling ${commas(ceiling)}, ${verdict})`);
+	if (headroom < 0) over.push({ name, bytes, ceiling });
+}
+
+if (unbounded.length > 0) {
+	failed = true;
+	console.error('\nbundle gate FAILED - a route that renders no day has no ceiling:');
+	for (const { name, bytes, page } of unbounded) {
+		console.error(`  ${name} measured ${commas(bytes)} B (${kb(bytes)}), first seen at ${page}`);
+	}
+	console.error('\nAdd it under "page_weight": { "ceilings_bytes": { ... } } in config/idhazh.json,');
+	console.error('and to the PageWeightConfig default in backend/idhazh/contracts/app_config.py:');
+	for (const { name, bytes } of unbounded) console.error(`    ${JSON.stringify(name)}: ${bytes},`);
+}
+
+if (namesNothing.length > 0) {
+	failed = true;
+	console.error('\nbundle gate FAILED - a ceiling in config/idhazh.json names no route in the build:');
+	for (const line of namesNothing) console.error(`  ${line}`);
+	console.error(
+		'\nDelete the ceiling, or find out why the route stopped building. A ceiling over\n' +
+			'nothing still reads as a bound somebody checked.'
+	);
+}
+
+if (over.length > 0) {
+	failed = true;
+	console.error('\nbundle gate FAILED - a prerendered page is over its ceiling:');
+	for (const { name, bytes, ceiling } of over) {
+		console.error(
+			`  ${name} weighs ${commas(bytes)} B (${kb(bytes)}), ` +
+				`${commas(bytes - ceiling)} B over the ${commas(ceiling)} B ceiling`
+		);
+	}
+	console.error(
+		'\nTwo answers are legitimate and they are not interchangeable. If the page took on\n' +
+			'bytes it does not render - a day payload inlined by a layout is how this last\n' +
+			'happened - remove them. If the page genuinely carries more, raise the ceiling in\n' +
+			'config/idhazh.json and in the app_config.py default together, in the commit that\n' +
+			'earned the bytes, and say in the message what they buy.'
+	);
+}
+
 if (failed) process.exit(1);
 
 console.log('\nbundle gate: every route matches its recorded weight.');
+console.log('bundle gate: every page that renders no day is under its ceiling.');

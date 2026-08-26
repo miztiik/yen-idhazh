@@ -1135,6 +1135,67 @@ warmed its dictionary. It replaces the earlier ~2.2 KB-per-item estimate as an
 order-of-magnitude check on the *shape*; a real 17-item day is measured after
 the first pipeline run, not before it.
 
+### The prerendered page, on the wire
+
+Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-26. Method:
+`gzip -9` over each prerendered `index.html` in `frontend/build`, heaviest page
+per route class. One tree, six published days, built three times.
+
+These are the numbers behind `page_weight.ceilings_bytes` in
+`config/idhazh.json`, which
+[../how-to/run-the-gates.md](../how-to/run-the-gates.md) explains.
+
+| Route | Build 1 | Build 2 | Build 3 | Range | Ceiling committed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `/404` | 1,060 | 1,062 | 1,062 | 2 | **1,127** |
+| `/evals/` | 2,411 | 2,408 | 2,411 | 3 | **2,475** |
+| `/console/` | 123,266 | 123,260 | 123,265 | 6 | **123,330** |
+| `/archive/` | 1,124,597 | 1,124,599 | 1,124,596 | 3 | **1,124,663** |
+| `/` | 229,772 | 229,772 | 229,772 | 0 | not capped |
+| `/<date>/` | 396,993 | 396,995 | 396,995 | 2 | not capped |
+| `/<date>/<topic>/` | 395,866 | 395,867 | 395,869 | 3 | not capped |
+
+Each ceiling is the heaviest observed build plus 64 bytes, and the 64 is the
+noise floor already derived in `frontend/bundle-baseline.json`. **A ceiling
+inside its own noise floor is a coin toss, not a measurement**: the range above
+is up to 8 bytes over three builds because SvelteKit stamps a version string
+into the markup and different digits compress differently, so a ceiling set at
+exactly the heaviest build would fail on a rebuild of an unchanged tree. 64
+bytes is 8x the widest range measured here, and the regression these ceilings
+exist to catch is 313,000 bytes, so the allowance costs the gate nothing. The
+`/404` ceiling keeps the 1,063 seen on an earlier tree the same day rather than
+tightening onto 1,062.
+
+**Confirmed on node 22, which is what CI runs.** Same tree, node 22.23.2 win-x64
+from `nodejs.org/dist`: `/404` 1,061, `/evals/` 2,413, `/console/` 123,265,
+`/archive/` 1,124,602. Every route stays under its ceiling with 61 to 66 bytes
+spare, so the toolchain moves these numbers by less than the noise floor
+absorbs. The JavaScript ratchet is the part that does care: on node 24 the `/`
+route reads 65 bytes under its node-22 record, one byte outside the +/-64
+tolerance, so `npm run bundle-gate` fails locally on node 24 for a reason that
+is not the change.
+
+**The last three rows are deliberately uncapped.** A day page weighs what the
+day published, so a number over it would cap the news rather than catch a
+regression. `frontend/tests/payload-weight.spec.ts` covers those by counting a
+marker instead, which is the same promise in a unit that does not move when the
+pipeline publishes.
+
+**A ceiling here fires on a published day, and that was watched happening
+within the hour.** The table above is the second measurement. The first, taken
+on the same day against the same tree less than an hour earlier, read
+`/archive/` 1,022,379 and `/console/` 114,161. Between the two, `digest:
+2026-08-26` re-ran the day and grew `frontend/public/digest/2026/08/26/digest.json`
+from 380,272 to 727,978 bytes. `/archive/` rose 102,222 bytes and `/console/`
+9,105, and `npm run bundle-gate` failed on both.
+
+`/archive/` inlines every committed day to feed the on-device search, so it
+grows about 170 KB per published day: 822.0 KB over five days on 2026-08-26
+(PR #119, same method), 1,022.4 KB over six, 1,124.6 KB after that day was
+re-run. `/console/` grows with the ledger its charts read, and plateaus once the
+prerendered window is full. Neither ceiling is a steady bound. **When one fires
+on a publish, the fix is the archive plan under `TODO/`, not a bigger number.**
+
 ### Days to the 1 GB Pages ceiling
 
 The image rows below are historical. They were the arithmetic that made Row #9's

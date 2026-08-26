@@ -114,6 +114,14 @@
       "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
     }
   },
+  "page_weight": {
+    "ceilings_bytes": {
+      "/404": 1127,
+      "/archive/": 1124663,
+      "/console/": 123330,
+      "/evals/": 2475
+    }
+  },
   "retention": {
     "dry_run": true,
     "image_months": -1,
@@ -173,7 +181,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-25",
+  "version": "2026-08-26T10:00",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [
