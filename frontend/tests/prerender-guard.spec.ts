@@ -105,3 +105,24 @@ test('a day directory holding no payload is not a published day', () => {
 test('a static route that stopped being reached fails even on an empty tree', () => {
 	expect(unseen(scratch(), ['/archive'])).toThrow(/had a page to build and did not build it/);
 });
+
+/**
+ * The build log is a record leaving the process, so it carries no absolute path
+ * and no drive letter (CLAUDE.md section 2). Every fixture here sits outside the
+ * repository, which is exactly the case that used to print a traversal.
+ */
+test('the log record names no absolute path and no traversal', () => {
+	const said: string[] = [];
+	const previous = console.log;
+	console.log = (line: string) => said.push(line);
+	try {
+		unseen(scratch(), [DATED, TOPIC])();
+	} finally {
+		console.log = previous;
+	}
+
+	expect(said).toHaveLength(1);
+	expect(said[0]).toContain('DIGEST_ROOT');
+	expect(said[0]).not.toMatch(/[A-Za-z]:[\\/]/);
+	expect(said[0]).not.toContain('..');
+});

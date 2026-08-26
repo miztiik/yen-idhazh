@@ -81,12 +81,26 @@ function publishedNothing(route, survey) {
 }
 
 /**
+ * Where the tree is, in a form a log record may carry (CLAUDE.md section 2).
+ *
+ * @param {string} root
+ * @returns {string}
+ */
+function place(root) {
+	const where = relative(process.cwd(), root).split(sep).join('/');
+	if (where === '') return '.';
+	// An override points outside the repo, and the traversal out to it is
+	// neither minimal nor allowed to be printed absolute. Name the switch.
+	return where.startsWith('..') ? 'the tree DIGEST_ROOT names' : where;
+}
+
+/**
  * @param {{ days: number, topics: boolean }} survey
  * @param {string} root
  * @returns {string}
  */
 function describe(survey, root) {
-	const where = relative(process.cwd(), root).split(sep).join('/') || '.';
+	const where = place(root);
 	if (survey.days === 0) return `no day is published under ${where}`;
 	const days = `${survey.days} published ${survey.days === 1 ? 'day' : 'days'}`;
 	const topics = survey.topics ? 'at least one names a topic' : 'none names a topic';
