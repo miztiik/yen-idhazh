@@ -1,4 +1,8 @@
 {
+  "assist": {
+    "max_tokens": 256,
+    "min_readable_letter_share": 0.5
+  },
   "collect": {
     "blocked_url_markers": [
       "fool.com/the-ascent/"

@@ -1,5 +1,29 @@
 {
   "$defs": {
+    "AssistConfig": {
+      "additionalProperties": false,
+      "description": "On-device search: the runner embeds the day, the reader's tab embeds a query.\n\nBoth knobs describe how much of an item the encoder is allowed to read, so\nthey are set from what the encoder can do rather than from taste.",
+      "properties": {
+        "max_tokens": {
+          "default": 256,
+          "description": "How far into an item's text the encoder reads before it truncates. 512 is the hard ceiling because that is the encoder's position table; the default is 256 because that is what the model was trained at, and the measurement says nothing is waiting above it. Measured 2026-08-26 over the 1886 embedded items of the six committed days: p95 217 tokens, p99 243, max 280, and 0.58 percent of items run past 256 by a mean of 13 tokens. Raising it would read 0.05 percent more text and re-date every committed vector.",
+          "maximum": 512,
+          "minimum": 16,
+          "title": "Max Tokens",
+          "type": "integer"
+        },
+        "min_readable_letter_share": {
+          "default": 0.5,
+          "description": "How much of an item's alphabet the encoder has to know before the item gets a vector at all. The committed weights carry an English uncased vocabulary, so an item written in another script still produces a confident unit vector that no query can retrieve. Below this share the item gets no vector and the run records why. Half is a plain reading of 'mostly not in our alphabet', and it sits in the middle of an empty band: measured 2026-08-26 over the six committed days, 3 of 1889 items score 0.0 and the next lowest scores 0.9975, so every threshold between 0.01 and 0.99 selects the same three items.",
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "title": "Min Readable Letter Share",
+          "type": "number"
+        }
+      },
+      "title": "AssistConfig",
+      "type": "object"
+    },
     "CollectConfig": {
       "additionalProperties": false,
       "properties": {
@@ -1102,6 +1126,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the assist block: max_tokens and min_readable_letter_share.",
+      "version": "2026-08-26T10:05",
+      "why": "The encoder's token cap was a literal in embed.py, which is exactly the kind of tunable Rule #6 puts in config. The second knob is new behaviour: an item the encoder cannot read used to get a confident vector no query could retrieve, and now gets no vector and a logged reason. Both defaults are measured, not chosen - see the field descriptions. Additive with defaults, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "Added the page_weight block.",
       "version": "2026-08-26T10:00",
       "why": "A prerendered page could grow without limit and nothing said so. The marker count in payload-weight.spec.ts catches a day payload inlined where no day is rendered; it cannot see /archive/, which inlines every day on purpose, and it cannot see growth that carries no marker. A ceiling per route catches both. It is a knob rather than a literal in the gate script (Rule #6). Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
@@ -1229,6 +1258,9 @@
   ],
   "description": "`config/idhazh.json` - every tunable, schema-validated.",
   "properties": {
+    "assist": {
+      "$ref": "#/$defs/AssistConfig"
+    },
     "collect": {
       "$ref": "#/$defs/CollectConfig"
     },
@@ -1266,7 +1298,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-26T10:00",
+      "default": "2026-08-26T10:05",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1280,5 +1312,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-26T10:00"
+  "version": "2026-08-26T10:05"
 }

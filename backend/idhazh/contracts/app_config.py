@@ -836,11 +836,64 @@ class PageWeightConfig(Model):
         return self
 
 
+class AssistConfig(Model):
+    """On-device search: the runner embeds the day, the reader's tab embeds a query.
+
+    Both knobs describe how much of an item the encoder is allowed to read, so
+    they are set from what the encoder can do rather than from taste.
+    """
+
+    max_tokens: int = Field(
+        default=256,
+        ge=16,
+        le=512,
+        description=(
+            "How far into an item's text the encoder reads before it truncates. 512 "
+            "is the hard ceiling because that is the encoder's position table; the "
+            "default is 256 because that is what the model was trained at, and the "
+            "measurement says nothing is waiting above it. Measured 2026-08-26 over "
+            "the 1886 embedded items of the six committed days: p95 217 tokens, p99 "
+            "243, max 280, and 0.58 percent of items run past 256 by a mean of 13 "
+            "tokens. Raising it would read 0.05 percent more text and re-date every "
+            "committed vector."
+        ),
+    )
+    min_readable_letter_share: float = Field(
+        default=0.5,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How much of an item's alphabet the encoder has to know before the item "
+            "gets a vector at all. The committed weights carry an English uncased "
+            "vocabulary, so an item written in another script still produces a "
+            "confident unit vector that no query can retrieve. Below this share the "
+            "item gets no vector and the run records why. Half is a plain reading of "
+            "'mostly not in our alphabet', and it sits in the middle of an empty "
+            "band: measured 2026-08-26 over the six committed days, 3 of 1889 items "
+            "score 0.0 and the next lowest scores 0.9975, so every threshold between "
+            "0.01 and 0.99 selects the same three items."
+        ),
+    )
+
+
 class AppConfig(Contract):
     """`config/idhazh.json` - every tunable, schema-validated."""
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26T10:05",
+            change="Added the assist block: max_tokens and min_readable_letter_share.",
+            why=(
+                "The encoder's token cap was a literal in embed.py, which is exactly the "
+                "kind of tunable Rule #6 puts in config. The second knob is new "
+                "behaviour: an item the encoder cannot read used to get a confident "
+                "vector no query could retrieve, and now gets no vector and a logged "
+                "reason. Both defaults are measured, not chosen - see the field "
+                "descriptions. Additive with defaults, so an older config still "
+                "validates and no read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26T10:00",
             change="Added the page_weight block.",
@@ -1170,6 +1223,7 @@ class AppConfig(Contract):
     ui: UiConfig = Field(default_factory=UiConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
+    assist: AssistConfig = Field(default_factory=AssistConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @model_validator(mode="after")

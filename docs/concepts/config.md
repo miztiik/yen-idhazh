@@ -163,6 +163,39 @@ removed, hidden or re-ranked, and the whole topic is one prerendered click away.
 A day that ran to a single topic ignores it, because a lone heading over the
 whole page states what the page already says.
 
+The `assist` block is on-device search. The runner embeds the day and commits
+the vectors; a reader's tab embeds only the query. Both knobs say how much of an
+item the encoder is allowed to read, so both are set from what the encoder can
+do rather than from taste.
+
+- `assist.max_tokens` (256) is how far into an item's text the encoder reads
+  before it truncates. 512 is a hard ceiling because that is the encoder's
+  position table, and 256 is the default because that is what the model was
+  trained at. This is the one knob here that was moved out of code, and the
+  move came with the measurement that says where to leave it: over the 1886
+  embedded items of the six committed days, p95 is 217 tokens, p99 is 243 and
+  the longest is 280, so 256 reads 99.95 percent of every token published. The
+  0.58 percent of items that do run over lose a mean of 13 tokens off the end.
+  Raising it would buy that 0.05 percent and re-date every committed vector, so
+  it stays. `backend/utilities/token_budget.py` reproduces the sweep, and a test
+  fails if a future day's p95 ever climbs above the cap.
+- `assist.min_readable_letter_share` (0.5) is how much of an item's alphabet the
+  encoder has to know before the item gets a vector at all. The committed
+  weights carry an English uncased vocabulary. An item in another script still
+  gets a vector out of that encoder - a confident, well-formed one, about which
+  characters appeared rather than about the story, which no query a reader types
+  will retrieve. Below this share the item gets no vector and the run logs why;
+  the item still publishes and still reads normally. Half is a plain reading of
+  "mostly not in our alphabet", and the corpus says the exact number does not
+  matter: 3 of 1889 items score 0.0 and the next lowest scores 0.9975, so every
+  threshold between 0.01 and 0.99 picks the same three items.
+
+The browser keeps its own copy of the token cap in
+`frontend/src/lib/assist/loader.ts`, because the config reader is server-only and
+a query read further than the items it is matched against is a different
+question asked silently. A backend test compares the two and fails when they
+separate.
+
 ## What is NOT a knob
 
 Not everything variable is tunable. Two categories stay out of `config/`:
