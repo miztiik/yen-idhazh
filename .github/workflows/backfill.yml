@@ -108,4 +108,4 @@ jobs:
           PUSH_FAILED_MESSAGE: 'the repaired days could not be pushed'
         run: |
           set -euo pipefail
-          bash .github/scripts/commit-and-push.sh frontend/public/digest
+          bash .github/scripts/commit-and-push.sh frontend/public/digest frontend/public/assist/index

@@ -112,6 +112,26 @@ def test_load_published_answers_the_same_from_either_header(tmp_path: Path) -> N
     assert published == ledger.load_published(narrow)
 
 
+def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: Path) -> None:
+    """`ledger._append` writes every row it is handed. Its callers own the repeats.
+
+    Pinned because the promise in `ledger._append` names those callers, and a
+    dedupe quietly added here would make that docstring wrong while every test
+    still passed. The eval ledger is the other half of the contrast: it refuses
+    an observation it already holds, because a row there is a measurement rather
+    than a fact about a run.
+    """
+    state = tmp_path / "state"
+    assert ledger.append_published(state, [published_row()]) == 1
+    assert ledger.append_published(state, [published_row()]) == 1
+
+    with ledger.published_path(state).open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+
+    assert len(rows) == 2, "the append path does not deduplicate"
+    assert ledger.load_published(state) == {URL_KEY: DATE}, "the read keeps the earliest date"
+
+
 def test_committed_state_csv_rows_match_their_headers() -> None:
     mismatches: list[str] = []
     for path in sorted((REPO_ROOT / "state").rglob("*.csv")):

@@ -11,12 +11,14 @@ returning reader see what is new without the page knowing anything about them.
 
 from __future__ import annotations
 
+import base64
+import binascii
 import logging
 import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime
 from pathlib import Path
-from typing import Final
+from typing import Final, Literal
 
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import (
@@ -39,14 +41,24 @@ from idhazh.contracts.run_manifest import (
     VerticalCount,
 )
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind, Taxonomy
-from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, text_for, to_base64
+from idhazh.embed import (
+    DIMENSIONS,
+    DTYPE,
+    EMBEDDER_ID,
+    VECTOR_SCALE,
+    Embedder,
+    text_for,
+    to_base64,
+)
 
 LOG: Final = logging.getLogger("idhazh")
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
+INDEX_ROOT: Final = Path("frontend/public/assist/index")
 _UNTITLED: Final = "Untitled item"
 _ABSTRACT_NOTE: Final = "This is a summary of the paper's abstract. The full paper is a PDF."
 _TRUNCATED_NOTE: Final = "We could only read the first part of this page."
@@ -67,6 +79,23 @@ def write_atomic(path: Path, text: str) -> None:
     try:
         with handle:
             handle.write(text)
+        Path(handle.name).replace(path)
+    except BaseException:
+        Path(handle.name).unlink(missing_ok=True)
+        raise
+
+
+def write_atomic_bytes(path: Path, data: bytes) -> None:
+    """The same guarantee for a file that is not text.
+
+    The vector sibling is raw int8. Writing it through the text path would let a
+    host's line-ending rules rewrite bytes inside a vector.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    handle = tempfile.NamedTemporaryFile("wb", dir=path.parent, delete=False)
+    try:
+        with handle:
+            handle.write(data)
         Path(handle.name).replace(path)
     except BaseException:
         Path(handle.name).unlink(missing_ok=True)
@@ -226,6 +255,132 @@ def merge_embeddings(
     return current.model_copy(update={"vectors": {**previous.vectors, **current.vectors}})
 
 
+def month_of(date: str) -> str:
+    """`<YYYY-MM>` - the shard a published date belongs to."""
+    return date[:7]
+
+
+def days_in_month(digest_root: Path, month: str) -> list[DigestDay]:
+    """Every committed day of one month, oldest first. A month with none gives none."""
+    year, month_number = month.split("-")
+    paths = sorted((digest_root / year / month_number).glob("*/digest.json"))
+    return [DigestDay.from_json(path.read_text(encoding="utf-8")) for path in paths]
+
+
+def _vector_bytes(encoded: str, dimensions: int) -> bytes | None:
+    """The stored vector, or nothing when it is not the width this index names.
+
+    A short vector is the one failure that must never be written: the offsets
+    after it would all be wrong by its shortfall, every one of them would decode
+    cleanly, and every score would be nonsense.
+    """
+    try:
+        raw = base64.b64decode(encoded, validate=True)
+    except (binascii.Error, ValueError):
+        return None
+    return raw if len(raw) == dimensions else None
+
+
+def build_search_index(month: str, days: Sequence[DigestDay]) -> tuple[SearchIndex, bytes]:
+    """One month of published items, and the vector file its offsets point into.
+
+    Built whole from the committed days every time. There is no incremental
+    path, so there is no read-modify-write to race with itself across two runs
+    of a day and no repair command for when it does. The cost is one pass over a
+    month of payloads per assemble run, which is measured in
+    `docs/reference/measurements.md`.
+
+    **One index names one encoder.** The header is taken from the newest day
+    that carries vectors. A day whose block names another model, width or dtype
+    keeps its items in the index with no vector at all - browsable, not
+    searchable - because two encoders in one space produce scores that look like
+    scores and mean nothing. That is the rule `merge_embeddings` already applies
+    inside a day, applied across the days of a month.
+    """
+    ordered = sorted(days, key=lambda day: day.date)
+
+    model_id: str = EMBEDDER_ID
+    dimensions: int = DIMENSIONS
+    dtype: Literal["int8"] = DTYPE
+    for day in reversed(ordered):
+        newest = day.embeddings
+        if newest is not None and newest.vectors:
+            model_id, dimensions, dtype = newest.model_id, newest.dimensions, newest.dtype
+            break
+
+    entries: list[SearchIndexEntry] = []
+    vectors = bytearray()
+    for day in ordered:
+        block = day.embeddings
+        named = block is not None and (block.model_id, block.dimensions, block.dtype) == (
+            model_id,
+            dimensions,
+            dtype,
+        )
+        if block is not None and not named:
+            LOG.warning(
+                "date=%s holds %s vectors from %s/%s/%s, and this index names %s/%s/%s - "
+                "its items stay in the index without one",
+                day.date,
+                len(block.vectors),
+                block.model_id,
+                block.dimensions,
+                block.dtype,
+                model_id,
+                dimensions,
+                dtype,
+            )
+        for item in day.items:
+            offset: int | None = None
+            encoded = block.vectors.get(item.item_id) if named and block is not None else None
+            if encoded is not None:
+                raw = _vector_bytes(encoded, dimensions)
+                if raw is None:
+                    LOG.warning(
+                        "item %s on %s stores a vector this index cannot lay out at %s "
+                        "bytes, so it gets none",
+                        item.item_id,
+                        day.date,
+                        dimensions,
+                    )
+                else:
+                    offset = len(vectors)
+                    vectors += raw
+            entries.append(
+                SearchIndexEntry(
+                    date=day.date,
+                    item_id=item.item_id,
+                    title=item.title,
+                    vertical=item.vertical,
+                    vector=offset,
+                )
+            )
+
+    index = SearchIndex(
+        version=SearchIndex.schema_version(),
+        month=month,
+        model_id=model_id,
+        dimensions=dimensions,
+        dtype=dtype,
+        scale=VECTOR_SCALE,
+        entries=entries,
+    )
+    return index, bytes(vectors)
+
+
+def rebuild_search_index(*, digest_root: Path, index_root: Path, month: str) -> SearchIndex:
+    """Regenerate a month's index from the days that are committed right now.
+
+    Every writer of a day payload owes this call. The shard is derived, so a
+    deleted day needs no separate cleanup - the next assemble run simply writes
+    a shard that no longer names it.
+    """
+    index, vectors = build_search_index(month, days_in_month(digest_root, month))
+    write_atomic(index_root / f"{month}.json", index.to_json())
+    write_atomic_bytes(index_root / f"{month}.bin", vectors)
+    return index
+
+
 def build_day(
     *,
     plan: RunPlan,
@@ -243,6 +398,14 @@ def build_day(
     An item already published keeps its place. That is not politeness: the
     order is part of what a shared link shows, so moving it would change what
     the recipient sees relative to the sender.
+
+    A run can come back as itself. `cli.stage_assemble` writes the day, then
+    builds the manifest, then writes it, so a run that dies in that gap leaves a
+    day holding its items and a manifest that never heard of it - and the next
+    run reads the same number off the manifest. Replacing the reference rather
+    than adding a second one is what makes that replay one run, and the count on
+    it is every item the number introduced rather than what this attempt added,
+    because that is what `DigestDay` validates it against.
     """
     already = {item.item_id for item in (previous.items if previous else [])}
     fresh = [item for item in items if item.item_id not in already]
@@ -250,7 +413,13 @@ def build_day(
 
     runs = list(previous.runs) if previous else []
     runs = [run for run in runs if run.n != run_n]
-    runs.append(DigestRunRef(n=run_n, at=generated_at, items_added=len(fresh)))
+    runs.append(
+        DigestRunRef(
+            n=run_n,
+            at=generated_at,
+            items_added=sum(1 for item in combined if item.introduced_by_run == run_n),
+        )
+    )
     runs.sort(key=lambda run: run.n)
 
     names = vertical_names(taxonomy)
@@ -308,7 +477,18 @@ def build_manifest(
     item_health_rows: Sequence[ItemHealthRow] | None = None,
     routes: Sequence[Route] | None = None,
 ) -> RunManifest:
-    """What ran, against which model, at which commit - appended, never rewritten."""
+    """What ran, against which model, at which commit - appended, never rewritten.
+
+    This appends where `build_day` replaces, and the difference is not an
+    oversight. `RunManifest` refuses a `runs` list that is not numbered from 1
+    without gaps, so `runs[-1].n` is `len(runs)` and the next number cannot
+    already be taken. A second record for one run is not a duplicate this
+    function has to filter out - it is a payload the contract will not build.
+    A guard here would be a branch nothing can reach.
+
+    The day is the surface that needs the replace, because its items land on
+    disk one write before this one does.
+    """
     run_n = (previous.runs[-1].n + 1) if previous else 1
     if item_health_rows is not None:
         succeeded = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.OK)

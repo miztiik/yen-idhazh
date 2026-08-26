@@ -159,9 +159,18 @@ def system_prompt(
     """The prompt text with config's numbers substituted in.
 
     `source_words` picks the length band, so a release note and a long read are
-    asked for different summaries. It is the length of the text the model is
-    actually given - truncated if the article was truncated - because asking for
-    a summary of words the model never saw is asking it to invent them.
+    asked for different summaries. It is the length of the SOURCE BODY, before
+    `extract.truncation_cap_tokens` cut it - which is what the knob's own name,
+    `min_source_words`, says, and what `extract.min_source_words` has always
+    compared against.
+
+    It used to be the post-cap length, on the argument that asking about words
+    the model never saw invites invention. That argument is about content, and
+    a band sets only the target LENGTH: the fenced block still holds the visible
+    text and nothing else. The rule also could not work. The post-cap count
+    cannot pass `int(truncation_cap_tokens / TOKENS_PER_WORD)`, which at the
+    committed cap of 2500 is 1923 words, so the 2000-word band never once fired
+    and its longer target range was dead configuration.
 
     `substitute` and never `safe_substitute`: a renamed knob has to raise here
     rather than render `$target_words_max` into a live system prompt, where a
@@ -218,7 +227,9 @@ def fits_context(
     prompt_config: SummarizeConfig | None = None,
 ) -> bool:
     """Prompt plus reply has to fit, or the reply is silently cut off mid-sentence."""
-    rendered = system_prompt(prompt_config, source_words=article.word_count, brief=article.brief)
+    rendered = system_prompt(
+        prompt_config, source_words=article.band_source_words, brief=article.brief
+    )
     overhead = len(rendered.split()) * 2
     return article.token_count + inference.max_output_tokens + overhead <= inference.n_ctx
 
@@ -233,7 +244,9 @@ def build_request(
 ) -> dict[str, Any]:
     return request_payload(
         model_id=model_id,
-        system=system_prompt(prompt_config, source_words=article.word_count, brief=article.brief),
+        system=system_prompt(
+            prompt_config, source_words=article.band_source_words, brief=article.brief
+        ),
         user=user_turn(article),
         output_schema=output_schema(prompt_config, evaluation),
         inference=inference,

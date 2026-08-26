@@ -17,6 +17,7 @@ from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from pydantic import ValidationError
 from pytest import MonkeyPatch
 
 from idhazh import assemble, cli, config, ledger
@@ -91,11 +92,17 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
     settings = config.load(CONFIG_DIR)
     items = plan().items
     base = article()
+
+    def sized(words: int) -> Article:
+        # Both counts, because the band follows the source body and the sort
+        # has to agree with the prompt it is grouping.
+        return base.model_copy(update={"word_count": words, "source_word_count": words})
+
     candidates = [
-        cli._FetchedWorkItem(items[0], base.model_copy(update={"word_count": 2000}), 0, 0, 0.0, 0),
-        cli._FetchedWorkItem(items[1], base.model_copy(update={"word_count": 10}), 0, 0, 0.0, 1),
-        cli._FetchedWorkItem(items[2], base.model_copy(update={"word_count": 800}), 0, 0, 0.0, 2),
-        cli._FetchedWorkItem(items[3], base.model_copy(update={"word_count": 100}), 0, 0, 0.0, 3),
+        cli._FetchedWorkItem(items[0], sized(2000), 0, 0, 0.0, 0),
+        cli._FetchedWorkItem(items[1], sized(10), 0, 0, 0.0, 1),
+        cli._FetchedWorkItem(items[2], sized(800), 0, 0, 0.0, 2),
+        cli._FetchedWorkItem(items[3], sized(100), 0, 0, 0.0, 3),
     ]
 
     ordered = sorted(candidates, key=lambda candidate: cli._summarize_band_sort_key(candidate, settings))
@@ -1086,6 +1093,121 @@ def test_a_later_run_appends_and_never_reorders() -> None:
     assert second.runs[-1].items_added == 0, "an item already published is not published twice"
 
 
+def test_a_run_that_comes_back_as_itself_still_produces_a_day() -> None:
+    """`stage_assemble` writes the day, then builds the manifest, then writes it.
+
+    A run that dies in that gap leaves a day carrying its items and a manifest
+    that never heard of it, so the next run reads the same number off the
+    manifest and appends to a day that already holds work under that number.
+    The run reference has to count every item the number introduced, because
+    that is what `DigestDay` validates it against.
+    """
+    settings = config.load(CONFIG_DIR)
+    base = plan()
+    crashed = assemble.build_day(
+        plan=base,
+        items=[digest_item(run_n=1).model_copy(update={"item_id": base.items[0].item_id})],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    replayed = assemble.build_day(
+        plan=base,
+        items=[digest_item(run_n=1).model_copy(update={"item_id": base.items[1].item_id})],
+        previous=crashed,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T13:00:00Z",
+        retention_window_months=-1,
+    )
+
+    assert len(replayed.items) == 2, "the replay keeps what its own first attempt published"
+    assert [run.n for run in replayed.runs] == [1], "one attempt and its replay are one run"
+    assert replayed.runs[0].items_added == 2, (
+        "the reference counts what run 1 introduced, not what this attempt added"
+    )
+
+
+def test_a_carried_item_is_not_recorded_as_published_twice() -> None:
+    """The join in `_published_rows` is the only thing keeping `published.csv` clean.
+
+    `ledger._append` writes every row it is handed, so a second row for one
+    address would stay in the file forever. A day carries yesterday's items
+    forward, and the plan a later run built has already dropped their addresses,
+    so they fall out of the join instead of being recorded again.
+    """
+    settings = config.load(CONFIG_DIR)
+    base = plan()
+    first, second = base.items[0], base.items[1]
+    first_plan = base.model_copy(update={"items": [first]})
+    later_plan = base.model_copy(update={"items": [second], "run_id": f"{base.date}-2"})
+
+    day_one = assemble.build_day(
+        plan=first_plan,
+        items=[digest_item(run_n=1).model_copy(update={"item_id": first.item_id})],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    day_two = assemble.build_day(
+        plan=later_plan,
+        items=[digest_item(run_n=2).model_copy(update={"item_id": second.item_id})],
+        previous=day_one,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T13:00:00Z",
+        retention_window_months=-1,
+    )
+
+    assert [item.item_id for item in day_two.items] == [first.item_id, second.item_id]
+    assert [row.url_key for row in cli._published_rows(day_one, first_plan)] == [first.url_key]
+    assert [row.url_key for row in cli._published_rows(day_two, later_plan)] == [second.url_key]
+
+
+def test_a_later_run_cannot_rewrite_the_words_a_reader_already_read() -> None:
+    """The gate that makes `updated_at` and `updated_by_run` reserved rather than live.
+
+    An item the day already holds is dropped whole, so a second run carrying
+    different words for the same address changes nothing a reader can see. If
+    this ever stops holding, docs/architecture/publishing/layout.md is wrong and
+    has to be corrected in the same commit.
+    """
+    settings = config.load(CONFIG_DIR)
+    original = digest_item(run_n=1)
+    first = assemble.build_day(
+        plan=plan(),
+        items=[original],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    rewritten = original.model_copy(
+        update={"summary": "Different words for the same address.", "key_points": ["Rewritten."]}
+    )
+    second = assemble.build_day(
+        plan=plan(),
+        items=[rewritten],
+        previous=first,
+        taxonomy=settings.taxonomy,
+        run_n=2,
+        generated_at="2026-08-21T19:00:00Z",
+        retention_window_months=-1,
+    )
+
+    kept = second.items[0]
+    assert kept.summary == original.summary
+    assert kept.key_points == original.key_points
+    assert kept.introduced_by_run == 1
+    assert kept.updated_at is None
+    assert kept.updated_by_run is None
+
+
 def test_the_run_that_wrote_an_item_resolves_to_a_recorded_run() -> None:
     """The join to the manifest that names the model lands on a run the day recorded."""
     day = DigestDay.from_json(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
@@ -1144,6 +1266,58 @@ def test_the_manifest_records_what_ran_against_what() -> None:
     assert manifest.runs[-1].run_id == "2026-08-21-1"
     assert manifest.runs[-1].config_digests
     assert manifest.runs[-1].pipeline_fingerprints
+
+
+def test_the_manifest_cannot_record_one_run_twice() -> None:
+    """Why `build_manifest` appends where `build_day` replaces.
+
+    The numbering rule lives on the contract, so `runs[-1].n` is `len(runs)` and
+    the next number cannot already be taken. Pinned here because the docstring
+    on `build_manifest` points at this to explain the missing guard.
+    """
+    settings = config.load(CONFIG_DIR)
+    day = assemble.build_day(
+        plan=plan(),
+        items=[digest_item()],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+
+    def manifest_after(previous: RunManifest | None) -> RunManifest:
+        return assemble.build_manifest(
+            plan=plan(),
+            day=day,
+            previous=previous,
+            summaries=[summary()],
+            models=[],
+            commit_sha="a" * 40,
+            runner="local",
+            started_at="2026-08-21T06:00:00Z",
+            completed_at="2026-08-21T07:00:00Z",
+            config_digests=settings.digests,
+            site_bytes=1024,
+            site_files=2,
+        )
+
+    first = manifest_after(None)
+    second = manifest_after(first)
+    assert [run.n for run in second.runs] == [1, 2]
+
+    with pytest.raises(ValidationError, match="numbered from 1 without gaps"):
+        RunManifest(
+            version=RunManifest.schema_version(),
+            date=first.date,
+            runs=[first.runs[0], first.runs[0]],
+        )
+    with pytest.raises(ValidationError, match="numbered from 1 without gaps"):
+        RunManifest(
+            version=RunManifest.schema_version(),
+            date=second.date,
+            runs=[second.runs[1], second.runs[0]],
+        )
 
 
 def test_the_manifest_records_what_the_router_cost() -> None:

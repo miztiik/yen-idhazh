@@ -290,6 +290,13 @@
           "title": "Lead Coverage Min",
           "type": "number"
         },
+        "qualification_pool_multiple": {
+          "default": 6,
+          "description": "Articles a qualification shard extracts for every one it replays. A floor on the choice the stratified selection gets, never a cap on the walk: a shard that has not yet been offered every length tier keeps going through its slice. Raising it buys fetch seconds, never model minutes, because the model still sees corpus_per_shard articles - one address measured 2.1 s on 2026-08-26 over 150 of them, against 330 minutes for the job.",
+          "minimum": 1,
+          "title": "Qualification Pool Multiple",
+          "type": "integer"
+        },
         "spot_checks_per_week": {
           "default": 10,
           "minimum": 0,

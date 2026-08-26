@@ -61,6 +61,18 @@ it caps `verbatim_run` for brief items and derives the floor above.
 `evaluation.lead_coverage_min` is 0.30; a miss below it caps `high` at `medium`.
 That lets a brief stop naturally instead of padding toward the old 40-word gate.
 
+Every `min_source_words` in this file - `extract.min_source_words` and each
+`summarize.bands[].min_source_words` - counts the **source body**, before
+`extract.truncation_cap_tokens` cuts it. One name, one meaning. Reading the top
+band off the post-cap count is what left it empty until 2026-08-26, because that
+count stops at `int(2500 / 1.3) = 1923` words and the band starts at 2000
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+
+`evaluation.qualification_pool_multiple` sizes how wide a qualification shard
+casts before it selects. It is a floor and not a cap: a shard whose slice has not
+yet offered every length tier keeps walking. Raising it buys fetch seconds and
+never model minutes, because the model still sees `corpus_per_shard` articles.
+
 `config.sources` can declare `form: "abstract"` on a feed. That is a curator's
 fact about the feed, not a detector over page text. NBER uses it; arXiv and SSRN
 should use the same field if those feeds are added.
@@ -217,6 +229,19 @@ Some numbers in `config/` are not there to be tuned. They are there to stop a bu
 - `page_weight.ceilings_bytes` is a **limit**, and the only one on this list. It says how heavy each named prerendered page may be on the wire, gzipped, and `frontend/scripts/bundle-gate.mjs` fails the build above it. Each number is the heaviest of three builds of one tree plus the 64-byte noise floor, and nothing beyond it: a ceiling above today's weight is a gate that never fires, and a ceiling inside its own noise floor is a coin toss. The object is the single source - the `PageWeightConfig` default in the contract is empty, so a number lives here and nowhere else (Rule #6). Only a route whose HTML does not grow with the published data is named: `/404` and `/evals/` today. A day page weighs what the day published, and `/archive/` (it inlines every committed day for the on-device search) and `/console/` (it grows with the ledger its charts read) grow the same way, so a fixed ceiling on any of them would fail on an ordinary publish rather than catch a regression. The gate reports a route the object does not name without failing it, and the class those data-driven routes belong to is covered by the marker count in `frontend/tests/payload-weight.spec.ts`. `/archive/` was capped and then uncapped on 2026-08-26 for exactly this - the ceiling fired on every publish and was raised twice in a day before it was removed ([../reference/measurements.md](../reference/measurements.md#the-prerendered-page-on-the-wire)).
 
 A guard set near the working range is the worst of both. It fires on good runs, gets raised to stop the noise, and stops guarding anything. That is the failure the token cap actually had.
+
+### The other failure: a vocabulary with no way to be applied
+
+A knob nothing reads has a mirror image, and it is harder to see. `taxonomy.json` declared four lenses and nine event types from the first commit, and every one of them carried an `id`, a `display_name` and **no way to say what assigns it**. So nothing ever did: measured 2026-08-26, 0 of 2,121 committed items carried a lens or an event. The file read as a working vocabulary and was a list of labels.
+
+The fix, on 2026-08-26, was a `keywords` list on each lens and each event, holding the curated terms that assign it ([../architecture/sources/discovery.md](../architecture/sources/discovery.md) owns the rule and its measured coverage). Two things about that field are deliberate:
+
+- **It is a config field and not a code constant** (Rule #6), because it is a curated artifact that gets tuned. The first draft over-tagged: bare `research` and `study` put the `research` event on 34.7 percent of real articles, which is not a filter. Tuning it must not be a code change.
+- **An empty list is legal and assigns nothing.** That is what makes the field additive - a taxonomy written before it still validates - and it is also exactly the silence that let the vocabulary ship unwired for five days. A test now asserts every committed lens and event carries terms, so the empty state cannot come back unnoticed.
+
+The lesson generalises past this file: **a config entry that declares a thing must also declare how the thing is decided, or it is decoration.** An id and a display name describe a label. They never describe a rule.
+
+The same day found the third shape of the same failure, and it is the worst of them: **a knob that is read, but always against an empty input.** `collect.watchlist_bonus` was read on every planned item and added to the score under `if watchlist_hit`, and it could never fire, because `watchlist_hit` was tested against a `watchlist_keys` the caller hardcoded to the empty set. Nothing here was dead code and nothing was unread config, and the term still never moved a number. A test asserting "the bonus lifts the score" passed the whole time, because the test supplied the flag itself. Fixed 2026-08-26: `config/watchlist.json` carries 30 entities and the flag comes from their aliases. The test now pins each term's **size** against its knob rather than only its direction, which is the check that would have caught it.
 
 ## A knob nothing reads is deleted
 

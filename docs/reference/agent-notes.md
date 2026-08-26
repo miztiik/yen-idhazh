@@ -166,6 +166,15 @@ tests, utilities and modules the change had nothing to do with. Run
 format pass has already happened, `git restore --` the specific unrelated paths
 rather than the tree.
 
+**A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
+Windows filenames are case-insensitive, so a gate script that writes
+`ruff check` output to `$out\ruff.txt` and then a sentinel to `$out\RUFF.txt`
+silently overwrites the result with the word `RUFF-DONE`. The run looks like it
+passed - the sentinel is there, the file exists, and nothing errored - and the
+exit code you needed is gone. On 2026-08-26 this destroyed the ruff and mypy
+output of a full gate run and cost a second one. Give a sentinel a name that is
+not the stem of any output file, such as `SENTINEL.txt`.
+
 ## GitHub CLI
 
 **A `workflow_dispatch` cannot reach a workflow that is not on the default
@@ -241,6 +250,29 @@ gh api "repos/<owner>/<repo>/actions/runs/<id>/artifacts" --jq '[.artifacts[].na
 
 A count that disagrees is a truncated download, not a missing artifact.
 Re-run the download; do not conclude the run produced less than it did.
+
+### The `items-*` artifacts are the only corpus of real article text
+
+Nothing commits an article body - we publish a link and our own summary, never
+the source text - so a rule that reads `Article.text` cannot be measured against
+`frontend/public/digest/` at all. The measurable corpus is a completed pipeline
+run's artifacts:
+
+```powershell
+gh run list --repo <owner>/<repo> --workflow digest.yml --limit 5 --json databaseId,conclusion
+foreach ($n in 0,1,2,3) { gh run download <run-id> --repo <owner>/<repo> --name "items-$n" --dir "$env:TEMP\corpus\items-$n" }
+(Get-ChildItem "$env:TEMP\corpus" -Recurse -Filter '*.article.json').Count
+```
+
+Two things bite. **Filter on `status == "ok"`**: a failed article is a real
+payload with no `text`, and it deflates every percentage silently - 160 files
+were 121 usable articles on the run measured 2026-08-26, a 24 percent
+difference. And **artifacts expire**, so a number measured this way carries its
+run id, not just its date, or nobody can reproduce it.
+
+Used on 2026-08-26 to tune the lens and event vocabularies before wiring them.
+It changed the answer: a candidate list that looked reasonable put one event on
+34.7 percent of articles.
 
 ## The Actions cache
 
@@ -549,6 +581,21 @@ contends with the first.
   that is what `assist.min_readable_letter_share` gates on. Measured 2026-08-26
   over 1889 committed items the result is two points with nothing between them:
   3 items at 0.0 and the next lowest at 0.9975.
+
+## Building a page of a chosen length
+
+- **`trafilatura` drops a paragraph it has already seen, so a fixture built from
+  one repeated sentence is not the length the test believes.** A synthetic page
+  of 320 copies of one sentence extracts to about 150 words, and it does that
+  whether the page holds 30 copies or 3000. Nothing errors, and the test then
+  asserts a length band the article never reached. Give every copy its own
+  ordinal - `f"Item {index}. {SENTENCE}"` - and the count tracks: measured
+  2026-08-26, 320 unique sentences of 12 words extracted to 3783 words against
+  3840 asked for, while the identical-sentence version of the same page gave
+  121.
+
+- **Count the prefix.** A sentence of ten words plus an `Item N.` ordinal is
+  twelve words, and sizing on ten undershoots every fixture by a fifth.
 
 ## The canary build
 
