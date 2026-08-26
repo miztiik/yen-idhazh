@@ -58,7 +58,7 @@ The three fields are declared on `Article`, copied onto `DigestItem`, exported t
 
 **Where the value would have been set.** `to_article` in `backend/idhazh/extract.py` builds the only ok article and passes none of the three; `_failed` in the same file does the same for a failed one. All three are declared `default_factory=list` in `backend/idhazh/contracts/article.py`, so leaving them out is legal and silent. `to_digest_item` in `backend/idhazh/assemble.py` then copies the three empty lists onto the published item. No model is involved anywhere: neither `backend/idhazh/prompts/summarize.txt` nor `backend/idhazh/prompts/route.txt` contains the word lens, event or entity.
 
-**The entity half is worse than unwired.** `config/watchlist.json` declares `"entities": []`, so there is no registry to match a name against and the ceiling on items that could gain an entity today is zero, whatever the matcher. `backend/idhazh/cli.py` hands `plan_vertical` a hardcoded empty `watchlist_keys` for the same reason, so `watchlist_bonus` has never moved a score - the watchlist term of the ranking formula below is dead arithmetic. `EntityDef.aliases` is declared in `backend/idhazh/contracts/watchlist.py` and read nowhere, and it is the only name-matching surface any config contract has.
+**The entity half is worse than unwired.** `config/watchlist.json` declared `"entities": []`, so there was no registry to match a name against and the ceiling on items that could gain an entity was zero, whatever the matcher. `backend/idhazh/cli.py` handed `plan_vertical` a hardcoded empty `watchlist_keys` for the same reason, so `watchlist_bonus` had never moved a score - the watchlist term of the ranking formula below was dead arithmetic. `EntityDef.aliases` was declared in `backend/idhazh/contracts/watchlist.py` and read nowhere, and it was the only name-matching surface any config contract had. All of that was fixed on 2026-08-26; the rule is below.
 
 **The vocabulary would fire, and the match rule is the whole design.** Measured 2026-08-26 over our own published title, summary and key points - our words, never fetched text. A word-boundary match on the words inside each lens id hits 167 of 1889 items, 8.8 percent: `china` 94, `markets` 69, `cyber` 11, `ai-roi` 2. The same match for an event id as a word hits 438 items, 23.2 percent, led by `research` 179 and `incident` 72.
 
@@ -121,7 +121,26 @@ Full event spread: `release` 22.3, `regulation` 19.0, `deal` 13.2, `research` 12
 
 **The first draft was worse and the measurement is what caught it.** A candidate vocabulary using bare `research`, `study`, `revenue` and `profit` tagged `research` on 34.7 percent of articles and `earnings` on 14.9 percent - a filter taking one article in three is not a filter. Replacing them with `researchers`, `arxiv`, `preprint`, `quarterly results` and `fiscal quarter` moved those to 12.4 and 4.1 percent. No judgement about "good keywords" would have found that; running the list over 121 real articles did.
 
-**What is still zero: `entities`.** The watchlist declares no entity, so the ceiling on items that could gain one is zero whatever the matcher, and the retrieval eval's free query tier still builds nothing.
+**What is still zero: nothing.** `entities` was the last of the three, and it is built - see below.
+
+### Entities, and the end of the dead watchlist term
+
+`config/watchlist.json` declared `"entities": []`, so the ceiling on items that could gain an entity was zero whatever the matcher, and `EntityDef.aliases` was declared on day one and read nowhere. Both were fixed on 2026-08-26 and the rule is the same one sentence, with `aliases` as the curated surface instead of `keywords`.
+
+**Thirty entities, and the list was measured rather than asserted.** Thirty-five candidates were run over both corpora first. Five matched **nothing at all** - `cisa`, `european-commission`, `opec`, `sec`, `tsmc` - which was confirmed as genuine absence rather than a matcher fault by grepping the raw strings across every committed payload (0 hits each). Those five were cut. An entity nobody has published about is a vocabulary entry with no evidence, and this file already has a history of shipping decoration; any of them is one config edit away the day a story needs it.
+
+| Corpus | Items with an entity | Entities carried by >= 3 items |
+| --- | --- | --- |
+| 121 real articles (the Extract site) | 38, **31.4 percent** | 7 |
+| 2,121 committed items, own words | 472, **22.3 percent** | 25 |
+
+**The number this was for: the retrieval eval's free query tier goes from 0 queries to 25**, covering 585 of 2,121 items, from `entity-asml` at 3 to `entity-google` at 99. Measured by running the eval's own `entity_queries` over a corpus the matcher had tagged ([../../concepts/evaluation.md](../../concepts/evaluation.md)). That is what the corpus **supports**: no committed payload was rewritten, so the tier reports zero until new days land.
+
+**`watchlist_bonus` was dead arithmetic and is now live.** `cli` handed `plan_vertical` a hardcoded empty `watchlist_keys`, so `PlannedItem.watchlist_hit` was false on every item ever planned and the 0.5 bonus never reached a score. It is now the set of candidates whose **feed title** matches an entity alias.
+
+The title, not the article text, and the asymmetry is deliberate. A plan runs before a single page is fetched, so the title is all it has. An article whose body names an entity its title does not still earns the published tag at Extract: **the tag says what the item is about, the bonus says what we were already watching for.** Those are different questions and they are allowed to disagree.
+
+**This reorders every future day and no past one.** A bonus that starts firing is a live ranking change - that was named before it was made, and it is the reason this was an owner decision rather than a defect fix. `state/published.csv` still stops an already-published address being planned again, so no day a reader has already seen moves.
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 
