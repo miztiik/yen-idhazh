@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-26
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -74,7 +74,7 @@ A collision - two addresses landing on the same ten digits - is rare and is a co
 
 There is no daily item cap and no per-vertical cap. What a day publishes is what survives the score and `max_per_source` (2), which stops one prolific outlet filling a vertical.
 
-`run.safety_ceiling_per_run` (200) exists and is not a cap. It is a crash guard: if a feed change or a canonicalisation bug ever produces thousands of candidates, the run stops rather than spending six hours discovering it. A normal day is nowhere near it. If a run ever hits it, the answer is to find the bug, not to raise the number.
+`run.safety_ceiling_per_run` (160) exists and is not a cap. It is a crash guard: if a feed change or a canonicalisation bug ever produces thousands of candidates, the run stops rather than spending six hours discovering it. A normal day is nowhere near it - the largest ever planned is 149 items. If a run ever hits it, the answer is to find the bug, not to raise the number. What sets the number is the worst case the `work` and `route` jobs both have to finish, not an editorial view of how long a day should be ([../../concepts/config.md](../../concepts/config.md)).
 
 ## Design rationale
 

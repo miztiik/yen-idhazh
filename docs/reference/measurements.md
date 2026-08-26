@@ -90,13 +90,15 @@ measured 801 tokens at the time and now measures at most 879. The table uses the
 current maximum. A derived time now requires an explicit model-specific prompt
 count and truncation cap; without them the tool prints raw throughput only.
 
-**These figures do not size a production worker.** `run.shard_size = 5` is not
-enforced by `digest.yml`; the workflow divides the whole plan among the worker
-jobs the dispatch asked for - one to eight since 2026-08-25, and four on every
-scheduled run. Run `32742672105` measured 34 to 41 items per worker across four.
-A current day can be larger. Size request and job bounds from a measured real
-worker population and its worst item, never from five-item arithmetic or the
-229-second blend.
+**These figures do not size a production worker.** From 2026-08-26 `digest.yml`
+derives the worker count as `min(ceil(items / run.shard_size), run.max_parallel)`,
+so `run.shard_size` decides how few workers a small day is worth, not how big a
+shard is. `run.max_parallel` is four, so an automatic run still fans out to at
+most the four this page has measured; a dispatch may ask for up to eight. At
+`run.safety_ceiling_per_run` a worker draws 40 items, not five. Run
+`32742672105` measured 34 to 41 items per worker across four. A current day can
+be larger. Size request and job bounds from a measured real worker population
+and its worst item, never from five-item arithmetic or the 229-second blend.
 
 ### Candidate: Qwen3.5-9B-Q4_K_M (measured; adoption work incomplete)
 
@@ -162,6 +164,53 @@ What remains unmeasured:
 The model card publishes no summarization or faithfulness result. Its reasoning,
 instruction-following, coding and long-context tables are a prior and not
 evidence for this pipeline.
+
+#### Estimate: what one work shard costs on the candidate
+
+**Every figure in this subsection is an estimate, not a measurement, and none of
+them may settle a design on its own (Rule #10).** Derived 2026-08-25 from the
+`llama-bench` figures measured 2026-08-23 on `ubuntu-latest` / AMD EPYC 9V74 /
+4 threads / llama.cpp `b10598` / n=3, using the Qwen3-8B prompt token count as an
+unmeasured substitute for the 9B's.
+
+Both derivations start from the same base - the derived Qwen3-8B **worst long
+article of 342 s** - because a timeout is set by the worst item and not by a
+blend. That base is itself derived, so this is an estimate resting on an
+estimate. It decomposes as 879 prompt tokens plus the 2500-token truncation cap,
+3379 tokens prefilled at 10.98 tok/s (interpolated between the 1800- and
+4850-token rows) for 307.8 s, plus 250 decoded tokens at 7.28 tok/s for 34.3 s.
+The two derivations differ in how they carry that across to the candidate:
+
+- **Interpolation** scales each part by the candidate's own rate at that length -
+  prefill 10.98 -> 9.95 tok/s and decode 7.28 -> 6.01 tok/s. It gives 381 s an
+  article.
+- **Decode ratio** scales the whole 342 s by the decode observation alone
+  (7.28 -> 6.01 tok/s). It gives 414 s an article, and is the pessimistic one
+  because prefill degrades far less than decode on this candidate.
+
+The two rates were taken in separate jobs on different CPU models, so the ratio
+between them is an observation and not a controlled delta.
+
+An automatic run fans out to `run.max_parallel` workers, which is four, so the
+ceiling divided by four is what one worker draws in the worst case. A dispatch
+may ask for up to eight and would halve these figures; nothing here rests on
+that, because a scheduled run is the path a reader depends on.
+
+| Ceiling | Items a shard draws at four workers | Interpolation | Decode ratio | Against the 330-minute `work` bound |
+| --- | --- | --- | --- | --- |
+| 200 (until 2026-08-26) | 50 | 318 min (96%) | 345 min (105%) | busts one method and has no margin on the other |
+| **160 (today)** | **40** | **254 min (77%)** | **276 min (84%)** | **clears both** |
+
+160 is the ceiling because it clears the bound under both methods and because it
+absorbs the one input nobody has measured: the prompt is counted with the 8B's
+tokenizer. If the 9B renders the same prompt 20% longer - 3554 tokens rather than
+3379, at 399 s an article - 40 items still clears at 266 min while 50 items busts
+at 333 min. The largest day ever planned is 149 items (run `32742672105`,
+2026-08-24), so 160 removes nothing that has ever been read.
+
+Replace this table with a measurement as soon as one exists. The measurement that
+settles it is one candidate `work` shard on `ubuntu-latest` reporting its own
+`prefill_ms` and `decode_ms` per item.
 
 ### On a laptop (kept only as a warning)
 
@@ -555,10 +604,11 @@ The fixed cost is 1.5% of the job. That settles the first of the three questions
 this row opened: it is not model loading.
 
 The derived ceiling: `(3600 - 47) / 21.0` = **169 routable items** inside the
-60-minute bound. `run.safety_ceiling_per_run` is 200. The two numbers have never
-been consistent, and the runs that fit did so because roughly a quarter of the
-plan had no `OK` summary and was skipped. **Improving the summarizer breaks the
-router.** That coupling is the defect, not the bound.
+60-minute bound. `run.safety_ceiling_per_run` was 200 when this was measured, and
+moved to 160 on 2026-08-26. The two numbers had never been consistent, and the
+runs that fit did so because roughly a quarter of the plan had no `OK` summary
+and was skipped. **Improving the summarizer breaks the router.** That coupling is
+the defect, not the bound.
 
 Job wall-clock across the eight real runs since the daily size moved from 17
 items to 200 on 2026-08-23:
@@ -699,9 +749,12 @@ The derived ceiling, restated for both hosts and both configurations:
 | 20.7 s (fast host) | 172 items | 324 items |
 | 40.3 s (slow host) | 88 items | 166 items |
 
-against `run.safety_ceiling_per_run = 200` and a 50-minute stage budget. The
-slow host still cannot finish a maximum day, which is why the stage now stops
-itself rather than being killed.
+against a 50-minute stage budget. `run.safety_ceiling_per_run` was 200 when this
+was measured and moved to 160 on 2026-08-26 for the `work` job's sake. 160 is the
+first ceiling a slow host clears with `enabled_kinds: [chart]` - 166 items
+against 160 - so the plan ceiling and the router's capacity now agree where at
+200 they never did. A slow host still cannot finish a maximum day with the
+diagram arm on, which is why the stage stops itself rather than being killed.
 
 ## The one-slot production observation
 
@@ -1503,8 +1556,10 @@ timestamps, so that queue is not inside any of them.
 four was a choice and not a platform limit. Every shard restores the same cache
 key, so the change adds cache restores and model loads, never cache bytes.
 
-The scheduled run is unchanged. It passes no inputs, so the plan job's
-`SHARDS=4` fallback still decides it. This measurement does not move it - see
+The scheduled run is unchanged. It passes no inputs, so it gets the four workers
+it has always had - through the plan job's own `SHARDS=4` fallback when this ran,
+and through `run.max_parallel` since 2026-08-26. This measurement does not move
+it - see
 [Does this move the scheduled default](#does-this-move-the-scheduled-default-to-eight).
 
 ### The baseline to compare against
@@ -1719,7 +1774,9 @@ Rule #2. The fourth - every shard's memory peak clear of 16 GB - is unread
 rather than failed, and the resident-set figure that stands in for it is a
 per-machine number the shard count does not change.
 
-Three things have to hold before the `SHARDS=4` fallback moves:
+Three things have to hold before `run.max_parallel` moves - the plan job's
+`SHARDS=4` fallback when this was written, and the config knob the derivation
+clamps by since 2026-08-26:
 
 1. **A day at eight shards has to publish.** This one did not. Raising the
    fan-out on the path a reader depends on, on the strength of a run that lost
@@ -1732,8 +1789,8 @@ Three things have to hold before the `SHARDS=4` fallback moves:
    faster while `route` drops a third of the day's visuals moves the failure
    rather than removing it.
 
-Then the fallback moves, in its own commit, naming the run it rests on. This
-section does not move it.
+Then `run.max_parallel` moves, in its own commit, naming the run it rests on.
+This section does not move it.
 
 ## Still unmeasured
 

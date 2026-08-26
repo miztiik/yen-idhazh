@@ -1,6 +1,6 @@
 # Evaluate and Adopt a New Summarizer Model
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 Measure a candidate summarizer against the configured incumbent, decide whether
 it clears the bar, and change the model without losing reproducibility.
@@ -376,9 +376,10 @@ test the fingerprint and manifest paths before rollout.
 
 The steady-state cache must hold the summary model and router model. The
 transition can temporarily hold the old summary model too and cross the 10 GB
-repository ceiling. Production currently divides the whole plan across a fixed
-worker count; it does not enforce `run.shard_size`. Do not size a timeout from a
-fictional five-item shard.
+repository ceiling. Production derives the worker count from the plan as
+`min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
+`run.safety_ceiling_per_run` gives a worker 40 items. Do not size a timeout from
+a fictional five-item shard.
 
 Before the first production run:
 
@@ -398,9 +399,7 @@ Then:
 
 1. Run the full local gates.
 2. Run a one-URL local smoke through the candidate config.
-3. Repair and verify bounded worker selection. The current `--cap` CLI argument
-   is not passed into `stage_plan`, and Content refresh distributes the whole
-   plan over a fixed worker count.
+3. Verify bounded worker selection against the day you plan to run.
 4. Run a manual Content refresh only after its measured worker population fits.
 5. Inspect item-health failure codes, per-item read/write rates, the fingerprint
    row, run manifest, cache state and published summaries.

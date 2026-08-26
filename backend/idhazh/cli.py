@@ -41,6 +41,7 @@ from idhazh import (
     summarize,
     telemetry,
 )
+from idhazh.contracts.app_config import RunConfig
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
@@ -130,6 +131,7 @@ def stage_plan(
     now: Clock | None = None,
     run_n: int | None = None,
     state_dir: Path | None = None,
+    cap: int | None = None,
 ) -> RunPlan:
     """Read every live feed, rank the pool, and write down what it saw. No model.
 
@@ -145,6 +147,11 @@ def stage_plan(
 
     Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
     guard against a mis-parsed feed, not a reading budget.
+
+    `cap` takes the best `cap` stories of each vertical and is for a validation
+    run that must not plan a whole day. It is a different knob from the crash
+    guard: it works per vertical, before the day is deduplicated, and a run that
+    does not ask for it plans exactly what it planned before.
     """
     read_url = fetcher or live_fetcher(settings)
     clock = now or assemble.utc_now
@@ -216,6 +223,9 @@ def stage_plan(
             front_page_keys=frozenset(front_page),
         )
         verticals.append(summary)
+        if cap is not None and len(planned) > cap:
+            LOG.info("cap applied vertical=%s planned=%s cap=%s", vertical.id, len(planned), cap)
+            planned = planned[:cap]
         items.extend(planned)
 
     items = _dedupe_planned_items(items)
@@ -367,6 +377,25 @@ def _next_run_n(date: str) -> int:
 
 
 # --- work -------------------------------------------------------------------
+
+
+def shard_count(items: int, *, run: RunConfig) -> int:
+    """How many worker jobs a day of `items` earns.
+
+    `run.shard_size` is what one worker is sized to carry, so a day that needs
+    fewer workers gets fewer. Every extra job restores the weights again, and
+    that restore is the largest fixed cost in the pipeline (Rule #2). The count
+    never passes `run.max_parallel` and never falls below one, so an empty day
+    still runs a worker that exits cleanly rather than an empty matrix.
+
+    This is what a run derives for itself. An operator dispatching `digest.yml`
+    names a count instead, and may name a larger one than this will ever return.
+
+    The bound this has to clear is the worst case, not the day in hand: at
+    `run.safety_ceiling_per_run` items the shard each worker draws must still
+    finish inside the `work` job's timeout.
+    """
+    return max(1, min(-(-items // run.shard_size), run.max_parallel))
 
 
 def shard_of(plan: RunPlan, *, shard: int, shards: int) -> list[PlannedItem]:
@@ -1230,7 +1259,8 @@ def _scorer(enabled: bool) -> object | None:
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
     parser.add_argument(
-        "stage", choices=("plan", "work", "route", "assemble", "run", "validate", "decide")
+        "stage",
+        choices=("plan", "shards", "work", "route", "assemble", "run", "validate", "decide"),
     )
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
     parser.add_argument("--config", type=Path, default=config.DEFAULT_CONFIG_DIR)
@@ -1263,8 +1293,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=int,
         default=None,
         help=(
-            "Override each vertical's daily cap when planning. For validation only: "
-            "the daily cap is how much a reader wants, not how much a measurement needs."
+            "Take at most this many stories from each vertical when planning. For "
+            "validation only: how big a day is is what a reader wants, not what a "
+            "measurement needs."
         ),
     )
     args = parser.parse_args(argv)
@@ -1295,8 +1326,14 @@ def main(argv: Sequence[str] | None = None) -> int:
             settings=settings, date=date, commit_sha=args.commit, runner=args.runner
         )
 
+    if args.stage == "shards":
+        # stdout carries the answer and stderr carries the logs, so a caller
+        # reads one number without parsing a log line.
+        print(shard_count(len(_load_plan(date).items), run=settings.app.run))
+        return 0
+
     if args.stage in ("plan", "run"):
-        plan = stage_plan(date, settings=settings, fetcher=read_url)
+        plan = stage_plan(date, settings=settings, fetcher=read_url, cap=args.cap)
         assemble.write_atomic(_plan_path(date), plan.to_json())
         LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 

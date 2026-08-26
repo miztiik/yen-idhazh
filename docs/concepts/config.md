@@ -125,12 +125,17 @@ runtime only after a runner measurement records hardware, date and spread in
 
 ### Current run-shape gap
 
-`run.shard_size` and `run.shard_timeout_minutes` exist in config, but
-`digest.yml` currently distributes the full plan across a fixed worker count and
-sets the work job to 330 minutes. It does not enforce either config value.
-Treating a worker as five items, or 150 minutes, is therefore false when sizing
-a model. A model adoption must measure the actual worker population or wire the
-knobs before using them.
+`run.shard_size` and `run.max_parallel` are enforced from 2026-08-26:
+`digest.yml` derives the worker count from the planned day as
+`min(ceil(items / run.shard_size), run.max_parallel)`. That is the automatic
+path; an operator dispatching the workflow names a count instead, up to the
+eight the workflow's own guard allows. `run.shard_timeout_minutes`
+is still read by nothing in `digest.yml`, which sets the work job to 330 minutes.
+Treating a worker as 150 minutes is therefore still false when sizing a model.
+Treating a worker as five items is also still false, for the opposite reason:
+`shard_size` decides how few workers a small day is worth, and a full day at the
+ceiling gives a worker 40 items. A model adoption measures the actual worker
+population.
 
 ## Console surface
 
@@ -171,7 +176,7 @@ The distinction matters because a value in `config/` reads as an invitation to c
 
 Some numbers in `config/` are not there to be tuned. They are there to stop a bug running for six hours, or to say out loud that something has changed. A guard, an alarm and a limit look identical in JSON, so the name and the comment carry the whole difference:
 
-- `run.safety_ceiling_per_run` (200) is a **crash guard**. A normal run is nowhere near it. If a canonicalisation bug ever produces thousands of candidates, the run stops instead of discovering that slowly. Hitting it means find the bug, not raise the number. It replaced a daily item cap, which was a limit pretending to be a guard - see [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
+- `run.safety_ceiling_per_run` (160) is a **crash guard**. A normal run is nowhere near it. If a canonicalisation bug ever produces thousands of candidates, the run stops instead of discovering that slowly. Hitting it means find the bug, not raise the number. It replaced a daily item cap, which was a limit pretending to be a guard - see [../architecture/sources/freshness.md](../architecture/sources/freshness.md). It is also the worst case every downstream bound is checked against, which is what decides the number - see [Design rationale](#design-rationale).
 - `models.inference.max_output_tokens` (900) is a **crash guard**. It stops a runaway decode from burning a shard's whole timeout. It is not a length target: the length a summary should be is set by the word bands in `summarize.bands`, which is the knob a person actually wants ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). It was 250, and at 250 the reply ran out of budget mid-object and failed as a *shape* error - which named the wrong cause and sent the reader of that failure looking at the decoder. It now sits well above any summary we would want.
 - `models.inference.request_timeout_minutes` (22.1) is a **per-request guard**. It limits one summarizer POST, not the shard. It protects the day from one local model request that accepts a connection and never replies: that item records `model_unreachable`, and the worker continues. The default is sized from the authoritative runner measurements in [../reference/measurements.md](../reference/measurements.md): the worst 8B long article plus one cold prompt prefix, doubled. `run.shard_timeout_minutes` stays the outer bound for the whole shard.
 - `run.route_budget_minutes` (40) is a **stage budget**, and it is the one number here that a person is meant to move. It says how long the route stage may spend before it stops asking the model and leaves the rest of the day unrouted. It is sized *below* the route job's 50-minute timeout on purpose: a job killed at its timeout skips its upload step, so the run loses every decision it had already made rather than the tail it could not reach. The 10 minutes between the two are the fixed cost the stage clock never sees. Measured 2026-08-24/25, the per-item cost is 20.7 s on a fast runner host and 40.3 s on a slow one, so what fits inside the budget changes run to run - which is exactly why the bound is a clock rather than an item count ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
@@ -207,6 +212,10 @@ Keeping tunables in schema-validated files rather than in code exists so that tu
 
 Excluding the runner's ceilings is the less obvious half. They look exactly like knobs and are not: a configurable job timeout invites someone to raise it rather than fix the batch size, which is precisely the reasoning Rule #2 exists to prevent. Authority: Carmack.
 
+**`run.safety_ceiling_per_run` moved from 200 to 160 on 2026-08-26.** A guard is still sized, and this one is sized by the slowest thing that has to finish a full day of it. Two bounds disagreed with 200. An automatic run derives `min(ceil(items / run.shard_size), run.max_parallel)` = four shards, so 200 hands a worker 50 items; against the Qwen3.5-9B candidate that derives to 318 minutes one way and 345 the other, over a 330-minute job timeout that nobody may raise (Rule #2). At 160 the same arithmetic gives 40 items, 254 and 276 minutes, and clears both. The route stage says the same thing from the other side: its measured slow-host capacity is 166 items in a 50-minute budget, so 200 and the router never agreed and 160 does. The largest day ever planned is 149 items, so the move removes nothing a reader has ever had. The lever was the ceiling rather than the timeout, because the timeout is the platform; and rather than the shard count, because `run.max_parallel` is four until the three conditions under [Eight work shards](../reference/measurements.md#eight-work-shards) are met, and `route` is unsharded either way ([../reference/measurements.md](../reference/measurements.md)). Authority: Carmack.
+
+**`run.max_parallel` and the workflow's eight-shard ceiling are different numbers on purpose.** `digest.yml` lets an operator dispatch up to eight workers, and one such run halved the slowest worker. `run.max_parallel` is the most a run derives *for itself*, and it stays at four because no eight-shard day has yet published. The dispatch ceiling is the escape hatch; the config knob is the automatic path a reader depends on, and an unmeasured number may not move that path (Rule #10). Authority: Carmack.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -218,6 +227,8 @@ Excluding the runner's ceilings is the less obvious half. They look exactly like
 | Keeping a dead knob "in case it is wanted later" | It reads as a control. The next person sizes the system by what the knobs claim, and one of them is a lie. | Fowler |
 | A daily item cap as the run-shape knob | It decides how many good articles a day may have before knowing what the day contains. The safety ceiling catches the failure a cap was accidentally also catching. | Reader |
 | Using `max_output_tokens` as the summary length control | A length set by a token budget fails as a malformed object rather than as a long summary, so the error names the decoder instead of the prompt. | Andre |
+| Raising the `work` job's `timeout-minutes` past 330 so a 200-item ceiling fits | The budget is the platform, not a preference (Rule #2). The ceiling is the knob; the timeout is not. | Carmack |
+| Leaving the work fan-out a fixed four | It made `run.shard_size` read as configuration and behave as decoration, and it paid the weights restore four times on a day that needed one worker. | Fowler |
 
 ## See also
 

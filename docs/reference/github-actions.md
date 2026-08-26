@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -33,28 +33,45 @@ flowchart LR
 ## Content refresh
 
 The schedule and manual dispatch use the same job graph. The plan job creates
-the work list. The work matrix creates one to eight total worker jobs. Manual
-dispatch offers 1 through 8 and defaults to four. The plan job rejects any other
-value before it creates the matrix. The work strategy sets `max-parallel: 8`, so
-a dispatch at the ceiling runs every worker at once.
+the work list, then derives the fan-out from it. The work matrix creates one to
+eight total worker jobs. Manual dispatch offers 1 through 8 and defaults to
+four; an explicit input always wins over the derivation, and the plan job
+rejects any other value before it creates the matrix. The work strategy sets
+`max-parallel: 8`, so a dispatch at the ceiling runs every worker at once.
 
-**The ceiling is eight; the scheduled run is still four.** A scheduled run
-passes no inputs, so the plan job's own `SHARDS=4` fallback decides it, and that
-fallback is deliberately untouched. One dispatch has now run at eight and halved
-the slowest worker, from 113.1 minutes to 58.8 - but it failed at `assemble` and
-published nothing, so no day has yet reached a reader through this fan-out.
-What moves the scheduled default is written under
+**The ceiling is eight; a run derives at most four for itself.** A scheduled run
+passes no inputs, so the count is
+`min(ceil(items / run.shard_size), run.max_parallel)`, never below one - and
+`run.max_parallel` is four. A day of 16 or more items therefore still runs the
+four workers it has always run, and a smaller day runs fewer. Every extra worker
+restores the weights again, and that restore is the largest fixed cost in the
+pipeline. One dispatch has now run at eight and halved the slowest worker, from
+113.1 minutes to 58.8 - but it failed at `assemble` and published nothing, so no
+day has yet reached a reader through that fan-out. What moves `run.max_parallel`
+to eight is written under
 [Eight work shards](measurements.md#eight-work-shards), not this change.
+
+A *derived* count above the ceiling is walked down into it rather than rejected:
+by then the feeds have been read, and a config the guard disagrees with must
+cost the tail of the fan-out rather than the whole day. Only a dispatched value
+is a hard failure.
 
 Rule #2 allows 20 concurrent jobs. Eight workers plus the router is nine, and
 `route` waits on `work` rather than racing it, so the ceiling is nowhere near
 the platform limit. Every shard restores the same cache key, so more shards buy
 more restores and never more cache bytes.
 
-Each worker receives its round-robin share of the whole plan. The workflow does
-not enforce `config.run.shard_size` or `shard_timeout_minutes`; the work job uses
-a 330-minute workflow timeout. A model-fit claim must use the measured worker
-population or first wire those config values.
+The derivation runs in its own `fanout` step after `Plan the day`, because there
+is no planned item count before the plan exists. `jobs.plan.outputs.shards` and
+`jobs.plan.outputs.matrix` both read that step; `date` and `faithfulness` still
+come from `decide`.
+
+Each worker receives its round-robin share of the whole plan and reads the count
+from the job output rather than deriving it again - two answers to that question
+would drop or double-work items with no error. The workflow enforces
+`config.run.shard_size` and `config.run.max_parallel`. It still does not enforce
+`shard_timeout_minutes`; the work job uses a 330-minute workflow timeout, and
+`run.safety_ceiling_per_run` is the ceiling sized against it.
 
 Each worker checks its weights before it starts the server. `sha256sum` compares
 the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a
@@ -71,7 +88,7 @@ failure, then commits the digest and state.
 flowchart LR
     SCHEDULE["schedule<br/>02:20, 06:20, 10:20, 14:20, 18:20 UTC"] --> PLAN["plan"]
     MANUAL["manual dispatch"] --> PLAN
-    PLAN --> WORK["work shards<br/>at most eight total jobs"]
+    PLAN --> WORK["work shards<br/>derived from the plan, at most eight"]
     WORK --> ROUTE["route"]
     ROUTE --> ASSEMBLE["assemble"]
     ASSEMBLE --> COMMIT["commit digest and state"]
