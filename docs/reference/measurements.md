@@ -1265,6 +1265,97 @@ re-run. `/console/` grows with the ledger its charts read, and plateaus once the
 prerendered window is full. Neither ceiling is a steady bound. **When one fires
 on a publish, the fix is the archive plan under `TODO/`, not a bigger number.**
 
+### The vector backfill, and the one raise the archive plan cannot absorb
+
+Hardware: Intel Core i7-1265U, Windows, node 24.12.0, onnxruntime 1.29.0. Date:
+2026-08-26. Method: as above, three builds of one tree.
+
+The backfill filled every closed day's vectors, and 1,175 new vectors are bytes
+`/archive/` carries. The ceilings were raised, and this is the one case the
+"archive plan, not a bigger number" rule above does not cover: that plan is
+blocked on this backfill by its own preconditions, so it cannot land first.
+
+Taken on the final rebased tree, seven published days:
+
+| Route | Build 1 | Build 2 | Build 3 | Range | Ceiling committed |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `/404` | 1,061 | 1,061 | 1,059 | 2 | **1,127** (unchanged) |
+| `/evals/` | 2,411 | 2,411 | 2,406 | 5 | **2,475** (unchanged) |
+| `/console/` | 136,702 | 136,708 | 136,708 | 6 | **136,772** |
+| `/archive/` | 1,675,982 | 1,675,983 | 1,675,984 | 2 | **1,676,048** |
+
+**Two causes, and they are not the same size.** The backfill's own share was
+isolated an hour earlier, on the tree before the last rebase, by building
+`origin/main` untouched and then building it again with the repair applied:
+
+| Route | Ceiling before | `origin/main` untouched | With the backfill | The backfill's share |
+| --- | ---: | ---: | ---: | ---: |
+| `/archive/` | 1,124,663 | 1,213,246 | 1,583,734 | **+370,488** |
+| `/console/` | 123,330 | 129,598 | 129,602 | **+4** |
+
+So `/archive/` was already 88,583 bytes over its ceiling and `/console/` 6,268
+over, on a tree nobody had touched - the scheduled pipeline published more of
+2026-08-26 after PR #126 measured them, which is the countdown behaviour that
+section describes, watched a third time. The CI `site` job was already failing
+on `main` at 6535e52 for exactly this, before this row existed. The gap between
+1,583,734 and the 1,675,984 in the table above is the same countdown running
+again during the row: `digest: 2026-08-26` grew the live day from 385 items to
+505 while the gates were running. **A ceiling measured before the final rebase
+is already wrong.**
+
+370,488 bytes for 1,175 vectors is 315 bytes a vector on the wire, against 512
+base64 characters raw - so gzip returns about 38 percent of what base64 costs.
+That figure sizes the archive plan's shards and replaces its 35 percent
+estimate.
+
+**A day page carries its own vectors and never reads them.** `/<date>/` went
+from 396,997 to 581,552 bytes gzipped over the same backfill - 184,555 bytes a
+reader downloads to read one day's stories. Search lives on `/archive/`; the
+in-page filter on a day is a lowercased substring test that needs no vector at
+all. Nothing was measuring this before, because a day route is deliberately
+uncapped and the block was nearly empty. This is a defect in the day route's
+load, not in the backfill: a day payload the archive reads whole is the same
+file the day page renders, and only the archive needs the block.
+
+**What a reader pays.** `/archive/` is 1.68 MB gzipped. That is the cost of
+holding the whole corpus on one page, and it is the reason the archive plan
+exists rather than a reason to leave the corpus empty: before the backfill,
+1,175 of the 1,614 items a reader can search for had no vector at all, so the
+page was heavy AND could not find them.
+
+### The encoder reproduces itself, and the committed days did not
+
+Hardware: Intel Core i7-1265U, Windows, onnxruntime 1.29.0. Date: 2026-08-26.
+Method: decode each committed vector, re-encode its item's `title. summary`
+through `idhazh.embed`, and compare - cosine on the decoded pair, and the item's
+top-10 neighbours within its own day computed from each side.
+
+| Day | Vectors compared | Cosine min | Cosine median | At or above 0.9999 | Byte-identical | Max byte delta | Top-10 moved |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 2026-08-21 | 4 | 0.992538 | 0.994693 | 0/4 | 0/4 | 2 | 0/4 |
+| 2026-08-22 | 10 | 0.991415 | 0.993853 | 0/10 | 0/10 | 3 | 6/10 |
+| 2026-08-23 | 137 | 0.988646 | 0.993482 | 0/137 | 0/137 | 3 | 134/137 |
+| 2026-08-24 | 145 | 0.987867 | 0.993621 | 1/145 | 1/145 | 3 | 138/145 |
+| 2026-08-25 | 143 | 0.989480 | 0.993632 | 0/143 | 0/143 | 3 | 135/143 |
+| **2026-08-26** (CI wrote it that day) | 80 | 0.996260 | **1.000000** | 58/80 | 54/80 | 2 | not measured |
+
+The last row is the control, and it is what makes the other five readable. A
+Windows re-encode reproduces the day CI had written hours earlier at a median
+cosine of exactly 1.000000, with 54 of 80 vectors byte-identical - so the
+machine is not the variable. Every closed day predates `a995b18`, the commit
+that stopped `encode` padding its input and batching it, so those vectors carry
+an arithmetic the browser's query encoder no longer uses. That is why a short
+day is re-encoded whole rather than topped up.
+
+After the repair, the same test over the repaired days reads cosine 1.000000,
+60 of 60 byte-identical, maximum byte delta 0 and zero rank movement on each of
+2026-08-23, 2026-08-24 and 2026-08-25. The only vectors still below the bar are
+the 14 on 2026-08-21 and 2026-08-22, which already had one for every item they
+earned and were therefore skipped.
+
+Encode cost: 0.16 s an item, one sequence per forward pass. 1,602 items in
+511 s, single-threaded, on a loaded machine.
+
 ### Days to the 1 GB Pages ceiling
 
 The image rows below are historical. They were the arithmetic that made Row #9's

@@ -136,6 +136,14 @@ archive plan under `TODO/`, not a bigger number. Watched happening on
 `/console/` 9,105, and the gate failed on both
 ([../reference/measurements.md](../reference/measurements.md)).
 
+**One raise is not covered by that rule, and it is the vector backfill.** The
+archive plan is blocked on the backfill by its own preconditions, so it cannot
+land first, and 1,175 filled vectors are 370,488 gzipped bytes `/archive/` has
+to carry until it does. Both ceilings moved on 2026-08-26 for that reason and
+for the countdown that had already fired underneath it - the numbers, and which
+cause owns which bytes, are in
+[../reference/measurements.md](../reference/measurements.md#the-vector-backfill-and-the-one-raise-the-archive-plan-cannot-absorb).
+
 ## The browser suite
 
 The browser gate runs against the **canary day**, not the real digest, so it

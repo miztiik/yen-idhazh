@@ -148,6 +148,16 @@ rather than the tree.
 
 ## GitHub CLI
 
+**A `workflow_dispatch` cannot reach a workflow that is not on the default
+branch.** `gh workflow run <file> --ref <my-branch>` answers
+`HTTP 404: workflow <file> not found on the default branch`, even when the file
+is committed and pushed on that branch and its `on:` block is correct. GitHub
+resolves the workflow id from `main` and only then applies `--ref`. So a row
+that ships a new dispatch-only workflow cannot use it to produce anything for
+its own pull request; the first dispatch is possible only after the merge.
+Measured 2026-08-26 on `backfill.yml`. Plan the row around it rather than
+debugging the YAML.
+
 **`gh pr checks --watch` and a bare `gh run watch` open an alternate terminal
 buffer** and return nothing an agent can read. Pipe through `Out-String`, or read
 the state directly:
