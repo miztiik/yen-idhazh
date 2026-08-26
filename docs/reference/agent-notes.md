@@ -116,6 +116,26 @@ it by subject:
 GitHub keeps `refs/pull/<n>/head` for a merged PR forever, so this is recoverable
 either way.
 
+**A file you can see in the editor may not be in the repository at all.** The
+editor's workspace is the shared checkout, and `TODO/` there collects untracked
+plan-docs that were authored but never committed. In a worktree cut from
+`origin/main` the file simply is not present, and every git question about it
+answers as though it never existed: `git log --all -- <path>` prints nothing,
+`git grep <name> origin/main` finds no inbound link, and `git rm <path>` fails.
+That reads exactly like "somebody already distilled and deleted this", which is
+a different conclusion with a different response. On 2026-08-26 a whole
+plan-doc, five sibling plan-docs and every cross-reference between them turned
+out to be untracked. Ask before you plan the work:
+
+```powershell
+git ls-files --error-unmatch <path>          # "did you forget to git add" = untracked
+git -C <the shared checkout> status --porcelain -- TODO/
+```
+
+An untracked plan-doc cannot be deleted by a pull request, and there is nothing
+to repoint - but its findings still have to reach `docs/`, which is the half
+that matters.
+
 **Line endings are pinned, so do not hand-normalise.** `.gitattributes` sets
 `text eol=lf` on every authored file type. A tool that writes CRLF is normalised
 when git stores the blob. A blanket normalise pass rewrites files you never
@@ -296,6 +316,31 @@ answers about a different revision of the file you meant. The tell is a symbol
 you know exists reported as absent, or a line number tens of lines off. Read the
 file by absolute path instead, or search from a terminal in your own worktree.
 
+## Hugging Face
+
+**The `ETag` on a weights download is not the SHA-256, and it looks exactly
+like one.** Pinning the two configured models on 2026-08-26 meant proving the
+bytes at a commit still matched the `sha256` in `config/idhazh.json`. A `HEAD`
+on `https://huggingface.co/<repo>/resolve/<commit>/<file>` answers with a
+64-character hex `ETag` and the right `Content-Length` - and that hex disagrees
+with the recorded digest, because repositories on Xet-backed storage return a
+Xet content hash there. Read as a mismatch it says the weights moved, which
+would stop a change that is fine.
+
+Ask the pointer instead. `/raw/` at a commit returns the git-LFS pointer text,
+and `oid sha256:` in it is the digest of the bytes that URL serves:
+
+```powershell
+curl.exe -sS "https://huggingface.co/<repo>/raw/<commit>/<file>"
+```
+
+The repository-scoped API answers the same question for the default branch -
+`https://huggingface.co/api/models/<repo>?blobs=true` carries `sha` (the head
+commit) and each file's `lfs.oid`. **Its revision-scoped form does not**:
+`/api/models/<repo>/revision/<commit>?blobs=true` returns `lfs.size` with
+`lfs.oid` null, so a check written against it silently compares against
+`None`.
+
 ## npm
 
 **`npm ci` in a fresh worktree can stop making progress after the tree is
@@ -382,6 +427,18 @@ contends with the first.
   Read the *difference between the two runs*, never the delta against the
   record. Mine was +2 to +4 bytes on those routes, which is the real answer.
 
+  **And the same unchanged tree passes on one run and fails on the next**, which
+  is what makes this read as something you broke. `frontend/bundle-baseline.json`
+  records `/` at 49,167 B on node 22 with a 64-byte tolerance derived from four
+  node-22 builds that ranged 49,193 to 49,205. Four node-24 builds of one
+  unchanged source measured 49,096 / 49,101 / 49,107 / 49,111 - deltas of -71,
+  -66, -60 and -56, so two of the four fall outside the tolerance and two do not.
+  Running the gate twice over one finished build gives byte-identical output, so
+  the jitter is in the build, not in the measurement. Two workers on 2026-08-26
+  each reached for `bundle-baseline.json` over this. Do not: CI pins node 22, the
+  local toolchain here is node 24, and re-recording moves a number CI is happy
+  with onto a toolchain CI never runs.
+
 ## PowerShell
 
 - **One line only.** Multi-line commands are mangled before they reach the
@@ -459,6 +516,39 @@ contends with the first.
   per worktree before running the browser suite. Two agents on one port do not
   collide loudly: `reuseExistingServer` is on outside CI, so the second one
   silently tests the first one's bytes.
+
+## Measuring with the committed encoder
+
+- **The committed `tokenizer.json` bakes in truncation and padding, so every
+  length you measure off it is the same number.**
+  `frontend/static/assist/models/.../tokenizer.json` carries
+  `"truncation": {"max_length": 128}` and a fixed `"padding": {"Fixed": 128}` as
+  top-level keys in the file. `Tokenizer.from_file(path).encode(text)` therefore
+  returns exactly 128 ids for a six-word headline and for a two-thousand-word
+  article alike. Nothing errors, and a p50, a p95 and a max that are all the same
+  power of two look like a narrow distribution rather than a broken instrument.
+  `backend/idhazh/embed.py` already overrides both, which is why no committed
+  vector was ever affected - but a measurement that builds its own tokenizer
+  inherits them. Switch both off first:
+
+  ```python
+  tok.no_truncation()
+  tok.no_padding()
+  ```
+
+  Diagnose in one line with
+  `json.loads(Path(f).read_text())["truncation"]`.
+
+- **The unknown-token share does not detect text the encoder cannot read.** The
+  vocabulary holds single Devanagari, Arabic and Cyrillic characters as subword
+  pieces, so a Hindi sentence tokenises to an `[UNK]` share of 0.008 and an
+  Arabic one to 0.000 - each spelled out one character at a time. What the
+  vocabulary lacks is the words, not the letters, so the share reads as a clean
+  bill of health for an item no query will ever retrieve. Measure the share of
+  `str.isalpha()` characters whose `unicodedata.name` begins `LATIN` instead;
+  that is what `assist.min_readable_letter_share` gates on. Measured 2026-08-26
+  over 1889 committed items the result is two points with nothing between them:
+  3 items at 0.0 and the next lowest at 0.9975.
 
 ## The canary build
 

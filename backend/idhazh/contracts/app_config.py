@@ -17,7 +17,7 @@ from typing import ClassVar, Literal, Self
 
 from pydantic import Field, model_validator
 
-from idhazh.contracts.base import ChangelogEntry, Contract, Model, Sha256, Slug
+from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
 from idhazh.contracts.route import VisualKind
 
 
@@ -33,6 +33,14 @@ class ModelRef(Model):
 
     id: Slug
     repo: str = Field(min_length=1, description="Hugging Face repository the GGUF is pulled from.")
+    revision: CommitSha | None = Field(
+        default=None,
+        description=(
+            "The hub commit the weights are fetched at. A download that names a branch "
+            "gets whatever was uploaded last, so the bytes can change under a config "
+            "that still records the old sha256."
+        ),
+    )
     file: str = Field(min_length=1)
     quantisation: str = Field(min_length=1)
     sha256: Sha256 | None = Field(
@@ -942,6 +950,21 @@ class AppConfig(Contract):
                 "rather than catching regressions; the gate now reports an unnamed route "
                 "without failing it. Older config still validates and the empty default "
                 "changes no committed value, so no read-side migration (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-26T20:00",
+            change="ModelRef gained an optional revision: the hub commit the weights are at.",
+            why=(
+                "Every weights download in the pipeline and the measurement harness read "
+                "`resolve/main`, which is a branch. Upstream re-uploads a GGUF and the "
+                "bytes change under a config that still records the old sha256, so a run "
+                "either dies at the checksum or - where no checksum runs - measures a "
+                "model nobody named (Rule #10). This field was rejected once as "
+                "speculative because nothing read it; validate.yml now pins a revision "
+                "and the adoption target names one, so it has readers. Optional with a "
+                "null default, so the published run manifests that carry no revision "
+                "still validate and no read-side migration is needed (section 11)."
             ),
         ),
         ChangelogEntry(

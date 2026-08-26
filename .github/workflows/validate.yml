@@ -21,24 +21,33 @@ name: Model validation
 on:
   workflow_dispatch:
     inputs:
+      # Every candidate field is empty by default and falls back to the model
+      # `config/idhazh.json` names, so no model ref is written in this file
+      # (Rule #6). A dispatch that leaves them empty re-qualifies the incumbent,
+      # which is a coherent run rather than a broken one. Qualifying a NEW model
+      # means filling them in; the values for the model under adoption are in
+      # docs/reference/measurements.md, which is where a target is declared.
       candidate_repo:
-        description: 'Hugging Face GGUF repository for the candidate'
-        default: 'unsloth/Qwen3.5-9B-GGUF'
+        description: 'Hugging Face GGUF repository. Empty = the configured summarizer.'
+        default: ''
       candidate_revision:
         description: 'Immutable repository revision. A branch name is not a pin.'
-        default: '3885219b6810b007914f3a7950a8d1b469d598a5'
+        default: ''
       candidate_file:
-        description: 'GGUF filename'
-        default: 'Qwen3.5-9B-Q4_K_M.gguf'
+        description: 'GGUF filename. Empty = the configured summarizer.'
+        default: ''
       candidate_id:
         description: 'Model id the summaries and the ledger will carry'
-        default: 'qwen3-5-9b-q4-k-m'
+        default: ''
+      candidate_quantisation:
+        description: 'Quantisation the ledger will carry'
+        default: ''
       candidate_sha256:
         description: 'SHA-256 the adoption target declares for those bytes'
-        default: '03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8'
+        default: ''
       candidate_bytes:
-        description: 'Byte count the adoption target declares'
-        default: '5680522464'
+        description: 'Byte count the adoption target declares. 0 = it declares none.'
+        default: '0'
       shards:
         description: 'Capture-and-replay jobs. Each one freezes its own slice.'
         default: '3'
@@ -76,6 +85,12 @@ jobs:
     outputs:
       date: ${{ steps.decide.outputs.date }}
       matrix: ${{ steps.fanout.outputs.matrix }}
+      candidate_repo: ${{ steps.candidate.outputs.repo }}
+      candidate_revision: ${{ steps.candidate.outputs.revision }}
+      candidate_file: ${{ steps.candidate.outputs.file }}
+      candidate_id: ${{ steps.candidate.outputs.id }}
+      candidate_quantisation: ${{ steps.candidate.outputs.quantisation }}
+      candidate_sha256: ${{ steps.candidate.outputs.sha256 }}
     steps:
       - uses: actions/checkout@v6
 
@@ -90,6 +105,39 @@ jobs:
 
       - id: decide
         run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      # One place decides what the candidate is: the dispatch input where one
+      # was given, `models.summarize` from config otherwise. Every job below
+      # reads the answer from here rather than repeating that fallback at each
+      # use site, which is what keeps the two from disagreeing.
+      #
+      # The inputs arrive through `env` and not through an expression pasted
+      # into the program, and each value is asserted to be one bare word here -
+      # downstream they are substituted straight into shell commands and into a
+      # download URL, and nothing after this point can catch a value carrying a
+      # space, a quote or a newline.
+      - id: candidate
+        env:
+          CANDIDATE_REPO: ${{ inputs.candidate_repo }}
+          CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
+          CANDIDATE_FILE: ${{ inputs.candidate_file }}
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          CANDIDATE_QUANTISATION: ${{ inputs.candidate_quantisation }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+
+          config = json.load(open("config/idhazh.json", encoding="utf-8"))
+          configured = config["models"]["summarize"]
+          for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
+              value = os.environ.get(f"CANDIDATE_{field.upper()}", "").strip()
+              value = value or configured.get(field) or ""
+              if value.split() != [value]:
+                  raise SystemExit(f"candidate {field} is empty or not one word")
+              print(f"{field}={value}")
+          PY
 
       - id: fanout
         run: |
@@ -157,16 +205,18 @@ jobs:
               "id": os.environ["CANDIDATE_ID"],
               "quantisation": os.environ["CANDIDATE_QUANT"],
               "repo": os.environ["CANDIDATE_REPO"],
+              "revision": os.environ["CANDIDATE_REVISION"],
               "sha256": os.environ["CANDIDATE_SHA256"],
           }
           path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
           PY
         env:
-          CANDIDATE_FILE: ${{ inputs.candidate_file }}
-          CANDIDATE_ID: ${{ inputs.candidate_id }}
-          CANDIDATE_QUANT: Q4_K_M
-          CANDIDATE_REPO: ${{ inputs.candidate_repo }}
-          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+          CANDIDATE_FILE: ${{ needs.plan.outputs.candidate_file }}
+          CANDIDATE_ID: ${{ needs.plan.outputs.candidate_id }}
+          CANDIDATE_QUANT: ${{ needs.plan.outputs.candidate_quantisation }}
+          CANDIDATE_REPO: ${{ needs.plan.outputs.candidate_repo }}
+          CANDIDATE_REVISION: ${{ needs.plan.outputs.candidate_revision }}
+          CANDIDATE_SHA256: ${{ needs.plan.outputs.candidate_sha256 }}
 
       # Keyed on the candidate bytes, not on its filename: two builds of one
       # model share a name, and a key that cannot tell them apart serves the
@@ -179,7 +229,7 @@ jobs:
           path: |
             backend/models
             backend/bin
-          key: qualify-${{ inputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+          key: qualify-${{ needs.plan.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
 
       - name: Fetch the runtime and the candidate
         if: steps.weights.outputs.cache-hit != 'true'
@@ -204,12 +254,12 @@ jobs:
           SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
           cp -a "$SRC"/. backend/bin/
           chmod +x backend/bin/llama-server
-          # An immutable revision in the path, never `resolve/main`. A branch
+          # An immutable revision in the path, never a branch name. A branch
           # moves, and a candidate nobody can fetch again is a candidate nobody
           # can reproduce.
           curl -fsSL --retry 3 --retry-all-errors \
-            -o "backend/models/${{ inputs.candidate_file }}" \
-            "https://huggingface.co/${{ inputs.candidate_repo }}/resolve/${{ inputs.candidate_revision }}/${{ inputs.candidate_file }}?download=true"
+            -o "backend/models/${{ needs.plan.outputs.candidate_file }}" \
+            "https://huggingface.co/${{ needs.plan.outputs.candidate_repo }}/resolve/${{ needs.plan.outputs.candidate_revision }}/${{ needs.plan.outputs.candidate_file }}?download=true"
 
       # No `if:`. This runs on a cache hit too, because a restored entry is the
       # one case where nobody watched the bytes arrive. It sits before the
@@ -218,10 +268,15 @@ jobs:
       - name: Verify the candidate bytes
         run: |
           set -euo pipefail
-          WEIGHTS="backend/models/${{ inputs.candidate_file }}"
-          echo "${{ inputs.candidate_sha256 }}  ${WEIGHTS}" | sha256sum --check
+          WEIGHTS="backend/models/${{ needs.plan.outputs.candidate_file }}"
+          echo "${{ needs.plan.outputs.candidate_sha256 }}  ${WEIGHTS}" | sha256sum --check
           OBSERVED=$(stat -c %s "$WEIGHTS")
-          if [ "$OBSERVED" != "${{ inputs.candidate_bytes }}" ]; then
+          # A byte count the target declares is a cross-check of the DOCUMENT,
+          # not of the file - sha256 above already settles the bytes. Zero means
+          # no target declares one, which is what a dispatch that qualifies the
+          # configured model gets.
+          if [ "${{ inputs.candidate_bytes }}" != "0" ] \
+            && [ "$OBSERVED" != "${{ inputs.candidate_bytes }}" ]; then
             echo "candidate is ${OBSERVED} bytes; the target declares ${{ inputs.candidate_bytes }}" >&2
             exit 1
           fi
@@ -233,8 +288,8 @@ jobs:
           mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py \
             --config backend/var/candidate-config \
             --binary backend/bin/llama-server \
-            --weights "backend/models/${{ inputs.candidate_file }}" \
-            --alias "${{ inputs.candidate_id }}" \
+            --weights "backend/models/${{ needs.plan.outputs.candidate_file }}" \
+            --alias "${{ needs.plan.outputs.candidate_id }}" \
             --format nul)
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
           echo "$!" > llama-server.pid
@@ -252,8 +307,8 @@ jobs:
             exit 1
           }
           SERVED=$(curl -sf http://127.0.0.1:8080/v1/models | jq -r '.data[0].id')
-          if [ "$SERVED" != "${{ inputs.candidate_id }}" ]; then
-            echo "the server answers to ${SERVED}, not ${{ inputs.candidate_id }}" >&2
+          if [ "$SERVED" != "${{ needs.plan.outputs.candidate_id }}" ]; then
+            echo "the server answers to ${SERVED}, not ${{ needs.plan.outputs.candidate_id }}" >&2
             exit 1
           fi
 
@@ -275,9 +330,9 @@ jobs:
             --shards "${{ fromJSON(inputs.shards) }}" \
             --repeats "${{ fromJSON(inputs.repeats) }}" \
             --corpus-per-shard "${{ fromJSON(inputs.corpus_per_shard) }}" \
-            --candidate-revision "${{ inputs.candidate_revision }}" \
+            --candidate-revision "${{ needs.plan.outputs.candidate_revision }}" \
             --candidate-bytes "${{ fromJSON(inputs.candidate_bytes) }}" \
-            --weights "backend/models/${{ inputs.candidate_file }}" \
+            --weights "backend/models/${{ needs.plan.outputs.candidate_file }}" \
             --commit "${GITHUB_SHA}" \
             --runner ubuntu-latest
 
@@ -334,7 +389,7 @@ jobs:
 
       - name: Commit the validation ledger
         env:
-          COMMIT_MESSAGE: "qualify: ${{ inputs.candidate_id }} ${{ needs.plan.outputs.date }}"
+          COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"
           NOTHING_STAGED_MESSAGE: "the gates wrote no ledger row"
           PUSH_FAILED_MESSAGE: "could not push the validation ledger after three attempts"
         run: bash .github/scripts/commit-and-push.sh state

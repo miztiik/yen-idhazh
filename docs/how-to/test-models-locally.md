@@ -54,11 +54,17 @@ A number from another build is a separate measurement.
 
 **The weights.**
 
+Every URL names a commit rather than a branch. A branch hands back whatever was
+uploaded last, so a download from one is not the file `config/idhazh.json`
+records the SHA-256 of. Both commits below are `models.route.revision` and
+`models.summarize.revision` in that file - copy them from there rather than from
+here, because there they are the values the pipeline itself fetches.
+
 ```bash
 curl -L -o backend/models/Qwen3-8B-Q4_K_M.gguf \
-  "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf?download=true"
+  "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/7c41481f57cb95916b40956ab2f0b139b296d974/Qwen3-8B-Q4_K_M.gguf?download=true"
 curl -L -o backend/models/Qwen3-4B-Q4_K_M.gguf \
-  "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf?download=true"
+  "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf?download=true"
 ```
 
 4.7 GB and 2.4 GB. Measured on a runner 2026-08-22: 180 s and 32 s to download.
@@ -67,7 +73,7 @@ To compare the Qwen3.5 candidate against the configured summarizer, add:
 
 ```bash
 curl -L -o backend/models/Qwen3.5-9B-Q4_K_M.gguf \
-  "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/main/Qwen3.5-9B-Q4_K_M.gguf?download=true"
+  "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf?download=true"
 ```
 
 That file is 5.29 GiB. It took 118 s to download on `ubuntu-latest` on
@@ -294,9 +300,13 @@ paths and prints one result per model and thread count:
 
 ```bash
 python backend/utilities/measure_llm.py \
-  --models "Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf,unsloth/Qwen3.5-9B-GGUF:Qwen3.5-9B-Q4_K_M.gguf" \
+  --models "Qwen/Qwen3-8B-GGUF@7c41481f57cb95916b40956ab2f0b139b296d974:Qwen3-8B-Q4_K_M.gguf,unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf" \
   --threads "1,2,4,8"
 ```
+
+A reference is `repository@commit:file`, and the commit is required. The utility
+reads the file listing at that commit and downloads from it, so two runs of one
+reference always compare the same bytes.
 
 On Windows, use `.venv\Scripts\python.exe` if `python` is not the project
 interpreter. On Linux, set `LD_LIBRARY_PATH=backend/bin` if the prebuilt runtime
@@ -332,9 +342,13 @@ Run the hosted sweep after this workflow version is on the default branch:
 ```bash
 gh workflow run measure.yml \
   -f target=llm \
-  -f models='Qwen/Qwen3-8B-GGUF:Qwen3-8B-Q4_K_M.gguf' \
+  -f models='Qwen/Qwen3-8B-GGUF@7c41481f57cb95916b40956ab2f0b139b296d974:Qwen3-8B-Q4_K_M.gguf' \
   -f threads='4,8'
 ```
+
+Leave `models` out and the job measures both models `config/idhazh.json` names,
+at the commits it pins. The input exists for a model config does not name, which
+is what this harness is for; nothing in the workflow file names a model itself.
 
 The LLM job downloads only that model, runs both thread counts and uploads
 `hardware.txt`, `weights.txt`, `resources.json` and `llm.json` in the

@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-26
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -35,6 +35,58 @@ Live counts measured 2026-08-22 by fetching and parsing every configured feed. A
 **There is no per-vertical daily cap and no daily item ceiling.** How many items a vertical publishes is decided by supply, by the score, and by `max_per_source`. See [freshness.md](freshness.md).
 
 **Lenses** are a closed vocabulary of cross-cutting tags. **Events** are a closed vocabulary of what happened to an item - a release, a deal, an acquisition, a funding round, a capital commitment, results, a regulatory action, research, an incident. Both are enums in the contract, not free-text strings, so a new value is a schema change with a changelog entry rather than a typo waiting to happen ([../contracts/schemas.md](../contracts/schemas.md)).
+
+## Lenses, events and entities are declared and never assigned
+
+Every published item carries `lenses: []`, `events: []` and `entities: []`. Not most items - every item, on every committed day.
+
+Measured 2026-08-26 over the six committed days under `frontend/public/digest/`:
+
+| Day | Items | With a lens | With an event | With an entity |
+| --- | --- | --- | --- | --- |
+| 2026-08-21 | 4 | 0 | 0 | 0 |
+| 2026-08-22 | 10 | 0 | 0 | 0 |
+| 2026-08-23 | 147 | 0 | 0 | 0 |
+| 2026-08-24 | 731 | 0 | 0 | 0 |
+| 2026-08-25 | 724 | 0 | 0 | 0 |
+| 2026-08-26 | 273 | 0 | 0 | 0 |
+| **Total** | **1889** | **0** | **0** | **0** |
+
+The three fields are declared on `Article`, copied onto `DigestItem`, exported to `schemas/article.schema.json` and `schemas/digest-day.schema.json`, and typed in the frontend's payload types. Nothing writes them. The tagging step this page describes was never built.
+
+**Where the value would have been set.** `to_article` in `backend/idhazh/extract.py` builds the only ok article and passes none of the three; `_failed` in the same file does the same for a failed one. All three are declared `default_factory=list` in `backend/idhazh/contracts/article.py`, so leaving them out is legal and silent. `to_digest_item` in `backend/idhazh/assemble.py` then copies the three empty lists onto the published item. No model is involved anywhere: neither `backend/idhazh/prompts/summarize.txt` nor `backend/idhazh/prompts/route.txt` contains the word lens, event or entity.
+
+**The entity half is worse than unwired.** `config/watchlist.json` declares `"entities": []`, so there is no registry to match a name against and the ceiling on items that could gain an entity today is zero, whatever the matcher. `backend/idhazh/cli.py` hands `plan_vertical` a hardcoded empty `watchlist_keys` for the same reason, so `watchlist_bonus` has never moved a score - the watchlist term of the ranking formula below is dead arithmetic. `EntityDef.aliases` is declared in `backend/idhazh/contracts/watchlist.py` and read nowhere, and it is the only name-matching surface any config contract has.
+
+**The vocabulary would fire, and the match rule is the whole design.** Measured 2026-08-26 over our own published title, summary and key points - our words, never fetched text. A word-boundary match on the words inside each lens id hits 167 of 1889 items, 8.8 percent: `china` 94, `markets` 69, `cyber` 11, `ai-roi` 2. The same match for an event id as a word hits 438 items, 23.2 percent, led by `research` 179 and `incident` 72.
+
+Those are floors, not proposals - they read the summary rather than the article, and the terms are the ids themselves rather than a curated list. What matters more is how far the count moves when the rule moves. Five plausible rules over the identical corpus:
+
+| Match rule | Items with a lens | Share |
+| --- | --- | --- |
+| Word-boundary on the id's words, ignoring words of 2 letters or fewer | 167 | 8.8 percent |
+| Substring on the same words | 200 | 10.6 percent |
+| Substring on the display name | 189 | 10.0 percent |
+| Substring on `market` rather than `markets` | 335 | 17.7 percent |
+| Substring on every word in the id, `ai` included | 1666 | 88.2 percent |
+
+The last row is the finding. Dropping the two-letter guard makes `ai-roi` match 1648 items, because `ai` is a substring of `said`, `remains` and `chair`. One unstated choice moves the answer by a factor of ten and turns a filter into noise. **The vocabulary is not the problem and the wiring is not the whole problem: the match rule is a curated artifact, and it has nowhere to live today.** That is what makes this a config-shape change rather than a missing function call.
+
+**What it costs.** Nothing a reader sees today, because lenses and events were already kept off the topic pill row ([../publishing/frontend.md](../publishing/frontend.md)). It costs the retrieval eval its free query tier, which builds queries from entity slugs carried by three or more items and therefore builds none. And it costs this page its own claim: eight index entries per fetch is one index entry today, the vertical.
+
+### Why this is a design consultation and not a defect fix
+
+Assigning a tag needs a rule, and no config contract has anywhere to put one. `LensDef` carries `id`, `display_name` and a lifecycle; `EventDef` carries `id` and `display_name`. The measured spread above says the rule cannot be derived from the id, so it has to be written down, and writing it down changes a persisted config shape and pulls in `CLAUDE.md` section 11. That alone makes it Level 5 (section 6, "a persisted contract") before the rest is counted: the matcher and its tests, the wiring commit, a curated watchlist, and the `watchlist_keys` wiring - which is a live ranking change, because a bonus that starts firing reorders every future day.
+
+**How it runs is settled. Where it runs is not.** Four places agree the tagger is deterministic, uses no model and costs no extra request: this page's own definition, `LensId` in `backend/idhazh/contracts/taxonomy.py` ("a question asked of items already collected"), Fowler's recorded ruling 1 in the plan-doc, and that plan-doc's stage diagram, which marks the plan job "(no model)". Nothing in the repository proposes asking a model.
+
+The site is the open question, and the two candidates carry different contract costs. This page says "a tag, applied after the fetch", which puts the matcher on sanitized article text at Extract, where `Article` already holds the three fields and nothing new is persisted. The stage diagram says "rank + tag lens/entity" inside the plan job, which runs on the feed title alone before a byte is fetched, and would need three new fields on `PlannedItem` - making `run-plan` a second persisted contract to version. Picking one is the owner's call and is not settled here.
+
+Whichever is chosen, one boundary rule holds. A matcher that reads article text reads a stranger's page, so it runs after `sanitize` and it may only ever emit a member of a closed enum ([trust-boundary.md](trust-boundary.md), Rule #11). A hostile page can then win itself a tag we already publish. It can never invent one, and it never reaches a prompt.
+
+**There is a third outcome, and it is cheaper than either.** Fowler, consulted 2026-08-26: before asking how to build the tagger, ask whether the surface should exist. Three fields, two schemas, a frontend type and a config vocabulary are rent paid every day by a feature with no reader-facing consumer today. The consultation therefore weighs three options, not two - tag at Extract, tag in the plan job, or delete the three dimensions and their vocabularies and stop paying. Deleting is itself a breaking contract change needing a read-side migration (section 11), so it is the same class of work; it is not the cheap way out, only the honest third choice.
+
+Filed as defect 16 in [`../../../TODO/20260823-known-defects-plan.md`](../../../TODO/20260823-known-defects-plan.md).
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 
@@ -158,6 +210,7 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | Raising the faithfulness threshold to keep affiliate pages out | They are faithful. Short declarative marketing prose is trivially entailed, so every cut that excludes them excludes real reporting first, and the bar rewards the source it should reject. |
 | Retiring `cnn-world` over the syndicated affiliate pages | It is a working feed carrying real reporting. Retiring a whole source over three items it passed through costs the vertical a desk to fix a link filter. |
 | Blocking `fool.com` entirely | The publisher's editorial arm has not been observed to fail. The measured cut is the affiliate section, and nothing wider has been measured. |
+| Asking the summarizer for the lens, event and entity tags | A tag decides what a reader is shown under a filter, so a page that picks its own tags writes its own index entry - fetched text steering a control (Rule #11). It also adds decode tokens to the one stage that already dominates the run. A deterministic matcher costs no model time and returns the same answer on every re-run, which is the property the rest of this page's arithmetic already has. Andre, consulted 2026-08-26. |
 | A per-feed weight only, with no tier | The tier is the reusable half: it is a fact about a kind of source, and a new feed inherits it without anyone inventing a number. |
 | Keeping the flat floor of twenty-five and leaving two verticals unpublished | The floor would then be measuring the borrowed constant, not the health of the desk. Two verticals stay dark for a reason that does not survive being stated. |
 | Dropping the floor to whatever the thinnest vertical reached | That is tuning the target to the result with no rule behind it, and the floor stops being able to fail. |

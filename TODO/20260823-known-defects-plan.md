@@ -2,18 +2,19 @@
 
 **Last Updated**: 2026-08-26
 
-Sixteen defects found while shipping and re-reading the freshness, identity,
-health and evaluation work, plus the console charts. None was in the scope that
-found it. Defects 11 and 12 were found by running the gates and by opening the
-published day in a browser, not by reading code; 13 and 14 the same way, 15 by
-redrawing a chart that had to work around it, and 16 by asking what could ever
-make the new embeddings merge rule fire.
+Seventeen defects found while shipping and re-reading the freshness, identity,
+health and evaluation work, plus the console charts and the retrieval eval. None
+was in the scope that found it. Defects 11 and 12 were found by running the gates
+and by opening the published day in a browser, not by reading code; 13 and 14 the
+same way, 15 by redrawing a chart that had to work around it, 16 by asking what
+could ever make the new embeddings merge rule fire, and 17 by a query generator
+that returned nothing.
 
 **Twelve are closed.** Defect 8 is closed on the item copy and on the day's band
-bar. **Three are open.** Defect 2 has its instrument built and is waiting on
-human labels and calendar time, which no amount of engineering closes. Defect 15
-costs a reader nothing today, so it was filed rather than fixed. Defect 16 is a
-question for a person, not a task for an agent, so it is recorded and left.
+bar. **Four are open.** Defect 2 has its instrument built and is waiting on human
+labels and calendar time, which no amount of engineering closes. Defect 15 costs
+a reader nothing today, so it was filed rather than fixed. Defects 16 and 17 are
+both Level 5 and belong to the owner.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -36,6 +37,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | FIXED - 2026-08-25 |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 4 | **OPEN - no reader-facing symptom** |
 | 16 | The published item carries revision machinery no run can trigger | 5 | **OPEN - a decision, not a task** |
+| 17 | Three declared taxonomy dimensions are empty on every published item | 5 | **OPEN - design consultation** |
 
 ## 16 - The published item carries revision machinery no run can trigger (OPEN)
 
@@ -244,6 +246,95 @@ plus the rendering paragraph in
 Four files and structural: it changes how absence travels, not one call site.
 Not Level 5 - no persisted contract moves and no reader-facing promise moves.
 Not Level 3 - every consumer reads that shape, so it is not a local fix.
+
+## 17 - Three declared taxonomy dimensions are empty on every published item (OPEN)
+
+Found 2026-08-26 while building the retrieval eval. Its free query tier builds
+queries from entity slugs carried by three or more items, and it built none.
+
+**Measured over the committed payloads**, all six days under
+`frontend/public/digest/`: 1889 items, and 0 of them carry a non-empty `lenses`,
+`events` or `entities`. Per day - 2026-08-21: 4 items, 2026-08-22: 10,
+2026-08-23: 147, 2026-08-24: 731, 2026-08-25: 724, 2026-08-26: 273. Every column
+is zero on every row. The keys are present on each item as empty arrays, so the
+shape ships and only the values are missing.
+
+**Nothing writes them, and nothing ever did.** `to_article` in
+`backend/idhazh/extract.py` builds the only ok article and passes none of the
+three; `_failed` in the same file does the same for a failed one. All three are
+declared `default_factory=list` in `backend/idhazh/contracts/article.py`, so the
+omission is legal and silent. `to_digest_item` in `backend/idhazh/assemble.py`
+then copies the empty lists onto the published item. No prompt is involved:
+neither file in `backend/idhazh/prompts/` contains the word lens, event or
+entity. This is an unbuilt feature, not a regression.
+
+**Two more dead wires found on the same trail.** `config/watchlist.json` declares
+`"entities": []`, so the ceiling on items that could gain an entity is zero
+whatever the matcher. `backend/idhazh/cli.py` hands `plan_vertical` a hardcoded
+empty `watchlist_keys`, so `watchlist_bonus` has never moved a score - the
+watchlist term of the ranking formula is dead arithmetic, and `PlannedItem`
+persists a `watchlist_hit` field that is always false. `EntityDef.aliases` is
+declared in `backend/idhazh/contracts/watchlist.py` and read nowhere.
+
+**The vocabulary would fire, but the match rule is the design.** Measured
+2026-08-26 over our own published title, summary and key points. A word-boundary
+match on the words inside each lens id hits 167 of 1889 items, 8.8 percent -
+`china` 94, `markets` 69, `cyber` 11, `ai-roi` 2. An event id as a word hits 438
+items, 23.2 percent. Both are floors, not proposals.
+
+The spread matters more than either number. Substring instead of word-boundary
+gives 200 items; matching `market` instead of `markets` gives 335, 17.7 percent;
+and dropping the two-letter guard so `ai-roi` may match on `ai` gives 1666 items,
+88.2 percent, because `ai` sits inside `said` and `remains`. One unstated choice
+moves the answer tenfold and turns a filter into noise. The rule is a curated
+artifact, and it has nowhere to live in config today.
+
+**Level 5** (CLAUDE.md section 6). Assigning a tag needs a rule, and no config
+contract has anywhere to put one: `LensDef` carries `id`, `display_name` and a
+lifecycle, `EventDef` carries `id` and `display_name`. The measured spread says
+the rule cannot be derived from the id, so it must be written down, and writing
+it down changes a persisted config shape and pulls in section 11. Beyond that the
+work is a matcher plus tests, a wiring commit, a curated watchlist, and the
+`watchlist_keys` wiring - and that last one reorders every future day, because a
+0.5 bonus that starts firing is a live ranking change.
+
+**How it runs is settled; where it runs is not.** Four places agree the tagger is
+deterministic, uses no model and costs no extra request: `discovery.md`, the
+`LensId` docstring in `backend/idhazh/contracts/taxonomy.py`, Fowler's recorded
+ruling 1 in [`20260815-digest-pipeline-plan.md`](20260815-digest-pipeline-plan.md),
+and that same plan-doc's stage diagram, which marks the plan job "(no model)".
+Nothing in the repository proposes asking a model.
+
+The site is the open question and the two candidates cost different contracts.
+[`docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md)
+says "a tag, applied after the fetch", which puts the matcher on sanitized
+article text at Extract, where `Article` already holds the fields and nothing new
+is persisted. The stage diagram says "rank + tag lens/entity" inside the plan job,
+which sees the feed title alone and would need three new fields on `PlannedItem`,
+making `run-plan` a second contract to version. Picking one is the consultation
+this row waits on.
+
+Andre, consulted 2026-08-26, ruled out the third option: do not ask the
+summarizer for the tags. A tag decides what a reader is shown under a filter, so
+a page picking its own tags is fetched text steering a control (Rule #11), and it
+adds decode tokens to the stage that already dominates the run. Whichever
+deterministic site is chosen, the matcher runs after `sanitize` and may only emit
+a member of a closed enum - a hostile page can then win a tag we already publish,
+and can never invent one.
+
+Fowler, consulted 2026-08-26, added a third outcome. Before asking how to build
+the tagger, ask whether the surface should exist: three fields, two schemas, a
+frontend type and two vocabularies are rent paid daily by a feature with no
+reader-facing consumer today. So the consultation weighs three options - tag at
+Extract, tag in the plan job, or delete the dimensions. Deleting is also a
+breaking change needing a read-side migration, so it is the same class of work,
+not the cheap way out.
+
+Diagnosis recorded in
+[`docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md),
+with the measured zero also noted on
+[`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md),
+which had called the same controls "mostly-zero".
 
 ## 2 - The faithfulness thresholds have no labelled error rate (INSTRUMENT BUILT)
 
