@@ -17,6 +17,10 @@ import { join, relative, resolve, sep } from 'node:path';
  * when the pipeline publishes, and it costs one pass over bytes already on
  * disk.
  *
+ * What a count of markers cannot see, `scripts/bundle-gate.mjs` bounds: it holds
+ * every page that renders no day under a ceiling in `config/idhazh.json`,
+ * `/archive/` included.
+ *
  * Runs in Node rather than in a page, like the arithmetic tests in
  * `frame.spec.ts`. It reads the build the preview server is about to serve.
  */
