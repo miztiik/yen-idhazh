@@ -17,7 +17,6 @@ export function load() {
 	return {
 		ui: uiConfig(),
 		latest,
-		day,
 		footer: day
 			? {
 					date: day.date,

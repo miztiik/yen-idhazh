@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -17,6 +17,10 @@ Three consequences, and each one removes a whole class of problem:
 - **A payload that fails its contract fails the build.** What would have been a runtime error a reader discovers becomes a build error nobody ships.
 
 The loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives.
+
+**Whatever the root layout's load returns is inlined into every page beneath it**, so the root layout returns the four facts the footer prints and never the day they were read from. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB.
+
+[frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. `/archive/` is the single exclusion, because it inlines every committed day on purpose to feed the on-device search, and a second assertion fails on the day that stops being true - so the exclusion cannot outlive its reason.
 
 | State | When | What ships |
 | --- | --- | --- |
