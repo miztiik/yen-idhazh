@@ -44,6 +44,7 @@ from idhazh import (
     retention,
     route,
     summarize,
+    tag,
     telemetry,
 )
 from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, RunConfig
@@ -645,6 +646,7 @@ def _fetch_one(
     article = extract.to_article(
         item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
     )
+    article = tag.tagged(article, taxonomy=settings.taxonomy)
     return article, fetch_ms, int((time.monotonic() - started) * 1000)
 
 

@@ -12,9 +12,9 @@ renaming what a reader sees never orphans a payload written under the old label.
 from __future__ import annotations
 
 from enum import IntEnum, StrEnum
-from typing import ClassVar, Self
+from typing import Annotated, ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, Contract, DateStamp, Model, Slug
 
@@ -75,6 +75,18 @@ class EventType(StrEnum):
     INCIDENT = "incident"
 
 
+MatchTerm = Annotated[
+    str, StringConstraints(pattern=r"^[A-Za-z0-9][A-Za-z0-9 '/&.-]*$", min_length=2)
+]
+"""One curated phrase that assigns a tag.
+
+At least two characters, because a one-character term matches most English
+prose. Punctuation is dropped before the comparison, so `ai-roi`, `AI/ROI` and
+`AI ROI` are the same term - the pattern exists to keep a term readable in
+config, not to define the match.
+"""
+
+
 class Lifecycled(Model):
     """Anything that can be drafted, published and later retired."""
 
@@ -105,11 +117,25 @@ class VerticalDef(Lifecycled):
 class LensDef(Lifecycled):
     id: LensId
     display_name: str = Field(min_length=1)
+    keywords: list[MatchTerm] = Field(
+        default_factory=list,
+        description=(
+            "The curated terms that assign this lens. A lens is assigned when one of "
+            "them appears in the item's words as a whole-word phrase, case-folded. "
+            "Nothing is derived from the id or the display name: deriving from the id "
+            "was measured at 88.2 percent of items, because `ai` sits inside `said`. "
+            "An empty list means the lens is never assigned."
+        ),
+    )
 
 
 class EventDef(Model):
     id: EventType
     display_name: str = Field(min_length=1)
+    keywords: list[MatchTerm] = Field(
+        default_factory=list,
+        description="The curated terms that assign this event. Same rule as LensDef.keywords.",
+    )
 
 
 class Taxonomy(Contract):
@@ -117,6 +143,18 @@ class Taxonomy(Contract):
 
     __schema_stem__: ClassVar[str] = "taxonomy"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26",
+            change="Added keywords to LensDef and EventDef.",
+            why=(
+                "Both vocabularies shipped with no way to say what assigns a tag, so "
+                "nothing ever did: 0 of 2,121 committed items carried a lens or an event. "
+                "The rule cannot be derived from the id - measured, deriving it tags 88.2 "
+                "percent of items because `ai` sits inside `said` - so it has to be "
+                "written down. Additive with an empty default, so a taxonomy written "
+                "before this still validates and simply assigns nothing."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22T11:00",
             change="Removed VerticalDef.daily_cap.",
@@ -154,3 +192,14 @@ class Taxonomy(Contract):
 
     def vertical(self, vertical_id: str) -> VerticalDef | None:
         return next((item for item in self.verticals if item.id == vertical_id), None)
+
+    def lens_terms(self) -> dict[LensId, list[str]]:
+        """The lens match surface. A retired lens keeps its tombstone and stops matching."""
+        return {
+            lens.id: lens.keywords
+            for lens in self.lenses
+            if lens.status is not LifecycleStatus.RETIRED
+        }
+
+    def event_terms(self) -> dict[EventType, list[str]]:
+        return {event.id: event.keywords for event in self.events}
