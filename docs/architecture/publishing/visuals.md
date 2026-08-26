@@ -1,6 +1,6 @@
 # Visual routing and rendering
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 How an item gets a chart, a diagram, or - most of the time - nothing at all.
 
@@ -152,6 +152,49 @@ argued after it is seen.
 routing reply asked for a chart, whatever the decision became, so the gap between it and the day's
 published charts is exactly what the two controls below rejected. Without it a model that stops
 asking for charts and checks that start refusing them are the same number.
+
+## Where the kill line is read from
+
+The console carries a `Charts` table, one row per published day, newest first. It is the surface the
+kill line is read off, and it is for the operator: nothing about chart economics reaches the digest
+page a reader sees. Seven columns:
+
+| Column | Read from |
+| --- | --- |
+| Day | The published date. |
+| Reached | `items_routed + items_prefiltered`, summed over the day's runs. |
+| Asked the model | `items_routed`, summed over the day's runs. |
+| Charts drafted | `charts_drafted`, summed over the day's runs. |
+| Charts published | The day's `digest.json`: items whose `visual` is a `chart` in state `rendered`. |
+| Router minutes | `route_ms` summed over the runs that recorded one, in minutes. |
+| Minutes per chart | Router minutes divided by charts published. |
+
+The two gaps are the point. Reached against asked is the reachability gate above, running before any
+request. Drafted against published is the two post-model controls. A single funnel of bars would
+make the last stage the shortest and hardest to read, and the last stage is where the decision sits -
+so it is a table.
+
+**A number that does not exist prints a dash, never a zero.** A day whose route job never ran
+reached zero items, which is a measurement and prints as `0`. It spent no measured minutes, which is
+not the same as spending none - `route_ms` is null on that manifest, and `0.0` there would read as a
+router that was free. A day with no published chart has no per-chart cost, so that cell is a dash
+too rather than an infinity or a zero.
+
+**Zero reached and a day older than the counts read the same, on purpose.** `items_routed`,
+`items_prefiltered` and `charts_drafted` all default to zero on a manifest written before they
+existed, so a day from before 2026-08-24 prints zero reached beside the charts it really published.
+That is the honest reading: nothing committed says what its router did. It also means a day before
+the counts existed cannot enter the kill line's fourteen-day window, which is correct - the window
+starts when the chart-only gate went on, and the gate and the counts landed together.
+
+**No rate is stored.** `Minutes per chart` is two committed numbers divided at read time. A
+persisted rate is a third fact that can disagree with the two it came from, and the console's whole
+claim is that every figure on it was written down when the run happened.
+
+**Charts published is counted from the payload, not from the manifest.** The manifest records what
+the router decided; the payload records what a reader can see. A chart whose render failed, and a
+diagram, are both visuals and neither is a published chart - counting visuals instead would put the
+diagram arm's output on the chart arm's bill.
 
 ## Two controls that run after the model has answered
 
@@ -338,6 +381,8 @@ bound by design instead of by which host it drew (Rule #2).
 
 | Option | Why rejected |
 | --- | --- |
+| A funnel of bars for the four chart counts on the console | The stages fall by an order of magnitude - 88 reached, 47 asked, 17 drafted, 9 published on 2026-08-25 - so the bar the decision rests on is the one a reader can barely see. A table gives every stage the same weight. |
+| A model filter or a model legend on the console Charts table | A filter over two values hides half the data and saves nobody any work. When a second model has run enough days to compare, the ledger it is read from has to be truthful first. |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
 | Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
 | Shard the `route` job across a matrix | Still the strongest remaining lever, and still blocked on the same thing. Asset filenames come from a per-vertical counter seeded by reading the day's directory, so four shards would each read the same highest ordinal and two would write `energy-01.svg` - the exact collision fixed on 2026-08-24, reintroduced fourfold. The 2026-08-25 renumbering does not unblock it: that runs once, at the commit step, against paths the tip already publishes, and four shards collide inside one run when their artifacts unpack over each other - long before any commit, and silently. Sharding needs the published asset path to come from the item's own identity first, and that is a published-payload change. Take the budget stop now, measure again, shard if a day still cannot finish. |

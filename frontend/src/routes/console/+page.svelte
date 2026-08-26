@@ -1,11 +1,12 @@
 <script lang="ts">
 	/** The operator's page. Not a reader's.
 	 *
-	 * It answers four questions and refuses to answer any others: did the runs
-	 * work, which feeds are broken, how long each stage took, and how big the
-	 * site is getting. Every number is read from the committed ledger - nothing
-	 * here is derived at read time, which is what stops today's code quietly
-	 * restating yesterday's figures.
+	 * It answers five questions and refuses to answer any others: did the runs
+	 * work, which feeds are broken, how long each stage took, how big the site is
+	 * getting, and whether the chart arm earns its router minutes. Every count is
+	 * read from the committed ledger. The only arithmetic is one committed count
+	 * divided by another, and that is deliberate: a stored rate can disagree with
+	 * the counts printed beside it.
 	 *
 	 * The run grid stays static. The telemetry viewport and the timing trend are
 	 * hand-written SVG, so the console still reads with JavaScript off.
@@ -60,6 +61,16 @@
 
 	function mb(bytes: number): string {
 		return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	}
+
+	/** A minute count, or a dash where there is no number to print.
+	 *
+	 * Null means nothing was measured. Printing that as `0.0` would say the
+	 * router was free, and printing a per-chart cost of infinity on a day with no
+	 * chart would say it was ruinous. Both are answers to a question nobody asked.
+	 */
+	function minutes(value: number | null): string {
+		return value === null ? '-' : value.toFixed(1);
 	}
 </script>
 
@@ -285,6 +296,55 @@
 							<td class="py-2 text-end tabular-nums">{run.failed}</td>
 							<td class="py-2 text-end tabular-nums">{mb(run.siteBytes)}</td>
 							<td class="py-2 text-end tabular-nums">{run.siteFiles}</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
+
+	{#if data.charts.length > 0}
+		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Charts</h2>
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+			What the router cost and what it published, one row per day, newest first. Reached is every
+			item the router looked at. Asked the model is the part it sent a request for: an item whose
+			own numbers cannot fill a chart is answered without one. Charts drafted is what the model
+			asked for, and charts published is what survived the checks that run after it answers. A
+			dash means no router time was written down, so there is no rate to divide, and zero
+			reached means nothing committed says what the router did - it never ran, or its manifest
+			is older than these counts. Over 14 days with the chart-only gate on, the arm is retired
+			if the median day spends more than 6 router minutes per published chart, or puts a chart
+			on fewer than 5% of the items it published.
+		</p>
+		<div class="mt-3 overflow-x-auto" data-charts="table">
+			<table class="w-full text-[0.8125rem]">
+				<thead class="text-text-tertiary">
+					<tr class="border-b border-rule">
+						<th class="py-2 text-start font-normal">Day</th>
+						<th class="py-2 text-end font-normal">Reached</th>
+						<th class="py-2 text-end font-normal">Asked the model</th>
+						<th class="py-2 text-end font-normal">Charts drafted</th>
+						<th class="py-2 text-end font-normal">Charts published</th>
+						<th class="py-2 text-end font-normal">Router minutes</th>
+						<th class="py-2 text-end font-normal">Minutes per chart</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.charts as day (day.date)}
+						<tr class="border-b border-rule" data-chart-day={day.date}>
+							<td class="py-2">{day.date}</td>
+							<td class="py-2 text-end tabular-nums" data-charts-cell="reached">{day.reached}</td>
+							<td class="py-2 text-end tabular-nums" data-charts-cell="asked">{day.asked}</td>
+							<td class="py-2 text-end tabular-nums" data-charts-cell="drafted">{day.drafted}</td>
+							<td class="py-2 text-end tabular-nums" data-charts-cell="published"
+								>{day.published}</td
+							>
+							<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
+								>{minutes(day.routerMinutes)}</td
+							>
+							<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
+								>{minutes(day.minutesPerChart)}</td
+							>
 						</tr>
 					{/each}
 				</tbody>

@@ -30,9 +30,9 @@
       "why": "Runtime and shell plus the date-index route, now carrying the encoder guard: the archive refuses a day whose vectors name a different encoder, which costs the identifier, the version, the width and the comparison that reads them (+103 B on 2026-08-26). It still carries no reader item chunk, because the archive lists days rather than stories."
     },
     "/console/": {
-      "bytes": 64438,
-      "measured": "2026-08-25",
-      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them, now including the stage-timing decade axis that replaced the shared linear one - its decade list, its minor stubs, and the run splitting that draws a zero as a gap instead of a plunge to the axis floor (+495 B on 2026-08-25; logAxis itself was already on this route)."
+      "bytes": 64967,
+      "measured": "2026-08-26",
+      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them, the stage-timing decade axis with its minor stubs and its gap-instead-of-plunge run splitting, and now the Charts table that says what the router cost and what it published on each day. The table cost +592 B, measured on 2026-08-26 against the same tree without it: seven columns, a dash-for-no-number formatter, and the row markup Svelte compiles into the route chunk."
     },
     "/evals/": {
       "bytes": 41860,

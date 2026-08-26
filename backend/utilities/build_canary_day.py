@@ -314,6 +314,10 @@ def _record(
     succeeded: int,
     failed: int,
     skipped: int,
+    routed: int = 0,
+    prefiltered: int = 0,
+    charts_drafted: int = 0,
+    route_ms: int | None = None,
 ) -> RunRecord:
     hour = f"{n * 6:02d}"
     return RunRecord(
@@ -339,6 +343,10 @@ def _record(
         items_succeeded=succeeded,
         items_failed=failed,
         items_skipped=skipped,
+        items_routed=routed,
+        items_prefiltered=prefiltered,
+        charts_drafted=charts_drafted,
+        route_ms=route_ms,
         site_bytes=54_230,
         site_files=4,
     )
@@ -351,6 +359,14 @@ def manifest(target: Path, published: int) -> RunManifest:
     added items. Run 2 found nothing new and skipped everything it planned. Run
     3 broke. A fixture that claimed a later run succeeded on items the digest
     does not carry would make the two files disagree about the same day.
+
+    Run 1 also carries the router's own counts, so the console's Charts table
+    has one day with real arithmetic under it and nineteen quiet days with none.
+    They are consistent with the digest too: the router reached all eight
+    published items, posted five and answered three from their own numbers, and
+    of its two chart drafts one is the chart the day publishes. The other died
+    in the checks that run after the model answers, which is the gap the table
+    exists to show.
     """
     day = RunManifest(
         version=RunManifest.schema_version(),
@@ -365,6 +381,10 @@ def manifest(target: Path, published: int) -> RunManifest:
                 succeeded=published,
                 failed=0,
                 skipped=0,
+                routed=5,
+                prefiltered=3,
+                charts_drafted=2,
+                route_ms=264_000,
             ),
             # Amber: nothing was attempted. Every candidate was already published.
             _record(DATE, 2, RunStatus.COMPLETED, planned=4, succeeded=0, failed=0, skipped=4),
