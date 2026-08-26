@@ -10,6 +10,7 @@
  */
 
 import type { DigestDay, DigestEmbeddings, DigestItem } from '$lib/payload/types';
+import { ENCODER_ID } from './encoder';
 
 export interface SearchHit {
 	item: DigestItem;
@@ -47,13 +48,24 @@ export function cosine(left: number[], right: number[]): number {
 
 /** True when a day carries vectors this build knows how to read.
  *
- * The width check is not defensive clutter. A payload written by a future
- * encoder would otherwise be decoded against the wrong dimensionality and
- * produce plausible nonsense rather than an error.
+ * Three checks, and only two of them are about decoding. The width and the
+ * dtype catch a payload this decoder would misread, and a wrong answer there is
+ * loud. The identifier catches the payload it would decode perfectly and still
+ * get wrong: another encoder of the same width and dtype produces vectors of
+ * exactly the right shape in a different space, so every dot product is
+ * meaningless and every score still looks like a score.
+ *
+ * The payload has always carried `model_id` for this. `DigestEmbeddings` is
+ * self-describing so that a mismatch fails loudly; until now nothing read it.
  */
 export function searchable(day: DigestDay, dimensions: number): boolean {
 	const block: DigestEmbeddings | null = day.embeddings;
-	return Boolean(block && block.dtype === 'int8' && block.dimensions === dimensions);
+	return Boolean(
+		block &&
+			block.model_id === ENCODER_ID &&
+			block.dtype === 'int8' &&
+			block.dimensions === dimensions
+	);
 }
 
 /** Rank items across every day that carries vectors. */
