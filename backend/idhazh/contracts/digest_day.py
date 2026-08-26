@@ -10,8 +10,10 @@ an item looks and may never change where it sits, whether it appears, or how it
 ranks. An item introduced by a later run appends after the items already there,
 which is why `introduced_by_run` may never decrease down the list.
 
-A run that rewrites an item's words names itself in `updated_by_run`, so the
-join to the run manifest that names the model stays true after a revision.
+`updated_at` and `updated_by_run` are reserved and nothing writes them. An
+item's words are written once, by the run that introduced it. The two fields
+hold the join to the run manifest that names the model, so that join stays true
+if a run ever does rewrite an item's words.
 """
 
 from __future__ import annotations
@@ -111,14 +113,22 @@ class DigestItem(Model):
     )
     updated_at: Timestamp | None = Field(
         default=None,
-        description="A later run changed this text; a revision is visible or it does not happen.",
+        description=(
+            "Reserved. Null in every payload ever written, because no run can revise "
+            "an item: `rank.plan_vertical` drops a candidate already in "
+            "`state/published.csv`, `cli` supplies that set, and `assemble.build_day` "
+            "drops an item the day already holds. If a run ever does revise, the rule "
+            "it must keep is that the item says so."
+        ),
     )
     updated_by_run: int | None = Field(
         default=None,
         ge=1,
         description=(
-            "The run that wrote the words this item now carries. Null until a run "
-            "revises the item, and on every day published before this existed."
+            "Reserved, and null everywhere for the same reason as `updated_at`. It "
+            "would name the run that wrote the words this item carries, so the join to "
+            "the run manifest answers with the right model. Until then "
+            "`assemble.run_that_wrote` answers with `introduced_by_run`."
         ),
     )
 
@@ -166,6 +176,18 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26",
+            change="Marked updated_at and updated_by_run reserved in their descriptions.",
+            why=(
+                "Both read as machinery a run could use, and no run can: three gates stop "
+                "a published address being planned, summarized or appended a second time. "
+                "Measured on this checkout 2026-08-26 - 2,121 committed items, 2,121 "
+                "carry updated_at, 2,107 carry updated_by_run, zero carry a value in "
+                "either. Description-only, so no payload changes and none needs a "
+                "migration."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-25",
             change="Added optional updated_by_run to published items.",
