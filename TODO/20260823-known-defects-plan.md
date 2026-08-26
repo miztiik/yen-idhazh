@@ -10,11 +10,11 @@ same way, 15 by redrawing a chart that had to work around it, 16 by asking what
 could ever make the new embeddings merge rule fire, and 17 by a query generator
 that returned nothing.
 
-**Twelve are closed.** Defect 8 is closed on the item copy and on the day's band
-bar. **Four are open.** Defect 2 has its instrument built and is waiting on human
+**Fourteen are closed.** Defect 8 is closed on the item copy and on the day's band
+bar. **Two are open.** Defect 2 has its instrument built and is waiting on human
 labels and calendar time, which no amount of engineering closes. Defect 15 costs
-a reader nothing today, so it was filed rather than fixed. Defects 16 and 17 are
-both Level 5 and belong to the owner.
+a reader nothing today, so it was filed rather than fixed. Defects 16 and 17
+were both Level 5 and belonged to the owner; both were answered on 2026-08-26.
 
 Non-authoritative working material (CLAUDE.md section 3). Nothing here is a
 decision; each row is a defect with its evidence and where the fix landed.
@@ -37,7 +37,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | 14 | The canary day has no scored item, so the compression chart is only ever tested empty | 2 | FIXED - 2026-08-25 |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 4 | **OPEN - no reader-facing symptom** |
 | 16 | The published item carries revision machinery no run can trigger | 5 | **DECIDED 2026-08-26 - the fields stay reserved, PR #141** |
-| 17 | Three declared taxonomy dimensions are empty on every published item | 5 | **OPEN - design consultation** |
+| 17 | Three declared taxonomy dimensions are empty on every published item | 5 | **BUILT 2026-08-26 - PR #145 (lenses, events), PR #148 (entities)** |
 
 ## 16 - The published item carries revision machinery no run can trigger (DECIDED)
 
@@ -268,7 +268,7 @@ Four files and structural: it changes how absence travels, not one call site.
 Not Level 5 - no persisted contract moves and no reader-facing promise moves.
 Not Level 3 - every consumer reads that shape, so it is not a local fix.
 
-## 17 - Three declared taxonomy dimensions are empty on every published item (OPEN)
+## 17 - Three declared taxonomy dimensions are empty on every published item (BUILT)
 
 Found 2026-08-26 while building the retrieval eval. Its free query tier builds
 queries from entity slugs carried by three or more items, and it built none.
@@ -356,6 +356,45 @@ Diagnosis recorded in
 with the measured zero also noted on
 [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md),
 which had called the same controls "mostly-zero".
+
+**Built 2026-08-26. The owner answered both questions: wire lenses and events
+(PR #145), and build entities (PR #148).** So neither the delete option nor the
+design-row option was taken.
+
+The rule is one sentence, and the second half is the load-bearing part: **a tag
+is assigned when one of its curated terms appears in the item's words as a
+whole-word phrase, case-folded, and nothing is derived from the tag's id or its
+display name.** Terms live in `config/taxonomy.json` under `keywords` and in
+`config/watchlist.json` under `aliases`, so tuning them is not a code change.
+
+**Where it runs is settled: the worker, on the extracted article, after
+`sanitize`.** The stage diagram in
+[`20260815-digest-pipeline-plan.md`](20260815-digest-pipeline-plan.md) said the
+plan job, which sees the feed title alone and would need three new fields on
+`PlannedItem`; it was corrected in the same commit. Andre's ruling holds - no
+model is asked, and the vocabulary is keyed by a closed enum, so a hostile page
+can win a tag we already publish and can never invent one.
+
+**Measured, and the measurement changed the answer twice.** A first keyword
+draft using bare `research` and `study` put the research event on 34.7 percent
+of real articles; curated phrases moved it to 12.4 percent. Five of thirty-five
+candidate entities matched nothing at all and were cut. Final coverage over 121
+real article payloads: lenses 25.6 percent, events 57.9 percent, entities 31.4
+percent, no single tag above 22.3 percent.
+
+**The number the row existed for: the retrieval eval's free query tier goes from
+0 queries to 25**, covering 616 of 2,237 committed items. That is what the
+corpus supports - no committed payload was rewritten, so the tier reports zero
+until new days land.
+
+**`watchlist_bonus` is no longer dead arithmetic.** `watchlist_keys` is now the
+candidates whose feed title matches an entity alias. This reorders every future
+day and no past one.
+
+Recorded in
+[`docs/architecture/sources/discovery.md`](../docs/architecture/sources/discovery.md),
+[`docs/concepts/config.md`](../docs/concepts/config.md) and
+[`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md).
 
 ## 2 - The faithfulness thresholds have no labelled error rate (INSTRUMENT BUILT)
 
