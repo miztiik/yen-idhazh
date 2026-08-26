@@ -538,6 +538,18 @@ class EvaluationConfig(Model):
             "A number, because 'materially diverges' is an argument waiting to happen."
         ),
     )
+    qualification_pool_multiple: int = Field(
+        default=6,
+        ge=1,
+        description=(
+            "Articles a qualification shard extracts for every one it replays. A floor "
+            "on the choice the stratified selection gets, never a cap on the walk: a "
+            "shard that has not yet been offered every length tier keeps going through "
+            "its slice. Raising it buys fetch seconds, never model minutes, because the "
+            "model still sees corpus_per_shard articles - one address measured 2.1 s on "
+            "2026-08-26 over 150 of them, against 330 minutes for the job."
+        ),
+    )
 
     @model_validator(mode="after")
     def _bands_and_ranges_are_ordered(self) -> Self:

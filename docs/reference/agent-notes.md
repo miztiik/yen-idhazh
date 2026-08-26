@@ -550,6 +550,21 @@ contends with the first.
   over 1889 committed items the result is two points with nothing between them:
   3 items at 0.0 and the next lowest at 0.9975.
 
+## Building a page of a chosen length
+
+- **`trafilatura` drops a paragraph it has already seen, so a fixture built from
+  one repeated sentence is not the length the test believes.** A synthetic page
+  of 320 copies of one sentence extracts to about 150 words, and it does that
+  whether the page holds 30 copies or 3000. Nothing errors, and the test then
+  asserts a length band the article never reached. Give every copy its own
+  ordinal - `f"Item {index}. {SENTENCE}"` - and the count tracks: measured
+  2026-08-26, 320 unique sentences of 12 words extracted to 3783 words against
+  3840 asked for, while the identical-sentence version of the same page gave
+  121.
+
+- **Count the prefix.** A sentence of ten words plus an `Item N.` ordinal is
+  twelve words, and sizing on ten undershoots every fixture by a fifth.
+
 ## The canary build
 
 - **`build_canary_day.py` used to append to the canary ledgers instead of

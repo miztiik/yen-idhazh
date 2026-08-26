@@ -88,6 +88,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added source_word_count: the body length before the truncation cap.",
+      "version": "2026-08-26",
+      "why": "The length band is named min_source_words and was being chosen from the post-cap count, which cannot exceed int(truncation_cap_tokens / 1.3). At the committed cap of 2500 that ceiling is 1923 words, so the 2000-word band was unreachable by arithmetic. The field is None on payloads written before it existed, where band_source_words falls back to the post-cap count the build that wrote them used."
+    },
+    {
       "change": "Added source_form to the extract payload.",
       "version": "2026-08-23T18:49",
       "why": "Summarize and publish need the curator-declared source form after the plan file is no longer in hand. The field defaults to article so older payloads still read."
@@ -229,6 +234,20 @@
       "title": "Source Url",
       "type": "string"
     },
+    "source_word_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Words in the extracted body before `extract.truncation_cap_tokens` cut it. A count, never the text: the pre-cap body is not kept and is not ours to republish. None on a payload written before the field existed.",
+      "title": "Source Word Count"
+    },
     "status": {
       "$ref": "#/$defs/ArticleStatus"
     },
@@ -293,7 +312,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-23T18:49",
+      "default": "2026-08-26",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -305,6 +324,7 @@
     },
     "word_count": {
       "default": 0,
+      "description": "Words in `text`, after the cap.",
       "minimum": 0,
       "title": "Word Count",
       "type": "integer"
@@ -326,5 +346,5 @@
   ],
   "title": "Article",
   "type": "object",
-  "version": "2026-08-23T18:49"
+  "version": "2026-08-26"
 }

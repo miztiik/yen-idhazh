@@ -376,6 +376,39 @@ def test_a_recorded_brief_uses_the_brief_band_even_when_the_source_is_longer() -
     assert "50 to 90 words" not in system
 
 
+def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
+    """The band follows the source body, not the words left after the cap.
+
+    Before this, the post-cap count picked the band, so the longest tier could
+    never be reached: it sits at 2000 words and the cap allows 1923.
+    """
+    ask = SummarizeConfig()
+    top = ask.bands[-1]
+    source = article().model_copy(
+        update={
+            "word_count": 1900,
+            "source_word_count": top.min_source_words + 500,
+            "truncated": True,
+            "truncated_at_tokens": 2500,
+        }
+    )
+    system = build_request(source, model_id="m", inference=InferenceConfig())["messages"][0][
+        "content"
+    ]
+    assert f"{top.target_words_min} to {top.target_words_max} words" in system
+
+
+def test_an_article_written_before_the_field_keeps_its_post_cap_band() -> None:
+    """The read-side migration, at the one place a band is chosen."""
+    ask = SummarizeConfig()
+    older = article().model_copy(update={"word_count": 1900, "source_word_count": None})
+    system = build_request(older, model_id="m", inference=InferenceConfig())["messages"][0][
+        "content"
+    ]
+    band = ask.band_for(1900)
+    assert f"{band.target_words_min} to {band.target_words_max} words" in system
+
+
 def test_the_prompt_and_the_decoder_count_key_points_the_same_way() -> None:
     """Disagree, and the decoder rejects a reply that did exactly what was asked."""
     asked = SummarizeConfig(key_points_min=3, key_points_max=4)

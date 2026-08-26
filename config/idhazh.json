@@ -49,6 +49,7 @@
     "brief_compression_ceiling": 0.5,
     "golden_set_size": 20,
     "lead_coverage_min": 0.3,
+    "qualification_pool_multiple": 6,
     "spot_checks_per_week": 10,
     "summary_words_max": 250,
     "summary_words_min": 25,
