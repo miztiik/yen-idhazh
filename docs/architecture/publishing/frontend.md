@@ -406,10 +406,12 @@ nothing. This is not a chart library returning ([../../concepts/design-system.md
 they own no element, no canvas and no theme, and no reader route imports either
 one. `npm run bundle-gate` holds that true. Beside its encoder check it records
 every route class's first-load JavaScript and fails when the number moves, so
-the next dependency has to be measured and written down before it can ship. HTML
-weight is deliberately outside that gate: the document belongs to the payload
-work, and one gate spanning both would make two workstreams fail each other's
-builds.
+the next dependency has to be measured and written down before it can ship. The
+same script also holds each prerendered page's HTML under a ceiling, but only
+for the routes whose weight does not grow with the published data - `/404` and
+`/evals/`: a route that grows with the corpus is measured and reported, never
+failed, so the payload workstream cannot fail a build over an ordinary publish
+([../../concepts/config.md](../../concepts/config.md)).
 
 The item-health viewport has three parts, in this order:
 
@@ -564,6 +566,18 @@ regeneration, a `changelog` stamp and the `frontend/src/lib/server/config.ts`
 mirror - which would make every byte change a schema change. Authority: Carmack,
 2026-08-25.
 
+The same script gates the prerendered HTML and the first-load JavaScript, which
+was once rejected on the grounds that one gate over both would make two
+workstreams fail each other's builds. That risk was real and it materialised:
+the `/archive/` and `/console/` HTML ceilings, added to the script in #126,
+fired on ordinary publishes because those pages grow with the published corpus.
+The fix was not to split the script but to scope the HTML ceiling to the routes
+whose weight does not grow with data - `/404` and `/evals/` - and to report a
+data-driven route without failing it. So the two checks share a script and stay
+independent: the JavaScript ratchet reads `frontend/bundle-baseline.json`, the
+HTML ceilings read `config/idhazh.json`, and neither fails the other's build.
+Authority: Carmack (the original rejection), resolved by the page-weight change.
+
 Folding `/evals/` into `/console/` keeps one route answering "how is the
 pipeline doing". Both old routes read `state/scores.csv` and counted per-day
 bands. Two surfaces reading one ledger would disagree as soon as one count
@@ -628,7 +642,6 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | `d3-scale` from a CDN | The HTTP cache is partitioned per site, so the shared-cache argument is dead, and the repo's `script-src` allows `self` only. | Carmack |
 | Fixing the units by hand instead of taking the dependency | `.nice()` and `ticks()` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
 | A `console.chart_width` default per chart shape | One knob names the width the reading column leaves; a chart sharing a row divides it. Four knobs would be four ways to disagree about one column. | Jony |
-| Gating HTML weight in the same script as first-load JS | The document is owned by the payload work. One gate over both would make two independent workstreams fail each other's builds. | Carmack |
 | Putting the first-load ceilings in `config/` | An operator has no reason to raise the weight a reader pays, and a budget that can be edited to fit the build is not a budget. | Carmack, Rule #2 |
 | A `run.success_floor_pct` reference line on a stage failure panel | That floor is a published rate over attempted items; a stage panel is a different denominator. A wrong reference line is worse than none. | Jony |
 
