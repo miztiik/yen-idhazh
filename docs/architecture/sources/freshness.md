@@ -93,6 +93,45 @@ The age rule went the same way for the same reason. A 24-hour cutoff and a decay
 
 Both first-sighting and the published ledger are append-only files under `state/`, committed by CI. That is not a preference - it is the only shape available. There is no database (Rule #1), and anything a later run must read has to survive as a committed file.
 
+### A per-run reading budget was proposed on 2026-08-25 and refused
+
+Authority: Carmack and Fowler. The proposal was a new knob at the planning step,
+capping how many items one run may plan for reading, separate from the crash
+guard. The value floated was about 59 items - the 40-minute route stage clock
+divided by the slowest measured per-item routing cost, `2400 / 40.3`. Four facts
+refused it.
+
+| Why it was refused | The evidence |
+| --- | --- |
+| The bound it adds already exists one stage later, and it is a clock rather than a count | `cli.stage_route` stops its loop at `run.route_budget_minutes` (40 minutes), inside the route job's 50-minute timeout. A count has to be set for the worst host, so the number that fits a slow host leaves a fast one idle. The router-side version of the same proposal was refused for the same reason - see [../publishing/visuals.md](../publishing/visuals.md). |
+| The loss it answered is already prevented | The `routes` artifact upload in `.github/workflows/digest.yml` carries `if: always()`. A route stage that runs out of clock still hands over every decision it made. What cost four of the six runs on 2026-08-24/25 their visuals was a cancelled job skipping an upload step that had no condition on it. That step has one now. |
+| The number behind it is contaminated | The 20.7 s and 40.3 s per-item route figures were measured over 703 items that all ran with `diagram` in `visuals.enabled_kinds`, so the model was asked about every one of them: `asked=False` appears zero times in all 703. `diagram` is off now, and with it off a measured 68 of 145 items (46.9 percent) never reach the model at all. |
+| It throttles the wrong stage, and a reader pays for it | A plan-stage budget bounds what `summarize` is handed, in order to protect `route`. `summarize` runs as four worker jobs by default, eight at the ceiling, and has no stage clock at all - its only bound is the `work` job's 330-minute timeout. `route` is one job with a 40-minute stage clock. On 2026-08-24 the committed digest carries **731 items**; a 59-item budget over five runs caps that day at 295 and deletes about 436 of them. |
+
+**The corrected cost, labelled an estimate because that is what it is (Rule
+#10).** Multiply the measured per-item cost by the measured share that still
+reaches the model: about **11.0 s an item on the fast host and 21.4 s on the slow
+one**, which is roughly **218 and 112 items** inside the 40-minute clock. Nobody
+has observed either figure. Both are two measurements multiplied together, and
+both treat a skipped item as free when it still costs a reachability check and a
+file write. The proposal's 59 is about half the slow-host estimate and a quarter
+of the fast-host one, so the knob would have been set from a number the
+configuration change had already moved.
+
+**The real cause is named here and fixed nowhere.** `rank.plan_vertical` orders
+candidates and then admits all of them - `_take` refuses only what
+`max_per_source` (2) refuses. **There is no score floor anywhere in the
+pipeline.** The only other bound is `run.safety_ceiling_per_run`, and that guard
+is already inside the working range rather than above it: the plan job on
+2026-08-25 logged `safety ceiling reached planned=221 ceiling=200`, so what
+decided the size of that run was the crash guard and not the score
+([../../reference/measurements.md](../../reference/measurements.md)). A budget
+truncates an ordered list at a second arbitrary point. A score floor rejects an
+item for not being worth reading, which is the question actually being asked.
+**The trigger:** a floor needs an instrument that can say what a score is worth,
+so it waits on the retrieval eval. Until that lands the number would be a guess,
+and guessing it is what this refusal is about.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -104,12 +143,15 @@ Both first-sighting and the published ledger are append-only files under `state/
 | Rejecting any future date outright | Clock skew between a publisher and the runner is normal and small. A zero tolerance would drop real articles for being three minutes early. |
 | Keeping rank position as the item id | Run 2 of a day renumbers every story, and anything that moved one place publishes twice. |
 | Writing the published ledger at plan time | A run that dies mid-way would leave behind a claim it published something it did not, and the article would never be publishable again. |
+| A per-run reading budget at the planning step | Refused 2026-08-25 by Carmack and Fowler. The bound already exists one stage later and is a clock; the artifact loss it answered already carries `if: always()`; its value came from a measurement taken before `diagram` was switched off; and it deletes about 436 items from a 731-item day. See the design rationale above. |
+| A score floor set now rather than measured | A floor is the right control and the wrong thing to guess. It waits on the retrieval eval, which is the instrument that can say what a score is worth. |
 
 ## See also
 
 - [discovery.md](discovery.md) - what the sources are, how they are tiered, and how the score is built.
 - [health.md](health.md) - the record of what every feed did, and the quarantine that reads it.
 - [../contracts/determinism.md](../contracts/determinism.md) - the fingerprint that makes "this re-run changed nothing" checkable.
+- [../publishing/visuals.md](../publishing/visuals.md) - the route stage clock, and the router-side version of the budget refused above.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages, and which of them see the whole day.
 - [../../concepts/config.md](../../concepts/config.md) - where these knobs live and the knob-versus-fact rule.
 - [../../reference/github-actions.md](../../reference/github-actions.md) - workflow names and exact triggers.
