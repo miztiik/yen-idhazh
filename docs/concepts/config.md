@@ -61,6 +61,18 @@ it caps `verbatim_run` for brief items and derives the floor above.
 `evaluation.lead_coverage_min` is 0.30; a miss below it caps `high` at `medium`.
 That lets a brief stop naturally instead of padding toward the old 40-word gate.
 
+Every `min_source_words` in this file - `extract.min_source_words` and each
+`summarize.bands[].min_source_words` - counts the **source body**, before
+`extract.truncation_cap_tokens` cuts it. One name, one meaning. Reading the top
+band off the post-cap count is what left it empty until 2026-08-26, because that
+count stops at `int(2500 / 1.3) = 1923` words and the band starts at 2000
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+
+`evaluation.qualification_pool_multiple` sizes how wide a qualification shard
+casts before it selects. It is a floor and not a cap: a shard whose slice has not
+yet offered every length tier keeps walking. Raising it buys fetch seconds and
+never model minutes, because the model still sees `corpus_per_shard` articles.
+
 `config.sources` can declare `form: "abstract"` on a feed. That is a curator's
 fact about the feed, not a detector over page text. NBER uses it; arXiv and SSRN
 should use the same field if those feeds are added.

@@ -50,6 +50,7 @@
     "label_min_run_days": 10,
     "labellers": [],
     "lead_coverage_min": 0.3,
+    "qualification_pool_multiple": 6,
     "spot_checks_per_week": 15,
     "summary_words_max": 250,
     "summary_words_min": 25,

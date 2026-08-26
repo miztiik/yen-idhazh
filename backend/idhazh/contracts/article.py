@@ -49,6 +49,18 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-26",
+            change="Added source_word_count: the body length before the truncation cap.",
+            why=(
+                "The length band is named min_source_words and was being chosen from the "
+                "post-cap count, which cannot exceed int(truncation_cap_tokens / 1.3). At "
+                "the committed cap of 2500 that ceiling is 1923 words, so the 2000-word "
+                "band was unreachable by arithmetic. The field is None on payloads written "
+                "before it existed, where band_source_words falls back to the post-cap "
+                "count the build that wrote them used."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-23T18:49",
             change="Added source_form to the extract payload.",
             why=(
@@ -99,7 +111,16 @@ class Article(Contract):
 
     title: UntrustedLine | None = None
     text: str | None = Field(default=None, description="Sanitized text. Never republished.")
-    word_count: int = Field(default=0, ge=0)
+    word_count: int = Field(default=0, ge=0, description="Words in `text`, after the cap.")
+    source_word_count: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Words in the extracted body before `extract.truncation_cap_tokens` cut it. "
+            "A count, never the text: the pre-cap body is not kept and is not ours to "
+            "republish. None on a payload written before the field existed."
+        ),
+    )
     token_count: int = Field(default=0, ge=0)
     brief: bool = Field(
         default=False,
@@ -152,8 +173,20 @@ class Article(Contract):
             raise ValueError("article failure_code must belong to fetch or extract")
         if self.truncated != (self.truncated_at_tokens is not None):
             raise ValueError("truncated and truncated_at_tokens must agree")
+        if self.source_word_count is not None and self.source_word_count < self.word_count:
+            raise ValueError("source_word_count counts the body before the cap, so it is not less")
         if len(set(self.lenses)) != len(self.lenses):
             raise ValueError("lenses must be distinct")
         if len(set(self.events)) != len(self.events):
             raise ValueError("events must be distinct")
         return self
+
+    @property
+    def band_source_words(self) -> int:
+        """The length a `summarize.bands` tier is chosen from.
+
+        The read-side migration for `source_word_count`. A payload written
+        before the field existed carries only the post-cap count, which is the
+        number the build that wrote it used, so that is what it keeps reading.
+        """
+        return self.word_count if self.source_word_count is None else self.source_word_count

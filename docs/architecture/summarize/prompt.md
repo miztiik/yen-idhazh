@@ -47,9 +47,35 @@ Two rules make band selection safe rather than approximate:
   bands do not climb is refused at load, because `band_for` would otherwise
   return the wrong ask instead of failing.
 
-The band is chosen from the length of the text the model is **actually given**,
-truncated if the article was truncated. Asking for a summary of words the model
-never saw is asking it to invent them.
+The band is chosen from the length of the **source body**, before
+`extract.truncation_cap_tokens` cut it. `Article.source_word_count` carries that
+number and `Article.band_source_words` reads it, falling back to the post-cap
+count on a payload written before the field existed.
+
+### Design rationale - why the band left the post-cap count
+
+Until 2026-08-26 the band came from the post-cap count, on the argument that
+asking for a summary of words the model never saw is asking it to invent them.
+Two things were wrong with it.
+
+The argument is about content, and a band sets only the target length. The
+fenced block still holds the visible text and nothing else, so a longer ask
+cannot reach words the model was not given.
+
+The rule also could not work. The post-cap count cannot pass
+`int(truncation_cap_tokens / TOKENS_PER_WORD)`, which at the committed cap of
+2500 is **1923 words** - below the top band's 2000. That band never fired once,
+and its longer ask was dead configuration. Measured 2026-08-26 over 109 articles
+extracted live from that day's plan: the post-cap rule put 0 of them in the top
+band, and the source-body rule put 3 there.
+
+The knob's own name settles which count it wants. `extract.min_source_words`
+already compares against the full body, and `summarize.bands[].min_source_words`
+is the same name for the same thing. Two meanings for one name was the defect.
+
+The rejected alternative was to lower the top band's boundary under 1923. That
+makes the number fit the code instead of making the code mean the number, and it
+moves a threshold to make a corpus pass - which Row #10 decision 3 forbids.
 
 ## The ask sits inside the gate, and something checks
 
