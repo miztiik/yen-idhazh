@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -278,7 +278,7 @@ Measured 2026-08-25 on the committed repository.
 | Rows in `state/item-health/2026-08.csv` | 1200 | `Import-Csv` count |
 | File size | 354,465 bytes | `stat` |
 | Mean row | **295 bytes** | size / rows |
-| Rows on a full day | **1000** | 2026-08-24: 5 runs x the 200-item `safety_ceiling_per_run` |
+| Rows on a full day | **800** | 2026-08-26: 5 runs x the 160-item `safety_ceiling_per_run` |
 | Published projection `frontend/public/telemetry/2026-08.csv` | 103,004 bytes, 10 of the 24 columns | `stat` |
 | Mean published row | 85.8 bytes raw, **13.8 bytes gzipped** (6.2x) | gzip at maximum level |
 | Blob versions of the shard in git so far | 14, 1.44 MB uncompressed | `git rev-list --objects` then `git cat-file -s` |
@@ -288,14 +288,14 @@ Projected forward at the current cadence and ceiling:
 
 | Horizon | Ledger shard | Served projection (gzipped) |
 | --- | --- | --- |
-| a day | 295 KB | 14 KB |
-| a month (one shard) | **8.8 MB** | **410 KB** |
-| a year (12 shards) | 106 MB | 4.9 MB |
+| a day | 236 KB | 11 KB |
+| a month (one shard) | **7.1 MB** | **330 KB** |
+| a year (12 shards) | 85 MB | 4.0 MB |
 
 Three limits, in the order they will actually bite:
 
 1. **The reader's download, first.** The console fetches a whole month shard.
-   410 KB gzipped at the end of a busy month is already more than the rest of
+   330 KB gzipped at the end of a busy month is already more than the rest of
    the page. The lever is the projection, not the ledger: the served file
    carries 10 columns today and could carry fewer, or become a pre-aggregated
    day-grain file with the per-item rows kept for the operator only. Nothing
@@ -303,7 +303,7 @@ Three limits, in the order they will actually bite:
    measurement rather than the next change.
 2. **Git history, second.** Every run rewrites the whole shard as a new blob, so
    the repository grows with `commits x shard size`, not with rows: five commits
-   a day against a shard averaging half its final size is roughly 660 MB of
+   a day against a shard averaging half its final size is roughly 530 MB of
    uncompressed blob a month. Delta compression on an append-only file is
    cheap - 14 versions and 1.44 MB sit inside a 26 MiB pack - but "cheap" is not
    a measured number here and must not be quoted as one. The lever if it bites
@@ -311,7 +311,7 @@ Three limits, in the order they will actually bite:
    handles because it globs the directory.
 3. **The 1 GB published site, last and least.** `state/` is never served, so it
    does not count against that cap at all. Only the projection under
-   `frontend/public/telemetry/` does, and at 4.9 MB gzipped a year it is not the
+   `frontend/public/telemetry/` does, and at 4.0 MB gzipped a year it is not the
    thing that fills a gigabyte - the day payloads and their SVG assets are.
 
 What is deliberately **not** planned: pruning. The ledger is the only durable

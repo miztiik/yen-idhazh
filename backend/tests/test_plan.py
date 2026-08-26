@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import dataclasses
 import json
+import shutil
 import tempfile
 from pathlib import Path
 
@@ -23,6 +24,7 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, fetch, ledger
+from idhazh.contracts.app_config import RunConfig
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.run_plan import RunPlan
 from idhazh.contracts.seen import PublishedRow
@@ -191,6 +193,7 @@ def plan(
     run_n: int = 1,
     state: Path | None = None,
     safety_ceiling: int | None = None,
+    cap: int | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
     if safety_ceiling is not None:
@@ -215,6 +218,7 @@ def plan(
         now=lambda: now,
         run_n=run_n,
         state_dir=state if state is not None else Path(tempfile.mkdtemp()),
+        cap=cap,
     )
 
 
@@ -414,6 +418,50 @@ def test_cross_vertical_duplicate_drops_once_before_the_safety_ceiling(caplog: p
 def test_the_committed_ceiling_is_far_above_any_real_day() -> None:
     built = plan([LAB, TRADE, COMMUNITY])
     assert len(built.items) < config.load().app.run.safety_ceiling_per_run
+
+
+def test_a_cap_takes_the_best_of_each_vertical_and_leaves_the_ceiling_alone() -> None:
+    """The validation knob, which was parsed and then dropped on the floor.
+
+    It bounds a vertical rather than the day, so it is a different lever from
+    `run.safety_ceiling_per_run`, and a run that does not ask for it plans
+    exactly what it planned before.
+    """
+    full = plan([LAB, TRADE, COMMUNITY])
+    assert len(full.items) > 1, "the fixture pool has to be big enough to show a trim"
+
+    capped = plan([LAB, TRADE, COMMUNITY], cap=1)
+    assert [item.item_id for item in capped.items] == [full.items[0].item_id]
+    assert capped.verticals[0].planned == 1
+    assert plan([LAB, TRADE, COMMUNITY], cap=None).to_json() == full.to_json()
+
+
+def test_the_cap_flag_reaches_the_plan_stage(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    """`--cap` was declared, parsed, and read by nothing at all.
+
+    A validation run therefore planned a whole day and could outrun the job it
+    was given. The fetcher is the same fixture seam every other test here uses;
+    only the way it is reached changes, because `main` builds its own.
+    """
+    settings = settings_for([LAB, TRADE, COMMUNITY])
+    config_dir = tmp_path / "config"
+    shutil.copytree(CONFIG_DIR, config_dir)
+    (config_dir / "sources.json").write_text(settings.sources.to_json(), encoding="utf-8")
+    (config_dir / "taxonomy.json").write_text(settings.taxonomy.to_json(), encoding="utf-8")
+    monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+    monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+    monkeypatch.setattr(
+        cli, "live_fetcher", lambda _settings: fetcher_over(LAB_URL, TRADE_URL, COMMUNITY_URL)
+    )
+
+    assert cli.main(["plan", "--date", DATE, "--config", str(config_dir), "--cap", "1"]) == 0
+
+    written = RunPlan.from_json(
+        (tmp_path / "run" / DATE / "plan.json").read_text(encoding="utf-8")
+    )
+    assert len(written.items) == 1
+    assert len(plan([LAB, TRADE, COMMUNITY]).items) > 1, "the same day is bigger uncapped"
 
 
 # --- salience: a vote, never a discovery -------------------------------------
@@ -831,6 +879,46 @@ def test_a_shard_beyond_the_item_count_is_empty_rather_than_an_error() -> None:
     """Four workers on a two-item day is normal, and two of them must exit cleanly."""
     built = built_plan()
     assert cli.shard_of(built, shard=len(built.items) + 1, shards=len(built.items) + 2) == []
+
+
+def run_config(**overrides: int) -> RunConfig:
+    return config.load().app.run.model_copy(update=overrides)
+
+
+@pytest.mark.parametrize(
+    ("items", "expected"),
+    [(0, 1), (1, 1), (5, 1), (6, 2), (10, 2), (11, 3), (15, 3), (16, 4), (149, 4)],
+)
+def test_the_shard_count_honours_the_configured_shard_size(items: int, expected: int) -> None:
+    """`run.shard_size` read as configuration and behaved as decoration.
+
+    Five URLs is what one worker is sized to carry, so a day that needs fewer
+    workers must get fewer: every extra job restores the weights again, and that
+    restore is the largest fixed cost in the pipeline.
+    """
+    run = run_config(shard_size=5, max_parallel=4)
+    assert cli.shard_count(items, run=run) == expected
+
+
+def test_the_shard_count_never_exceeds_max_parallel() -> None:
+    """The matrix cannot run a job the strategy will not start."""
+    run = run_config(shard_size=5, max_parallel=4)
+    assert cli.shard_count(10_000, run=run) == run.max_parallel
+    assert cli.shard_count(10_000, run=run_config(shard_size=1, max_parallel=2)) == 2
+
+
+def test_the_shard_count_is_at_least_one_so_an_empty_day_still_runs() -> None:
+    """An empty matrix skips every worker, and the run publishes nothing without saying why."""
+    assert cli.shard_count(0, run=run_config(shard_size=5, max_parallel=4)) == 1
+
+
+def test_the_worst_case_day_still_fits_the_configured_fan_out() -> None:
+    """The ceiling is what sizes a worker's worst shard, so the two are read together."""
+    run = config.load().app.run
+    shards = cli.shard_count(run.safety_ceiling_per_run, run=run)
+    assert shards == run.max_parallel
+    worst_shard = -(-run.safety_ceiling_per_run // shards)
+    assert worst_shard == 40, "the figure the 330-minute work timeout was checked against"
 
 
 # --- the fixtures themselves -------------------------------------------------
