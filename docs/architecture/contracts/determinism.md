@@ -41,17 +41,25 @@ The declared inputs are the weights digest, the quantisation, the runtime build,
 
 ### Current implementation gap
 
-The contract above is not fully implemented. `stage_work` currently passes
-`ModelRef.sha256`, or 64 zeroes when config omits it, and records the literal
-`llama-server-local` as the runtime build. It does not observe the GGUF file the
-server opened or the production llama.cpp build.
+The contract above is not fully implemented. `stage_work` passes
+`ModelRef.sha256` - what config expected, not what the server opened - and
+records the literal `llama-server-local` as the runtime build. It does not
+observe the GGUF file the server opened or the production llama.cpp build.
 
-That gap matters most during a model swap: without a fix, a new weight file can
-land under a zero digest and a changed runtime can look unchanged. The work
-command must receive the observed GGUF SHA-256 and runtime build from the process
-that downloaded and started them, compare the GGUF digest with config, and carry
-both into `PipelineInputs`. Until then, fingerprint rows do not prove weight or
-runtime identity.
+The zero-digest half of that gap is closed. `build_inputs` raises on a missing
+or placeholder digest instead of substituting sixty-four zeroes, so a run
+without a recorded weight digest stops rather than stamping one that validates
+and says nothing (Rule #10). The `work` job checks the file on disk against
+`models.summarize.sha256` with `sha256sum` before `llama-server` starts, on a
+cache hit as well as a miss, and its health check asserts the server serves the
+configured alias and loaded the configured filename. That gate is what lets the
+config value stand in for the observed one until the observation is wired.
+
+What remains matters most during a model swap: a changed runtime can still look
+unchanged. The work command must receive the observed GGUF SHA-256 and runtime
+build from the process that downloaded and started them, compare the GGUF digest
+with config, and carry both into `PipelineInputs`. Until then, fingerprint rows
+do not prove runtime identity.
 
 The remaining identity fields are also incomplete: `stage_work` uses the model
 id as chat-template identity and `local` as runner class.
