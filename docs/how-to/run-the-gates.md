@@ -82,8 +82,8 @@ prerendered, so a contract-invalid payload fails the build rather than the page.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it compares every route's first-load JavaScript against the weight
-recorded for it in `frontend/bundle-baseline.json`, and it holds every page that
-renders no day under the ceiling configured for it in `config/idhazh.json`.
+recorded for it in `frontend/bundle-baseline.json`, and it holds every route
+named in `config/idhazh.json` under the gzip ceiling set there.
 
 **That comparison is a two-sided ratchet, not a budget.** A route that grew past
 the recorded weight fails, and so does one that shrank past it - an unclaimed
@@ -110,49 +110,33 @@ updates its baseline cannot fail.
 
 **The page ceiling is one-sided, and it bounds the document rather than the
 script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
-`gzip -9` size each route's prerendered HTML may reach. A page that got lighter
-needs no permission, so there is no lower bound. Only routes that render no day
-are bounded - `/404`, `/archive/`, `/console/` and `/evals/` today. A day page
-weighs what the day published, so a number over it would cap the news instead of
-catching a regression; those routes are covered by the marker count in
-`frontend/tests/payload-weight.spec.ts`, which runs in the browser suite.
+`gzip -9` size each named route's prerendered HTML may reach. A page that got
+lighter needs no permission, so there is no lower bound. Only routes whose HTML
+does not grow with the published data are named - `/404` and `/evals/` today. A
+day page weighs what the day published, and `/archive/` and `/console/` grow the
+same way, so a fixed ceiling on any of them would cap the news or fail on an
+ordinary publish instead of catching a regression; those are covered by the
+marker count in `frontend/tests/payload-weight.spec.ts`, which runs in the
+browser suite. A route the config does not name is reported by the gate without
+failing it.
 
-Two failures are worth telling apart:
+When a named route is over, two failures are worth telling apart:
 
 - **A page took on bytes it does not render.** A day payload inlined by a layout
   is how this last happened, and it cost 313,000 bytes. Remove them.
-- **The page genuinely carries more.** Raise the number in `config/idhazh.json`
-  **and** in the `PageWeightConfig` default in
-  `backend/idhazh/contracts/app_config.py` together, in the commit that earned
-  the bytes, and say in the message what they buy. Two copies that disagree fail
-  a backend test, so neither can move alone.
+- **The page genuinely carries more.** Raise the number in `config/idhazh.json`,
+  in the commit that earned the bytes, and say in the message what they buy. The
+  number lives in that file alone - the `PageWeightConfig` default is empty - so
+  there is no second copy to move.
 
-**`/archive/` grows about 170 KB gzipped per published day**, because it inlines
-every committed day to feed the on-device search, and `/console/` grows with the
-ledger its charts read. Their ceilings are therefore countdowns rather than
-steady bounds: they fail on a published day, and the answer that day is the
-archive plan under `TODO/`, not a bigger number. Watched happening on
-2026-08-26 - a re-run of that day moved `/archive/` 102,222 bytes and
-`/console/` 9,105, and the gate failed on both
-([../reference/measurements.md](../reference/measurements.md)).
-
-**One raise is not covered by that rule, and it is the vector backfill.** The
-archive plan is blocked on the backfill by its own preconditions, so it cannot
-land first, and 1,175 filled vectors are 370,488 gzipped bytes `/archive/` has
-to carry until it does. Both ceilings moved on 2026-08-26 for that reason and
-for the countdown that had already fired underneath it - the numbers, and which
-cause owns which bytes, are in
-[../reference/measurements.md](../reference/measurements.md#the-vector-backfill-and-the-one-raise-the-archive-plan-cannot-absorb).
-
-**Raising one is a measurement, not a decision, and it needs a control.** The
-`/console/` ceiling went from 123,330 to 137,567 on 2026-08-26. What made
-that defensible was a build of the *old* payload under the *new* source, which
-reproduced the number being replaced to within one byte and so proved the rest
-of the rise was the payload rather than the change asking for it. It also showed
-the split: 13,439 bytes of the first 14,235 were the pipeline running that day
-twice more, and 796 were the section that raised the ceiling
-([../reference/measurements.md](../reference/measurements.md#the-console-section-on-top-of-that-raise)).
-Without that control, a raise is only a bigger number with a sentence beside it.
+**`/archive/` and `/console/` are not capped, and that is deliberate.**
+`/archive/` inlines every committed day to feed the on-device search and grows
+about 170 KB gzipped per published day; `/console/` grows with the ledger its
+charts read. A fixed ceiling on either was a countdown, not a bound: it fired on
+an ordinary publish and was raised to silence it - `/archive/` twice in one day
+on 2026-08-26 - which is a gate that never actually held. Their growth belongs
+to the marker count above and, for `/archive/`, to its own plan under `TODO/`
+([../reference/measurements.md](../reference/measurements.md#the-prerendered-page-on-the-wire)).
 
 ## The browser suite
 

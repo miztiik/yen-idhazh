@@ -18,8 +18,9 @@ import { join, relative, resolve, sep } from 'node:path';
  * disk.
  *
  * What a count of markers cannot see, `scripts/bundle-gate.mjs` bounds: it holds
- * every page that renders no day under a ceiling in `config/idhazh.json`,
- * `/archive/` included.
+ * the routes named in `config/idhazh.json` under a gzip ceiling. `/archive/` and
+ * `/console/` are not among them - they grow with the published corpus and the
+ * ledger, so this marker count is the only gate they answer to.
  *
  * Runs in Node rather than in a page, like the arithmetic tests in
  * `frame.spec.ts`. It reads the build the preview server is about to serve.
