@@ -32,7 +32,7 @@ These are the *surfaces*, not a field list. The field-level truth is `schemas/ap
 
 The knobs are spread across four files rather than one, along the line of who edits them and how often: `config/idhazh.json` for behaviour, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
 
-Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing.
+Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. The daily workflow keeps no copy of them: its `plan` job reads `models.summarize` and `models.route` from here and republishes them to every job that needs one, including the weights cache key ([../reference/github-actions.md](../reference/github-actions.md)).
 
 Extraction has three shape and access control groups:
 
