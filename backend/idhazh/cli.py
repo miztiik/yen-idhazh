@@ -1106,7 +1106,9 @@ def stage_assemble(
         run_n=run_n,
         generated_at=generated_at,
         retention_window_months=settings.app.retention.image_months,
-        embeddings=assemble.build_embeddings(digest_items, Embedder(config.REPO_ROOT)),
+        embeddings=assemble.build_embeddings(
+            digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
+        ),
         item_health_rows=item_health_rows,
     )
     assemble.write_atomic(target / "digest.json", day.to_json())

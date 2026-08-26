@@ -11,6 +11,7 @@ returning reader see what is new without the page knowing anything about them.
 
 from __future__ import annotations
 
+import logging
 import tempfile
 from collections.abc import Sequence
 from datetime import UTC, datetime
@@ -42,6 +43,8 @@ from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import SourceKind, Taxonomy
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, text_for, to_base64
+
+LOG: Final = logging.getLogger("idhazh")
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 _UNTITLED: Final = "Untitled item"
@@ -163,6 +166,11 @@ def build_embeddings(
     day that cannot be searched on a device is a day that still publishes; the
     search surface is secondary by construction and removing it must never cost
     a reader a single summary.
+
+    An item the encoder cannot read is skipped rather than embedded, and the
+    reason goes to the log the run keeps (section 1b). `vectors` is keyed by
+    item id, so a skipped item is simply absent - the reader-side decoder
+    already handles a day where not every item has one.
     """
     if not items or not embedder.available:
         return None
@@ -170,7 +178,16 @@ def build_embeddings(
         embedder.load()
         vectors: dict[str, str] = {}
         for start in range(0, len(items), batch):
-            window = items[start : start + batch]
+            window = []
+            for item in items[start : start + batch]:
+                if embedder.readable(text_for(item)):
+                    window.append(item)
+                else:
+                    LOG.warning(
+                        "item %s gets no vector: its text is not in the alphabet the "
+                        "encoder was trained on, so any vector would be unretrievable",
+                        item.item_id,
+                    )
             for item, vector in zip(
                 window, embedder.encode([text_for(i) for i in window]), strict=True
             ):
