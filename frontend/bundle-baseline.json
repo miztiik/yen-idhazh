@@ -30,9 +30,9 @@
       "why": "Runtime and shell plus the date-index route, now carrying the encoder guard: the archive refuses a day whose vectors name a different encoder, which costs the identifier, the version, the width and the comparison that reads them (+103 B on 2026-08-26). It still carries no reader item chunk, because the archive lists days rather than stories."
     },
     "/console/": {
-      "bytes": 64967,
+      "bytes": 66158,
       "measured": "2026-08-26",
-      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them, the stage-timing decade axis with its minor stubs and its gap-instead-of-plunge run splitting, and now the Charts table that says what the router cost and what it published on each day. The table cost +592 B, measured on 2026-08-26 against the same tree without it: seven columns, a dash-for-no-number formatter, and the row markup Svelte compiles into the route chunk."
+      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them, the stage-timing decade axis with its minor stubs and its gap-instead-of-plunge run splitting, the Charts table that says what the router cost and what it published on each day, and now the What the model did table - nine counts of the day's own items, the divider row that names a model change, and the dash, percent and whole-unit formatters that keep a raw score off the screen. That section cost +1,196 B: the same tree measured 64,962 B with the four console files at origin/main and model-work.ts absent, and 66,158 B with them, on one machine on 2026-08-26."
     },
     "/evals/": {
       "bytes": 41860,

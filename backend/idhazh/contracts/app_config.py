@@ -808,7 +808,7 @@ class PageWeightConfig(Model):
         default_factory=lambda: {
             "/404": 1_127,
             "/archive/": 1_676_048,
-            "/console/": 136_772,
+            "/console/": 137_567,
             "/evals/": 2_475,
         },
         description=(
@@ -818,13 +818,15 @@ class PageWeightConfig(Model):
             "heaviest of three builds of one tree on 2026-08-26, six published days, "
             "plus the 64-byte noise floor in frontend/bundle-baseline.json - and "
             "nothing beyond it, because a ceiling above today's weight is a gate that "
-            "never fires. The regression these catch is a day payload inlined again, "
-            "which was 313,000 bytes when it last happened, so the noise floor costs "
-            "the gate nothing. /archive/ and /console/ also grow as the pipeline "
-            "publishes, so those two fire on a published day, and the answer that day "
-            "is the archive plan rather than a bigger number - the one exception being "
-            "the backfill that plan itself waits on, which is why /archive/ reads "
-            "1.68 MB here."
+            "never fires. /console/ was re-measured later that day, over the seven "
+            "published days and on the tree that added its 'What the model did' "
+            "section. The regression these catch is a day "
+            "payload inlined again, which was 313,000 bytes when it last happened, so "
+            "the noise floor costs the gate nothing. /archive/ and /console/ also grow "
+            "as the pipeline publishes, so those two fire on a published day, and the "
+            "answer that day is the archive plan rather than a bigger number - the one "
+            "exception being the backfill that plan itself waits on, which is why "
+            "/archive/ reads 1.68 MB here."
         ),
     )
 
