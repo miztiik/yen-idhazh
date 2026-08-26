@@ -38,6 +38,17 @@ export const DOWNLOAD_MB = 43;
 
 export const MODEL_ID = 'all-MiniLM-L6-v2';
 
+/** The token cap the runner truncates at, repeated here because it is not shared yet.
+ *
+ * One artifact, two runtimes only holds if both runtimes read the same amount
+ * of text. The tokenizer config says 512 and the pipeline takes its cap from
+ * there, so without this line a long query is read twice as far in the tab as
+ * every item it is compared against. The runner's copy is `MAX_TOKENS` in
+ * `backend/idhazh/embed.py`; row #8 of the plan moves that one into `config/`
+ * and this one follows it there.
+ */
+export const MAX_TOKENS = 256;
+
 export type AssistState =
 	| { status: 'idle' }
 	| { status: 'loading' }
@@ -88,6 +99,10 @@ export async function load(): Promise<Extractor> {
 			// here is what stops that 10 MB reaching a reader.
 			device: 'wasm'
 		});
+		// The feature-extraction pipeline hardcodes `truncation: true` and passes
+		// no length, so the cap comes from the tokenizer config. Setting it here
+		// is the only place the browser's cap can be named.
+		pipe.tokenizer.model_max_length = MAX_TOKENS;
 		extractor = pipe as unknown as Extractor;
 		return extractor;
 	})();
