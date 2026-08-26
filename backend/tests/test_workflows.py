@@ -72,6 +72,19 @@ LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256su
 LLAMA_PINNED_ENDPOINT: Final = (
     "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}"
 )
+# The four refs the daily run needs and the one place they are written. The
+# `plan` job reads `config/idhazh.json` and republishes them, so the workflow
+# holds no model repo and no weights filename of its own.
+MODEL_REF_OUTPUTS: Final = ("summarize_repo", "summarize_file", "route_repo", "route_file")
+# What the daily run used to call them at workflow scope. Named here so the
+# defect cannot come back under its own name at any scope.
+MODEL_ENV_NAMES: Final = frozenset({"MODEL_REPO", "MODEL_FILE", "ROUTE_REPO", "ROUTE_FILE"})
+# The weights cache jobs, and the config role each one serves.
+WEIGHTS_CACHE_ROLES: Final = {"work": "summarize", "route": "route"}
+# Bumped from v3 when the weights half of the key moved off the workflow `env`
+# copy, so the first run after that lands refetches once instead of restoring an
+# entry nobody can attribute.
+WEIGHTS_CACHE_SUFFIX: Final = "v4"
 MEASUREMENT_TARGETS: Final = frozenset({"llm", "image", "corpus", "runtime", "batched"})
 # The batched-bench arm's own definition. `docs/reference/measurements.md`
 # publishes these values as the invocation behind its number, so a silent edit
@@ -88,8 +101,8 @@ BATCHED_BENCH_SETTINGS: Final = {
 # the host it drew, and a number that cannot name the bytes that produced it is
 # not a measurement (Rule #10).
 RUNTIME_IDENTITY_JOBS: Final = {
-    "work": ("llama-server.log", "MODEL_FILE"),
-    "route": ("router.log", "ROUTE_FILE"),
+    "work": ("llama-server.log", "summarize_file"),
+    "route": ("router.log", "route_file"),
 }
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
@@ -374,6 +387,61 @@ def _script(step: dict[str, object], description: str) -> str:
     script = step.get("run")
     assert isinstance(script, str), f"{description} must run a shell script"
     return script
+
+
+def _expression(body: str) -> str:
+    return "${{ " + body + " }}"
+
+
+def _plan_output(name: str) -> str:
+    return _expression(f"needs.plan.outputs.{name}")
+
+
+def _every_env(workflow: dict[str, object]) -> list[tuple[str, dict[str, object]]]:
+    """Every `env` mapping in a workflow, at all three scopes it can appear at.
+
+    A job-scoped or step-scoped copy of a model ref is the same defect as the
+    workflow-scoped one that was deleted, so the search cannot stop at the top.
+    """
+    scopes: list[tuple[str, dict[str, object]]] = []
+    if (top := workflow.get("env")) is not None:
+        scopes.append(("workflow", _mapping(top, "workflow env")))
+    for job_name in _mapping(workflow.get("jobs"), "jobs"):
+        if (job_env := _job(workflow, job_name).get("env")) is not None:
+            scopes.append((f"job {job_name}", _mapping(job_env, f"job {job_name} env")))
+        for step in _steps(workflow, job_name):
+            if (step_env := step.get("env")) is None:
+                continue
+            label = step.get("name") or step.get("id") or step.get("uses")
+            where = f"job {job_name} step {label}"
+            scopes.append((where, _mapping(step_env, f"{where} env")))
+    return scopes
+
+
+def _run_the_models_step(script: str, config_root: Path) -> dict[str, str]:
+    """Run the program the `models` step carries, and read what it would write.
+
+    The step redirects its stdout into `$GITHUB_OUTPUT`, so its stdout IS the
+    job output. Running the shipped bytes against a real config directory is
+    what makes this a test of the step rather than of a copy of it.
+    """
+    match = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
+    assert match is not None, "the models step must carry an inline program"
+
+    result = subprocess.run(
+        [sys.executable, "-c", match.group(1)],
+        cwd=config_root,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise AssertionError(result.stderr.strip())
+    return dict(
+        cast(tuple[str, str], tuple(line.split("=", 1)))
+        for line in result.stdout.splitlines()
+        if line
+    )
 
 
 def _grep_pattern(script: str, description: str) -> re.Pattern[str]:
@@ -1265,7 +1333,90 @@ def test_the_health_check_names_the_weights_that_answered() -> None:
     assert '["models"]["summarize"]["id"]' in script, "the alias comes from config"
     assert "/v1/models" in script, "assert the served alias"
     assert "/props" in script, "assert the loaded path"
-    assert "${MODEL_FILE}" in script
+    assert _plan_output("summarize_file") in script
+
+
+def test_the_daily_run_writes_no_model_ref_of_its_own() -> None:
+    """The Oracle. One place writes a production model ref, and it is config.
+
+    `digest.yml` used to carry the repo and the filename as workflow `env` while
+    the alias came from config. Two answers to one question drift the moment
+    either is edited: llama-server then serves the old bytes under the new alias
+    and every eval row names a model that never ran (Rule #6, Rule #10).
+    """
+    text = read_text(WORKFLOWS_DIR / "digest.yml")
+    assert ".gguf" not in text, "a weights filename is written in config, not here"
+    assert not re.search(r"huggingface\.co/(?!\$\{\{)", text), "no repo literal"
+
+    workflow = _load_workflows()["digest.yml"]
+    for scope, env in _every_env(workflow):
+        named = MODEL_ENV_NAMES & set(env)
+        assert not named, f"{scope} names a model through env: {sorted(named)}"
+
+
+def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Path) -> None:
+    """`needs` resolves before a job's first step. `steps` does not.
+
+    That difference is the whole reason the refs travel as job outputs: it is
+    what lets the weights cache key in `work` and `route` name the file it holds
+    rather than be told by a copy that can disagree with config.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
+    for name in MODEL_REF_OUTPUTS:
+        assert outputs.get(name) == _expression(f"steps.models.outputs.{name}")
+
+    step = _step(workflow, "plan", "id", "models")
+    script = _script(step, "digest.yml/plan/models")
+    assert "config/idhazh.json" in script, "the refs come from config"
+    assert '>> "$GITHUB_OUTPUT"' in script
+
+    models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
+    assert _run_the_models_step(script, REPO_ROOT) == {
+        f"{role}_{field}": models[role][field]
+        for role in ("summarize", "route")
+        for field in ("repo", "file")
+    }
+
+    # Every ref is substituted straight into a shell command downstream, so the
+    # one step that writes them is where a value that is not one bare word has
+    # to stop. Nothing else between config and those commands can catch it.
+    (tmp_path / "config").mkdir()
+    models["summarize"]["file"] = "Qwen3-8B-Q4_K_M.gguf; rm -rf /"
+    (tmp_path / "config" / "idhazh.json").write_text(
+        json.dumps({"models": models}), encoding="utf-8"
+    )
+    with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
+        _run_the_models_step(script, tmp_path)
+
+
+def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
+    """Both halves of what the entry holds, and both from one source.
+
+    The fetch step runs only on a cache miss, so a key that omits either half
+    turns that step into dead code and serves the wrong bytes silently. The
+    composed string is asserted too: an expression that does not resolve leaves
+    a literal `${{` in the key, and Actions would key the cache on that text.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    keys = dict(_runtime_cache_keys(workflow))
+    assert set(keys) == set(WEIGHTS_CACHE_ROLES)
+
+    models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
+    for job_name, role in WEIGHTS_CACHE_ROLES.items():
+        weights = _plan_output(f"{role}_file")
+        build = _expression("env.LLAMA_CPP_BUILD")
+        assert keys[job_name] == f"llm-{weights}-{build}-{WEIGHTS_CACHE_SUFFIX}", job_name
+
+        composed = keys[job_name].replace(weights, models[role]["file"]).replace(
+            build, PINNED_LLAMA_BUILD
+        )
+        assert "${{" not in composed, f"{job_name}: every half of the key must resolve"
+        assert composed == (
+            f"llm-{models[role]['file']}-{PINNED_LLAMA_BUILD}-{WEIGHTS_CACHE_SUFFIX}"
+        ), job_name
+
+    assert keys["work"] != keys["route"], "one entry cannot hold two sets of weights"
 
 
 def test_measurements_dispatch_selects_exactly_one_target() -> None:
@@ -1506,7 +1657,7 @@ def test_every_inference_job_names_its_host_binary_and_weights() -> None:
     """
     workflow = _load_workflows()["digest.yml"]
 
-    for job_name, (log_name, weights_var) in RUNTIME_IDENTITY_JOBS.items():
+    for job_name, (log_name, weights_output) in RUNTIME_IDENTITY_JOBS.items():
         step = _step(workflow, job_name, "name", RUNTIME_IDENTITY_STEP)
         where = f"digest.yml/{job_name}/{RUNTIME_IDENTITY_STEP}"
         # A cancelled job skips a step with no condition, and a shard that died
@@ -1520,7 +1671,7 @@ def test_every_inference_job_names_its_host_binary_and_weights() -> None:
             f"'system_info' {log_name}",
             "llama-server --version",
             "sha256sum backend/bin/llama-server",
-            f'sha256sum "backend/models/${{{weights_var}}}"',
+            f'sha256sum "backend/models/{_plan_output(weights_output)}"',
         ):
             assert probe in script, f"{where} must print {probe}"
         assert "${LLAMA_CPP_BUILD}" in script, f"{where} must name the pinned build"
