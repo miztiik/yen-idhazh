@@ -322,6 +322,24 @@ contends with the first.
   then shows progress dots and an exit code and nothing else, which reads like
   a broken collection. Run `pytest` with no quiet flag. Before concluding that
   a missing summary means something is wrong, check `[tool.pytest.ini_options]`.
+- **A launch that reported nothing still launched.** `Start-Process -Wait`
+  returned `Command produced no output` and exit 1 three times on 2026-08-26
+  while starting the script every time, so three builds wrote `frontend/build`
+  and one output directory at once. Nothing errored. `npm run bundle-gate` then
+  measured a half-written tree and put `/console/` at 52,127 B against a real
+  130,396 - a number that was one paste away from being recorded as a ceiling.
+  Two tells: a page weight that moved by tens of kilobytes with no change to
+  match it, and `The process cannot access the file` when you read the output
+  back. Before trusting any byte measurement, look for the second build:
+
+  ```powershell
+  Get-CimInstance Win32_Process -Filter "Name='node.exe'" | Select-Object ProcessId,CommandLine
+  ```
+
+  This is the sharp edge of the "re-issue a command that produced no output"
+  rule below: re-issue it only after checking whether the first one is running.
+  `frontend/build` is one shared directory, so two builds in it is not a slow
+  gate - it is a wrong number that looks like a right one.
 
 ## PowerShell
 

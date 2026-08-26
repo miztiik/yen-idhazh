@@ -1,4 +1,5 @@
 import type { RateSpread, StageTimingDay, ThroughputDay } from '$lib/charts/series';
+import { modelByDate, modelWork } from '$lib/server/model-work';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
@@ -18,14 +19,6 @@ export const prerender = true;
 
 type TimingStats = StageTimingDay;
 
-interface ScoreStats {
-	date: string;
-	items: number;
-	scoreMs: number;
-	meanHhem: number;
-	bands: { high: number; medium: number; low: number };
-}
-
 interface CompressionPoint {
 	date: string;
 	item_id: string;
@@ -36,6 +29,10 @@ interface CompressionPoint {
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
+
+// The page prints these; the derivation is server-only, so the shape crosses
+// as a type and the ledger reader never reaches a browser bundle.
+export type { ModelDay, ModelRow } from '$lib/server/model-work';
 
 export interface RunSquare {
 	runId: string;
@@ -289,6 +286,7 @@ export function load() {
 
 	const scoresByDate = byDate(rows);
 	const itemHealthByDate = byDate(itemRows);
+	const modelOnDate = modelByDate(rows);
 
 	const timingDays: TimingStats[] = [...itemHealthByDate.entries()]
 		.map(([date, group]) => {
@@ -354,6 +352,7 @@ export function load() {
 				readTps: prefillMs > 0 ? evaluated / (prefillMs / 1000) : 0,
 				writeTps: decodeMs > 0 ? written / (decodeMs / 1000) : 0,
 				cacheHitPct: prompt > 0 ? (cached / prompt) * 100 : 0,
+				model: modelOnDate.get(date) ?? null,
 				runs: [...perRun.entries()]
 					.map(([runId, bucket]) => ({
 						runId,
@@ -366,24 +365,6 @@ export function load() {
 		})
 		.filter((day): day is ThroughputDay => day !== null)
 		.sort((a, b) => a.date.localeCompare(b.date));
-
-	const scoreDays: ScoreStats[] = [...scoresByDate.entries()]
-		.map(([date, group]) => {
-			const num = (name: string) => group.map((r) => Number(r[name] ?? 0) || 0);
-			const bands = { high: 0, medium: 0, low: 0 };
-			for (const row of group) {
-				const band = row.band as keyof typeof bands;
-				if (band in bands) bands[band] += 1;
-			}
-			return {
-				date,
-				items: group.length,
-				scoreMs: median(num('score_ms')),
-				meanHhem: num('hhem').reduce((a, b) => a + b, 0) / Math.max(group.length, 1),
-				bands
-			};
-		})
-		.sort((a, b) => b.date.localeCompare(a.date));
 
 	const manifests = loadManifests();
 	// The strip is a time axis, so it reads oldest to newest. The Runs table under
@@ -416,7 +397,11 @@ export function load() {
 		// The explanation lives in docs/, which the site does not publish, so the
 		// chart points at the repository rather than restating it in a caption.
 		throughputReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/architecture/summarize/throughput.md`,
-		scoreDays,
+		// Every fixed benchmark figure lives in the write-up and none of them is
+		// copied onto this page: two machines and two workloads, so a gap between a
+		// bench number and a run reads as a regression nobody measured.
+		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/measurements.md`,
+		modelWork: modelWork(rows, itemRows),
 		manifests,
 		charts: chartDays(manifests, publishedCharts()),
 		totalRows: rows.length,

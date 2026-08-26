@@ -1,12 +1,13 @@
 <script lang="ts">
 	/** The operator's page. Not a reader's.
 	 *
-	 * It answers five questions and refuses to answer any others: did the runs
-	 * work, which feeds are broken, how long each stage took, how big the site is
-	 * getting, and whether the chart arm earns its router minutes. Every count is
-	 * read from the committed ledger. The only arithmetic is one committed count
-	 * divided by another, and that is deliberate: a stored rate can disagree with
-	 * the counts printed beside it.
+	 * It answers six questions and refuses to answer any others: did the runs
+	 * work, which feeds are broken, how long each stage took, what the model did
+	 * to the day's own articles, how big the site is getting, and whether the
+	 * chart arm earns its router minutes. Every count is read from the committed
+	 * ledger. The only arithmetic is one committed count divided by another, and
+	 * that is deliberate: a stored rate can disagree with the counts printed
+	 * beside it.
 	 *
 	 * The run grid stays static. The telemetry viewport and the timing trend are
 	 * hand-written SVG, so the console still reads with JavaScript off.
@@ -16,7 +17,7 @@
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
-	import type { Health } from './+page.server';
+	import type { Health, ModelDay } from './+page.server';
 
 	let { data } = $props();
 
@@ -71,6 +72,90 @@
 	 */
 	function minutes(value: number | null): string {
 		return value === null ? '-' : value.toFixed(1);
+	}
+
+	/** A count of today's items, or a dash where the ledger holds no answer.
+	 *
+	 * Null is not zero. A day the scorer never ran on has summaries nobody
+	 * counted, and a zero there would say the model wrote nothing.
+	 */
+	function count(value: number | null): string {
+		return value === null ? '-' : String(value);
+	}
+
+	function percent(value: number | null): string {
+		return value === null ? '-' : `${value}%`;
+	}
+
+	/** Whole units, never a decimal, and never a zero that was really work.
+	 *
+	 * A measurement that rounds away prints `<1`. Rounded to `0` it would say the
+	 * model ran for nothing, which is the one reading the number cannot support.
+	 */
+	function whole(ms: number | null, per: number): string {
+		if (ms === null) return '-';
+		const value = Math.round(ms / per);
+		return value === 0 && ms > 0 ? '<1' : String(value);
+	}
+
+	/** Every column of the model table, in the order it is printed.
+	 *
+	 * The label and the sentence under it live together, so a column cannot be
+	 * added without saying in plain words what it counts.
+	 */
+	const COLUMNS: { key: string; label: string; line: string }[] = [
+		{ key: 'summaries', label: 'Summaries today', line: '' },
+		{
+			key: 'not-sure',
+			label: 'Marked "not sure"',
+			line: "How many of today's summaries we told you not to trust."
+		},
+		{
+			key: 'unsupported',
+			label: 'Numbers not in the article',
+			line: 'The summary had a figure. The article did not.'
+		},
+		{
+			key: 'hedge',
+			label: '"Maybe" told as fact',
+			line: 'The article said it might have happened. The summary said it did.'
+		},
+		{
+			key: 'part',
+			label: 'Article read only in part',
+			line: 'The article was too long, so the machine read the start and stopped.'
+		},
+		{
+			key: 'copied',
+			label: 'Copied, not rewritten',
+			line: 'How much of a normal summary is lifted word for word.'
+		},
+		{
+			key: 'per-item',
+			label: 'Time to write one',
+			line: 'How long the machine takes on one article.'
+		},
+		{ key: 'minutes', label: 'Model minutes', line: '' },
+		{ key: 'failed', label: 'Failed', line: '' }
+	];
+
+	/** One day's printed cells, in the order `COLUMNS` names them.
+	 *
+	 * Built here rather than spelled out in the markup so a header and its column
+	 * cannot drift apart, which is the way a table starts lying.
+	 */
+	function cells(day: ModelDay): { key: string; text: string }[] {
+		return [
+			{ key: 'summaries', text: count(day.summaries) },
+			{ key: 'not-sure', text: count(day.notSure) },
+			{ key: 'unsupported', text: count(day.unsupportedNumbers) },
+			{ key: 'hedge', text: count(day.hedgeDropped) },
+			{ key: 'part', text: count(day.readInPart) },
+			{ key: 'copied', text: percent(day.copiedPct) },
+			{ key: 'per-item', text: whole(day.perItemMs, 1000) },
+			{ key: 'minutes', text: whole(day.totalMs, 60_000) },
+			{ key: 'failed', text: count(day.failed) }
+		];
 	}
 </script>
 
@@ -227,44 +312,79 @@
 		width={data.console.chart_width}
 	/>
 
-	{#if data.throughputDays.length > 0}
-		<ThroughputTrend
-			days={data.throughputDays}
-			height={data.console.chart_height}
-			width={data.console.chart_width}
-			reference={data.throughputReference}
-		/>
-	{/if}
-
-	{#if data.scoreDays.length === 0}
-		<p class="mt-10 text-[0.9375rem] text-text-secondary">
-			Nothing has been scored yet. The score ledger fills as days publish.
+	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
+		<p class="mt-10 text-[0.9375rem] text-text-secondary" data-model="empty">
+			Nothing has been summarised yet. This fills as days publish.
 		</p>
 	{:else}
-		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Confidence and size</h2>
-		<div class="mt-3 overflow-x-auto">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule text-start">
-						<th class="py-2 text-start font-normal">Day</th>
-						<th class="py-2 text-end font-normal">Mean faithfulness</th>
-						<th class="py-2 text-end font-normal">High</th>
-						<th class="py-2 text-end font-normal">Medium</th>
-						<th class="py-2 text-end font-normal">Low</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.scoreDays as day (day.date)}
-						<tr class="border-b border-rule">
-							<td class="py-2">{day.date}</td>
-							<td class="py-2 text-end tabular-nums">{day.meanHhem.toFixed(3)}</td>
-							<td class="py-2 text-end tabular-nums">{day.bands.high}</td>
-							<td class="py-2 text-end tabular-nums">{day.bands.medium}</td>
-							<td class="py-2 text-end tabular-nums">{day.bands.low}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
+		<div data-model-section>
+			<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">What the model did</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+				Every figure is that day's own articles, measured the day it ran. The articles change
+				every day, so a dip can be the news rather than the model. Fixed benchmark figures are
+				not here - they are in the
+				<a href={data.measurementsReference} class="text-accent hover:underline" rel="noreferrer"
+					>measurements write-up</a
+				>.
+			</p>
+
+			{#if data.throughputDays.length > 0}
+				<ThroughputTrend
+					days={data.throughputDays}
+					height={data.console.chart_height}
+					width={data.console.chart_width}
+					reference={data.throughputReference}
+				/>
+			{/if}
+
+			{#if data.modelWork.length > 0}
+				<div class="mt-6 overflow-x-auto" data-model="table">
+					<table class="w-full text-[0.8125rem]">
+						<thead class="text-text-tertiary">
+							<tr class="border-b border-rule">
+								<th class="py-2 pe-4 text-start align-bottom font-normal">Day</th>
+								{#each COLUMNS as column (column.key)}
+									<th class="py-2 ps-4 text-end align-bottom font-normal">
+										<!-- The sentence is bounded rather than left to the column, so a
+										     nine-column table wraps its explanations instead of growing
+										     past the width an operator can read. -->
+										<span class="ms-auto block max-w-[10rem]">
+											{column.label}
+											{#if column.line}
+												<span class="mt-0.5 block text-[0.6875rem] leading-snug"
+													>{column.line}</span
+												>
+											{/if}
+										</span>
+									</th>
+								{/each}
+							</tr>
+						</thead>
+						<tbody>
+							{#each data.modelWork as row (row.kind === 'swap' ? `swap ${row.date}` : row.day.date)}
+								{#if row.kind === 'swap'}
+									<!-- A date and an id. An arrow or a delta here would claim the swap
+									     caused whatever moved, and no committed figure says that. -->
+									<tr class="border-b border-rule" data-model-swap={row.date}>
+										<td colspan={COLUMNS.length + 1} class="py-2 text-[0.75rem] text-text-tertiary">
+											{row.date} - {row.model}
+										</td>
+									</tr>
+								{:else}
+									<tr class="border-b border-rule" data-model-day={row.day.date}>
+										<td class="py-2 pe-4">{row.day.date}</td>
+										{#each cells(row.day) as cell (cell.key)}
+											<td class="py-2 ps-4 text-end tabular-nums" data-model-cell={cell.key}
+												>{cell.text}</td
+											>
+										{/each}
+									</tr>
+								{/if}
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			{/if}
 		</div>
 	{/if}
 
