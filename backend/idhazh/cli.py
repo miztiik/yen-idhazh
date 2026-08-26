@@ -113,10 +113,22 @@ QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualificatio
 #: The planted attacks, run live against a candidate before it is adopted.
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
-INDEX_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "assist" / "index"
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
+
+
+def _index_root() -> Path:
+    """Where a month's search index goes, derived from the digest root it projects.
+
+    Derived rather than a constant of its own, because a constant does not move
+    when a caller moves the days. A test that redirects `PUBLIC_ROOT` at a
+    temporary tree used to leave this pointing at the repository, so the suite
+    rebuilt the committed shard out of fixture days - which is how the shard on
+    `main` came to name one item no published day holds. `publish_telemetry` is
+    passed its root the same way and for the same reason.
+    """
+    return PUBLIC_ROOT.parent / "assist" / "index"
 
 
 def _run_dir(date: str) -> Path:
@@ -1859,7 +1871,7 @@ def stage_assemble(
     # The month shard is a projection of the days on disk, so it is rebuilt after
     # the day is written and never patched in place.
     index = assemble.rebuild_search_index(
-        digest_root=PUBLIC_ROOT, index_root=INDEX_ROOT, month=assemble.month_of(plan.date)
+        digest_root=PUBLIC_ROOT, index_root=_index_root(), month=assemble.month_of(plan.date)
     )
 
     site_bytes, site_files = assemble.site_size(PUBLIC_ROOT)
@@ -2304,7 +2316,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # day is the one the scheduled pipeline is appending to.
         return stage_backfill_vectors(
             root=PUBLIC_ROOT,
-            index_root=INDEX_ROOT,
+            index_root=_index_root(),
             today=min(date, _today()),
             embedder=Embedder(config.REPO_ROOT, settings.app.assist),
         )
