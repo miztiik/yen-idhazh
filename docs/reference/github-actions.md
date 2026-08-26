@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -77,7 +77,11 @@ would drop or double-work items with no error. The workflow enforces
 Each worker checks its weights before it starts the server. `sha256sum` compares
 the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a
 cache hit as well as a miss, because a restored cache entry is the one case where
-nobody watched the bytes arrive. The health check then asserts that
+nobody watched the bytes arrive. The router does the same against
+`models.route.sha256`; so do the two measurement jobs that load the summarizer.
+The rule is written once, under
+[Every download fails loudly, and every weight is checked](#every-download-fails-loudly-and-every-weight-is-checked).
+The health check then asserts that
 `GET /v1/models` returns the configured alias and that `GET /props` names the
 configured filename. A shard that fails either one stops before it summarizes
 anything.
@@ -317,6 +321,48 @@ fixed string `llama-server-local`, so the manifest does not yet name the build.
 
 A workflow contract test pins the three variables, the digest check on every
 fetch path, and the build inside every runtime cache key.
+
+## Every download fails loudly, and every weight is checked
+
+Every download in every workflow is spelled `curl -fsSL --retry 3
+--retry-all-errors`, and the release lookups that find the llama.cpp archive are
+spelled `curl -fsS`. `-f` is the letter that matters. Without it curl treats a
+403 or a 502 as a successful transfer: it writes the HTTP error body into the
+output file and exits 0. Nothing downstream looks at the file until a server
+tries to open it.
+
+In the daily run that is worse than a failed step, because `backend/models` is a
+cache path. A rate-limited minute writes a page of error text where the weights
+should be, `actions/cache` saves it under the pinned key, and every later run
+restores that same page until the entry is evicted. The retries are the cheap
+half of the fix; `-f` is the half that stops the bad file being written at all.
+
+The digest check is what catches the other failure, a transfer that dies
+mid-body. That is a 200 response, so curl has nothing to retry and the file on
+disk is simply short. Every job that downloads weights therefore runs
+`sha256sum --check` against a recorded digest, after the fetch and before
+anything reads the file. **No check carries an `if:`.** The fetch step is
+skipped on a cache hit, and a restored entry is the one case where nobody
+watched the bytes arrive - so it is the case that most needs the check.
+
+| Workflow and job | Weights | Digest read from |
+| --- | --- | --- |
+| `digest.yml` / `work` | the summarizer | `models.summarize.sha256` |
+| `digest.yml` / `route` | the router | `models.route.sha256` |
+| `measure.yml` / `runtime` | the summarizer | `models.summarize.sha256` |
+| `measure.yml` / `batched` | the summarizer | `models.summarize.sha256` |
+| `validate.yml` / `qualify` | the candidate | the `plan` job's `candidate_sha256` |
+
+The four config digests are the same field, `ModelRef.sha256` in
+`config/idhazh.json`. `validate.yml` is the one exception, and deliberately: an
+operator can point it at a model config does not name, so its `plan` job decides
+the digest once - from the dispatch input, or from config when there is none -
+and republishes it as a job output the whole run reads.
+
+The workflow contract test that holds this open is closed-world. It finds the
+downloads by reading every workflow file rather than by consulting a list, and
+fails when the set it finds differs from the set it pins. A tenth workflow that
+downloads weights fails the test until it carries the same pair of steps.
 
 ## One place writes a production model ref, and it is config
 
