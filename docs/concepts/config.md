@@ -230,6 +230,19 @@ Some numbers in `config/` are not there to be tuned. They are there to stop a bu
 
 A guard set near the working range is the worst of both. It fires on good runs, gets raised to stop the noise, and stops guarding anything. That is the failure the token cap actually had.
 
+### The other failure: a vocabulary with no way to be applied
+
+A knob nothing reads has a mirror image, and it is harder to see. `taxonomy.json` declared four lenses and nine event types from the first commit, and every one of them carried an `id`, a `display_name` and **no way to say what assigns it**. So nothing ever did: measured 2026-08-26, 0 of 2,121 committed items carried a lens or an event. The file read as a working vocabulary and was a list of labels.
+
+The fix, on 2026-08-26, was a `keywords` list on each lens and each event, holding the curated terms that assign it ([../architecture/sources/discovery.md](../architecture/sources/discovery.md) owns the rule and its measured coverage). Two things about that field are deliberate:
+
+- **It is a config field and not a code constant** (Rule #6), because it is a curated artifact that gets tuned. The first draft over-tagged: bare `research` and `study` put the `research` event on 34.7 percent of real articles, which is not a filter. Tuning it must not be a code change.
+- **An empty list is legal and assigns nothing.** That is what makes the field additive - a taxonomy written before it still validates - and it is also exactly the silence that let the vocabulary ship unwired for five days. A test now asserts every committed lens and event carries terms, so the empty state cannot come back unnoticed.
+
+The lesson generalises past this file: **a config entry that declares a thing must also declare how the thing is decided, or it is decoration.** An id and a display name describe a label. They never describe a rule.
+
+The same day found the third shape of the same failure, and it is the worst of them: **a knob that is read, but always against an empty input.** `collect.watchlist_bonus` was read on every planned item and added to the score under `if watchlist_hit`, and it could never fire, because `watchlist_hit` was tested against a `watchlist_keys` the caller hardcoded to the empty set. Nothing here was dead code and nothing was unread config, and the term still never moved a number. A test asserting "the bonus lifts the score" passed the whole time, because the test supplied the flag itself. Fixed 2026-08-26: `config/watchlist.json` carries 30 entities and the flag comes from their aliases. The test now pins each term's **size** against its knob rather than only its direction, which is the check that would have caught it.
+
 ## A knob nothing reads is deleted
 
 A knob that no code path reads is worse than clutter. It reads as a control, so the next person to open the file sizes the system by what the knobs claim - and eventually somebody changes one and waits for an effect that never arrives.
