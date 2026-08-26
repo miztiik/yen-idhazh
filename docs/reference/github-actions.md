@@ -64,7 +64,7 @@ more restores and never more cache bytes.
 The derivation runs in its own `fanout` step after `Plan the day`, because there
 is no planned item count before the plan exists. `jobs.plan.outputs.shards` and
 `jobs.plan.outputs.matrix` both read that step; `date` and `faithfulness` still
-come from `decide`.
+come from `decide`, and the four model refs come from `models`.
 
 Each worker receives its round-robin share of the whole plan and reads the count
 from the job output rather than deriving it again - two answers to that question
@@ -265,10 +265,11 @@ digest before it unpacks anything.
 The SHA-256 is the release API's own `digest` for that asset. It was confirmed
 on 2026-08-25 by downloading the 16,377,727-byte archive and hashing it.
 
-The weights cache key names the build: `llm-<weights>-<build>-v3` in the two
+The weights cache key names the build: `llm-<weights>-<build>-v4` in the two
 `digest.yml` jobs, `validate-<challenger>-<build>-v3` in `validate.yml`. The
-suffix moved from `v2` in the same change, so the first run after it landed
-refetched once rather than restoring the older entry.
+`digest.yml` suffix moved to `v4` when the weights half stopped coming from a
+workflow variable, so the first run after that refetched once rather than
+restoring an entry nobody could attribute. `v3` was the same move for the build.
 
 **The key matters more than the pin.** The fetch step runs only on a cache
 miss. Keyed on the weights alone, the cache froze one binary and then served a
@@ -282,6 +283,35 @@ fixed string `llama-server-local`, so the manifest does not yet name the build.
 
 A workflow contract test pins the three variables, the digest check on every
 fetch path, and the build inside every runtime cache key.
+
+## One place writes a production model ref, and it is config
+
+`config/idhazh.json` holds `models.summarize` and `models.route`. `digest.yml`
+holds no model repository and no weights filename of its own - grepping it for a
+`.gguf` name or a Hugging Face repository returns nothing, and a workflow
+contract test asserts that.
+
+The `plan` job reads config in a `models` step and publishes four job outputs:
+`summarize_repo`, `summarize_file`, `route_repo` and `route_file`. `work` and
+`route` already `needs: plan`, and **the `needs` context resolves before a job's
+first step while `steps` does not**. That is the whole reason the refs travel as
+job outputs: it is what lets a cache key name the weights it holds. A step
+cannot, which is why the key had to be told by a second copy until now.
+
+That second copy was the defect. The alias came from config while the repository
+and the filename came from workflow `env`, so editing one served the old bytes
+under the new alias and filed every eval row under a model that never ran
+(Rule #10). Changing the model is now one edit to config, and the cache key moves
+with it.
+
+The `models` step asserts each value is one bare word before it writes it. Every
+ref is substituted straight into a shell command downstream, and that step is the
+only point between config and those commands where a value carrying a space, a
+quote or a newline can be stopped.
+
+`measure.yml` and `validate.yml` keep their own model variables on purpose.
+Neither keys a cache on a production model ref, and measuring or validating a
+candidate means naming a model that is deliberately not in config yet.
 
 ## Repository settings these workflows depend on
 
