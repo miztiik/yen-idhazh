@@ -7,7 +7,15 @@ name = "idhazh"
 version = "0.1.0"
 description = "Build-time producer for yen-idhazh: a static-first, self-evaluating article digest."
 readme = "README.md"
-requires-python = ">=3.12"
+# The floor is what CI installs. The ceiling is what the dependencies publish:
+# the compiled ones ship one wheel per CPython minor, and `onnxruntime` is
+# pinned exactly, so its matrix is the wall. Version 1.29.0 publishes cp311
+# through cp314 and no source distribution at all, so 3.15 cannot install at any
+# price (read from the package index, 2026-08-26). Without a ceiling pip does
+# not refuse an interpreter it cannot resolve - it falls back to a source build
+# and stops answering. `a0` because pip matches this specifier with prereleases
+# enabled, so a plain `<3.15` would still admit a 3.15 beta.
+requires-python = ">=3.12,<3.15.0a0"
 license = "MIT"
 dependencies = [
     # The single source of truth for every persisted shape (Rule #3). Also

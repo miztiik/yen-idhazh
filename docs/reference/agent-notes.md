@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-26
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -222,6 +222,49 @@ release is pinned and digest-checked, and each inference job prints the sha256
 of its binary and its weights. Kept here because the shape generalises: any
 cache key that omits an input the cached bytes depend on turns a fetch step
 into dead code and the artifact into an unnamed one.
+
+## The Python environment
+
+**An install on an unsupported interpreter does not fail - it stops
+answering.** `pip install -e ".[dev]"` prints no error and no traceback, and
+`site-packages` holds `pip` and nothing else. Observed 2026-08-25 on Windows:
+the documented `python -m venv .venv` took whatever `python` resolved to, which
+was 3.14, and ten minutes later `site-packages` still held only `pip`. Nothing
+about it reads as a version problem.
+
+It is deceptive because pip writes nothing into `site-packages` until it has
+resolved and built every distribution. A large download, a resolver that keeps
+backtracking and a source build all look the same from outside: a venv with only
+`pip` in it. The symptom cannot point at a cause.
+
+**A missing wheel is the cause that never resolves itself.** A compiled
+dependency ships one wheel per CPython minor. When the minor is missing, pip
+falls back to the source distribution and starts a build - `pydantic-core` then
+wants a Rust toolchain and `lxml` wants libxml2, and neither prints a line for
+minutes. One command tells you which interpreter you are on:
+
+```powershell
+.\.venv\Scripts\python.exe -c "import sys; print(sys.version)"
+```
+
+**Closed 2026-08-26 at the top end.** `pyproject.toml` now declares
+`requires-python = ">=3.12,<3.15.0a0"`, so pip refuses an interpreter it cannot
+resolve for, up front, with a message that names the version. The ceiling is
+`onnxruntime==1.29.0`: pinned exactly, cp311 through cp314, and no source
+distribution at all, so 3.15 cannot install at any price.
+
+**The 3.14 hang was not a missing wheel, whatever it looked like.** Every
+per-minor compiled dependency in the resolved set publishes a cp314 wheel for
+Windows, the oldest of them uploaded 2026-05-06 - read from the package index on
+2026-08-26, after the observation. By elimination a 3.14 install that never
+returns is a download or a resolve that is not finishing, and this page already
+records a TLS handshake failure against `files.pythonhosted.org`. Do not repeat
+the wheel diagnosis without checking the index first.
+
+**On a machine whose only interpreter is outside the bound**, do not fight the
+venv. Use the shared checkout's interpreter with `PYTHONPATH` set to your own
+worktree's `backend` - the same escape as the `.pth` trap above, and it needs
+the same `import idhazh` check before any result is worth reading.
 
 ## Running the gates
 
