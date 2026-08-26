@@ -900,7 +900,13 @@ def stage_route(
         )
 
 
-def _route_one(article: Article, summary: Summary, settings: config.Settings) -> tuple[Route, bool]:
+def _route_one(
+    article: Article,
+    summary: Summary,
+    settings: config.Settings,
+    *,
+    endpoint: str = DEFAULT_ENDPOINT,
+) -> tuple[Route, bool]:
     """One routing decision, and whether the model was asked for it.
 
     The model is skipped when no enabled visual kind could survive `to_route`'s
@@ -911,7 +917,10 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
     settled question.
 
     A skipped item still writes a `Route`. Silence is what turns a skip into a
-    quiet descope of the feature.
+    quiet descope of the feature. So does an item the model never answered for,
+    and the two ways it can go unanswered are logged apart: a server that
+    refused the prompt for length is running, and a run log that calls it
+    unreachable sends whoever reads it to look for a process that never died.
     """
     visuals = settings.app.visuals
     facts = route.numeric_facts(article.text or "", limit=visuals.max_facts)
@@ -934,11 +943,22 @@ def _route_one(article: Article, summary: Summary, settings: config.Settings) ->
         inference=settings.app.models.inference,
         visuals=visuals,
     )
+    completion: Completion
+    cause = "router unreachable"
     try:
-        completion = post(payload, timeout=visuals.request_timeout_minutes * 60)
+        completion = post(payload, endpoint=endpoint, timeout=visuals.request_timeout_minutes * 60)
+    except HTTPError as error:
+        # Before OSError, which HTTPError subclasses. A server that answered is
+        # not an unreachable one, and the body is the only place it says why it
+        # refused. It is a stream, so read it once.
+        completion = Completion(content="")
+        with error:
+            if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
+                cause = "router prompt did not fit the context window"
+        LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
     except OSError as error:
         completion = Completion(content="")
-        LOG.warning("router unreachable id=%s reason=%s", article.item_id, type(error).__name__)
+        LOG.warning("%s id=%s reason=%s", cause, article.item_id, type(error).__name__)
     return (
         route.to_route(
             article,
