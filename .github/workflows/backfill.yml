@@ -1,0 +1,111 @@
+name: Vector backfill
+
+# Row #11: the corpus was part empty, so archive search ranked well over the
+# items it could see and could not see most of them. Measured 2026-08-26 over
+# the five closed days: 439 vectors for 1,614 items that had earned one.
+#
+# `build_day` used to replace a day's embeddings block instead of merging it, so
+# a day that ran five times kept the last run's vectors alone. That is fixed
+# forward. Nothing revisits a closed day - a scheduled run only ever appends to
+# the current one - so the days already committed stay wrong until something
+# goes back for them. This is that something.
+#
+# Never scheduled, and it never will be. It is a repair, and a repair that runs
+# on a timer is a repair nobody reads the output of. A person dispatches it,
+# reads what it says it changed, and dispatches it again to commit.
+#
+# It runs here rather than on a developer machine because this is the machine
+# that wrote every other vector in the corpus. Measured 2026-08-26, the gap that
+# argument protects against is real: a Windows re-encode of the day CI had
+# written hours earlier returns a median cosine of 1.000000 with 54 of 80
+# vectors byte-identical, which is close - and 26 of 80 still differ. Vectors a
+# reader ranks against each other should come from one place.
+
+on:
+  workflow_dispatch:
+    inputs:
+      commit:
+        description: 'Commit the repaired days. Off reports what would change and commits nothing.'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: backfill-vectors
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    runs-on: ubuntu-latest
+    # Measured 2026-08-26 (Windows 11, 8 vCPU, onnxruntime 1.29.0): 0.16 s an
+    # item, one sequence per forward pass. The whole committed corpus is under
+    # five minutes of that. The bound is here for the site build, not the
+    # encoder.
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # No dev extra: the encoder and the tokenizer are base dependencies, and
+      # the weights are committed under frontend/static/.
+      - name: Install
+        run: pip install -e .
+
+      - name: Re-encode every closed day whose vectors are wrong
+        run: python -m idhazh backfill-vectors
+
+      - name: Say what changed
+        run: |
+          set -euo pipefail
+          git diff --stat -- frontend/public/digest/
+          python - <<'PY'
+          import json, pathlib
+          root = pathlib.Path("frontend/public/digest")
+          total_items = total_vectors = 0
+          for path in sorted(root.glob("*/*/*/digest.json")):
+              day = json.loads(path.read_text(encoding="utf-8"))
+              vectors = len((day.get("embeddings") or {}).get("vectors", {}))
+              items = len(day["items"])
+              total_items += items
+              total_vectors += vectors
+              print(f"{day['date']}  items={items:>5}  vectors={vectors:>5}")
+          print(f"corpus: {total_vectors} vectors over {total_items} items")
+          PY
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install the site
+        working-directory: frontend
+        run: npm ci
+
+      # The vectors ride inside the day payloads, and /archive/ inlines every
+      # committed day to feed the on-device search - so this job is the one that
+      # can push that page past its configured ceiling. Proving the site still
+      # fits BEFORE the commit is the difference between a dispatch that does
+      # nothing and a dispatch that breaks main (Rule #2).
+      - name: Build the site and hold it to its weight ceilings
+        working-directory: frontend
+        run: |
+          npm run build
+          npm run bundle-gate
+
+      - name: Commit the repaired days
+        if: inputs.commit
+        env:
+          COMMIT_MESSAGE: 'backfill: re-encode the closed days'
+          NOTHING_STAGED_MESSAGE: 'every closed day already carries the vectors it earned'
+          PUSH_FAILED_MESSAGE: 'the repaired days could not be pushed'
+        run: |
+          set -euo pipefail
+          bash .github/scripts/commit-and-push.sh frontend/public/digest
