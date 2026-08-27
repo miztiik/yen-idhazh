@@ -236,11 +236,35 @@ The form keeps all target-specific inputs visible. A job reads only the inputs
 for its selected target. The default target is `llm`; the default runtime
 candidate is `baseline`.
 
-`Model validation` currently hardcodes Qwen3-8B as incumbent, downloads and
-caches incumbent plus challenger together, and refetches each planned URL for
-each model. It is an exploratory dispatch, not a controlled adoption gate.
+`Model validation` predates the qualification harness. It names an incumbent of
+its own rather than reading `config/idhazh.json`, downloads and caches two models
+together, and refetches each planned URL for each model. It is an exploratory
+dispatch, not a controlled adoption gate, and the 2026-08-26 qualification did
+not use it.
 [Evaluate and Adopt a New Summarizer Model](../how-to/evaluate-new-summarizer-model.md)
 owns the repair and acceptance requirements.
+
+### The cache across the model swap, measured 2026-08-27
+
+Read with `gh cache list` on either side of the 2026-08-27 summarizer swap,
+against the 10 GB repository ceiling in Rule #2. `n=1` - a cache listing is a
+state, not a sample, so there is no spread.
+
+| Moment | Bytes | Of the 10 GB cap |
+| --- | --- | --- |
+| Before: router `llm-Qwen3-4B-Q4_K_M.gguf-b10598-v4` 2,438,761,586, a stale `qualify-03b74727...-b10598` 5,614,108,894, python and node about 0.59 GB | 8.05 GB | 81% |
+| After deleting the stale qualification copy | 3,031,429,559 | 30% |
+| After the production fill of 5,680,522,464 for the configured summarizer | **8,711,952,023** | **87%** |
+
+**There was no retired-incumbent Qwen3-8B weights cache to delete.** PR #135
+moved the cache key
+to `-v4`, and the retired incumbent never filled under that key, so the whole
+transition was one deletion of a qualification artifact rather than a swap of two
+five-gigabyte entries. The cache key is
+`llm-<file>-<revision>-<llama.cpp build>-v4`, built from the plan job's outputs,
+so a model change moves the key and an old entry ages out rather than being
+restored under a new alias
+([measurements.md](measurements.md#the-cache-transition-measured-2026-08-27)).
 
 Pages publication builds only committed data and uploads a static bundle. It
 does not run the producer or a model, and the published site has no runtime
