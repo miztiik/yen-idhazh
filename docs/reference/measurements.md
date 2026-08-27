@@ -1671,6 +1671,16 @@ SVGs at 227,711 B, and `run.json`. n=1. The four other committed days measure
 15.8, 40.4, 387.1 and 1,466.3 KB, so the spread across days is the day itself -
 4 items against 731 - and not measurement error.
 
+**That day is smaller since 2026-08-27, and the row above is the pre-repair
+figure.** Fourteen of its SVGs were each claimed by two items, so both members of
+every pair lost the picture and the files went with them: 172,164 B of SVG and
+5,532 B of payload, leaving 4 rendered SVGs at 55,547 B
+([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
+The KB/day row is not re-derived from it. The same day's `digest.json` had
+already grown to 1,929,583 B by then, up from the 1,570,461 B above, so the
+repair is the smaller of two reasons this measurement has moved - and one day
+was never a growth rate.
+
 **The old 37 KB/day and 28,340 days were wrong by 48x.** 37 KB was a 17-item day
 priced from the 2.2 KB-per-item fixture estimate, and the day has since grown to
 731 items. 28,340 days was 77 years of headroom; the measured figure is under
