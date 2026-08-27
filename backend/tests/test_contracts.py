@@ -60,6 +60,19 @@ LONG_HEX = re.compile(r"[0-9a-f]{16,}")
 #: b10598 lists neither `prompt_tokens_cached_total` nor the wording that says
 #: what `prompt_tokens_total` counts, so only the binary's own output settles it.
 METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
+#: The two pages that spell the item-health failure vocabulary out by hand.
+DOC_ITEM_HEALTH = REPO_ROOT / "docs" / "architecture" / "sources" / "item-health.md"
+DOC_ONE_URL = REPO_ROOT / "docs" / "how-to" / "troubleshoot-one-url.md"
+
+
+def backticked(text: str) -> set[str]:
+    return set(re.findall(r"`([a-z_]+)`", text))
+
+
+def paragraph_after(text: str, lead: str) -> str:
+    _, found, rest = text.partition(lead)
+    assert found, f"the page no longer says {lead!r}"
+    return rest.split("\n\n", 2)[1]
 
 
 def fixture_paths() -> list[Path]:
@@ -440,6 +453,40 @@ def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None
     assert cells["code"] == ""
     assert cells["http_status"] == ""
     assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum() -> None:
+    """Two pages enumerate the summarize codes by hand, and neither is generated.
+
+    `copied_source` and `leaked_address` were minted on 2026-08-27 and both pages
+    kept the old list for a day, so each one asserted a vocabulary the code had
+    already outgrown. `unknown` is excluded because it belongs to every stage and
+    `to_summary` never returns it.
+    """
+    summarize_only = {
+        code.value
+        for code, stages in FAILURE_CODE_STAGES.items()
+        if stages == frozenset({ItemStage.SUMMARIZE})
+    }
+
+    tabled = re.findall(r"^\| `summarize` \|(.+)\|$", read_text(DOC_ITEM_HEALTH), re.MULTILINE)
+    assert len(tabled) == 1, "the item-health stage table no longer has one summarize row"
+    assert backticked(tabled[0]) == summarize_only
+
+    listed = re.findall(r"^\| Summary `([a-z_]+)`", read_text(DOC_ONE_URL), re.MULTILINE)
+    assert set(listed) == summarize_only
+    assert len(listed) == len(summarize_only), "the one-URL page lists a code twice"
+
+
+def test_the_item_health_page_splits_the_codes_the_way_the_contract_does() -> None:
+    """The source-neutral split is a promise about which feed gets quarantined."""
+    text = read_text(DOC_ITEM_HEALTH)
+    neutral = {code.value for code in SOURCE_NEUTRAL_FAILURE_CODES}
+
+    assert backticked(paragraph_after(text, "never count against a source:")) == neutral
+    assert backticked(paragraph_after(text, "can count against the source:")) == {
+        code.value for code in FailureCode
+    } - neutral
 
 
 def test_the_runtime_counters_columns_are_defined_once() -> None:
