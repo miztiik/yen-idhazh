@@ -72,8 +72,8 @@ This is where Reader and the owner disagreed, and it is worth recording properly
 | Band | On the item |
 | --- | --- |
 | `high` | **Nothing.** Ink spent on the absence of a problem, and colour-only |
-| `medium` | A 6px dot and "Mostly matches the source" |
-| `low` | A 6px dot and "May not match the source", the label in the low token |
+| `medium` | A 6px dot and the sentence named by `band_reason`. An older payload with no reason falls back to "Mostly matches the source" |
+| `low` | A 6px dot and the sentence named by `band_reason`, in the low token. An older payload with no reason falls back to "May not match the source" |
 
 It sits **on the meta line, after the summary and beside the source link** - never above the title. A caveat above the title pre-judges an item before the reader has read a word. The reading order is: what it is, what it says, then where it came from and how sure we are.
 
@@ -119,7 +119,11 @@ Pills rather than tabs. Tabs assert a fixed exhaustive set of panels; the vertic
 
 Each pill is a link to a prerendered route, so middle-click, share and back all work. Lenses and events are not on the pill row: thirteen mostly-zero controls above seventeen items is a control bar longer than some days.
 
-"Mostly-zero" understates it. All thirteen are zero, on all 1889 published items, because nothing in the pipeline assigns a lens or an event - measured 2026-08-26 and diagnosed in [../sources/discovery.md](../sources/discovery.md). The ruling holds either way, and it would still hold if the fields were populated tomorrow.
+The committed days still carry no lens, event or entity on any of their 2,237
+items because they were not backfilled. The pipeline now assigns all three on
+newly extracted articles through the deterministic rule in
+[../sources/discovery.md](../sources/discovery.md). The UI ruling holds either
+way: sparse, payload-dependent dimensions do not get a permanent control row.
 
 ## The read mark is held per day, and it expires
 
@@ -182,29 +186,46 @@ The degraded states, and each one is designed rather than discovered:
 | JavaScript off | The day row, and a `<noscript>` line saying the list needs it. The day links are prerendered, so navigation still works |
 | Nothing published at all | "Nothing has been published yet.", as before |
 
-## Search reads the same month index, and says which months it read
+## Search reads the same month index, and says how far back it read
 
 Search used to rank over the whole day payloads the page carried, which is why
 the page carried them. It now reads `index/<YYYY-MM>.json` and its
 sibling `<YYYY-MM>.bin`, and the eager payloads are gone. That is the last 1.7
 MB of the archive's weight, and it is the reason this row exists.
 
-**The scope is one month, and it is a knob.** `assist.search_months` defaults to
-1. The reader waits on the download and never on the arithmetic: measured
-2026-08-26, a month of vectors is 518 KB on the wire and about 2.1 seconds on a
-10 Mbit line at the rate the committed days ran, or 4.8 seconds at the
-structural ceiling, against 74 to 159 milliseconds of ranking. The fetch is 9 to
-30 times the ranking at every scope, so widening this buys nothing but waiting -
-three months is a 14.4 second download, and one month is the only scope whose
-first search starts inside about five seconds.
+**The scope is a floor of days, filled by whole month shards.**
+`assist.search_months` (1) is how many shards a search always reads, newest
+first. `assist.search_min_days` (7) is the fewest days it tries to reach: when
+the shards `search_months` names cover fewer days than that, a search reads one
+more shard - one more and no more, so the cost is bounded at a single extra
+fetch.
 
-**The page says what it searched**, in one line under the box: `Searching August
-2026 - 2235 stories.`, and `Older months are not searched.` when the archive
-holds more months than the scope. A reader who gets nothing back has to be able
-to tell "never published" from "not in the months this read", and the knob is
-invisible to them otherwise. The line is there **before** the first search, and
-costs nothing to put there: the story list above has already fetched that month,
-and the count of searchable stories is in the file it fetched.
+The reader waits on the download and never on the arithmetic: measured
+2026-08-26, one month is a 2.53 MB vector file beside a 518 KB browse index -
+about 2.1 seconds on a 10 Mbit line at the rate the committed days ran, or 4.8
+seconds at the structural ceiling - against 74 to 159 milliseconds of ranking.
+The fetch is 9 to 30 times the ranking at every scope, so a wider scope buys
+nothing but waiting: three months is a 14.4 second download, and one month is
+the only scope whose first search starts inside about five seconds.
+
+**The extra shard levels the bytes across the month instead of doubling them.**
+It fires only when the newest shard is thin, and a thin shard is a small
+download. At the observed rate of 353.5 items a day it fires on the first 6 days
+of a month - 20 percent of them - and on 1 September the two shards together
+move about what the single shard on 30 September already moves. The rejected
+version of this rule reached a full month back from the newest published day on
+every date, which fetches two whole shards on 29 days out of 30 and charges a
+second browse index to every visitor who only browses.
+
+**The page says how far back it searched**, in one line under the box:
+`Searching 1 to 20 August 2026 - 8 stories.`, and `Older stories are not
+searched.` when the archive holds more than the scope read. It names days rather
+than months because the month name is what hid the defect: on 1 September
+`September 2026` reads like a month and holds one day. A reader who gets nothing
+back has to be able to tell "never published" from "outside what this read", and
+the knobs are invisible to them otherwise. The line is there **before** the first
+search, and costs nothing to put there: the story list above has already fetched
+that month, and the count of searchable stories is in the file it fetched.
 
 **A result renders from the day it names.** The index carries no title-plus-
 summary pair on purpose - [layout.md](layout.md) prices that at 6.35 times the
@@ -226,9 +247,10 @@ already carries four facts.
 leaves the story list saying so, and search says `these stories cannot be
 searched on this device` without a click, because the identity check reads the
 index the list already has. No `.bin` leaves the list working and search saying
-the same thing on the first search, because 518 KB of vectors is fetched then
-and not before. Either way the check runs **before** the 43 MB encoder download:
-a reader who cannot be helped by those bytes is not asked to spend them.
+the same thing on the first search, because the vectors - 2.53 MB a month at the
+observed rate - are fetched then and not before. Either way the check runs
+**before** the 43 MB encoder download: a reader who cannot be helped by those
+bytes is not asked to spend them.
 
 ## The search box is a field, and one click is the whole gesture
 
@@ -264,7 +286,7 @@ from `Stories` to `Search results`, the count line changes with it, and
 `Show all stories` gives the browse list back. Two lists side by side would
 leave a reader working out which one answered them - and it is what makes the
 browse list the search's empty state: a query that matches nothing leaves the
-page exactly where it was, under one line naming the month.
+page exactly where it was, under one line naming the days it read.
 
 **The count is over the stories searched, and the cap is stated when it bites.**
 `10 results from the 2235 stories searched. Only the closest 10 are shown.` A
@@ -465,7 +487,9 @@ projection that drops `canonical_url`, `url_key` and `detail`
 Stage timing medians read from `state/item-health/<YYYY-MM>.csv`, not from
 `state/scores.csv`. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run. The score
-ledger still owns faithfulness and scorer time for the scored subset.
+ledger still owns faithfulness and scorer time for the scored subset, and
+`score_ms` is read through the same rule as the other three stages: an empty
+cell is one fewer item timed, never a zero.
 
 The viewport is a 30-day default window, not a retention policy. The window size
 and where today sits are `console.default_window_days` and
@@ -602,17 +626,42 @@ vertical resolution as `summarize`, so a 3x extractor regression - what a source
 changing its markup looks like - is as visible as a 3x model regression, and
 nothing else on the console carries that signal.
 
-**Three facts about a missing number, three renderings, never collapsed.** A day
-with no census breaks the line, because "no data" and "no time spent" are
-different facts. A day whose value is zero or negative breaks it identically and
-is never clamped to the axis floor - a clamped point draws a plunge to the
-bottom of the plot, which states that the stage got a thousand times faster.
-Then the gap is named in type under the legend, one line per affected stage,
-because a hole in a line is a mystery: `No time recorded for extract on 3 days
-in this window.` A stage with no number anywhere in the window leaves the plot
-and the legend together and says so. A run of one day draws a dot, so a stage
-that runs on alternate days is drawn rather than absent. With no days at all the
-section is one line.
+**Three facts about a missing number, three marks, and none of them a bare
+zero.** All three used to arrive at this chart as the number `0`: a day nothing
+timed, a day whose median really was zero, and a day timed for only some of its
+items. Each day now arrives as a `StageTiming` - the median, how many items the
+stage timed, and how many items there were - and each fact draws as itself:
+
+- **Nothing timed** breaks the line, because "no number" and "no time spent" are
+  different facts.
+- **A measured zero** breaks the line too, and draws an open dot in the stage
+  colour, centred on the baseline rule. It is never clamped into the bottom
+  decade: a clamped point draws a plunge to the floor of the plot, which states
+  that the stage got a thousand times faster. Zero has no position on a decade
+  axis, and the baseline rule is the one place on that axis which is not a claim
+  about size. A median of zero does not mean the stage took no time - it means
+  it finished faster than a 1 ms clock can measure, which is an ordinary state
+  for a cheap stage. `state/scores.csv` recorded exactly that for `score_ms` on
+  all ten rows of 2026-08-22.
+- **A day timed in part** draws the items it timed, and the line under the chart
+  says how many that was.
+
+One line of type per stage names whichever of the three happened, because a hole
+in a line is a mystery and three holes that look alike are worse than one: `We
+timed no fetch work on 3 of the 30 days. The line breaks there.`, `score took
+under 1 ms per item on 1 day, which is faster than we can time. The open dot on
+the baseline marks it.`, and `We timed 1,240 of the 1,480 items for extract on 2
+days. The line is the items we timed.` A stage timed in full on every day of the
+window has nothing to explain and gets no line at all.
+
+**A stage the window never timed is stated once, in the legend**: the row greys
+and prints `not timed` where a value would be. It used to be stated twice - the
+legend printed `no data` and a paragraph under it printed the same absence in
+longer words. The open dot gets no legend entry either; the line of type names
+it, and a key would be a second thing to read for a mark that appears on a
+handful of days a year. A run of one day draws a dot, so a stage that runs on
+alternate days is drawn rather than absent. With no days at all the section is
+one line.
 
 **The legend prints the newest day's value per stage, sorted by that value,
 descending.** The number an operator acts on is today's; a window median moves
@@ -624,7 +673,23 @@ bound to the stage and never to the rank**, so a reorder never repaints a line.
 The chart gains no linear/log toggle: a toggle is an admission that we could not
 decide which axis is correct.
 
-Authority: Jony, 2026-08-25.
+**The counts ride on the payload rather than being reconstructed from the
+value.** The chart used to rebuild "this is absent" from the number it was
+handed, which is how the three facts collapsed in the first place: `median()`
+returned `0` for an empty sample, and `score_ms` went through `Number(cell ?? 0)
+|| 0`, which invented a zero sample point out of an empty cell rather than only
+losing one. `sample()` is now the only way to build a `StageTiming`, and
+`median()` takes one rather than a `number[]`, so a bare array of numbers - and
+the fabricated zero that used to fill an empty cell - no longer type-checks.
+`svelte-check` is the gate for that: `StageTimingDay` is a hand-written
+prerender input, not a Pydantic contract and not a committed payload, so the
+schema versioning in `CLAUDE.md` section 11 does not apply to it. Telling the
+three apart cost the console route 509 B of gzipped first-load JavaScript, which
+is 0.8 percent of it, measured 2026-08-27 against `origin/main`'s own source
+built on the same tree and the same machine.
+
+Authority: Jony, 2026-08-25; the three marks and the counts behind them, Jony
+and Fowler, 2026-08-27.
 
 ## The bundle gate is a regression detector, not a performance budget
 
@@ -734,6 +799,24 @@ changed. `/evals/` stays as a static entry point because `CLAUDE.md` section 3
 says the published dashboard keeps the route. Authority: Jony and owner defect
 3.
 
+The search scope is a floor of days rather than a count of calendar shards,
+because a calendar shard is not a window. `assist.search_months` on its own made
+the reach whatever the current month happened to hold: 31 days on the evening of
+31 August and one day the next morning. A reader who searched that morning got
+nothing back and had no way to tell it from a story we never published, and
+nothing they did caused the change. The alternative that was explored and
+rejected is the obvious one - reach a full month back from the newest published
+day, on every date. It gives a constant window and it costs two whole shards on
+29 days out of 30, plus a second browse index charged to every visitor who only
+browses: 518 KB gzipped a month at the observed rate, measured 2026-08-26,
+against an archive page that is 2,912 bytes. A seven-day floor buys the same
+reach on the days that were broken, fires on 6 days of 30, and fires only when
+the shard already being read is small - so the bytes a search moves are levelled
+across the month instead of doubled. Seven, because a week is already this
+site's unit for what a reader still has in mind: `ui.read_mark_days` keeps a
+read mark for seven days and `console.min_window_days` will not draw a narrower
+window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -758,6 +841,8 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | Reconciling the encoder identifier to the upstream `all-MiniLM-L6-v2` | `embeddings.model_id` is a slug, so that spelling can never be written into a payload. Adopting it means widening a persisted contract to fit a capital letter, and re-stamping five committed days to buy nothing. | Fowler, Andre |
 | A config knob for the encoder identifier or its version | The guard compares a payload against this string. A knob is a way to turn the guard off by accident, which is the same reason `embed.py` refuses one for its own copy. | Andre |
 | Telling the reader their vectors are stale and offering to update | There is no update for them to take - the encoder is whatever this build committed. A prompt with no action behind it is a notification asking for thanks. | Jony, Reader |
+| Reaching a full month back from the newest published day on every date | A constant window, bought with two whole shards on 29 days out of 30 and a second 518 KB browse index charged to every visitor who only browses. | Carmack |
+| Naming the months a search read, rather than the days | On 1 September "September 2026" reads like thirty days and holds one. The month name is what hid the collapse it was meant to disclose. | Jony |
 | Padding every sequence to the token cap so batch composition stops mattering | It was the first proposal and the measurement refused it. Fixed padding removes the *shape* a batch imposes, not the *scale* it sets: pad-to-cap against no padding still moved a component by 1.56e-2, and padding also moves the runner further from a browser that pads nothing. | Carmack, Rule #10 |
 | Accepting host variation and gating a re-encode on cosine alone | A cosine tolerance is the right check for a backfill, but leaving the arithmetic unpinned makes every future re-encode a fresh argument about which machine was right. | Carmack |
 | A console listing every feed, healthy ones included | Naming all seventy sources hides the four that are broken. | owner |
@@ -785,6 +870,10 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | Rendering every failed row in the window | 800 rows measured 7824px and pushed the compression chart to document y=9105. The rows are on demand. | Jony |
 | A virtual-scrolling failure table | A dependency and a scroll-position bug for something a cap and a button already solve. | Jony |
 | A per-day stacked bar list for stage timings | Thirty days is about 150 rows and no trend, and the trend is the only question the section is asked. | Jony |
+| Clamping a zero stage timing into the bottom decade | It draws a plunge to the floor of the plot, which says the stage got a thousand times faster on a day it was merely quick. | Jony |
+| A caret beside the line for a zero stage timing | A second shape for a fact the open dot already carries, and one more thing to learn before the chart can be read. | Jony |
+| A dashed bridge across a stage-timing gap | A slope between two days that share no measurement is a number nobody took. | Jony |
+| A fifth sub-millisecond decade on the stage-timing axis | It moves every mark on a 30-day chart to hold ten rows from one day. The axis is not the thing that was wrong. | Jony |
 | `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Rule #8 |
 | Fading the per-point band lines instead of collapsing them | The wash is a node count, not an alpha value. One fact drawn 1166 times is still drawn 1166 times at any opacity, and the fact has one value per configured band. | Jony, Carmack |
 | A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. | Jony, Carmack |

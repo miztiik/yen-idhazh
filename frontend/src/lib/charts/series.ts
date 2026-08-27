@@ -42,14 +42,27 @@ export interface SummaryBand {
 	target_words_max: number;
 }
 
+/** One stage's day: the median, and the counts behind it.
+ *
+ * `ms` is null where nothing was timed. Zero is a measurement - a cheap stage
+ * finishes inside a millisecond clock's own resolution - so the two facts
+ * cannot share a value. `timed` against `total` carries the third one: a day
+ * timed in full and a day timed in part are not the same day either.
+ */
+export interface StageTiming {
+	ms: number | null;
+	timed: number;
+	total: number;
+}
+
 /** One day's median milliseconds per stage, over the item-health census. */
 export interface StageTimingDay {
 	date: string;
 	items: number;
-	fetchMs: number;
-	extractMs: number;
-	summarizeMs: number;
-	scoreMs: number;
+	fetch: StageTiming;
+	extract: StageTiming;
+	summarize: StageTiming;
+	score: StageTiming;
 }
 
 /** The spread of one day's per-item rates. A candle, never an average.
