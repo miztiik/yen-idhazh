@@ -62,10 +62,25 @@ class SeenRow(Contract):
 
 
 class PublishedRow(Contract):
-    """One row of `state/published.csv`, appended when an item reaches a committed digest."""
+    """One row of `state/published.csv`, appended when an item reaches a committed digest.
+
+    It carries no address. `item_id` and `published_on` join to that day's
+    committed payload, where the address is already published as `source_url` -
+    see `docs/architecture/sources/freshness.md` for the worked recovery.
+    """
 
     __schema_stem__: ClassVar[str] = "published-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-26",
+            change="Removed canonical_url. The row is url_key, published_on and item_id.",
+            why=(
+                "Nothing on the read path opened it: load_published maps url_key to "
+                "published_on by name. It was 48.6 percent of a row on a ledger with "
+                "no time bound. The address is recoverable by joining item_id and "
+                "published_on against that day's payload, which retention may not touch."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22T11:00",
             change="Initial shape: the address, the day it ran, and the item it ran as.",
@@ -77,7 +92,6 @@ class PublishedRow(Contract):
     )
 
     url_key: UrlKey
-    canonical_url: Url
     published_on: DateStamp = Field(description="The digest date, not the article's own date.")
     item_id: ItemId
 
