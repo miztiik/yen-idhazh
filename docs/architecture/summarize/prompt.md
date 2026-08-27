@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -270,8 +270,7 @@ drift.
 
 ## Cost
 
-**Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf`, LF line
-endings. Tokenization is deterministic, so the spread is zero. Recorded in
+**Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), LF line endings. Tokenization is deterministic, so the spread is zero. Recorded in
 [`../../reference/measurements.md`](../../reference/measurements.md).
 
 | Quantity | Value |
