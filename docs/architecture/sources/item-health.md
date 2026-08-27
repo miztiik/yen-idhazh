@@ -115,7 +115,7 @@ degrades an item and never fails it.
 | `plan` | `not_attempted` |
 | `fetch` | `robots_denied`, `robots_unreachable`, `blocked_address`, `http_client_error`, `http_rate_limited`, `http_server_error`, `network_error` |
 | `extract` | `no_text`, `too_short`, `not_prose`, `boilerplate`, `paywalled`, `unsupported_form` |
-| `summarize` | `model_unreachable`, `context_exceeded`, `output_truncated`, `bad_shape`, `length_out_of_range` |
+| `summarize` | `model_unreachable`, `context_exceeded`, `output_truncated`, `bad_shape`, `length_out_of_range`, `copied_source`, `leaked_address` |
 | any failed stage | `unknown` |
 
 `detail` is `str | None`, max 200 characters, and is populated only when
@@ -167,12 +167,12 @@ that happens, and what a change in either rate is allowed to prove, is
 
 ## What counts against a source
 
-Thirteen codes never count against a source:
+Fifteen codes never count against a source:
 
 `not_attempted`, `robots_denied`, `robots_unreachable`, `blocked_address`,
 `http_rate_limited`, `too_short`, `not_prose`, `boilerplate`,
 `model_unreachable`, `context_exceeded`, `output_truncated`, `bad_shape`,
-`length_out_of_range`
+`length_out_of_range`, `copied_source`, `leaked_address`
 
 The remaining seven can count against the source:
 
@@ -188,6 +188,12 @@ infrastructure failure. It never counts against a source.
 `context_exceeded` records the served context window refusing a prompt. The
 article was long, and the window, the truncation cap and the prompt overhead are
 all ours - so it is our budget, not a publisher writing at length.
+
+`copied_source` and `leaked_address` record a reply we refused after it parsed:
+one that copied the article instead of summarizing it, and one that carried an
+address into our own words. The article was fine both times and the model wrote
+the words, so counting either against the feed would quarantine a wire service
+for a defect we own.
 
 ## Adding a column is a two-part change
 

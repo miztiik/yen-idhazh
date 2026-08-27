@@ -141,6 +141,51 @@ Discouragement is not a control, so four things make it structurally hard rather
 
 Not to be done: seeding the queue with model pre-labels for a human to confirm. Confirmation is anchoring, and it turns an independent measurement into an expensive agreement rate with the model - LLM-as-judge with a rubber stamp.
 
+### Current qualification-gate implementation gap
+
+**The `publishable_length` gate cannot fail, and this is not fixed.** It grades
+the survivors of the rule it is grading, so the only answer its arithmetic
+allows is "none outside the range". Rule 1 above is broken here inside our own
+instrument rather than by a model: the word range is the selector, and the same
+word range is the alarm.
+
+The range is enforced twice, off the same two knobs. `summarize.to_summary`
+counts the drafted words and refuses anything outside
+`evaluation.summary_words_min` to `evaluation.summary_words_max` with
+`length_out_of_range`, returning a payload whose status is `failed` and whose
+summary text is unset. `cli._observe` sets both `ok` and `schema_valid` from that
+status, and takes `summary_word_count` from the summary text - zero for a refused
+reply, never the count the model actually wrote. `evals/qualify.py` then grades
+`[o for o in observations if o.ok]` against those same two knobs. Every reply
+that could fail the gate was refused before the gate looked.
+
+Run 33016222069 reported 0 of 90 replies outside the range, and passed
+([../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m)).
+Zero is the only number that arithmetic can return, on any model and at any
+threshold, so the result is not evidence that this summarizer writes publishable
+lengths. Read the gate as "not measured", never as "passed".
+
+**The fix is to record the measurement instead of dropping the item, and it has
+not been written.** `stage_qualify` already appends an observation for every
+call, refused ones included, so the only thing missing is the number: `_observe`
+would carry the words the reply actually held, and the gate would read every
+reply rather than the survivors. That widens the persisted `ItemObservation`
+contract, which makes it a Level 3 change ([../../CLAUDE.md](../../CLAUDE.md)
+section 6) needing its own schema stamp, changelog entry and review. Nothing
+here does it.
+
+**The same question hangs over any gate that reads only survivors.** Filtering is
+sound when the filter and the grade are different properties, and a tautology
+when they are the same one. The two other gates that filter were checked and are
+sound: `schema_validity` puts every attempt in its denominator and only the clean
+ones in its numerator, and `determinism` skips failed calls - a call with no
+reply has no digest to compare - but grades digest drift rather than the property
+it filtered on, and names how many items it counted. So a new gate answers two
+questions before it is registered. Which population does it read, and has an
+earlier stage already refused on the property it grades? If the answer to the
+second is yes, the gate measures the refusal. If the population is narrower than
+the run, the gate's `measured` string has to say so.
+
 ## Bands, not raw numbers
 
 Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config.md](config.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
@@ -789,9 +834,10 @@ reader can tell a breach from a blank reply.
 
 **The consequence for this page is bigger than the reply failure: Rule #11 has
 no live evidence today.** An instrument that cannot separate a breach from a
-blank reply can never confirm the rule it exists to confirm. Nine gates still
-measure what they claim to; the canary arm does not, and cannot until the
-failure code lands.
+blank reply can never confirm the rule it exists to confirm. Eight gates still
+measure what they claim to. The canary arm does not, and cannot until the
+failure code lands - and `publishable_length` does not either, for an unrelated
+reason ([Current qualification-gate implementation gap](#current-qualification-gate-implementation-gap)).
 
 **A `sanitizer`-neutralised canary cannot fail its live marker check, by
 construction.** This is an eval-design defect rather than a model result.
