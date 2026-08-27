@@ -1,6 +1,6 @@
 # How to run the pipeline
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Running a digest end to end on your own machine, and what each stage is allowed
 to do. Project-specific by nature: this describes *this* pipeline, not a process
@@ -36,17 +36,16 @@ python -m pip install -e ".[faithfulness]"   # transformers + torch, hundreds of
 ```
 
 Get the runtime and the weights per
-[set-up-local-inference.md](set-up-local-inference.md), then start the server:
+[set-up-local-inference.md](set-up-local-inference.md), then print the server
+command with the program in
+[test-models-locally.md](test-models-locally.md#serve-a-model) and run it. Do
+not type the flags: `server_argv` is the only place they are written, and a
+hand-typed copy here has already drifted once.
 
-```
-backend/bin/llama-server --model backend/models/Qwen3-8B-Q4_K_M.gguf \
-  --ctx-size 8192 --no-context-shift --batch-size 512 --ubatch-size 512 \
-  --threads 4 --port 8080
-```
-
-The summarize stage talks to `127.0.0.1:8080` and nothing else. There is no
-hosted inference anywhere in this project ([../../CLAUDE.md](../../CLAUDE.md)
-section 0a).
+The summarize stage talks to `127.0.0.1:8080` and nothing else. Set `LLAMA_PORT`
+before both commands to move it - the server command and the client read the
+same variable. There is no hosted inference anywhere in this project
+([../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
 ## Useful flags
 

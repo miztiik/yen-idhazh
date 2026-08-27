@@ -1,6 +1,6 @@
 # Test the models locally
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 How to run the pipeline's models on your own machine, compare them, and read the
 result. Everything here also runs in CI - the point of doing it locally is a
@@ -114,30 +114,48 @@ file and the pinned llama.cpp build.
 
 ## Serve a model
 
-The flags are not yours to choose. `server_argv` builds them from `config/`, so
-a flag typed by hand here is a different server from the one CI runs. The
-fingerprint contract intends to cover behaviour-affecting runtime inputs, but
-production identity wiring is incomplete. Ask for the command instead of
-copying one:
+The flags are not yours to choose. `server_argv` in
+[`backend/idhazh/llm/server.py`](../../backend/idhazh/llm/server.py) builds them
+from `config/`, and it is the only function in the repository that spells a
+`llama-server` flag, so a flag typed by hand here is a different server from the
+one CI runs. The fingerprint contract intends to cover behaviour-affecting
+runtime inputs, but production identity wiring is incomplete. Ask for the
+command instead of copying one:
 
 ```bash
-python backend/utilities/llama_server_argv.py \
-  --config config \
-  --binary backend/bin/llama-server \
-  --weights backend/models/Qwen3-8B-Q4_K_M.gguf \
-  --alias qwen3-8b-q4-k-m \
-  --format shell
+python - <<'PY'
+from pathlib import Path
+
+from idhazh import config
+from idhazh.llm.server import server_argv
+
+settings = config.load(Path("config"))
+model = settings.app.models.summarize
+print(" ".join(server_argv(
+    binary=Path("backend/bin/llama-server"),
+    weights=Path("backend/models") / model.file,
+    model=model,
+    inference=settings.app.models.inference,
+)))
+PY
 ```
 
-Run the generated command with `LD_LIBRARY_PATH=backend/bin` in front. Do not
-copy a frozen rendering into another runbook: optional flags such as `-np 1`
-move through config. On Windows, use
-`backend\bin\llama-server.exe`; the generator prints the same flags.
+This is the one place that program is written down. Point it at
+`settings.app.models.route` for the router, or at another `config.load(...)`
+directory for a scratch config. On Windows, save the same program to a file and
+run it with `.venv\Scripts\python.exe <file>`; use `backend\bin\llama-server.exe`
+for the binary.
 
-`digest.yml` starts its server the same way, from the same generator, and a test
-fails if the two ever disagree. **`--no-warmup` is no longer passed** - the page
-fault is paid either way, so the workflow now pays it during `pip install`
-instead of inside the first request.
+Run the printed command with `LD_LIBRARY_PATH=backend/bin` in front. Do not copy
+a frozen rendering into another runbook: optional flags such as `-np 1` move
+through config.
+
+`digest.yml`, `validate.yml` and `measure.yml` all start their servers from that
+same function, and a test fails if any of them renders the list a second way.
+The port is the same story: each workflow declares `LLAMA_PORT` once and the
+argv, every health probe and the client all read it. **`--no-warmup` is no longer
+passed** - the page fault is paid either way, so the workflow now pays it during
+`pip install` instead of inside the first request.
 
 **Use `--threads 4` when reproducing the current runner baseline.** GitHub gives
 the VM four scheduler-visible CPUs. That does not mean four physical cores plus
