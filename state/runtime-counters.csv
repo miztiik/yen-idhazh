@@ -1,2 +1,3 @@
 version,date,run_id,shard,shards,scraped_at,prompt_tokens_total,prompt_tokens_cached_total,prompt_seconds_total,tokens_predicted_total,tokens_predicted_seconds_total,n_decode_total,n_tokens_max,n_busy_slots_per_decode
 2026-08-27,2026-08-27,2026-08-27-1,2,4,2026-08-27T13:55:16Z,29673,26754,921.478,7948,2270.95,8025,3321,1.0
+2026-08-27,2026-08-27,2026-08-27-1,0,4,2026-08-27T14:10:12Z,27616,21261,2814.8,6568,1258.24,6637,4288,1.0
