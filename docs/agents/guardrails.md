@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -78,7 +78,7 @@ A persona's own worldview shapes what it says, never how plainly it says it.
 - **Republishing article bodies.** Publish the link and our own summary.
 - **Paywalled or login-walled sources.** If `robots.txt` or a paywall says no, the answer is no.
 - **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement.
-- **Fine-tuning, GPU runners, and models that do not fit the runner.**
+- **Training on the runner, GPU runners, and models that do not fit the runner.** Training elsewhere is allowed; the runner only opens finished weights. A fine-tuned model is an ordinary candidate and enters through the same qualification as any other.
 - **Accessibility framework / audit tooling.** Descoped at project level; basic ARIA and keyboard navigation ARE in scope. See `CLAUDE.md` section 0a.
 
 ## Git hygiene for autonomous work
