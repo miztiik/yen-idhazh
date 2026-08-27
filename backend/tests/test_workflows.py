@@ -299,6 +299,7 @@ COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
 COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
 COMMIT_STEPS: Final = {
     "plan": "Commit what the plan saw",
+    "work": "Commit what this shard measured",
     "assemble": "Commit the day",
 }
 COMMIT_BASE_ENV: Final = frozenset(
@@ -309,10 +310,12 @@ COMMIT_BASE_ENV: Final = frozenset(
 # commits rendered assets, so only assemble renumbers them.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
+    "work": COMMIT_BASE_ENV,
     "assemble": COMMIT_BASE_ENV | {"REFRESH_PATHS", "REGENERATE_COMMAND", "RENUMBER_COMMAND"},
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
+    "work": ["state/item-health", "state/scores.csv"],
     "assemble": [
         "frontend/public/digest",
         "frontend/public/telemetry",
@@ -320,6 +323,15 @@ COMMIT_STAGED_PATHS: Final = {
         "state",
     ],
 }
+# The step that fills the two ledgers the step above commits, and the two things
+# that decide which items are this shard's.
+RECORD_STEP: Final = "Record what this shard measured"
+RECORD_COMMAND: Final = "python -m idhazh record"
+# Neither of the work job's two steps may fail the shard. See the comment above
+# them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
+# every scalar a string, so the value to compare is the word, not the boolean.
+WORK_LEDGER_STEPS: Final = (RECORD_STEP, COMMIT_STEPS["work"])
+TOLERATED: Final = "true"
 COMMIT_IDENTITY: Final = (
     "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
 )
@@ -329,11 +341,15 @@ COMMIT_IDENTITY: Final = (
 SUBSTITUTED_DATE: Final = "2026-08-25"
 SUBSTITUTED_DAY_DIR: Final = "frontend/public/digest/2026/08/25"
 SUBSTITUTED_SHA: Final = "0" * 40
+SUBSTITUTED_SHARD: Final = "3"
+SUBSTITUTED_SHARDS: Final = "8"
 EXPRESSION_VALUES: Final = {
     "needs.plan.outputs.date": SUBSTITUTED_DATE,
     "needs.plan.outputs.day_dir": SUBSTITUTED_DAY_DIR,
+    "needs.plan.outputs.shards": SUBSTITUTED_SHARDS,
     "steps.decide.outputs.date": SUBSTITUTED_DATE,
     "github.sha": SUBSTITUTED_SHA,
+    "matrix.shard": SUBSTITUTED_SHARD,
 }
 # What assemble hands back to origin's tip before it rebuilds. The day's own
 # directory is never in this list: the routes artifact unpacks this run's
@@ -812,6 +828,16 @@ def _write(path: Path, text: str) -> None:
     path.write_text(text, encoding="ascii", newline="\n")
 
 
+def _seed_ledger(staged: str) -> str:
+    """Where a scripted origin puts the ledger for one staged path.
+
+    A staged path is either a directory of month shards or one named file, and
+    the work job stages one of each - so a harness that always appended a
+    filename would have built a directory called `scores.csv`.
+    """
+    return staged if staged.endswith(".csv") else f"{staged}/ledger.csv"
+
+
 def _scripted_origin(
     tmp_path: Path, env: dict[str, str], staged_paths: Sequence[str]
 ) -> tuple[Path, Path]:
@@ -821,7 +847,7 @@ def _scripted_origin(
     seed = tmp_path / "seed"
     _git(tmp_path, env, "clone", str(origin), str(seed))
     for index, staged in enumerate(staged_paths):
-        _write(seed / staged / "ledger.csv", f"header\nrow-{index}\n")
+        _write(seed / _seed_ledger(staged), f"header\nrow-{index}\n")
     _write(seed / "docs" / "unrelated.md", "seed\n")
     _write(seed / "runner-noise.txt", "clean\n")
     # This repository's own attributes file. `merge=union` on the ledgers is
@@ -1392,13 +1418,137 @@ def test_the_plan_job_publishes_the_day_directory_it_decided() -> None:
     assert f"frontend/public/digest/{SUBSTITUTED_DATE.replace('-', '/')}" == SUBSTITUTED_DAY_DIR
 
 
+def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
+    """The Oracle, in YAML: a cancelled job runs `always()` steps and skips the rest.
+
+    The items artifact carries a shard's verdicts for one day and has no `if:`,
+    so a cancelled job never uploads it. A run stopped between the workers and
+    the publish had measured every item and kept none of the measurements.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    names = [step.get("name") for step in _steps(workflow, "work")]
+
+    for name in WORK_LEDGER_STEPS:
+        step = _step(workflow, "work", "name", name)
+        assert _normalize_condition(step.get("if"), f"work step {name}") == "always()"
+
+    record = _substitute(
+        _script(_step(workflow, "work", "name", RECORD_STEP), f"work step {RECORD_STEP}")
+    )
+    assert RECORD_COMMAND in record
+    assert f'--date "{SUBSTITUTED_DATE}"' in record
+    # This shard's own items. A record step that asked for the whole day would
+    # file rows for items seven other workers are still holding. The step's line
+    # continuations are folded first, the way bash reads them.
+    assert shlex.split(record.replace("\\\n", " "))[-4:] == [
+        "--shard",
+        SUBSTITUTED_SHARD,
+        "--shards",
+        SUBSTITUTED_SHARDS,
+    ]
+    # Ahead of every `always()` step that only writes a log, because a cancelled
+    # job spends one grace period on all of them in order and these two are the
+    # ones whose loss the pair exists to prevent.
+    assert names.index(RECORD_STEP) + 1 == names.index(COMMIT_STEPS["work"])
+    assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
+
+
+def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
+    """Which loss is cheaper, said in the workflow rather than left to an exit code.
+
+    The shard's product is the items artifact assemble publishes from, and
+    assemble writes the same census again - so a ledger push that spends its
+    three attempts costs this run an early copy of rows it gets anyway. A failed
+    shard costs the day a whole worker. The script exits 1 when it gives up
+    (proved in `test_a_rebase_it_cannot_finish_still_ends_the_script_cleanly`),
+    which is why saying so is load-bearing rather than decorative.
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    for name in WORK_LEDGER_STEPS:
+        step = _step(workflow, "work", "name", name)
+        assert step.get("continue-on-error") == TOLERATED, (
+            f"work step {name} must not fail the shard"
+        )
+    # Closed-world, because a publish step that swallowed its own failure would
+    # publish nothing and report success. The one that was already here is
+    # assemble's routes download: `route` is allowed to produce no artifact at
+    # all, and every item then publishes with no picture.
+    tolerant = {
+        (job_name, step.get("name") or step.get("uses"))
+        for job_name in _mapping(workflow.get("jobs"), "jobs")
+        for step in _steps(workflow, job_name)
+        if step.get("continue-on-error") == TOLERATED
+    }
+    assert tolerant == {
+        *(("work", name) for name in WORK_LEDGER_STEPS),
+        ("assemble", "actions/download-artifact@v8"),
+    }
+
+
+def test_every_path_the_work_shard_stages_is_union_merged() -> None:
+    """Eight shards append to one branch, so both ledgers need the union driver.
+
+    Asked of git rather than of a pattern matcher written here: `.gitattributes`
+    is the file that decides, and a second implementation of its globbing could
+    agree with this test and disagree with the merge.
+    """
+    # The file each staged path resolves to. A directory is monthly shards.
+    written = {
+        "state/item-health": f"state/item-health/{SUBSTITUTED_DATE[:7]}.csv",
+        "state/scores.csv": "state/scores.csv",
+    }
+    assert set(written) == set(COMMIT_STAGED_PATHS["work"])
+
+    answered = subprocess.run(
+        ["git", "check-attr", "merge", "--", *written.values()],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+
+    assert answered == [f"{path}: merge: union" for path in written.values()]
+
+
+@requires_bash
+def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
+    """Eight workers, one branch, one row each.
+
+    They run in turn from clones taken before any of them pushed, so every one
+    after the first finds a base that has already moved - which is the state a
+    real fan-out puts them in. What this proves is that the rebase resolves it
+    and no row is lost. It does not prove the three-attempt budget: eight truly
+    concurrent pushes cannot be made deterministic in a test.
+    """
+    staged_paths, settings = _commit_call("work")
+    env = _isolated_env(tmp_path)
+    origin, _ = _scripted_origin(tmp_path, env, staged_paths)
+    relative = _seed_ledger(staged_paths[0])
+    shards = range(8)
+    runners = []
+    for shard in shards:
+        runner = tmp_path / f"shard-{shard}"
+        _git(tmp_path, env, "clone", str(origin), str(runner))
+        _write(runner / relative, f"header\nrow-0\nshard-{shard}\n")
+        runners.append(runner)
+
+    results = [_run_commit_script(runner, env, staged_paths, settings) for runner in runners]
+
+    assert [result.returncode for result in results] == [0] * len(runners)
+    landed = _git(origin, env, "show", f"main:{relative}").splitlines()
+    assert landed[0] == "header"
+    assert sorted(landed[1:]) == ["row-0", *(f"shard-{shard}" for shard in shards)]
+    assert not any(_mid_rebase(runner) for runner in runners)
+
+
 @requires_bash
 @pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
 def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
     staged_paths, settings = _commit_call(job_name)
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
-    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nfresh\n")
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
     if "REGENERATE_COMMAND" in settings:
         # The push wins here, so the producer never runs. Point it at the
         # harness one anyway: the pipeline's own `assemble` anchors its paths on
@@ -1439,7 +1589,7 @@ def test_the_commit_step_rebases_past_a_racing_commit(tmp_path: Path) -> None:
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     _race(tmp_path, env, "docs/unrelated.md", "racing\n")
-    _write(runner / staged_paths[0] / "ledger.csv", "header\nrow-0\nfresh\n")
+    _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
     _write(runner / "runner-noise.txt", "dirty\n")
     _write(runner / "leftover.log", "kept\n")
 
