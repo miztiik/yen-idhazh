@@ -32,6 +32,7 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
@@ -1230,6 +1231,51 @@ def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
     assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == settled
     assert telemetry.is_final(article(), None) is False
     assert telemetry.is_final(None, None) is False
+
+
+def test_a_shard_commits_what_its_model_server_counted(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The Oracle for row 9: the second instrument survives the job that read it.
+
+    Every timing on the item-health ledger is a field copied out of one model
+    reply. The server counts the same work for itself, and until this stage
+    existed those counters reached only a job log with two days of retention -
+    so the read rate two published surfaces quote could be reported and never
+    reconciled (Rule #10).
+    """
+    run_plan = plan()
+    isolate_ledgers(tmp_path, monkeypatch)
+    capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
+
+    row = cli.stage_counters(run_plan, metrics_path=capture, shard=0, shards=1)
+
+    assert row.prompt_tokens_total == 23411
+    assert row.prompt_seconds_total == 2128.08
+    committed = ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id)
+    assert committed == [row]
+    assert ledger.read_header(ledger.runtime_counters_path(tmp_path / "state")) == (
+        RuntimeCountersRow.csv_columns()
+    )
+
+
+def test_a_shard_whose_server_died_still_files_a_row(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """No file at all is a fact about the shard, not an absence of one.
+
+    Pooling a run has to see the shard that contributed nothing, or three
+    shards' tokens get quoted as a four-shard run. The cells are null rather
+    than zero: the server did not answer, it did not read nothing.
+    """
+    run_plan = plan()
+    isolate_ledgers(tmp_path, monkeypatch)
+
+    row = cli.stage_counters(run_plan, metrics_path=tmp_path / "never-written.prom")
+
+    assert row.prompt_tokens_total is None
+    assert row.run_id == run_plan.run_id
+    assert ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id) == [row]
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:

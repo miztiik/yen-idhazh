@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -30,7 +30,7 @@ question, and the four answers do not mix.
 | Path | Holds | Written by | Reaches a reader |
 | --- | --- | --- | --- |
 | `config/` | The tunable knobs: `idhazh.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
-| `schemas/` | One generated JSON Schema per contract, sixteen files | `python -m idhazh.contracts.export` | no |
+| `schemas/` | One generated JSON Schema per contract, twenty-two files | `python -m idhazh.contracts.export` | no |
 | `backend/` | The build-time producer. Not a service, ever | a person | no |
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `state/` | The append-only ledgers one run leaves for the next | a run, in CI | **never** |

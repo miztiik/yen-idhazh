@@ -14,7 +14,14 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, SCHEMAS_DIR, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    REPO_ROOT,
+    SCHEMAS_DIR,
+    read_text,
+)
 
 from idhazh.contracts import canonical_json, derive_url_key
 from idhazh.contracts.app_config import AppConfig, PageWeightConfig
@@ -32,6 +39,7 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
@@ -44,6 +52,12 @@ CONFIG_FILES: dict[str, type[Contract]] = {
     "watchlist.json": Watchlist,
 }
 LONG_HEX = re.compile(r"[0-9a-f]{16,}")
+#: Four real `GET /metrics` bodies, one per work shard of run `2026-08-26-5`,
+#: pulled from that run's `runtime-log-*` artifacts before they expired. Real
+#: captures rather than hand-written text (Rule #7): the upstream README at tag
+#: b10598 lists neither `prompt_tokens_cached_total` nor the wording that says
+#: what `prompt_tokens_total` counts, so only the binary's own output settles it.
+METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
 
 
 def fixture_paths() -> list[Path]:
@@ -356,6 +370,102 @@ def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None
     assert cells["code"] == ""
     assert cells["http_status"] == ""
     assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_the_runtime_counters_columns_are_defined_once() -> None:
+    assert RuntimeCountersRow.csv_columns() == (
+        "version",
+        "date",
+        "run_id",
+        "shard",
+        "shards",
+        "scraped_at",
+        "prompt_tokens_total",
+        "prompt_tokens_cached_total",
+        "prompt_seconds_total",
+        "tokens_predicted_total",
+        "tokens_predicted_seconds_total",
+        "n_decode_total",
+        "n_tokens_max",
+        "n_busy_slots_per_decode",
+    )
+
+
+@pytest.mark.parametrize("path", METRICS_CAPTURES, ids=lambda p: p.stem)
+def test_the_server_agrees_with_itself_about_what_a_prompt_token_is(path: Path) -> None:
+    """The Oracle for the definition: the server's own rate over its own counters.
+
+    llama-server publishes `prompt_tokens_seconds` as well as the two counters it
+    is made of. If `prompt_tokens_total` counted cached tokens too, the published
+    gauge and the counters would disagree - so this reproduces the gauge from the
+    counters and proves the field means what the row says it means: prompt tokens
+    the model actually read, which is the ledger's `input_tokens - cached_tokens`.
+    """
+    text = read_text(path)
+    row = RuntimeCountersRow.from_metrics_text(
+        text,
+        date="2026-08-26",
+        run_id="2026-08-26-5",
+        shard=int(path.stem[-1]),
+        shards=len(METRICS_CAPTURES),
+        scraped_at="2026-08-26T21:12:05Z",
+    )
+    published = {
+        line.split(" ")[0]: float(line.split(" ")[1])
+        for line in text.splitlines()
+        if line.startswith("llamacpp:")
+    }
+
+    assert row.prompt_tokens_total is not None
+    assert row.prompt_seconds_total is not None
+    reproduced = row.prompt_tokens_total / row.prompt_seconds_total
+    # The gauge is printed to six significant figures, so the comparison is too.
+    assert reproduced == pytest.approx(published["llamacpp:prompt_tokens_seconds"], rel=1e-5)
+    assert row.prompt_tokens_cached_total is not None
+    assert row.prompt_tokens_cached_total > 0, "a capture with no cache hits proves nothing here"
+
+
+def test_a_series_this_build_does_not_publish_is_null_and_never_zero() -> None:
+    """A rename has to look like a missing column, not like a server that read nothing."""
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-26",
+        run_id="2026-08-26-5",
+        shard=0,
+        shards=4,
+        scraped_at="2026-08-26T21:32:30Z",
+    )
+    for field in SERIES.values():
+        assert getattr(row, field) is None
+    cells = row.csv_row()
+    assert all(cells[field] == "" for field in SERIES.values())
+    assert RuntimeCountersRow.from_csv_row(cells) == row
+
+
+def test_a_count_that_stops_being_whole_raises_instead_of_truncating() -> None:
+    """A silently truncated counter is a wrong number that nothing can spot later."""
+    with pytest.raises(ValueError, match="prompt_tokens_total"):
+        RuntimeCountersRow.from_metrics_text(
+            "llamacpp:prompt_tokens_total 23411.5\n",
+            date="2026-08-26",
+            run_id="2026-08-26-5",
+            shard=0,
+            shards=4,
+            scraped_at="2026-08-26T21:32:30Z",
+        )
+
+
+def test_a_shard_index_must_sit_inside_the_run_it_names() -> None:
+    with pytest.raises(ValueError, match="below the shard count"):
+        RuntimeCountersRow.model_validate(
+            {
+                "date": "2026-08-26",
+                "run_id": "2026-08-26-5",
+                "shard": 4,
+                "shards": 4,
+                "scraped_at": "2026-08-26T21:32:30Z",
+            }
+        )
 
 
 # --- Invariants the shape exists to carry ----------------------------------

@@ -319,7 +319,7 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
-    "work": ["state/item-health", "state/scores.csv"],
+    "work": ["state/item-health", "state/scores.csv", "state/runtime-counters.csv"],
     "assemble": [
         "frontend/public/digest",
         "frontend/public/telemetry",
@@ -331,10 +331,19 @@ COMMIT_STAGED_PATHS: Final = {
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
 RECORD_COMMAND: Final = "python -m idhazh record"
+# The third ledger the same commit step stages: what llama-server itself counted
+# for this shard. It has to sit between the other two, because the row it writes
+# is committed by the step after it.
+COUNTERS_STEP: Final = "What the server counted"
+COUNTERS_COMMAND: Final = "python -m idhazh counters"
+# Deliberately not `--metrics`: that is llama-server's own flag, and
+# `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` forbids any
+# workflow step from spelling one.
+COUNTERS_FLAG: Final = "--counters-file"
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
-WORK_LEDGER_STEPS: Final = (RECORD_STEP, COMMIT_STEPS["work"])
+WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
 TOLERATED: Final = "true"
 COMMIT_IDENTITY: Final = (
     "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
@@ -368,6 +377,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "state/published.csv",
         "state/scores.csv",
         "state/item-health",
+        "state/runtime-counters.csv",
     ],
 }
 # The producer the harness drives through the loop. See its own docstring for
@@ -1530,9 +1540,12 @@ def test_a_worker_commits_its_rows_before_the_run_can_throw_them_away() -> None:
         SUBSTITUTED_SHARDS,
     ]
     # Ahead of every `always()` step that only writes a log, because a cancelled
-    # job spends one grace period on all of them in order and these two are the
-    # ones whose loss the pair exists to prevent.
-    assert names.index(RECORD_STEP) + 1 == names.index(COMMIT_STEPS["work"])
+    # job spends one grace period on all of them in order and these are the ones
+    # whose loss the group exists to prevent. Consecutive, and in this order: the
+    # counters step writes a row the commit step stages.
+    assert [names.index(name) for name in WORK_LEDGER_STEPS] == [
+        names.index(RECORD_STEP) + offset for offset in range(len(WORK_LEDGER_STEPS))
+    ]
     assert names.index(COMMIT_STEPS["work"]) < names.index("Prompt cache log summary")
 
 
@@ -1580,6 +1593,7 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     written = {
         "state/item-health": f"state/item-health/{SUBSTITUTED_DATE[:7]}.csv",
         "state/scores.csv": "state/scores.csv",
+        "state/runtime-counters.csv": "state/runtime-counters.csv",
     }
     assert set(written) == set(COMMIT_STAGED_PATHS["work"])
 
@@ -2708,8 +2722,8 @@ def test_every_work_shard_records_how_hard_the_server_was_pushed() -> None:
     """
     workflow = _load_workflows()["digest.yml"]
 
-    step = _step(workflow, "work", "name", "What the server counted")
-    where = "digest.yml/work/What the server counted"
+    step = _step(workflow, "work", "name", COUNTERS_STEP)
+    where = f"digest.yml/work/{COUNTERS_STEP}"
     # The shard that ran out of context is the shard whose high watermark is
     # worth reading, and that shard failed.
     assert _normalize_condition(step.get("if"), f"{where} if") == "always()"
@@ -2727,6 +2741,38 @@ def test_every_work_shard_records_how_hard_the_server_was_pushed() -> None:
     path = with_block.get("path")
     assert isinstance(path, str), "work runtime-log upload path must be a string"
     assert METRICS_FILE in path.splitlines(), "the runtime artifact must carry the raw counters"
+
+
+def test_the_servers_own_counters_outlive_the_job_that_read_them() -> None:
+    """The Oracle for row 9: a scrape that only reaches a log cannot check anything.
+
+    `runtime-log-*` keeps the raw body for two days. Every prefill rate this
+    project publishes is derived from the item-health ledger, and until this row
+    landed there was no committed second instrument to hold it against - so the
+    headline could be reported and never reconciled (Rule #10).
+    """
+    workflow = _load_workflows()["digest.yml"]
+    where = f"digest.yml/work/{COUNTERS_STEP}"
+    script = _substitute(_script(_step(workflow, "work", "name", COUNTERS_STEP), where))
+
+    assert COUNTERS_COMMAND in script, f"{where} must commit the snapshot, not only log it"
+    assert f'--date "{SUBSTITUTED_DATE}"' in script
+    # This shard's own snapshot, and the file the same step just wrote. The
+    # step's line continuations are folded first, the way bash reads them.
+    assert shlex.split(script.replace("\\\n", " "))[-6:] == [
+        "--shard",
+        SUBSTITUTED_SHARD,
+        "--shards",
+        SUBSTITUTED_SHARDS,
+        COUNTERS_FLAG,
+        METRICS_FILE,
+    ]
+    # A body that came back empty still writes a row. A shard whose server was
+    # already gone and a shard that never ran are different facts, and pooling a
+    # run has to see the shard that contributed nothing - so the step cannot
+    # short-circuit before the command that files it.
+    assert "exit 0" not in script, f"{where} must file a row even when the scrape came back empty"
+    assert "state/runtime-counters.csv" in COMMIT_STAGED_PATHS["work"]
 
 
 # --- The qualification arm (Row #10) ----------------------------------------
