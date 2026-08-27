@@ -22,9 +22,10 @@ from conftest import (
     SCHEMAS_DIR,
     read_text,
 )
+from pydantic import ValidationError
 
 from idhazh.contracts import canonical_json, derive_url_key
-from idhazh.contracts.app_config import AppConfig, PageWeightConfig
+from idhazh.contracts.app_config import AppConfig, EvaluationConfig, PageWeightConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
@@ -35,6 +36,7 @@ from idhazh.contracts.item_health import (
     SOURCE_NEUTRAL_FAILURE_CODES,
     FailureCode,
     ItemHealthRow,
+    ItemOutcome,
     ItemStage,
 )
 from idhazh.contracts.route import Route
@@ -210,6 +212,28 @@ def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
         AppConfig.model_validate({"console": {"chart_width": 0}})
 
 
+def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
+    """The one edit that would silence a gate instead of tightening it.
+
+    A refused item writes no score, so it leaves the corpus `brief_copying_ceiling`
+    reads. Drop the reject to the gate's own number and every item the gate could
+    have failed is gone before it looks - the gate stops failing, which reads
+    exactly like a pipeline that stopped copying.
+    """
+    gate = EvaluationConfig().brief_compression_ceiling
+    for silenced in (gate, gate / 2):
+        with pytest.raises(ValidationError):
+            EvaluationConfig(verbatim_reject_ceiling=silenced)
+    assert EvaluationConfig(verbatim_reject_ceiling=gate + 0.01).verbatim_reject_ceiling > gate
+
+
+def test_the_committed_reject_ceiling_leaves_the_brief_gate_a_live_band() -> None:
+    """0.75 against a 0.5 gate, so (0.5, 0.75] is a band the gate can still fail in."""
+    evaluation = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).evaluation
+    assert evaluation.verbatim_reject_ceiling == 0.75
+    assert evaluation.brief_compression_ceiling == 0.5
+
+
 def test_the_committed_config_carries_the_capped_routes() -> None:
     """`frontend/scripts/bundle-gate.mjs` reads the file, never the model, and
     the model default is empty - so the committed config is the only place the
@@ -338,12 +362,49 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 13
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 15
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+@pytest.mark.parametrize(
+    "code", [FailureCode.COPIED_SOURCE, FailureCode.LEAKED_ADDRESS], ids=lambda c: c.value
+)
+def test_a_refused_reply_is_the_models_fault_and_never_the_feeds(code: FailureCode) -> None:
+    """A wire service publishing short briefs must not be quarantined for our model.
+
+    `collect.quarantine_after_failures` is 5, so leaving either code out of the
+    source-neutral set would take a working feed off the list on the fifth copy.
+    """
+    assert FAILURE_CODE_STAGES[code] == frozenset({ItemStage.SUMMARIZE})
+    assert code in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+@pytest.mark.parametrize(
+    "code", [FailureCode.COPIED_SOURCE, FailureCode.LEAKED_ADDRESS], ids=lambda c: c.value
+)
+def test_a_refused_reply_survives_the_ledger_round_trip(code: FailureCode) -> None:
+    """The census row is the only durable record of a dropped item, so it must read back."""
+    published = ItemHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json")
+    )
+    row = published.model_copy(
+        update={
+            "stage": ItemStage.SUMMARIZE,
+            "outcome": ItemOutcome.FAILED,
+            "code": code,
+            "summary_words": 44,
+        }
+    )
+
+    restored = ItemHealthRow.from_csv_row(row.csv_row())
+    assert restored.code is code
+    assert restored.summary_words == 44
+    assert restored.counts_against_source is False
+    assert restored == row
 
 
 def test_a_prompt_that_did_not_fit_is_our_budget_and_not_the_sources_fault() -> None:

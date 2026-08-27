@@ -39,6 +39,19 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-27",
+            change="failure_code may now carry copied_source or leaked_address.",
+            why=(
+                "Summarize refuses two more replies: one that copies the source instead "
+                "of summarizing it, and one that carries an address into our own words. "
+                "No field on this payload changed, but the failure vocabulary is inlined "
+                "into this schema, so the generated file's bytes move and the change is "
+                "stamped here rather than left to the drift gate to announce. Additive - "
+                "a payload written before today names none of the new values and still "
+                "validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-24T18:30",
             change="Added prefill_ms, decode_ms and cached_tokens.",
             why=(
