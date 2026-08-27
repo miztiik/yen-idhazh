@@ -675,12 +675,11 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
 def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     """Point every output root and every committed ledger at the test's own tree.
 
-    The month index follows `PUBLIC_ROOT` rather than needing a redirect of its
-    own: `stage_assemble` rebuilds it from whatever day directory it was given,
-    and it used to be a constant, so a test that moved the days left it pointing
-    at the repository and rebuilt the committed index from an empty fixture tree.
-    That truncated the served vectors to zero bytes - a change `git status` shows
-    and a test never asserts on.
+    The month index is one of them because `stage_assemble` rebuilds it from
+    whatever day directory it was given. Its root is derived from `PUBLIC_ROOT`,
+    so patching that covers it. Left unpatched it rebuilt the committed index
+    from an empty fixture tree and truncated the served vectors to zero bytes - a
+    change `git status` shows and a test never asserts on.
     """
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
