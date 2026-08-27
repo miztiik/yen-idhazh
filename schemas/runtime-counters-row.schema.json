@@ -1,0 +1,172 @@
+{
+  "$id": "runtime-counters-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the shard, and the llamacpp: counters its server reported at job end.",
+      "version": "2026-08-27",
+      "why": "The item-health ledger's prefill and decode timings are copied out of the model's own replies, one request at a time, and two published surfaces quote rates derived from them. Nothing committed could check either, because the server's own counters were scraped into a job log that keeps them for two days. A number that cannot be reconciled cannot justify a design (Rule #10), so the second instrument is now a committed row."
+    }
+  ],
+  "description": "One `work` shard, one run, one row.",
+  "properties": {
+    "date": {
+      "description": "The digest day, the same one the item-health row files under.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "n_busy_slots_per_decode": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Slots busy per decode call, averaged. Says whether batching happened at all, which is what separates 'more slots did not help' from 'more slots were never used'.",
+      "title": "N Busy Slots Per Decode"
+    },
+    "n_decode_total": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "llama_decode() calls, speculative and multimodal excluded.",
+      "title": "N Decode Total"
+    },
+    "n_tokens_max": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The longest sequence the server saw, prompt plus generation. Says how close the day came to `n_ctx`.",
+      "title": "N Tokens Max"
+    },
+    "prompt_seconds_total": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Seconds spent reading prompts. The ledger's `prefill_ms`.",
+      "title": "Prompt Seconds Total"
+    },
+    "prompt_tokens_cached_total": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prompt tokens reused from the cache instead of read. The ledger's `cached_tokens`.",
+      "title": "Prompt Tokens Cached Total"
+    },
+    "prompt_tokens_total": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Prompt tokens the server actually read, cached ones excluded. The same quantity the ledger spells `input_tokens - cached_tokens`.",
+      "title": "Prompt Tokens Total"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "scraped_at": {
+      "description": "When the counters were read. Job end, after the last item settled.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Scraped At",
+      "type": "string"
+    },
+    "shard": {
+      "description": "Which work shard this server served.",
+      "minimum": 0,
+      "title": "Shard",
+      "type": "integer"
+    },
+    "shards": {
+      "description": "How many shards the run split into. The denominator.",
+      "minimum": 1,
+      "title": "Shards",
+      "type": "integer"
+    },
+    "tokens_predicted_seconds_total": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Seconds spent writing. The ledger's `decode_ms`.",
+      "title": "Tokens Predicted Seconds Total"
+    },
+    "tokens_predicted_total": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Tokens written. The ledger's `output_tokens`.",
+      "title": "Tokens Predicted Total"
+    },
+    "version": {
+      "default": "2026-08-27",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "shard",
+    "shards",
+    "scraped_at"
+  ],
+  "title": "RuntimeCountersRow",
+  "type": "object",
+  "version": "2026-08-27"
+}

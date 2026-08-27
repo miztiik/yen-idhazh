@@ -113,6 +113,14 @@ the same reason: those rows otherwise ride only in that shard's `items-<shard>`
 artifact, which is kept for one day and is not uploaded at all when a job is
 cancelled.
 
+A worker commits a third row in the same step: what its model server counted for
+the whole shard, read once from `/metrics` at job end and filed in
+`state/runtime-counters.csv`. The raw body still ships in `runtime-log-<shard>`,
+which keeps it for two days - long enough to read a failure, far too short to
+hold a published rate to account. The committed row is what lets
+`backend/utilities/reconcile_prefill.py` check the item-health ledger's read rate
+against a second instrument (Rule #10).
+
 ### The three commit steps push through a rebase, and the one that can rebuild rebuilds
 
 The plan job, each work shard and the assemble job commit, then push in a loop of
@@ -158,13 +166,13 @@ thrown at `git merge-file`. A text merge of two digests produces a payload no
 producer would ever write.
 
 `REFRESH_PATHS` names what the rebuild owns: the day's `digest.json` and
-`run.json`, `frontend/public/telemetry/`, and the three ledgers assemble appends
-to. It never names the day's directory. The routes artifact unpacks this run's
-rendered charts into that same directory and no producer in the assemble job can
-make them again, so the two payload files are named one at a time.
-`frontend/public/telemetry/` is a full rewrite of `state/item-health/`, which is
-why it is regenerated and not unioned: a union of two rewrites is a file with
-every row twice.
+`run.json`, `frontend/public/telemetry/`, and the four ledgers the workers and
+assemble append to. It never names the day's directory. The routes artifact
+unpacks this run's rendered charts into that same directory and no producer in
+the assemble job can make them again, so the two payload files are named one at a
+time. `frontend/public/telemetry/` is a full rewrite of `state/item-health/`,
+which is why it is regenerated and not unioned: a union of two rewrites is a file
+with every row twice.
 
 **The charts in that directory are the other way to lose the day, and they get
 their own answer.** A chart is filed as `<vertical>-<NN>.svg`, numbered from the

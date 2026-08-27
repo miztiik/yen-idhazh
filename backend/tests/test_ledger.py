@@ -11,8 +11,10 @@ from conftest import FIXTURES_DIR
 from idhazh import ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from utilities.migrate_published_ledger import narrow
+from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 STATE_FIXTURES = FIXTURES_DIR / "state"
@@ -21,6 +23,12 @@ RUN_ID = "2026-08-23-1"
 STAMP = "2026-08-23T06:00:00Z"
 URL = "https://example.org/items/one"
 URL_KEY = derive_url_key(URL)
+#: The one committed run both instruments measured. Its four `runtime-log-*`
+#: artifacts were pulled before they expired and its item-health rows are in the
+#: committed month shard, so the reconciliation runs on real data with no
+#: network and no mocks (Rule #7).
+RECONCILED_DATE = "2026-08-26"
+RECONCILED_RUN = "2026-08-26-5"
 
 
 def seen_row() -> SeenRow:
@@ -192,3 +200,119 @@ def test_committed_state_csv_rows_match_their_headers() -> None:
                 )
 
     assert mismatches == []
+
+
+# --- The server's own counters, and what they are for ----------------------
+
+
+def counters_row(shard: int, **counters: object) -> RuntimeCountersRow:
+    return RuntimeCountersRow.model_validate(
+        {
+            "date": DATE,
+            "run_id": RUN_ID,
+            "shard": shard,
+            "shards": 4,
+            "scraped_at": STAMP,
+            **counters,
+        }
+    )
+
+
+def test_every_ledger_a_work_shard_stages_exists_in_a_fresh_checkout() -> None:
+    """`git add` on a path that is not there aborts the whole commit step.
+
+    The script runs under `set -euo pipefail` and stages all three of the work
+    job's ledgers in one call, so a `state/runtime-counters.csv` that only
+    appears once the counters stage has succeeded would let a broken scrape cost
+    the shard its item-health rows as well - the exact loss the commit step was
+    added to prevent. The header ships with the contract instead.
+    """
+    path = ledger.runtime_counters_path(REPO_ROOT / "state")
+
+    assert path.exists(), "the ledger a work shard stages must exist before the first run"
+    assert ledger.read_header(path) == RuntimeCountersRow.csv_columns()
+
+
+def test_a_re_run_shard_cannot_be_counted_twice(tmp_path: Path) -> None:
+    """The cells are cumulative totals, so a second row is not a second fact.
+
+    A re-run of a failed job starts a fresh server and scrapes it again. Nothing
+    pools two rows for one shard correctly - the tokens would simply be added to
+    themselves - and `merge=union` keeps both lines rather than collapsing them,
+    so the filter has to run before the write.
+    """
+    assert ledger.append_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
+    assert ledger.append_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=999)]) == 0
+    assert ledger.append_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
+
+    landed = ledger.load_runtime_counters(tmp_path, run_id=RUN_ID)
+    assert [row.shard for row in landed] == [0, 1]
+    assert [row.prompt_tokens_total for row in landed] == [100, 200]
+
+
+def test_a_shard_whose_server_was_gone_still_counts_as_a_shard(tmp_path: Path) -> None:
+    """Pooling a run has to see the shard that contributed nothing.
+
+    Three shards' tokens quoted as a four-shard run is a number nobody can read.
+    An empty scrape writes nulls, not zeroes, so the row says "this shard ran and
+    the server did not answer" rather than "this shard read no tokens".
+    """
+    ledger.append_runtime_counters(
+        tmp_path, [counters_row(0, prompt_tokens_total=100, prompt_seconds_total=10.0)]
+    )
+    ledger.append_runtime_counters(tmp_path, [counters_row(1)])
+
+    pooled = pool_counters(ledger.load_runtime_counters(tmp_path, run_id=RUN_ID))
+
+    assert pooled.parts == 2, "a silent shard is still a shard"
+    assert pooled.tokens == 100
+    assert pooled.rate == 10.0
+
+
+def test_the_ledgers_prefill_rate_agrees_with_the_servers_own_counters() -> None:
+    """The Oracle for row 9, on one real committed run.
+
+    `docs/architecture/summarize/throughput.md` and the console both publish a
+    read rate derived from the item-health ledger, which sums a field copied out
+    of one model reply per item. The server counted the same work for itself.
+    Until the counters were committed the two could not be held against each
+    other at all, which is what Rule #10 forbids.
+
+    The tolerance was written down before either side was read. The four
+    `.prom` bodies are real captures from run `2026-08-26-5`'s `runtime-log-*`
+    artifacts; the ledger side is the committed `state/item-health/2026-08.csv`.
+    """
+    rows = [
+        RuntimeCountersRow.from_metrics_text(
+            path.read_text(encoding="utf-8"),
+            date=RECONCILED_DATE,
+            run_id=RECONCILED_RUN,
+            shard=int(path.stem[-1]),
+            shards=4,
+            scraped_at="2026-08-26T21:32:30Z",
+        )
+        for path in sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
+    ]
+    assert len(rows) == 4, "all four shards, or the run figure is not the run"
+
+    server = pool_counters(rows)
+    committed = pool_ledger(
+        ledger.item_health_path(REPO_ROOT / "state", RECONCILED_DATE), run_id=RECONCILED_RUN
+    )
+    assert committed.parts > 100, (
+        "the committed ledger no longer holds this run's rows - the oracle has no input"
+    )
+
+    gap = abs(committed.rate - server.rate) / server.rate
+    assert gap <= TOLERANCE, (
+        f"ledger {committed.rate:.4f} tok/s against server {server.rate:.4f} tok/s "
+        f"is {gap * 100:.2f} percent apart, outside the {TOLERANCE * 100:.0f} percent bound"
+    )
+
+
+def test_a_run_with_no_committed_snapshot_says_so_rather_than_reporting_zero() -> None:
+    """An audit that finds nothing must not read as an audit that found agreement."""
+    result = reconcile(REPO_ROOT / "state", run_id="1970-01-01-1")
+
+    assert result.server.parts == 0
+    assert "nothing to check against" in result.verdict
