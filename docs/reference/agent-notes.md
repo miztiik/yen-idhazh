@@ -77,6 +77,23 @@ Print that path before every gate run. If it does not name your worktree, every
 result after it is about somebody else's code. Verified 2026-08-25 across ten
 worktrees.
 
+**And the same variable is what breaks the NEXT worktree.** `PYTHONPATH` leaks
+into every terminal the editor opens afterwards, and it beats a correct `.pth`
+just as reliably as it beats a wrong one. A worktree with its own venv, its own
+`pip install -e .` and its own correct `_editable_impl_idhazh.pth` still imported
+a sibling worktree's `idhazh`, so `python -m idhazh.contracts.export` wrote
+`schemas/` into the OTHER tree and `git status` here stayed clean - which reads
+exactly like the exporter ignoring a new contract. Clear it first, then print the
+path:
+
+```powershell
+$env:PYTHONPATH=''
+& .\.venv\Scripts\python.exe -c "import idhazh; print(idhazh.__file__)"
+```
+
+Set the variable only when you are deliberately borrowing another checkout's
+venv. Observed 2026-08-27.
+
 **A header migration cannot survive a rebase, because `state/*.csv` is
 `merge=union`.** Union merge keeps every line from both sides, which is exactly
 right for an append-only ledger and exactly wrong for a file whose every line

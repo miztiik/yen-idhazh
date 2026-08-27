@@ -91,7 +91,7 @@ from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
-from idhazh.evals import golden, metrics, qualify, score, validation, writer
+from idhazh.evals import evidence, golden, metrics, qualify, score, validation, writer
 from idhazh.evals.hhem import (
     HHEM_REVISION,
     HHEM_SCORER_ID,
@@ -121,6 +121,9 @@ LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
+#: A sibling of `VAR_ROOT` rather than a child, because the run never reads it
+#: back and no downstream job downloads it. A test redirects it the same way.
+EVIDENCE_ROOT: Final = config.REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
 #: The planted attacks, run live against a candidate before it is adopted.
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
@@ -144,6 +147,10 @@ def _index_root() -> Path:
 
 def _run_dir(date: str) -> Path:
     return VAR_ROOT / date
+
+
+def _evidence_dir(date: str) -> Path:
+    return EVIDENCE_ROOT / date
 
 
 def _today() -> str:
@@ -622,6 +629,7 @@ def stage_work(
         )
         row = row.model_copy(update={"score_ms": score_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
+        _write_evidence(row, premise=seen, summary=summary.summary or "")
         LOG.info(
             "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
             item.item_id,
@@ -631,6 +639,20 @@ def stage_work(
             summarize_ms,
             score_ms,
         )
+
+
+def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:
+    """Leave the two texts this row was judged on where a person can read them.
+
+    Outside `items/` on purpose. That directory is downloaded whole by route and
+    by assemble and kept for a day; this one is read by nobody in the run, is
+    never committed, and needs to outlive the day so a labeller has time to work
+    (`docs/how-to/label-the-faithfulness-queue.md`).
+    """
+    item = evidence.of(row, premise=premise, summary=summary)
+    path = evidence.path_for(_evidence_dir(row.date), item)
+    assemble.write_atomic(path, item.to_json())
+    return path
 
 
 def _write_stamp(items_dir: Path, *, inputs: PipelineInputs, run_id: str) -> FingerprintRow:

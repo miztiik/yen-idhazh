@@ -1,0 +1,108 @@
+{
+  "$id": "evidence-item.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the measurement's identity, the premise, and the summary.",
+      "version": "2026-08-27",
+      "why": "The faithfulness bands are a reader-facing promise with no measured human error rate, and the label queue could not produce one: it showed a labeller the headline and the link and never the article the verdict has to judge. This payload carries the exact text the scorer read, beside the exact summary it scored, so a human and the scorer answer the same question about the same document."
+    }
+  ],
+  "description": "One scored item's premise and summary, addressed by the measurement it belongs to.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "output_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "premise": {
+      "description": "The article after extraction, sanitizing and the truncation cap - the text the scorer read, byte for byte. Untrusted (Rule #11): it prints as inert terminal text and never becomes a prompt, a path or a URL.",
+      "title": "Premise",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "scorer_version": {
+      "minLength": 1,
+      "title": "Scorer Version",
+      "type": "string"
+    },
+    "source_digest": {
+      "description": "sha256 of `premise`, the same value the eval row carries. Recomputed on read, so an edited premise fails to load rather than reaching a labeller.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Source Digest",
+      "type": "string"
+    },
+    "source_url": {
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "summary": {
+      "description": "The summary the scorer scored against `premise`. The published item also carries key points; they are left out because the scorer never read them, and showing a labeller words the number does not cover would put the two of them back on different questions.",
+      "title": "Summary",
+      "type": "string"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Title"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-27",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "url_key",
+    "pipeline_fingerprint",
+    "output_digest",
+    "scorer_version",
+    "date",
+    "run_id",
+    "item_id",
+    "source_url",
+    "source_digest",
+    "premise",
+    "summary"
+  ],
+  "title": "EvidenceItem",
+  "type": "object",
+  "version": "2026-08-27"
+}
