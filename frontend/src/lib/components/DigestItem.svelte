@@ -19,6 +19,7 @@
 		showVertical = true,
 		showMark = true,
 		read = false,
+		day,
 		onRead
 	}: {
 		item: DigestItem;
@@ -30,6 +31,8 @@
 		showVertical?: boolean;
 		showMark?: boolean;
 		read?: boolean;
+		/** Set on a search result: the day it was found on, and the link back. */
+		day?: { date: string; href: string };
 		onRead?: () => void;
 	} = $props();
 </script>
@@ -78,5 +81,5 @@
 
 	<ItemVisual visual={item.visual} />
 
-	<ItemMeta {item} {showMark} {onRead} />
+	<ItemMeta {item} {showMark} {day} {onRead} />
 </article>

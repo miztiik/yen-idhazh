@@ -196,6 +196,22 @@ exit code you needed is gone. On 2026-08-26 this destroyed the ruff and mypy
 output of a full gate run and cost a second one. Give a sentinel a name that is
 not the stem of any output file, such as `SENTINEL.txt`.
 
+**A new pipeline CLI flag may not be named after a llama-server flag.**
+`test_every_job_that_starts_a_server_reaches_the_one_argv_builder` reads every
+`run:` body in every workflow and fails on any whole-token match against
+`llama_server_flags()`, so that the server's argv is built once from `config/`
+and never spelled by hand. A stage that wants to be handed the scraped
+`/metrics` body therefore takes `--counters-file` and not `--metrics`. The
+failure names the step and the flag, so it is quick to read - but only if you
+know the guard is about the server's namespace rather than about your stage.
+
+**A path added to `commit-and-push.sh` must already exist in a fresh checkout.**
+The script runs `git add "$@"` under `set -euo pipefail` with every path a job
+owns in one call, so a file that only appears once its producer has succeeded
+turns a producer failure into a failure of the whole commit step - and the other
+ledgers staged beside it are lost with it. Ship a new row ledger with its header
+committed, and assert the committed header equals the contract's column list.
+
 ## GitHub CLI
 
 **A `workflow_dispatch` cannot reach a workflow that is not on the default
@@ -294,6 +310,42 @@ run id, not just its date, or nobody can reproduce it.
 Used on 2026-08-26 to tune the lens and event vocabularies before wiring them.
 It changed the answer: a candidate list that looked reasonable put one event on
 34.7 percent of articles.
+
+### "The evidence expired" is usually wrong - check the artifact AND the job log
+
+A short `retention-days` is not the same as gone. Two independent recoveries,
+and it is worth trying both before writing a fixture by hand (Rule #7 wants a
+real capture, and a hand-typed one is not):
+
+- **The artifact, if the run is still inside its window.** `runtime-log-*`
+  keeps two days, so yesterday's run still hands over the raw bodies:
+  `gh run download <run-id> --repo <owner>/<repo> --name runtime-log-3 --dir "$env:TEMP\rt3"`.
+- **The job log, which GitHub keeps far longer than any of these artifacts.**
+  Anything a step printed is still there:
+  `gh run view --repo <owner>/<repo> --job <job-id> --log | Select-String 'llamacpp:'`.
+  Get the job ids from
+  `gh api "repos/<owner>/<repo>/actions/runs/<run-id>/jobs?per_page=100" --jq '.jobs[]|"\(.id) \(.name)"'`.
+  Note the shape: `gh api .../actions/jobs/<id>/logs` returns nothing at all,
+  because it redirects to a blob `gh` will not follow. Use `gh run view --job`.
+
+Used on 2026-08-27 to recover four real `/metrics` bodies for the prefill
+reconciliation, which is why `tests/fixtures/runtime/` holds captures rather
+than something plausible somebody typed.
+
+### An upstream README can be behind the binary
+
+llama.cpp `b10598` publishes `llamacpp:prompt_tokens_cached_total` and describes
+`llamacpp:prompt_tokens_total` as "Number of prompt tokens processed, excluding
+cached tokens". Its own `tools/server/README.md` at that exact tag carries
+neither: not the extra series, and not the four words that decide whether a
+number is a read rate or a prompt rate. A field's meaning comes from a capture,
+never from the document about it.
+
+When the instrument publishes a derived value beside its inputs, use it as a
+free self-check: `llamacpp:prompt_tokens_seconds` is exactly
+`prompt_tokens_total / prompt_seconds_total`, so reproducing the gauge from the
+counters proves which definition the counter is using, with no second source
+needed.
 
 ## The Actions cache
 
@@ -415,6 +467,16 @@ contends with the first.
 
 ## Running the gates
 
+- **A test that skips itself when it cannot find a control is a gate that turns
+  off silently.** `canaries.spec.ts` looked for the old search offer button and
+  called `test.skip` when the count was zero, so renaming that control switched
+  off an injection canary and the suite still reported green - `2 skipped` in a
+  125-line pass list that nobody reads to the end. Observed 2026-08-27. Two
+  rules fall out: read the skip count on every suite run and account for each
+  one, and write the guard as `await expect(locator, 'why this matters')
+  .toHaveCount(1)` rather than a skip whenever the fixture is supposed to
+  provide the thing. A skip is right only when the environment genuinely varies;
+  it is never right for a selector you control.
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
   `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
   then shows progress dots and an exit code and nothing else, which reads like
@@ -546,6 +608,13 @@ contends with the first.
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **`Select-String` matches case-insensitively unless you say otherwise**, so a
+  search for a constant finds the helper that replaced it. Hunting a merge
+  failure on 2026-08-27, `Select-String -Pattern 'INDEX_ROOT'` reported five
+  hits in a file whose real content was five `_index_root()` calls, which read
+  as "the constant is still there" and pointed the diagnosis at the wrong side
+  of the merge for ten minutes. Pass `-CaseSensitive` whenever the question is
+  about an identifier.
 - **`Select-String` has no `-Recurse`.** Use
   `Get-ChildItem -Recurse | Select-String`, or the editor's own search.
 - **A relative path inside a `[System.IO.File]` call does not follow

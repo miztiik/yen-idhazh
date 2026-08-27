@@ -7,12 +7,13 @@ that only works as part of the whole is a stage nobody can debug.
     idhazh plan       read feeds, rank, record      -> run/<date>/plan.json
     idhazh work       fetch, extract, summarize, score -> run/<date>/items/*
     idhazh record     commit what one shard settled -> state/
+    idhazh counters   commit what one shard's model server counted -> state/
     idhazh assemble   collect what finished        -> frontend/public/... + state/
 
 `idhazh run` is the three in order, which is what a developer wants and what
-the daily workflow calls. `record` is not one of the three: the daily workflow
-runs it inside the worker job so a run that dies before it publishes still keeps
-what it measured.
+the daily workflow calls. `record` and `counters` are not among the three: the
+daily workflow runs both inside the worker job so a run that dies before it
+publishes still keeps what it measured.
 
     idhazh backfill-vectors   re-encode closed days whose vectors are short
 
@@ -73,6 +74,7 @@ from idhazh.contracts.qualification import (
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
 from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import FeedDef
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -1823,6 +1825,46 @@ def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int
     return recorded, scored
 
 
+def stage_counters(
+    plan: RunPlan, *, metrics_path: Path, shard: int = 0, shards: int = 1
+) -> RuntimeCountersRow:
+    """Commit what this shard's model server counted, so the ledger can be checked.
+
+    Every timing on the item-health ledger is a field the summarize stage copied
+    out of one model reply. The server's own counters are the second instrument,
+    and until now they reached only a job log that keeps them for two days - so
+    the rates two published surfaces quote could not be reconciled with anything
+    (Rule #10).
+
+    Both counters are cumulative for the server process and a shard runs one
+    server for its whole job, so this one read covers the shard entirely.
+
+    A missing or empty body still writes a row, with every counter null. A shard
+    whose server was already gone and a shard that never ran are different facts,
+    and pooling a run needs to see the shard that contributed nothing.
+    """
+    text = metrics_path.read_text(encoding="utf-8") if metrics_path.exists() else ""
+    row = RuntimeCountersRow.from_metrics_text(
+        text,
+        date=plan.date,
+        run_id=plan.run_id,
+        shard=shard,
+        shards=shards,
+        scraped_at=assemble.utc_now(),
+    )
+    landed = ledger.append_runtime_counters(STATE_ROOT, [row])
+    LOG.info(
+        "counted shard=%s/%s run=%s read_tokens=%s read_seconds=%s rows=%s",
+        shard,
+        shards,
+        plan.run_id,
+        row.prompt_tokens_total,
+        row.prompt_seconds_total,
+        landed,
+    )
+    return row
+
+
 def stage_assemble(
     plan: RunPlan, *, settings: config.Settings, commit_sha: str, runner: str = "local"
 ) -> DigestDay:
@@ -2237,6 +2279,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "shards",
             "work",
             "record",
+            "counters",
             "route",
             "assemble",
             "run",
@@ -2317,6 +2360,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         type=float,
         default=330.0,
         help="The dispatch's own per-job bound. The budget gate is measured against it.",
+    )
+    parser.add_argument(
+        "--counters-file",
+        type=Path,
+        default=Path("llama-metrics.prom"),
+        help=(
+            "The GET /metrics body this shard's model server returned at job end. "
+            "Not spelled --metrics: that is llama-server's own flag, and no workflow "
+            "step may write one by hand."
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -2404,6 +2457,15 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "record":
         stage_record(_load_plan(date), shard=args.shard, shards=args.shards)
+        return 0
+
+    if args.stage == "counters":
+        stage_counters(
+            _load_plan(date),
+            metrics_path=args.counters_file,
+            shard=args.shard,
+            shards=args.shards,
+        )
         return 0
 
     if args.stage == "route" or (args.stage == "run" and args.visuals):
