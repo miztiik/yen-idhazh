@@ -13,16 +13,20 @@ is easy; a summarizer that cannot be talked out of its shape is the product.
 from __future__ import annotations
 
 import json
-import shlex
 import socket
-import subprocess
-import sys
 import threading
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    FIXTURES_DIR,
+    REPO_ROOT,
+    llama_server_flags,
+    read_text,
+)
 from pydantic import ValidationError
 
 from idhazh import cli, config
@@ -181,6 +185,7 @@ def test_the_output_shape_is_enforced_by_the_decoder() -> None:
 
 def test_the_server_is_started_from_config_not_by_hand() -> None:
     from idhazh.contracts.app_config import ModelRef
+    from idhazh.llm.server import DEFAULT_PORT
 
     binary = Path("bin/llama-server")
     weights = Path("models/w.gguf")
@@ -206,7 +211,7 @@ def test_the_server_is_started_from_config_not_by_hand() -> None:
         "--threads",
         "4",
         "--port",
-        "8080",
+        str(DEFAULT_PORT),
         "--metrics",
     ]
 
@@ -229,65 +234,53 @@ def test_the_server_refuses_an_oversized_prompt_rather_than_shifting_it() -> Non
     assert "--no-context-shift" in argv
 
 
-def test_server_argv_matches_the_digest_workflow_command() -> None:
+def test_server_argv_names_the_port_it_was_given() -> None:
+    """One declaration reaches the flag, the client address and the probes.
+
+    `DEFAULT_PORT` is what `LLAMA_PORT` sets, so the test reads it rather than
+    restating 8080 - a second literal here is the defect this row removed.
+    """
     from idhazh.contracts.app_config import ModelRef
+    from idhazh.llm.server import DEFAULT_ENDPOINT, DEFAULT_PORT
 
-    workflow = (REPO_ROOT / ".github/workflows/digest.yml").read_text(encoding="utf-8")
-    assert workflow.count("backend/utilities/llama_server_argv.py") == 4
-    for literal in (
-        "--ctx-size 8192",
-        "--batch-size 512",
-        "--ubatch-size 512",
-        "--threads 4",
-        "--no-warmup",
-    ):
-        assert literal not in workflow
-
-    settings = config.load(CONFIG_DIR)
-    cases = (
-        (
-            "Qwen3-8B-Q4_K_M.gguf",
-            settings.app.models.summarize.id,
-            settings.app.models.summarize,
-        ),
-        (
-            "Qwen3-4B-Q4_K_M.gguf",
-            settings.app.models.route.id,
-            settings.app.models.route,
-        ),
+    argv = server_argv(
+        binary=Path("bin/llama-server"),
+        weights=Path("models/w.gguf"),
+        model=ModelRef(id="m", repo="r", file="w.gguf", quantisation="Q4_K_M"),
+        inference=InferenceConfig(),
+        port=8181,
     )
-    for file_name, alias, model in cases:
-        expected = server_argv(
-            binary=Path("backend/bin/llama-server"),
-            weights=Path("backend/models") / file_name,
-            model=ModelRef(
-                id=alias,
-                repo=model.repo,
-                file=model.file,
-                quantisation=model.quantisation,
-                sha256=model.sha256,
-            ),
-            inference=settings.app.models.inference,
-        )
-        actual = subprocess.check_output(
-            [
-                sys.executable,
-                "backend/utilities/llama_server_argv.py",
-                "--config",
-                "config",
-                "--binary",
-                "backend/bin/llama-server",
-                "--weights",
-                f"backend/models/{file_name}",
-                "--alias",
-                alias,
-                "--format",
-                "shell",
-            ],
-            cwd=REPO_ROOT,
-            text=True,
-        ).strip()
-        assert shlex.split(actual) == expected
+
+    assert argv[argv.index("--port") + 1] == "8181"
+    assert f":{DEFAULT_PORT}/" in DEFAULT_ENDPOINT
+
+
+def test_exactly_one_function_spells_a_llama_server_flag() -> None:
+    """The Oracle. A second renderer of this list is a second server.
+
+    `backend/utilities/llama_server_argv.py` was that second renderer. It
+    existed for one reason - `digest.yml` started its server before
+    `pip install -e .` ran, so the package was not importable yet - and it
+    drifted the moment a flag landed on one copy and not the other. The install
+    moved one step earlier and the copy is gone.
+
+    Closed-world: the flags come from `server_argv` itself, so a new one joins
+    this search without anybody remembering to add it, and the file set is
+    compared by equality rather than by membership. The workflow half of the
+    same Oracle is
+    `test_workflows.test_every_job_that_starts_a_server_reaches_the_one_argv_builder`.
+    """
+    every_flag = llama_server_flags()
+    assert "--ctx-size" in every_flag and "--no-context-shift" in every_flag
+
+    spellers = {
+        path.relative_to(REPO_ROOT).as_posix()
+        for path in REPO_ROOT.glob("backend/**/*.py")
+        if any(f'"{flag}"' in path.read_text(encoding="utf-8") for flag in every_flag)
+    }
+    # The builder, and the test that pins what it builds. A third file is a
+    # second answer to what the server runs.
+    assert spellers == {"backend/idhazh/llm/server.py", "backend/tests/test_summarize.py"}
 
 
 def test_runtime_sweep_flags_are_emitted_only_when_configured() -> None:

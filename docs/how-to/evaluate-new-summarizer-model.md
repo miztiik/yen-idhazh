@@ -1,6 +1,6 @@
 # Evaluate and Adopt a New Summarizer Model
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Measure a candidate summarizer against the configured incumbent, decide whether
 it clears the bar, and change the model without losing reproducibility.
@@ -19,7 +19,7 @@ What exists:
   prefill and decode locally;
 - `.github/workflows/measure.yml`, target `llm`, runs the same raw measurement on
   `ubuntu-latest`;
-- `llama_server_argv.py` builds the server command from config;
+- `idhazh.llm.server.server_argv` builds the server command from config;
 - `work` can exercise the real fetch, extract, sanitize and summarize path;
 - `validate` can score model output with HHEM; and
 - `.github/workflows/validate.yml` plus `idhazh qualify` and
@@ -131,16 +131,12 @@ or run it again with one changed input.
 ## 2. Prove that the model loads
 
 Download the entire llama.cpp binary directory, not one executable. Generate the
-candidate server command from a scratch config that differs only in
-`models.summarize`:
+candidate server command with the program in
+[test-models-locally.md](test-models-locally.md#serve-a-model), pointed at a
+scratch config that differs only in `models.summarize`:
 
-```bash
-python backend/utilities/llama_server_argv.py \
-  --config backend/var/candidate-config \
-  --binary backend/bin/llama-server \
-  --weights backend/models/model-Q4_K_M.gguf \
-  --alias candidate-model-id \
-  --format shell
+```python
+settings = config.load(Path("backend/var/candidate-config"))
 ```
 
 There is no candidate-config command today. Create the directory under

@@ -418,6 +418,37 @@ quote or a newline can be stopped.
 Neither keys a cache on a production model ref, and measuring or validating a
 candidate means naming a model that is deliberately not in config yet.
 
+## One function builds the server command, and one variable says the port
+
+`digest.yml`, `validate.yml` and `measure.yml` each stand up a `llama-server`,
+and none of them writes a flag. Every one imports `server_argv` from
+`backend/idhazh/llm/server.py`, which renders the whole command from
+`config/idhazh.json`. A contract test holds that from both sides: exactly one
+Python file spells those flags, and no command in any workflow spells one.
+
+There used to be a second renderer, `backend/utilities/llama_server_argv.py`,
+and it existed for exactly one reason. Both `digest.yml` inference jobs ran
+`Start the model` before `Install`, so `pip install -e .` had not run and the
+package was not importable yet. `Install` now runs one step earlier, straight
+after `setup-python`, and the copy is gone. Moving a step within a job is the
+same work in a different position, so no wall-clock claim is made for it
+(Rule #10).
+
+While the copy existed the two halves drifted, and the arm that drifted is the
+one nobody diffed. `validate.yml` never needed the utility - its `Install`
+already ran before its server started - so for two changes it qualified
+candidates on a server the daily run does not run.
+
+**The port is one `env: LLAMA_PORT` per workflow.** It was nine literals in
+`digest.yml` and three in `validate.yml`, and all of them had to move together
+or the job failed in a way that reads as an unreachable model (Rule #6).
+`server_argv` takes it as an argument; every `/health`, `/v1/models`, `/props`
+and `/metrics` probe reads it; and `idhazh.llm.server` reads the same variable
+for the address the summarize stage posts to, so the server and its client
+cannot end up on different ports. It is not a config field. It decides nothing
+about the words, so `idhazh.fingerprint` has nothing to classify and
+`pipeline_fingerprint` does not move.
+
 ## Repository settings these workflows depend on
 
 Read from the repository API on 2026-08-25.
