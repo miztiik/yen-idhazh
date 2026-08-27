@@ -19,7 +19,7 @@ decision. Current project behaviour belongs in `docs/` (Rule #4).
 
 | # | Defect | Level | Status |
 | --- | --- | --- | --- |
-| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - QUEUE INCOMPLETE; 0 of 60 labels; 0 of 10 current-pipeline run-days** |
+| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - QUEUE INCOMPLETE; 0 of 60 labels; 0 of 10 current-pipeline run-days, and 10 has never been reached** |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 4 | **OPEN - no current reader-facing symptom** |
 
 ## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
@@ -59,7 +59,13 @@ Closing steps, in order:
 3. Draw and label 60 rows, six per HHEM decile. Keep the score, band,
    counterweights, model identity, fingerprint and running tally hidden.
 4. Collect 10 distinct run-days under one `scorer_version` and one
-   `pipeline_fingerprint`.
+   `pipeline_fingerprint`. **Ten has never been reached.** Over the same ledger,
+   the longest run of consecutive run-days under a single pair is 3 -
+   `2026-08-24` to `2026-08-26`, under fingerprint `969b1917...d2b945` - and the
+   stamp has moved four times across the five scored run-days the ledger holds.
+   So this step is not a waiting period, and it does not close on its own. The
+   reset mechanism, the measured rate and the two ways out are stated once, in
+   [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md#design-rationale).
 5. Re-test the cuts by stratum. Move a threshold only when the labels support
    the new cut.
 
