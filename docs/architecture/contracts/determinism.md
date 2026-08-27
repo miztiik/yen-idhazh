@@ -1,6 +1,6 @@
 # Determinism and the Pipeline Fingerprint
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 How the pipeline proves a re-run changed nothing, and how it records the times that claim turns out to be false. This page owns the stamp, the ledger that expands it, the skip rule built on it, and the violation policy.
 
@@ -64,7 +64,9 @@ check asserts the server serves the configured alias and loaded the configured
 filename. That gate is what lets the config value stand in for the observed one.
 `/props` names the file the server opened; it does not digest it, and digesting
 five gigabytes in every shard is a cost nobody has measured against the gate it
-would replace.
+would replace. The qualification path does digest the file it is about to run
+(`_candidate_identity`), so the observation exists and production has not adopted
+it.
 
 The five blind spots below are still outside the stamp.
 
@@ -74,11 +76,29 @@ missing article digest belongs in a separate per-item work identity used by a
 future skip key.
 
 The skip path is not wired. `stage_work` computes a fingerprint and records it,
-and nothing reads `state/fingerprints.csv` back to call `classify`. The Qwen3.5
-adoption plan defers that on purpose: a safe skip needs a separate typed
-per-item work identity carrying both the article-input digest and the pipeline
-fingerprint, and article identity does not belong inside the configuration
-fingerprint.
+and nothing reads `state/fingerprints.csv` back to call `classify`. That is
+deliberate: a safe skip needs a separate typed per-item work identity carrying
+both the article-input digest and the pipeline fingerprint, and article identity
+does not belong inside the configuration fingerprint.
+
+### A placeholder digest used to stamp clean, and now it raises
+
+Sixty-four zeroes satisfy the `Sha256` type. A stamp built on them validated,
+published and said nothing at all about which weights ran - so "nobody measured
+the weights" and "these are the weights" were the same fingerprint. Every stamp
+written that way was valid and false.
+
+`build_inputs` now refuses an absent or placeholder `model_sha256` and names the
+file whose digest is missing. Refusing is right where degrading was right for
+`runtime_build` and `chat_template_sha256`: those record a source that did not
+answer, which is a fact about the run and stamps apart from every run whose
+source did answer. A placeholder weights digest records nothing and stamps
+*together* with every other unmeasured run, which is the one shape that makes the
+ledger lie (Rule #10).
+
+The defect was found by the 2026-08-26 model qualification, which is the first
+thing that had a reason to compare an expectation against an observation
+([../../reference/measurements.md](../../reference/measurements.md#two-defects-the-qualification-exposed-both-fixed)).
 
 ## Which inference knobs the stamp carries
 
@@ -99,7 +119,7 @@ Ten of the nineteen knobs stay outside the stamp. Nine of the ten reach `server_
 | `startup_warmup` | no, and safe | A pass before the run. It decodes nothing that we keep. |
 | `request_timeout_minutes` | no, and safe | A clock bound on one POST. It stops a call, it does not reword one. |
 
-The five blind spots are real. Move one and a summary can change while the stamp holds still. They stay undigested here on purpose: adding a field to `PipelineInputs` resets every fingerprint, and [`../../../TODO/20260825-qwen35-9b-adoption-plan.md`](../../../TODO/20260825-qwen35-9b-adoption-plan.md) already spends one reset on the model swap. Digesting them apart from that swap spends the reset twice.
+The five blind spots are real. Move one and a summary can change while the stamp holds still. They stay undigested here on purpose: adding a field to `PipelineInputs` resets every fingerprint, and the 2026-08-27 summarizer swap already spent one reset. Digesting them apart from a reset something else is paying for spends the reset twice, so the next one to move the model ref is the commit that should carry them.
 
 `server_argv` used to claim in its own docstring that every knob it passes is a fingerprint input. It never was. The docstring now points at `NOT_DIGESTED` rather than claim coverage nobody checked.
 
@@ -183,7 +203,7 @@ The row is written in `work` and appended in `assemble` because a work shard's c
 | Hand-assemble the digest input from a list of names | A second enumeration to keep in step with the model, and forgetting an entry is silent by construction. | Fowler |
 | Store the prompt text on the ledger row | Puts text nothing downstream reads into a permanent committed record; the digest answers the only question asked of it. | Andre |
 | Write an eval row for an unchanged item | Makes every trend on the dashboard a function of how often the job ran rather than of how the summaries changed. | Andre |
-| Digest the five blind spots now | Every fingerprint resets when they enter the stamp, and row 4 of the Qwen3.5-9B swap plan resets them all anyway. Two resets buy one. | Fowler |
+| Digest the five blind spots now | Every fingerprint resets when they enter the stamp, and the 2026-08-27 model swap reset them all anyway. Two resets buy one. | Fowler |
 | Put all ten undigested knobs on the ledger row the way `host_cpu` is | `host_cpu` earns its column because it explains a violation. A KV cache setting explains nothing on its own, and ten more columns cost every future row. | Fowler |
 | Correct the fields and leave the docstring | The fields were never the defect. The scope statement already said an undeclared field is not covered; only the docstring claimed otherwise. | Fowler |
 | Delete the false sentence and add nothing | The gap stays real and stays unwritten, so the next reader re-derives it from the argv list. | Fowler |

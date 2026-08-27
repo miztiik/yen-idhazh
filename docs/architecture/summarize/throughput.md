@@ -112,8 +112,8 @@ the drift reverses.
 ## Concurrency inside a shard is not a lever, but shard count is
 
 **Measured 2026-08-25** on a GitHub-hosted `ubuntu-latest` (AMD EPYC 9V74,
-4 vCPU, 15 GB), `Qwen3-8B-Q4_K_M.gguf` through `llama-batched-bench` on
-llama.cpp `b10598`, three repeats. Running two sequences through the model at
+4 vCPU, 15 GB), `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through
+`llama-batched-bench` on llama.cpp `b10598`, three repeats. Running two sequences through the model at
 once raises **aggregate** write from 5.77 to 6.07 tok/s. That is **1.055x**,
 spread 0.022, against a gate of 1.4x set before the run. Four sequences reach
 1.133x and oversubscribe the 4 vCPU, so no parallel level on this runner clears
@@ -185,15 +185,22 @@ trusting either. A one-day window still draws its candle: min, p25, median, p75
 and max is five numbers and a real shape. It drops the date cadence, which one
 column cannot carry, and prints the date as one label instead.
 
-**A model-swap mark is not built, and today it would draw nothing.** The rule
-above tells a reader to attribute a whole-candle move to a swap, but the chart
-does not say where a swap happened - so the reader has to know. `loadManifests()`
-already returns each day's model ids, so the join is small. What is missing is a
-way to prove it: all five published days ran `qwen3-8b-q4-k-m` and nothing else,
-so the mark cannot fire, the browser suite cannot see it, and the frontend has no
-unit-test runner to test the swap-detection in isolation. Build it with the first
-swap, or with a pure module and a runner to test it - not before, or it ships
-unverified.
+**A model-swap mark is not built, and the thing that blocked it has now
+happened.** The rule above tells a reader to attribute a whole-candle move to a
+swap, but the chart does not say where a swap happened - so the reader has to
+know. `loadManifests()` already returns each day's model ids, so the join is
+small. What was missing was a way to prove it: every published day up to
+2026-08-27 ran `qwen3-8b-q4-k-m` and nothing else, so the mark could not fire
+and the browser suite could not see it. `qwen3-5-9b-q4-k-m` became the
+configured summarizer on 2026-08-27, so the first day it publishes gives the
+mark a real transition to draw and the suite a real fixture. Build it then, or
+with a pure module and a runner to test it - not before, or it ships unverified.
+
+**Nothing on this chart is evidence that the swap improved anything.** No
+comparison against the retired model was ever run
+([`../../concepts/evaluation.md`](../../concepts/evaluation.md)), and a candle
+that moves the day a model changes is a change in rate, not a change in quality.
+The two are different measurements and this chart takes only one of them.
 
 ## Design rationale
 
