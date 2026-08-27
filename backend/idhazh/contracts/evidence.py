@@ -24,6 +24,14 @@ against. `backend/var/run/<date>/plan.json` and `<item_id>.article.json` are
 gitignored and regenerable in exactly the same way and are contracts for exactly
 the same reason.
 
+**It is a contract under Rule #3 and not a migration surface under section 11.**
+Nothing this payload was ever written into survives: the oldest copy that can
+exist is a workflow artifact 14 days old, and a re-run rebuilds it byte for byte.
+So a shape change here never owes a read-side migration - it owes a re-run. The
+`version` field is carried because every `Contract` carries one and because it
+tells a labeller which build wrote the file in front of them, not because an
+older payload has to keep validating.
+
 `source_digest` is rebuilt from `premise` on read rather than trusted, so a file
 whose text was edited after the run cannot load at all.
 """

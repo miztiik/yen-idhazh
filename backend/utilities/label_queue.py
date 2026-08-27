@@ -204,7 +204,7 @@ def main() -> int:
         "--evidence",
         default="",
         help=(
-            f"The evidence package to read the article and the summary from. Defaults to "
+            "The evidence package to read the article and the summary from. Defaults to "
             f"{evidence.EVIDENCE_ROOT_RELPATH}, which a local run writes. Point it at a "
             "downloaded artifact directory for a day CI produced."
         ),
