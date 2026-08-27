@@ -574,6 +574,26 @@ contends with the first.
   `/archive/` - the only route the change touched - was not among them. That is
   the tell that the record, not the branch, is the thing that moved.
 
+- **A Playwright spec cannot import a module that imports `$app/anything`.**
+  Playwright's pure-function specs run in Node with no SvelteKit resolver, so a
+  spec that reaches into `frontend/src/lib/` fails the *whole suite* at load
+  time with `Error: Cannot find package '$app' imported from ...` - not one
+  test, all of them, before a single browser opens. Measured 2026-08-27, when
+  `assist-guard.spec.ts` started importing the month-index parser and that
+  parser lived beside the `fetch` that needs `base`. The fix is a module split:
+  the pure half in its own file with no `$app` import, the fetching half
+  re-exporting it. The tell is that the error names a *package* rather than a
+  test.
+
+- **The local build can beat the ratchet, so build the control before you
+  believe the failure.** The entry above says a local node-24 build reads under
+  the recorded node-22 weights. On 2026-08-27 an untouched base build of one
+  tree read -48, -49, -47, -45, -8, +10 and -52 against the record - every route
+  inside the 64-byte tolerance, gate green. So "local always undershoots" is not
+  a rule you can apply without checking, and on that day the ratchet failure was
+  real. Build the base source on your own tree, run the gate on it, and only
+  then decide whether the delta is yours.
+
 ## PowerShell
 
 - **One line only.** Multi-line commands are mangled before they reach the

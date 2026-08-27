@@ -22,6 +22,12 @@ import { join, relative, resolve, sep } from 'node:path';
  * `/console/` are not among them - they grow with the published corpus and the
  * ledger, so this marker count is the only gate they answer to.
  *
+ * `/archive/` was excluded from the rule below until 2026-08-27, because it
+ * inlined every committed day so on-device search could read the vectors
+ * without a request. Search reads the month index now, so the exclusion and the
+ * test that guarded it are both gone and the archive answers the same rule as
+ * every other page.
+ *
  * Runs in Node rather than in a page, like the arithmetic tests in
  * `frame.spec.ts`. It reads the build the preview server is about to serve.
  */
@@ -68,7 +74,7 @@ function rendersADay(route: string): boolean {
 
 test('no page inlines a day it does not render', () => {
 	const carriers = pages()
-		.filter((page) => !rendersADay(page.route) && page.route !== '/archive/')
+		.filter((page) => !rendersADay(page.route))
 		.filter((page) => page.markers > 0)
 		.map((page) => `${page.route} carries ${page.markers} items`);
 
@@ -97,21 +103,17 @@ test('the marker is found where a day is rendered', () => {
 });
 
 /**
- * `/archive/` is the one page excluded above, and it is excluded because it
- * inlines every committed day on purpose: the on-device search reads the
- * vectors out of those payloads without a request. Rebuilding that surface is
- * its own plan.
- *
- * Asserted rather than commented so the exclusion cannot outlive its reason. On
- * the day the archive stops inlining payloads this test fails, and the fix is
- * to delete the exclusion in the first test and this test with it.
+ * The archive is the page this rule was written for, so it gets its own
+ * assertion rather than being covered only by the sweep above. It carried every
+ * committed day - 1.7 MB gzipped - to feed on-device search, and the whole
+ * point of the month index is that it no longer has to.
  */
-test('the archive exclusion still has a reason', () => {
+test('the archive carries no day payload at all', () => {
 	const archive = pages().find((page) => page.route === '/archive/');
 
 	expect(archive, 'the build has no /archive/ page').toBeDefined();
 	expect(
 		archive?.markers ?? 0,
-		'/archive/ no longer inlines day payloads - remove its exclusion above'
-	).toBeGreaterThan(0);
+		'/archive/ is inlining day payloads again - search reads the month index'
+	).toBe(0);
 });

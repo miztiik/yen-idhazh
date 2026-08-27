@@ -47,6 +47,8 @@ from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, Embedder, dequantise
 
 #: Where the pipeline writes the days the published site reads.
 DIGEST_GLOB: Final = "frontend/public/digest/*/*/*/digest.json"
+#: Where the pipeline writes the month shards a reader's tab actually searches.
+INDEX_RELDIR: Final = "frontend/public/assist/index"
 #: The committed query set, relative to the repository root.
 QUERY_SET_RELPATH: Final = "tests/fixtures/search/retrieval-queries.json"
 
@@ -282,6 +284,68 @@ def load_corpus(root: Path) -> Corpus:
                 )
             )
     return Corpus(items=tuple(items))
+
+
+def load_index_corpus(root: Path, months: int | None = None) -> Corpus:
+    """The same corpus, read the way a reader's tab now reads it.
+
+    `load_corpus` above reads the day payloads. The published archive stopped
+    carrying them: the page fetches `index/<YYYY-MM>.json` and its
+    sibling `.bin`, and ranks over that. The two loaders exist so one question
+    can be asked with everything else held still - did moving to the index cost
+    any recall - and the answer is a comparison rather than an argument.
+
+    `months` is `assist.search_months`: how many shards, newest first, a tab
+    actually reads. `None` reads every committed month, which is what the page
+    did before the scope became a knob.
+
+    A shard whose header names another encoder, another width or another dtype
+    contributes no vectors, exactly as a day payload does above. The header's
+    own `scale` decodes the bytes, rather than a constant here, because that is
+    what `search.ts` does and a decoder that ignores the scale would rank a
+    re-quantised shard as plausible nonsense.
+    """
+    directory = root / INDEX_RELDIR
+    if not directory.is_dir():
+        return Corpus(items=())
+
+    shards = sorted(directory.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9].json"), reverse=True)
+    if months is not None:
+        shards = shards[:months]
+
+    items: list[CorpusItem] = []
+    for path in sorted(shards):
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        usable = (
+            payload.get("model_id") == EMBEDDER_ID
+            and payload.get("dtype") == DTYPE
+            and payload.get("dimensions") == DIMENSIONS
+        )
+        raw = path.with_suffix(".bin").read_bytes() if usable else b""
+        scale = float(payload.get("scale", 0.0))
+        for entry in payload["entries"]:
+            offset = entry.get("vector")
+            vector: tuple[float, ...] | None = None
+            if raw and offset is not None:
+                block = raw[offset : offset + DIMENSIONS]
+                if len(block) == DIMENSIONS:
+                    vector = tuple(_scaled(block, scale))
+            items.append(
+                CorpusItem(
+                    date=entry["date"],
+                    item_id=entry["item_id"],
+                    entities=(),
+                    vector=vector,
+                )
+            )
+    return Corpus(items=tuple(items))
+
+
+def _scaled(raw: bytes, scale: float) -> list[float]:
+    """int8 back to a unit vector, using the scale the shard states."""
+    signed = [(byte - 256 if byte > 127 else byte) * scale for byte in raw]
+    length = math.sqrt(sum(value * value for value in signed)) or 1.0
+    return [value / length for value in signed]
 
 
 def load_queries(root: Path) -> tuple[LabelledQuery, ...]:

@@ -5,39 +5,39 @@
   "tolerance_basis": "4 builds of identical source, route /, 2026-08-25, this repo: 49193 / 49198 / 49198 / 49205. Range 12 B, and the cause is named - SvelteKit stamps a version string into the entry chunk. 64 B is 5.3x that range; four samples underestimate a true range, so the multiple is the margin. Derived, not measured. If a build ever fails inside 64 B, re-derive it from more builds and more routes rather than nudging it.",
   "routes": {
     "/": {
-      "bytes": 49101,
+      "bytes": 49549,
       "measured": "2026-08-27",
-      "why": "SvelteKit runtime, the app shell, and the reader item chunk every day view shares - item cards, the in-place topic filter and the per-day read mark. Re-recorded 2026-08-27 from CI's own build, not a local one. Two causes, and only the second is this branch's: origin/main at 10391d3 already builds 56 B under this record and is green on it, and the archive row rewrites the footer's retention sentence - `Charts older than N months are deleted.` for `Days older than N months are removed.` - which is the only change on the shell every route loads, worth 10 B here. 56 plus 10 left the 64 B tolerance, so the gate was right. The number below is what the `site` job measured on this branch (49,101 B) against 49,111 B for main on the same day, so it puts the route in the middle of the band rather than back on its edge."
+      "why": "SvelteKit runtime, the app shell, and the reader item chunk every day view shares - item cards, the in-place topic filter and the per-day read mark. It grew 430 B when the archive's search started rendering a result through that same item component: Vite cuts a chunk by which routes use a module, so the shared reader chunk absorbed the archive's search code too. Read as a difference, not an absolute - an untouched base build of this tree read 49,119 B and passed this gate on every route, and the changed one reads 49,549 B on the same machine and the same node."
     },
     "/<date>/": {
-      "bytes": 48974,
+      "bytes": 49422,
       "measured": "2026-08-27",
-      "why": "The same runtime, shell and reader item chunk as /, on one day's items. Re-recorded 2026-08-27 from CI's own build, not a local one. Two causes, and only the second is this branch's: origin/main at 10391d3 already builds 56 B under this record and is green on it, and the archive row rewrites the footer's retention sentence - `Charts older than N months are deleted.` for `Days older than N months are removed.` - which is the only change on the shell every route loads, worth 7 B here. 56 plus 7 left the 64 B tolerance, so the gate was right. The number below is what the `site` job measured on this branch (48,974 B) against 48,981 B for main on the same day, so it puts the route in the middle of the band rather than back on its edge."
+      "why": "The same runtime, shell and reader item chunk as /, on one day's items, and the same +430 B from that shared chunk. Control on this tree: 48,992 B."
     },
     "/<date>/<topic>/": {
-      "bytes": 49066,
+      "bytes": 49514,
       "measured": "2026-08-27",
-      "why": "The same runtime, shell and reader item chunk as /, on one topic of one day. Re-recorded 2026-08-27 from CI's own build, not a local one. Two causes, and only the second is this branch's: origin/main at 10391d3 already builds 56 B under this record and is green on it, and the archive row rewrites the footer's retention sentence - `Charts older than N months are deleted.` for `Days older than N months are removed.` - which is the only change on the shell every route loads, worth 6 B here. 56 plus 6 left the 64 B tolerance, so the gate was right. The number below is what the `site` job measured on this branch (49,066 B) against 49,072 B for main on the same day, so it puts the route in the middle of the band rather than back on its edge."
+      "why": "The same runtime, shell and reader item chunk as /, on one topic of one day, and the same +428 B from that shared chunk. Control on this tree: 49,086 B."
     },
     "/404": {
-      "bytes": 40907,
-      "measured": "2026-08-25",
-      "why": "Runtime and app shell and nothing route-specific. This is the floor every other route sits on."
+      "bytes": 40753,
+      "measured": "2026-08-27",
+      "why": "Runtime and app shell and nothing route-specific. This is the floor every other route sits on. It fell 105 B in the same chunk re-cut that raised /: one module left this route's preload list. Control on this tree: 40,858 B."
     },
     "/archive/": {
-      "bytes": 45719,
+      "bytes": 49988,
       "measured": "2026-08-27",
-      "why": "Runtime and shell plus the archive route, which now lists stories instead of dates: the month-index fetch and decode, the newest-first regrouping, the paged list and its Show-more control, and the encoder guard it already carried. What the bytes buy is a page that stops growing with every published story - it fetches one month at a time instead of inlining the corpus. Derived, not pasted: an untouched origin/main build on this tree read /archive/ at 44,543 B and the changed one at 45,708 B, so the change is +1,165 B and 44,554 + 1,165 is what CI should see. A local Windows build reads 10 to 73 B under CI's Linux npm ci on every route, which is why the delta is the measurement and the absolute is not."
+      "why": "Runtime and shell plus the archive route, which lists stories and now searches them: the month-index fetch and decode, the newest-first regrouping, the paged list and its Show-more control, the encoder guard, and - new here - the int8 vector decode, the day-payload fetch and cache a result renders from, and the digest's own item component that renders it. That is +4,277 B against an untouched base build of this tree at 45,711 B, and what it buys is 1,763,770 gzipped bytes off the document: the page no longer inlines every committed day. A dynamic import of the item component was measured and rejected on 2026-08-27 - it moves this route to 46,988 B but costs / another 310 B, because a separate chunk compresses worse than the shared one it left."
     },
     "/console/": {
-      "bytes": 66158,
-      "measured": "2026-08-26",
-      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them, the stage-timing decade axis with its minor stubs and its gap-instead-of-plunge run splitting, the Charts table that says what the router cost and what it published on each day, and now the What the model did table - nine counts of the day's own items, the divider row that names a model change, and the dash, percent and whole-unit formatters that keep a raw score off the screen. That section cost +1,196 B: the same tree measured 64,962 B with the four console files at origin/main and model-work.ts absent, and 66,158 B with them, on one machine on 2026-08-26."
+      "bytes": 66056,
+      "measured": "2026-08-27",
+      "why": "Runtime and shell plus the console route: hand-written SVG charts and the d3-scale and d3-array arithmetic behind them, the stage-timing decade axis with its minor stubs and its gap-instead-of-plunge run splitting, the Charts table that says what the router cost and what it published on each day, and the What the model did table. It fell 112 B in the archive change's chunk re-cut, having gained nothing of its own. Control on this tree: 66,168 B."
     },
     "/evals/": {
-      "bytes": 41860,
-      "measured": "2026-08-25",
-      "why": "Runtime and shell plus the stub that moves an old bookmark to /console/."
+      "bytes": 41710,
+      "measured": "2026-08-27",
+      "why": "Runtime and shell plus the stub that moves an old bookmark to /console/. Down 98 B in the same chunk re-cut. Control on this tree: 41,808 B."
     }
   }
 }

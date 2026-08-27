@@ -3,11 +3,11 @@
 	 *
 	 * The stories are fetched a month at a time rather than inlined. Everything
 	 * this page renders from its own data - the day row, the counts, the topic
-	 * names - grows per day or per month; nothing grows per story. That is the
-	 * point of the change: the page used to carry every committed day whole.
+	 * names - grows per day or per month; nothing grows per story.
 	 *
-	 * The eager payloads below are still here for on-device search, which is
-	 * unchanged. They leave in their own commit, so either half can be undone.
+	 * Search reads the same months. The page used to carry every committed day
+	 * whole so search could reach the vectors inside them; it now reads the
+	 * sibling vector file and fetches a day only when a result from it is shown.
 	 */
 	import { base } from '$app/paths';
 	import { longDate, plural, shortDate } from '$lib/format';
@@ -133,5 +133,5 @@
 		{/if}
 	{/if}
 
-	<AssistSearch days={data.payloads} assist={data.assist} />
+	<AssistSearch months={data.months} verticalNames={data.verticalNames} assist={data.assist} />
 </section>
