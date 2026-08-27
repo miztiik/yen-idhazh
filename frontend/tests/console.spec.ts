@@ -444,14 +444,14 @@ test('the timing legend is sorted by the newest day, tallest first', async ({ pa
 test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }) => {
 	await page.goto('/console/');
 
-	// The canary scores one day of the window, so `score` has a number on that
-	// day and none on the rest. A zero clamped onto a log axis would draw the
-	// line falling to the bottom of the plot, which says the stage got a
+	// The canary scores one day of the three, so `score` has a number on that
+	// day and none on the other two. A zero clamped onto a log axis would draw
+	// the line falling to the bottom of the plot, which says the stage got a
 	// thousand times faster. The chart breaks the line and names the loss.
 	await expect(page.locator('[data-stage-mark="score"]')).not.toHaveCount(0);
-	await expect(page.locator('[data-timing-gap="score"]')).toHaveText(
-		'No time recorded for score on 1 day in this window.'
-	);
+	const note = page.locator('[data-timing-note="score"]');
+	await expect(note, 'score is timed on one day of three, so it owes a note').toHaveCount(1);
+	await expect(note).toHaveText('We timed no score work on 2 of the 3 days. The line breaks there.');
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
 		const floor = Math.max(
@@ -473,6 +473,61 @@ test('a stage with no number draws a gap, never a plunge to the axis floor', asy
 	expect(geometry.marks).toBeGreaterThan(0);
 	// Every stage is legible: no line sits flat on the floor of the plot.
 	expect(geometry.floor - geometry.lowest).toBeGreaterThan(4);
+});
+
+test('a timing nobody took, a timing of zero and a partly timed day read apart', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// The three facts that used to arrive at this chart as the number 0. The
+	// fixture carries one of each: 2026-08-18 timed no summarize work, timed
+	// extract at 0 ms on all three items, and 2026-08-20 timed four of its five
+	// items for summarize. Counts are asserted before text, so renaming an
+	// attribute fails here instead of quietly matching nothing.
+	const zero = page.locator('[data-stage-zero="extract"]');
+	await expect(zero, 'the day extract measured 0 ms draws one open dot').toHaveCount(1);
+	await expect(zero, 'an open dot, so it is not read as a point on the scale').toHaveAttribute(
+		'fill',
+		'none'
+	);
+
+	// Centred on the baseline rule. Clamped into the bottom decade instead, it
+	// would draw a plunge that says the stage got a thousand times faster.
+	const offBaseline = await page.locator('[data-timing="plot"]').evaluate((svg) => {
+		const dot = svg.querySelector('[data-stage-zero]');
+		const floor = Math.max(
+			...[...svg.querySelectorAll('[data-decade-line]')].map((line) =>
+				Number(line.getAttribute('y1'))
+			)
+		);
+		return Math.abs(Number(dot?.getAttribute('cy')) - floor);
+	});
+	expect(offBaseline).toBeLessThanOrEqual(1);
+
+	const extract = page.locator('[data-timing-note="extract"]');
+	await expect(extract, 'the measured zero is named in type').toHaveCount(1);
+	await expect(extract).toHaveText(
+		'extract took under 1 ms per item on 1 day, which is faster than we can time. ' +
+			'The open dot on the baseline marks it.'
+	);
+
+	// Both facts about summarize, one paragraph, absence first.
+	const summarize = page.locator('[data-timing-note="summarize"]');
+	await expect(summarize, 'summarize has a blank day and a part-timed day').toHaveCount(1);
+	await expect(summarize).toHaveText(
+		'We timed no summarize work on 1 of the 3 days. The line breaks there. ' +
+			'We timed 4 of the 5 items for summarize on 1 day. The line is the items we timed.'
+	);
+
+	// A stage timed in full every day of the window has nothing to explain.
+	await expect(page.locator('[data-timing-note="fetch"]')).toHaveCount(0);
+
+	// One place, not two. The legend used to print `no data` for the same
+	// absence a paragraph under it also named.
+	const chart = await page.locator('[data-timing="chart"]').innerText();
+	expect(chart).not.toContain('no data');
+	expect(chart).not.toContain('No time recorded');
 });
 
 test('the timing chart draws one unit per CSS pixel at every width', async ({ page }) => {
@@ -635,7 +690,7 @@ test('the telemetry viewport renders the published projection', async ({ page })
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 	await expect(page.locator('[data-compression]')).toBeVisible();
-	await expect(page.locator('[data-viewport-control]')).toContainText('7 rows in view');
+	await expect(page.locator('[data-viewport-control]')).toContainText('11 rows in view');
 });
 
 test('a failure panel prints its rate in type, not only in a tooltip', async ({ page }) => {
