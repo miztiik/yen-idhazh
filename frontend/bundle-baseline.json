@@ -5,19 +5,19 @@
   "tolerance_basis": "4 builds of identical source, route /, 2026-08-25, this repo: 49193 / 49198 / 49198 / 49205. Range 12 B, and the cause is named - SvelteKit stamps a version string into the entry chunk. 64 B is 5.3x that range; four samples underestimate a true range, so the multiple is the margin. Derived, not measured. If a build ever fails inside 64 B, re-derive it from more builds and more routes rather than nudging it.",
   "routes": {
     "/": {
-      "bytes": 49167,
-      "measured": "2026-08-25",
-      "why": "SvelteKit runtime, the app shell, and the reader item chunk every day view shares - item cards, the in-place topic filter and the per-day read mark."
+      "bytes": 49101,
+      "measured": "2026-08-27",
+      "why": "SvelteKit runtime, the app shell, and the reader item chunk every day view shares - item cards, the in-place topic filter and the per-day read mark. Re-recorded 2026-08-27 from CI's own build, not a local one. Two causes, and only the second is this branch's: origin/main at 10391d3 already builds 56 B under this record and is green on it, and the archive row rewrites the footer's retention sentence - `Charts older than N months are deleted.` for `Days older than N months are removed.` - which is the only change on the shell every route loads, worth 10 B here. 56 plus 10 left the 64 B tolerance, so the gate was right. The number below is what the `site` job measured on this branch (49,101 B) against 49,111 B for main on the same day, so it puts the route in the middle of the band rather than back on its edge."
     },
     "/<date>/": {
-      "bytes": 49039,
-      "measured": "2026-08-25",
-      "why": "The same runtime, shell and reader item chunk as /, on one day's items."
+      "bytes": 48974,
+      "measured": "2026-08-27",
+      "why": "The same runtime, shell and reader item chunk as /, on one day's items. Re-recorded 2026-08-27 from CI's own build, not a local one. Two causes, and only the second is this branch's: origin/main at 10391d3 already builds 56 B under this record and is green on it, and the archive row rewrites the footer's retention sentence - `Charts older than N months are deleted.` for `Days older than N months are removed.` - which is the only change on the shell every route loads, worth 7 B here. 56 plus 7 left the 64 B tolerance, so the gate was right. The number below is what the `site` job measured on this branch (48,974 B) against 48,981 B for main on the same day, so it puts the route in the middle of the band rather than back on its edge."
     },
     "/<date>/<topic>/": {
-      "bytes": 49131,
-      "measured": "2026-08-25",
-      "why": "The same runtime, shell and reader item chunk as /, on one topic of one day."
+      "bytes": 49066,
+      "measured": "2026-08-27",
+      "why": "The same runtime, shell and reader item chunk as /, on one topic of one day. Re-recorded 2026-08-27 from CI's own build, not a local one. Two causes, and only the second is this branch's: origin/main at 10391d3 already builds 56 B under this record and is green on it, and the archive row rewrites the footer's retention sentence - `Charts older than N months are deleted.` for `Days older than N months are removed.` - which is the only change on the shell every route loads, worth 6 B here. 56 plus 6 left the 64 B tolerance, so the gate was right. The number below is what the `site` job measured on this branch (49,066 B) against 49,072 B for main on the same day, so it puts the route in the middle of the band rather than back on its edge."
     },
     "/404": {
       "bytes": 40907,
