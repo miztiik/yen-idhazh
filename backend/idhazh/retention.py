@@ -4,12 +4,21 @@ The 1 GB Pages cap is the earliest hard limit this project meets, and it is met
 by images rather than by text. So this does two separate things, and they are
 deliberately not the same thing:
 
-- **The alarm** measures the published site every run and says when it is
-  approaching the ceiling. It is on from the first run, long before anything is
-  ever deleted, because measuring the ceiling is what turns a policy into a
-  decision rather than a reaction.
+- **The alarm** measures the built bundle - the tree the deploy uploads - and
+  says when it is approaching the ceiling. It is on from the first run, long
+  before anything is ever deleted, because measuring the ceiling is what turns a
+  policy into a decision rather than a reaction.
 - **The prune** removes rendered visuals older than a configured window. It
   ships disabled, in dry-run, behind a per-run delete fuse.
+
+**The alarm measures the built bundle and never the committed payload tree.**
+Those are two different trees and they grow at different rates, so one cannot
+stand in for the other. Measured 2026-08-27 on this checkout: the payload tree
+under `frontend/public/digest/` was 7,027,075 bytes while the built site was
+128,064,853 - eighteen times larger, and the eighteen was twenty-one the day
+before. The alarm used to watch the payload tree, so it could not have fired
+until the site was already six times past the cap. A green light on the wrong
+tree is worse than no light, because a green light gets read as safety.
 
 Three rules the prune obeys, each one a way this goes wrong otherwise:
 
@@ -62,24 +71,54 @@ def over_budget(size: SiteSize, config: RetentionConfig) -> bool:
     return size.megabytes > config.site_budget_mb
 
 
-def headroom_mb(size: SiteSize) -> float:
-    return PAGES_HARD_CAP_MB - size.megabytes
+def over_cap(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> bool:
+    """Past the platform's own ceiling, which is where reporting stops being enough.
+
+    `cap_mb` is a parameter for the same reason `prune` takes `today`: a test has
+    to be able to cross the line without building a one-gigabyte fixture. No
+    caller passes it, and the CLI offers no flag for it.
+    """
+    return size.megabytes > cap_mb
 
 
-def budget_alarm(size: SiteSize, config: RetentionConfig) -> str | None:
-    """The alarm's words for the run log, or None when the site is inside budget.
+def headroom_mb(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> float:
+    return cap_mb - size.megabytes
 
-    The alarm only reports - it fails no build and deletes nothing - so the run
-    that meets it needs a line it can act on: the size, the alarm point it
-    crossed, and the headroom left to the platform cap. Promoting this line to a
-    GitHub issue is a workflow step not yet built.
+
+def budget_alarm(
+    size: SiteSize, config: RetentionConfig, *, cap_mb: int = PAGES_HARD_CAP_MB
+) -> str | None:
+    """The alarm's words, or None when the built site is inside budget.
+
+    Below the platform cap the alarm only reports - it fails no build and deletes
+    nothing - so the run that meets it needs a line it can act on: the size, the
+    alarm point it crossed, and the headroom left to the cap.
     """
     if not over_budget(size, config):
         return None
     return (
         f"published site is {size.megabytes:.0f} MB, past the "
-        f"{config.site_budget_mb} MB alarm point, with {headroom_mb(size):.0f} MB "
-        f"left to the {PAGES_HARD_CAP_MB} MB Pages cap"
+        f"{config.site_budget_mb} MB alarm point, with "
+        f"{headroom_mb(size, cap_mb=cap_mb):.0f} MB left to the {cap_mb} MB Pages cap"
+    )
+
+
+def cap_breach(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> str | None:
+    """The words for a site that can no longer be published, or None.
+
+    This one fails the build, and the alarm above does not. The split is the
+    whole point: 800 MB still deploys, so failing there would stop publishing
+    weeks before it had to, and the reader loses a working site to a budget that
+    still had room. Past the cap the site is outside what Rule #2 allows, and
+    failing in the job that measured it names the cause - a deploy that refuses
+    the bytes names nothing.
+    """
+    if not over_cap(size, cap_mb=cap_mb):
+        return None
+    return (
+        f"built site is {size.megabytes:.0f} MB in {size.files} files, past the "
+        f"{cap_mb} MB Pages cap. It cannot be published. Prune, or shrink what a "
+        f"published day costs"
     )
 
 

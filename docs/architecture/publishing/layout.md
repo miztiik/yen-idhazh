@@ -206,6 +206,16 @@ Two promises to the reader, both non-negotiable: **the window is stated before a
 
 The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. The footer used to say days were removed, which promised the opposite of what the code does; it now says the same thing the archive does, because two sentences disagreeing about deletion on one page is the exact failure this section exists to prevent.
 
+### Follow-up: the dated route trees are what decides the cap date (2026-08-27)
+
+**Recorded, not fixed. No row has addressed it.**
+
+The prerendered dated routes are **50,598,258 bytes, 39.5 percent of the published site** - measured 2026-08-27 on an Intel Core i7-1265U, Windows 11, node 24.12.0, over the six committed days and 2,237 items ([../../reference/measurements.md](../../reference/measurements.md#what-is-left-and-where-it-is)). They were 65,197,022 bytes and 44.4 percent before PR #171 narrowed the staged payload.
+
+That is **twelve prerendered documents per published day**: six HTML pages - the all-topics page and one per vertical - and their six `__data.json` twins. Every published day adds twelve more, forever, and nothing else on the site grows per day at anything like that rate. So this is the number the 1 GB cap date is a function of: at 16,641,956 bytes a published day the site reaches the cap on about 2026-10-22, and about 39.5 percent of each of those days is this.
+
+The three levers this page already names - encode efficiently, honour the visual rule, then prune - were all argued about images. **None of them touches an HTML document.** Whatever answers this is a fourth thing, and it has not been designed. What is written down here is the measurement, so the next person starts from a number rather than a feeling.
+
 ## The frontend stack
 
 Svelte 5, Vite, TypeScript, Tailwind, vitest, Playwright, `json-schema-to-typescript`, and `ajv`.
@@ -258,6 +268,22 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 
 **One path was not safe, and that one was fixed.** The day's run reference counted what the current attempt added rather than what the number introduced, so a replay after a lost manifest write built a payload its own contract rejects - `run 1 items_added disagrees with the items it introduced` - and the day was lost rather than doubled. The count now comes from the assembled day, which is the definition the contract validates against.
 
+### The site alarm watched a tree eighteen times smaller than the site (2026-08-27)
+
+The 1 GB cap is on the **built bundle** - `frontend/build/`, the directory the Pages deploy uploads. The alarm measured `frontend/public/digest/`, which is what the pipeline writes. Measured 2026-08-27 on this checkout: **7,027,075 bytes against 128,064,853**, eighteen times apart, and twenty-one times apart the day before. At the rate the payload tree grows, an alarm point of 800 MB on it could not have been reached until the site was already about six times past the cap. **The alarm ran every pipeline run, cost real seconds, and would never have warned anybody.** That is worse than no alarm, because a green light is read as safety.
+
+The recorded arithmetic had the same units error and it is corrected in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling): the site crosses 1 GB on about **2026-10-22, 56 published days from 2026-08-27**, not the 593 or 516 days that page carried.
+
+**The fix is to measure where the site exists.** The bundle does not exist while `assemble` runs - it is built by a later step - so the measurement moved out of the assemble stage and became its own step, `idhazh site-weight --site-tree build`, in every job that builds the site: `ci.yml`'s `site` job, `digest.yml`'s `assemble` job, and `backfill.yml`. It runs before the commit that publishes a day, so a day that would break the site never lands.
+
+**The tree has no default.** A default is how the old call came to name the wrong one. The workflow names it at the call site, and a contract test reads the path back off `pages.yml`'s own upload step - so the thing measured and the thing published are pinned to be one directory, and pointing the gate anywhere else fails the suite rather than being noticed a month later.
+
+**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb` (800 MB) the step prints an Actions warning and passes; past the 1 GiB cap it fails. Failing at 800 MB would stop publishing about two weeks before it had to, and a reader would lose a working site to a budget that still had room. Past the cap the bytes cannot be published at all, and failing in the job that measured them names the cause - a deploy that refuses them names nothing.
+
+**`site_bytes` on the run manifest stays what it always was.** It is the committed payload tree, six days of published manifests carry it, and changing what it means would be a contract break for a number that is genuinely useful about repository growth. What changed is that it now says which tree it holds, so nobody reads it as the site again ([../contracts/schemas.md](../contracts/schemas.md)).
+
+**The deploy is not gated.** `pages.yml` prints `du -sb build` and always did. Adding the check there would need a Python install on the deploy path for no new coverage: every byte that reaches `main` passes through the `assemble` job or through `ci.yml`, and both now measure it before the push rather than after.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -291,6 +317,11 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 | A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. |
 | A title-derived slug in a URL | Titles originate in fetched text, and fetched text never becomes a URL (Rule #11). |
 | Deleting text alongside images under one retention knob | Text is a fraction of a percent of the bytes. |
+| Measuring the site cap over `frontend/public/digest` | It is not the site. Measured 2026-08-27: 7,027,075 bytes against the built bundle's 128,064,853, eighteen times apart and growing at different rates, so neither can stand in for the other. |
+| Deriving the site size from the payload tree with a calibrated multiplier | The ratio moved from 21x to 18x on one pull request. A multiplier nobody can re-measure per run is an unmeasured number justifying a design (Rule #10). |
+| Failing the build at the 800 MB alarm point | It stops publishing about two weeks before it has to. A reader loses a working site to a budget that still had room; the cap is where refusing the bytes is the honest answer. |
+| Measuring the site in the Pages deploy instead | The day is already committed by then, and undoing it is a revert. Gating before the push is what turns a broken site into a run that publishes nothing. |
+| A default value for `--site-tree` | A default is how the measurement came to name the wrong tree. The workflow names it, and a test reads it back off the deploy's own upload step. |
 | Reusing the render-failure state to mark a prune | One field carrying two different facts, which is the band-aid Rule #5 forbids. |
 | Deduplicating the state ledgers the way the eval ledger does | A state row is a fact about a run, not a measurement. A feed that answered twice answered twice, and collapsing the two rows turns a count of runs into a count of days - which is the number `discover.resting` reads to decide a quarantine. |
 | A duplicate-run guard in `build_manifest` to match the one in `build_day` | Unreachable. `RunManifest` refuses a `runs` list that is not numbered from 1 without gaps, so the next number cannot already be taken. The branch would never run and no test could reach it. |
@@ -305,6 +336,8 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 - [frontend.md](frontend.md) - the two dashboards these routes serve.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload contracts and the versioning rules a deletion has to honour.
 - [../../reference/measurements.md](../../reference/measurements.md#sizing-the-archive-index) - what a browse entry, a vector and a month shard actually cost.
+- [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling) - the cap date, the per-published-day growth rate, and the units error that made both wrong until 2026-08-27.
+- [../../reference/measurements.md](../../reference/measurements.md#the-site-page-by-page-after-the-payload-narrowing-2026-08-27) - what each page and the whole site weigh today.
 - [../../reference/measurements.md](../../reference/measurements.md#the-month-search-index-as-written) - the shard that exists: its bytes, its rebuild cost, and the bijection it holds.
 - [../../concepts/config.md](../../concepts/config.md) - where the retention knobs live and the build-time versus shipped-config rule.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - the engineering contract, including schema versioning (section 11) and git hygiene (section 8).

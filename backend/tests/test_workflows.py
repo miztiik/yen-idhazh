@@ -1193,6 +1193,75 @@ def test_assemble_holds_the_site_to_its_weight_before_it_pushes() -> None:
     assert gate < names.index("Commit the day"), "the site is gated before the day is pushed"
 
 
+#: Every job that builds the site, and so every job that can grow it past the cap.
+SITE_WEIGHT_JOBS: Final = (
+    ("ci.yml", "site"),
+    ("digest.yml", "assemble"),
+    ("backfill.yml", "backfill"),
+)
+SITE_WEIGHT_CALL: Final = ("python", "-m", "idhazh", "site-weight")
+
+
+def _published_tree() -> str:
+    """The directory the Pages deploy uploads, read off the deploy itself."""
+    step = next(
+        item
+        for item in _steps(_load_workflows()["pages.yml"], "build")
+        if str(item.get("uses", "")).startswith("actions/upload-pages-artifact@")
+    )
+    with_block = _mapping(step.get("with"), "pages.yml upload-pages-artifact with")
+    path = with_block.get("path")
+    assert isinstance(path, str), "the deploy must upload one named directory"
+    return path.rstrip("/")
+
+
+def _site_weight_step(workflow: dict[str, object], job_name: str) -> tuple[int, list[str]]:
+    """Where the site-weight call sits in a job, and the argv it runs."""
+    for index, step in enumerate(_steps(workflow, job_name)):
+        argv = shlex.split(str(step.get("run", "")))
+        if tuple(argv[:4]) == SITE_WEIGHT_CALL:
+            directory = str(step.get("working-directory", "")).strip("/")
+            return index, [directory, *argv]
+    raise AssertionError(f"{job_name} builds the site and never measures it")
+
+
+@pytest.mark.parametrize(("filename", "job_name"), SITE_WEIGHT_JOBS)
+def test_the_site_gate_measures_the_tree_the_deploy_uploads(filename: str, job_name: str) -> None:
+    """The 1 GB cap is a property of the published bundle, so that is what gets
+    measured - the same directory `pages.yml` hands to the deploy.
+
+    This is the defect the row fixed. The alarm used to measure
+    `frontend/public/digest`, which is the pipeline's committed output and not
+    the site: 7,027,075 bytes against 128,064,853 on 2026-08-27, eighteen times
+    apart and growing at different rates. An alarm at 800 MB on that tree could
+    not have fired before the site was already six times past the cap.
+
+    Deriving the expected path from the deploy is what makes the fix structural.
+    Point the gate back at `frontend/public/digest`, or anywhere else, and the
+    two stop agreeing here.
+    """
+    workflow = _load_workflows()[filename]
+    index, argv = _site_weight_step(workflow, job_name)
+    directory, *call = argv
+
+    assert "--site-tree" in call, "the tree is named at the call site, never defaulted"
+    measured = f"{directory}/{call[call.index('--site-tree') + 1]}".strip("/")
+    assert measured == _published_tree(), (
+        f"{filename}/{job_name} measures {measured!r}; the deploy uploads "
+        f"{_published_tree()!r}. One of the two is measuring the wrong tree."
+    )
+    assert not measured.startswith("frontend/public"), (
+        "frontend/public is what the pipeline writes, not what a reader downloads"
+    )
+
+    built = next(
+        position
+        for position, step in enumerate(_steps(workflow, job_name))
+        if "npm run build" in str(step.get("run", ""))
+    )
+    assert built < index, "the tree does not exist until the site is built"
+
+
 def test_ci_and_pages_keep_their_push_boundaries() -> None:
     workflows = _load_workflows()
 

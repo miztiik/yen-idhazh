@@ -88,10 +88,20 @@ Run from `frontend/`.
 npm run check
 npm run build
 npm run bundle-gate
+python -m idhazh site-weight --site-tree build
 ```
 
 `check` is `svelte-check`. `build` is the strongest of the three: every route is
 prerendered, so a contract-invalid payload fails the build rather than the page.
+
+`site-weight` is the fourth, and it is the only one that measures the whole
+site rather than one page. It sums `frontend/build/` - the directory the Pages
+deploy uploads - and holds it against two lines: over `retention.site_budget_mb`
+in `config/idhazh.json` it prints a warning and passes, and past the 1 GiB Pages
+cap it fails. **Point it at anything else and the suite fails**, because the tree
+is read back off `pages.yml`'s own upload step. It measures nothing until the
+site is built, so run it after `npm run build`, and a run that reports zero files
+fails rather than passes.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it compares every route's first-load JavaScript against the weight
