@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -8,8 +8,10 @@ source-grain evidence.
 
 ## Every item, every run, one row
 
-`state/item-health/<YYYY-MM>.csv`, appended by Assemble once per run. One row is
-written for each planned item on each run, whether the item succeeds or fails.
+`state/item-health/<YYYY-MM>.csv`. One row is written for each planned item on
+each run, whether the item succeeds or fails. Two stages write it: a worker
+commits the rows for its own items as each one settles, and Assemble writes the
+whole day's census afterwards.
 
 The row carries:
 
@@ -74,9 +76,21 @@ The 24 columns, in file order:
 **The row is a census, not an error log.** Successes and failures share one file
 because a rate needs its denominator beside its numerator.
 
-**Assemble is the only writer.** It is the one stage that sees every planned item
-and every finished payload. A worker writing its own rows would turn a
-diagnostic append into a rebase race against the publish commit.
+**A row is one planned item on one run.** `(date, run_id, item_id)` is the
+identity, and `ledger.append_item_health` filters on it before it writes. That is
+what lets two stages write the file: the second one to see an item has nothing
+new to say. Nothing else here filters - `merge=union` keeps the lines from both
+sides rather than collapsing them, so the check has to happen before the write.
+
+**A worker records only settled items.** It writes an article payload for every
+item it reaches and a summary payload for every item that got as far as the
+model, so an accepted article with no summary beside it means the shard stopped
+mid-item. Assemble classifies that item later. A row filed at the moment of an
+interruption would record it as a failure, and this file cannot correct a row.
+
+**Assemble owns the denominator.** It is the one stage that sees every planned
+item, so it is the only one that writes a `not_attempted` row for an item no
+worker reached.
 
 **Nothing under `state/` is served.** The console reads a narrow projection of
 this file - see [Scaling](#scaling) - and a reader gets figures, never the file.
@@ -233,6 +247,14 @@ that reports nothing leaves them null and the item still publishes. Nothing on
 this row is our arithmetic, which is the point - see
 [../summarize/throughput.md](../summarize/throughput.md).
 
+**A copied field is one instrument, and there is now a second.** Each `work`
+shard also commits what its server counted for the whole shard, as one row of
+`state/runtime-counters.csv`. `backend/utilities/reconcile_prefill.py` pools both
+sides of a run and prints the gap, which is how a rate quoted off this file stops
+being an assertion. Measured on run `2026-08-26-5`: 11.1755 tok/s from this
+ledger against 11.1796 from the server, 0.037 percent apart
+([../../reference/measurements.md](../../reference/measurements.md)).
+
 **Route and render are not here.** An item that got a chart and an item that got
 nothing write the same row. A render failure degrades an item and never fails
 it, so the two are indistinguishable in this ledger by design. What the router
@@ -338,10 +360,18 @@ Authority: Fowler.
 The row stores `canonical_url`. About 80 bytes buys back the URL that otherwise
 expires with a run artifact. Authority: Fowler.
 
-Assemble is the only item-health ledger writer. Worker shards already upload one
-JSON payload per item through the `items-*` artifact. A per-shard CSV append
-would turn a diagnostic row into a rebase race against the publish commit.
-Authority: Carmack.
+A worker commits the rows for its own items, and Assemble writes the rest.
+Assemble was the only writer until 2026-08-27, to keep a diagnostic append out of
+a rebase race with the publish commit. What that reasoning missed is where the
+rows live in between: a shard's verdicts leave the runner only inside its
+`items-<shard>` artifact, which is kept for one day and is not uploaded at all
+when a job is cancelled. A run stopped between the workers and the publish had
+measured every item and recorded none of it - and a bad day is exactly the day
+worth measuring. The race the old rule avoided is answered instead by the two
+things that already existed for it: `merge=union` on `state/**/*.csv`, and the
+rebase loop in `.github/scripts/commit-and-push.sh` that the plan job has always
+used for the same reason. The double-write the old rule also avoided is answered
+by the row identity above. Authority: Fowler, over Carmack's original ruling.
 
 ## Rejected alternatives
 
@@ -359,6 +389,8 @@ Authority: Carmack.
 | Prune the ledger on a retention schedule | The rows worth keeping longest are the ones from the worst days, and those are the first a size-driven prune would take. Windows are a read-side parameter instead. |
 | Serve `state/item-health/` directly to the console | The row carries `canonical_url`, `url_key` and `detail`, none of which belongs in a browser. The narrow projection under `frontend/public/telemetry/` exists so the forbidden columns are absent by construction rather than filtered on read. |
 | One row per item, updated as the item progresses | An update is a read-modify-write over the whole history, and two runs racing on that lose rows. Append is what makes the file safe for five runs a day. |
+| Keep the worker's rows in the `items-*` artifact and raise its retention | The artifact is not uploaded at all when a job is cancelled, so a longer retention protects nothing in the case that loses the rows. |
+| Let a worker record every item it was planned, not only the settled ones | An item the shard was interrupted on would be filed as a failure, and an append-only ledger cannot take that back. |
 | Add a route or render outcome column | Route is not a terminal item stage: a render failure degrades an item, never fails it. The run manifest and the day payload already carry what the router did. |
 
 ## See also

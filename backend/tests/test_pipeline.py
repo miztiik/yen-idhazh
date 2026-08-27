@@ -20,7 +20,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT,
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config, ledger
+from idhazh import assemble, cli, config, ledger, telemetry
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import derive_output_digest
@@ -32,6 +32,7 @@ from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
@@ -672,9 +673,16 @@ def test_a_hung_model_request_costs_one_item_not_the_shard(
 
 
 def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
-    """Point every output root and every committed ledger at the test's own tree."""
+    """Point every output root and every committed ledger at the test's own tree.
+
+    `INDEX_ROOT` is one of them because `stage_assemble` rebuilds the month index
+    from whatever day directory it was given. Left unpatched it rebuilt the
+    committed index from an empty fixture tree and truncated the served vectors
+    to zero bytes - a change `git status` shows and a test never asserts on.
+    """
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(cli, "INDEX_ROOT", tmp_path / "public" / "assist" / "index")
     monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
     monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
     monkeypatch.setattr(cli, "FINGERPRINTS", tmp_path / "state" / "fingerprints.csv")
@@ -1023,6 +1031,7 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     run_plan = plan()
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+    monkeypatch.setattr(cli, "INDEX_ROOT", tmp_path / "public" / "assist" / "index")
     monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
     monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
     items_dir = tmp_path / "run" / run_plan.date / "items"
@@ -1067,6 +1076,206 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     assert day.items_planned == ok + failed == len(run_plan.items)
     assert manifest.runs[-1].items_planned == ok + failed
     assert manifest.runs[-1].items_failed == failed
+
+
+def health_rows(state_dir: Path, date: str) -> list[ItemHealthRow]:
+    """Every item-health row the committed shard holds, in file order."""
+    path = ledger.item_health_path(state_dir, date)
+    if not path.exists():
+        return []
+    with path.open(encoding="utf-8", newline="") as handle:
+        return [ItemHealthRow.from_csv_row(record) for record in csv.DictReader(handle)]
+
+
+def test_a_run_that_dies_before_assemble_keeps_what_its_workers_measured(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The Oracle, first half: assemble never runs and the rows are still there.
+
+    Until this stage existed, a shard's verdicts left the runner only inside an
+    `items-<shard>` artifact that expires in a day and is skipped entirely when
+    the job is cancelled. A run stopped here had measured every item and
+    recorded none of it.
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+    recorded, _ = cli.stage_record(run_plan)
+
+    rows = health_rows(state, run_plan.date)
+    assert recorded == len(rows) == len(run_plan.items)
+    assert {row.run_id for row in rows} == {run_plan.run_id}
+    assert [row.item_id for row in rows] == [item.item_id for item in run_plan.items]
+    assert ledger.read_header(ledger.item_health_path(state, run_plan.date)) == (
+        ItemHealthRow.csv_columns()
+    )
+
+
+def test_the_assemble_that_follows_appends_nothing_the_worker_already_recorded(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The Oracle, second half: two writers, one row per item per run.
+
+    A repeat is not free. `publish_telemetry` copies every row into the file the
+    console reads, and `merge=union` keeps the lines from both sides rather than
+    collapsing them - so a second copy is one item counted twice on the
+    dashboard, forever, in a ledger that cannot correct a row.
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+    cli.stage_record(run_plan)
+    after_the_worker = health_rows(state, run_plan.date)
+
+    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+
+    rows = health_rows(state, run_plan.date)
+    keys = [(row.date, row.run_id, row.item_id) for row in rows]
+    assert rows == after_the_worker, "assemble re-wrote rows the worker had already committed"
+    assert len(keys) == len(set(keys)) == len(run_plan.items)
+    # The dedupe only bites because both writers file under one run id. If the
+    # two derivations ever part, every row lands twice.
+    assert {row.run_id for row in rows} == {run_plan.run_id}
+
+
+def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """A run cancelled after its workers is re-run, and the shard files nothing new.
+
+    Nothing published in between, so `_next_run_n` hands the replay the same run
+    id - which is exactly what makes its rows the same rows.
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    committed = ledger.item_health_path(tmp_path / "state", run_plan.date)
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+    cli.stage_record(run_plan)
+    after_one_run = committed.read_bytes()
+
+    replayed, _ = cli.stage_record(run_plan)
+
+    assert replayed == 0
+    assert committed.read_bytes() == after_one_run
+
+
+def test_a_shard_records_its_own_items_and_nobody_else_s(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """Eight workers run at once, so a shard that recorded the day would file
+    rows for items the other seven are still holding."""
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        shard=0,
+        shards=2,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+
+    cli.stage_record(run_plan, shard=0, shards=2)
+
+    mine = [item.item_id for item in cli.shard_of(run_plan, shard=0, shards=2)]
+    assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == mine
+    assert len(mine) < len(run_plan.items)
+
+
+def test_an_item_whose_summary_is_not_written_yet_is_not_recorded(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """An interruption is not a failure, and this ledger cannot correct a row.
+
+    The worker writes an article payload for every item it reaches and a summary
+    payload for every item that got as far as the model. An accepted article with
+    no summary beside it means the shard stopped mid-item.
+    """
+    run_plan = plan()
+    isolate_ledgers(tmp_path, monkeypatch)
+    items_dir = tmp_path / "run" / run_plan.date / "items"
+    stage_route_payloads(run_plan, items_dir, text=FULL_TEXT)
+    interrupted = run_plan.items[1]
+    (items_dir / f"{interrupted.item_id}.summary.json").unlink()
+
+    recorded, _ = cli.stage_record(run_plan)
+
+    settled = [item.item_id for item in run_plan.items if item.item_id != interrupted.item_id]
+    assert recorded == len(settled)
+    assert [row.item_id for row in health_rows(tmp_path / "state", run_plan.date)] == settled
+    assert telemetry.is_final(article(), None) is False
+    assert telemetry.is_final(None, None) is False
+
+
+def test_a_shard_commits_what_its_model_server_counted(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The Oracle for row 9: the second instrument survives the job that read it.
+
+    Every timing on the item-health ledger is a field copied out of one model
+    reply. The server counts the same work for itself, and until this stage
+    existed those counters reached only a job log with two days of retention -
+    so the read rate two published surfaces quote could be reported and never
+    reconciled (Rule #10).
+    """
+    run_plan = plan()
+    isolate_ledgers(tmp_path, monkeypatch)
+    capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
+
+    row = cli.stage_counters(run_plan, metrics_path=capture, shard=0, shards=1)
+
+    assert row.prompt_tokens_total == 23411
+    assert row.prompt_seconds_total == 2128.08
+    committed = ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id)
+    assert committed == [row]
+    assert ledger.read_header(ledger.runtime_counters_path(tmp_path / "state")) == (
+        RuntimeCountersRow.csv_columns()
+    )
+
+
+def test_a_shard_whose_server_died_still_files_a_row(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """No file at all is a fact about the shard, not an absence of one.
+
+    Pooling a run has to see the shard that contributed nothing, or three
+    shards' tokens get quoted as a four-shard run. The cells are null rather
+    than zero: the server did not answer, it did not read nothing.
+    """
+    run_plan = plan()
+    isolate_ledgers(tmp_path, monkeypatch)
+
+    row = cli.stage_counters(run_plan, metrics_path=tmp_path / "never-written.prom")
+
+    assert row.prompt_tokens_total is None
+    assert row.run_id == run_plan.run_id
+    assert ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id) == [row]
 
 
 def test_a_later_run_appends_and_never_reorders() -> None:

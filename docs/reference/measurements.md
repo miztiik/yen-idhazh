@@ -607,6 +607,93 @@ across four shards. That is 21 percent more than the 315-token estimate implied,
 and it does not change the decision - the ceiling is still 1-2 percent of a run.
 **Row 9's collapse survives its own correction.**
 
+## The ledger and the server agree about the read rate
+
+**Measured 2026-08-27** against run `33008629212` of `digest.yml`, which is run
+`2026-08-26-5`. Four `work` shards, each a GitHub-hosted `ubuntu-latest` with 4
+vCPU, `Qwen3-8B-Q4_K_M.gguf` on llama.cpp `b10598`.
+
+Two instruments measured the same work and neither knew about the other. The
+item-health ledger sums a field the summarize stage copies out of each model
+reply, one request at a time. llama-server counted the whole shard for itself
+and published the totals on `/metrics`. Until this row landed those counters
+reached only a job log that keeps them for two days, so the read rate that
+[../architecture/summarize/throughput.md](../architecture/summarize/throughput.md)
+and the console publish could be reported and never checked - which is what Rule
+#10 forbids. The counters are now a committed row, and this is the first
+reconciliation.
+
+**The tolerance was written down before either side was read: 5 percent.** Far
+above the noise, because an unrecorded request adds tokens and seconds together
+and barely moves a ratio, and millisecond rounding over 116 rows is under 0.001
+percent. Far below the failure the check exists to catch, which is counting
+cached tokens as read - on run `2026-08-25-1` that was 11.09 tok/s against
+19.96, an 80 percent error.
+
+| Instrument | Read rate | Tokens read | Seconds | Parts |
+| --- | --- | --- | --- | --- |
+| Item-health ledger | 11.1755 tok/s | 107,856 | 9,651.10 | 116 items |
+| llama-server counters | 11.1796 tok/s | 107,856 | 9,647.58 | 4 shards |
+
+**They agree to 0.037 percent, against a bound of 5 percent.** In plain words:
+the ledger is right, and the number two documents rest on can now be shown to be
+right rather than asserted.
+
+Three counts match to the token, not merely to the tolerance: tokens read
+(107,856 both sides), tokens reused from the cache (96,814 both sides) and
+tokens written (31,992 both sides). So the ledger's row set is exactly the
+request set the server served - no retry and no warmup went unrecorded on this
+run. The entire disagreement is 3.52 seconds of prefill time in 9,647.58, which
+is the 0.036 percent above and is not explained here.
+
+**The two instruments use the same definition, and the server settles it.**
+`llamacpp:prompt_tokens_total` is documented in the binary's own output as
+"Number of prompt tokens processed, excluding cached tokens", and the server's
+published `llamacpp:prompt_tokens_seconds` gauge reproduces exactly as
+`prompt_tokens_total / prompt_seconds_total` - 23,411 over 2,128.08 is 11.001 on
+shard 3, and 11.001 is what the gauge says. That is the ledger's
+`input_tokens - cached_tokens` under another name. The upstream
+`tools/server/README.md` at tag `b10598` lists neither the "excluding cached
+tokens" wording nor `llamacpp:prompt_tokens_cached_total` at all, so the README
+is behind the binary and only a real capture settles what the field means.
+The four captures are committed at `tests/fixtures/runtime/`.
+
+**Spread, shard by shard**, from the server's side:
+
+| Shard | Read rate | Tokens read | Seconds |
+| --- | --- | --- | --- |
+| `work (0)` | 10.9254 tok/s | 30,538 | 2,795.15 |
+| `work (1)` | 11.4195 tok/s | 27,056 | 2,369.28 |
+| `work (2)` | 11.4014 tok/s | 26,851 | 2,355.07 |
+| `work (3)` | 11.0010 tok/s | 23,411 | 2,128.08 |
+
+0.494 tok/s from slowest to fastest, which is 4.4 percent of the run figure -
+the host-to-host variation
+[Which machine a shard drew moved its rate 3.4x](#which-machine-a-shard-drew-moved-its-rate-34x)
+already documents, at its small end. **The run figure is the sum of the tokens
+over the sum of the seconds and never the mean of these four rates**; averaging
+would weigh a shard that read 23,411 tokens the same as one that read 30,538.
+
+The run figure of 11.18 tok/s sits 2.1 percent above the 10.95 tok/s headline
+measured on 2026-08-24 in
+[Model throughput across the four workers](#model-throughput-across-the-four-workers).
+Two different days with two different article mixes on two different host draws,
+so the two are consistent and neither corrects the other.
+
+**What this costs, against Rule #2.** Measured on the four rows above: 428 bytes
+for four rows, so 107 bytes a row. At eight shards and five runs a day that is
+40 rows and about 4.3 kB a day, 14,600 rows and about 1.6 MB a year - roughly
+where `state/scores.csv` already is after four months. Nothing under `state/` is
+served, so the 1 GB Pages ceiling is untouched. No new artifact and no new cache
+entry either: the scrape already ran and the raw body already shipped inside
+`runtime-log-*`. What changed is that a copy of it now survives the run.
+
+**What is still unchecked.** One run. The reconciliation holds for
+`2026-08-26-5` and says nothing yet about a day whose shard died mid-item, a
+re-run job, or a build that renames a series. Re-run
+`python backend/utilities/reconcile_prefill.py --run <run-id>` after a few more
+days before treating the agreement as a property rather than an observation.
+
 ## Evaluation ledger re-band
 
 **Measured 2026-08-23** on `state/scores.csv` at commit `6c332c7`, n=156.
@@ -2317,7 +2404,7 @@ what the binary says about itself is visible on one screen. The two digests are
 what let a number on this page name the bytes that produced it (Rule #10); the
 run manifest still records `runtime_build` as a fixed string and does not.
 
-Two more instruments landed beside them.
+Three more instruments landed beside them.
 
 **The log summary greps `^(srv|slot) `, not a list of expected lines**, plus
 both the `n_ctx_slot` and `n_ctx_seq` spellings of the one field llama.cpp has
@@ -2344,6 +2431,14 @@ the 500 MB artifact budget (Rule #2). A 105-minute shard writes about two thirds
 of that. Raising the shard ceiling scales this term with the shard count and
 leaves the `items-*` total flat, because the plan is divided between workers
 rather than copied to each of them.
+
+**And the server's own counters stopped expiring with the log.** The `/metrics`
+scrape has printed `llamacpp:` lines into the job log since 2026-08-25, and the
+raw body has ridden in `runtime-log-<shard>` for two days. From 2026-08-27 each
+shard also files the counters as one row of `state/runtime-counters.csv`, which
+is what turned the read rate from a reported number into a checked one - see
+[The ledger and the server agree about the read rate](#the-ledger-and-the-server-agree-about-the-read-rate)
+for the arithmetic, the reconciliation and the storage cost.
 
 ## What a work shard costs
 
