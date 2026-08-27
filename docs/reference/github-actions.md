@@ -38,7 +38,8 @@ the work list, then derives the fan-out from it. The work matrix creates one to
 eight total worker jobs. Manual dispatch offers 1 through 8 and defaults to
 four; an explicit input always wins over the derivation, and the plan job
 rejects any other value before it creates the matrix. The work strategy sets
-`max-parallel: 8`, so a dispatch at the ceiling runs every worker at once.
+`max-parallel` to that same derived count, so every worker of a run starts at
+once and the fan-out cannot disagree with its own concurrency cap.
 
 **The ceiling is eight; a run derives at most four for itself.** A scheduled run
 passes no inputs, so the count is
@@ -65,14 +66,18 @@ more restores and never more cache bytes.
 The derivation runs in its own `fanout` step after `Plan the day`, because there
 is no planned item count before the plan exists. `jobs.plan.outputs.shards` and
 `jobs.plan.outputs.matrix` both read that step; `date` and `faithfulness` still
-come from `decide`, and the four model refs come from `models`.
+come from `decide`, the four model refs come from `models`, and
+`shard_timeout_minutes` comes from `bounds`. Everything a job needs before its
+first step travels as a job output, because `needs` resolves there and `steps`
+does not.
 
 Each worker receives its round-robin share of the whole plan and reads the count
 from the job output rather than deriving it again - two answers to that question
 would drop or double-work items with no error. The workflow enforces
-`config.run.shard_size` and `config.run.max_parallel`. It still does not enforce
-`shard_timeout_minutes`; the work job uses a 330-minute workflow timeout, and
-`run.safety_ceiling_per_run` is the ceiling sized against it.
+`config.run.shard_size`, `config.run.max_parallel` and, since 2026-08-27,
+`config.run.shard_timeout_minutes`: the work job's `timeout-minutes` is that
+value and nothing else, so changing the config number changes the bound.
+`run.safety_ceiling_per_run` is the item ceiling sized against it.
 
 Each worker checks its weights before it starts the server. `sha256sum` compares
 the file on disk against `models.summarize.sha256` in `config/idhazh.json`, on a

@@ -297,10 +297,13 @@ Require at least `evaluation.validation_articles` common successful pairs.
 Report paired distributions and spread, not only two unpaired means.
 
 Twenty paired items, two models and three repeats is at least 120 inference
-calls before canaries. Prove every job fits the current 330-minute workflow bound
-with worst-case margin before dispatch; the six-hour platform maximum is not the
-operative timeout. If it is sharded, each job must extract its items once and
-run both models while those Article payloads remain on the same ephemeral disk.
+calls before canaries. Prove every job fits the bound that job actually carries,
+with worst-case margin, before dispatch: `validate.yml` takes its qualification
+budget as a dispatch input defaulting to 330 minutes, and `digest.yml`'s work
+job reads `run.shard_timeout_minutes`. The six-hour platform maximum is not the
+operative timeout for either. If it is sharded, each job must extract its items
+once and run both models while those Article payloads remain on the same
+ephemeral disk.
 Article bodies may not be uploaded as cross-job artifacts. Do not cache both
 model files together.
 
