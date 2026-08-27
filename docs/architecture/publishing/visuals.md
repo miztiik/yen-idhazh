@@ -1,6 +1,6 @@
 # Visual routing and rendering
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 How an item gets a chart, a diagram, or - most of the time - nothing at all.
 
@@ -152,6 +152,15 @@ argued after it is seen.
 routing reply asked for a chart, whatever the decision became, so the gap between it and the day's
 published charts is exactly what the two controls below rejected. Without it a model that stops
 asking for charts and checks that start refusing them are the same number.
+
+**The summarizer swap on 2026-08-27 moved an input the window sits on.** The router runs on its own
+Qwen3-4B and that model did not change, but the user turn it reads carries the summary text as well
+as the article's opening and the indexed numbers - so a different summarizer writes a different
+question, and `charts_drafted` can move with no router change at all. The 6.2% and 4.4 minutes
+measured on 2026-08-25 were taken on the retired incumbent's summaries. Read the fourteen-day window
+from days after the swap, and treat a step at the swap date as a changed input rather than a
+verdict. The mark that would make that step visible on the console is not built
+([../summarize/throughput.md](../summarize/throughput.md)).
 
 ## Where the kill line is read from
 

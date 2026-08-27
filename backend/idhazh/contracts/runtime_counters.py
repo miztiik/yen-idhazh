@@ -33,9 +33,9 @@ numbers would have to travel inside the items artifact, which expires in a day
 and is not uploaded at all when a job is cancelled. The audience is wrong -
 `run.json` is a published payload a reader's browser fetches, and this is
 measurement evidence that belongs under `state/`, which is never served. And the
-timing is wrong - `TODO/20260825-qwen35-9b-swap-plan.md` rows 2 to 4 also open
-`RunManifest`, and two branches stamping one contract's changelog on the same
-day raise `TypeError` at import (`docs/architecture/contracts/schemas.md`).
+timing is wrong - a concurrent branch was also opening `RunManifest`, and two
+branches stamping one contract's changelog on the same day raise `TypeError` at
+import (`docs/architecture/contracts/schemas.md`).
 """
 
 from __future__ import annotations

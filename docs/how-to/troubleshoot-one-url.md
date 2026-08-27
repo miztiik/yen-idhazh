@@ -298,10 +298,11 @@ diagnosis. It stays under gitignored `backend/var/` and must not be committed.
 ## Validate the whole local path
 
 The manual path was exercised on 2026-08-24 with a real BBC URL, the live
-`bbc-tech` source definition and local Qwen3-8B-Q4_K_M on an Intel i7-1265U.
-One observation (`n=1`): fetch 328 ms, extraction 78 ms, summarization 352,921
-ms. These are proof that the procedure reaches every stage, not performance
-baselines.
+`bbc-tech` source definition and local Qwen3-8B-Q4_K_M (retired incumbent,
+historical record) on an Intel i7-1265U. One observation (`n=1`): fetch 328 ms,
+extraction 78 ms, summarization 352,921 ms. These are proof that the procedure
+reaches every stage, not performance baselines, and the configured summarizer
+has never been timed on this path.
 
 ## Clean up
 

@@ -358,6 +358,24 @@ The owner can approve a model for reasons outside the automated margin. Record
 that approval and the measured trade in the pull request and living docs. Do not
 rewrite the measurement to make the approval look automatic.
 
+### What that looked like the one time it happened
+
+Qwen3.5-9B-Q4_K_M became the configured summarizer on 2026-08-27 by owner
+decision ([../../CLAUDE.md](../../CLAUDE.md) section 0), over two failing hard
+gates. **It did not qualify.** Nine of eleven registered gates passed; the
+injection canaries scored 4 of 5 against a Rule #11 threshold of all five, and
+one brief-band item came back word for word at a verbatim run of 1.000 against a
+ceiling of 0.5. No comparison against the retired model was run, so nothing about
+that adoption says the new summaries are better.
+
+Two things that record leaves for whoever runs this procedure next. **A failing
+gate stayed failing and stayed written down** - the run report was not re-scored,
+no threshold moved, and the gate list still shows two failures. And **step 6 was
+never completed**: the frozen corpus was single-model, so the paired evidence
+this page asks for still does not exist for the model now in production. Both
+are in [../concepts/evaluation.md](../concepts/evaluation.md) and
+[../reference/measurements.md](../reference/measurements.md).
+
 ## 8. Adopt the model
 
 Do not change historical payloads or historical measurement rows.
@@ -389,15 +407,20 @@ and drift tests together.
 ## 9. Fix identity before trusting the rollout
 
 The determinism contract says the fingerprint records the GGUF file the runtime
-opened, llama.cpp build, chat template and runner class. The current `stage_work`
-passes `ModelRef.sha256` (or 64 zeroes), the literal `llama-server-local`, the
-model id as the chat-template identity and `local` as the runner. It does not
-observe those production inputs.
+opened, llama.cpp build, chat template and runner class.
 
-That is a pre-existing implementation gap. A model swap must not leave the new
-model recorded as zeroes or the runtime recorded as local. Pass the observed
-GGUF SHA-256 and runtime build into `work`, compare the GGUF hash to config, and
-test the fingerprint and manifest paths before rollout.
+**Half of this is now closed.** A stamp built on an absent or placeholder weights
+digest raises rather than publishing, so "nobody measured the weights" can no
+longer validate as a fingerprint, and the qualification path digests the file it
+is about to run rather than reading the number back out of config.
+
+**The other half is open.** Production `stage_work` still passes
+`ModelRef.sha256` - what config expected - and leans on the `work` job's
+`sha256sum` check of the file on disk to make the two agree. A model swap must
+not leave the new model recorded as an expectation nobody verified at the point
+of use. Pass the observed GGUF SHA-256 and runtime build into `work`, compare the
+hash to config there, and test the fingerprint and manifest paths before rollout
+([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
 
 ## 10. Cache transition and rollout
 
@@ -407,6 +430,13 @@ repository ceiling. Production derives the worker count from the plan as
 `min(ceil(items / run.shard_size), run.max_parallel)`, so a full day at
 `run.safety_ceiling_per_run` gives a worker 40 items. Do not size a timeout from
 a fictional five-item shard.
+
+**Measure the cache; do not derive it.** On 2026-08-27 the transition was far
+cheaper than the arithmetic said, because the cache key names the model file and
+the pinned llama.cpp build - so the outgoing model had already aged out under an
+older key and there was nothing to delete. What had to go was a stale
+qualification artifact. Before and after are recorded in
+[../reference/github-actions.md](../reference/github-actions.md#the-cache-across-the-model-swap-measured-2026-08-27).
 
 Before the first production run:
 

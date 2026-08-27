@@ -13,7 +13,7 @@ There are four models in this project and they are tested differently:
 
 | Model | Role | How you test it |
 | --- | --- | --- |
-| Qwen3-8B-Q4_K_M | writes the summaries | serve it, run `work`, read the eval rows |
+| Qwen3.5-9B-Q4_K_M | writes the summaries | serve it, run `work`, read the eval rows |
 | Qwen3-4B-Q4_K_M | decides chart / diagram / nothing | serve it, run `route`, look at the SVG |
 | HHEM-2.1-Open | scores summaries against their source | it loads inside `work`; check `hhem` in the ledger |
 | all-MiniLM-L6-v2 | on-device search, in the browser | committed under `frontend/static/`; `npm run test:browser` |
@@ -61,25 +61,32 @@ records the SHA-256 of. Both commits below are `models.route.revision` and
 here, because there they are the values the pipeline itself fetches.
 
 ```bash
-curl -L -o backend/models/Qwen3-8B-Q4_K_M.gguf \
-  "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/7c41481f57cb95916b40956ab2f0b139b296d974/Qwen3-8B-Q4_K_M.gguf?download=true"
+curl -L -o backend/models/Qwen3.5-9B-Q4_K_M.gguf \
+  "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf?download=true"
 curl -L -o backend/models/Qwen3-4B-Q4_K_M.gguf \
   "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/bc640142c66e1fdd12af0bd68f40445458f3869b/Qwen3-4B-Q4_K_M.gguf?download=true"
 ```
 
-4.7 GB and 2.4 GB. Measured on a runner 2026-08-22: 180 s and 32 s to download.
+5.29 GiB and 2.4 GB. The summarizer took 118 s to download on `ubuntu-latest` on
+2026-08-23, `n=1`; spread is unavailable, and the rate is not stable enough to
+extrapolate from. The router took 32 s on a runner on 2026-08-22. Exact SHA-256
+of the summarizer:
+`03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`.
 
-To compare the Qwen3.5 candidate against the configured summarizer, add:
+The retired incumbent Qwen3-8B-Q4_K_M is no longer configured and nothing in the
+pipeline fetches it. Fetch it only to reproduce a historical measurement, or to
+replay a canary against it - which is the one open question the adoption left
+([evaluate-new-summarizer-model.md](evaluate-new-summarizer-model.md)):
 
 ```bash
-curl -L -o backend/models/Qwen3.5-9B-Q4_K_M.gguf \
-  "https://huggingface.co/unsloth/Qwen3.5-9B-GGUF/resolve/3885219b6810b007914f3a7950a8d1b469d598a5/Qwen3.5-9B-Q4_K_M.gguf?download=true"
+RETIRED_REPO=Qwen/Qwen3-8B-GGUF     # retired incumbent, historical record
+RETIRED_FILE=Qwen3-8B-Q4_K_M.gguf   # retired incumbent, historical record
+RETIRED_REV=7c41481f57cb95916b40956ab2f0b139b296d974
+curl -L -o "backend/models/$RETIRED_FILE" \
+  "https://huggingface.co/$RETIRED_REPO/resolve/$RETIRED_REV/$RETIRED_FILE?download=true"
 ```
 
-That file is 5.29 GiB. It took 118 s to download on `ubuntu-latest` on
-2026-08-23, `n=1`; spread is unavailable. The download rate is not stable
-enough to extrapolate from. Exact SHA-256:
-`03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8`.
+4.7 GB, 180 s to download on a runner on 2026-08-22.
 
 ### Local files are not the GitHub Actions cache
 
@@ -221,7 +228,7 @@ gate.
 # plan one URL list
 python -m idhazh plan --date 2026-08-22
 
-# with the 8B served
+# with the summarizer served
 python -m idhazh validate --date 2026-08-22 --leaderboard 0.75
 
 # restart llama-server on the 4B, then
@@ -269,15 +276,16 @@ Both thresholds are in `config/idhazh.json` under `evaluation`.
 `decide` exits non-zero on a switch. That pause is deliberate. It is still only
 one input to the adoption decision.
 
-### What the gate said on 2026-08-22
+### What the gate said on 2026-08-22, on models that are no longer configured
 
 Measured on `ubuntu-latest`, 17 of 20 articles (three addresses had already
-rotted):
+rotted). Both rows are the retired incumbent's historical record and neither
+describes the configured summarizer:
 
 | Model | Published score | Measured here |
 | --- | --- | --- |
-| Qwen3-8B-Q4_K_M | 0.750 | **0.887** |
-| Qwen3-4B-Q4_K_M | 0.740 | **0.891** |
+| Qwen3-8B-Q4_K_M (retired incumbent, historical record) | 0.750 | **0.887** |
+| Qwen3-4B-Q4_K_M (the router, not the summarizer) | 0.740 | **0.891** |
 
 Both beat their published number by about 0.14, and the two are within 0.004 of
 each other - well inside the 0.05 margin, so no switch. The verdict was still
@@ -290,7 +298,7 @@ Speed, separately from quality:
 
 ```bash
 LD_LIBRARY_PATH=backend/bin backend/bin/llama-bench \
-  -m backend/models/Qwen3-8B-Q4_K_M.gguf \
+  -m backend/models/Qwen3.5-9B-Q4_K_M.gguf \
   -p 730,1800,4850 -n 250 -t 4 -r 3 -o json > backend/var/llm.json
 
 python backend/utilities/summarise_bench.py backend/var/llm.json \
@@ -304,11 +312,18 @@ rendered prompt count for that model. Omit `--system-prompt-tokens` when
 comparing models with different tokenizers; raw prefill and decode rates remain
 comparable, but one model's prompt count is not the other's.
 
-On the runner, 2026-08-22: the 8B decodes at 7.28 tok/s; the 4B at 13.00 tok/s.
-Using the current maximum 879-token prompt, the derived blends are 229 s and
-130 s per article for the 8B and 4B respectively. The throughput is measured;
-the per-article figures are derived from it, the measured corpus buckets and
-the production 2500-token truncation cap.
+**879 is the retired incumbent's tokenizer count, so pass it only to reproduce
+that model's figures.** Nobody has rendered this prompt through the configured
+summarizer's tokenizer, so a derived seconds-per-article figure for it would be
+an estimate dressed as arithmetic (Rule #10). Omit the flag and read the raw
+rates until that count is measured.
+
+On the runner, 2026-08-23, the configured summarizer decodes at 6.01 tok/s.
+The retired incumbent decoded at 7.28 tok/s on 2026-08-22 and the router at
+13.00 tok/s; using the 879-token prompt, their derived blends are 229 s and
+130 s per article. Those two rows are the retired incumbent's historical record.
+The throughput is measured; the per-article figures are derived from it, the
+measured corpus buckets and the production 2500-token truncation cap.
 
 ### Compare two models and several thread counts locally
 
@@ -318,9 +333,12 @@ paths and prints one result per model and thread count:
 
 ```bash
 python backend/utilities/measure_llm.py \
-  --models "Qwen/Qwen3-8B-GGUF@7c41481f57cb95916b40956ab2f0b139b296d974:Qwen3-8B-Q4_K_M.gguf,unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf" \
+  --models "unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf,<challenger-repo>@<commit>:<challenger-file>.gguf" \
   --threads "1,2,4,8"
 ```
+
+The first reference is the configured summarizer, at the revision
+`config/idhazh.json` pins. The second is whatever you are screening against it.
 
 A reference is `repository@commit:file`, and the commit is required. The utility
 reads the file listing at that commit and downloads from it, so two runs of one
@@ -360,7 +378,7 @@ Run the hosted sweep after this workflow version is on the default branch:
 ```bash
 gh workflow run measure.yml \
   -f target=llm \
-  -f models='Qwen/Qwen3-8B-GGUF@7c41481f57cb95916b40956ab2f0b139b296d974:Qwen3-8B-Q4_K_M.gguf' \
+  -f models='unsloth/Qwen3.5-9B-GGUF@3885219b6810b007914f3a7950a8d1b469d598a5:Qwen3.5-9B-Q4_K_M.gguf' \
   -f threads='4,8'
 ```
 
