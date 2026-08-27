@@ -55,6 +55,7 @@ from idhazh.contracts.app_config import (
     EvaluationConfig,
     ExtractConfig,
     InferenceConfig,
+    RetentionConfig,
     RunConfig,
 )
 from idhazh.contracts.article import Article, ArticleStatus
@@ -2064,12 +2065,11 @@ def stage_assemble(
         digest_root=PUBLIC_ROOT, index_root=_index_root(), month=assemble.month_of(plan.date)
     )
 
+    # The committed payload tree, which is what this stage can see. It is not the
+    # published site and the Pages cap is not measured here - the site is built
+    # by a later step in this same job, and `idhazh site-weight` measures it
+    # there. See docs/architecture/publishing/layout.md.
     site_bytes, site_files = assemble.site_size(PUBLIC_ROOT)
-    site_alarm = retention.budget_alarm(
-        retention.SiteSize(site_bytes, site_files), settings.app.retention
-    )
-    if site_alarm is not None:
-        LOG.warning("%s", site_alarm)
     manifest = assemble.build_manifest(
         plan=plan,
         day=day,
@@ -2330,6 +2330,58 @@ def stage_backfill_vectors(
     return 0
 
 
+def stage_site_weight(
+    tree: Path, config: RetentionConfig, *, cap_mb: int = retention.PAGES_HARD_CAP_MB
+) -> int:
+    """Measure the built bundle against the alarm point and the Pages cap.
+
+    `tree` is the directory the Pages deploy uploads, and it only exists after
+    the site is built - so this runs as its own step after `npm run build`, in
+    every job that builds. It is deliberately not part of `assemble`: that stage
+    runs before the build and can only see the committed payloads, which are a
+    different tree eighteen times smaller.
+
+    There is no default tree. A default is how this pointed at the wrong one.
+
+    Three outcomes: an empty tree fails, because a measurement of nothing reads
+    exactly like a site inside budget; over the cap fails, because those bytes
+    cannot be published; over the alarm point reports and passes, because they
+    still can.
+    """
+    size = retention.measure(tree)
+    if size.files == 0:
+        LOG.error(
+            "site-weight measured 0 files under %s - build the site first. "
+            "A measurement of nothing passes every ceiling",
+            tree.as_posix(),
+        )
+        return 1
+
+    breach = retention.cap_breach(size, cap_mb=cap_mb)
+    if breach is not None:
+        LOG.error("%s", breach)
+        return 1
+
+    alarm = retention.budget_alarm(size, config, cap_mb=cap_mb)
+    if alarm is not None:
+        # An Actions workflow command, so the line lands on the run's summary
+        # rather than three thousand lines into a log nobody opens. Outside
+        # Actions it is one more printed line and costs nothing.
+        print(f"::warning title=Published site approaching the Pages cap::{alarm}")
+        LOG.warning("%s", alarm)
+        return 0
+
+    LOG.info(
+        "site-weight %s: %.1f MB in %s files, %.0f MB left to the %s MB Pages cap",
+        tree.as_posix(),
+        size.megabytes,
+        size.files,
+        retention.headroom_mb(size, cap_mb=cap_mb),
+        cap_mb,
+    )
+    return 0
+
+
 # --- entry point --------------------------------------------------------------
 
 
@@ -2385,6 +2437,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "qualify-canaries",
             "qualify-decide",
             "backfill-vectors",
+            "site-weight",
         ),
     )
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
@@ -2468,6 +2521,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             "step may write one by hand."
         ),
     )
+    parser.add_argument(
+        "--site-tree",
+        type=Path,
+        default=None,
+        help=(
+            "The built bundle `site-weight` measures - the directory the Pages deploy "
+            "uploads. Required, and deliberately without a default: a default is how "
+            "this came to measure the committed payloads instead of the site."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -2476,6 +2539,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stderr,
     )
+    if args.stage == "site-weight":
+        # Placed above the fetcher because measuring a directory reads no socket,
+        # and starting one to do it would read every host's robots.txt for nothing.
+        if args.site_tree is None:
+            parser.error("site-weight needs --site-tree: the built bundle to measure")
+        return stage_site_weight(args.site_tree, settings.app.retention)
+
     date = args.date or _today()
     # One fetcher for the whole invocation, so `idhazh run` reads each host's
     # robots.txt once across all three stages rather than once per stage.
