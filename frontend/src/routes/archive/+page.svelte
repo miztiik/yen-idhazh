@@ -155,7 +155,7 @@
 			<p
 				class="mt-1 text-[0.9375rem] text-text-secondary"
 				data-search-empty
-			>{`Nothing in ${results.scope} is close to that.`}</p>
+			>{`No story from ${results.scope} is close to that.`}</p>
 		{/if}
 
 		{#if status === 'unavailable' && !showingResults}

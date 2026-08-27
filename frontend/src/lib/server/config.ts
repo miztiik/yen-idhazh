@@ -64,6 +64,7 @@ export interface AssistConfig {
 	similarity_floor: number;
 	result_limit: number;
 	search_months: number;
+	search_min_days: number;
 }
 
 const DEFAULTS: UiConfig = {
@@ -104,7 +105,8 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 const ASSIST_DEFAULTS: AssistConfig = {
 	similarity_floor: 0.35,
 	result_limit: 10,
-	search_months: 1
+	search_months: 1,
+	search_min_days: 7
 };
 
 interface RawConfig {

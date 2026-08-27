@@ -4,6 +4,7 @@
     "min_readable_letter_share": 0.6,
     "recall_min": 0.9,
     "result_limit": 8,
+    "search_min_days": 14,
     "search_months": 3,
     "similarity_floor": 0.4
   },

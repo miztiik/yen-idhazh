@@ -286,7 +286,23 @@ def load_corpus(root: Path) -> Corpus:
     return Corpus(items=tuple(items))
 
 
-def load_index_corpus(root: Path, months: int | None = None) -> Corpus:
+def _days_in(shards: list[Path]) -> set[str]:
+    """The days those shards can answer for. An entry with no vector is not one.
+
+    `searchedDays` in `frontend/src/lib/assist/search.ts` counts the same way:
+    an item that browses but was never embedded cannot be retrieved, so a day
+    made only of those is not a day a search reaches.
+    """
+    days: set[str] = set()
+    for path in shards:
+        payload = json.loads(path.read_text(encoding="utf-8"))
+        for entry in payload["entries"]:
+            if entry.get("vector") is not None:
+                days.add(entry["date"])
+    return days
+
+
+def load_index_corpus(root: Path, months: int | None = None, min_days: int = 0) -> Corpus:
     """The same corpus, read the way a reader's tab now reads it.
 
     `load_corpus` above reads the day payloads. The published archive stopped
@@ -296,8 +312,12 @@ def load_index_corpus(root: Path, months: int | None = None) -> Corpus:
     any recall - and the answer is a comparison rather than an argument.
 
     `months` is `assist.search_months`: how many shards, newest first, a tab
-    actually reads. `None` reads every committed month, which is what the page
-    did before the scope became a knob.
+    always reads. `min_days` is `assist.search_min_days`: below that many days
+    of published stories the tab reads ONE more shard, and one more only, so a
+    search on the first of a month does not collapse to a single day. `None`
+    reads every committed month, which is what the page did before the scope
+    became a knob. The rule is `readScope` in `frontend/src/lib/assist/search.ts`
+    and this is the copy that measures it, so the two have to move together.
 
     A shard whose header names another encoder, another width or another dtype
     contributes no vectors, exactly as a day payload does above. The header's
@@ -311,7 +331,11 @@ def load_index_corpus(root: Path, months: int | None = None) -> Corpus:
 
     shards = sorted(directory.glob("[0-9][0-9][0-9][0-9]-[0-9][0-9].json"), reverse=True)
     if months is not None:
-        shards = shards[:months]
+        wanted = max(months, 1)
+        taken = shards[:wanted]
+        if len(_days_in(taken)) < min_days:
+            taken = shards[: wanted + 1]
+        shards = taken
 
     items: list[CorpusItem] = []
     for path in sorted(shards):
