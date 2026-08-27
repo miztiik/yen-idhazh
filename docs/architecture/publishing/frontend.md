@@ -16,7 +16,12 @@ Three consequences, and each one removes a whole class of problem:
 - **There is no loading state to design**, and therefore no spinner to be tempted by. The payload loader still exists as exactly one module; it runs in Node instead of in a browser.
 - **A payload that fails its contract fails the build.** What would have been a runtime error a reader discovers becomes a build error nobody ships.
 
-**Two pages fetch, and both fetch a month.** The console reads older telemetry shards when an operator pans back, and the archive reads the month index behind its story list. Neither is on the reading path: a day page, a topic page and the home page still make no request at all. The rule is about what a reader waits for to read the news, and it is unchanged.
+**Three files are fetched, and none of them is on the reading path.** The
+console reads older telemetry shards when an operator pans back. The archive
+reads the month index behind its story list, that month's sibling vector file
+when a reader asks to search, and the day payload behind a result it is showing.
+A day page, a topic page and the home page still make no request at all. The
+rule is about what a reader waits for to read the news, and it is unchanged.
 
 The loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives.
 
@@ -26,7 +31,7 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 
 **Whatever the root layout's load returns is inlined into every page beneath it**, so the root layout returns the four facts the footer prints and never the day they were read from. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB.
 
-[frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. `/archive/` is the single exclusion, because it inlines every committed day on purpose to feed the on-device search, and a second assertion fails on the day that stops being true - so the exclusion cannot outlive its reason.
+[frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
 
 | State | When | What ships |
 | --- | --- | --- |
@@ -175,7 +180,45 @@ The degraded states, and each one is designed rather than discovered:
 | JavaScript off | The day row, and a `<noscript>` line saying the list needs it. The day links are prerendered, so navigation still works |
 | Nothing published at all | "Nothing has been published yet.", as before |
 
-**Search is untouched by this and still eager.** The whole day payloads are still on the page for it. They leave in their own commit, so reverting the list leaves search working and reverting search leaves the list working.
+## Search reads the same month index, and says which months it read
+
+Search used to rank over the whole day payloads the page carried, which is why
+the page carried them. It now reads `assist/index/<YYYY-MM>.json` and its
+sibling `<YYYY-MM>.bin`, and the eager payloads are gone. That is the last 1.7
+MB of the archive's weight, and it is the reason this row exists.
+
+**The scope is one month, and it is a knob.** `assist.search_months` defaults to
+1. The reader waits on the download and never on the arithmetic: measured
+2026-08-26, a month of vectors is 518 KB on the wire and about 2.1 seconds on a
+10 Mbit line at the rate the committed days ran, or 4.8 seconds at the
+structural ceiling, against 74 to 159 milliseconds of ranking. The fetch is 9 to
+30 times the ranking at every scope, so widening this buys nothing but waiting -
+three months is a 14.4 second download, and one month is the only scope whose
+first search starts inside about five seconds.
+
+**The page says what it searched**, in one line under the box: `Searching August
+2026 - 2235 stories.`, and `Older months are not searched.` when the archive
+holds more months than the scope. A reader who gets nothing back has to be able
+to tell "never published" from "not in the months this read", and the knob is
+invisible to them otherwise.
+
+**A result renders from the day it names.** The index carries no title-plus-
+summary pair on purpose - [layout.md](layout.md) prices that at 6.35 times the
+entry, charged to every browsing visitor - so a result fetches the day payload
+behind it and renders through `DigestItem`, the same component the digest page
+uses. That is what keeps the result list from being a second place where fetched
+web text reaches a page unsanitised (Rule #11). Ten results spanning ten days
+cost at most ten fetches; ten from one day cost one; a day already in hand is
+never fetched twice, and neither is a month. Until a day arrives, and if it
+never does, the result is the title, the date and the topic the index carried -
+so a failed fetch costs a summary and never a result.
+
+**Two files a month fail independently, and both are designed states.** No index
+leaves the story list saying so. No `.bin` leaves the list working and search
+saying `Search is unavailable here - these stories cannot be searched on this
+device.` The check runs **before** the 43 MB encoder download, alongside the
+encoder-identity check that was already there: a reader who cannot be helped by
+those bytes is not asked to spend them.
 
 ## The archive names its encoder, and refuses vectors from any other
 

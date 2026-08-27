@@ -130,12 +130,13 @@ When a named route is over, two failures are worth telling apart:
   there is no second copy to move.
 
 **`/archive/` and `/console/` are not capped, and that is deliberate.**
-`/archive/` inlines every committed day to feed the on-device search and grows
-about 170 KB gzipped per published day; `/console/` grows with the ledger its
-charts read. A fixed ceiling on either was a countdown, not a bound: it fired on
-an ordinary publish and was raised to silence it - `/archive/` twice in one day
-on 2026-08-26 - which is a gate that never actually held. Their growth belongs
-to the marker count above and, for `/archive/`, to its own plan under `TODO/`
+`/console/` grows with the ledger its charts read. `/archive/` used to inline
+every committed day to feed the on-device search and grew about 170 KB gzipped
+per published day; it stopped on 2026-08-27, and what is left grows per day and
+per month rather than per story. A fixed ceiling on either was a countdown, not
+a bound: it fired on an ordinary publish and was raised to silence it -
+`/archive/` twice in one day on 2026-08-26 - which is a gate that never actually
+held. Their growth belongs to the marker count above
 ([../reference/measurements.md](../reference/measurements.md#the-prerendered-page-on-the-wire)).
 
 ## The browser suite

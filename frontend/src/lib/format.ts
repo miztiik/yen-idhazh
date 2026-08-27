@@ -34,6 +34,13 @@ export function dayMonth(date: string): string {
 	return `${day} ${MONTHS[month - 1]!.slice(0, 3)}`;
 }
 
+/** "2026-08" -> "August 2026". What a reader is told a search covered. */
+export function monthName(month: string): string {
+	const [year, index] = month.split('-').map(Number);
+	if (!year || !index || index < 1 || index > 12) return month;
+	return `${MONTHS[index - 1]} ${year}`;
+}
+
 export function clockUtc(timestamp: string): string {
 	return timestamp.slice(11, 16) + ' UTC';
 }

@@ -19,11 +19,11 @@
  * Staging into `static/` before the build is the placement where dev, preview
  * and the deployed bundle all agree.
  *
- * Only image files are copied from digest payloads. The JSON payloads stay
- * unserved on purpose. Telemetry is different: the console fetches a projected
- * CSV that has already dropped URL keys, canonical URLs and free text. The
- * month index is different for the same reason the telemetry shard is - the
- * archive fetches a month at a time so its page stops growing with the corpus.
+ * Three kinds of file are staged from the digest tree: rendered images, the day
+ * payloads a search result renders from, and the month index with its sibling
+ * vector file. `run.json` is not staged - nothing fetches it. Telemetry is
+ * different again: the console fetches a projected CSV that has already dropped
+ * URL keys, canonical URLs and free text.
  */
 
 import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
@@ -62,15 +62,16 @@ function stageIndexes() {
 	}
 	let staged = 0;
 	for (const name of readdirSync(indexSource)) {
-		// The browse list reads the JSON. The sibling `.bin` carries the vectors
-		// and nothing fetches it yet, so staging it would be megabytes a reader
-		// downloads for nothing.
-		if (!/^\d{4}-\d{2}\.json$/.test(name)) continue;
+		// Both halves. The browse list reads the JSON; a search reads the sibling
+		// `.bin`, which is why it is staged at all - it was left out while nothing
+		// fetched a vector, because it is megabytes a reader would download for
+		// nothing.
+		if (!/^\d{4}-\d{2}\.(json|bin)$/.test(name)) continue;
 		mkdirSync(indexTarget, { recursive: true });
 		cpSync(join(indexSource, name), join(indexTarget, name));
 		staged += 1;
 	}
-	console.log(`month index: staged ${staged} month(s) into static/assist/index.`);
+	console.log(`month index: staged ${staged} file(s) into static/assist/index.`);
 }
 
 stageIndexes();
@@ -81,11 +82,19 @@ if (!existsSync(source)) {
 }
 
 let copied = 0;
+let payloads = 0;
 const walk = (relative) => {
 	for (const name of readdirSync(join(source, relative))) {
 		const next = join(relative, name);
 		if (statSync(join(source, next)).isDirectory()) {
 			walk(next);
+		} else if (name === 'digest.json') {
+			// A search result is rendered from the day it names, fetched when it is
+			// on screen. The archive used to inline every one of these instead, which
+			// charged every browsing visitor the whole corpus.
+			mkdirSync(join(target, relative), { recursive: true });
+			cpSync(join(source, next), join(target, next));
+			payloads += 1;
 		} else if (IMAGE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))) {
 			mkdirSync(join(target, relative), { recursive: true });
 			cpSync(join(source, next), join(target, next));
@@ -94,7 +103,9 @@ const walk = (relative) => {
 	}
 };
 walk('');
-console.log(`rendered visuals: staged ${copied} file(s) into static/digest.`);
+console.log(
+	`rendered visuals: staged ${copied} image(s) and ${payloads} day payload(s) into static/digest.`
+);
 
 if (!existsSync(telemetrySource)) {
 	console.log(`telemetry: no projection tree at ${telemetrySource}, nothing to stage.`);

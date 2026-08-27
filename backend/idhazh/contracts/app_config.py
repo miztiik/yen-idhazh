@@ -931,6 +931,22 @@ class AssistConfig(Model):
             "slots cannot all be shown."
         ),
     )
+    search_months: int = Field(
+        default=1,
+        ge=1,
+        le=12,
+        description=(
+            "How many month shards a search reads, newest first. The reader waits on "
+            "the download, not on the arithmetic: measured 2026-08-26, one month is a "
+            "518 KB vector file and about 2.1 seconds on a 10 Mbit line at the rate "
+            "the committed days ran, or 4.8 seconds at the structural ceiling, against "
+            "74 to 159 milliseconds of ranking. The fetch is 9 to 30 times the ranking "
+            "at every scope, so this knob buys download seconds and never compute "
+            "seconds. Three months is a 14.4 second download, so one month is the only "
+            "scope whose first search starts inside about five seconds. The page names "
+            "the months it read, so widening this widens a sentence a reader can see."
+        ),
+    )
     recall_min: float = Field(
         default=0.69,
         ge=0.0,
@@ -957,6 +973,22 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27T00:30",
+            change="assist.search_months added, defaulting to 1.",
+            why=(
+                "Archive search used to rank over every committed day, because the page "
+                "carried every committed day. It now reads month shards, so how many "
+                "months it reads is a real choice and it was about to become a literal "
+                "in the ranking module (Rule #6). One month, because the reader waits on "
+                "the download and not on the arithmetic: measured 2026-08-26, a month of "
+                "vectors is 518 KB and about 2.1 seconds on a 10 Mbit line at the rate "
+                "the committed days ran, against 74 to 159 milliseconds of ranking, and "
+                "three months is a 14.4 second download. Additive with a default, so an "
+                "older config still validates and no read-side migration is needed "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27",
             change="ui.archive_page_size added, defaulting to 25.",

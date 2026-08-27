@@ -183,9 +183,10 @@ does. Like `items_per_topic` it hides nothing - every story is one more click
 away, and the order is the published one.
 
 The `assist` block is on-device search. The runner embeds the day and commits
-the vectors; a reader's tab embeds only the query. Both knobs say how much of an
-item the encoder is allowed to read, so both are set from what the encoder can
-do rather than from taste.
+the vectors; a reader's tab embeds only the query. The first two knobs say how
+much of an item the encoder is allowed to read, and the third says how much of
+the archive a search reads at all. All three are set from what was measured
+rather than from taste.
 
 - `assist.max_tokens` (256) is how far into an item's text the encoder reads
   before it truncates. 512 is a hard ceiling because that is the encoder's
@@ -208,6 +209,15 @@ do rather than from taste.
   "mostly not in our alphabet", and the corpus says the exact number does not
   matter: 3 of 1889 items score 0.0 and the next lowest scores 0.9975, so every
   threshold between 0.01 and 0.99 picks the same three items.
+- `assist.search_months` (1) is how many month shards a search reads, newest
+  first. The reader waits on the download and never on the arithmetic: a month
+  of vectors is 518 KB on the wire and about 2.1 seconds on a 10 Mbit line at
+  the rate the committed days ran, against 74 to 159 milliseconds of ranking.
+  The fetch is 9 to 30 times the ranking at every scope, so this knob buys
+  download seconds and never compute seconds, and three months is a 14.4 second
+  wait before the first result. One month is the only scope whose first search
+  starts inside about five seconds. Widening it is visible to a reader rather
+  than silent: the page prints the months it searched under the box.
 
 The browser keeps its own copy of the token cap in
 `frontend/src/lib/assist/loader.ts`, because the config reader is server-only and
