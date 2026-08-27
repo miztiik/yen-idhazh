@@ -290,7 +290,7 @@ def load_index_corpus(root: Path, months: int | None = None) -> Corpus:
     """The same corpus, read the way a reader's tab now reads it.
 
     `load_corpus` above reads the day payloads. The published archive stopped
-    carrying them: the page fetches `assist/index/<YYYY-MM>.json` and its
+    carrying them: the page fetches `index/<YYYY-MM>.json` and its
     sibling `.bin`, and ranks over that. The two loaders exist so one question
     can be asked with everything else held still - did moving to the index cost
     any recall - and the answer is a comparison rather than an argument.

@@ -45,14 +45,19 @@ const telemetryTarget = join('static', 'telemetry');
 // index is a projection of exactly those days. One switch cannot leave a
 // canary build serving the real archive's stories.
 const indexSource = resolve(source, '..', 'assist', 'index');
-const indexTarget = join('static', 'assist', 'index');
+// Its own top-level tree, beside `static/digest/` and `static/telemetry/`, and
+// deliberately not under `static/assist/`. That directory is the on-device
+// encoder, which is secondary by contract: the bundle must render complete with
+// it deleted (`CLAUDE.md` section 0a), and CI proves that by parking it and
+// asserting the build carries no `assist/` at all. The archive's story list is
+// not a model feature - it is how the page lists anything - so it has to
+// survive that parking, and a staged tree inside the parked one cannot.
+const indexTarget = join('static', 'index');
 
 // Generated, so it is rebuilt rather than accumulated. A stale visual from a
 // previous build would be served beside a payload that no longer names it.
 rmSync(target, { recursive: true, force: true });
 rmSync(telemetryTarget, { recursive: true, force: true });
-// Only the index directory. `static/assist/` also holds the committed encoder
-// and its wasm, which are authored files rather than staged ones.
 rmSync(indexTarget, { recursive: true, force: true });
 
 function stageIndexes() {
@@ -71,7 +76,7 @@ function stageIndexes() {
 		cpSync(join(indexSource, name), join(indexTarget, name));
 		staged += 1;
 	}
-	console.log(`month index: staged ${staged} file(s) into static/assist/index.`);
+	console.log(`month index: staged ${staged} file(s) into static/index.`);
 }
 
 stageIndexes();

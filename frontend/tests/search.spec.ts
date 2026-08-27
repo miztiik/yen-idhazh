@@ -22,7 +22,7 @@ import { resolve } from 'node:path';
  */
 
 const FIXTURES = resolve(process.cwd(), '..', 'tests', 'fixtures');
-const VECTORS = /\/assist\/index\/\d{4}-\d{2}\.bin$/;
+const VECTORS = /\/index\/\d{4}-\d{2}\.bin$/;
 
 interface Gold {
 	pass_bar: { minimum: number };

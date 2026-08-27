@@ -4,18 +4,20 @@ import { expect, test, type Page } from '@playwright/test';
  * The archive browses stories, not days.
  *
  * The Oracle this row is held to: the list renders every committed story in
- * published order newest first, and the page still renders when the index is
- * absent - falling back to the day row rather than white-screening.
+ * published order newest first, the page still renders when the index is
+ * absent - falling back to the day row rather than white-screening - and the
+ * list still works with the whole on-device model directory gone.
  *
  * The suite runs against the canary build, which is one day of eight items over
  * nineteen quiet ones. That is enough to prove the order and the fallback, and
  * not enough to reach a second page: the page size is 25. The paging test below
  * therefore serves a larger index through `page.route`. That is the static host
  * answering differently, not our code replaced - the same boundary the missing
- * -index test uses, and the only one either test touches (Rule #7).
+ * -index and model-absent tests use, and the only one any of them touches
+ * (Rule #7).
  */
 
-const MONTH = /\/assist\/index\/\d{4}-\d{2}\.json$/;
+const MONTH = /\/index\/\d{4}-\d{2}\.json$/;
 
 /** Every story on the page, in the order it is rendered. */
 async function titles(page: Page): Promise<string[]> {
@@ -130,6 +132,21 @@ test('the page renders complete when the index is gone', async ({ page }) => {
 	// than our code. Everything else on this list would be ours.
 	const ours = errors.filter((text) => !text.includes('Failed to load resource'));
 	expect(ours, 'a missing index must degrade, not error').toEqual([]);
+});
+
+test('the stories still list with the whole model directory gone', async ({ page }) => {
+	// The runtime half of the CI model-absent gate. That gate parks `static/assist`
+	// and asserts the bundle carries no `assist/`; this fails every request under
+	// that path and asks for the stories anyway. Browsing is not an on-device model
+	// feature, so nothing the list needs may be served from the encoder's directory
+	// (`CLAUDE.md` section 0a). Staging the index there is what broke both, and this
+	// is the test that would have caught it.
+	await page.route('**/assist/**', (route) => route.fulfill({ status: 404, body: 'not found' }));
+
+	await page.goto('/archive/');
+
+	await expect(page.locator('[data-story-list="rows"] li').first()).toBeVisible();
+	expect((await titles(page)).length, 'no story reached the list').toBeGreaterThan(0);
 });
 
 test('the header states the retention window before anything is deleted', async ({ page }) => {

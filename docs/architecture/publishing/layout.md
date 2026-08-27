@@ -126,7 +126,13 @@ The fix is the shape `publish_telemetry` already had: the index root is derived 
 
 ### How it reaches a browser
 
-`frontend/public/` is where `backend/` writes and the site reads **through the filesystem at build time**. Only `frontend/static/` is copied into the served bundle, which is why [../../../frontend/scripts/copy-visuals.mjs](../../../frontend/scripts/copy-visuals.mjs) stages rendered images and the telemetry projection across. Three more kinds of file ride that same step from 2026-08-27: `<YYYY-MM>.json`, its sibling `<YYYY-MM>.bin`, and every day's `digest.json`.
+`frontend/public/` is where `backend/` writes and the site reads **through the filesystem at build time**. Only `frontend/static/` is copied into the served bundle, which is why [../../../frontend/scripts/copy-visuals.mjs](../../../frontend/scripts/copy-visuals.mjs) stages rendered images and the telemetry projection across. Three more kinds of file ride that same step from 2026-08-27: `<YYYY-MM>.json` and its sibling `<YYYY-MM>.bin` into `static/index/`, and every day's `digest.json` into `static/digest/`.
+
+**The index is staged beside the encoder, never inside it.** `static/assist/` is the on-device encoder and its wasm - authored files, committed, and secondary by contract: the bundle must render complete with that directory deleted ([../../../CLAUDE.md](../../../CLAUDE.md) section 0a), and CI proves it by parking `static/assist`, building, and asserting the bundle carries no `assist/` at all. Browsing the archive is not a model feature. It is how the page lists anything, so the data it needs cannot live in a directory whose whole contract is that it can be removed. The index therefore gets its own top-level tree, the same shape `static/digest/` and `static/telemetry/` already have: one directory per staged projection, ignored by git, rebuilt every build.
+
+**The `.bin` goes there too, even though only a searching reader fetches it.** It is one shard in two files, so splitting them across two paths would buy nothing, and the reason the directory is wrong has nothing to do with who reads the file: staging runs inside `npm run build`, so anything written under `static/assist/` reappears after the gate has parked it.
+
+**The first placement was inside `static/assist/index/`, and CI caught it the same day.** `build/assist` existed on a build that had otherwise succeeded, and the gate failed. Read as a gate problem it invites an exclusion. It was a path problem: two different things, one directory.
 
 **The `.bin` is staged because something finally opens it.** It was left out while the index shipped unconsumed - megabytes in the bundle for a file no page fetched - and search reading the index is the commit that earns it.
 

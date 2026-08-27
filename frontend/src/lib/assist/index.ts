@@ -50,7 +50,7 @@ export function loadIndex(
 
 async function readIndex(month: string, fetcher: typeof fetch): Promise<MonthIndex | null> {
 	try {
-		const response = await fetcher(`${base}/assist/index/${month}.json`);
+		const response = await fetcher(`${base}/index/${month}.json`);
 		if (!response.ok) {
 			console.warn(`[archive] the stories for ${month} are not available (${response.status})`);
 			return null;
@@ -93,7 +93,7 @@ export function loadVectors(
 
 async function readVectors(month: string, fetcher: typeof fetch): Promise<Int8Array | null> {
 	try {
-		const response = await fetcher(`${base}/assist/index/${month}.bin`);
+		const response = await fetcher(`${base}/index/${month}.bin`);
 		if (!response.ok) {
 			console.warn(`[archive] the vectors for ${month} are not available (${response.status})`);
 			return null;

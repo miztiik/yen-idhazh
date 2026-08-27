@@ -1371,7 +1371,7 @@ the new one it adds 8.8 KB.
 
 **What it costs elsewhere, stated rather than left to be discovered.** The
 bundle gains the two files search now fetches and the day payloads a result
-renders from: `static/assist/index` goes from 378,869 bytes to 1,237,109 (the
+renders from: `static/index` goes from 378,869 bytes to 1,237,109 (the
 sibling `.bin` joins the JSON), and `static/digest` from 1,055,600 to 6,976,807
 (six `digest.json` join 87 rendered images). That is 6.78 MB on disk against
 1.76 MB off the page, and the two are paid by different people - every visitor
@@ -1875,54 +1875,73 @@ cost is a second parse rather than a second download.
 
 ## The published ledger
 
-**Measured 2026-08-25** on a developer machine (i7-1265U, Windows, CPython
-3.14), over the committed `state/published.csv`. This is deterministic file
-arithmetic, so the spread is zero and the hardware matters only for the
-in-memory figure at the end.
+**Re-measured 2026-08-26** on a developer machine (i7-1265U, Windows 11, CPython
+3.12.12), over the ledger as `831fdac0ec36b3c7d38dd7cd26e3a8d2ba2a4755` holds
+it, immediately before and after
+`backend/utilities/migrate_published_ledger.py` rewrote the file. This is
+deterministic file arithmetic, so the spread is zero and the hardware matters
+only for the in-memory figure at the end. It supersedes a 2026-08-25 reading of
+1,449 rows at 214.9 B, which was taken before the column below was dropped.
 
-| Quantity | Value | Method |
-| --- | --- | --- |
-| Rows | 1,449 | `csv.DictReader` |
-| Bytes | 311,325 (304.0 KB) | `stat` |
-| Mean row | **214.9 B** | bytes / rows |
-| `version` share | 24,633 B, 7.9% | field-width sum, one separator per cell |
-| `url_key` share | 94,185 B, 30.3% | same |
-| **`canonical_url` share** | **150,937 B, 48.5%** | same |
-| `published_on` share | 15,939 B, 5.1% | same |
-| `item_id` share | 25,580 B, 8.2% | same |
+**Re-run 2026-08-27 against `origin/main` at `1eacb45`, and every number came
+back the same.** That commit holds the same 476,809-byte file as
+`831fdac0ec36b3c7d38dd7cd26e3a8d2ba2a4755`, so no run published between the two
+and there was nothing new to weigh. A figure taken off this file is otherwise
+stale within the hour, because CI commits it several times a day. Re-run the
+migration against whatever `origin/main` holds before trusting the table.
 
-Projected forward at 214.9 B a row:
+The row lost `canonical_url` in that commit. Nothing on the read path opened it,
+and the address it carried is still recoverable - the join, and what it cost, is
+[../architecture/sources/freshness.md](../architecture/sources/freshness.md).
 
-| Rows a day | A year of rows | A year of bytes |
-| --- | --- | --- |
-| 295, the observed mean over five committed days | 107,675 | **23.1 MB** |
-| 1,000, the structural ceiling below | 365,000 | **78.4 MB** |
-| 200, one run's worth | 73,000 | **15.7 MB** |
+| Quantity | Before | After | Method |
+| --- | --- | --- | --- |
+| Rows | 2,213 | 2,213 | `csv.DictReader` |
+| Bytes | 476,809 (465.6 KB) | **244,910 (239.2 KB)** | `stat` |
+| Mean row | 215.5 B | **110.7 B** | bytes / rows |
+| `version` share | 37,629 B, 7.9% | 37,629 B, 15.4% | field-width sum, one separator per cell |
+| `url_key` share | 143,853 B, 30.2% | 143,853 B, 58.7% | same |
+| **`canonical_url` share** | **231,899 B, 48.6%** | **gone** | same |
+| `published_on` share | 24,356 B, 5.1% | 24,356 B, 9.9% | same |
+| `item_id` share | 39,072 B, 8.2% | 39,072 B, 16.0% | same |
 
-The observed mean is 1,473 items over the five committed days of
-`frontend/public/digest/2026/08/`: 4, 10, 147, 731 and 581. A five-day mean over
-a corpus that went from 4 items to 731 inside it is a description, not a
-forecast. The ceiling row is the one to design against.
+The rewrite removed 231,899 bytes - 48.6 percent of the file, and 104.8 bytes
+off every row. Nothing else moved: the same 2,213 rows carry the same 2,213
+`(url_key, published_on)` pairs, in the same order, and those two cells are the
+whole of what the skip read opens.
+
+Projected forward at the two mean rows above:
+
+| Rows a day | A year of rows | Was | Now | Saved |
+| --- | --- | --- | --- | --- |
+| 553, the ledger's own rate over the four days it holds | 201,936 | 43.5 MB | **22.3 MB** | 21.2 MB |
+| 1,000, the structural ceiling below | 365,000 | 78.6 MB | **40.4 MB** | 38.2 MB |
+| 200, one run's worth | 73,000 | 15.7 MB | 8.1 MB | 7.6 MB |
+
+The ledger spans 2026-08-23 to 2026-08-26 and records only what a run
+introduced, so 2,213 over four days is the real publish rate rather than a count
+of what the days carry. It reads slightly low: the last of those four days was
+still running when the file was measured. The ceiling row is the one to design
+against.
 
 **What it costs to read.** `ledger.load_published` parses the whole file into a
 list of dicts and then folds it into one map. `tracemalloc` peak over the
-committed ledger is **1,037,214 B**, 716 B a row, for 1,449 rows. At the
-365,000-row structural ceiling that is **261 MB**, or 1.6 percent of the
-runner's 16 GB (Rule #2). The per-row figure is CPython 3.14 string and dict
-overhead on this machine and will differ on the runner's interpreter build; the
-conclusion - that a year of this file is a rounding error against 16 GB - does
-not depend on which side of 300 MB it lands.
+narrowed ledger is **1,102,193 B**, 498.1 B a row, for 2,213 rows. At the
+365,000-row structural ceiling that is **182 MB**, or 1.1 percent of the
+runner's 16 GB (Rule #2). The 2026-08-25 reading was 716 B a row, so the
+narrowing took about 30 percent off the read - but that reading was on CPython
+3.14 and this one is on 3.12.12, so the interpreter is not held constant and the
+two are not a clean before-and-after. The conclusion is the same either way: a
+year of this file is a rounding error against 16 GB.
 
 The plan stage is also the job that loads no model, so this allocation never
 sits beside 4.68 GiB of weights.
 
-**`canonical_url` is read by nothing on the read path.** `load_published` reads
-`url_key` and `published_on` by name; no other reader exists. It is 104.2 B of
-the 214.9 B row, so removing it would save about **11 MB a year** at the
-observed mean and 38 MB at the structural ceiling. It is recoverable forever by
-joining `item_id` and `published_on` against the day payload's `source_url`.
-What it buys is that a person can grep the ledger by address. What that means
-for the contract, and why the column stays, is
+**The address survived the column.** Every one of the 2,213 committed rows joins
+to a `source_url`: `published_on` picks the day directory and `item_id` picks
+the item inside `digest.json`, with no absent day and no absent item (measured
+2026-08-26 over the whole file). What the column bought was a grep by address,
+and that is what was given up - see
 [../architecture/sources/freshness.md](../architecture/sources/freshness.md).
 
 ## The safety ceiling fires on every run

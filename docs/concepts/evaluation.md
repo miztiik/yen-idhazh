@@ -494,7 +494,7 @@ labels catch up somebody is told to delete this caveat.
 ### Moving search to the month index cost nothing, 2026-08-27
 
 The archive stopped carrying every committed day and started fetching
-`assist/index/<YYYY-MM>.json` with its sibling vector file. That is 1.7 MB off
+`index/<YYYY-MM>.json` with its sibling vector file. That is 1.7 MB off
 the page, and the question a byte saving can never answer on its own is whether
 the index lost information the day payload carried.
 
