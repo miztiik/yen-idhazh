@@ -918,7 +918,7 @@ def test_the_worst_case_day_still_fits_the_configured_fan_out() -> None:
     shards = cli.shard_count(run.safety_ceiling_per_run, run=run)
     assert shards == run.max_parallel
     worst_shard = -(-run.safety_ceiling_per_run // shards)
-    assert worst_shard == 40, "the figure the 330-minute work timeout was checked against"
+    assert worst_shard == 40, "the worker size run.shard_timeout_minutes is measured against"
 
 
 # --- the fixtures themselves -------------------------------------------------

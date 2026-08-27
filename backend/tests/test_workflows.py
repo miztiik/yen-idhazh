@@ -112,6 +112,10 @@ SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 # that is what every scheduled run gets and no eight-shard run is measured yet.
 CONTENT_REFRESH_SHARDS: Final = frozenset({"1", "2", "3", "4", "5", "6", "7", "8"})
 CONTENT_REFRESH_SHARD_DEFAULT: Final = "4"
+# How long a worker may run and how many run at once. Both were literals in the
+# work job while `config/idhazh.json` declared different numbers that nothing
+# read, so config was a wrong answer with a schema behind it (Rule #6).
+WORK_BOUND_KEYS: Final = frozenset({"timeout-minutes", "max-parallel"})
 
 # Every major below was read from its own `action.yml` on 2026-08-24 and declares
 # `using: node24`. `upload-pages-artifact@v5` is composite and pins a Node 24
@@ -447,6 +451,24 @@ def _step(
     return matches[0]
 
 
+def _values_keyed(node: object, names: frozenset[str]) -> list[tuple[str, str]]:
+    """Every value under one of `names`, at any depth of a job body.
+
+    Recursive rather than top-level: a step-level `timeout-minutes` written as a
+    literal is the same defect as a job-level one, one level down.
+    """
+    found: list[tuple[str, str]] = []
+    if isinstance(node, dict):
+        for key, value in cast(dict[str, object], node).items():
+            if key in names and isinstance(value, str):
+                found.append((key, value))
+            found.extend(_values_keyed(value, names))
+    elif isinstance(node, list):
+        for item in cast(list[object], node):
+            found.extend(_values_keyed(item, names))
+    return found
+
+
 def _action_references(workflow: dict[str, object]) -> list[tuple[str, str]]:
     references: list[tuple[str, str]] = []
     for job_name in _mapping(workflow.get("jobs"), "jobs"):
@@ -623,15 +645,15 @@ def _every_env(workflow: dict[str, object]) -> list[tuple[str, dict[str, object]
     return scopes
 
 
-def _run_the_models_step(script: str, config_root: Path) -> dict[str, str]:
-    """Run the program the `models` step carries, and read what it would write.
+def _run_the_inline_program(script: str, config_root: Path) -> dict[str, str]:
+    """Run the program a plan-job step carries, and read what it would write.
 
     The step redirects its stdout into `$GITHUB_OUTPUT`, so its stdout IS the
     job output. Running the shipped bytes against a real config directory is
     what makes this a test of the step rather than of a copy of it.
     """
     match = re.search(r"<<'PY'[^\n]*\n(.*?)\nPY(?:\n|$)", script, flags=re.DOTALL)
-    assert match is not None, "the models step must carry an inline program"
+    assert match is not None, "the step must carry an inline program"
 
     result = subprocess.run(
         [sys.executable, "-c", match.group(1)],
@@ -1162,10 +1184,71 @@ def test_content_refresh_has_eight_total_work_shards_at_most() -> None:
     assert len(options) == len(CONTENT_REFRESH_SHARDS)
     assert frozenset(options) == CONTENT_REFRESH_SHARDS
 
-    strategy = _mapping(_job(workflow, "work").get("strategy"), "work strategy")
-    # The concurrency cap matches the ceiling. Left at four it would queue half
-    # of an eight-shard dispatch and hand back the wall-clock the fan-out buys.
-    assert strategy.get("max-parallel") == "8"
+
+def test_the_work_job_reads_its_bound_and_its_width_from_the_plan() -> None:
+    """A bound written twice is a bound that can disagree with itself.
+
+    `timeout-minutes` said 330 while `run.shard_timeout_minutes` said 150 and
+    nothing read the config number, so a model sized against config was sized
+    against a number production ignored. Both keys now resolve through
+    `needs.plan.outputs`, and neither may go back to being a number typed here.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    work = _job(workflow, "work")
+    strategy = _mapping(work.get("strategy"), "work strategy")
+
+    assert work.get("timeout-minutes") == _expression(
+        "fromJSON(needs.plan.outputs.shard_timeout_minutes)"
+    )
+    # The run's own worker count, never a fixed one. Held at four it would queue
+    # half of an eight-shard dispatch and hand back the wall-clock the fan-out
+    # buys; held at eight it says nothing true about a four-worker day.
+    assert strategy.get("max-parallel") == _expression("fromJSON(needs.plan.outputs.shards)")
+
+    for key, value in _values_keyed(work, WORK_BOUND_KEYS):
+        assert not value.isdigit(), f"the work job writes {key} as the literal {value}"
+
+
+def test_the_work_bound_is_whatever_the_config_says_it_is(tmp_path: Path) -> None:
+    """Change the number in `config/idhazh.json` and the rendered bound changes.
+
+    Running the shipped program against a real config directory is what makes
+    this a test of the step rather than of a copy of its arithmetic.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    outputs = _mapping(_job(workflow, "plan").get("outputs"), "plan outputs")
+    assert outputs.get("shard_timeout_minutes") == _expression(
+        "steps.bounds.outputs.shard_timeout_minutes"
+    )
+
+    script = _script(_step(workflow, "plan", "id", "bounds"), "digest.yml/plan/bounds")
+    assert "config/idhazh.json" in script, "the bound comes from config"
+    assert '>> "$GITHUB_OUTPUT"' in script
+
+    committed = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["run"]
+    assert _run_the_inline_program(script, REPO_ROOT) == {
+        "shard_timeout_minutes": str(committed["shard_timeout_minutes"])
+    }
+
+    def config_saying(minutes: object) -> Path:
+        (tmp_path / "config").mkdir(exist_ok=True)
+        (tmp_path / "config" / "idhazh.json").write_text(
+            json.dumps({"run": {"shard_timeout_minutes": minutes}}), encoding="utf-8"
+        )
+        return tmp_path
+
+    moved = int(committed["shard_timeout_minutes"]) + 7
+    assert _run_the_inline_program(script, config_saying(moved)) == {
+        "shard_timeout_minutes": str(moved)
+    }
+
+    # `timeout-minutes` takes whatever it is handed, and a value it cannot read
+    # as a number leaves the worker with no bound at all - which the run finds
+    # out six hours later. So the one step that writes it is where a bound that
+    # is not a whole count of minutes has to stop.
+    for unusable in ("150", 0, -1, 12.5, True, None):
+        with pytest.raises(AssertionError, match="shard_timeout_minutes"):
+            _run_the_inline_program(script, config_saying(unusable))
 
 
 def test_content_refresh_derives_the_shard_count_after_the_plan() -> None:
@@ -1839,7 +1922,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
     assert '>> "$GITHUB_OUTPUT"' in script
 
     models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
-    assert _run_the_models_step(script, REPO_ROOT) == {
+    assert _run_the_inline_program(script, REPO_ROOT) == {
         f"{role}_{field}": models[role][field]
         for role in ("summarize", "route")
         for field in MODEL_REF_FIELDS
@@ -1854,7 +1937,7 @@ def test_the_plan_job_publishes_the_model_refs_it_read_from_config(tmp_path: Pat
         json.dumps({"models": models}), encoding="utf-8"
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.file")):
-        _run_the_models_step(script, tmp_path)
+        _run_the_inline_program(script, tmp_path)
 
 
 def test_the_measurement_harness_defaults_to_the_configured_models(tmp_path: Path) -> None:
@@ -1882,7 +1965,7 @@ def test_the_measurement_harness_defaults_to_the_configured_models(tmp_path: Pat
     assert "config/idhazh.json" in script, "the refs come from config"
 
     models = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]
-    produced = _run_the_models_step(script, REPO_ROOT)
+    produced = _run_the_inline_program(script, REPO_ROOT)
     assert produced == {
         **{
             f"{role}_{field}": models[role][field]
@@ -1914,7 +1997,7 @@ def test_the_measurement_harness_defaults_to_the_configured_models(tmp_path: Pat
         json.dumps({"models": models}), encoding="utf-8"
     )
     with pytest.raises(AssertionError, match=re.escape("models.summarize.revision")):
-        _run_the_models_step(script, tmp_path)
+        _run_the_inline_program(script, tmp_path)
 
 
 def test_the_qualification_candidate_is_decided_once(tmp_path: Path) -> None:
@@ -1946,7 +2029,7 @@ def test_the_qualification_candidate_is_decided_once(tmp_path: Path) -> None:
     }
 
     summarize = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["models"]["summarize"]
-    assert _run_the_models_step(script, REPO_ROOT) == {
+    assert _run_the_inline_program(script, REPO_ROOT) == {
         field: summarize[field] for field in fields
     }
 
@@ -1955,7 +2038,7 @@ def test_the_qualification_candidate_is_decided_once(tmp_path: Path) -> None:
         json.dumps({"models": {"summarize": {**summarize, "file": ""}}}), encoding="utf-8"
     )
     with pytest.raises(AssertionError, match="candidate file"):
-        _run_the_models_step(script, tmp_path)
+        _run_the_inline_program(script, tmp_path)
 
 
 def test_the_weights_cache_key_names_the_model_and_the_build_it_holds() -> None:
