@@ -77,6 +77,18 @@ def derive_url_key(canonical_url: str) -> str:
     return hashlib.sha256(canonical_url.encode("utf-8")).hexdigest()
 
 
+def derive_text_digest(text: str) -> str:
+    """The one way this project digests a block of text.
+
+    It lives here because a contract may not import the rest of `idhazh`
+    (CLAUDE.md section 4), and a payload that rebuilds a text digest on read
+    needs the same arithmetic the pipeline used to write it.
+    `idhazh.fingerprint.text_digest` is this function under the name the stages
+    already call, so the two can never drift into two conventions.
+    """
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
 def canonical_json(payload: Any) -> str:
     """The one serialization every persisted payload uses.
 
