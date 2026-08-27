@@ -130,12 +130,22 @@ def to_eval_row(
     `self_repetition` takes the summary alone. It is the only column that reads
     neither the article nor the pair, and it is recorded and not banded for the
     same reason.
+
+    `source_word_count` and `source_seen_word_count` both come off `article`,
+    never off a text this function counts for itself. They are a before-the-cap
+    and after-the-cap pair, and a pair is only readable when one counter
+    produced both numbers.
     """
     text = summary.summary or ""
     unsupported = metrics.unsupported_numbers(text, full_text)
     coverage = metrics.lead_coverage(text, full_text)
     hedge = metrics.hedge_dropped(text, full_text)
     verbatim = metrics.verbatim_run(text, full_text)
+    # An article written before the pre-cap count existed reports the post-cap
+    # one, so the pair says "no cut seen" rather than inventing a source length.
+    source_words = (
+        article.word_count if article.source_word_count is None else article.source_word_count
+    )
     delta = round(hhem - hhem_full, _DELTA_PLACES)
     truncation_flagged = delta > config.truncation_gap_max or (
         article.brief and verbatim > config.brief_compression_ceiling
@@ -177,7 +187,7 @@ def to_eval_row(
             hedge_dropped=hedge,
             config=config,
         ),
-        source_word_count=metrics.word_count(full_text),
+        source_word_count=source_words,
         source_seen_word_count=article.word_count,
         summary_word_count=metrics.word_count(text),
         pipeline_fingerprint=summary.pipeline_fingerprint,

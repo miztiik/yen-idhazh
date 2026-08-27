@@ -68,6 +68,47 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-27T20:30",
+            change=(
+                "hhem_full is now scored against the article before the truncation cap, "
+                "so hhem_delta and truncation_flagged can be non-zero. No column was "
+                "added or removed and no row was rewritten."
+            ),
+            why=(
+                "dual_score exists to tell a model that invented something from a model "
+                "that faithfully summarized the half we gave it, and its only production "
+                "caller handed it the same string twice: extract.truncate_to_tokens "
+                "returned the cut text and to_article kept only that. Measured over all "
+                "2,232 rows written before this, hhem_delta is exactly 0.0 on 2,232 of "
+                "2,232 and hhem equals hhem_full on every one. Those rows record two "
+                "scores of one text, so 'the gap was zero' means 'the gap was never "
+                "measured' and must not be read as evidence that truncation costs "
+                "nothing. Recorded only - no band reads either column, so "
+                "METRICS_VERSION did not move."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-27T20:00",
+            change=(
+                "source_word_count is now Article.source_word_count, the pre-cap count, "
+                "rather than a recount of whatever text the caller passed as full_text. "
+                "No column was added or removed and no row was rewritten."
+            ),
+            why=(
+                "The pair source_word_count / source_seen_word_count reads as "
+                "before-truncation and after-truncation and was neither. Both came off "
+                "the same post-cap string through two different counters - "
+                "len(_WORD.findall(t)) against len(t.split()) - so the difference between "
+                "them measured the counters. Measured over all 2,232 rows written before "
+                "this: they agree on 287, source_word_count is larger on 1,355, and "
+                "source_seen_word_count is larger on 590, which is impossible if one "
+                "string is a cut of the other. Read as a truncation signal the pair said "
+                "87 percent of items were truncated; counting the rows sitting on the "
+                "1,923-word cap says 6.3 percent. Rows written before this stamp carry "
+                "the old meaning and must not be read as a truncation rate."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-27",
             change=(
                 "Added source_digest, nullable, at the end of the row. The ledger's "
@@ -156,7 +197,14 @@ class EvalRow(Contract):
     attempt: int = Field(ge=1)
 
     hhem: Score = Field(ge=0.0, le=1.0, description="Faithfulness against the text the model saw.")
-    hhem_full: Score = Field(ge=0.0, le=1.0, description="Faithfulness against the full article.")
+    hhem_full: Score = Field(
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Faithfulness against the article before the truncation cap. Equal to hhem "
+            "on rows stamped before 2026-08-27T20:30, which scored one text twice."
+        ),
+    )
     hhem_delta: Score = Field(
         description="hhem - hhem_full. The cost of truncation, invisible unless both are scored."
     )
@@ -199,9 +247,20 @@ class EvalRow(Contract):
     )
     band: ConfidenceBand
 
-    source_word_count: int = Field(ge=0, description="The full article.")
+    source_word_count: int = Field(
+        ge=0,
+        description=(
+            "The article before the truncation cap, counted by Article.source_word_count. "
+            "Rows stamped before 2026-08-27T20:00 recount the post-cap text instead."
+        ),
+    )
     source_seen_word_count: int = Field(
-        default=0, ge=0, description="What the model actually got, after truncation."
+        default=0,
+        ge=0,
+        description=(
+            "What the model actually got, after truncation. Counted the same way as "
+            "source_word_count, so the difference between the two is the cut."
+        ),
     )
     summary_word_count: int = Field(ge=0)
     pipeline_fingerprint: Sha256

@@ -142,11 +142,18 @@ def dual_score(
     faithfully summarized the half we gave it". Those are different defects with
     different fixes, and the gap between these two numbers is the only thing
     that separates them.
+
+    Identical texts are scored once and the result reused. The scorer is
+    deterministic, so the second pass could only ever return the first answer,
+    and about 97 percent of items are never truncated. Measured on
+    `ubuntu-latest` 2026-08-26, run `2026-08-26-5`: one pass over a 900-word
+    chunk takes 2.88 to 3.08 s (n=5), so the pass this skips is worth roughly
+    2 s an item.
     """
-    return (
-        score_over_chunks(scorer, seen_text, summary),
-        score_over_chunks(scorer, full_text, summary),
-    )
+    seen = score_over_chunks(scorer, seen_text, summary)
+    if seen_text == full_text:
+        return (seen, seen)
+    return (seen, score_over_chunks(scorer, full_text, summary))
 
 
 def band_edges(values: Sequence[float]) -> tuple[float, float]:
