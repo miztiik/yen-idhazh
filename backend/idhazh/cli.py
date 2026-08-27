@@ -611,6 +611,7 @@ def stage_work(
             article=article,
             summary=summary,
             full_text=seen,
+            premise=seen,
             hhem=hhem,
             hhem_full=hhem_full,
             config=settings.app.evaluation,
