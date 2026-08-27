@@ -1,4 +1,4 @@
-import type { RateSpread, StageTimingDay, ThroughputDay } from '$lib/charts/series';
+import type { RateSpread, StageTiming, StageTimingDay, ThroughputDay } from '$lib/charts/series';
 import { modelByDate, modelWork } from '$lib/server/model-work';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
@@ -137,6 +137,12 @@ function sample(rows: Record<string, string>[], name: string): Sample {
 		.map((row) => measured(row, name))
 		.filter((value): value is number => value !== null);
 	return { values, timed: values.length, total: rows.length };
+}
+
+/** A sample reduced to what the chart draws: one median, and the two counts
+ * that say whether the day was timed in full, in part, or not at all. */
+function timing(of: Sample): StageTiming {
+	return { ms: median(of), timed: of.timed, total: of.total };
 }
 
 function byDate(rows: Record<string, string>[]): Map<string, Record<string, string>[]> {
@@ -319,14 +325,19 @@ export function load() {
 			return {
 				date,
 				items: group.length,
-				fetchMs: median(sample(group, 'fetch_ms')) ?? 0,
-				extractMs: median(sample(group, 'extract_ms')) ?? 0,
-				summarizeMs: median(sample(group, 'summarize_ms')) ?? 0,
-				scoreMs:
-					median({ values: scoreMs, timed: scoreMs.length, total: scoreGroup.length }) ?? 0
+				fetch: timing(sample(group, 'fetch_ms')),
+				extract: timing(sample(group, 'extract_ms')),
+				summarize: timing(sample(group, 'summarize_ms')),
+				score: timing({ values: scoreMs, timed: scoreMs.length, total: scoreGroup.length })
 			};
 		})
-		.filter((day) => day.fetchMs > 0 || day.extractMs > 0 || day.summarizeMs > 0 || day.scoreMs > 0)
+		.filter(
+			(day) =>
+				(day.fetch.ms ?? 0) > 0 ||
+				(day.extract.ms ?? 0) > 0 ||
+				(day.summarize.ms ?? 0) > 0 ||
+				(day.score.ms ?? 0) > 0
+		)
 		.sort((a, b) => b.date.localeCompare(a.date));
 
 	// Two different statistics, both kept on purpose. The candle is the spread of

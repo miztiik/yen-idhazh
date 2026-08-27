@@ -41,10 +41,10 @@
 	}: { days: StageTimingDay[]; height: number; width: number } = $props();
 
 	const STAGES = [
-		{ key: 'fetchMs', label: 'fetch', colour: 'var(--series-1)' },
-		{ key: 'extractMs', label: 'extract', colour: 'var(--series-2)' },
-		{ key: 'summarizeMs', label: 'summarize', colour: 'var(--series-3)' },
-		{ key: 'scoreMs', label: 'score', colour: 'var(--series-4)' }
+		{ key: 'fetch', label: 'fetch', colour: 'var(--series-1)' },
+		{ key: 'extract', label: 'extract', colour: 'var(--series-2)' },
+		{ key: 'summarize', label: 'summarize', colour: 'var(--series-3)' },
+		{ key: 'score', label: 'score', colour: 'var(--series-4)' }
 	] as const;
 
 	type Stage = (typeof STAGES)[number];
@@ -84,7 +84,9 @@
 	 * the log form of the rounding rule, not an exception to it. */
 	const scale = $derived(
 		logAxis(
-			ordered.flatMap((day) => STAGES.map((stage) => day[stage.key])),
+			ordered
+				.flatMap((day) => STAGES.map((stage) => day[stage.key].ms))
+				.filter((ms): ms is number => ms !== null),
 			[box.bottom, box.top]
 		)
 	);
@@ -118,11 +120,11 @@
 	};
 
 	function at(date: string, key: Stage['key']): number {
-		return byDate.get(date)?.[key] ?? 0;
+		return byDate.get(date)?.[key].ms ?? 0;
 	}
 
 	function newestOf(stage: Stage): number {
-		const value = newest?.[stage.key] ?? 0;
+		const value = newest?.[stage.key].ms ?? 0;
 		return value > 0 ? value : 0;
 	}
 
