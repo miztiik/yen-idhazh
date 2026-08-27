@@ -34,7 +34,14 @@ from pathlib import Path
 from typing import Final, NamedTuple
 
 from idhazh import config
-from idhazh.assemble import build_embeddings, day_dir, to_digest_visual, write_atomic
+from idhazh.assemble import (
+    build_embeddings,
+    day_dir,
+    month_of,
+    rebuild_search_index,
+    to_digest_visual,
+    write_atomic,
+)
 from idhazh.contracts.app_config import EvaluationConfig, ModelRef
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
@@ -613,6 +620,16 @@ def main() -> int:
     runs = manifest(args.out, len(day.items))
     checks = health(args.state)
     scored = scores(args.state, day.items, evaluation)
+    # Every writer of a committed day payload owes its month a rebuild
+    # (docs/architecture/publishing/layout.md). The archive browses this tree in
+    # the browser suite, so without the rebuild it would show days and no
+    # stories - and the suite would pass on a page a reader cannot use.
+    index_root = args.out.parent / "assist" / "index"
+    months = sorted({month_of(date) for date in [*quiet, DATE]})
+    indexed = [
+        rebuild_search_index(digest_root=args.out, index_root=index_root, month=month)
+        for month in months
+    ]
     digest = hashlib.sha256(day.to_json().encode("utf-8")).hexdigest()[:12]
     visuals = sum(1 for item in day.items if item.visual is not None)
     print(f"canary day {DATE}: {len(day.items)} items, {visuals} visuals, payload {digest}")
@@ -621,6 +638,10 @@ def main() -> int:
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
     print(f"wrote {writer.ledger_path(args.state).as_posix()}: {scored} scored items")
+    print(
+        f"wrote {index_root.as_posix()}: {len(indexed)} month(s), "
+        f"{sum(len(index.entries) for index in indexed)} entries"
+    )
     return 0
 
 

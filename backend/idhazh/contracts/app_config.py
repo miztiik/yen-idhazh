@@ -816,6 +816,16 @@ class UiConfig(Model):
             "clock. One week covers a reader who comes back after a break."
         ),
     )
+    archive_page_size: int = Field(
+        default=25,
+        ge=1,
+        description=(
+            "How many stories the archive's list adds each time a reader asks for more. "
+            "The day page pages at twelve because a day is short and the reader came to "
+            "read it; the archive holds thousands and the reader came to find one, so "
+            "it opens on the same twenty-five the console's failure list does."
+        ),
+    )
 
 
 class PageWeightConfig(Model):
@@ -956,6 +966,17 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27T02:00",
+            change="ui.archive_page_size added, defaulting to 25.",
+            why=(
+                "The archive now lists every published story instead of a row per day, "
+                "and a list of thousands needs a first screen. The number belongs in "
+                "config rather than in the page (Rule #6). Additive with a default, so "
+                "an older config still validates and no read-side migration is needed "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27",
             change=(

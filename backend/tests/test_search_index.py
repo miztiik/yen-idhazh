@@ -21,7 +21,7 @@ from typing import Any
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import assemble
+from idhazh import assemble, cli
 from idhazh.contracts.base import canonical_json
 from idhazh.contracts.digest_day import DigestDay, DigestEmbeddings
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
@@ -357,3 +357,61 @@ class TestTheWriter:
             "vertical",
             "vector",
         }
+
+
+# --- Integration tier: the shard the repository actually carries -------------
+
+
+class TestTheCommittedShard:
+    """Where the index is written, and whether the committed one is real.
+
+    The writer was correct from its first commit and the shard on `main` was
+    not: it named one item, `ai-01`, that no published day holds. The cause was
+    the path rather than the arithmetic. `stage_assemble` took the index root
+    from a module constant while every pipeline test redirects only
+    `PUBLIC_ROOT`, so the backend suite rebuilt the *published* shard out of
+    fixture days, on any machine that ran it.
+    """
+
+    def test_a_redirected_digest_root_carries_the_index_with_it(
+        self, tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+    ) -> None:
+        """The test that would have caught it, and does now."""
+        assert cli._index_root() == REPO_ROOT / "frontend" / "public" / "assist" / "index"
+
+        monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        redirected = cli._index_root()
+
+        assert redirected == tmp_path / "public" / "assist" / "index"
+        assert REPO_ROOT not in redirected.parents
+
+    def test_the_committed_shard_names_the_committed_days(self) -> None:
+        """The published index is a projection of the published days, or it is wrong.
+
+        This is the reader-facing half: the archive lists what this file holds,
+        so a shard that disagrees with the tree is a page that lists the wrong
+        stories. It is compared by entry rather than by bytes, because a schema
+        version stamped after the last publish would move the bytes without
+        moving a single story.
+        """
+        index_root = REPO_ROOT / "frontend" / "public" / "assist" / "index"
+        if not index_root.exists():
+            pytest.skip("no committed index in this checkout")
+
+        days = committed_days()
+        months = sorted({assemble.month_of(payload.date) for payload in days})
+        assert months, "a probe over an empty corpus proves nothing"
+
+        for month in months:
+            path = index_root / f"{month}.json"
+            assert path.exists(), f"{month} has published days and no committed shard"
+            committed = SearchIndex.from_json(path.read_text(encoding="utf-8"))
+            expected = [
+                (payload.date, item.item_id)
+                for payload in days
+                if assemble.month_of(payload.date) == month
+                for item in payload.items
+            ]
+            assert [
+                (record.date, record.item_id) for record in committed.entries
+            ] == expected
