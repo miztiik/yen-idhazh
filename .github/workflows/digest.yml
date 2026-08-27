@@ -940,6 +940,16 @@ jobs:
           npm run build
           npm run bundle-gate
 
+      # The 1 GB Pages cap is measured HERE and nowhere else, because `build` is
+      # the tree the deploy uploads and it does not exist until the step above
+      # has run. `assemble` can only see the committed payloads, which are a
+      # different tree eighteen times smaller - measuring those was an alarm that
+      # could never fire. Over the alarm point this prints and passes; past the
+      # cap it fails, before the day is pushed rather than at the deploy.
+      - name: Measure the built site against the Pages cap
+        working-directory: frontend
+        run: python -m idhazh site-weight --site-tree build
+
       # The checkout above carries main's tip at TRIGGER time, and this run has
       # been going for two to three hours by now. So the day was just built on a
       # base that old, and the push below is the first thing to find out.
