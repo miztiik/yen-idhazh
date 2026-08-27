@@ -107,6 +107,11 @@ jobs:
       # The oracle for the assist row: delete the whole model directory, build,
       # and the digest must be untouched. If it degrades at all, the feature is
       # on the critical path and the row has failed.
+      #
+      # `build/index` is the other half, and it is why the month index is staged
+      # outside `static/assist/`. Browsing the archive is not a model feature, so
+      # the data the story list fetches has to survive the parking that proves
+      # the model is optional.
       - name: Model-absent gate - the digest does not depend on any of it
         working-directory: frontend
         run: |
@@ -115,6 +120,7 @@ jobs:
           npm run build
           test -s build/archive/index.html
           test ! -d build/assist
+          test -d build/index
           grep -q 'Archive' build/archive/index.html
           mv ../assist-parked static/assist
           echo "the digest renders complete with no model directory."

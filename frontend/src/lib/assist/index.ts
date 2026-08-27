@@ -27,7 +27,7 @@ export async function loadMonth(
 	fetcher: typeof fetch = fetch
 ): Promise<SearchIndexEntry[] | null> {
 	try {
-		const response = await fetcher(`${base}/assist/index/${month}.json`);
+		const response = await fetcher(`${base}/index/${month}.json`);
 		if (!response.ok) {
 			console.warn(`[archive] the stories for ${month} are not available (${response.status})`);
 			return null;

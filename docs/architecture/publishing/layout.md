@@ -126,7 +126,11 @@ The fix is the shape `publish_telemetry` already had: the index root is derived 
 
 ### How it reaches a browser
 
-`frontend/public/` is where `backend/` writes and the site reads **through the filesystem at build time**. Only `frontend/static/` is copied into the served bundle, which is why [../../../frontend/scripts/copy-visuals.mjs](../../../frontend/scripts/copy-visuals.mjs) stages rendered images and the telemetry projection across. The month index now rides that same step: `<YYYY-MM>.json` is copied into `static/assist/index/` before the build.
+`frontend/public/` is where `backend/` writes and the site reads **through the filesystem at build time**. Only `frontend/static/` is copied into the served bundle, which is why [../../../frontend/scripts/copy-visuals.mjs](../../../frontend/scripts/copy-visuals.mjs) stages rendered images and the telemetry projection across. The month index now rides that same step: `<YYYY-MM>.json` is copied into `static/index/` before the build.
+
+**It is staged beside the encoder, never inside it.** `static/assist/` is the on-device encoder and its wasm - authored files, committed, and secondary by contract: the bundle must render complete with that directory deleted ([../../../CLAUDE.md](../../../CLAUDE.md) section 0a), and CI proves it by parking `static/assist`, building, and asserting the bundle carries no `assist/` at all. Browsing the archive is not a model feature. It is how the page lists anything, so the data it needs cannot live in a directory whose whole contract is that it can be removed. The index therefore gets its own top-level tree, the same shape `static/digest/` and `static/telemetry/` already have: one directory per staged projection, ignored by git, rebuilt every build.
+
+**The first placement was inside `static/assist/index/`, and CI caught it the same day.** The staging step ran during `npm run build`, so it recreated `static/assist/` after the gate had parked it, `build/assist` existed, and the gate failed - on a build that had otherwise succeeded. Read as a gate problem it invites an exclusion. It was a path problem: two different things, one directory.
 
 **The sibling `.bin` is not staged.** Nothing fetches a vector yet, and staging it would put megabytes into the bundle for a file no page opens. Whoever makes search read it stages it in the commit that earns it.
 

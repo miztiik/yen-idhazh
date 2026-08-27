@@ -395,11 +395,19 @@ To prove the digest does not depend on it at all:
 ```bash
 mv static/assist ../assist-parked && npm run build
 test ! -d build/assist && grep -q Archive build/archive/index.html
+test -d build/index
 mv ../assist-parked static/assist
 ```
 
 The digest must render complete with the model directory gone. CI runs exactly
 this.
+
+The last line is the other direction, and it is why the archive's month index is
+staged into `static/index/` rather than into `static/assist/index/`. Browsing is
+not a model feature, so the data the story list fetches has to outlive the
+parking that proves the model is optional. A staged tree inside the parked one
+also fails the gate outright: the staging step runs during `npm run build`, so it
+puts `static/assist/` back and `build/assist` reappears.
 
 ## When it goes wrong
 

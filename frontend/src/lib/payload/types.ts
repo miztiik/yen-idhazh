@@ -100,7 +100,9 @@ export interface SearchIndexEntry {
 	vector: number | null;
 }
 
-/** `assist/index/<YYYY-MM>.json` - one month of published stories. */
+/** `frontend/public/assist/index/<YYYY-MM>.json` - one month of published
+ * stories. It is served from `index/<YYYY-MM>.json`, outside the model
+ * directory, because browsing must survive that directory being deleted. */
 export interface SearchIndex {
 	version: string;
 	month: string;
