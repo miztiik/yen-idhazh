@@ -265,9 +265,17 @@ jobs:
         run: pip install -e ".[measure]"
 
       - name: Measure real article lengths
+        env:
+          # Through `env`, not pasted into the command below.
+          CORPUS_LINKS: ${{ inputs.corpus_links }}
         run: |
+          set -euo pipefail
+          if ! [[ "$CORPUS_LINKS" =~ ^[1-9][0-9]{0,4}$ ]]; then
+            echo "corpus_links is how many links to fetch: 1 to 99999" >&2
+            exit 1
+          fi
           python3 backend/utilities/measure_corpus.py \
-            --limit ${{ inputs.corpus_links }} --sleep 1
+            --limit "$CORPUS_LINKS" --sleep 1
 
       - uses: actions/upload-artifact@v7
         with:

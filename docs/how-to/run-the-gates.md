@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -38,7 +38,7 @@ Four extras are declared. Install only what you need:
 
 | Extra | Pulls | When |
 | --- | --- | --- |
-| `dev` | `ruff`, `mypy`, `pytest` | always - this is the gate set |
+| `dev` | `ruff`, `mypy`, `pytest`, `PyYAML`, `shellcheck-py` | always - this is the gate set |
 | `measure` | `feedparser`, `trafilatura` | live source sampling; hits the network |
 | `bench-image` | `torch`, `diffusers` | image-model benchmarking; multi-gigabyte |
 
@@ -47,12 +47,13 @@ either one.
 
 ## The backend gates
 
-Run all four from the repository root. Each must be clean.
+Run all five from the repository root. Each must be clean.
 
 ```powershell
 .\.venv\Scripts\python.exe -m ruff check .
 .\.venv\Scripts\python.exe -m mypy
 .\.venv\Scripts\python.exe -m pytest
+.\.venv\Scripts\shellcheck.exe --severity=style (Get-ChildItem .github/scripts/*.sh).FullName
 .\.venv\Scripts\python.exe -m idhazh.contracts.export
 git diff --exit-code -- schemas/
 ```
@@ -61,6 +62,18 @@ On 2026-08-25 that is 858 tests and 88 files type-checked. The last two lines
 are the contract drift gate: the export regenerates `schemas/` from the Pydantic
 models, and a non-empty diff means a generated artifact was hand-edited or a
 model changed without regenerating ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
+
+**`shellcheck` is the same binary CI runs**, installed by the `dev` extra rather
+than downloaded, so the local gate and the CI gate cannot disagree about a
+version. CI writes the same command with a bare `.github/scripts/*.sh`, because
+bash expands a glob and PowerShell does not - hand shellcheck the literal
+pattern and it reports `openBinaryFile: invalid argument`, which reads like a
+broken install. It prints nothing on a pass, and a silent run is the pass.
+
+It reads files, so it covers `.github/scripts/` and nothing else. The shell
+written inline in a workflow `run:` body is held by the contract tests in
+`backend/tests/test_workflows.py`
+([../reference/github-actions.md](../reference/github-actions.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
 
 **`ruff format` is not a gate.** `ruff format --check .` reports 14 files it
 would rewrite (2026-08-24), all of them pre-existing. Running it across the repo
