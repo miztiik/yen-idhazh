@@ -281,6 +281,20 @@ starting another. What stops is the waiting. **A failed download offers a
 retry**, because one flaky connection may not turn the feature off for the rest
 of a page's life.
 
+**A failure ends the attempt, the same way a stop does.** The library asks for
+the tokenizer and the weights at the same time, and it keeps reporting on the one
+still arriving after the other has already failed. Until 2026-08-27 that late
+report was accepted. It put the block back to `Getting ready to search.` with a
+`Stop` beside it, seconds after the reader had been told the download did not
+finish, and it took the retry away for the rest of the page's life. That is the
+permanent dead end this control exists to remove, arriving by another door. The
+counter that already drops a report landing after a stop now counts a failure as
+an end too. Measured by holding the tokenizer back four seconds against a failing
+weights file: the failure showed at 1.7 s, was overwritten at 4.9 s, and the
+retry never came back. It is a race, so it did not fail every time - it turned
+the browser gate red in three of the four CI runs seen that day, one of them
+`main`'s own commit.
+
 **There is one list, and a search replaces what is in it.** The heading changes
 from `Stories` to `Search results`, the count line changes with it, and
 `Show all stories` gives the browse list back. Two lists side by side would

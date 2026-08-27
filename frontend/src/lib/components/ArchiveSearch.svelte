@@ -94,8 +94,9 @@
 	let indexes = $state<MonthIndex[]>([]);
 	// Not reactive: nothing on screen is a function of the raw vectors.
 	let scope: SearchableMonth[] = [];
-	// Bumped by a stop and by every new search, so a download that lands after a
-	// stop is dropped rather than reviving a state the reader left.
+	// Which download the sentence is allowed to describe. Bumped by a stop, by
+	// every new search, and by a failure, so a file that lands after any of those
+	// is dropped rather than reviving a state the reader was taken out of.
 	let attempt = 0;
 
 	const searchedCount = $derived(
@@ -210,7 +211,15 @@
 			});
 		} catch (error) {
 			console.error('[archive] the search did not run', error);
-			if (mine === attempt) phase = { name: 'failed' };
+			if (mine !== attempt) return;
+			// This attempt is over. Its other files are still arriving - the library
+			// loads the tokenizer and the weights at the same time, and only one of
+			// them failed - and each one still reports its progress. Ending the
+			// attempt here is what stops the next report reviving a download the
+			// reader has already been told did not finish, and taking the retry with
+			// it for the rest of the page's life.
+			attempt += 1;
+			phase = { name: 'failed' };
 		}
 	}
 
