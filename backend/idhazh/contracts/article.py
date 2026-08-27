@@ -49,6 +49,18 @@ class Article(Contract):
     __schema_stem__: ClassVar[str] = "article"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-27",
+            change="failure_code may now carry copied_source or leaked_address.",
+            why=(
+                "Summarize gained two rejects and the failure vocabulary is inlined into "
+                "this schema, so this generated file's bytes move even though no field "
+                "on this payload changed and extract can never write either value. "
+                "Stamped here rather than left to the drift gate to announce (section "
+                "11). Additive - a payload written before today names none of the new "
+                "values and still validates."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-26",
             change="Added source_word_count: the body length before the truncation cap.",
             why=(

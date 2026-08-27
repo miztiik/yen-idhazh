@@ -22,6 +22,8 @@
         "output_truncated",
         "bad_shape",
         "length_out_of_range",
+        "copied_source",
+        "leaked_address",
         "unknown"
       ],
       "title": "FailureCode",
@@ -41,6 +43,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "failure_code may now carry copied_source or leaked_address.",
+      "version": "2026-08-27",
+      "why": "Summarize refuses two more replies: one that copies the source instead of summarizing it, and one that carries an address into our own words. No field on this payload changed, but the failure vocabulary is inlined into this schema, so the generated file's bytes move and the change is stamped here rather than left to the drift gate to announce. Additive - a payload written before today names none of the new values and still validates."
+    },
     {
       "change": "Added prefill_ms, decode_ms and cached_tokens.",
       "version": "2026-08-24T18:30",
@@ -244,7 +251,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-24T18:30",
+      "default": "2026-08-27",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -261,5 +268,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-24T18:30"
+  "version": "2026-08-27"
 }

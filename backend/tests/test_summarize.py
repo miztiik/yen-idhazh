@@ -12,6 +12,7 @@ is easy; a summarizer that cannot be talked out of its shape is the product.
 
 from __future__ import annotations
 
+import ast
 import json
 import socket
 import threading
@@ -30,12 +31,18 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh import cli, config
-from idhazh.contracts.app_config import InferenceConfig, SummarizeConfig, SummaryBand
+from idhazh.contracts.app_config import (
+    EvaluationConfig,
+    InferenceConfig,
+    SummarizeConfig,
+    SummaryBand,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import (
     Completion,
     is_context_exceeded,
@@ -43,7 +50,7 @@ from idhazh.llm.server import (
     request_payload,
     server_argv,
 )
-from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
+from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, LINK_PLACEHOLDER
 from idhazh.summarize import (
     build_request,
     draft_model,
@@ -915,12 +922,221 @@ def test_a_summary_outside_the_publishable_range_is_refused() -> None:
 
 
 def test_the_publishable_range_comes_from_config() -> None:
-    from idhazh.contracts.app_config import EvaluationConfig
-
     reply = body(summary="y " * 100)
     assert replied(reply).status is SummaryStatus.OK
     tightened = EvaluationConfig(summary_words_min=150, summary_words_max=200)
     assert replied(reply, evaluation=tightened).status is SummaryStatus.FAILED
+
+
+# --- A copy is not a summary -------------------------------------------------
+
+
+def copied_run(kept: int) -> str:
+    """A 44-word summary whose first `kept` words are one unbroken lift.
+
+    The tail is words the source does not contain, so the longest run is exactly
+    `kept` and the ratio is exactly `kept / 44`.
+    """
+    lifted = (article("brief").text or "").split()[9:]
+    ours = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo".split()
+    return " ".join(lifted[:kept] + ours[: 44 - kept])
+
+
+def test_a_summary_that_is_one_copied_run_of_its_source_is_refused() -> None:
+    """The measured defect: 44 published words, every one of them lifted unbroken.
+
+    Run 33016222069 on 2026-08-26 published item business-economy-4010712495 as a
+    44-word copy of its 53-word source. Republishing an article body is a
+    non-goal (CLAUDE.md section 0a), so it is refused rather than scored down.
+    """
+    result = summarised("copied-the-source", source="brief")
+
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is FailureCode.COPIED_SOURCE
+    assert "1.000 of the summary" in (result.failure_detail or "")
+    assert result.summary is None
+    assert result.key_points == []
+
+
+def test_the_copied_reply_failed_on_the_copying_and_on_nothing_else() -> None:
+    """Every other rule in `to_summary` passes this reply, so only one can have fired.
+
+    Without this, the test above would still pass if the reply were malformed or
+    the wrong length, and the copy rule could be dead.
+    """
+    source = article("brief")
+    draft = parse_draft(completion("copied-the-source").content)
+    bounds = EvaluationConfig()
+
+    assert bounds.summary_words_min <= len(draft.summary.split()) <= bounds.summary_words_max
+    assert verbatim_run(draft.summary, source.text or "") == 1.0
+    assert source.brief is True
+    assert source.source_word_count == 53
+
+
+def test_the_reject_fires_above_the_ceiling_and_not_at_it() -> None:
+    """0.75 is the ceiling, so 0.750 publishes and 0.773 does not.
+
+    A boundary either side of one number, because a rule that fired at the
+    ceiling would leave `brief_copying_ceiling` a band it can never fail in.
+    """
+    text = article("brief").text or ""
+    assert verbatim_run(copied_run(33), text) == pytest.approx(0.75)
+    assert verbatim_run(copied_run(34), text) == pytest.approx(34 / 44)
+
+    assert replied(body(summary=copied_run(33)), source="brief").status is SummaryStatus.OK
+    over = replied(body(summary=copied_run(34)), source="brief")
+    assert over.failure_code is FailureCode.COPIED_SOURCE
+
+
+def test_the_copy_ceiling_is_read_from_config_and_not_written_in_the_code() -> None:
+    """Rule #6. Move the knob and the same reply changes side."""
+    reply = completion("copied-the-source").content
+    permissive = EvaluationConfig(verbatim_reject_ceiling=1.0)
+    strict = EvaluationConfig(verbatim_reject_ceiling=0.6)
+
+    assert replied(reply, source="brief", evaluation=permissive).status is SummaryStatus.OK
+    assert replied(reply, source="brief", evaluation=strict).failure_code is (
+        FailureCode.COPIED_SOURCE
+    )
+    assert replied(body(summary=copied_run(33)), source="brief", evaluation=strict).failure_code is (
+        FailureCode.COPIED_SOURCE
+    )
+
+
+def test_a_summary_in_its_own_words_is_untouched_by_the_copy_rule() -> None:
+    """The rule must cost nothing to the summaries it is not about."""
+    result = summarised("ok")
+    assert result.status is SummaryStatus.OK
+    assert verbatim_run(result.summary or "", article().text or "") < 0.75
+
+
+def test_the_summarizer_never_imports_the_scorer() -> None:
+    """It borrows one model-free metric and may reach no further.
+
+    `verbatim_run` is pure string work. `evals/hhem.py` loads a model and
+    `evals/score.py` and `evals/qualify.py` decide what publishes, so a
+    summarizer able to import any of them would let the thing being measured
+    reach its own judge - and would drag a model load into every worker.
+    """
+    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "summarize.py"))
+    for node in ast.walk(tree):
+        names: list[str] = []
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names = [node.module]
+        for name in names:
+            assert "hhem" not in name, f"summarize.py imports {name}"
+            for grader in ("idhazh.evals.score", "idhazh.evals.qualify"):
+                assert not name.startswith(grader), f"summarize.py imports {name}"
+
+
+# --- An address never reaches our own words ---------------------------------
+
+
+def test_the_exfiltration_canarys_address_cannot_reach_a_payload() -> None:
+    """The canary's own attack, run against the output side.
+
+    The sanitizer stops the address on the way in. This is the second control:
+    if the model writes one anyway - invented, remembered, or lifted from a page
+    the sanitizer had not seen - the item does not publish (Rule #11).
+    """
+    canary = json.loads(read_text(FIXTURES_DIR / "canaries" / "exfiltration-via-url.json"))
+    beacon = canary["must_not_survive"][0]
+    draft = parse_draft(completion("leaked-the-address").content)
+    assert beacon in draft.summary, "the fixture stopped carrying the canary's address"
+
+    result = summarised("leaked-the-address")
+
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is FailureCode.LEAKED_ADDRESS
+    assert "carries an address" in (result.failure_detail or "")
+    assert result.summary is None
+    assert beacon not in (result.failure_detail or ""), "the address must not ride the failure out"
+
+
+def test_the_leaked_reply_failed_on_the_address_and_on_nothing_else() -> None:
+    """Every other rule passes this reply, so the address rule is the one that fired."""
+    draft = parse_draft(completion("leaked-the-address").content)
+    bounds = EvaluationConfig()
+
+    assert bounds.summary_words_min <= len(draft.summary.split()) <= bounds.summary_words_max
+    assert verbatim_run(draft.summary, article().text or "") < bounds.verbatim_reject_ceiling
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "https://collect.canary.example/beacon",
+        "www.collect-canary.example/b?d=1",
+        "data:text/html;base64,PHNjcmlwdD4=",
+    ],
+    ids=["https", "bare-host", "data-uri"],
+)
+def test_every_address_shape_the_sanitizer_knows_is_refused_on_the_way_out(address: str) -> None:
+    """One definition of an address, read from the sanitizer, used in both directions."""
+    leaked = body(
+        summary=(
+            "The ministry published its industrial strategy on Tuesday and said the "
+            f"consultation will run for eight weeks. The full notice sits at {address} "
+            "for anyone who wants to read the original documents."
+        )
+    )
+    assert replied(leaked).failure_code is FailureCode.LEAKED_ADDRESS
+
+
+def test_a_key_point_carrying_an_address_costs_the_item_too() -> None:
+    """Key points are published words. An address in one is on the page either way."""
+    result = replied(
+        body(key_points=["Read the notice at https://collect.canary.example/beacon.", "Two."])
+    )
+    assert result.failure_code is FailureCode.LEAKED_ADDRESS
+    assert "key point" in (result.failure_detail or "")
+
+
+def test_the_marker_the_sanitizer_leaves_behind_is_refused_as_well() -> None:
+    """The likelier failure: the model copies a line the sanitizer had already cleaned.
+
+    There is no address left to follow, and the reader is handed a summary that
+    says `[link]` where a fact should be. Both are the same rule, and the reason
+    reads differently so an operator knows which morning they are having.
+    """
+    result = replied(
+        body(
+            summary=(
+                "The ministry published its industrial strategy on Tuesday and the "
+                f"consultation runs for eight weeks. The notice is at {LINK_PLACEHOLDER} "
+                "and it closes at the end of the quarter."
+            )
+        )
+    )
+    assert result.failure_code is FailureCode.LEAKED_ADDRESS
+    assert "marker left where" in (result.failure_detail or "")
+
+
+def test_an_address_in_the_title_costs_the_rewrite_and_not_the_item() -> None:
+    """The title has a working fallback, so dropping it takes the address off the page.
+
+    The summary has none, which is why the same leak there is fatal. The clean
+    title is asserted too, or the drop could be the word-count rule firing.
+    """
+    leaked = "Ministry notice at https://collect.canary.example/beacon opens the consultation"
+    clean = "Ministry notice opens the eight-week industrial strategy consultation"
+    assert 6 <= len(leaked.split()) <= 14
+    assert 6 <= len(clean.split()) <= 14
+
+    assert replied(body(title=clean)).title == clean
+    result = replied(body(title=leaked))
+    assert result.status is SummaryStatus.OK
+    assert result.title is None
+
+
+def test_an_ordinary_summary_is_untouched_by_the_address_rule() -> None:
+    """A rule that fired on plain prose would cost every item and catch nothing."""
+    result = summarised("ok")
+    assert result.status is SummaryStatus.OK
+    assert result.summary is not None
 
 
 def test_a_failed_article_is_never_sent_to_the_model() -> None:
