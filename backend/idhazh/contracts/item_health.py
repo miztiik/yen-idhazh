@@ -67,6 +67,8 @@ class FailureCode(StrEnum):
     OUTPUT_TRUNCATED = "output_truncated"
     BAD_SHAPE = "bad_shape"
     LENGTH_OUT_OF_RANGE = "length_out_of_range"
+    COPIED_SOURCE = "copied_source"
+    LEAKED_ADDRESS = "leaked_address"
     UNKNOWN = "unknown"
 
 
@@ -91,6 +93,8 @@ FAILURE_CODE_STAGES: Final[Mapping[FailureCode, frozenset[ItemStage]]] = Mapping
         FailureCode.OUTPUT_TRUNCATED: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.BAD_SHAPE: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.LENGTH_OUT_OF_RANGE: frozenset({ItemStage.SUMMARIZE}),
+        FailureCode.COPIED_SOURCE: frozenset({ItemStage.SUMMARIZE}),
+        FailureCode.LEAKED_ADDRESS: frozenset({ItemStage.SUMMARIZE}),
         FailureCode.UNKNOWN: frozenset(ItemStage),
     }
 )
@@ -110,6 +114,8 @@ SOURCE_NEUTRAL_FAILURE_CODES: Final[frozenset[FailureCode]] = frozenset(
         FailureCode.OUTPUT_TRUNCATED,
         FailureCode.BAD_SHAPE,
         FailureCode.LENGTH_OUT_OF_RANGE,
+        FailureCode.COPIED_SOURCE,
+        FailureCode.LEAKED_ADDRESS,
     }
 )
 
@@ -119,6 +125,22 @@ class ItemHealthRow(Contract):
 
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27",
+            change="Added the copied_source and leaked_address summarize failure codes.",
+            why=(
+                "Two things the project forbids outright had no code to record them. A "
+                "brief published on 2026-08-26 was a 44-word summary of which every word "
+                "was one unbroken copy of its 53-word source, which republishes an "
+                "article body (CLAUDE.md section 0a); and nothing on the output side "
+                "refused an address in our own text, so the sanitizer running before the "
+                "model was the only control on Rule #11. Both codes are source-neutral: "
+                "a copied brief and a leaked address are the model's failures, and "
+                "counting either against the feed would quarantine a wire service for a "
+                "defect we own. Additive and the vocabulary is closed, so a row an "
+                "earlier run wrote still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-25",
             change="Added the context_exceeded summarize failure code.",
