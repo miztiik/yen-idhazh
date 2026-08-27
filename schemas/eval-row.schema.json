@@ -16,6 +16,21 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "hhem_full is now scored against the article before the truncation cap, so hhem_delta and truncation_flagged can be non-zero. No column was added or removed and no row was rewritten.",
+      "version": "2026-08-27T20:30",
+      "why": "dual_score exists to tell a model that invented something from a model that faithfully summarized the half we gave it, and its only production caller handed it the same string twice: extract.truncate_to_tokens returned the cut text and to_article kept only that. Measured over all 2,232 rows written before this, hhem_delta is exactly 0.0 on 2,232 of 2,232 and hhem equals hhem_full on every one. Those rows record two scores of one text, so 'the gap was zero' means 'the gap was never measured' and must not be read as evidence that truncation costs nothing. Recorded only - no band reads either column, so METRICS_VERSION did not move."
+    },
+    {
+      "change": "source_word_count is now Article.source_word_count, the pre-cap count, rather than a recount of whatever text the caller passed as full_text. No column was added or removed and no row was rewritten.",
+      "version": "2026-08-27T20:00",
+      "why": "The pair source_word_count / source_seen_word_count reads as before-truncation and after-truncation and was neither. Both came off the same post-cap string through two different counters - len(_WORD.findall(t)) against len(t.split()) - so the difference between them measured the counters. Measured over all 2,232 rows written before this: they agree on 287, source_word_count is larger on 1,355, and source_seen_word_count is larger on 590, which is impossible if one string is a cut of the other. Read as a truncation signal the pair said 87 percent of items were truncated; counting the rows sitting on the 1,923-word cap says 6.3 percent. Rows written before this stamp carry the old meaning and must not be read as a truncation rate."
+    },
+    {
+      "change": "Added source_digest, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-08-27",
+      "why": "The row named the words that came out and never the text they were scored against. A person re-reading an item to label it by hand had no way to prove the article in front of them was the sanitized, truncated premise the scorer read, so a disagreement between the two measured premise mismatch and not scorer error. Empty on the 2,232 rows that predate it: those runs recorded no premise, and a digest computed today would name text nobody read. Recorded only - no band reads it, so METRICS_VERSION did not move."
+    },
+    {
       "change": "Added self_repetition, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
       "version": "2026-08-26",
       "why": "Every n-gram column here reads the summary against the article. Nothing read the summary against itself, so a summary that says the same clause three times scored clean on all eleven quality columns - greedy decoding has no sampling noise to break a loop, and a repeated sentence is still perfectly supported by the source. Null and not zero on the rows that predate it: zero means measured and not repeating. Recorded only - no band reads it, so METRICS_VERSION did not move."
@@ -122,7 +137,7 @@
       "type": "number"
     },
     "hhem_full": {
-      "description": "Faithfulness against the full article.",
+      "description": "Faithfulness against the article before the truncation cap. Equal to hhem on rows stamped before 2026-08-27T20:30, which scored one text twice.",
       "maximum": 1.0,
       "minimum": 0.0,
       "title": "Hhem Full",
@@ -186,9 +201,23 @@
       "description": "Share of the summary's 4-word windows that repeat one it already used. The only column that reads the summary against ITSELF: every other n-gram column reads it against the article, and a repeated sentence is perfectly supported by the article. Zero means no window repeats. Recorded only, never banded. Null on a row scored before 2026-08-26.",
       "title": "Self Repetition"
     },
+    "source_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The premise the faithfulness scorer read, digested whole: the article text after sanitizing and truncation. Not the fetched page, and not the summary - `output_digest` already names those words. It exists so a person labelling this item by hand can prove they are reading the same text the scorer read; without it a disagreement between them measures a premise mismatch rather than a scorer error. Null on a row scored before 2026-08-27.",
+      "title": "Source Digest"
+    },
     "source_seen_word_count": {
       "default": 0,
-      "description": "What the model actually got, after truncation.",
+      "description": "What the model actually got, after truncation. Counted the same way as source_word_count, so the difference between the two is the cut.",
       "minimum": 0,
       "title": "Source Seen Word Count",
       "type": "integer"
@@ -200,7 +229,7 @@
       "type": "string"
     },
     "source_word_count": {
-      "description": "The full article.",
+      "description": "The article before the truncation cap, counted by Article.source_word_count. Rows stamped before 2026-08-27T20:00 recount the post-cap text instead.",
       "minimum": 0,
       "title": "Source Word Count",
       "type": "integer"
@@ -256,7 +285,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-08-27T20:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -294,5 +323,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-08-27T20:30"
 }

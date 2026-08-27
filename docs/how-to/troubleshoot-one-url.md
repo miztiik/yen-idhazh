@@ -290,6 +290,8 @@ Interpret them in this order:
 | Summary `output_truncated` | The model exhausted the configured output budget before closing its JSON. |
 | Summary `bad_shape` | The constrained reply or reasoning channel violated the summary contract. |
 | Summary `length_out_of_range` | The reply parsed, but its word count missed the configured band. |
+| Summary `copied_source` | The summary's longest unbroken run copied from the source ran past `evaluation.verbatim_reject_ceiling`. Republishing an article body is a non-goal. |
+| Summary `leaked_address` | The summary or a key point carried an address, or the `[link]` placeholder the sanitizer left where the source's address was. The title degrades to the source headline instead. |
 | No eval file | Expected with `--no-faithfulness`; otherwise inspect scorer installation and stderr. |
 
 The fetched article text is deliberately visible in `.article.json` for local
@@ -298,10 +300,11 @@ diagnosis. It stays under gitignored `backend/var/` and must not be committed.
 ## Validate the whole local path
 
 The manual path was exercised on 2026-08-24 with a real BBC URL, the live
-`bbc-tech` source definition and local Qwen3-8B-Q4_K_M on an Intel i7-1265U.
-One observation (`n=1`): fetch 328 ms, extraction 78 ms, summarization 352,921
-ms. These are proof that the procedure reaches every stage, not performance
-baselines.
+`bbc-tech` source definition and local Qwen3-8B-Q4_K_M (retired incumbent,
+historical record) on an Intel i7-1265U. One observation (`n=1`): fetch 328 ms,
+extraction 78 ms, summarization 352,921 ms. These are proof that the procedure
+reaches every stage, not performance baselines, and the configured summarizer
+has never been timed on this path.
 
 ## Clean up
 

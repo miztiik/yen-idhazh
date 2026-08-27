@@ -415,3 +415,45 @@ class TestTheCommittedShard:
             assert [
                 (record.date, record.item_id) for record in committed.entries
             ] == expected
+
+    def test_the_committed_vectors_rebuild_byte_for_byte(self, tmp_path: Path) -> None:
+        """The day payloads are the only store the vectors have, and this proves it.
+
+        Nothing in a browser opens the block. The published day pages dropped it
+        on 2026-08-27 and the staged copy never carries it, so the committed tree
+        under `frontend/public/digest/` is the whole supply and this rebuild is
+        the whole demand.
+
+        **A lost block does not raise.** `build_search_index` writes every entry
+        and a zero-byte vector file, and search then answers nothing for every
+        query with no log line saying why - so a test that checks only that a
+        shard was written cannot see it. The byte count is what sees it.
+
+        The `.bin` is compared byte for byte where the shard above is compared by
+        entry, and the difference is deliberate: the JSON carries a schema
+        version, which a stamp landing after the last publish would move without
+        moving a single story. The `.bin` is vectors and nothing else.
+        """
+        index_root = REPO_ROOT / "frontend" / "public" / "assist" / "index"
+        if not index_root.exists():
+            pytest.skip("no committed index in this checkout")
+
+        days = committed_days()
+        months = sorted({assemble.month_of(payload.date) for payload in days})
+        assert months, "a probe over an empty corpus proves nothing"
+
+        for month in months:
+            path = index_root / f"{month}.bin"
+            assert path.exists(), f"{month} has published days and no committed vector file"
+            committed = path.read_bytes()
+            assemble.rebuild_search_index(
+                digest_root=DIGEST_ROOT, index_root=tmp_path, month=month
+            )
+            rebuilt = (tmp_path / f"{month}.bin").read_bytes()
+
+            assert rebuilt, f"{month}.bin rebuilt empty - the committed days lost their vectors"
+            assert len(rebuilt) % DIMENSIONS == 0
+            assert rebuilt == committed, (
+                f"{month}.bin rebuilds to {len(rebuilt)} bytes against "
+                f"{len(committed)} committed"
+            )

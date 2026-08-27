@@ -21,6 +21,7 @@
   "scored_at": "2026-08-21T18:19:37Z",
   "scorer_version": "hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-1;bands=0.80/0.50",
   "self_repetition": null,
+  "source_digest": null,
   "source_seen_word_count": 1320,
   "source_url": "https://blog.example-lab.org/2026/08/model-release",
   "source_word_count": 1320,

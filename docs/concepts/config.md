@@ -20,9 +20,9 @@ Knobs, by the surface they tune:
 - **Extraction** - the truncation cap, the retry budget, backoff, what counts as an oversized body, shape-signal thresholds, shape enforcement switches, and paywall fallback markers.
 - **Model** - which model reference and quantisation, the context size, thread count, and the sampling parameters that pin determinism.
 - **Summarize** - the length bands, title range, key-point range and quote cap.
-- **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the brief compression ceiling, the word gate, and the spot-check sample size ([evaluation.md](evaluation.md)).
+- **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the brief compression ceiling, the copy reject ceiling, the word gate, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
-- **Retention** - the image age window, the dry-run switch, the deletion fuse, and the published-site alarm point ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
+- **Retention** - the image age window, the dry-run switch, the deletion fuse, and the published-site alarm point ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` is read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller.
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
 - **Logging** - the level, and which events emit ([telemetry.md](telemetry.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
@@ -60,6 +60,23 @@ summary floor is 125 characters. `evaluation.brief_compression_ceiling` is 0.5;
 it caps `verbatim_run` for brief items and derives the floor above.
 `evaluation.lead_coverage_min` is 0.30; a miss below it caps `high` at `medium`.
 That lets a brief stop naturally instead of padding toward the old 40-word gate.
+
+`evaluation.verbatim_reject_ceiling` is 0.75, and it is deliberately a different
+number from `evaluation.brief_compression_ceiling`. The compression ceiling is a
+gate: it reads the scores a run wrote and fails the run when a brief copied too
+much. The reject ceiling is a rule inside the summarize stage: above it the item
+is refused and never scored at all. Give the two one value and the gate has
+nothing left to read, because every item it could have failed was dropped before
+it looked - and a gate that stops failing reads exactly like a pipeline that
+stopped copying. An `EvaluationConfig` validator refuses any reject ceiling at or
+below the gate's, so an operator cannot collapse them by editing one line.
+
+0.75 is a starting point and not a calibrated threshold (Rule #10). It is the
+midpoint of the empty band that eight brief items left on 2026-08-26 (run
+33016222069): seven scored at or below 0.241 and the eighth scored 1.000, so
+every value between those two selects the same single item and nothing in the
+data prefers one over another. The floor is fixed at 0.5 by the validator above.
+Eight items is not a distribution.
 
 Every `min_source_words` in this file - `extract.min_source_words` and each
 `summarize.bands[].min_source_words` - counts the **source body**, before
@@ -198,8 +215,8 @@ away, and the order is the published one.
 
 The `assist` block is on-device search. The runner embeds the day and commits
 the vectors; a reader's tab embeds only the query. The first two knobs say how
-much of an item the encoder is allowed to read, and the third says how much of
-the archive a search reads at all. All three are set from what was measured
+much of an item the encoder is allowed to read, and the last two say how much of
+the archive a search reads at all. All four are set from what was measured
 rather than from taste.
 
 - `assist.max_tokens` (256) is how far into an item's text the encoder reads
@@ -223,15 +240,28 @@ rather than from taste.
   "mostly not in our alphabet", and the corpus says the exact number does not
   matter: 3 of 1889 items score 0.0 and the next lowest scores 0.9975, so every
   threshold between 0.01 and 0.99 picks the same three items.
-- `assist.search_months` (1) is how many month shards a search reads, newest
-  first. The reader waits on the download and never on the arithmetic: a month
-  of vectors is 518 KB on the wire and about 2.1 seconds on a 10 Mbit line at
-  the rate the committed days ran, against 74 to 159 milliseconds of ranking.
-  The fetch is 9 to 30 times the ranking at every scope, so this knob buys
-  download seconds and never compute seconds, and three months is a 14.4 second
-  wait before the first result. One month is the only scope whose first search
-  starts inside about five seconds. Widening it is visible to a reader rather
-  than silent: the page prints the months it searched under the box.
+- `assist.search_months` (1) is how many month shards a search always reads,
+  newest first. The reader waits on the download and never on the arithmetic: one
+  month is a 2.53 MB vector file beside a 518 KB browse index, about 2.1 seconds
+  on a 10 Mbit line at the rate the committed days ran, against 74 to 159
+  milliseconds of ranking. The fetch is 9 to 30 times the ranking at every scope,
+  so this knob buys download seconds and never compute seconds, and three months
+  is a 14.4 second wait before the first result. One month is the only scope
+  whose first search starts inside about five seconds.
+- `assist.search_min_days` (7) is the fewest days of published stories a search
+  tries to reach, and it is what stops a calendar shard being mistaken for a
+  window. On 31 August the newest shard held 31 days; on 1 September it held one,
+  so the same search reached 31 times less for a reason no reader could see, and
+  finding nothing looked exactly like a story we never published. Below this
+  floor a search reads one more shard, and one more only, so the cost is bounded
+  at a single extra fetch. Seven days because a week is already this site's unit
+  for what a reader still has in mind - `ui.read_mark_days` keeps a read mark for
+  seven days and `console.min_window_days` will not draw a narrower window. The
+  extra fetch fires on the first 6 days of a month, 20 percent of them, and only
+  when the shard already being read is small, so the bytes a search moves are
+  levelled across the month rather than doubled. Widening either knob is visible
+  to a reader rather than silent: the page prints the days it searched under the
+  box.
 
 The browser keeps its own copy of the token cap in
 `frontend/src/lib/assist/loader.ts`, because the config reader is server-only and
@@ -305,9 +335,13 @@ Excluding the runner's ceilings is the less obvious half. They look exactly like
 
 **`run.safety_ceiling_per_run` moved from 200 to 160 on 2026-08-26.** A guard is still sized, and this one is sized by the slowest thing that has to finish a full day of it. Two bounds disagreed with 200. An automatic run derives `min(ceil(items / run.shard_size), run.max_parallel)` = four shards, so 200 hands a worker 50 items; against the Qwen3.5-9B candidate that derives to 318 minutes one way and 345 the other, over a 330-minute job timeout that nobody may raise (Rule #2). At 160 the same arithmetic gives 40 items, 254 and 276 minutes, and clears both. The route stage says the same thing from the other side: its measured slow-host capacity is 166 items in a 50-minute budget, so 200 and the router never agreed and 160 does. The largest day ever planned is 149 items, so the move removes nothing a reader has ever had. The lever was the ceiling rather than the timeout, because the timeout is the platform; and rather than the shard count, because `run.max_parallel` is four until the three conditions under [Eight work shards](../reference/measurements.md#eight-work-shards) are met, and `route` is unsharded either way ([../reference/measurements.md](../reference/measurements.md)). Authority: Carmack.
 
-**That paragraph's 9B arithmetic no longer clears the bound, and it was never a measurement.** The `work` job's bound is 150 minutes from 2026-08-27, not 330, so a 40-item 9B worker at 254 or 276 derived minutes does not fit it. A third derivation on the same page, taken from a live production observation rather than from length interpolation, puts the same worker at about 130 minutes and does fit. All three are estimates of a model this project has never run a day on, so none of them may hold a live bound open (Rule #10). The 9B adoption measures its own worst worker and moves `run.shard_timeout_minutes` with that number, in the commit that adopts the model; if that number needs the ceiling to move instead, the ceiling is still the lever.
+**That paragraph's 9B arithmetic no longer clears the bound, and it was never a measurement.** The `work` job's bound is 150 minutes from 2026-08-27, not 330, so a 40-item 9B worker at 254 or 276 derived minutes does not fit it. A third derivation on the same page, taken from a live production observation rather than from length interpolation, puts the same worker at about 130 minutes and does fit. All three are estimates of a model this project has never run a day on, so none of them may hold a live bound open (Rule #10). **The adoption did not settle this.** Qwen3.5-9B-Q4_K_M became the configured summarizer on 2026-08-27 without a production worker ever being measured on it - the 95.2-minute figure the qualification recorded is a replay job under a different bound, not a worker ([../reference/measurements.md](../reference/measurements.md#the-qualification-budget-derived-2026-08-26)). `run.shard_timeout_minutes` therefore still rests on the retired incumbent's worker population. The first scheduled day the configured model runs is what may move it; if that number needs the ceiling to move instead, the ceiling is still the lever.
+
+**That day ran on 2026-08-27, and it left both numbers where they are.** Run `33073809079` is the first scheduled day on Qwen3.5-9B-Q4_K_M: four workers, 40 items each, slowest worker **85.6 minutes** - inside the 83.5-to-94.5 minutes the retired 8B took at the same load, and 1.75x inside the 150-minute bound ([../reference/measurements.md](../reference/measurements.md#the-first-scheduled-day-on-the-configured-model-2026-08-27)). So none of the three estimates was needed and none is vindicated: the measurement is 85.6, the closest estimate said 130, and the other two said 254 and 276. One run does not move a bound either way (Rule #10), and this one gives the next one something to be compared against.
 
 **`run.max_parallel` and the workflow's eight-shard ceiling are different numbers on purpose.** `digest.yml` lets an operator dispatch up to eight workers, and one such run halved the slowest worker. `run.max_parallel` is the most a run derives *for itself*, and it stays at four because no eight-shard day has yet published. The dispatch ceiling is the escape hatch; the config knob is the automatic path a reader depends on, and an unmeasured number may not move that path (Rule #10). Authority: Carmack.
+
+**One dispatch at eight is authorized and has not been fired.** Authority: the owner, 2026-08-27. What blocked the raise was a run that lost its day at the commit step to an asset-name conflict, and that cause is gone - a rendered chart is filed under its item's own id, so two runs cannot pick one path for two stories ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)). What the dispatch now waits on is a baseline: both arms of the recorded 1.92x were measured on the retired 8B, and the configured model has run exactly one scheduled day. Firing after it has run a full day of slots makes the comparison same-model and same-supply instead of a third unpaired one ([../reference/measurements.md](../reference/measurements.md#does-this-move-the-scheduled-default-to-eight)). `run.max_parallel` moves in its own commit, naming the run it rests on, or it does not move.
 
 **The `work` job's bound came down from 330 to `run.shard_timeout_minutes` on 2026-08-27, and the config number did not move.** Neither 330 nor 150 had a recorded basis, so the direction was decided by reading the wall-clock of all 106 `work` jobs the repository has: across 16 full days at four workers the slowest worker of a run took 83.5 to 117.5 minutes, and at today's 40-item ceiling the worst was 94.5. 150 is half again that; 330 was 3.5x it, and more than half the six-hour platform maximum. So the workflow's number was the wrong one and it now reads this one - the same shape `run.route_budget_minutes` has always had, where the number lives in config and the job bound sits above it with the reason written in the workflow. A bound above about 165 minutes could not be honoured in any case: the scheduled runs are four hours apart and share one concurrency group with `cancel-in-progress: false`, so at 330 a single hung worker delayed the next two digests ([../reference/measurements.md](../reference/measurements.md#what-a-work-shard-costs)). Authority: Carmack.
 

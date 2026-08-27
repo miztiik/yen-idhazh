@@ -665,6 +665,28 @@ jobs:
           retention-days: 1
           if-no-files-found: ignore
 
+      # The article and the summary each scored item was judged on, for the
+      # person who labels the faithfulness queue by hand. The committed ledger
+      # keeps digests and no text, and this checkout is deleted when the job
+      # ends, so this artifact is the only copy that survives the run.
+      #
+      # Kept longer than every other artifact here and still not forever.
+      # Labelling sixty rows is an evening of a person's time, not a job step,
+      # so one day is not a window; ninety days would be a promise this project
+      # does not make about somebody else's article body. Fourteen days is a
+      # deadline a labeller can plan around, and it is what bounds the storage
+      # this costs (Rule #2). See
+      # docs/how-to/label-the-faithfulness-queue.md.
+      #
+      # Never committed, and deliberately not named in any commit-and-push.sh
+      # call: an article body is not ours to republish (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: evidence-${{ matrix.shard }}
+          path: backend/var/evidence/${{ needs.plan.outputs.date }}/
+          retention-days: 14
+          if-no-files-found: ignore
+
   # Visual routing runs on the small model, in its own job, because one
   # llama-server serves one set of weights. It is deliberately unable to stop a
   # publication: `continue-on-error` plus assemble's `always()` means a router
@@ -940,6 +962,16 @@ jobs:
           npm run build
           npm run bundle-gate
 
+      # The 1 GB Pages cap is measured HERE and nowhere else, because `build` is
+      # the tree the deploy uploads and it does not exist until the step above
+      # has run. `assemble` can only see the committed payloads, which are a
+      # different tree eighteen times smaller - measuring those was an alarm that
+      # could never fire. Over the alarm point this prints and passes; past the
+      # cap it fails, before the day is pushed rather than at the deploy.
+      - name: Measure the built site against the Pages cap
+        working-directory: frontend
+        run: python -m idhazh site-weight --site-tree build
+
       # The checkout above carries main's tip at TRIGGER time, and this run has
       # been going for two to three hours by now. So the day was just built on a
       # base that old, and the push below is the first thing to find out.
@@ -951,11 +983,11 @@ jobs:
       # directory - the routes artifact unpacked this run's rendered charts into
       # that same directory, and no producer here can make those again.
       #
-      # `RENUMBER_COMMAND` is what keeps those charts from being the thing that
-      # loses the day. Their filenames are numbered from the day's directory, so
-      # a run that pushed while this one worked has already taken the number
-      # this one wrote. Its file is published; this run's is not, so this run's
-      # is the one that moves.
+      # `DROP_RACED_ASSETS_COMMAND` is what keeps those charts from being the
+      # thing that loses the day. A chart is filed under its item's own id, so a
+      # path a run that pushed while this one worked has already taken is that
+      # same item's chart. Its file is published; this run's copy is not, and
+      # the rebuild keeps the published item anyway, so this run's copy goes.
       - name: Commit the day
         env:
           COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
@@ -973,8 +1005,8 @@ jobs:
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest
-          RENUMBER_COMMAND: >-
-            python backend/utilities/renumber_racing_assets.py
+          DROP_RACED_ASSETS_COMMAND: >-
+            python backend/utilities/drop_raced_assets.py
             --date ${{ needs.plan.outputs.date }}
         run: >-
           bash .github/scripts/commit-and-push.sh

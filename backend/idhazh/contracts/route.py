@@ -55,6 +55,25 @@ class Route(Contract):
     __schema_stem__: ClassVar[str] = "route"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-27",
+            change=(
+                "asset_path is now written as digest/<Y>/<M>/<D>/<item_id>.svg. It was "
+                "digest/<Y>/<M>/<D>/<vertical>-<NN>.svg, where NN came from a counter "
+                "seeded by reading the day's directory."
+            ),
+            why=(
+                "A counter has to be seeded from somewhere a run can read, and two runs "
+                "of one day read the same directory before either had pushed. Both wrote "
+                "energy-03.svg for different items and run 32869125768 lost a finished "
+                "day to CONFLICT (add/add). Naming the file after the item makes the "
+                "path a function of the item, so no two runs and no two shards can pick "
+                "one path for two stories, and sharding the route stage stops being "
+                "blocked on it. No migration: the path is stored, not derived, so every "
+                "payload written under the old shape still validates and still resolves "
+                "to the file it names. Both shapes are live in committed data."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-25",
             change="Added drafted_chart, defaulting to false and derived true for a chart.",
             why=(
@@ -104,7 +123,12 @@ class Route(Contract):
     )
     spec_format: SpecFormat | None = None
     asset_path: RelPath | None = Field(
-        default=None, description="Relative POSIX path under frontend/public/, once rendered."
+        default=None,
+        description=(
+            "Relative POSIX path under frontend/public/, once rendered. Written as "
+            "digest/<Y>/<M>/<D>/<item_id>.svg since 2026-08-27; payloads before that "
+            "carry digest/<Y>/<M>/<D>/<vertical>-<NN>.svg and stay valid."
+        ),
     )
     alt_text: UntrustedLine | None = None
     visual_state: VisualState = VisualState.ABSENT

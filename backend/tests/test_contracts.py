@@ -22,9 +22,10 @@ from conftest import (
     SCHEMAS_DIR,
     read_text,
 )
+from pydantic import ValidationError
 
 from idhazh.contracts import canonical_json, derive_url_key
-from idhazh.contracts.app_config import AppConfig, PageWeightConfig
+from idhazh.contracts.app_config import AppConfig, EvaluationConfig, PageWeightConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
@@ -35,6 +36,7 @@ from idhazh.contracts.item_health import (
     SOURCE_NEUTRAL_FAILURE_CODES,
     FailureCode,
     ItemHealthRow,
+    ItemOutcome,
     ItemStage,
 )
 from idhazh.contracts.route import Route
@@ -43,6 +45,7 @@ from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
+from idhazh.fingerprint import text_digest
 
 BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
 CONFIG_FILES: dict[str, type[Contract]] = {
@@ -58,6 +61,19 @@ LONG_HEX = re.compile(r"[0-9a-f]{16,}")
 #: b10598 lists neither `prompt_tokens_cached_total` nor the wording that says
 #: what `prompt_tokens_total` counts, so only the binary's own output settles it.
 METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
+#: The two pages that spell the item-health failure vocabulary out by hand.
+DOC_ITEM_HEALTH = REPO_ROOT / "docs" / "architecture" / "sources" / "item-health.md"
+DOC_ONE_URL = REPO_ROOT / "docs" / "how-to" / "troubleshoot-one-url.md"
+
+
+def backticked(text: str) -> set[str]:
+    return set(re.findall(r"`([a-z_]+)`", text))
+
+
+def paragraph_after(text: str, lead: str) -> str:
+    _, found, rest = text.partition(lead)
+    assert found, f"the page no longer says {lead!r}"
+    return rest.split("\n\n", 2)[1]
 
 
 def fixture_paths() -> list[Path]:
@@ -210,6 +226,28 @@ def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
         AppConfig.model_validate({"console": {"chart_width": 0}})
 
 
+def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
+    """The one edit that would silence a gate instead of tightening it.
+
+    A refused item writes no score, so it leaves the corpus `brief_copying_ceiling`
+    reads. Drop the reject to the gate's own number and every item the gate could
+    have failed is gone before it looks - the gate stops failing, which reads
+    exactly like a pipeline that stopped copying.
+    """
+    gate = EvaluationConfig().brief_compression_ceiling
+    for silenced in (gate, gate / 2):
+        with pytest.raises(ValidationError):
+            EvaluationConfig(verbatim_reject_ceiling=silenced)
+    assert EvaluationConfig(verbatim_reject_ceiling=gate + 0.01).verbatim_reject_ceiling > gate
+
+
+def test_the_committed_reject_ceiling_leaves_the_brief_gate_a_live_band() -> None:
+    """0.75 against a 0.5 gate, so (0.5, 0.75] is a band the gate can still fail in."""
+    evaluation = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).evaluation
+    assert evaluation.verbatim_reject_ceiling == 0.75
+    assert evaluation.brief_compression_ceiling == 0.5
+
+
 def test_the_committed_config_carries_the_capped_routes() -> None:
     """`frontend/scripts/bundle-gate.mjs` reads the file, never the model, and
     the model default is empty - so the committed config is the only place the
@@ -308,6 +346,21 @@ def test_the_eval_ledger_columns_are_defined_once() -> None:
         assert required in columns, "a ledger row must still mean something after a prune"
 
 
+def test_the_recorded_premise_digest_names_the_article_fixture() -> None:
+    """The populated shape, checked against text this repository holds.
+
+    A fixture digest nobody can recompute proves the field parses and nothing
+    else. This one is the digest of `article/ok.json`'s sanitized text, so the
+    fixture also pins the convention: sha256 over the UTF-8 bytes, all 64 hex
+    characters, which is what `text_digest` spells everywhere else.
+    """
+    source = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    scored = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "premise-recorded.json"))
+
+    assert scored.source_digest == text_digest(source.text or "")
+    assert scored.source_digest != scored.output_digest
+
+
 def test_the_item_health_ledger_columns_are_defined_once() -> None:
     assert ItemHealthRow.csv_columns() == (
         "version",
@@ -338,12 +391,49 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
-    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 13
+    assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 15
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.MODEL_UNREACHABLE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.NOT_PROSE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.BOILERPLATE in SOURCE_NEUTRAL_FAILURE_CODES
     assert FailureCode.HTTP_CLIENT_ERROR not in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+@pytest.mark.parametrize(
+    "code", [FailureCode.COPIED_SOURCE, FailureCode.LEAKED_ADDRESS], ids=lambda c: c.value
+)
+def test_a_refused_reply_is_the_models_fault_and_never_the_feeds(code: FailureCode) -> None:
+    """A wire service publishing short briefs must not be quarantined for our model.
+
+    `collect.quarantine_after_failures` is 5, so leaving either code out of the
+    source-neutral set would take a working feed off the list on the fifth copy.
+    """
+    assert FAILURE_CODE_STAGES[code] == frozenset({ItemStage.SUMMARIZE})
+    assert code in SOURCE_NEUTRAL_FAILURE_CODES
+
+
+@pytest.mark.parametrize(
+    "code", [FailureCode.COPIED_SOURCE, FailureCode.LEAKED_ADDRESS], ids=lambda c: c.value
+)
+def test_a_refused_reply_survives_the_ledger_round_trip(code: FailureCode) -> None:
+    """The census row is the only durable record of a dropped item, so it must read back."""
+    published = ItemHealthRow.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json")
+    )
+    row = published.model_copy(
+        update={
+            "stage": ItemStage.SUMMARIZE,
+            "outcome": ItemOutcome.FAILED,
+            "code": code,
+            "summary_words": 44,
+        }
+    )
+
+    restored = ItemHealthRow.from_csv_row(row.csv_row())
+    assert restored.code is code
+    assert restored.summary_words == 44
+    assert restored.counts_against_source is False
+    assert restored == row
 
 
 def test_a_prompt_that_did_not_fit_is_our_budget_and_not_the_sources_fault() -> None:
@@ -379,6 +469,40 @@ def test_item_health_csv_round_trip_uses_empty_cells_for_absent_values() -> None
     assert cells["code"] == ""
     assert cells["http_status"] == ""
     assert ItemHealthRow.from_csv_row(cells) == row
+
+
+def test_the_pages_that_name_the_summarize_codes_still_agree_with_the_enum() -> None:
+    """Two pages enumerate the summarize codes by hand, and neither is generated.
+
+    `copied_source` and `leaked_address` were minted on 2026-08-27 and both pages
+    kept the old list for a day, so each one asserted a vocabulary the code had
+    already outgrown. `unknown` is excluded because it belongs to every stage and
+    `to_summary` never returns it.
+    """
+    summarize_only = {
+        code.value
+        for code, stages in FAILURE_CODE_STAGES.items()
+        if stages == frozenset({ItemStage.SUMMARIZE})
+    }
+
+    tabled = re.findall(r"^\| `summarize` \|(.+)\|$", read_text(DOC_ITEM_HEALTH), re.MULTILINE)
+    assert len(tabled) == 1, "the item-health stage table no longer has one summarize row"
+    assert backticked(tabled[0]) == summarize_only
+
+    listed = re.findall(r"^\| Summary `([a-z_]+)`", read_text(DOC_ONE_URL), re.MULTILINE)
+    assert set(listed) == summarize_only
+    assert len(listed) == len(summarize_only), "the one-URL page lists a code twice"
+
+
+def test_the_item_health_page_splits_the_codes_the_way_the_contract_does() -> None:
+    """The source-neutral split is a promise about which feed gets quarantined."""
+    text = read_text(DOC_ITEM_HEALTH)
+    neutral = {code.value for code in SOURCE_NEUTRAL_FAILURE_CODES}
+
+    assert backticked(paragraph_after(text, "never count against a source:")) == neutral
+    assert backticked(paragraph_after(text, "can count against the source:")) == {
+        code.value for code in FailureCode
+    } - neutral
 
 
 def test_the_runtime_counters_columns_are_defined_once() -> None:

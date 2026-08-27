@@ -1,6 +1,6 @@
 # The summarizer prompt
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 What the Summarize stage asks a model for, and where every number in that ask
 comes from.
@@ -97,6 +97,52 @@ The output shape is enforced by grammar-constrained decoding against a schema
 generated from `SummaryDraft`, not requested in prose. `SummaryDraft` is closed
 to unknown keys, so a planted tool call fails at validation rather than reaching
 a payload.
+
+## The shape is not the whole check
+
+A reply can hold its shape perfectly and still be something we may not publish.
+Those failures are refused in `to_summary` after the reply parses, never asked
+for in the prompt - a prompt is written in the same channel as an attack and
+loses to a better-worded one.
+
+**A copy.** `verbatim_run` measures the longest unbroken stretch our summary
+lifted from the article. Above `evaluation.verbatim_reject_ceiling` the item is
+refused with `copied_source`. Republishing an article body is a non-goal
+(`CLAUDE.md` section 0a), so this is a rule and not a score: the levers that make
+a copy less likely - a longer target, a higher source floor - only change the
+odds, and a non-goal is not a tuning target.
+
+The check reads `article.text`, which is the text the model was shown. For a
+brief that is the whole article. On a truncated item it is less, so a run
+measured here can only under-report the copying, which is the safe direction.
+
+It is a reject and not a retry. Decoding is deterministic (`temperature` is 0.0)
+and run 33016222069 recorded an identical `output_digest` across all three
+repeats of the item that copied, so a second call returns the same words and
+costs a second inference. A retry that changed the ask would be a prompt change,
+and the attempt budget it would need has no home in `config/` (Rule #6).
+
+The reader sees nothing. The item is absent like any other failed item, and
+`state/item-health/` carries the census row that says which code dropped it and
+how many words it had.
+
+**An address.** No published word of ours may carry a URL. Above the fence the
+sanitizer already replaced every address in the source with `[link]`, so a
+summary or a key point holding one is refused with `leaked_address`, and so is
+one still holding the `[link]` marker. `sanitize` owns what an address looks
+like and this reject reads it rather than writing a second pattern, so one pass
+over our own words answers both questions: a marker already there was lifted out
+of the fenced source, and a marker that only appears after the pass was a live
+address.
+
+Two controls, not one. The sanitizer runs before the model on text it has seen;
+this runs after the model on text it wrote. A page can still ask for a beacon,
+and the address now has to survive both.
+
+The title takes the other route. It is the one field with a working fallback -
+the source's own headline - so an address there drops the title and keeps the
+item, the same way a title outside the asked range does. The summary has no
+fallback, which is why the same leak there is fatal.
 
 ## Model compatibility is mechanical
 
@@ -270,8 +316,7 @@ drift.
 
 ## Cost
 
-**Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf`, LF line
-endings. Tokenization is deterministic, so the spread is zero. Recorded in
+**Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), LF line endings. Tokenization is deterministic, so the spread is zero. Recorded in
 [`../../reference/measurements.md`](../../reference/measurements.md).
 
 | Quantity | Value |

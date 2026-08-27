@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { longDate } from '../src/lib/format';
 
 /**
  * Does on-device search actually work, or does it merely run?
@@ -26,6 +27,8 @@ const FIXTURES = resolve(process.cwd(), '..', 'tests', 'fixtures');
 const VECTORS = /\/index\/\d{4}-\d{2}\.bin$/;
 const MONTH = /\/index\/\d{4}-\d{2}\.json$/;
 const WEIGHTS = /\/assist\/models\/.*\.onnx$/;
+/** The other file the encoder needs, which the library asks for at the same time. */
+const TOKENIZER = /\/assist\/models\/.*\/tokenizer\.json$/;
 
 interface Gold {
 	pass_bar: { minimum: number };
@@ -68,6 +71,19 @@ async function answered(page: Page): Promise<void> {
 	await expect(page.locator('[data-search-state]')).toContainText('The download is done', {
 		timeout: 180_000
 	});
+}
+
+/** The newest day the canary build published, read off the day row. */
+async function newestDay(page: Page): Promise<string> {
+	const hrefs = await page
+		.locator('[data-day-row] a')
+		.evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+	const dates = hrefs
+		.map((href) => /(\d{4}-\d{2}-\d{2})/.exec(href)?.[1])
+		.filter((date): date is string => date !== undefined)
+		.sort();
+	if (dates.length === 0) throw new Error(`no dates in the day row: ${hrefs.join(', ')}`);
+	return dates[dates.length - 1]!;
 }
 
 /** The newest month the canary build published, read off the day row. */
@@ -127,16 +143,18 @@ test('the retrieval bar, on hand-labelled queries', async ({ page }) => {
 	expect(recall, `misses:\n${misses.join('\n')}`).toBeGreaterThanOrEqual(gold.pass_bar.minimum);
 });
 
-test('the page says which months it searched, before anything is downloaded', async ({ page }) => {
+test('the page says how far back it searched, before anything is downloaded', async ({ page }) => {
 	// A reader who gets nothing back must be able to tell "never published" from
-	// "not in the months this searched". The scope is a config knob, so the
-	// sentence is the only place a reader can see what it is set to - and it has
-	// to be there before they spend 43 MB finding out.
+	// "outside what this read". The scope is a floor of days filled by whole month
+	// shards, so it has to name days: a month name over a partial month promises
+	// thirty days and holds one, which is the defect this replaced. And it has to
+	// be there before they spend 43 MB finding out.
 	await page.goto('/archive/');
 
-	await expect(page.locator('[data-search-scope]')).toHaveText(
-		/^Searching [A-Z][a-z]+ \d{4}( to [A-Z][a-z]+ \d{4})? - \d+ (story|stories)\./
-	);
+	const scope = page.locator('[data-search-scope]');
+	await expect(scope).toHaveText(/^Searching .+ - \d+ (story|stories)\.$/);
+	// The newest day it can answer for is named in full, never rounded to a month.
+	await expect(scope).toContainText(longDate(await newestDay(page)));
 });
 
 test('a result carries the summary from the day it names', async ({ page }) => {
@@ -157,6 +175,51 @@ test('a result carries the summary from the day it names', async ({ page }) => {
 		/\/\d{4}-\d{2}-\d{2}\/#[a-z0-9-]+$/
 	);
 });
+
+test('a result keeps the way out to the source', async ({ page }) => {
+	// The day a result renders from is a projection now - `copy-visuals.mjs`
+	// stages a named list of fields and drops the rest, which is how the second
+	// copy of every day stopped costing what the day itself costs. A field taken
+	// off that list disappears from every search result at once, renders as a
+	// slightly shorter meta line, and fails nothing.
+	//
+	// `source_url` is the field where that would cost the most. It is the
+	// reader's exit and their only means of checking what we wrote about a story
+	// - the most important thing on a result after the summary. So it gets an
+	// assertion of its own rather than sharing one with the summary above, and it
+	// is checked against the staged file rather than against a shape: the bytes
+	// on disk and the link on screen have to name the same address.
+	await page.goto('/archive/');
+	await ask(page, gold.queries[0]!.query);
+	await answered(page);
+
+	const first = page.locator('[data-story-list="rows"] li').first();
+	const article = first.locator('article');
+	await expect(article).toBeVisible();
+
+	const itemId = await article.getAttribute('id');
+	const back = await first.locator('[data-item-day]').getAttribute('href');
+	const date = /(\d{4})-(\d{2})-(\d{2})/.exec(back ?? '');
+	expect(date, `no date on the result's link back: ${back}`).not.toBeNull();
+
+	const staged = JSON.parse(
+		readFileSync(
+			resolve(process.cwd(), 'static', 'digest', date![1]!, date![2]!, date![3]!, 'digest.json'),
+			'utf8'
+		)
+	) as { items: { item_id: string; source_name: string; source_url: string }[] };
+	const item = staged.items.find((one) => one.item_id === itemId);
+	expect(item, `${itemId} is not in the staged day the result names`).toBeDefined();
+
+	const out = first.getByRole('link', { name: 'Read the original' });
+	await expect(out, 'a search result offers no link to its source').toHaveCount(1);
+	// A dropped field leaves `href` unset rather than wrong, so the attribute is
+	// what bites - the link text survives either way.
+	await expect(out).toHaveAttribute('href', item!.source_url);
+	// Who said it, on the same line. The summary is only worth as much as this.
+	await expect(article, 'the result names no source').toContainText(item!.source_name);
+});
+
 
 test('a search replaces the one story list, and a link gives it back', async ({ page }) => {
 	// One list, not two. Two lists side by side leave a reader working out which
@@ -187,9 +250,10 @@ test('a query with no answer leaves the story list where it was', async ({ page 
 	await ask(page, 'medieval basket weaving techniques of rural Anatolia');
 	await answered(page);
 
-	await expect(page.locator('[data-search-empty]')).toHaveText(
-		/^Nothing in [A-Z][a-z]+ \d{4} is close to that\.$/
-	);
+	const empty = page.locator('[data-search-empty]');
+	await expect(empty).toHaveText(/^No story from .+ is close to that\.$/);
+	// The same days the line under the box named, so a miss is answerable.
+	await expect(empty).toContainText(longDate(await newestDay(page)));
 	await expect(page.locator('h2').first()).toHaveText('Stories');
 	expect(await titles(page)).toEqual(browsed);
 });
@@ -252,16 +316,38 @@ test('a stop leaves the page exactly as it was', async ({ page }) => {
 test('a failed download offers a way to try again', async ({ page }) => {
 	// One flaky connection must not turn the feature off for the rest of the
 	// page's life. This is the dead end that used to be permanent.
+	//
+	// The library asks for the tokenizer and the weights at the same time, so
+	// failing only the weights leaves a file still on its way. Holding that file
+	// back puts it on the far side of the failure, which is the order a loaded
+	// runner reaches on its own: its progress report used to revive the download
+	// the reader had just been told did not finish, and take the retry away with
+	// it for good. Left to chance that order turned this test red in three of the
+	// four CI runs observed on 2026-08-27, `main`'s own commit among them.
 	await page.route(WEIGHTS, (route) => route.fulfill({ status: 500, body: 'no' }));
+	await page.route(TOKENIZER, async (route) => {
+		await new Promise((wake) => setTimeout(wake, 5_000));
+		await route.continue();
+	});
 	await page.goto('/archive/');
 
+	const state = page.locator('[data-search-state]');
 	await ask(page, gold.queries[0]!.query);
-	await expect(page.locator('[data-search-state]')).toContainText(
-		'the download did not finish',
-		{ timeout: 120_000 }
+	await expect(state).toContainText('the download did not finish', { timeout: 120_000 });
+
+	// The held file lands in here, and the failure has to still be what a reader
+	// is looking at once it has.
+	await page.waitForLoadState('networkidle');
+	await expect(state, 'a file arriving late revived the failed download').toContainText(
+		'the download did not finish'
 	);
+	await expect(
+		page.locator('[data-search-retry]'),
+		'the way back went away on its own'
+	).toHaveCount(1);
 
 	await page.unroute(WEIGHTS);
+	await page.unroute(TOKENIZER);
 	await page.locator('[data-search-retry]').click();
 	await expect(page.locator('[data-search-stop]'), 'the retry did not restart it').toBeVisible();
 });

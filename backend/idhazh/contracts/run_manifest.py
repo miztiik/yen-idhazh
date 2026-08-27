@@ -5,9 +5,11 @@ built several times; each run appends a record and never rewrites an earlier
 one. No run identifier appears in a data path or a reader URL - it lives here
 and in the page footer.
 
-`site_bytes` and `site_files` are recorded on every run from the first one, long
-before any retention policy exists. Measuring the ceiling is what makes the
-policy a decision rather than a reaction (Rule #10 applied to storage).
+`site_bytes` and `site_files` are the committed payload tree, recorded on every
+run from the first one. They are **not** the published site and they are not
+what the 1 GB Pages cap is measured against: the site is built after this stage
+runs, and `idhazh site-weight` measures it there. Measured 2026-08-27, the two
+trees differed by eighteen times.
 """
 
 from __future__ import annotations
@@ -135,8 +137,16 @@ class RunRecord(Model):
         description="Recorded, not raised. A gate that fires on a CPU class gets switched off.",
     )
 
-    site_bytes: int = Field(ge=0)
-    site_files: int = Field(ge=0)
+    site_bytes: int = Field(
+        ge=0,
+        description=(
+            "Bytes under frontend/public/digest/ after this run - the committed payload "
+            "tree, not the published site and not what the Pages cap is measured against."
+        ),
+    )
+    site_files: int = Field(
+        ge=0, description="Files under frontend/public/digest/ after this run."
+    )
     config_digests: list[ConfigDigest] = Field(default_factory=list)
     note: str | None = None
 
@@ -155,6 +165,18 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27T11:00",
+            change="site_bytes and site_files now say which tree they measure.",
+            why=(
+                "They always held the committed payload tree, and this document said they "
+                "measured the ceiling. Measured 2026-08-27, that tree was 7,027,075 bytes "
+                "while the published site was 128,064,853 - eighteen times larger. A field "
+                "that reads as the site cap and holds a tree eighteen times smaller is how "
+                "the alarm came to watch the wrong thing. No value changed and no payload "
+                "needs migrating; only the description did."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26T20:00",
             change="The embedded ModelRef gained an optional revision.",

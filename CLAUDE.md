@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -21,8 +21,12 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 - **Republishing article bodies.** The pipeline publishes a link and our own summary. Never the source text.
 - **Paywalled or login-walled sources.** If `robots.txt` or a paywall says no, the answer is no.
 - **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement.
-- **Fine-tuning, GPU runners, and models that do not fit the runner.** See Rule #2.
+- **Training on the runner, GPU runners, and models that do not fit the runner.** See Rule #2. Training a model elsewhere is not a non-goal. The runner only ever opens finished weights and reads bytes, so where those weights were trained does not change what the runner has to do. A fine-tuned model is an ordinary candidate: one entry in `config/idhazh.json`, the same qualification, the same SHA-256.
 - **Accessibility framework / audit tooling** (axe-core, WCAG-level gating, automated contrast checks). Descoped at project level. Basic ARIA and keyboard navigation ARE in scope: visible focus rings, labelled controls, semantic landmarks, keyboard-reachable interactive surfaces. Design-level accessibility is encouraged; merge-gating on audit tooling is not.
+
+### Design rationale
+
+**The fine-tuning clause was narrowed on 2026-08-27 to name what it was actually protecting.** It read "Fine-tuning, GPU runners, and models that do not fit the runner", which any reader took as a ban on using a fine-tuned model at all. That was never the hazard. The hazard is a build step the runner cannot execute: no GPU, 4 vCPU, and a job that stops at 6 hours. Training somewhere else costs the runner nothing, because the runner only opens a finished GGUF and reads bytes. The wide wording made an ordinary model swap look like a rule reversal, and a rule that fires on ordinary work stops being read.
 
 ## 0b. Voice
 

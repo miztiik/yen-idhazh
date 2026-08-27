@@ -4,6 +4,7 @@
     "min_readable_letter_share": 0.5,
     "recall_min": 0.69,
     "result_limit": 10,
+    "search_min_days": 7,
     "search_months": 1,
     "similarity_floor": 0.35
   },
@@ -57,7 +58,8 @@
     "truncation_gap_max": 0.1,
     "validation_articles": 20,
     "validation_drop_max": 0.1,
-    "validation_switch_margin": 0.05
+    "validation_switch_margin": 0.05,
+    "verbatim_reject_ceiling": 0.75
   },
   "extract": {
     "backoff_initial_seconds": 1.0,
@@ -192,7 +194,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-27",
+  "version": "2026-08-27T12:00",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

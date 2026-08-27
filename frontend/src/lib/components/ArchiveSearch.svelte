@@ -41,17 +41,18 @@
 		type CachedEncoder,
 		type EncoderProgress
 	} from '$lib/assist/loader';
-	import { ENCODER_DIMENSIONS } from '$lib/assist/encoder';
 	import { loadIndex, loadVectors } from '$lib/assist/index';
 	import type { MonthIndex } from '$lib/assist/month';
 	import {
+		dayRange,
 		rank,
-		searchable,
+		readScope,
+		searchedDays,
 		type RankOptions,
 		type SearchableMonth,
 		type SearchOutcome
 	} from '$lib/assist/search';
-	import { monthName, plural } from '$lib/format';
+	import { plural } from '$lib/format';
 
 	// Every knob comes from `config/idhazh.json` through the route's load, so
 	// nothing here decides how many months to read, how many results to show, or
@@ -62,7 +63,12 @@
 		onResults
 	}: {
 		months: string[];
-		assist: { similarity_floor: number; result_limit: number; search_months: number };
+		assist: {
+			similarity_floor: number;
+			result_limit: number;
+			search_months: number;
+			search_min_days: number;
+		};
 		/** Hand the page one search, or null to give it its story list back. */
 		onResults: (outcome: SearchOutcome | null) => void;
 	} = $props();
@@ -88,8 +94,9 @@
 	let indexes = $state<MonthIndex[]>([]);
 	// Not reactive: nothing on screen is a function of the raw vectors.
 	let scope: SearchableMonth[] = [];
-	// Bumped by a stop and by every new search, so a download that lands after a
-	// stop is dropped rather than reviving a state the reader left.
+	// Which download the sentence is allowed to describe. Bumped by a stop, by
+	// every new search, and by a failure, so a file that lands after any of those
+	// is dropped rather than reviving a state the reader was taken out of.
 	let attempt = 0;
 
 	const searchedCount = $derived(
@@ -98,20 +105,17 @@
 			0
 		)
 	);
-	// Oldest to newest, because that is the way a range reads out loud.
-	const scopeNames = $derived(indexes.map((index) => monthName(index.month)).reverse());
+	// Days, not month names. The scope is a floor of days filled by whole shards,
+	// so a month name over a partial month would name thirty days and hold one.
+	const days = $derived(searchedDays(indexes));
 	const scopeLabel = $derived(
-		scopeNames.length === 0
-			? ''
-			: scopeNames.length === 1
-				? scopeNames[0]!
-				: `${scopeNames[0]} to ${scopeNames[scopeNames.length - 1]}`
+		days.length === 0 ? '' : dayRange(days[0]!, days[days.length - 1]!)
 	);
 	const scopeSentence = $derived(
 		scopeLabel === ''
 			? ''
 			: `Searching ${scopeLabel} - ${plural(searchedCount, 'story', 'stories')}.` +
-				(indexes.length < months.length ? ' Older months are not searched.' : '')
+				(indexes.length < months.length ? ' Older stories are not searched.' : '')
 	);
 
 	/** Mebibytes to one place, which is the precision a reader can use. */
@@ -145,15 +149,15 @@
 			phase = { name: 'blocked', reason: 'this browser cannot run it' };
 			return;
 		}
-		// The same month files the story list above has already asked for, from
-		// the same cache. Nothing extra moves for a reader who never searches, and
-		// the sentence under the box can still say what a search would cover.
-		const wanted = months.slice(0, Math.max(settings.search_months, 1));
-		const ready: MonthIndex[] = [];
-		for (const month of wanted) {
-			const index = await loadIndex(month);
-			if (index && searchable(index, ENCODER_DIMENSIONS)) ready.push(index);
-		}
+		// The newest month is the one the story list above has already asked for,
+		// from the same cache. A second shard is read only when that one is thin,
+		// which is when it is small, and the sentence under the box can then say how
+		// far back a search would reach before a reader spends anything on it.
+		const ready = await readScope(
+			months,
+			{ months: settings.search_months, minDays: settings.search_min_days },
+			loadIndex
+		);
 		if (ready.length === 0) {
 			phase = { name: 'blocked', reason: 'these stories cannot be searched on this device' };
 			return;
@@ -162,10 +166,11 @@
 		cached = await cachedEncoder();
 	});
 
-	/** Fetch this month's vectors, before the encoder and not after it.
+	/** Fetch the vectors of every month in scope, before the encoder and not after.
 	 *
-	 * 518 KB against 43 MB. A reader the big download cannot help is not asked
-	 * to spend it, which is the same rule the encoder-identity check follows.
+	 * 2.53 MB a month against 43 MB, measured 2026-08-26 at the rate the committed
+	 * days ran. A reader the big download cannot help is not asked to spend it,
+	 * which is the same rule the encoder-identity check follows.
 	 */
 	async function readVectors(): Promise<boolean> {
 		if (scope.length > 0) return true;
@@ -206,7 +211,15 @@
 			});
 		} catch (error) {
 			console.error('[archive] the search did not run', error);
-			if (mine === attempt) phase = { name: 'failed' };
+			if (mine !== attempt) return;
+			// This attempt is over. Its other files are still arriving - the library
+			// loads the tokenizer and the weights at the same time, and only one of
+			// them failed - and each one still reports its progress. Ending the
+			// attempt here is what stops the next report reviving a download the
+			// reader has already been told did not finish, and taking the retry with
+			// it for the rest of the page's life.
+			attempt += 1;
+			phase = { name: 'failed' };
 		}
 	}
 

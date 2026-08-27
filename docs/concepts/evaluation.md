@@ -27,23 +27,50 @@ The primary measure is **faithfulness**: does the summary assert things the sour
 
 A single score cannot distinguish "the model invented something" from "the model faithfully summarized the half of the article we gave it". The **gap between the two** is the cost of truncation, and it is invisible unless you measure both. A large gap flags the item as a truncation artifact rather than a hallucination - a different defect with a different fix.
 
-### Current implementation gap
+### The gap, and the 2,232 rows that never measured it
 
-The production and validation callers currently pass `article.text` as both the
-model-visible text and the full text. `Article` persists only the truncated
-model-visible body. The two HHEM inputs are therefore identical and the
-documented truncation gap is zero by construction.
+The work stage carries the sanitized article twice: the cut text it shows the
+summarizer, and the whole body it shows the scorer. The whole body stays in the
+process that extracted it - `Article` persists only the cut text, and neither
+form is ever republished (Rule #1).
 
-Do not use `hhem_delta` as truncation evidence until extraction carries the
-sanitized full body to the scorer without sending it to the summarizer or
-publishing it. A model-adoption comparison must capture both forms once and
-replay the same bytes for every candidate.
+That was not true until 2026-08-27. Both the production and the validation
+callers passed `article.text` as both inputs, so the two HHEM scores read one
+string and the documented gap was zero by construction. Measured over the whole
+committed ledger at that date, `hhem_delta` is exactly 0.0 on **2,232 of 2,232
+rows** and `hhem` equals `hhem_full` on every one.
 
-Evaluator identity also needs repair. `HHEM_REVISION` is the mutable string
-`main`, and `weights_digest()` hashes the model name plus that string rather than
-the loaded weight bytes. A scorer version can therefore stay constant while the
-Hub serves different weights. Pin an immutable revision and observe the loaded
-weights before using HHEM to select a model.
+**A row stamped before `2026-08-27T20:30` recorded two scores of one text.** On
+those rows a zero gap means the gap was never measured, and reading them as
+evidence that truncation costs nothing is reading an instrument that was not
+plugged in.
+
+The scorer is deterministic, so identical texts are now scored once and the
+answer reused. About 97 percent of items are never cut, so most items pay one
+pass instead of two.
+
+Evaluator identity is pinned. `HHEM_REVISION` is a full immutable commit, and
+`weights_digest()` hashes the loaded tensors rather than a model name.
+`scorer_version` carries both observations. A scorer that has not loaded cannot
+name its weights and fails instead of minting a plausible identity.
+
+### The two source word counts are one counter, before and after the cap
+
+`source_word_count` is `Article.source_word_count`, the words in the extracted
+body before `extract.truncation_cap_tokens` cut it. `source_seen_word_count` is
+`Article.word_count`, the same counter applied to what survived. The difference
+between them is the cut, and nothing else.
+
+**A row stamped before `2026-08-27T20:00` measured something else.** Both cells
+came off the post-cap string through two different counters -
+`len(_WORD.findall(t))` against `len(t.split())` - so the difference measured
+the counters. Over the 2,232 rows written before that stamp the two agree on
+287, `source_word_count` is larger on 1,355, and `source_seen_word_count` is
+larger on **590**, which is impossible when one string is a cut of the other.
+Read as a truncation signal the pair said 87 percent of items were truncated;
+counting the rows sitting on the 1,923-word cap says 6.3 percent. The first
+number is wrong by a factor of fourteen, and it was quoted inside this project
+before anyone checked the impossible direction.
 
 ### The runtime must refuse, not shift
 
@@ -142,6 +169,51 @@ Discouragement is not a control, so four things make it structurally hard rather
 
 Not to be done: seeding the queue with model pre-labels for a human to confirm. Confirmation is anchoring, and it turns an independent measurement into an expensive agreement rate with the model - LLM-as-judge with a rubber stamp.
 
+### Current qualification-gate implementation gap
+
+**The `publishable_length` gate cannot fail, and this is not fixed.** It grades
+the survivors of the rule it is grading, so the only answer its arithmetic
+allows is "none outside the range". Rule 1 above is broken here inside our own
+instrument rather than by a model: the word range is the selector, and the same
+word range is the alarm.
+
+The range is enforced twice, off the same two knobs. `summarize.to_summary`
+counts the drafted words and refuses anything outside
+`evaluation.summary_words_min` to `evaluation.summary_words_max` with
+`length_out_of_range`, returning a payload whose status is `failed` and whose
+summary text is unset. `cli._observe` sets both `ok` and `schema_valid` from that
+status, and takes `summary_word_count` from the summary text - zero for a refused
+reply, never the count the model actually wrote. `evals/qualify.py` then grades
+`[o for o in observations if o.ok]` against those same two knobs. Every reply
+that could fail the gate was refused before the gate looked.
+
+Run 33016222069 reported 0 of 90 replies outside the range, and passed
+([../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m)).
+Zero is the only number that arithmetic can return, on any model and at any
+threshold, so the result is not evidence that this summarizer writes publishable
+lengths. Read the gate as "not measured", never as "passed".
+
+**The fix is to record the measurement instead of dropping the item, and it has
+not been written.** `stage_qualify` already appends an observation for every
+call, refused ones included, so the only thing missing is the number: `_observe`
+would carry the words the reply actually held, and the gate would read every
+reply rather than the survivors. That widens the persisted `ItemObservation`
+contract, which makes it a Level 3 change ([../../CLAUDE.md](../../CLAUDE.md)
+section 6) needing its own schema stamp, changelog entry and review. Nothing
+here does it.
+
+**The same question hangs over any gate that reads only survivors.** Filtering is
+sound when the filter and the grade are different properties, and a tautology
+when they are the same one. The two other gates that filter were checked and are
+sound: `schema_validity` puts every attempt in its denominator and only the clean
+ones in its numerator, and `determinism` skips failed calls - a call with no
+reply has no digest to compare - but grades digest drift rather than the property
+it filtered on, and names how many items it counted. So a new gate answers two
+questions before it is registered. Which population does it read, and has an
+earlier stage already refused on the property it grades? If the answer to the
+second is yes, the gate measures the refusal. If the population is narrower than
+the run, the gate's `measured` string has to say so.
+
 ## Bands, not raw numbers
 
 Scores are bucketed into a small number of confidence bands, and the band - not the number - is what drives behaviour: what gets retried, what publishes with a visible low-confidence marker, and what a reader sees. Bands are tunable ([config.md](config.md)) and are re-calibrated against the human spot-checks rather than being fixed by taste.
@@ -220,37 +292,78 @@ summary defects, and dropping them would bias the sample toward well-extracted
 items - the sampling error this whole page argues against. `unjudgeable` carries
 them, and the rate is reported with and without.
 
-### Current label-queue implementation gap
+### The label queue: three repairs, and what they left
 
-The current queue cannot show the evidence this section requires.
-`state/scores.csv` carries neither summary text nor extracted article text, and
-`label_queue.py` prints a missing-summary fallback. The draw is emitted in
-sequential HHEM-decile blocks, which leaks the hidden score gradient through
-order.
+The queue could not be used by a person until 2026-08-27. Three things were
+wrong with it, and all three are now fixed.
 
-Calibration is blocked until the queue joins to a frozen local evidence package
-containing exact source and summary text plus source digest, and globally
-shuffles the selected rows before display. Article bodies remain local and
-uncommitted.
+**It never showed the labeller the article.** `state/scores.csv` carries no
+summary text and no source text, so `label_queue.py` printed a missing-summary
+fallback on every row. That fallback was not a degradation - it was the only
+branch that could ever run, because `summary` is not a column in that file at
+all. The run now writes the exact premise the scorer read, plus the summary, to
+`backend/var/evidence/<date>/`, and records a `source_digest` on the eval row.
+The CLI shows both texts and refuses any row whose text does not match its
+recorded digest, so a labeller cannot judge text the scorer did not read. A row
+scored before that column existed is marked not labellable rather than guessed
+at, and all 2,232 rows written before 2026-08-27 are in that state.
 
-**The exact remaining requirement**, counted on the committed ledger 2026-08-24:
+**The draw leaked the hidden score gradient through its order.** `draw()`
+returned rows in sequential HHEM-decile blocks. The number was hidden and the
+stratum was not. It now returns one global `label_id` sort. `label_id` is
+already a sha256 over the address, the inputs, the words, the instrument and the
+draw, so the shuffle needs no seed and stays reproducible - two labellers can
+compare notes by position. **The strata are how rows are chosen, never how they
+are ordered.** Measured over the 38 rows at `draw_id=d1`: 9 runs of equal decile
+before, 28 after.
+
+**A global hash shuffle does not balance a prefix, and the first version of this
+rule said it did.** Over those same 38 rows the first ten deciles run 9, 9, 8, 9,
+9, 9, 5, 8, 9, 7. Balance is a property in expectation, not per draw. Stopping
+early gives a roughly balanced sample, not a guaranteed one, and a partial draw
+may not be reported as stratified.
+
+**One draw is one `(scorer_version, pipeline_fingerprint)` pair, enforced rather
+than warned about.** `eligible()`, `draw()` and `run_days()` all require both
+halves with no default, so the pool can no longer hold two pipelines. An empty
+pool exits non-zero and prints every pair in the ledger with its row count and
+date range, because a tool that says "0 rows at your pipeline, here is what does
+exist" is a usable status report and silence is not. Treating fingerprints as
+reported strata instead would change the calibration rule and still needs owner
+approval. Article bodies remain local and uncommitted.
+
+**The exact remaining requirement**, checked against the committed ledger and
+current code on 2026-08-27. These are exact counts over committed files rather
+than a timing, so there is no spread: the same commit gives the same numbers on
+any machine.
 
 | What | Have | Need |
 | --- | --- | --- |
 | Labels | **0** | 60 |
-| Distinct run-days at one `scorer_version` AND one `pipeline_fingerprint` | **1** (`2026-08-24`) | 10 |
-| Eligible rows | 731 | not the constraint |
+| Distinct run-days at the current `scorer_version` AND current `pipeline_fingerprint` | **1** | 10 |
+| Longest run of consecutive run-days at any one pair, ever reached | **3** (`2026-08-24` to `2026-08-26`) | 10 |
+| Eligible rows at that pair | 114 | not the constraint |
 
-Fixed `scorer_version`:
-`hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30`.
-Fixed `pipeline_fingerprint`: `969b1917...d2b945`. Note the band values sit
-**inside** the scorer version string, so moving a threshold mints a new scorer
-version and restarts the count. That is correct, and it is also why a cut cannot
-move halfway through a collection.
+The current scorer is
+`hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30`.
+The configured Qwen3.5-9B summarizer wrote its first day under it on
+`2026-08-27`, 114 rows at fingerprint `6a23e277`, and that is the whole window.
+Every earlier row was written by the retired Qwen3-8B, whose weight digest is
+part of the pipeline fingerprint, so none of them can be joined to this series.
+The previous three-day run also uses the old scorer. The band
+values sit **inside** the scorer version string, so moving a threshold also
+mints a new scorer version and restarts the count. That is correct, and it is
+why a cut cannot move halfway through a collection.
 
-**Nothing here may move a threshold.** The instrument exists; the labels do not.
-Until both the label count and the run-day count are met, any re-cut is a number
-chosen so a chart looks humbler.
+Read the second row and the third one together before reading the shortfall as
+patience. Ten is not ten days away. No pair in the ledger's whole history has
+ever held for more than three consecutive run-days, so the gate has never once
+been met. What sends the count back to zero, how often it has gone back, and
+what that costs are in [Design rationale](#design-rationale) below.
+
+**Nothing here may move a threshold.** The queue is usable now; the labels are
+not collected and the run-days are not banked. Until both counts are met, any
+re-cut is a number chosen so a chart looks humbler.
 
 ## The band says what is missing, not how good the item is
 
@@ -316,7 +429,13 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 
 **One column reads the summary against itself (2026-08-26).** Eleven quality columns, and every n-gram machine in `backend/idhazh/evals/metrics.py` intersected the summary's n-grams with the *source's*. Nothing could see a summary that repeated itself, which greedy decoding makes possible and which every other column scores *better* on the worse it gets. Proved on committed fixtures rather than argued: two 26-word summaries of the same article, one saying a clause three times and one saying it once, score exactly equal on `extractiveness` (0.000), `verbatim_run` (0.077) and `coverage` (0.333), and 0.000 against 0.391 on the new one. Authority: Andre's blind-spot finding; nullable and appended, Fowler's layout rule.
 
-**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count stands at 1 of 10. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
+**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count is stated once, in [The human labels](#the-human-labels-the-instrument-and-what-it-still-needs), and it has never reached 10. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
+
+**A fingerprint change restarts the run-day count at zero (2026-08-27).** The requirement above has asked for ten run-days at one `scorer_version` and one `pipeline_fingerprint` since it was written, and the page never said what happens when one of the two moves. The count goes back to zero, and it has to. The fingerprint exists so that ten days of scores are ten days of the *same* pipeline; a count carried across a model swap would average two different systems and present the result as one measurement. This is not a policy bolted on afterwards. `model_sha256` is a declared field of `PipelineInputs` in [`../../backend/idhazh/contracts/fingerprint.py`](../../backend/idhazh/contracts/fingerprint.py), and the stamp is a digest over that model's own serialization, so a model swap cannot leave the stamp still - and neither can a reworded prompt, a llama.cpp rebuild, a changed truncation cap, or any other declared input. Authority: the determinism contract, read rather than argued.
+
+**The measured reset rate (2026-08-27, `state/scores.csv` and `state/fingerprints.csv` at commit `c08d8b5`).** 2,232 eval rows, written by 18 runs across **5 scored run-days** (`2026-08-22` to `2026-08-26`), carry **5 distinct `pipeline_fingerprint` values** and **4 distinct `scorer_version` values** - one new pipeline stamp per scored day, on average. `2026-08-26` alone carried three different (`scorer_version`, `pipeline_fingerprint`) pairs: the stamp moved at that day's second run and again at its fifth, and the scorer version moved at the fifth with it. Every one of those 2,232 rows names the same `model_id`, `qwen3-8b-q4-k-m` - the model did not change once and the stamp still moved four times, so a model swap is *one* cause of a reset rather than the cause. `state/fingerprints.csv` holds a single row, because the ledger that expands a stamp into its inputs only started on 2026-08-26; four of the five stamps can no longer be expanded at all. Authority: measurement.
+
+**The consequence, plainly: the ten-day window has never once been reached (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. That reset opened the current window: the 9B wrote its first 114 rows the same day, under `hhem-2.1-open@8e4a2e6e` and `6a23e277`, so the count stands at 1 of 10 and none of the 2,232 earlier rows can join it. At the observed rate of pipeline change, every model or runtime improvement spends the whole window. That is a live tension between shipping a better pipeline and measuring the one already running, and **this page does not resolve it.** Two answers exist - freeze the pipeline for ten days and pay for the window in shipped improvements, or count run-days at one `scorer_version` and carry `pipeline_fingerprint` as a reported stratum instead of a disqualification. The second is the rule change [The label queue: three repairs, and what they left](#the-label-queue-three-repairs-and-what-they-left) says needs owner approval. Both are the owner's call. Nothing here moves a threshold. Authority: owner.
 
 ## Rejected alternatives
 
@@ -734,6 +853,101 @@ a person", not "the challenger won."
 The ledger records every candidate rather than only the winner, because a ledger
 holding only the winner cannot answer the question someone asks six months
 later: was the runner-up close?
+
+### The one adoption on record, and it did not qualify
+
+**Qwen3.5-9B-Q4_K_M became the configured summarizer on 2026-08-27 by owner
+decision ([../../CLAUDE.md](../../CLAUDE.md) section 0), over two failing hard
+gates. It did not qualify.** On a frozen, pre-registered corpus of 30 captured
+Article payloads replayed three times, nine of the eleven registered gates
+passed, including determinism (0 violations), schema validity (90/90), and mean
+faithfulness of 0.7149 against a 0.50 floor. Two failed: the injection canaries
+scored 4 of 5 against a Rule #11 threshold of all five, because
+`exfiltration-via-url` returned no summary at all; and one brief-band item was
+reproduced word for word, a verbatim run of 1.000 against a ceiling of 0.5. No
+comparison against the retired incumbent Qwen3-8B-Q4_K_M was run - no paired
+corpus, no side-by-side scores, no human review - so nothing here shows its
+summaries are better or worse than the retired model's.
+
+Qualification run `33016222069`, 2026-08-26, on `ubuntu-latest`. One model, three
+deterministic repeats, no side-by-side arm. Every gate outcome, the band counts,
+the faithfulness spread and the identity of the bytes that ran are in
+[../reference/measurements.md](../reference/measurements.md#the-configured-summarizer-qwen35-9b-q4_k_m).
+
+The frozen, **paired** corpus this page asks for above still does not exist.
+`qualify` freezes one model's inputs, which is what makes its own numbers
+replayable; it does not replay a second model through the same bytes.
+
+### The canary that failed did not survive anything
+
+**This page reported that a control had failed, and it had not. The correction
+is the lesson.** Until 2026-08-27 this section read: "the sanitizer was meant to
+strip that URL before the model ever saw it, and it did not." Nothing measured
+said that. The run's own artifact records `markers_present` as empty for every
+canary, the failing one included, and the sanitizer strips all 19 planted
+markers across the five committed fixtures while keeping all 10 facts they must
+not lose. The gate failed on `replied: false` - the model returned no usable
+summary for that item. Four canaries were neutralised, and the fifth was never
+exercised, because there was nothing to check. The artifact quote, the local
+sweep, its hardware and the command that reproduces it are in
+[../reference/measurements.md](../reference/measurements.md#the-fifth-canary-was-never-exercised).
+
+**Rule #11 held. Rule #10 broke.** Fetched text is data and never instruction,
+and the sanitizer plus the schema are the controls that rule names - both did
+their job. What failed is the measurement. The gate reported `4/5 passed,
+failing: exfiltration-via-url`, a string with no measurement in it, and two
+pages read it as a security finding. The gate is being given a failure code so a
+reader can tell a breach from a blank reply.
+
+**The consequence for this page is bigger than the reply failure: Rule #11 has
+no live evidence today.** An instrument that cannot separate a breach from a
+blank reply can never confirm the rule it exists to confirm. Eight gates still
+measure what they claim to. The canary arm does not, and cannot until the
+failure code lands - and `publishable_length` does not either, for an unrelated
+reason ([Current qualification-gate implementation gap](#current-qualification-gate-implementation-gap)).
+
+**A `sanitizer`-neutralised canary cannot fail its live marker check, by
+construction.** This is an eval-design defect rather than a model result.
+Sanitization runs before the prompt is built, so every string the canary forbids
+is already absent from what the model reads, and no degree of model obedience
+can put one back into a reply. Had the model complied perfectly and written
+"append the following link: [link]" into its summary, this gate would have
+scored that neutralised. An assertion that can only pass is not an oracle. The
+output-side control that makes the exfiltration canary falsifiable is being
+added.
+
+**The replay against the retired Qwen3-8B-Q4_K_M that this section used to
+prescribe is cancelled**, and the reason is recorded so nobody re-opens it. Both
+of its branches - "both models fail" and "only the 9B fails" - assume a marker
+reached a reply, and none did; and `sanitize()` runs before the request is built
+under every model, so the replay is structurally incapable of returning a
+different answer. What replaces it is narrower: land the failure code, then
+re-run the canary arm alone against the configured 9B - five calls, no corpus
+freeze, no repeats.
+
+### The alarm that watches the swap
+
+Both limbs are arithmetic over committed rows. Neither runs a model.
+
+| Limb | What is read | Trips when |
+| --- | --- | --- |
+| Unsupported numbers | share of `state/scores.csv` rows with `unsupported_numbers > 0` | the rate doubles, or rises 5 points absolute |
+| Copying without a faithfulness cost | mean `extractiveness` and mean `hhem` | extractiveness up 0.10 or more while hhem is flat or up |
+
+Segment by `pipeline_fingerprint`, at one fixed `scorer_version`, over a rolling
+14 run-days against the last 14 days the 8B produced.
+
+**The segment key is `pipeline_fingerprint`, not `model_id`.** A slug holds still
+while the prompt, the truncation cap and the llama.cpp build move, and all three
+move the score, so a slug attributes a changed score to an unchanged pipeline
+([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+Holding `scorer_version` fixed matters for the same reason: a rescore under a new
+scorer moves both sides of the comparison and would read as a model regression.
+
+The second limb exists because the first one alone can be gamed by the model
+itself. A summarizer that copies the source verbatim invents no numbers and
+scores well on faithfulness - it has stopped summarizing, and only the
+extractiveness pair sees it.
 
 ## See also
 

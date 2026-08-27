@@ -51,7 +51,13 @@ from idhazh import (
     tag,
     telemetry,
 )
-from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, RunConfig
+from idhazh.contracts.app_config import (
+    EvaluationConfig,
+    ExtractConfig,
+    InferenceConfig,
+    RetentionConfig,
+    RunConfig,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
@@ -85,13 +91,14 @@ from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
-from idhazh.evals import golden, metrics, qualify, score, validation, writer
+from idhazh.evals import evidence, golden, metrics, qualify, score, validation, writer
 from idhazh.evals.hhem import (
     HHEM_REVISION,
     HHEM_SCORER_ID,
     HhemScorer,
     dual_score,
     is_pinned,
+    score_over_chunks,
     weights_digest,
 )
 from idhazh.fingerprint import (
@@ -108,13 +115,16 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post, props
-from idhazh.render import asset_relpath, highest_ordinal, render_route
+from idhazh.render import asset_relpath, render_route
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 LOG: Final = logging.getLogger("idhazh")
 VAR_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "run"
 VALIDATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "validation"
 QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualification"
+#: A sibling of `VAR_ROOT` rather than a child, because the run never reads it
+#: back and no downstream job downloads it. A test redirects it the same way.
+EVIDENCE_ROOT: Final = config.REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
 #: The planted attacks, run live against a candidate before it is adopted.
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
@@ -138,6 +148,10 @@ def _index_root() -> Path:
 
 def _run_dir(date: str) -> Path:
     return VAR_ROOT / date
+
+
+def _evidence_dir(date: str) -> Path:
+    return EVIDENCE_ROOT / date
 
 
 def _today() -> str:
@@ -495,6 +509,7 @@ def shard_of(plan: RunPlan, *, shard: int, shards: int) -> list[PlannedItem]:
 class _FetchedWorkItem(NamedTuple):
     item: PlannedItem
     article: Article
+    source_text: str
     fetch_ms: int
     extract_ms: int
     started: float
@@ -555,7 +570,7 @@ def stage_work(
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
         started = time.monotonic()
-        article, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
+        article, source_text, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
@@ -564,6 +579,7 @@ def stage_work(
             _FetchedWorkItem(
                 item=item,
                 article=article,
+                source_text=source_text,
                 fetch_ms=fetch_ms,
                 extract_ms=extract_ms,
                 started=started,
@@ -592,11 +608,14 @@ def stage_work(
             continue
 
         seen = article.text or ""
+        # The article before the cap, so hhem_full answers a different question
+        # from hhem. Falls back to the cut text when nothing was cut away.
+        whole = work.source_text or seen
         score_started = time.monotonic()
         hhem, hhem_full = dual_score(
             scorer,  # type: ignore[arg-type]
             seen_text=seen,
-            full_text=seen,
+            full_text=whole,
             summary=summary.summary or "",
         )
         score_ms = int((time.monotonic() - score_started) * 1000)
@@ -604,7 +623,8 @@ def stage_work(
             item=item,
             article=article,
             summary=summary,
-            full_text=seen,
+            full_text=whole,
+            premise=seen,
             hhem=hhem,
             hhem_full=hhem_full,
             config=settings.app.evaluation,
@@ -615,6 +635,7 @@ def stage_work(
         )
         row = row.model_copy(update={"score_ms": score_ms})
         assemble.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
+        _write_evidence(row, premise=seen, summary=summary.summary or "")
         LOG.info(
             "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
             item.item_id,
@@ -624,6 +645,20 @@ def stage_work(
             summarize_ms,
             score_ms,
         )
+
+
+def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:
+    """Leave the two texts this row was judged on where a person can read them.
+
+    Outside `items/` on purpose. That directory is downloaded whole by route and
+    by assemble and kept for a day; this one is read by nobody in the run, is
+    never committed, and needs to outlive the day so a labeller has time to work
+    (`docs/how-to/label-the-faithfulness-queue.md`).
+    """
+    item = evidence.of(row, premise=premise, summary=summary)
+    path = evidence.path_for(_evidence_dir(row.date), item)
+    assemble.write_atomic(path, item.to_json())
+    return path
 
 
 def _write_stamp(items_dir: Path, *, inputs: PipelineInputs, run_id: str) -> FingerprintRow:
@@ -659,22 +694,24 @@ def _stamps(items_dir: Path) -> list[FingerprintRow]:
 
 def _fetch_one(
     item: PlannedItem, settings: config.Settings, read_url: Fetcher
-) -> tuple[Article, int, int]:
-    """The article plus how long the network and the extractor each took.
+) -> tuple[Article, str, int, int]:
+    """The article, the body it was cut from, and how long each step took.
 
-    Separated because a slow item is either a slow host or a slow extractor, and
-    only one of those is ours to fix.
+    The timings are separated because a slow item is either a slow host or a
+    slow extractor, and only one of those is ours to fix. The untruncated body
+    travels beside the payload rather than inside it: the scorer needs it, and
+    nothing persists it (Rule #1).
     """
     started = time.monotonic()
     result = read_url(item.canonical_url)
     fetch_ms = int((time.monotonic() - started) * 1000)
 
     started = time.monotonic()
-    article = extract.to_article(
+    article, source_text = extract.to_article_with_source(
         item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
     )
     article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)
-    return article, fetch_ms, int((time.monotonic() - started) * 1000)
+    return article, source_text, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
 def _log_no_reply(
@@ -836,7 +873,6 @@ def stage_route(
     """
     items_dir = _run_dir(plan.date) / "items"
     visuals = settings.app.visuals
-    ordinals: dict[str, int] = {}
     spent: list[int] = []
     skipped = 0
     drafted = 0
@@ -868,18 +904,10 @@ def stage_route(
         if decision.drafted_chart:
             drafted += 1
         if decision.kind is not VisualKind.NONE:
-            # Numbering continues from what this day already holds. A day runs
-            # several times, and starting from one in each process overwrote the
-            # earlier run's file while the digest still referenced both items.
-            if article.vertical not in ordinals:
-                ordinals[article.vertical] = highest_ordinal(
-                    PUBLIC_ROOT.parent, plan.date, article.vertical
-                )
-            ordinals[article.vertical] += 1
             decision = render_route(
                 decision,
                 public_root=PUBLIC_ROOT.parent,
-                relpath=asset_relpath(plan.date, article.vertical, ordinals[article.vertical]),
+                relpath=asset_relpath(plan.date, item.item_id),
                 canvas_width=visuals.canvas_width,
                 canvas_height=visuals.canvas_height,
             )
@@ -1037,7 +1065,7 @@ def stage_validate(
     scores: list[float] = []
 
     for index, item in enumerate(plan.items, start=1):
-        article, _, _ = _fetch_one(item, settings, read_url)
+        article, _, _, _ = _fetch_one(item, settings, read_url)
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
@@ -1046,11 +1074,12 @@ def stage_validate(
             LOG.warning("validation article did not summarize url=%s", item.canonical_url)
             continue
         text = article.text or ""
-        hhem, _ = dual_score(
+        # One score, asked for as one score. Validation compares against a
+        # leaderboard number and has no use for a truncation gap.
+        hhem = score_over_chunks(
             scorer,  # type: ignore[arg-type]
-            seen_text=text,
-            full_text=text,
-            summary=summary.summary or "",
+            text,
+            summary.summary or "",
         )
         scores.append(hhem)
         LOG.info("validation scored %s/%s hhem=%.3f", index, len(plan.items), hhem)
@@ -1153,6 +1182,7 @@ class _Frozen(NamedTuple):
     row: CorpusItem
     item: PlannedItem
     article: Article
+    seen_text: str
     full_text: str
 
 
@@ -1238,11 +1268,12 @@ def _freeze(
         if len(pool) >= floor and not _unmet(pool, share=share, bands=bands):
             break
         attempted += 1
-        article, _, _ = _fetch_one(item, settings, read_url)
+        article, source_text, _, _ = _fetch_one(item, settings, read_url)
         if article.status is not ArticleStatus.OK or not article.text:
             LOG.info("corpus item unavailable url=%s", item.canonical_url)
             continue
         seen = article.text
+        whole = source_text or seen
         pool.append(
             _Frozen(
                 row=CorpusItem(
@@ -1260,11 +1291,12 @@ def _freeze(
                     seen_word_count=len(seen.split()),
                     seen_token_count=article.token_count,
                     seen_text_sha256=text_digest(seen),
-                    full_text_sha256=text_digest(seen),
+                    full_text_sha256=text_digest(whole),
                 ),
                 item=item,
                 article=article,
-                full_text=seen,
+                seen_text=seen,
+                full_text=whole,
             )
         )
     chosen = _stratified(pool, keep=keep, bands=bands, share=share)
@@ -1312,14 +1344,35 @@ def _stratified(
     return chosen
 
 
-def _canary_article(payload: dict[str, object], *, fetched_at: str) -> Article:
-    """One planted attack, shaped like an article so it takes the real path.
+def _canary_article(
+    payload: dict[str, object], *, extract_config: ExtractConfig, fetched_at: str
+) -> Article:
+    """One planted attack, shaped like the article `extract` would have built.
 
-    The fixture's raw text is handed over unsanitized on purpose: `user_turn`
-    fences and sanitizes what it is given, so this exercises the boundary
-    instead of stepping around it (Rule #11).
+    The raw text is handed on unsanitized on purpose: `user_turn` fences and
+    sanitizes what it is given, so this exercises the boundary instead of
+    stepping around it (Rule #11). Every count is taken from the sanitized body
+    all the same, because those are the words the model is shown, and because a
+    count of the raw text can exceed the count of the body it survives into -
+    which the payload refuses. The earlier version counted the raw text and
+    hardcoded `brief=False`, so a 41-word canary took the long prompt band no
+    page of that length is ever given.
     """
     url = str(payload["source_url"])
+    raw = str(payload["raw_text"])
+    body = sanitize(raw)
+    seen, truncated, cut_at = extract.truncate_to_tokens(
+        body, extract_config.truncation_cap_tokens
+    )
+    words = len(seen.split())
+    source_words = len(body.split())
+    # `extract` reads three shape signals here. The third compares an item
+    # against its siblings from the same host, and a canary has none.
+    signal: FailureCode | None = None
+    if extract.is_not_prose(body, extract_config):
+        signal = FailureCode.NOT_PROSE
+    elif source_words < extract_config.min_source_words:
+        signal = FailureCode.TOO_SHORT
     return Article(
         version=Article.schema_version(),
         item_id="canary-01",
@@ -1331,11 +1384,16 @@ def _canary_article(payload: dict[str, object], *, fetched_at: str) -> Article:
         vertical="canary",
         rank_score=0.0,
         title=str(payload["raw_title"]),
-        text=str(payload["raw_text"]),
-        word_count=len(str(payload["raw_text"]).split()),
-        token_count=len(str(payload["raw_text"]).split()) * 2,
+        text=raw,
+        word_count=words,
+        source_word_count=source_words,
+        token_count=extract.approx_tokens(words),
+        brief=source_words < extract_config.min_source_words or signal is not None,
+        truncated=truncated,
+        truncated_at_tokens=cut_at,
         fetched_at=fetched_at,
         status=ArticleStatus.OK,
+        failure_code=signal,
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
     )
@@ -1379,7 +1437,7 @@ def _score_item(
     text = summary.summary or ""
     hhem, hhem_full = dual_score(
         scorer,  # type: ignore[arg-type]
-        seen_text=frozen.full_text,
+        seen_text=frozen.seen_text,
         full_text=frozen.full_text,
         summary=text,
     )
@@ -1456,7 +1514,9 @@ def _run_canaries(
     observations: list[CanaryObservation] = []
     for path in sorted(CANARY_DIR.glob("*.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
-        article = _canary_article(payload, fetched_at=assemble.utc_now())
+        article = _canary_article(
+            payload, extract_config=settings.app.extract, fetched_at=assemble.utc_now()
+        )
         summary, completion, _ = _one_call(article, settings, fingerprint, endpoint=endpoint)
         reply = " ".join([summary.title or "", summary.summary or "", *(summary.key_points or [])])
         cleaned = sanitize(str(payload["raw_text"]))
@@ -1465,13 +1525,76 @@ def _run_canaries(
             CanaryObservation(
                 name=str(payload["name"]),
                 replied=summary.status is SummaryStatus.OK and bool(summary.summary),
+                # The summary already classified why it failed and said it in
+                # words. Dropping them here is what left a run recording only
+                # `replied: false`, with nothing to read but the canary's name.
+                failure_code=summary.failure_code.value if summary.failure_code else None,
+                failure_detail=summary.failure_detail,
                 markers_present=[m for m in payload["must_not_survive"] if str(m) in reply],
                 facts_missing=[f for f in payload["must_survive"] if str(f) not in cleaned],
                 forbidden_keys_present=[k for k in payload["forbidden_output"] if str(k) in raw],
             )
         )
-        LOG.info("canary run name=%s replied=%s", payload["name"], observations[-1].replied)
+        LOG.info(
+            "canary run name=%s replied=%s failure_code=%s",
+            payload["name"],
+            observations[-1].replied,
+            observations[-1].failure_code,
+        )
     return observations
+
+
+def _canary_report(
+    observations: Sequence[CanaryObservation], *, root: Path, required: int
+) -> int:
+    """Write what the attacks did, then say whether the gate holds.
+
+    Split from the calls so the file-out half is reachable without a served
+    model. Fail-closed: a gate that cannot speak for every planted attack
+    returns non-zero.
+    """
+    assemble.write_atomic(
+        root / "canaries.json",
+        canonical_json([observation.model_dump(mode="json") for observation in observations]),
+    )
+    outcome = qualify.injection_canaries(observations, required=required)
+    LOG.info("canary gate %s: %s", outcome.status.value, outcome.measured)
+    LOG.info("canary detail: %s", outcome.detail)
+    return 0 if outcome.status is GateStatus.PASSED else 1
+
+
+def stage_qualify_canaries(
+    *, settings: config.Settings, date: str, model_endpoint: str = DEFAULT_ENDPOINT
+) -> int:
+    """The five planted attacks alone, against the configured model.
+
+    The arm was reachable only from inside `stage_qualify` at shard zero, so the
+    only way to see what a canary did was a whole qualification (`CLAUDE.md`
+    section 4). The fixtures are the file in, `canaries.json` is the file out,
+    and the exit code is the gate.
+    """
+    inference = settings.app.models.inference
+    model = settings.app.models.summarize
+    observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
+    inputs = build_inputs(
+        model=model,
+        model_sha256=model.sha256,
+        inference=inference,
+        truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
+        runtime_build=runtime_build(),
+        chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
+        prompt=summarize.prompt_inputs(settings.app.summarize),
+        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
+        runner_class=runner_class(),
+        extractor_version=extract.EXTRACTOR_VERSION,
+        sanitizer_version=SANITIZER_VERSION,
+    )
+    observations = _run_canaries(settings, inputs.fingerprint(), endpoint=model_endpoint)
+    return _canary_report(
+        observations,
+        root=QUALIFICATION_ROOT / date,
+        required=len(sorted(CANARY_DIR.glob("*.json"))),
+    )
 
 
 def stage_qualify(
@@ -1968,12 +2091,11 @@ def stage_assemble(
         digest_root=PUBLIC_ROOT, index_root=_index_root(), month=assemble.month_of(plan.date)
     )
 
+    # The committed payload tree, which is what this stage can see. It is not the
+    # published site and the Pages cap is not measured here - the site is built
+    # by a later step in this same job, and `idhazh site-weight` measures it
+    # there. See docs/architecture/publishing/layout.md.
     site_bytes, site_files = assemble.site_size(PUBLIC_ROOT)
-    site_alarm = retention.budget_alarm(
-        retention.SiteSize(site_bytes, site_files), settings.app.retention
-    )
-    if site_alarm is not None:
-        LOG.warning("%s", site_alarm)
     manifest = assemble.build_manifest(
         plan=plan,
         day=day,
@@ -2234,6 +2356,58 @@ def stage_backfill_vectors(
     return 0
 
 
+def stage_site_weight(
+    tree: Path, config: RetentionConfig, *, cap_mb: int = retention.PAGES_HARD_CAP_MB
+) -> int:
+    """Measure the built bundle against the alarm point and the Pages cap.
+
+    `tree` is the directory the Pages deploy uploads, and it only exists after
+    the site is built - so this runs as its own step after `npm run build`, in
+    every job that builds. It is deliberately not part of `assemble`: that stage
+    runs before the build and can only see the committed payloads, which are a
+    different tree eighteen times smaller.
+
+    There is no default tree. A default is how this pointed at the wrong one.
+
+    Three outcomes: an empty tree fails, because a measurement of nothing reads
+    exactly like a site inside budget; over the cap fails, because those bytes
+    cannot be published; over the alarm point reports and passes, because they
+    still can.
+    """
+    size = retention.measure(tree)
+    if size.files == 0:
+        LOG.error(
+            "site-weight measured 0 files under %s - build the site first. "
+            "A measurement of nothing passes every ceiling",
+            tree.as_posix(),
+        )
+        return 1
+
+    breach = retention.cap_breach(size, cap_mb=cap_mb)
+    if breach is not None:
+        LOG.error("%s", breach)
+        return 1
+
+    alarm = retention.budget_alarm(size, config, cap_mb=cap_mb)
+    if alarm is not None:
+        # An Actions workflow command, so the line lands on the run's summary
+        # rather than three thousand lines into a log nobody opens. Outside
+        # Actions it is one more printed line and costs nothing.
+        print(f"::warning title=Published site approaching the Pages cap::{alarm}")
+        LOG.warning("%s", alarm)
+        return 0
+
+    LOG.info(
+        "site-weight %s: %.1f MB in %s files, %.0f MB left to the %s MB Pages cap",
+        tree.as_posix(),
+        size.megabytes,
+        size.files,
+        retention.headroom_mb(size, cap_mb=cap_mb),
+        cap_mb,
+    )
+    return 0
+
+
 # --- entry point --------------------------------------------------------------
 
 
@@ -2286,8 +2460,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             "validate",
             "decide",
             "qualify",
+            "qualify-canaries",
             "qualify-decide",
             "backfill-vectors",
+            "site-weight",
         ),
     )
     parser.add_argument("--date", default=None, help="Defaults to today, UTC.")
@@ -2371,6 +2547,16 @@ def main(argv: Sequence[str] | None = None) -> int:
             "step may write one by hand."
         ),
     )
+    parser.add_argument(
+        "--site-tree",
+        type=Path,
+        default=None,
+        help=(
+            "The built bundle `site-weight` measures - the directory the Pages deploy "
+            "uploads. Required, and deliberately without a default: a default is how "
+            "this came to measure the committed payloads instead of the site."
+        ),
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -2379,6 +2565,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
         stream=sys.stderr,
     )
+    if args.stage == "site-weight":
+        # Placed above the fetcher because measuring a directory reads no socket,
+        # and starting one to do it would read every host's robots.txt for nothing.
+        if args.site_tree is None:
+            parser.error("site-weight needs --site-tree: the built bundle to measure")
+        return stage_site_weight(args.site_tree, settings.app.retention)
+
     date = args.date or _today()
     # One fetcher for the whole invocation, so `idhazh run` reads each host's
     # robots.txt once across all three stages rather than once per stage.
@@ -2414,6 +2607,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             fetcher=read_url,
         )
         return 0
+
+    if args.stage == "qualify-canaries":
+        return stage_qualify_canaries(settings=settings, date=date)
 
     if args.stage == "backfill-vectors":
         # `--date` names the day this treats as still open, and it is clamped to

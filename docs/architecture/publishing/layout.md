@@ -18,7 +18,7 @@ Coupling them means a change of mind about URL aesthetics rewrites every committ
 ```
 frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, every item
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
-frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.svg    optional visual
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg           optional visual
 frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
 state/scores.csv                                        the ledger - one path, never published twice
@@ -36,7 +36,9 @@ state/scores.csv                                        the ledger - one path, n
 
 **One day directory is the deletion atom.** Nothing outside it points into its interior except the append-only ledger, which is what makes pruning a single operation with no second edit.
 
-**No hash appears in any path, filename or URL.** A rendered visual is filed by its vertical and its ordinal within the day - `ai-03.svg` - which is predictable, derivable without a lookup, free of fetched text, and speakable. The anchor a reader lands on is the item's own id, `<vertical>-<ten digits>`, which is derived from the address so that a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)). Identity for dedupe is a field on the payload, not a segment of a path: paths are for humans and for globs, identity is for the contract.
+**No hash appears in any path, filename or URL.** A day carries two reader-facing addresses and both are the item's own id, `<vertical>-<ten digits>`: the anchor `#<item id>` and the rendered visual `ai-4821903756.svg`. The id is derived from the article's address, so a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)), and it is not a digest of anything - the ten digits are decimal and short enough to read back. The sha256 `url_key` that identity for dedupe actually rests on stays a field on the payload and never becomes a path segment. Paths are for humans and for globs; a hash is for the contract.
+
+**The asset name was `<vertical>-<NN>` until 2026-08-27, and both shapes are live in committed data.** The ordinal came from a counter, a counter has to be seeded from something a process can observe, and two runs of one day observed different things - which cost a finished day ([visuals.md](visuals.md)). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories. **No old address broke and none had to be migrated**: `assemble` copies `route.asset_path` into the day payload verbatim, the page renders that stored string, and the build stages by file suffix - so a name is data the day carries, never a rule the reader re-derives. That is the same property that makes the two contracts at the top of this page separable, applied one level down.
 
 **`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
 
@@ -138,13 +140,53 @@ The fix is the shape `publish_telemetry` already had: the index root is derived 
 
 **The day payloads are staged because a search result renders from the day it names.** The index carries no summary on purpose, so the result has to come from somewhere, and the alternative is a 6.35-times-larger index that every browsing visitor pays for. `run.json` is not staged; nothing fetches it.
 
-That is a second copy of the day text in the published bundle, and it is worth stating plainly rather than discovering later. **Only a reader who searches ever downloads one**, and only for a day a result of theirs sits on - the reading path is still one prerendered document and zero requests. What it costs the 1 GB site cap (Rule #2) is the same order as the day pages themselves, so it moves retention forward rather than introducing a new kind of growth.
+That is a second copy of the day in the published bundle, and it is worth stating plainly rather than discovering later. **Only a reader who searches ever downloads one**, and only for a day a result of theirs sits on - the reading path is still one prerendered document and zero requests.
+
+**It is not a second copy of the day, though, because it is a projection.** The staged file carries thirteen fields an item - the ones a search result actually renders - and nothing else. That is settled below, with what it cost and what it bought.
 
 **The staging source is derived from the digest root, in the script and in the page loader alike**, because an index is a projection of exactly those days. One switch rather than two is what stops a canary build serving the real archive's stories.
 
 **The archive fetches the index rather than inlining it, and that is the whole point.** Every other committed payload this site renders is read at build time and baked into the HTML, which is right for a day page: the day is bounded and the reader came to read it. The archive is the corpus. Inlining it would grow one document by about 50 gzipped bytes an item forever, which is the defect this index exists to end. The console already settled this shape - a bounded seed in the HTML, older months fetched from `static/` on demand - and the archive uses the same mechanism rather than inventing a second one. What the archive page still carries from its own data is a compact day row, three counts and about twenty topic names: all of it grows per day or per month, none of it per story.
 
 **A missing index is a designed state.** The page falls back to the day row and one plain sentence. It never white-screens ([../../../CLAUDE.md](../../../CLAUDE.md) section 12).
+
+### Two projections, and what one day costs
+
+Two copies of every day used to carry the vector block, and no browser has ever opened it. Its one production reader is the backend's index rebuild, which reads `frontend/public/` off the filesystem. So both copies are narrowed on the way out, in the two places the narrowing can happen:
+
+- **`payload.ts` `loadDay` drops `embeddings` after the parse.** Whatever that function returns is inlined into every prerendered document that renders the day, and there are twelve of those per day - six documents and their six `__data.json` twins.
+- **`copy-visuals.mjs` stages a projection rather than a copy.** A named allow-list of thirteen item fields, a one-line projector, and a guard that fails the build if a forbidden name ever reaches the list. That is the shape [../../../backend/idhazh/publish_telemetry.py](../../../backend/idhazh/publish_telemetry.py) already uses to keep URL keys and free text out of the console, and it is copied on purpose: a projection that has quietly widened looks exactly like one that has not.
+
+`frontend/public/` keeps the whole day, block and all. It is committed, it is in git, and it is the only store the vectors have.
+
+Measured 2026-08-27 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the six committed days, 2,237 items and 2,235 vectors. Page weights are `gzip -9` of the prerendered HTML, taken by the bundle gate itself, heaviest page per route. Site totals are the sum of file sizes under `frontend/build/`, which agreed with CI's own `du -sb build` on the same tree to 0.0006 percent.
+
+| Measured | Before | After | Saved |
+| --- | ---: | ---: | ---: |
+| `/<date>/`, gzipped | 581,557 B | 349,259 B | 232,298 B, 39.9 percent |
+| `/<date>/<topic>/`, gzipped | 581,034 B | 348,566 B | 232,468 B, 40.0 percent |
+| `/`, gzipped | 499,670 B | 302,122 B | 197,548 B, 39.5 percent |
+| `static/digest/`, on disk | 6,976,807 B | 3,620,375 B | 3,356,432 B, 48.1 percent |
+| The whole published site | 146,696,452 B | 128,064,853 B | 18,631,599 B, 12.7 percent |
+| One published day | 22,200,123 +/- 1,785,970 B | 16,641,956 +/- 1,294,368 B | 25.0 percent |
+
+Two of those rows are worth reading rather than scanning. **Two fifths of a day page was a block nobody could open**, which on the 10 Mbit reference line is about 0.19 seconds a reader waited for nothing, on every dated page they ever opened. And **the per-day row is the one that moves the cap**, because it is what the site charges for tomorrow rather than what it charges for the past.
+
+The per-day figures are the three mature days only - 2026-08-24, -25 and -26, at 731, 724 and 621 items. The first three days ran 4, 10 and 147 items, and mixing them halves the answer. The spread is the sample standard deviation over those three days. The before figure lands 3,419 bytes from the 22,196,704 the same rate was measured at independently the same day, which is 0.015 percent, so the two measurements are the same measurement.
+
+**The staged tree does not fall to nothing, and the floor is pictures.** 1,055,600 bytes of it is 87 rendered SVGs that the day pages fetch at runtime, and a projection must not touch those. The `digest.json` half went 5,921,207 -> 2,564,775 bytes, which is 56.7 percent off.
+
+### The revisit trigger, with a date on it
+
+**This does not solve the 1 GB cap (Rule #2). It buys about six weeks.**
+
+At the rate above, the published site reaches 1,073,741,824 bytes on **2026-10-22**, which is fifty-six more published days counted from 2026-08-27. Before this change the date was **2026-10-07**, forty-one days. Across the measured spread on the rate, it runs from 2026-10-19 to 2026-10-28.
+
+Almost all of that is the rate rather than the level: the 18.6 MB taken off the site today is worth 0.8 of a published day, and the 5.6 MB taken off every future day is worth 14.2.
+
+**Nothing fires when that date arrives.** No gate measures the whole-site total against the cap - the bundle gate holds single pages, and the marker count holds what a page inlines. So the trigger is a date and not an alarm: **re-measure the site total and the per-day rate by 2026-09-22, one month before the date, and act on the answer.**
+
+What to act on is already named. The prerendered dated route trees are 50,598,258 bytes, 39.5 percent of the whole site, and every one of them is a document that a reader who opens some other day never reads. They were 65,197,022 bytes and 44.4 percent before this change, so narrowing the payload made them smaller without making them a smaller share of the problem. That is the next lever, and retention (below) is the one after it.
 
 ## Retention
 
@@ -165,6 +207,16 @@ What it must never touch: a day's JSON payload, a date directory, the eval ledge
 Two promises to the reader, both non-negotiable: **the window is stated before anything is deleted**, on the archive page and on the missing-day page; and a pruned day lands in the designed missing state, **never a silent redirect to today**. A reader who cannot distinguish a dead link from a live one has lost the ability to trust any link.
 
 The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. The footer used to say days were removed, which promised the opposite of what the code does; it now says the same thing the archive does, because two sentences disagreeing about deletion on one page is the exact failure this section exists to prevent.
+
+### Follow-up: the dated route trees are what decides the cap date (2026-08-27)
+
+**Recorded, not fixed. No row has addressed it.**
+
+The prerendered dated routes are **50,598,258 bytes, 39.5 percent of the published site** - measured 2026-08-27 on an Intel Core i7-1265U, Windows 11, node 24.12.0, over the six committed days and 2,237 items ([../../reference/measurements.md](../../reference/measurements.md#what-is-left-and-where-it-is)). They were 65,197,022 bytes and 44.4 percent before PR #171 narrowed the staged payload.
+
+That is **twelve prerendered documents per published day**: six HTML pages - the all-topics page and one per vertical - and their six `__data.json` twins. Every published day adds twelve more, forever, and nothing else on the site grows per day at anything like that rate. So this is the number the 1 GB cap date is a function of: at 16,641,956 bytes a published day the site reaches the cap on about 2026-10-22, and about 39.5 percent of each of those days is this.
+
+The three levers this page already names - encode efficiently, honour the visual rule, then prune - were all argued about images. **None of them touches an HTML document.** Whatever answers this is a fourth thing, and it has not been designed. What is written down here is the measurement, so the next person starts from a number rather than a feeling.
 
 ## The frontend stack
 
@@ -188,11 +240,25 @@ This page used to say "A revision is visible or it does not happen", which reads
 
 **Deleting the fields is not the cheap option it looks like.** Every persisted model is `extra="forbid"`, so a model without the two fields rejects every payload that carries them. Measured on this checkout, 2026-08-26: six committed days, 2,121 items, 2,121 carrying `updated_at`, 2,107 carrying `updated_by_run`, and **zero** carrying a value in either. Removal costs a read-side migration that strips two keys from every day forever, or a rewrite of all six committed payloads. Retention deletes nothing today (`image_months` is -1 and `dry_run` is on), so waiting for the old payloads to age out is not available either. That is the whole price, and the reader gets nothing for it.
 
-**The named trigger that would revive revision is a summarizer model swap** ([../../../TODO/20260825-qwen35-9b-adoption-plan.md](../../../TODO/20260825-qwen35-9b-adoption-plan.md)). A better summarizer is the one event that makes words already published worth rewriting; a bug fix in the pipeline is not, and neither is a new field. That swap is also the point at which the run-manifest join the fields exist for starts to matter, because a day would then hold summaries from two different models.
+**The named trigger that would revive revision is a summarizer model swap, and it fired on 2026-08-27** ([../../concepts/evaluation.md](../../concepts/evaluation.md)). A better summarizer is the one event that makes words already published worth rewriting; a bug fix in the pipeline is not, and neither is a new field. Nothing was revised, and that is the correct answer here rather than an oversight: no comparison against the retired model was ever run, so nothing measured says the new summaries are better, and rewriting published words on an unmeasured hunch is the move Rule #10 forbids. What the swap does change is the run-manifest join the two fields exist for - from the first day the new model publishes, a day can hold summaries from two different models, so the join now has something to join.
 
 **The promise is pinned by a test, not by this paragraph.** `backend/tests/test_pipeline.py` asserts that a second run over an item the day already holds leaves its words, its `updated_at` and its `updated_by_run` untouched. A sentence on a page drifted once; the test fails the day the gates stop holding, which forces this page to be corrected in the same commit.
 
 Retention was demoted to third lever after the byte arithmetic showed that encoding and the existing visual rule together move the ceiling from months to years. A policy that deletes a reader's archive to reclaim a fraction of a percent of the bytes would have been solving the wrong problem.
+
+### The vectors are projected out, not moved out (2026-08-27)
+
+Two copies of every day carried a block no browser opens, and there were two ways to end that.
+
+**(a) Project at each boundary, which is what shipped.** `frontend/public/` keeps the whole day; each copy that leaves it drops what its own reader does not use. Two edits, no persisted shape moves, and it reverses by putting two lines back.
+
+**(b) Move the vectors out of the day payload into a committed sibling file**, so there is nothing left to project. That is the tidier drawing, and it costs far more than it looks. `DigestDay` is `extra="forbid"` like every persisted model here, so a model without `embeddings` rejects every payload that carries one - all six committed days, 2,237 items. The bill is a read-side migration that strips the key forever, or a rewrite of every committed payload, plus a breaking schema stamp and its migration in the same commit ([../../../CLAUDE.md](../../../CLAUDE.md) section 11). Retention deletes nothing today, so waiting for the old shape to age out is not on offer either. And the reader ends up exactly where (a) already puts them: the block reaches no browser under either.
+
+So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes. (a) was taken on that arithmetic rather than on taste. If a real reason to split the file turns up - a second encoder, or a day payload too large to fetch whole - (b) is still there, and this paragraph is its price list.
+
+**What (a) costs instead is a list that can drift.** Thirteen field names in [../../../frontend/scripts/copy-visuals.mjs](../../../frontend/scripts/copy-visuals.mjs) decide what a search result is able to render, and dropping one fails nothing: the result comes out slightly shorter and the reader never learns what they lost. Three things hold it. The script asserts that no forbidden name is on the list and fails the build if one is, which is the shape `publish_telemetry.py` uses for the same class of mistake. `frontend/tests/staged-day.spec.ts` keeps its own copy of the thirteen names, so widening the script without widening the promise fails. And `frontend/tests/search.spec.ts` drives the field where the loss would hurt most - the link out to the source - from the staged bytes through to the rendered link.
+
+**The field that nearly came off the list is `source_url`.** A narrower set of title, summary, source name and band renders a result that looks complete and has no way out to the original. That is the reader's only means of checking what we wrote, so a projection that drops it trades their trust for about ten bytes an item.
 
 ### Two append paths, and only one of them deduplicates (2026-08-27)
 
@@ -203,6 +269,22 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 **Where the code was already safe, the fix was a sentence and not a guard.** A guard that can never fire is untested branch weight, and it hides which file the guarantee actually lives in. `cli._published_rows` reads as "everything the day holds" and behaves as "what this run added", and it does that because the plan a later run built has already dropped every published address. Its comment used to claim the filter itself; it now names the upstream facts it depends on, so the next person to widen the plan sees what they would break.
 
 **One path was not safe, and that one was fixed.** The day's run reference counted what the current attempt added rather than what the number introduced, so a replay after a lost manifest write built a payload its own contract rejects - `run 1 items_added disagrees with the items it introduced` - and the day was lost rather than doubled. The count now comes from the assembled day, which is the definition the contract validates against.
+
+### The site alarm watched a tree eighteen times smaller than the site (2026-08-27)
+
+The 1 GB cap is on the **built bundle** - `frontend/build/`, the directory the Pages deploy uploads. The alarm measured `frontend/public/digest/`, which is what the pipeline writes. Measured 2026-08-27 on this checkout: **7,027,075 bytes against 128,064,853**, eighteen times apart, and twenty-one times apart the day before. At the rate the payload tree grows, an alarm point of 800 MB on it could not have been reached until the site was already about six times past the cap. **The alarm ran every pipeline run, cost real seconds, and would never have warned anybody.** That is worse than no alarm, because a green light is read as safety.
+
+The recorded arithmetic had the same units error and it is corrected in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling): the site crosses 1 GB on about **2026-10-22, 56 published days from 2026-08-27**, not the 593 or 516 days that page carried.
+
+**The fix is to measure where the site exists.** The bundle does not exist while `assemble` runs - it is built by a later step - so the measurement moved out of the assemble stage and became its own step, `idhazh site-weight --site-tree build`, in every job that builds the site: `ci.yml`'s `site` job, `digest.yml`'s `assemble` job, and `backfill.yml`. It runs before the commit that publishes a day, so a day that would break the site never lands.
+
+**The tree has no default.** A default is how the old call came to name the wrong one. The workflow names it at the call site, and a contract test reads the path back off `pages.yml`'s own upload step - so the thing measured and the thing published are pinned to be one directory, and pointing the gate anywhere else fails the suite rather than being noticed a month later.
+
+**Two lines, and only one of them fails a build.** Over `retention.site_budget_mb` (800 MB) the step prints an Actions warning and passes; past the 1 GiB cap it fails. Failing at 800 MB would stop publishing about two weeks before it had to, and a reader would lose a working site to a budget that still had room. Past the cap the bytes cannot be published at all, and failing in the job that measured them names the cause - a deploy that refuses them names nothing.
+
+**`site_bytes` on the run manifest stays what it always was.** It is the committed payload tree, six days of published manifests carry it, and changing what it means would be a contract break for a number that is genuinely useful about repository growth. What changed is that it now says which tree it holds, so nobody reads it as the site again ([../contracts/schemas.md](../contracts/schemas.md)).
+
+**The deploy is not gated.** `pages.yml` prints `du -sb build` and always did. Adding the check there would need a Python install on the deploy path for no new coverage: every byte that reaches `main` passes through the `assemble` job or through `ci.yml`, and both now measure it before the push rather than after.
 
 ## Rejected alternatives
 
@@ -218,6 +300,8 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 | base64 vectors inside the index JSON | 322.55 gzipped bytes an item against 249.82 - 22.5 percent more - and it charges every browsing visitor the vectors as well. |
 | HTTP range requests into the vector file | One request per result, against a static host that has to answer each one. The whole file already transfers compressed. |
 | A summary, source or band on an index entry | Measured 2026-08-26: 6.35 times the entry, and a month at the observed rate goes from 518 KB to 3.21 MB. A result renders from the day payload it names instead. |
+| Moving the vectors out of the day payload into a sibling committed file | A persisted-contract change that buys no bytes. `extra="forbid"` means a `DigestDay` without `embeddings` rejects all 2,237 committed items, so the price is a read-side migration forever or a rewrite of every day - and the block already reaches no browser. See [The vectors are projected out, not moved out](#the-vectors-are-projected-out-not-moved-out-2026-08-27). |
+| Staging the day payload whole and narrowing only the prerendered pages | Measured 2026-08-27: the staged tree is 6,976,807 bytes of the 146,696,452-byte site, and leaving it whole gives back 3,356,432 of the 18,631,599 this change saved. Same two files open, one of the two edits skipped. |
 | A positional vector index instead of a byte offset | Every reader then has to count how many entries above it were skipped, and an off-by-one decodes cleanly and ranks nonsense. |
 | Omitting an item that has no vector | It disappears from the browse list as well as from search, which is the larger loss. Two of 2,237 committed items are in this state today. |
 | A padded zero vector for an item that has none | It scores against every query. A null says "not searchable"; a zero says "equally close to everything". |
@@ -232,9 +316,16 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 | Re-ranking a day on a later run | Contradicts the memory of a reader who already read it. |
 | Merging a day's vectors across a model, width or dtype change | One map holding two widths, which is what the self-describing block exists to prevent. The reader-side decoder cannot tell the entries apart, so it would score half the day as plausible nonsense instead of failing. |
 | A run identifier in the path | One item at two addresses, so the same item is reachable two ways and neither is canonical. |
-| A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. |
+| A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. A ten-digit item id is not this: it is decimal, it is short, and it is already the anchor a reader lands on. |
+| A per-vertical ordinal in a rendered asset's filename | `ai-03.svg` reads better than `ai-4821903756.svg` and cannot be made correct. The ordinal comes from a counter, every seeding rule reads something a process can observe, and two runs of one day observe different things - which lost a finished day on 2026-08-25 ([visuals.md](visuals.md)). Speakability is worth less than a name two stories can never share. |
+| Rewriting the committed days into the new asset name | Nothing is broken to fix. A path is stored on the payload, so every old day still resolves, and a rewrite would move addresses a reader may already hold in exchange for tidiness. |
 | A title-derived slug in a URL | Titles originate in fetched text, and fetched text never becomes a URL (Rule #11). |
 | Deleting text alongside images under one retention knob | Text is a fraction of a percent of the bytes. |
+| Measuring the site cap over `frontend/public/digest` | It is not the site. Measured 2026-08-27: 7,027,075 bytes against the built bundle's 128,064,853, eighteen times apart and growing at different rates, so neither can stand in for the other. |
+| Deriving the site size from the payload tree with a calibrated multiplier | The ratio moved from 21x to 18x on one pull request. A multiplier nobody can re-measure per run is an unmeasured number justifying a design (Rule #10). |
+| Failing the build at the 800 MB alarm point | It stops publishing about two weeks before it has to. A reader loses a working site to a budget that still had room; the cap is where refusing the bytes is the honest answer. |
+| Measuring the site in the Pages deploy instead | The day is already committed by then, and undoing it is a revert. Gating before the push is what turns a broken site into a run that publishes nothing. |
+| A default value for `--site-tree` | A default is how the measurement came to name the wrong tree. The workflow names it, and a test reads it back off the deploy's own upload step. |
 | Reusing the render-failure state to mark a prune | One field carrying two different facts, which is the band-aid Rule #5 forbids. |
 | Deduplicating the state ledgers the way the eval ledger does | A state row is a fact about a run, not a measurement. A feed that answered twice answered twice, and collapsing the two rows turns a count of runs into a count of days - which is the number `discover.resting` reads to decide a quarantine. |
 | A duplicate-run guard in `build_manifest` to match the one in `build_day` | Unreachable. `RunManifest` refuses a `runs` list that is not numbered from 1 without gaps, so the next number cannot already be taken. The branch would never run and no test could reach it. |
@@ -249,6 +340,8 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 - [frontend.md](frontend.md) - the two dashboards these routes serve.
 - [../contracts/schemas.md](../contracts/schemas.md) - the payload contracts and the versioning rules a deletion has to honour.
 - [../../reference/measurements.md](../../reference/measurements.md#sizing-the-archive-index) - what a browse entry, a vector and a month shard actually cost.
+- [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling) - the cap date, the per-published-day growth rate, and the units error that made both wrong until 2026-08-27.
+- [../../reference/measurements.md](../../reference/measurements.md#the-site-page-by-page-after-the-payload-narrowing-2026-08-27) - what each page and the whole site weigh today.
 - [../../reference/measurements.md](../../reference/measurements.md#the-month-search-index-as-written) - the shard that exists: its bytes, its rebuild cost, and the bijection it holds.
 - [../../concepts/config.md](../../concepts/config.md) - where the retention knobs live and the build-time versus shipped-config rule.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - the engineering contract, including schema versioning (section 11) and git hygiene (section 8).

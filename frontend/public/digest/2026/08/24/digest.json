@@ -5146,12 +5146,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "ai",
-      "visual": {
-        "alt": "Bar chart. 40 minute 40 minute; 20 minute 20 minute; 30 minute 30 minute.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/ai-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -5298,12 +5293,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "ai",
-      "visual": {
-        "alt": "Bar chart. 33% 33 %; 105% 105 %; 87.0% 87.0 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/ai-02.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "low",
@@ -5333,12 +5323,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "ai",
-      "visual": {
-        "alt": "Bar chart. 2.43 2.43; 2.96 2.96; 711,000 711,000; 1.44 1.44.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/ai-03.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -6469,12 +6454,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "energy",
-      "visual": {
-        "alt": "Bar chart. 2.3% 2.3 %; 5.8% 5.8 %; 4.3% 4.3 %; 6.3% 6.3 %; 3.9% 3.9 %; 2.9% 2.9 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/energy-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -6533,12 +6513,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "energy",
-      "visual": {
-        "alt": "Bar chart. 45% 45 %; 56% 56 %; 90% 90 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/energy-02.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "low",
@@ -6567,12 +6542,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "energy",
-      "visual": {
-        "alt": "Bar chart. 8.3 GW 8.3 gw; 52 GW 52 gw; 54 GW 54 gw; 14 GW 14 gw; 26 GW 26 gw.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/energy-03.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -7520,12 +7490,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "business-economy",
-      "visual": {
-        "alt": "Bar chart. 2008 78 %; 2023 177 %; 2008 43 %; 2023 63 %; 2008 1 %; 2023 82 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/business-economy-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -8236,12 +8201,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "world",
-      "visual": {
-        "alt": "Bar chart. 2.8% 2.8 %; 40.2% 40.2 %; 56.9% 56.9 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/world-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -8628,12 +8588,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 2026 30; 2026 77,744.15; 2026 225; 2026 77,540.83.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -8663,12 +8618,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 3% 3 %; 8% 8 %; 11% 11 %; 4% 4 %; 10% 10 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-02.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -8872,12 +8822,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 1,278.7 mm 1,278.7 mm; 1,671.4 mm 1,671.4 mm; 1,039.7 mm 1,039.7 mm; 2,114.7 mm 2,114.7 mm; 1,147.4 mm 1,147.4 mm.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-03.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -8907,12 +8852,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 0.6% 0.6 %; 4.1% 4.1 %; 75% 75 %; 80% 80 %; 1% 1 %; 4% 4 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-04.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "low",
@@ -9060,12 +9000,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 23 23; 24 24; 31 31.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-05.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "low",
@@ -9123,12 +9058,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 16% 16 %; 9% 9 %; 16% 30 %; 28% 28 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-06.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "low",
@@ -13796,12 +13726,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "ai",
-      "visual": {
-        "alt": "Bar chart. 15 x 15 x; 30 x 30 x; 40 x 40 x; 10 x 10 x.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/ai-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -14100,12 +14025,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "ai",
-      "visual": {
-        "alt": "Bar chart. $13 billion $13 $; $7 billion $7 $; $4.5 billion $4.5 $; $500 million $500 $.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/ai-02.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -14758,12 +14678,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "ai",
-      "visual": {
-        "alt": "Bar chart. 16.27 16.27 vs; 16.16 16.16 vs; 15.91 15.91 vs.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/ai-03.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -15298,12 +15213,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "energy",
-      "visual": {
-        "alt": "Bar chart. 19% 19 %; 48% 48 %; 76% 76 %; 49.1% 49.1 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/energy-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -15569,12 +15479,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "energy",
-      "visual": {
-        "alt": "Bar chart. 24 24; 77,369.11 77,369.11; 24,219.05 24,219.05.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/energy-02.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -15721,12 +15626,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "energy",
-      "visual": {
-        "alt": "Bar chart. 2024 4 %; 2024 4 %; 2025 10 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/energy-03.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -15960,12 +15860,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "business-economy",
-      "visual": {
-        "alt": "Bar chart. \u00a31.00 \u00a31 \u00a3; \u00a32.00 \u00a32 \u00a3; \u00a35.99 \u00a35.99 \u00a3; \u00a312.99 \u00a312.99 \u00a3; \u00a32.06 \u00a32.06 \u00a3.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/business-economy-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -16880,12 +16775,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "world",
-      "visual": {
-        "alt": "Bar chart. 3,100 3,100; 32 32; 9 9.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/world-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -17351,12 +17241,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 15% 15 %; 9% 9 %; 194% 194 %; 39% 39 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-01.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "low",
@@ -17415,12 +17300,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 10 million hectares 10 hectare; 0.15 million hectares 2.8 hectare; 3.5 billion tonnes 0.15 hectare.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-02.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -17597,12 +17477,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 2014 43 %; 2024 89 %; 2022-23 25.2 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-03.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -17632,12 +17507,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 7.67 crore 7.67 crore; 3.4 crore 3.4 crore; 1.13 crore 1.13 crore; 2 crore 2 crore.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-04.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "high",
@@ -18083,12 +17953,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. 24% 24 %; 31.99% 31.99 %; 36.46% 36.46 %; 31.84% 31.84 %; 23.60% 23.60 %.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-05.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",
@@ -18206,12 +18071,7 @@
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "india",
-      "visual": {
-        "alt": "Bar chart. FY26 62,500 crore; FY31 25,000 crore; FY27 15,000 crore; FY28 20,000 crore; FY29 5,000 crore; FY30 10,000 crore; FY25 10,000 crore.",
-        "kind": "chart",
-        "path": "digest/2026/08/24/india-06.svg",
-        "state": "rendered"
-      }
+      "visual": null
     },
     {
       "band": "medium",

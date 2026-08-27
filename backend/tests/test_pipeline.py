@@ -9,8 +9,10 @@ No mocks and no network. The recorded score is a float, not a stub object.
 
 from __future__ import annotations
 
+import ast
 import csv
 import json
+import re
 import socket
 import threading
 from pathlib import Path
@@ -20,10 +22,10 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT,
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config, ledger, telemetry
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh import assemble, cli, config, extract, ledger, telemetry
+from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import derive_output_digest
+from idhazh.contracts.base import SHA256_PATTERN, derive_output_digest
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
@@ -36,8 +38,8 @@ from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, SourceTier
-from idhazh.evals import writer
-from idhazh.evals.hhem import chunks, score_over_chunks
+from idhazh.evals import metrics, writer
+from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
 from idhazh.evals.score import band, to_eval_row, verdict
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import read_ledger, text_digest
@@ -69,6 +71,7 @@ def row(**overrides: object) -> EvalRow:
         article=article(),
         summary=summary(),
         full_text=FULL_TEXT,
+        premise=FULL_TEXT,
         hhem=0.91,
         hhem_full=0.89,
         config=EvaluationConfig(),
@@ -100,10 +103,10 @@ def test_work_items_sort_by_summarize_band_and_keep_in_band_order() -> None:
         return base.model_copy(update={"word_count": words, "source_word_count": words})
 
     candidates = [
-        cli._FetchedWorkItem(items[0], sized(2000), 0, 0, 0.0, 0),
-        cli._FetchedWorkItem(items[1], sized(10), 0, 0, 0.0, 1),
-        cli._FetchedWorkItem(items[2], sized(800), 0, 0, 0.0, 2),
-        cli._FetchedWorkItem(items[3], sized(100), 0, 0, 0.0, 3),
+        cli._FetchedWorkItem(items[0], sized(2000), "", 0, 0, 0.0, 0),
+        cli._FetchedWorkItem(items[1], sized(10), "", 0, 0, 0.0, 1),
+        cli._FetchedWorkItem(items[2], sized(800), "", 0, 0, 0.0, 2),
+        cli._FetchedWorkItem(items[3], sized(100), "", 0, 0, 0.0, 3),
     ]
 
     ordered = sorted(candidates, key=lambda candidate: cli._summarize_band_sort_key(candidate, settings))
@@ -336,6 +339,7 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
         article=article(),
         summary=summary(),
         full_text=FULL_TEXT,
+        premise=FULL_TEXT,
         hhem=0.94,
         hhem_full=0.61,
         config=EvaluationConfig(),
@@ -369,6 +373,7 @@ def test_a_copied_brief_is_flagged_as_truncation_not_confidence() -> None:
         article=source,
         summary=brief_summary,
         full_text=copied,
+        premise=copied,
         hhem=0.94,
         hhem_full=0.93,
         config=EvaluationConfig(),
@@ -399,6 +404,7 @@ def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
         article=article(),
         summary=summary(),
         full_text=sourced,
+        premise=sourced,
         hhem=0.91,
         hhem_full=0.89,
         config=EvaluationConfig(),
@@ -410,6 +416,165 @@ def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
     assert built.evidential_density is not None
     assert built.evidential_density > 0.0
     assert built.speculative_density == 0.0, "measured, and measured as none"
+
+
+def test_the_row_digests_the_text_the_scorer_was_given() -> None:
+    """`output_digest` names the words that came out; this names the words that went in.
+
+    The digest is the shared `text_digest` and not a second convention: sha256
+    over the UTF-8 bytes, the full 64 hex characters, exactly as
+    `CorpusItem.seen_text_sha256` already spells the same quantity.
+    """
+    built = row()
+
+    assert built.source_digest == text_digest(FULL_TEXT)
+    assert built.source_digest != built.output_digest, "the premise is not the summary"
+
+
+def test_the_two_source_word_counts_are_one_counter_before_and_after_the_cap() -> None:
+    """Built by the real extractor, so the pair is a genuine cut and not two counters.
+
+    `source_seen_word_count` larger than `source_word_count` is impossible when
+    one string is a cut of the other. It happened on 590 of the 2,232 rows
+    written before this, which is what proved the pair was measuring
+    `len(_WORD.findall(t))` against `len(t.split())` on one post-cap string.
+    """
+    body = " ".join(f"word{n}" for n in range(4000))
+    cut = extract.to_article(
+        plan().items[0],
+        FetchResult(
+            FetchOutcome.OK,
+            status=200,
+            body=f"<html><body><article><p>{body}</p></article></body></html>".encode(),
+        ),
+        config=ExtractConfig(truncation_cap_tokens=256),
+        fetched_at="2026-08-21T06:00:00Z",
+    )
+    assert cut.truncated, "the fixture must actually be cut, or this proves nothing"
+
+    built = to_eval_row(
+        item=plan().items[0],
+        article=cut,
+        summary=summary(),
+        full_text=FULL_TEXT,
+        premise=FULL_TEXT,
+        hhem=0.91,
+        hhem_full=0.89,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="v",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+    assert built.source_word_count == cut.source_word_count == 4000
+    assert built.source_seen_word_count == cut.word_count
+    assert built.source_seen_word_count < built.source_word_count
+    assert built.source_word_count != metrics.word_count(FULL_TEXT), (
+        "the column must come off the article, not off whatever full_text was passed"
+    )
+
+
+def test_two_premises_digest_apart_and_the_same_premise_digests_the_same() -> None:
+    """A digest that did not separate, or did not repeat, would check nothing.
+
+    The two texts differ by one sentence, which is what truncation moving by a
+    paragraph looks like - not by a whole article.
+    """
+
+    def scored(premise: str) -> EvalRow:
+        return to_eval_row(
+            item=plan().items[0],
+            article=article(),
+            summary=summary(),
+            full_text=FULL_TEXT,
+            premise=premise,
+            hhem=0.91,
+            hhem_full=0.89,
+            config=EvaluationConfig(),
+            date="2026-08-21",
+            run_id="2026-08-21-1",
+            scorer_version="v",
+            scored_at="2026-08-21T06:18:02Z",
+        )
+
+    shorter = FULL_TEXT.rsplit(". ", 1)[0] + "."
+    assert shorter != FULL_TEXT
+
+    assert scored(FULL_TEXT).source_digest == scored(FULL_TEXT).source_digest
+    assert scored(FULL_TEXT).source_digest != scored(shorter).source_digest
+
+
+def test_the_work_stage_digests_the_same_text_it_scores() -> None:
+    """The whole value of the column is that these two are one variable.
+
+    A digest of anything else - the fetched page, the untruncated article, the
+    summary - would let a labeller and the scorer disagree about text and read
+    as the scorer being wrong. The suite cannot run the real scorer, whose
+    weights it may not download (Rule #7), so what is checked is the wiring:
+    `stage_work` passes one name to `dual_score(seen_text=...)` and to
+    `to_eval_row(premise=...)`.
+    """
+    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
+    stage = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "stage_work"
+    )
+
+    def argument(call_name: str, keyword: str) -> str:
+        for node in ast.walk(stage):
+            if not isinstance(node, ast.Call):
+                continue
+            called = node.func
+            spelled = called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            if spelled != call_name:
+                continue
+            for given in node.keywords:
+                if given.arg == keyword:
+                    assert isinstance(given.value, ast.Name), (
+                        f"{call_name}({keyword}=...) is no longer a plain name"
+                    )
+                    return given.value.id
+        raise AssertionError(f"stage_work no longer calls {call_name}({keyword}=...)")
+
+    assert argument("dual_score", "seen_text") == argument("to_eval_row", "premise")
+
+
+def test_the_work_stage_scores_against_a_different_text_than_it_showed_the_model() -> None:
+    """`hhem_full` only means anything when it reads something `hhem` did not.
+
+    Until 2026-08-27 `stage_work` passed one variable to both, so `hhem_delta`
+    was exactly 0.0 on all 2,232 committed rows and the detector `dual_score`
+    exists to be had never once carried information. Checked as wiring for the
+    same reason as the digest test above: the suite may not download the
+    scorer's weights (Rule #7).
+    """
+    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py"))
+    stage = next(
+        node
+        for node in ast.walk(tree)
+        if isinstance(node, ast.FunctionDef) and node.name == "stage_work"
+    )
+
+    def argument(call_name: str, keyword: str) -> str:
+        for node in ast.walk(stage):
+            if not isinstance(node, ast.Call):
+                continue
+            called = node.func
+            spelled = called.attr if isinstance(called, ast.Attribute) else getattr(called, "id", "")
+            if spelled != call_name:
+                continue
+            for given in node.keywords:
+                if given.arg == keyword:
+                    assert isinstance(given.value, ast.Name), (
+                        f"{call_name}({keyword}=...) is no longer a plain name"
+                    )
+                    return given.value.id
+        raise AssertionError(f"stage_work no longer calls {call_name}({keyword}=...)")
+
+    assert argument("dual_score", "seen_text") != argument("dual_score", "full_text")
+    assert argument("dual_score", "full_text") == argument("to_eval_row", "full_text")
 
 
 # --- The ledger --------------------------------------------------------------
@@ -483,6 +648,57 @@ def test_the_committed_ledger_carries_todays_columns() -> None:
     assert writer.read_header(ledger) == writer.columns()
 
 
+def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
+    """The migration, run against the real file rather than a copy of its shape.
+
+    `require_matching_header` compares the header tuple exactly, so the commit
+    that gave the contract a `source_digest` column stopped the committed ledger
+    loading until the file was widened by the same column. This appends to a byte
+    copy of what is committed, which is the run a release blocker would fail.
+    """
+    committed = REPO_ROOT / writer.LEDGER_RELPATH
+    if not committed.exists():
+        pytest.skip("no ledger committed yet")
+    ledger = tmp_path / "state" / "scores.csv"
+    ledger.parent.mkdir(parents=True)
+    ledger.write_bytes(committed.read_bytes())
+    before = committed.read_text(encoding="utf-8").count("\n")
+
+    assert writer.append(ledger, [row(url_key="d" * 64)]) == 1
+
+    assert writer.read_header(ledger) == writer.columns()
+    assert ledger.read_text(encoding="utf-8").count("\n") == before + 1
+
+
+def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path) -> None:
+    """An empty cell, never a digest computed today.
+
+    A row scored before 2026-08-27 recorded no premise. Filling it in now would
+    name text nobody read and would make a labeller's disagreement unreadable -
+    which is the one thing the column exists to prevent.
+    """
+    committed = REPO_ROOT / writer.LEDGER_RELPATH
+    if not committed.exists():
+        pytest.skip("no ledger committed yet")
+    with committed.open(encoding="utf-8", newline="") as handle:
+        records = list(csv.DictReader(handle))
+    assert records, "the ledger has rows, or this proves nothing"
+
+    for number, record in enumerate(records, start=2):
+        assert None not in record, f"line {number} has more cells than the header names"
+        assert all(value is not None for value in record.values()), (
+            f"line {number} has fewer cells than the header names"
+        )
+        digest = record["source_digest"]
+        assert digest == "" or re.fullmatch(SHA256_PATTERN, digest), (
+            f"line {number} carries {digest!r}, which the contract cannot read back"
+        )
+
+    predates = [record for record in records if record["date"] < "2026-08-27"]
+    assert predates, "every committed row is newer than the column, so nothing was migrated"
+    assert {record["source_digest"] for record in predates} == {""}
+
+
 def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
     """Silent corruption is the alternative, and it is unrecoverable once shipped."""
     ledger = tmp_path / "state" / "scores.csv"
@@ -527,6 +743,47 @@ def test_an_empty_premise_scores_zero_rather_than_raising() -> None:
             raise AssertionError("must not be called")
 
     assert score_over_chunks(Never(), "", "claim") == 0.0
+
+
+class _Counting:
+    """A scorer that answers deterministically and says how often it was asked."""
+
+    def __init__(self) -> None:
+        self.premises: list[str] = []
+
+    def score(self, premise: str, hypothesis: str) -> float:
+        del hypothesis
+        self.premises.append(premise)
+        return 0.5 + 0.1 * len(self.premises)
+
+
+def test_an_untruncated_article_is_scored_once_and_not_twice() -> None:
+    """The scorer is deterministic, so a second pass over one string cannot differ.
+
+    About 97 percent of items are never cut, and one pass over a 900-word chunk
+    measured 2.88 to 3.08 s on `ubuntu-latest` (2026-08-26, run `2026-08-26-5`,
+    n=5). The pass this skips was roughly 2 s an item, or 21 to 24 minutes of
+    runner wall-clock a day at the observed 621 to 731 items.
+    """
+    scorer = _Counting()
+    whole = "The plant will close in March, the ministry said on Tuesday."
+
+    seen, full = dual_score(scorer, seen_text=whole, full_text=whole, summary="claim")
+
+    assert scorer.premises == [whole], "one identical string, one pass"
+    assert seen == full
+
+
+def test_a_truncated_article_is_scored_against_both_texts() -> None:
+    """The short-circuit must not swallow the case the column exists for."""
+    scorer = _Counting()
+    seen_text = "The plant will close in March."
+    whole = f"{seen_text} The ministry named June as the original date."
+
+    seen, full = dual_score(scorer, seen_text=seen_text, full_text=whole, summary="claim")
+
+    assert scorer.premises == [seen_text, whole], "two different strings, two passes"
+    assert seen != full
 
 
 # --- Assembly ----------------------------------------------------------------
