@@ -1,4 +1,4 @@
-/** The month index, read in the browser one month at a time.
+/** The month index, fetched in the browser one month at a time.
  *
  * **Fetched at runtime, not inlined at prerender.** Every other committed
  * payload this site renders is read from the filesystem at build time and
@@ -9,77 +9,98 @@
  * shape: a bounded seed in the HTML, and older months fetched from `static/`
  * as the reader asks for them. This is the same mechanism.
  *
- * Nothing here reads the sibling vector file. The list browses; searching over
- * the index is a later change, and keeping them apart is what lets either one
- * be undone on its own.
+ * Two files a month, and different people pay for them. Every visitor browsing
+ * the list downloads the JSON. Only a reader who searches downloads the sibling
+ * `.bin`, and that reader has already accepted a 43 MB encoder.
+ *
+ * **Every fetch here is cached for the page's lifetime.** The list and the
+ * search box read the same months, and a reader who searches twice reads them
+ * again. The two maps below are that cache. Nothing in a `load` function calls
+ * this module, so a prerender never fills them.
+ *
+ * The shape this returns, and the parsing that checks it, live in `month.ts`.
+ * They are pure, and they stay out of this file because this file imports
+ * `$app/paths` and so can only run in a browser or a SvelteKit build.
  */
 
 import { base } from '$app/paths';
 import type { SearchIndexEntry } from '$lib/payload/types';
+import { indexOf, type MonthIndex } from './month';
 
-/** One month of stories, or null when that month cannot be read.
+export { entriesOf, indexOf, newestFirst, type MonthIndex } from './month';
+
+const indexes = new Map<string, Promise<MonthIndex | null>>();
+const vectors = new Map<string, Promise<Int8Array | null>>();
+
+/** One month, header and entries, or null when that month cannot be read.
  *
  * Null is a designed state. A month whose file is absent leaves a gap in the
  * list; it never takes the page down (`CLAUDE.md` section 1a).
  */
-export async function loadMonth(
+export function loadIndex(
 	month: string,
 	fetcher: typeof fetch = fetch
-): Promise<SearchIndexEntry[] | null> {
+): Promise<MonthIndex | null> {
+	const held = indexes.get(month);
+	if (held) return held;
+	const pending = readIndex(month, fetcher);
+	indexes.set(month, pending);
+	return pending;
+}
+
+async function readIndex(month: string, fetcher: typeof fetch): Promise<MonthIndex | null> {
 	try {
 		const response = await fetcher(`${base}/index/${month}.json`);
 		if (!response.ok) {
 			console.warn(`[archive] the stories for ${month} are not available (${response.status})`);
 			return null;
 		}
-		return entriesOf(await response.json());
+		return indexOf(await response.json());
 	} catch (error) {
 		console.warn(`[archive] the stories for ${month} could not be read`, error);
 		return null;
 	}
 }
 
-/** The entries a payload actually carries, newest day first.
- *
- * The shape is checked rather than trusted. This file is ours, but a half-
- * written or truncated one has to leave a gap in the list instead of throwing
- * inside a render.
- */
-export function entriesOf(payload: unknown): SearchIndexEntry[] | null {
-	if (typeof payload !== 'object' || payload === null) return null;
-	const entries = (payload as { entries?: unknown }).entries;
-	if (!Array.isArray(entries)) return null;
-	return newestFirst(entries.filter(isEntry));
+/** The stories of one month, newest day first. What the browse list reads. */
+export async function loadMonth(
+	month: string,
+	fetcher: typeof fetch = fetch
+): Promise<SearchIndexEntry[] | null> {
+	return (await loadIndex(month, fetcher))?.entries ?? null;
 }
 
-function isEntry(value: unknown): value is SearchIndexEntry {
-	if (typeof value !== 'object' || value === null) return false;
-	const entry = value as Record<string, unknown>;
-	return (
-		typeof entry.date === 'string' &&
-		typeof entry.item_id === 'string' &&
-		typeof entry.title === 'string' &&
-		typeof entry.vertical === 'string'
-	);
+/** That month's vectors, end to end as raw int8, or null when they cannot be read.
+ *
+ * A month whose JSON is present and whose `.bin` is absent browses normally and
+ * cannot be searched. That is the designed split rather than a half-failure:
+ * the list needs no vector, and search cannot work without one.
+ *
+ * No decompression here. GitHub Pages compresses `application/octet-stream` at
+ * the edge, measured against the live origin, so the file arrives compressed
+ * and `arrayBuffer()` hands back the raw bytes.
+ */
+export function loadVectors(
+	month: string,
+	fetcher: typeof fetch = fetch
+): Promise<Int8Array | null> {
+	const held = vectors.get(month);
+	if (held) return held;
+	const pending = readVectors(month, fetcher);
+	vectors.set(month, pending);
+	return pending;
 }
 
-/** Published order, newest day first.
- *
- * A month lists its days in published order, so its dates only ever go
- * forward. A reader opens the archive to see what is new, so the days come
- * back the other way round - but the order **inside** a day is left exactly as
- * published. That is what makes the first story here the first story on that
- * day's own page. No reader can change either order (`layout.md`).
- */
-export function newestFirst(entries: SearchIndexEntry[]): SearchIndexEntry[] {
-	const byDate = new Map<string, SearchIndexEntry[]>();
-	for (const entry of entries) {
-		const found = byDate.get(entry.date);
-		if (found) found.push(entry);
-		else byDate.set(entry.date, [entry]);
+async function readVectors(month: string, fetcher: typeof fetch): Promise<Int8Array | null> {
+	try {
+		const response = await fetcher(`${base}/index/${month}.bin`);
+		if (!response.ok) {
+			console.warn(`[archive] the vectors for ${month} are not available (${response.status})`);
+			return null;
+		}
+		return new Int8Array(await response.arrayBuffer());
+	} catch (error) {
+		console.warn(`[archive] the vectors for ${month} could not be read`, error);
+		return null;
 	}
-	return [...byDate.keys()]
-		.sort()
-		.reverse()
-		.flatMap((date) => byDate.get(date) ?? []);
 }

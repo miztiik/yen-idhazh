@@ -8,19 +8,46 @@
 	 * Everything here is secondary by construction. Delete the model directory
 	 * and this control reports itself unavailable; the archive above it is
 	 * unchanged, and so is every digest assertion on the page.
+	 *
+	 * **It reads the month index, and it says which months it read.** The page
+	 * used to carry every committed day so this component could reach the
+	 * vectors inside them. It now fetches `assist.search_months` shards and
+	 * prints the months it searched next to the box - a reader who gets nothing
+	 * back has to be able to tell "never published" from "not in this month".
+	 *
+	 * **A result is rendered from the day it names**, through the same component
+	 * the digest itself uses, so the result list is not a second place where
+	 * fetched web text reaches a page. Until that day arrives, and if it never
+	 * does, the result is the title, the date and the topic the index carried.
 	 */
 	import { DOWNLOAD_MB, embedQuery, supported, type AssistState } from '$lib/assist/loader';
 	import { ENCODER_DIMENSIONS } from '$lib/assist/encoder';
-	import { rank, searchable, type RankOptions, type SearchHit } from '$lib/assist/search';
+	import { loadIndex, loadVectors } from '$lib/assist/index';
+	import { itemOf, loadDay } from '$lib/assist/day';
+	import {
+		rank,
+		searchable,
+		type RankOptions,
+		type SearchableMonth,
+		type SearchHit
+	} from '$lib/assist/search';
 	import type { DigestDay } from '$lib/payload/types';
+	import DigestItem from './DigestItem.svelte';
+	import { monthName, plural, shortDate } from '$lib/format';
 	import { base } from '$app/paths';
 
-	// The two knobs come from `config/idhazh.json` through the route's load, so
-	// nothing here decides how many results to show or how close is close enough.
+	// Every knob comes from `config/idhazh.json` through the route's load, so
+	// nothing here decides how many months to read, how many results to show, or
+	// how close is close enough.
 	let {
-		days,
+		months,
+		verticalNames = {},
 		assist: settings
-	}: { days: DigestDay[]; assist: { similarity_floor: number; result_limit: number } } = $props();
+	}: {
+		months: string[];
+		verticalNames?: Record<string, string>;
+		assist: { similarity_floor: number; result_limit: number; search_months: number };
+	} = $props();
 
 	const ranking: RankOptions = $derived({
 		limit: settings.result_limit,
@@ -31,28 +58,58 @@
 	let query = $state('');
 	let hits = $state<SearchHit[]>([]);
 	let searched = $state(false);
+	let scope = $state<SearchableMonth[]>([]);
+	// One entry per result day, so a re-render sees a day the moment it lands.
+	let dayPayloads = $state<Record<string, DigestDay | null>>({});
 
-	// Truthiness, not `!== null`. A payload written before the embeddings block
-	// existed has no key at all, and `undefined !== null` would offer a reader the
-	// whole download for an archive that could not be searched. No figure in this
-	// sentence on purpose: it said 33 MB while the offer below said 43, and
-	// `DOWNLOAD_MB` is the one that is measured against the committed files.
-	const available = $derived(days.some((day) => Boolean(day.embeddings)));
+	const available = $derived(months.length > 0);
+	const searchedCount = $derived(
+		scope.reduce(
+			(count, month) => count + month.index.entries.filter((entry) => entry.vector !== null).length,
+			0
+		)
+	);
+	// Oldest to newest, because that is the way a range reads out loud.
+	const scopeNames = $derived(scope.map((month) => monthName(month.index.month)).reverse());
+	const scopeSentence = $derived(
+		scopeNames.length === 0
+			? ''
+			: `Searching ${
+					scopeNames.length === 1
+						? scopeNames[0]
+						: `${scopeNames[0]} to ${scopeNames[scopeNames.length - 1]}`
+				} - ${plural(searchedCount, 'story', 'stories')}.` +
+				(scope.length < months.length ? ' Older months are not searched.' : '')
+	);
+
+	/** Read the newest `search_months` shards, and keep the ones that can be searched. */
+	async function readScope(): Promise<SearchableMonth[]> {
+		const wanted = months.slice(0, Math.max(settings.search_months, 1));
+		const ready: SearchableMonth[] = [];
+		for (const month of wanted) {
+			const index = await loadIndex(month);
+			if (!index || !searchable(index, ENCODER_DIMENSIONS)) continue;
+			const vectors = await loadVectors(month);
+			if (!vectors) continue;
+			ready.push({ index, vectors });
+		}
+		return ready;
+	}
 
 	async function enable() {
 		if (!supported()) {
 			assist = { status: 'unavailable', reason: 'this browser cannot run the encoder' };
 			return;
 		}
-		// Before the download rather than after it. A reader whose days were
-		// written by a different encoder cannot be helped by fetching this one, so
-		// they get the sentence instead of the bytes. One line, in place of the
-		// offer - there is nothing here for a reader to do, so there is nothing to
-		// prompt them about.
-		if (!days.some((day) => searchable(day, ENCODER_DIMENSIONS))) {
+		// Before the download rather than after it. A reader whose stories were
+		// written by a different encoder cannot be helped by fetching this one, and
+		// neither can a reader whose vectors never arrived - so both get the
+		// sentence instead of the 43 MB. One line, in place of the offer.
+		scope = await readScope();
+		if (scope.length === 0) {
 			assist = {
 				status: 'unavailable',
-				reason: 'these days were written by a different encoder'
+				reason: 'these stories cannot be searched on this device'
 			};
 			return;
 		}
@@ -66,13 +123,25 @@
 		}
 	}
 
+	/** Fetch the day behind every result on screen. Once each, never twice. */
+	async function fetchDays(shown: SearchHit[]) {
+		const dates = [...new Set(shown.map((hit) => hit.entry.date))];
+		await Promise.all(
+			dates.map(async (date) => {
+				const day = await loadDay(date);
+				dayPayloads = { ...dayPayloads, [date]: day };
+			})
+		);
+	}
+
 	async function run(event: SubmitEvent) {
 		event.preventDefault();
 		const text = query.trim();
 		if (!text || assist.status !== 'ready') return;
 		try {
-			hits = rank(days, await embedQuery(text), ranking);
+			hits = rank(scope, await embedQuery(text), ranking);
 			searched = true;
+			void fetchDays(hits);
 		} catch (error) {
 			console.error('[assist] the search did not run', error);
 			assist = { status: 'unavailable', reason: 'the search did not run' };
@@ -81,7 +150,7 @@
 </script>
 
 {#if available}
-	<section class="mt-10 border-t border-rule pt-4 text-sm">
+	<section class="mt-10 border-t border-rule pt-4 text-sm" data-assist>
 		{#if assist.status === 'idle'}
 			<p class="text-muted">
 				<button
@@ -98,7 +167,9 @@
 		{:else if assist.status === 'loading'}
 			<p class="text-muted">Loading the encoder, once. This is the {DOWNLOAD_MB} MB.</p>
 		{:else if assist.status === 'unavailable'}
-			<p class="text-muted">Search is unavailable here - {assist.reason}.</p>
+			<p class="text-muted" data-assist-unavailable>
+				Search is unavailable here - {assist.reason}.
+			</p>
 		{:else}
 			<form onsubmit={run} class="flex gap-2">
 				<label class="sr-only" for="assist-query">Search this archive</label>
@@ -117,22 +188,46 @@
 				</button>
 			</form>
 
+			<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-assist-scope>{scopeSentence}</p>
+
 			{#if searched && hits.length === 0}
 				<p class="mt-3 text-muted">Nothing in the archive is close to that.</p>
 			{:else if hits.length > 0}
-				<ol class="mt-3 space-y-2">
-					{#each hits as hit (hit.item.item_id + hit.date)}
-						<li>
-							<a
-								href="{base}/{hit.date}/"
-								class="underline underline-offset-4 hover:text-ink"
-							>
-								{hit.item.title}
-							</a>
-							<span class="text-muted"> - {hit.date}</span>
+				<h2 class="sr-only">Search results</h2>
+				<ul class="mt-3" data-assist-results>
+					{#each hits as hit (hit.entry.date + hit.entry.item_id)}
+						{@const item = itemOf(dayPayloads[hit.entry.date] ?? null, hit.entry.item_id)}
+						<li data-assist-date={hit.entry.date}>
+							{#if item}
+								<p class="pt-3 text-[0.8125rem] text-text-tertiary">
+									<a href="{base}/{hit.entry.date}/#{hit.entry.item_id}" class="hover:underline">
+										{shortDate(hit.entry.date)}
+									</a>
+								</p>
+								<DigestItem
+									{item}
+									verticalName={verticalNames[item.vertical] ?? item.vertical}
+									level={3}
+									showVertical={false}
+									showMark={false}
+								/>
+							{:else}
+								<p class="border-b border-rule py-3">
+									<a
+										href="{base}/{hit.entry.date}/#{hit.entry.item_id}"
+										class="text-[1.0625rem] text-accent hover:underline"
+									>
+										{hit.entry.title}
+									</a>
+									<span class="mt-1 block text-[0.8125rem] text-text-tertiary">
+										{shortDate(hit.entry.date)} - {verticalNames[hit.entry.vertical] ??
+											hit.entry.vertical}
+									</span>
+								</p>
+							{/if}
 						</li>
 					{/each}
-				</ol>
+				</ul>
 			{/if}
 		{/if}
 	</section>

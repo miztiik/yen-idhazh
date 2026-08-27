@@ -59,10 +59,11 @@ export interface ConsoleConfig {
 	failure_list_max: number;
 }
 
-/** What on-device archive search keeps and how much of it it shows. */
+/** What on-device archive search reads, keeps and shows. */
 export interface AssistConfig {
 	similarity_floor: number;
 	result_limit: number;
+	search_months: number;
 }
 
 const DEFAULTS: UiConfig = {
@@ -100,7 +101,11 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	chart_width: 600,
 	failure_list_max: 25
 };
-const ASSIST_DEFAULTS: AssistConfig = { similarity_floor: 0.35, result_limit: 10 };
+const ASSIST_DEFAULTS: AssistConfig = {
+	similarity_floor: 0.35,
+	result_limit: 10,
+	search_months: 1
+};
 
 interface RawConfig {
 	ui?: Partial<UiConfig>;
