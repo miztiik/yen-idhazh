@@ -18,7 +18,7 @@ Coupling them means a change of mind about URL aesthetics rewrites every committ
 ```
 frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json     the whole day, every item
 frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for that date
-frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.svg    optional visual
+frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg           optional visual
 frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
 state/scores.csv                                        the ledger - one path, never published twice
@@ -36,7 +36,9 @@ state/scores.csv                                        the ledger - one path, n
 
 **One day directory is the deletion atom.** Nothing outside it points into its interior except the append-only ledger, which is what makes pruning a single operation with no second edit.
 
-**No hash appears in any path, filename or URL.** A rendered visual is filed by its vertical and its ordinal within the day - `ai-03.svg` - which is predictable, derivable without a lookup, free of fetched text, and speakable. The anchor a reader lands on is the item's own id, `<vertical>-<ten digits>`, which is derived from the address so that a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)). Identity for dedupe is a field on the payload, not a segment of a path: paths are for humans and for globs, identity is for the contract.
+**No hash appears in any path, filename or URL.** A day carries two reader-facing addresses and both are the item's own id, `<vertical>-<ten digits>`: the anchor `#<item id>` and the rendered visual `ai-4821903756.svg`. The id is derived from the article's address, so a later run of the same day reaches the same item ([../sources/freshness.md](../sources/freshness.md)), and it is not a digest of anything - the ten digits are decimal and short enough to read back. The sha256 `url_key` that identity for dedupe actually rests on stays a field on the payload and never becomes a path segment. Paths are for humans and for globs; a hash is for the contract.
+
+**The asset name was `<vertical>-<NN>` until 2026-08-27, and both shapes are live in committed data.** The ordinal came from a counter, a counter has to be seeded from something a process can observe, and two runs of one day observed different things - which cost a finished day ([visuals.md](visuals.md)). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories. **No old address broke and none had to be migrated**: `assemble` copies `route.asset_path` into the day payload verbatim, the page renders that stored string, and the build stages by file suffix - so a name is data the day carries, never a rule the reader re-derives. That is the same property that makes the two contracts at the top of this page separable, applied one level down.
 
 **`latest` and `archive` are derived at build time** from the directory listing, never committed. A committed pointer is exactly the file that goes stale after a prune or a raced deploy.
 
@@ -314,7 +316,9 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 | Re-ranking a day on a later run | Contradicts the memory of a reader who already read it. |
 | Merging a day's vectors across a model, width or dtype change | One map holding two widths, which is what the self-describing block exists to prevent. The reader-side decoder cannot tell the entries apart, so it would score half the day as plausible nonsense instead of failing. |
 | A run identifier in the path | One item at two addresses, so the same item is reachable two ways and neither is canonical. |
-| A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. |
+| A hash in a filename or URL | Unreadable, unspeakable, and unguessable-by-accident rather than unguessable-by-design. On a public repo with a public index it hides nothing, and it costs the reader a path they cannot reason about. A ten-digit item id is not this: it is decimal, it is short, and it is already the anchor a reader lands on. |
+| A per-vertical ordinal in a rendered asset's filename | `ai-03.svg` reads better than `ai-4821903756.svg` and cannot be made correct. The ordinal comes from a counter, every seeding rule reads something a process can observe, and two runs of one day observe different things - which lost a finished day on 2026-08-25 ([visuals.md](visuals.md)). Speakability is worth less than a name two stories can never share. |
+| Rewriting the committed days into the new asset name | Nothing is broken to fix. A path is stored on the payload, so every old day still resolves, and a rewrite would move addresses a reader may already hold in exchange for tidiness. |
 | A title-derived slug in a URL | Titles originate in fetched text, and fetched text never becomes a URL (Rule #11). |
 | Deleting text alongside images under one retention knob | Text is a fraction of a percent of the bytes. |
 | Measuring the site cap over `frontend/public/digest` | It is not the site. Measured 2026-08-27: 7,027,075 bytes against the built bundle's 128,064,853, eighteen times apart and growing at different rates, so neither can stand in for the other. |

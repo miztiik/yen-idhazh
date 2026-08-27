@@ -114,7 +114,7 @@ from idhazh.fingerprint import (
     text_digest,
 )
 from idhazh.llm.server import DEFAULT_ENDPOINT, Completion, is_context_exceeded, post, props
-from idhazh.render import asset_relpath, highest_ordinal, render_route
+from idhazh.render import asset_relpath, render_route
 from idhazh.sanitize import SANITIZER_VERSION, sanitize
 
 LOG: Final = logging.getLogger("idhazh")
@@ -865,7 +865,6 @@ def stage_route(
     """
     items_dir = _run_dir(plan.date) / "items"
     visuals = settings.app.visuals
-    ordinals: dict[str, int] = {}
     spent: list[int] = []
     skipped = 0
     drafted = 0
@@ -897,18 +896,10 @@ def stage_route(
         if decision.drafted_chart:
             drafted += 1
         if decision.kind is not VisualKind.NONE:
-            # Numbering continues from what this day already holds. A day runs
-            # several times, and starting from one in each process overwrote the
-            # earlier run's file while the digest still referenced both items.
-            if article.vertical not in ordinals:
-                ordinals[article.vertical] = highest_ordinal(
-                    PUBLIC_ROOT.parent, plan.date, article.vertical
-                )
-            ordinals[article.vertical] += 1
             decision = render_route(
                 decision,
                 public_root=PUBLIC_ROOT.parent,
-                relpath=asset_relpath(plan.date, article.vertical, ordinals[article.vertical]),
+                relpath=asset_relpath(plan.date, item.item_id),
                 canvas_width=visuals.canvas_width,
                 canvas_height=visuals.canvas_height,
             )

@@ -311,11 +311,12 @@ COMMIT_BASE_ENV: Final = frozenset(
 )
 # Only assemble can rebuild what it commits, so only assemble carries the three
 # settings that make the loop rebuild instead of merge - and only assemble
-# commits rendered assets, so only assemble renumbers them.
+# commits rendered assets, so only assemble drops a raced one.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
     "work": COMMIT_BASE_ENV,
-    "assemble": COMMIT_BASE_ENV | {"REFRESH_PATHS", "REGENERATE_COMMAND", "RENUMBER_COMMAND"},
+    "assemble": COMMIT_BASE_ENV
+    | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
@@ -383,14 +384,15 @@ COMMIT_REFRESH_PATHS: Final = {
 # The producer the harness drives through the loop. See its own docstring for
 # why the pipeline's `assemble` cannot be the one under a temporary clone.
 REBUILD_STAND_IN: Final = Path(__file__).with_name("rebuild_day.py")
-# The renumber, by contrast, IS the shipped one: it anchors on the working
+# The drop, by contrast, IS the shipped one: it anchors on the working
 # directory, so it runs inside a temporary clone unchanged.
-RENUMBER_ENTRY_POINT: Final = REPO_ROOT / "backend" / "utilities" / "renumber_racing_assets.py"
+DROP_ENTRY_POINT: Final = REPO_ROOT / "backend" / "utilities" / "drop_raced_assets.py"
 RUN_ARTIFACTS: Final = "backend/var/run"
 # One rendered chart, as the route job leaves it: an SVG in the day's directory
-# and a route payload saying where it landed.
-RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/energy-01.svg"
-NEXT_FREE_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/energy-02.svg"
+# and a route payload saying where it landed. The name is the item's own id, so
+# a path both runs hold is that one item rendered twice.
+RACED_ITEM_ID: Final = "energy-0000000001"
+RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_ID}.svg"
 
 
 def _load_workflows() -> dict[str, dict[str, object]]:
@@ -813,7 +815,7 @@ requires_bash: Final = pytest.mark.skipif(
 requires_space_free_paths: Final = pytest.mark.skipif(
     " " in sys.executable
     or " " in str(REBUILD_STAND_IN)
-    or " " in str(RENUMBER_ENTRY_POINT),
+    or " " in str(DROP_ENTRY_POINT),
     reason="REGENERATE_COMMAND is word-split on spaces",
 )
 
@@ -899,20 +901,20 @@ def _rebuild_command(date: str) -> str:
     return f"{Path(sys.executable).as_posix()} {REBUILD_STAND_IN.as_posix()} --date {date}"
 
 
-def _renumber_command(date: str) -> str:
-    """The shipped renumber, as the loop word-splits it."""
-    return f"{Path(sys.executable).as_posix()} {RENUMBER_ENTRY_POINT.as_posix()} --date {date}"
+def _drop_command(date: str) -> str:
+    """The shipped raced-asset drop, as the loop word-splits it."""
+    return f"{Path(sys.executable).as_posix()} {DROP_ENTRY_POINT.as_posix()} --date {date}"
 
 
-def _chart(repo: Path, date: str, item_id: str, relpath: str) -> None:
+def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
     """One rendered chart, exactly as the route job's artifact leaves it.
 
     An SVG under the day's directory and a real `Route` beside the run's items
-    saying where it landed. The bytes carry the item id, because two runs that
-    number a chart the same for different items with the SAME bytes is the case
-    git resolves on its own.
+    saying where it landed. `body` is what makes two renders of one item differ,
+    which is the only case that can now put two adds on one path - identical
+    bytes are the case git resolves on its own.
     """
-    _write(repo / "frontend" / "public" / relpath, f"<svg>{item_id}</svg>\n")
+    _write(repo / "frontend" / "public" / relpath, f"<svg>{body or item_id}</svg>\n")
     route = Route(
         version=Route.schema_version(),
         item_id=item_id,
@@ -1523,15 +1525,15 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     # rendered charts into it and no producer here can make them again, so the
     # two payload files are named one at a time.
     assert SUBSTITUTED_DAY_DIR not in settings["REFRESH_PATHS"].split()
-    # Which is why the charts get their own answer: they are handed a free
-    # number rather than handed back, so the rebase never sees two adds of one
-    # path. The entry point is the shipped one, not a copy of its logic.
-    assert settings["RENUMBER_COMMAND"].split()[1:] == [
-        "backend/utilities/renumber_racing_assets.py",
+    # Which is why the charts get their own answer: this run's copy is dropped
+    # rather than handed back, so the rebase never sees two adds of one path.
+    # The entry point is the shipped one, not a copy of its logic.
+    assert settings["DROP_RACED_ASSETS_COMMAND"].split()[1:] == [
+        "backend/utilities/drop_raced_assets.py",
         "--date",
         SUBSTITUTED_DATE,
     ]
-    assert RENUMBER_ENTRY_POINT.is_file()
+    assert DROP_ENTRY_POINT.is_file()
     # Neither setting may carry a space inside one of its words: the loop
     # word-splits both, and nothing here re-parses shell quoting.
     assert not any(
@@ -1540,9 +1542,9 @@ def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -
     )
     # The plan job records what it saw and cannot rebuild it, so it resolves a
     # race by rebasing, and `.gitattributes` unions its ledgers. It commits no
-    # rendered asset either, so it has nothing to renumber.
+    # rendered asset either, so it has nothing to drop.
     assert "REGENERATE_COMMAND" not in _commit_call("plan")[1]
-    assert "RENUMBER_COMMAND" not in _commit_call("plan")[1]
+    assert "DROP_RACED_ASSETS_COMMAND" not in _commit_call("plan")[1]
 
 
 def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> None:
@@ -1876,7 +1878,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     settings = {
         **settings,
         "REGENERATE_COMMAND": _rebuild_command(date),
-        "RENUMBER_COMMAND": _renumber_command(date),
+        "DROP_RACED_ASSETS_COMMAND": _drop_command(date),
     }
     env = _isolated_env(tmp_path)
     origin, runner = _digest_origin(tmp_path, env, date)
@@ -1934,29 +1936,31 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
 
 @requires_bash
 @requires_space_free_paths
-def test_two_runs_that_numbered_a_chart_the_same_both_keep_it(tmp_path: Path) -> None:
+def test_two_runs_that_rendered_one_item_still_publish_the_day(tmp_path: Path) -> None:
     """The Oracle above, with the one thing it never had: both sides create the path.
 
     Run `32869125768` finished eight workers and a router and then lost the
-    whole day here. A chart is filed by its vertical and its ordinal within the
-    day, and the ordinal is seeded by reading the day's directory - so two runs
-    of one day, neither able to see what the other pushed, both wrote
-    `energy-01.svg` for different items with different bytes. Git cannot rebase
-    two adds of one path, `assemble` exited 1, and the `items-*` artifacts
-    expired with every summary in them.
+    whole day here. A chart was filed by its vertical and its ordinal within the
+    day, and the ordinal was seeded by reading the day's directory - so two runs
+    of one day, neither able to see what the other pushed, wrote `energy-01.svg`
+    for DIFFERENT items with different bytes. Git cannot rebase two adds of one
+    path, `assemble` exited 1, and the `items-*` artifacts expired with every
+    summary in them.
 
-    The tip's chart is published and a reader may already hold that address, so
-    the tip's never moves. This run's takes the next free number, the route
-    payload naming it moves with it, and the rebuilt day points at a file that
-    is really there.
+    A chart is now filed under its item's own id, so that case cannot happen at
+    all. What is left is this one: two runs rendering the SAME item, which is
+    one story's picture drawn twice. The tip's copy is published and a reader
+    may already hold that address, and the rebuild keeps the tip's item anyway,
+    so this run's copy is dropped and the day publishes.
     """
     date = SUBSTITUTED_DATE
-    theirs, ours = "energy-0000000001", "energy-0000000002"
+    raced, fresh = RACED_ITEM_ID, "energy-0000000002"
+    fresh_asset = f"digest/{date.replace('-', '/')}/{fresh}.svg"
     staged_paths, settings = _commit_call("assemble")
     settings = {
         **settings,
         "REGENERATE_COMMAND": _rebuild_command(date),
-        "RENUMBER_COMMAND": _renumber_command(date),
+        "DROP_RACED_ASSETS_COMMAND": _drop_command(date),
     }
     env = _isolated_env(tmp_path)
     origin, runner = _digest_origin(tmp_path, env, date)
@@ -1964,39 +1968,42 @@ def test_two_runs_that_numbered_a_chart_the_same_both_keep_it(tmp_path: Path) ->
         tmp_path,
         env,
         date,
-        [theirs],
+        [raced],
         "Merge pull request #125 from someone/branch",
-        charts={theirs: RACED_ASSET},
+        charts={raced: RACED_ASSET},
     )
-    # This run's router numbered from a directory that could not see the push
-    # above, so it wrote the same path for a different item.
-    _chart(runner, date, ours, RACED_ASSET)
-    _rebuild(runner, env, date, [ours])
+    # This run planned the same item, because the push above had not happened
+    # when it planned - and drew it again, to different bytes.
+    _chart(runner, date, raced, RACED_ASSET, body="ours")
+    _chart(runner, date, fresh, fresh_asset)
+    _rebuild(runner, env, date, [raced, fresh])
 
     result = _run_commit_script(runner, env, staged_paths, settings)
 
     assert result.returncode == 0, result.stderr
     assert result.stdout.count("push rejected, rebasing (attempt ") == 1
-    assert f"{RACED_ASSET} is already published, so this run's copy moved" in result.stdout
+    assert f"{RACED_ASSET} is already published, so this run's copy of it was dropped" in (
+        result.stdout
+    )
     assert settings["PUSH_FAILED_MESSAGE"] not in result.stderr
     assert not _mid_rebase(runner)
 
     day = json.loads(_git(origin, env, "show", f"main:{SUBSTITUTED_DAY_DIR}/digest.json"))
-    assert day["items"] == ["item-a", "item-b", theirs, ours]
-    # Neither run lost its picture, and no two items share one.
-    assert day["visuals"] == {theirs: RACED_ASSET, ours: NEXT_FREE_ASSET}
+    assert day["items"] == ["item-a", "item-b", raced, fresh]
+    # The item this run introduced kept its picture, and no two items share one.
+    assert day["visuals"] == {raced: RACED_ASSET, fresh: fresh_asset}
     assert len(set(day["visuals"].values())) == len(day["visuals"])
     # The gate a broken image would fail: every path the day publishes is a file
     # the day publishes. A picture that 404s is worse than a job that stops.
     for relpath in day["visuals"].values():
         assert _tracked(origin, env, f"frontend/public/{relpath}")
-    # And the published one is byte-for-byte the one that was published, rather
-    # than this run's chart wearing its address.
+    # The published address still holds the bytes that were published under it,
+    # rather than this run's second attempt at the same picture.
     assert _git(origin, env, "show", f"main:frontend/public/{RACED_ASSET}") == (
-        f"<svg>{theirs}</svg>\n"
+        f"<svg>{raced}</svg>\n"
     )
-    assert _git(origin, env, "show", f"main:frontend/public/{NEXT_FREE_ASSET}") == (
-        f"<svg>{ours}</svg>\n"
+    assert _git(origin, env, "show", f"main:frontend/public/{fresh_asset}") == (
+        f"<svg>{fresh}</svg>\n"
     )
     assert _git(origin, env, "show", "main:docs/unrelated.md") == "merged by a pull request\n"
 
@@ -2012,7 +2019,7 @@ def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path)
     settings = {
         **settings,
         "REGENERATE_COMMAND": _rebuild_command("2026-08-24"),
-        "RENUMBER_COMMAND": _renumber_command(date),
+        "DROP_RACED_ASSETS_COMMAND": _drop_command(date),
     }
     env = _isolated_env(tmp_path)
     origin, runner = _digest_origin(tmp_path, env, date)

@@ -279,6 +279,16 @@ with a redirect `gh api` does not follow. Ask through the run instead:
 gh run view <runId> --repo <owner/repo> --job <jobId> --log
 ```
 
+**No log of any kind is readable while the run is still going.** The command
+above exits 1 with `run <id> is still in progress; logs will be available when
+it is complete`, and so does the run-level `gh run view <runId> --log` - even for
+a job that finished twenty minutes ago. Redirecting to a file makes this worse,
+because the file is then 82 bytes of that sentence and reads like an empty log.
+What IS readable mid-run is the artifacts: `gh run download <runId> --name plan`
+gives the run plan, and each `items-<n>` and `runtime-log-<n>` appears as its
+shard finishes. So to answer "how many items is this run doing?" while it runs,
+read `plan.json` rather than the `plan` job's log.
+
 **`gh run download` can exit 0 on a partial artifact.** One download extracted
 25 of 37 items and returned success; a second attempt gave all 124 files. Count
 what you got against what you expected before you compute anything from it - a
