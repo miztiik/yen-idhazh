@@ -16,12 +16,15 @@
 	 * in `frame.ts` remains the rule for series of comparable size; it yields
 	 * here because the drawn extent spans more than two decades.
 	 *
-	 * The x axis is the calendar, not the list of days that have rows. A day
-	 * with no census breaks the line rather than closing the gap, because "no
-	 * data" and "no time spent" are different facts. A zero breaks it the same
-	 * way and is never clamped to the axis floor: a clamped point draws a
-	 * plunge to the bottom of the plot, which says the stage got a thousand
-	 * times faster. A gap says "no number here", which is true.
+	 * The x axis is the calendar, not the list of days that have rows. Three
+	 * different facts used to arrive here as one missing number, and each one
+	 * now draws as itself. A day nothing timed breaks the line. A day measured
+	 * at zero breaks it too and draws an open dot on the baseline rule: zero has
+	 * no position on a decade axis, and clamping it into the bottom decade draws
+	 * a plunge that says the stage got a thousand times faster. A day timed for
+	 * some of its items draws the items it timed. One line of type under the
+	 * chart names whichever of the three happened, because a hole in a line is a
+	 * mystery and three holes that look alike are worse than one.
 	 *
 	 * Four stages, four categorical colours, bound to the stage and never to
 	 * its rank, so sorting the legend never repaints a line. The health ramp is
@@ -31,7 +34,7 @@
 	 */
 	import { chartWidth, frame, logAxis, MARGIN, observeWidth } from '$lib/charts/frame';
 	import { axisLabels, type LabelAlign } from '$lib/charts/run-history';
-	import type { StageTimingDay } from '$lib/charts/series';
+	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
 
 	let {
@@ -41,10 +44,10 @@
 	}: { days: StageTimingDay[]; height: number; width: number } = $props();
 
 	const STAGES = [
-		{ key: 'fetchMs', label: 'fetch', colour: 'var(--series-1)' },
-		{ key: 'extractMs', label: 'extract', colour: 'var(--series-2)' },
-		{ key: 'summarizeMs', label: 'summarize', colour: 'var(--series-3)' },
-		{ key: 'scoreMs', label: 'score', colour: 'var(--series-4)' }
+		{ key: 'fetch', label: 'fetch', colour: 'var(--series-1)' },
+		{ key: 'extract', label: 'extract', colour: 'var(--series-2)' },
+		{ key: 'summarize', label: 'summarize', colour: 'var(--series-3)' },
+		{ key: 'score', label: 'score', colour: 'var(--series-4)' }
 	] as const;
 
 	type Stage = (typeof STAGES)[number];
@@ -84,7 +87,9 @@
 	 * the log form of the rounding rule, not an exception to it. */
 	const scale = $derived(
 		logAxis(
-			ordered.flatMap((day) => STAGES.map((stage) => day[stage.key])),
+			ordered
+				.flatMap((day) => STAGES.map((stage) => day[stage.key].ms))
+				.filter((ms): ms is number => ms !== null),
 			[box.bottom, box.top]
 		)
 	);
@@ -96,19 +101,37 @@
 	const axis = $derived(axisLabels(calendar));
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 
-	/** A stage is on the chart only where it has a number somewhere in view. */
-	const drawn = $derived(STAGES.filter((stage) => calendar.some((date) => at(date, stage.key) > 0)));
+	/** A stage is on the chart where the window timed it at all, a zero
+	 * included: a measured zero is a number, and it has a mark of its own. */
+	const drawn = $derived(
+		STAGES.filter((stage) => calendar.some((date) => timedOn(date, stage.key) > 0))
+	);
 	/** Tallest first, so a label is matched to a line by position and not by
 	 * colour alone. It reorders only when two stages have changed places, which
-	 * is when the operator wants to notice. */
-	const legend = $derived([...drawn].sort((a, b) => newestOf(b) - newestOf(a)));
-	/** A hole in a line is a mystery, so every hole is named in type. */
-	const gaps = $derived(
-		STAGES.map((stage) => ({
-			stage,
-			missing: calendar.filter((date) => at(date, stage.key) <= 0).length,
-			everDrawn: drawn.includes(stage)
-		})).filter((note) => note.missing > 0)
+	 * is when the operator wants to notice. A stage with no number on the newest
+	 * day has nothing to sort on and sits last. */
+	const legend = $derived([...STAGES].sort((a, b) => (newestOf(b) ?? -1) - (newestOf(a) ?? -1)));
+	/** Every day a stage did not draw a plain point, counted by which of the
+	 * three reasons it was. A stage the window never timed says so in the legend
+	 * instead, once, rather than here and there. */
+	const notes = $derived(
+		drawn
+			.map((stage) => {
+				const part = calendar
+					.map((date) => timingOn(date, stage.key))
+					.filter(
+						(day): day is StageTiming => day !== null && day.timed > 0 && day.timed < day.total
+					);
+				return {
+					stage,
+					blank: calendar.filter((date) => timedOn(date, stage.key) === 0).length,
+					zero: calendar.filter((date) => at(date, stage.key) === 0).length,
+					partDays: part.length,
+					timed: part.reduce((total, day) => total + day.timed, 0),
+					items: part.reduce((total, day) => total + day.total, 0)
+				};
+			})
+			.filter((note) => note.blank > 0 || note.zero > 0 || note.partDays > 0)
 	);
 
 	const ANCHOR: Record<LabelAlign, 'start' | 'middle' | 'end'> = {
@@ -117,13 +140,22 @@
 		end: 'end'
 	};
 
-	function at(date: string, key: Stage['key']): number {
-		return byDate.get(date)?.[key] ?? 0;
+	function timingOn(date: string, key: Stage['key']): StageTiming | null {
+		return byDate.get(date)?.[key] ?? null;
 	}
 
-	function newestOf(stage: Stage): number {
-		const value = newest?.[stage.key] ?? 0;
-		return value > 0 ? value : 0;
+	/** How many of the day's items the stage timed. No row at all is none. */
+	function timedOn(date: string, key: Stage['key']): number {
+		return timingOn(date, key)?.timed ?? 0;
+	}
+
+	/** The day's median, or null where the stage timed nothing that day. */
+	function at(date: string, key: Stage['key']): number | null {
+		return timingOn(date, key)?.ms ?? null;
+	}
+
+	function newestOf(stage: Stage): number | null {
+		return newest?.[stage.key].ms ?? null;
 	}
 
 	function x(index: number): number {
@@ -134,17 +166,18 @@
 		return scale.scale(ms);
 	}
 
-	/** Each unbroken stretch of days that has a number, so an absent day and a
-	 * zero are both a gap and neither is a straight line drawn through nothing.
-	 * A stretch of one is a dot: a stage that runs on alternate days used to
-	 * draw nothing at all, because only a one-day window got dots. */
+	/** Each unbroken stretch of days with a positive number, so an absent day
+	 * and a measured zero both break the line and neither is a straight line
+	 * drawn through nothing. A stretch of one is a dot: a stage that runs on
+	 * alternate days used to draw nothing at all, because only a one-day window
+	 * got dots. */
 	function runs(key: Stage['key']): Point[][] {
 		const paths: Point[][] = [];
 		let current: Point[] = [];
 		calendar.forEach((date, index) => {
-			const value = at(date, key);
-			if (value > 0) {
-				current.push({ x: x(index), y: y(value) });
+			const ms = at(date, key);
+			if (ms !== null && ms > 0) {
+				current.push({ x: x(index), y: y(ms) });
 			} else if (current.length > 0) {
 				paths.push(current);
 				current = [];
@@ -154,12 +187,39 @@
 		return paths;
 	}
 
+	/** The days a stage was measured at zero. They sit on the baseline rule,
+	 * which is the one place on a decade axis that is not a claim about size. */
+	function zeros(key: Stage['key']): Point[] {
+		return calendar
+			.map((date, index) => ({ date, index }))
+			.filter((day) => at(day.date, key) === 0)
+			.map((day) => ({ x: x(day.index), y: box.bottom }));
+	}
+
 	function points(run: Point[]): string {
 		return run.map((point) => `${point.x},${point.y}`).join(' ');
 	}
 
 	function duration(ms: number): string {
 		return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
+	}
+
+	/** What the legend prints for the newest day. `0 ms` would say the stage
+	 * took no time, which is the sentence this chart exists not to say. */
+	function newestValue(stage: Stage): string {
+		const ms = newestOf(stage);
+		if (ms === null) return 'not timed';
+		return ms === 0 ? 'under 1 ms' : duration(ms);
+	}
+
+	function plural(count: number): string {
+		return count === 1 ? 'day' : 'days';
+	}
+
+	/** Thousands grouped. A window of a month counts items in the thousands,
+	 * and 1240 and 1,240 are not read at the same speed. */
+	function group(count: number): string {
+		return count.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 	}
 
 	/** A decade label crosses from milliseconds to seconds at 1000 ms. Every
@@ -256,6 +316,17 @@
 							/>
 						{/if}
 					{/each}
+					{#each zeros(stage.key) as mark, index (`${stage.key}-zero-${index}`)}
+						<circle
+							cx={mark.x}
+							cy={mark.y}
+							r="3.5"
+							fill="none"
+							stroke={stage.colour}
+							stroke-width="1.5"
+							data-stage-zero={stage.label}
+						/>
+					{/each}
 				{/each}
 
 				{#each axis as label (label.column)}
@@ -272,31 +343,38 @@
 			</svg>
 		</div>
 
-		{#if legend.length > 0}
-			<ul class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-				{#each legend as stage (stage.key)}
-					<li class="flex items-center gap-2" data-stage={stage.label}>
-						<span class="size-3 shrink-0 rounded-sm" style="background: {stage.colour}"></span>
-						{stage.label}
-						<span class="tabular-nums text-text-secondary"
-							>{newestOf(stage) > 0 ? duration(newestOf(stage)) : 'no data'}</span
-						>
-					</li>
-				{/each}
-			</ul>
-		{/if}
+		<ul class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
+			{#each legend as stage (stage.key)}
+				<li
+					class="flex items-center gap-2"
+					class:opacity-50={!drawn.includes(stage)}
+					data-stage={stage.label}
+				>
+					<span class="size-3 shrink-0 rounded-sm" style="background: {stage.colour}"></span>
+					{stage.label}
+					<span class="tabular-nums text-text-secondary">{newestValue(stage)}</span>
+				</li>
+			{/each}
+		</ul>
 		{#if newest}
 			<p class="mt-2 text-[0.75rem] text-text-tertiary">
 				Values are the newest day on record, {newest.date}.
 			</p>
 		{/if}
-		{#each gaps as note (note.stage.key)}
-			<p class="mt-1 text-[0.75rem] text-text-tertiary" data-timing-gap={note.stage.label}>
-				{#if note.everDrawn}
-					No time recorded for {note.stage.label} on {note.missing}
-					{note.missing === 1 ? 'day' : 'days'} in this window.
-				{:else}
-					No time recorded for {note.stage.label} in this window.
+		{#each notes as note (note.stage.key)}
+			<p class="mt-1 text-[0.75rem] text-text-tertiary" data-timing-note={note.stage.label}>
+				{#if note.blank > 0}
+					We timed no {note.stage.label} work on {note.blank} of the {calendar.length}
+					{plural(calendar.length)}. The line breaks there.
+				{/if}
+				{#if note.zero > 0}
+					{note.stage.label} took under 1 ms per item on {note.zero}
+					{plural(note.zero)}, which is faster than we can time. The open dot on the baseline marks
+					it.
+				{/if}
+				{#if note.partDays > 0}
+					We timed {group(note.timed)} of the {group(note.items)} items for {note.stage.label} on {note.partDays}
+					{plural(note.partDays)}. The line is the items we timed.
 				{/if}
 			</p>
 		{/each}
