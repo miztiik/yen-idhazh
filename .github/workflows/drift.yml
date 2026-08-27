@@ -43,13 +43,26 @@ jobs:
       # computed against a model that has since moved is not a trend.
       - name: Compare the windows
         id: compare
+        env:
+          # Through `env`, not pasted into the program below. The scheduled run
+          # passes no inputs, so both of these are the `||` default and the
+          # shape check below is proved against that path first.
+          RECENT_DAYS: ${{ inputs.recent_days || '7' }}
+          BASELINE_DAYS: ${{ inputs.baseline_days || '28' }}
         run: |
+          set -euo pipefail
+          for window in "$RECENT_DAYS" "$BASELINE_DAYS"; do
+            if ! [[ "$window" =~ ^[0-9]{1,4}$ ]]; then
+              echo "a window is a count of days: 1 to 4 digits" >&2
+              exit 1
+            fi
+          done
           python - <<'PY' | tee drift.txt
-          import csv, datetime, pathlib
+          import csv, datetime, os, pathlib
           from idhazh.drift import Observation, compare
 
-          recent_days = int("${{ inputs.recent_days || '7' }}")
-          baseline_days = int("${{ inputs.baseline_days || '28' }}")
+          recent_days = int(os.environ["RECENT_DAYS"])
+          baseline_days = int(os.environ["BASELINE_DAYS"])
           today = datetime.date.today()
           ledger = pathlib.Path("state/scores.csv")
           if not ledger.exists():

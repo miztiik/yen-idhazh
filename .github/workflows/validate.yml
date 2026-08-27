@@ -143,12 +143,33 @@ jobs:
               print(f"{field}={value}")
           PY
 
+      # Every number this dispatch carries, shaped once, here. `plan` is the job
+      # every other job needs, so "before its first use" is anywhere after this
+      # step - the qualify matrix, the job bound, the byte check and the gate
+      # all read these afterwards. They arrive through `env` and are read by
+      # name, so nothing below is pasted into a command.
       - id: fanout
+        env:
+          SHARDS: ${{ inputs.shards }}
+          CORPUS_PER_SHARD: ${{ inputs.corpus_per_shard }}
+          REPEATS: ${{ inputs.repeats }}
+          JOB_BUDGET_MINUTES: ${{ inputs.job_budget_minutes }}
+          CANDIDATE_BYTES: ${{ inputs.candidate_bytes }}
         run: |
           set -euo pipefail
-          SHARDS="${{ inputs.shards }}"
           if ! [[ "$SHARDS" =~ ^[1-8]$ ]]; then
             echo "shards must be an integer from 1 through 8" >&2
+            exit 1
+          fi
+          for count in "$CORPUS_PER_SHARD" "$REPEATS" "$JOB_BUDGET_MINUTES"; do
+            if ! [[ "$count" =~ ^[1-9][0-9]{0,3}$ ]]; then
+              echo "corpus_per_shard, repeats and job_budget_minutes are 1 through 9999" >&2
+              exit 1
+            fi
+          done
+          # 0 is the documented value for "the adoption target declares none".
+          if ! [[ "$CANDIDATE_BYTES" =~ ^[0-9]{1,15}$ ]]; then
+            echo "candidate_bytes is a byte count, or 0 when the target declares none" >&2
             exit 1
           fi
           echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
