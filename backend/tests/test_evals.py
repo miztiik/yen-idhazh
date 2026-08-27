@@ -10,10 +10,16 @@ No mocks and no network (Rule #7). The text here is written for the test.
 
 from __future__ import annotations
 
+import json
+
 import pytest
+from conftest import CONTRACT_FIXTURES_DIR, read_text
 
 from idhazh.contracts.app_config import EvaluationConfig
-from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.contracts.article import Article
+from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.summary import Summary
 from idhazh.evals.hhem import HHEM_REVISION, HhemScorer, is_pinned, weights_digest
 from idhazh.evals.metrics import (
     EVIDENTIAL_TERMS,
@@ -26,12 +32,13 @@ from idhazh.evals.metrics import (
     hedge_dropped,
     lead_coverage,
     scorer_version,
+    self_repetition,
     speculative_density,
     unsupported_numbers,
     verbatim_run,
     word_count,
 )
-from idhazh.evals.score import band
+from idhazh.evals.score import band, to_eval_row
 
 ARTICLE = (
     "Example Grid ordered four small modular reactors from Northwind Atomics on Tuesday, "
@@ -236,6 +243,134 @@ def test_function_words_alone_do_not_lift_the_score() -> None:
 
 def test_a_summary_shorter_than_one_ngram_is_not_extractive() -> None:
     assert extractiveness("Four reactors", ARTICLE) == 0.0
+
+
+# --- Repeating itself --------------------------------------------------------
+#
+# The defect greedy decoding makes possible and every metric above is blind to.
+# A repeated sentence is still perfectly supported by the article, so it scores
+# BETTER on faithfulness the worse it gets.
+#
+# The pair below is one summary written twice at the same length: `LOOPED` says
+# one clause three times, `CONTROL` says it once and then says something else.
+# They are built so the older metrics cannot tell them apart, which is the whole
+# claim the column makes.
+
+_SHARED = "Northwind Atomics won the order for four reactors."
+_CLAUSE = "Ontario has still not signed off."
+_ELSEWHERE = "The regulator has asked for more paperwork and a longer review window."
+
+LOOPED = f"{_SHARED} {_CLAUSE} {_CLAUSE} {_CLAUSE}"
+CONTROL = f"{_SHARED} {_CLAUSE} {_ELSEWHERE}"
+
+
+def test_a_looping_summary_is_invisible_to_every_metric_that_reads_the_source() -> None:
+    """The blind spot, stated as an equality rather than as an opinion.
+
+    Same length, same 4-gram overlap with the article, same longest copied run,
+    same surviving lead facts. Four numbers that cannot separate a summary that
+    said one thing three times from a summary that said three things.
+    """
+    assert word_count(LOOPED) == word_count(CONTROL) == 26
+    assert extractiveness(LOOPED, ARTICLE) == extractiveness(CONTROL, ARTICLE)
+    assert verbatim_run(LOOPED, ARTICLE) == verbatim_run(CONTROL, ARTICLE)
+    assert lead_coverage(LOOPED, ARTICLE) == lead_coverage(CONTROL, ARTICLE)
+
+    assert self_repetition(CONTROL) == 0.0
+    assert self_repetition(LOOPED) > 0.0
+
+
+def test_ordinary_prose_sits_at_the_zero_point() -> None:
+    """Zero is not "good" - it is "every four-word window is different"."""
+    assert self_repetition(FAITHFUL) == 0.0
+    assert self_repetition(ARTICLE) == 0.0
+
+
+def test_one_phrase_said_three_times_is_all_it_takes() -> None:
+    """The smallest repetition a four-word window can see, and what it reads as.
+
+    Two of this summary's 97 windows go on repeat, so the number is 0.02. Small
+    on purpose: one echoed phrase in a hundred words is a wobble. A whole clause
+    said three times, as above, is 0.39.
+    """
+    phrase = "at the same time"
+    gaps = [" ".join(f"filler{n}" for n in range(at, at + 22)) for at in (0, 22, 44, 66)]
+    summary = " ".join((gaps[0], phrase, gaps[1], phrase, gaps[2], phrase, gaps[3]))
+
+    assert word_count(summary) == 100
+    assert self_repetition(summary) == pytest.approx(2 / 97)
+
+
+def test_a_summary_shorter_than_one_window_cannot_repeat_itself() -> None:
+    assert self_repetition("Four reactors") == 0.0
+    assert self_repetition("") == 0.0
+
+
+def test_self_repetition_stays_inside_the_bounds_the_ledger_declares() -> None:
+    for text in (LOOPED, CONTROL, FAITHFUL, ARTICLE, SOURCED, SPECULATIVE, ""):
+        assert 0.0 <= self_repetition(text) <= 1.0
+
+
+def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -> None:
+    """The wiring, and the one metric this suite cannot compute itself.
+
+    `hhem` is a model score handed to the scorer, never recomputed from the
+    summary, so a loop cannot move it. HHEM's weights are not on the machine
+    that runs this suite and no test may fetch them (Rule #7), so what is proved
+    here is the plumbing: the same faithfulness number goes in for both
+    summaries and the same number comes out, while the new column separates
+    them.
+    """
+    item = RunPlan.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
+    ).items[0]
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
+
+    def scored(text: str) -> EvalRow:
+        return to_eval_row(
+            item=item,
+            article=article,
+            summary=written.model_copy(update={"summary": text}),
+            full_text=ARTICLE,
+            hhem=0.91,
+            hhem_full=0.89,
+            config=EvaluationConfig(),
+            date="2026-08-21",
+            run_id="2026-08-21-1",
+            scorer_version="hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
+            scored_at="2026-08-21T06:18:02Z",
+        )
+
+    control, looped = scored(CONTROL), scored(LOOPED)
+
+    assert control.hhem == looped.hhem == 0.91
+    assert control.hhem_full == looped.hhem_full == 0.89
+    assert control.extractiveness == looped.extractiveness
+    assert control.verbatim_run == looped.verbatim_run
+    assert control.coverage == looped.coverage
+    assert control.band == looped.band
+
+    assert control.self_repetition == 0.0
+    assert looped.self_repetition is not None
+    assert looped.self_repetition > 0.0
+
+
+def test_an_eval_row_written_before_this_column_still_loads() -> None:
+    """Nullable, so yesterday's committed row is not a release blocker (section 11).
+
+    The pre-change shape is a committed fixture with the key removed, which is
+    exactly what every row already in `state/scores.csv` carries. Null is the
+    honest value: 0.0 would claim the summary was read and never repeated.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json"))
+    del payload["self_repetition"]
+
+    before = EvalRow.model_validate(payload)
+
+    assert before.self_repetition is None
+    assert before.version == "2026-08-21T03:00", "an older stamp still validates"
+    assert EvalRow.csv_columns()[-1] == "self_repetition", "appended, so no cell shifts right"
 
 
 # --- Recorded, never flagged -------------------------------------------------
