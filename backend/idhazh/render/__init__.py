@@ -10,20 +10,14 @@ from idhazh.render.chart import render_chart
 from idhazh.render.diagram import render_diagram
 from idhazh.render.write import (
     asset_relpath,
-    assets_in_day,
-    free_relpath,
-    highest_ordinal,
+    drop_raced_assets,
     render_route,
-    renumber_racing_assets,
 )
 
 __all__ = [
     "asset_relpath",
-    "assets_in_day",
-    "free_relpath",
-    "highest_ordinal",
+    "drop_raced_assets",
     "render_chart",
     "render_diagram",
     "render_route",
-    "renumber_racing_assets",
 ]

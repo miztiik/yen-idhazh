@@ -35,6 +35,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "asset_path is now written as digest/<Y>/<M>/<D>/<item_id>.svg. It was digest/<Y>/<M>/<D>/<vertical>-<NN>.svg, where NN came from a counter seeded by reading the day's directory.",
+      "version": "2026-08-27",
+      "why": "A counter has to be seeded from somewhere a run can read, and two runs of one day read the same directory before either had pushed. Both wrote energy-03.svg for different items and run 32869125768 lost a finished day to CONFLICT (add/add). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories, and sharding the route stage stops being blocked on it. No migration: the path is stored, not derived, so every payload written under the old shape still validates and still resolves to the file it names. Both shapes are live in committed data."
+    },
+    {
       "change": "Added drafted_chart, defaulting to false and derived true for a chart.",
       "version": "2026-08-25",
       "why": "A chart draft that the post-model checks reject is today indistinguishable from a draft the model never wrote, so nothing committed says why 8 of 17 drafts died on 2026-08-25. The run manifest sums this into charts_drafted. The read-side migration is a validator: a payload written before the field existed whose kind is chart was necessarily drafted as one, and a default of false there would report fewer drafts than published charts."
@@ -89,7 +94,7 @@
         }
       ],
       "default": null,
-      "description": "Relative POSIX path under frontend/public/, once rendered.",
+      "description": "Relative POSIX path under frontend/public/, once rendered. Written as digest/<Y>/<M>/<D>/<item_id>.svg since 2026-08-27; payloads before that carry digest/<Y>/<M>/<D>/<vertical>-<NN>.svg and stay valid.",
       "title": "Asset Path"
     },
     "drafted_chart": {
@@ -188,7 +193,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-25",
+      "default": "2026-08-27",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -207,5 +212,5 @@
   ],
   "title": "Route",
   "type": "object",
-  "version": "2026-08-25"
+  "version": "2026-08-27"
 }
