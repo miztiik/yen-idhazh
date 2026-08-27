@@ -312,16 +312,17 @@ any machine.
 | What | Have | Need |
 | --- | --- | --- |
 | Labels | **0** | 60 |
-| Distinct run-days at the current `scorer_version` AND current `pipeline_fingerprint` | **0** | 10 |
+| Distinct run-days at the current `scorer_version` AND current `pipeline_fingerprint` | **1** | 10 |
 | Longest run of consecutive run-days at any one pair, ever reached | **3** (`2026-08-24` to `2026-08-26`) | 10 |
-| Eligible rows at that pair | 0 | not the constraint |
+| Eligible rows at that pair | 114 | not the constraint |
 
 The current scorer is
 `hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30`.
-The latest 116 rows use it with the retired Qwen3-8B summarizer. The current
-config uses Qwen3.5-9B, and the summarizer weight digest is part of the pipeline
-fingerprint, so the current pair has not produced a row yet. The previous
-three-day series uses the old scorer and cannot be joined to this one. The band
+The configured Qwen3.5-9B summarizer wrote its first day under it on
+`2026-08-27`, 114 rows at fingerprint `6a23e277`, and that is the whole window.
+Every earlier row was written by the retired Qwen3-8B, whose weight digest is
+part of the pipeline fingerprint, so none of them can be joined to this series.
+The previous three-day run also uses the old scorer. The band
 values sit **inside** the scorer version string, so moving a threshold also
 mints a new scorer version and restarts the count. That is correct, and it is
 why a cut cannot move halfway through a collection.
@@ -406,7 +407,7 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 
 **The measured reset rate (2026-08-27, `state/scores.csv` and `state/fingerprints.csv` at commit `c08d8b5`).** 2,232 eval rows, written by 18 runs across **5 scored run-days** (`2026-08-22` to `2026-08-26`), carry **5 distinct `pipeline_fingerprint` values** and **4 distinct `scorer_version` values** - one new pipeline stamp per scored day, on average. `2026-08-26` alone carried three different (`scorer_version`, `pipeline_fingerprint`) pairs: the stamp moved at that day's second run and again at its fifth, and the scorer version moved at the fifth with it. Every one of those 2,232 rows names the same `model_id`, `qwen3-8b-q4-k-m` - the model did not change once and the stamp still moved four times, so a model swap is *one* cause of a reset rather than the cause. `state/fingerprints.csv` holds a single row, because the ledger that expands a stamp into its inputs only started on 2026-08-26; four of the five stamps can no longer be expanded at all. Authority: measurement.
 
-**The consequence, plainly: the ten-day window has never once been reached (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. The last pair the ledger holds reached one day and was then superseded: adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moves `model_sha256`, so the configured pipeline has written no row yet and the count stands at 0 of 10. At the observed rate of pipeline change, every model or runtime improvement spends the whole window. That is a live tension between shipping a better pipeline and measuring the one already running, and **this page does not resolve it.** Two answers exist - freeze the pipeline for ten days and pay for the window in shipped improvements, or count run-days at one `scorer_version` and carry `pipeline_fingerprint` as a reported stratum instead of a disqualification. The second is the rule change [The label queue: three repairs, and what they left](#the-label-queue-three-repairs-and-what-they-left) says needs owner approval. Both are the owner's call. Nothing here moves a threshold. Authority: owner.
+**The consequence, plainly: the ten-day window has never once been reached (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. That reset opened the current window: the 9B wrote its first 114 rows the same day, under `hhem-2.1-open@8e4a2e6e` and `6a23e277`, so the count stands at 1 of 10 and none of the 2,232 earlier rows can join it. At the observed rate of pipeline change, every model or runtime improvement spends the whole window. That is a live tension between shipping a better pipeline and measuring the one already running, and **this page does not resolve it.** Two answers exist - freeze the pipeline for ten days and pay for the window in shipped improvements, or count run-days at one `scorer_version` and carry `pipeline_fingerprint` as a reported stratum instead of a disqualification. The second is the rule change [The label queue: three repairs, and what they left](#the-label-queue-three-repairs-and-what-they-left) says needs owner approval. Both are the owner's call. Nothing here moves a threshold. Authority: owner.
 
 ## Rejected alternatives
 

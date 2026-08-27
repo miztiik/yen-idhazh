@@ -24,10 +24,10 @@ decision. Current project behaviour belongs in `docs/` (Rule #4).
 
 | # | Defect | Level | Status |
 | --- | --- | --- | --- |
-| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - queue repaired; 0 of 60 labels; 0 of 10 run-days, and 10 has never been reached** |
+| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - queue repaired; 0 of 60 labels; 1 of 10 run-days, and 10 has never been reached** |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 3 | CLOSED 2026-08-27 (PR #180) |
-| 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | **OPEN - owner decision** |
-| 17 | Two different word counters share one string and read as truncation | 5 | **OPEN - owner decision** |
+| 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | **OPEN - owner approved 2026-08-27; not yet shipped** |
+| 17 | Two different word counters share one string and read as truncation | 5 | **OPEN - owner approved 2026-08-27; not yet shipped** |
 
 ## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
 
@@ -67,13 +67,14 @@ guaranteed one.
 
 **0 of 60 labels.** No `state/labels.csv` is committed.
 
-**0 of 10 run-days, and 10 has never been reached.** The longest run of
+**1 of 10 run-days, and 10 has never been reached.** The longest run of
 consecutive run-days under a single pair is 3 - `2026-08-24` to `2026-08-26`,
 under fingerprint `969b1917...d2b945` - and the stamp moved four times across
-the five scored run-days the ledger holds. The configured summarizer
-`qwen3-5-9b-q4-k-m` has written nothing, so it has no pipeline stamp at all. The
-116 rows the tool used to report progress against belong to the retired
-`qwen3-8b-q4-k-m`, and no future run-day can join them. The reset mechanism, the
+the five scored run-days the ledger held before today. The configured summarizer
+`qwen3-5-9b-q4-k-m` wrote its first 114 rows on `2026-08-27`, under scorer
+`hhem-2.1-open@8e4a2e6e` and fingerprint `6a23e277`, so the current window opened
+today at one day. No earlier row can join it: every one of the 2,232 rows before
+it was written by the retired `qwen3-8b-q4-k-m`. The reset mechanism, the
 measured rate and the two ways out are stated once, in
 [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md#design-rationale).
 
