@@ -1,6 +1,6 @@
 """Turn one article payload into one summary payload, deterministically.
 
-Three things here are controls rather than preferences, and each one is the
+Four things here are controls rather than preferences, and each one is the
 reason a specific failure cannot happen:
 
 - The article text goes in the user turn, fenced and labelled, and never in the
@@ -10,6 +10,9 @@ reason a specific failure cannot happen:
 - Every `<think>` block is asserted empty rather than assumed. A flag that
   silently stopped taking effect would otherwise cost faithfulness for months
   before anyone noticed.
+- A reply that copies the source instead of summarizing it is refused, because
+  republishing an article body is a non-goal (CLAUDE.md section 0a) and not a
+  quality score to be tuned.
 
 Every number the prompt states is substituted from config at render time
 (Rule #6). That is not only tidiness: what we ask for is one of the inputs
@@ -33,6 +36,7 @@ from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_output_digest
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import Completion, request_payload
 from idhazh.sanitize import untrusted_block
 
@@ -394,6 +398,22 @@ def to_summary(
             detail=f"summary is {words} words, outside the publishable range",
             generated_at=generated_at,
             failure_code=FailureCode.LENGTH_OUT_OF_RANGE,
+        )
+
+    # Read against `article.text`, which is the text the model was shown. For a
+    # brief that is the whole article; on a truncated item it is less, so a run
+    # measured here can only under-report the copying.
+    copied = verbatim_run(draft.summary, article.text or "")
+    if copied > bounds.verbatim_reject_ceiling:
+        return _failed(
+            article,
+            model_id=model_id,
+            detail=(
+                f"{copied:.3f} of the summary is one unbroken run copied from the source, "
+                "which republishes the article instead of summarizing it"
+            ),
+            generated_at=generated_at,
+            failure_code=FailureCode.COPIED_SOURCE,
         )
 
     title = _publishable_title(draft.title, ask)

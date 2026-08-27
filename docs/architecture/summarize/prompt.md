@@ -98,6 +98,34 @@ generated from `SummaryDraft`, not requested in prose. `SummaryDraft` is closed
 to unknown keys, so a planted tool call fails at validation rather than reaching
 a payload.
 
+## The shape is not the whole check
+
+A reply can hold its shape perfectly and still be something we may not publish.
+Those failures are refused in `to_summary` after the reply parses, never asked
+for in the prompt - a prompt is written in the same channel as an attack and
+loses to a better-worded one.
+
+**A copy.** `verbatim_run` measures the longest unbroken stretch our summary
+lifted from the article. Above `evaluation.verbatim_reject_ceiling` the item is
+refused with `copied_source`. Republishing an article body is a non-goal
+(`CLAUDE.md` section 0a), so this is a rule and not a score: the levers that make
+a copy less likely - a longer target, a higher source floor - only change the
+odds, and a non-goal is not a tuning target.
+
+The check reads `article.text`, which is the text the model was shown. For a
+brief that is the whole article. On a truncated item it is less, so a run
+measured here can only under-report the copying, which is the safe direction.
+
+It is a reject and not a retry. Decoding is deterministic (`temperature` is 0.0)
+and run 33016222069 recorded an identical `output_digest` across all three
+repeats of the item that copied, so a second call returns the same words and
+costs a second inference. A retry that changed the ask would be a prompt change,
+and the attempt budget it would need has no home in `config/` (Rule #6).
+
+The reader sees nothing. The item is absent like any other failed item, and
+`state/item-health/` carries the census row that says which code dropped it and
+how many words it had.
+
 ## Model compatibility is mechanical
 
 The request sends `chat_template_kwargs.enable_thinking` from

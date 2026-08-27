@@ -274,6 +274,26 @@ def row_for(code: FailureCode) -> ItemHealthRow:
                 date=plan().date,
                 run_id="2026-08-21-1",
             )
+        case FailureCode.COPIED_SOURCE:
+            draft = {
+                "title": "Example Lab publishes a smaller inference model",
+                "summary": ok_article.text or "",
+                "key_points": ["One useful fact.", "Second useful fact.", "Third useful fact."],
+            }
+            failed_summary = summarize.to_summary(
+                ok_article,
+                Completion(json.dumps(draft)),
+                model_id="qwen3-8b",
+                pipeline_fingerprint="0" * 64,
+                generated_at="2026-08-21T06:00:00Z",
+            )
+            return telemetry.classify_item(
+                planned=item(),
+                article=ok_article,
+                summary=failed_summary,
+                date=plan().date,
+                run_id="2026-08-21-1",
+            )
         case FailureCode.UNKNOWN:
             return telemetry.classify_item(
                 planned=item(),

@@ -12,6 +12,7 @@ is easy; a summarizer that cannot be talked out of its shape is the product.
 
 from __future__ import annotations
 
+import ast
 import json
 import socket
 import threading
@@ -30,12 +31,18 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh import cli, config
-from idhazh.contracts.app_config import InferenceConfig, SummarizeConfig, SummaryBand
+from idhazh.contracts.app_config import (
+    EvaluationConfig,
+    InferenceConfig,
+    SummarizeConfig,
+    SummaryBand,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_output_digest
 from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import (
     Completion,
     is_context_exceeded,
@@ -915,12 +922,114 @@ def test_a_summary_outside_the_publishable_range_is_refused() -> None:
 
 
 def test_the_publishable_range_comes_from_config() -> None:
-    from idhazh.contracts.app_config import EvaluationConfig
-
     reply = body(summary="y " * 100)
     assert replied(reply).status is SummaryStatus.OK
     tightened = EvaluationConfig(summary_words_min=150, summary_words_max=200)
     assert replied(reply, evaluation=tightened).status is SummaryStatus.FAILED
+
+
+# --- A copy is not a summary -------------------------------------------------
+
+
+def copied_run(kept: int) -> str:
+    """A 44-word summary whose first `kept` words are one unbroken lift.
+
+    The tail is words the source does not contain, so the longest run is exactly
+    `kept` and the ratio is exactly `kept / 44`.
+    """
+    lifted = (article("brief").text or "").split()[9:]
+    ours = "alpha bravo charlie delta echo foxtrot golf hotel india juliet kilo".split()
+    return " ".join(lifted[:kept] + ours[: 44 - kept])
+
+
+def test_a_summary_that_is_one_copied_run_of_its_source_is_refused() -> None:
+    """The measured defect: 44 published words, every one of them lifted unbroken.
+
+    Run 33016222069 on 2026-08-26 published item business-economy-4010712495 as a
+    44-word copy of its 53-word source. Republishing an article body is a
+    non-goal (CLAUDE.md section 0a), so it is refused rather than scored down.
+    """
+    result = summarised("copied-the-source", source="brief")
+
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is FailureCode.COPIED_SOURCE
+    assert "1.000 of the summary" in (result.failure_detail or "")
+    assert result.summary is None
+    assert result.key_points == []
+
+
+def test_the_copied_reply_failed_on_the_copying_and_on_nothing_else() -> None:
+    """Every other rule in `to_summary` passes this reply, so only one can have fired.
+
+    Without this, the test above would still pass if the reply were malformed or
+    the wrong length, and the copy rule could be dead.
+    """
+    source = article("brief")
+    draft = parse_draft(completion("copied-the-source").content)
+    bounds = EvaluationConfig()
+
+    assert bounds.summary_words_min <= len(draft.summary.split()) <= bounds.summary_words_max
+    assert verbatim_run(draft.summary, source.text or "") == 1.0
+    assert source.brief is True
+    assert source.source_word_count == 53
+
+
+def test_the_reject_fires_above_the_ceiling_and_not_at_it() -> None:
+    """0.75 is the ceiling, so 0.750 publishes and 0.773 does not.
+
+    A boundary either side of one number, because a rule that fired at the
+    ceiling would leave `brief_copying_ceiling` a band it can never fail in.
+    """
+    text = article("brief").text or ""
+    assert verbatim_run(copied_run(33), text) == pytest.approx(0.75)
+    assert verbatim_run(copied_run(34), text) == pytest.approx(34 / 44)
+
+    assert replied(body(summary=copied_run(33)), source="brief").status is SummaryStatus.OK
+    over = replied(body(summary=copied_run(34)), source="brief")
+    assert over.failure_code is FailureCode.COPIED_SOURCE
+
+
+def test_the_copy_ceiling_is_read_from_config_and_not_written_in_the_code() -> None:
+    """Rule #6. Move the knob and the same reply changes side."""
+    reply = completion("copied-the-source").content
+    permissive = EvaluationConfig(verbatim_reject_ceiling=1.0)
+    strict = EvaluationConfig(verbatim_reject_ceiling=0.6)
+
+    assert replied(reply, source="brief", evaluation=permissive).status is SummaryStatus.OK
+    assert replied(reply, source="brief", evaluation=strict).failure_code is (
+        FailureCode.COPIED_SOURCE
+    )
+    assert replied(body(summary=copied_run(33)), source="brief", evaluation=strict).failure_code is (
+        FailureCode.COPIED_SOURCE
+    )
+
+
+def test_a_summary_in_its_own_words_is_untouched_by_the_copy_rule() -> None:
+    """The rule must cost nothing to the summaries it is not about."""
+    result = summarised("ok")
+    assert result.status is SummaryStatus.OK
+    assert verbatim_run(result.summary or "", article().text or "") < 0.75
+
+
+def test_the_summarizer_never_imports_the_scorer() -> None:
+    """It borrows one model-free metric and may reach no further.
+
+    `verbatim_run` is pure string work. `evals/hhem.py` loads a model and
+    `evals/score.py` and `evals/qualify.py` decide what publishes, so a
+    summarizer able to import any of them would let the thing being measured
+    reach its own judge - and would drag a model load into every worker.
+    """
+    tree = ast.parse(read_text(REPO_ROOT / "backend" / "idhazh" / "summarize.py"))
+    for node in ast.walk(tree):
+        names: list[str] = []
+        if isinstance(node, ast.Import):
+            names = [alias.name for alias in node.names]
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            names = [node.module]
+        for name in names:
+            assert "hhem" not in name, f"summarize.py imports {name}"
+            for grader in ("idhazh.evals.score", "idhazh.evals.qualify"):
+                assert not name.startswith(grader), f"summarize.py imports {name}"
 
 
 def test_a_failed_article_is_never_sent_to_the_model() -> None:

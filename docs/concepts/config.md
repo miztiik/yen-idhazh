@@ -20,7 +20,7 @@ Knobs, by the surface they tune:
 - **Extraction** - the truncation cap, the retry budget, backoff, what counts as an oversized body, shape-signal thresholds, shape enforcement switches, and paywall fallback markers.
 - **Model** - which model reference and quantisation, the context size, thread count, and the sampling parameters that pin determinism.
 - **Summarize** - the length bands, title range, key-point range and quote cap.
-- **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the brief compression ceiling, the word gate, and the spot-check sample size ([evaluation.md](evaluation.md)).
+- **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the brief compression ceiling, the copy reject ceiling, the word gate, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, and the published-site alarm point ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)).
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
@@ -60,6 +60,23 @@ summary floor is 125 characters. `evaluation.brief_compression_ceiling` is 0.5;
 it caps `verbatim_run` for brief items and derives the floor above.
 `evaluation.lead_coverage_min` is 0.30; a miss below it caps `high` at `medium`.
 That lets a brief stop naturally instead of padding toward the old 40-word gate.
+
+`evaluation.verbatim_reject_ceiling` is 0.75, and it is deliberately a different
+number from `evaluation.brief_compression_ceiling`. The compression ceiling is a
+gate: it reads the scores a run wrote and fails the run when a brief copied too
+much. The reject ceiling is a rule inside the summarize stage: above it the item
+is refused and never scored at all. Give the two one value and the gate has
+nothing left to read, because every item it could have failed was dropped before
+it looked - and a gate that stops failing reads exactly like a pipeline that
+stopped copying. An `EvaluationConfig` validator refuses any reject ceiling at or
+below the gate's, so an operator cannot collapse them by editing one line.
+
+0.75 is a starting point and not a calibrated threshold (Rule #10). It is the
+midpoint of the empty band that eight brief items left on 2026-08-26 (run
+33016222069): seven scored at or below 0.241 and the eighth scored 1.000, so
+every value between those two selects the same single item and nothing in the
+data prefers one over another. The floor is fixed at 0.5 by the validator above.
+Eight items is not a distribution.
 
 Every `min_source_words` in this file - `extract.min_source_words` and each
 `summarize.bands[].min_source_words` - counts the **source body**, before
