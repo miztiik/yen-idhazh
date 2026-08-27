@@ -107,12 +107,16 @@ flowchart LR
 ```
 
 The plan job also commits first-sighting and feed-health state before it starts
-the workers. This keeps observations from a failed refresh.
+the workers. This keeps observations from a failed refresh. Each worker then
+commits the item-health and eval rows for the items its own shard settled, for
+the same reason: those rows otherwise ride only in that shard's `items-<shard>`
+artifact, which is kept for one day and is not uploaded at all when a job is
+cancelled.
 
-### Both commit steps push through a rebase, and the one that can rebuild rebuilds
+### The three commit steps push through a rebase, and the one that can rebuild rebuilds
 
-The plan job and the assemble job each commit, then push in a loop of three
-attempts. Both run one script,
+The plan job, each work shard and the assemble job commit, then push in a loop of
+three attempts. All of them run one script,
 [`.github/scripts/commit-and-push.sh`](../../.github/scripts/commit-and-push.sh).
 Two copies of the loop were a loop no test could execute.
 
@@ -130,11 +134,18 @@ failure it looks like it prevents.
 
 **There are two ways to lose the push race, and they need different answers.**
 
-The plan job only records what it saw. Its ledgers are append-only and every row
-is independent of its neighbours, so two runs that both appended are not in
-disagreement and the union of both sides is the answer. Every file under
-`state/` carries `merge=union` in `.gitattributes`, so that rebase resolves
-itself. A reader of those ledgers already deduplicates.
+The plan job only records what it saw, and so does a work shard. Their ledgers
+are append-only and every row is independent of its neighbours, so two runs that
+both appended are not in disagreement and the union of both sides is the answer.
+Every file under `state/` carries `merge=union` in `.gitattributes`, so that
+rebase resolves itself. A reader of those ledgers already deduplicates.
+
+A shard's two steps carry `continue-on-error`, so neither can fail the shard. The
+shard owes the run its items artifact, and assemble writes the same census again,
+so a ledger that will not push costs this run an early copy of rows it gets
+anyway - while a failed shard costs the day a whole worker. Eight shards racing
+one branch is the contention case the loop's three attempts and the union driver
+exist for.
 
 The assemble job rebuilds what it commits, so it rebuilds. `actions/checkout@v6`
 carries no `ref`, so the job takes main's tip at trigger time, and a run takes

@@ -508,6 +508,52 @@ jobs:
         if: failure()
         run: tail -50 llama-server.log || true
 
+      # The rows this shard earned, committed here rather than three hours later
+      # in assemble. Until then they exist only inside the items artifact at the
+      # end of this job, which keeps them for one day and is not uploaded at all
+      # when a job is cancelled - so a run stopped after the workers had measured
+      # every item recorded none of it.
+      #
+      # First of the `always()` steps for that reason: a cancelled job runs them
+      # in order inside a grace period, and this is the one whose loss the pair
+      # exists to prevent.
+      #
+      # Neither step may fail the shard. What this job owes the run is the items
+      # artifact assemble publishes from, and assemble writes the same census
+      # again - so a ledger that will not push costs this run an early copy of
+      # rows it is going to get anyway, while a failed shard costs the day a
+      # worker. `continue-on-error` says that out loud instead of leaving it to
+      # whether the last command in a `run:` body happens to return zero.
+      - name: Record what this shard measured
+        if: always()
+        continue-on-error: true
+        run: |
+          python -m idhazh record \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard ${{ matrix.shard }} \
+            --shards ${{ needs.plan.outputs.shards }}
+
+      # The shape the plan job uses, for the reason written there, and the same
+      # script - eight shards racing one branch is what its rebase loop and the
+      # `merge=union` attribute on these two paths are for. It cannot rebuild
+      # what it commits, so it carries none of the refresh settings.
+      #
+      # Appending the same row twice is the one thing that would make this worse
+      # than the loss it fixes, because `publish_telemetry` copies every row into
+      # the file the console reads. `ledger.append_item_health` keys a row by run
+      # and item and `evals.writer.append` keys one by observation, so assemble's
+      # copy of these rows is the same row and lands once.
+      - name: Commit what this shard measured
+        if: always()
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
+          NOTHING_STAGED_MESSAGE: "nothing measured to record"
+          PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          state/item-health state/scores.csv
+
       - name: Prompt cache log summary
         if: always()
         run: |
