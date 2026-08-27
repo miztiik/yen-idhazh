@@ -48,6 +48,7 @@ These exist on a developer machine and in CI. None is ever committed.
 | `backend/models/` | GGUF weights. 2.4 GB and 4.8 GB, against a 100 MB per-file ceiling |
 | `backend/bin/` | llama.cpp binaries, ~45 MB. Downloaded, not authored |
 | `backend/var/` | Run intermediates and caches. The committed record of a run is the digest plus the `state/` rows, never the workings |
+| `backend/var/evidence/` | Inside `backend/var/`, and named here because a person has to find it. One file per scored item, holding the article text and the summary a human labeller must read. Article bodies are not ours to republish (`CLAUDE.md` section 0a), so this one is uncommittable on principle rather than on size |
 | `frontend/build/` | The built bundle. Pages rebuilds it from source on every deploy |
 | `frontend/static/digest/` | Staged from `frontend/public/digest/` at build time. A copy is not a source |
 
@@ -75,6 +76,14 @@ because it is read the same way - joined to `state/scores.csv` on
 one exception to "written by a machine", and it is deliberate: the point of the
 file is that no machine wrote it (`CLAUDE.md` section 0a). See
 [../concepts/evaluation.md](../concepts/evaluation.md).
+
+**The text those labels judge lives under `backend/var/evidence/`, not under
+`state/`.** A label is our own words about an item and is ours to commit. The
+article it judges is somebody else's and is not, so the two are stored apart
+even though one is useless without the other. The run writes the evidence, the
+work job uploads it as an artifact with a deadline, and a fresh checkout has
+none of it - which is the intended cost. See
+[../how-to/label-the-faithfulness-queue.md](../how-to/label-the-faithfulness-queue.md).
 
 The Pages workflow uploads `frontend/build` and nothing else, so `state/` cannot
 reach a reader even by accident. The console reads it at build time and bakes
