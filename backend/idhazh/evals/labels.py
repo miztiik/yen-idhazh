@@ -13,6 +13,10 @@ all - and a boundary-weighted draw could not answer it: it would speak about
 0.75 to 0.85 and stay silent about the majority of the ledger. Re-weighting a
 uniform draw to the live distribution recovers an overall rate; the reverse is
 not available.
+
+The strata are how the rows are chosen and never how they are ordered. The queue
+comes back in one global `label_id` order, so the sequence says nothing about
+which decile a row came from.
 """
 
 from __future__ import annotations
@@ -21,7 +25,7 @@ import csv
 from collections.abc import Iterable, Mapping, Sequence
 from hashlib import sha256
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 
 from idhazh.contracts.label_row import LabelRow
 from idhazh.ledger import read_header as _read_header
@@ -59,16 +63,58 @@ def label_id(record: Mapping[str, str], *, draw_id: str) -> str:
     return sha256(material.encode("utf-8")).hexdigest()[:16]
 
 
-def eligible(records: Iterable[Mapping[str, str]], *, scorer_version: str) -> list[dict[str, str]]:
-    """Ledger rows the live instrument produced.
+def eligible(
+    records: Iterable[Mapping[str, str]],
+    *,
+    scorer_version: str,
+    pipeline_fingerprint: str,
+) -> list[dict[str, str]]:
+    """Ledger rows one instrument read from the words of one producer.
 
-    Rows at an older `scorer_version` are excluded, because a stratum computed
-    across two instruments is not a stratum. Short-source rows are deliberately
-    KEPT: they are extraction failures rather than summary defects, and dropping
-    them would bias the sample toward well-extracted items - the exact sampling
-    error the labels exist to avoid. The `unjudgeable` tag carries them instead.
+    Both halves of the pair are required and neither has a default. Refusing to
+    mix scorers while allowing mixed pipelines was incoherent: a new scorer
+    changes how the words are judged, and a new pipeline changes the words, so
+    either one crossing a stratum makes it two strata wearing one name.
+
+    Short-source rows are deliberately KEPT: they are extraction failures rather
+    than summary defects, and dropping them would bias the sample toward
+    well-extracted items - the exact sampling error the labels exist to avoid.
+    The `unjudgeable` tag carries them instead.
     """
-    return [dict(record) for record in records if record.get("scorer_version") == scorer_version]
+    return [
+        dict(record)
+        for record in records
+        if record.get("scorer_version") == scorer_version
+        and record.get("pipeline_fingerprint") == pipeline_fingerprint
+    ]
+
+
+class Pair(NamedTuple):
+    """One instrument-and-producer combination the ledger holds, and what it covers."""
+
+    scorer_version: str
+    pipeline_fingerprint: str
+    rows: int
+    first_date: str
+    last_date: str
+
+
+def pairs(records: Iterable[Mapping[str, str]]) -> list[Pair]:
+    """Every pair in the ledger with its row count and dates, oldest first.
+
+    What a refusal prints. "No rows at the pair you asked for" on its own leaves
+    the operator guessing whether the gate is one day away or unreachable; the
+    same refusal that also says what the ledger does hold answers that.
+    """
+    dates: dict[tuple[str, str], list[str]] = {}
+    for record in records:
+        key = (record["scorer_version"], record["pipeline_fingerprint"])
+        dates.setdefault(key, []).append(record["date"])
+    found = [
+        Pair(scorer_version, fingerprint, len(seen), min(seen), max(seen))
+        for (scorer_version, fingerprint), seen in dates.items()
+    ]
+    return sorted(found, key=lambda pair: (pair.first_date, pair.last_date, pair.rows))
 
 
 def draw(
@@ -76,6 +122,7 @@ def draw(
     *,
     draw_id: str,
     scorer_version: str,
+    pipeline_fingerprint: str,
     per_decile: int,
 ) -> list[dict[str, str]]:
     """`per_decile` rows from each `hhem` decile, deterministic by hash.
@@ -85,11 +132,17 @@ def draw(
     that quietly includes another stratum's rows is not the stratum it is named
     after. The shortfall is visible in the result and belongs in the report.
 
-    Rows come back in decile order, then by key. **Never in score order** - a
-    queue sorted by score is the single worst leak, because a labeller reads the
-    gradient off the sequence.
+    Rows come back in one global `label_id` order. Hiding the number while
+    emitting decile after decile hid nothing: a labeller working down the queue
+    still read the confidence gradient off the sequence, and the first twenty
+    rows were the bottom three deciles entire. `label_id` is a hash over the
+    address, the inputs, the words, the instrument and the draw, so sorting the
+    whole picked set by it is a shuffle that needs no seed and stays
+    reproducible - which matters the moment two labellers compare notes.
     """
-    pool = eligible(records, scorer_version=scorer_version)
+    pool = eligible(
+        records, scorer_version=scorer_version, pipeline_fingerprint=pipeline_fingerprint
+    )
     buckets: dict[int, list[dict[str, str]]] = {index: [] for index in range(DECILES)}
     for record in pool:
         record["label_id"] = label_id(record, draw_id=draw_id)
@@ -99,7 +152,7 @@ def draw(
     for index in range(DECILES):
         bucket = sorted(buckets[index], key=lambda row: row["label_id"])
         picked.extend(bucket[:per_decile])
-    return picked
+    return sorted(picked, key=lambda row: row["label_id"])
 
 
 def shortfalls(picked: Sequence[Mapping[str, str]], *, per_decile: int) -> dict[int, int]:
@@ -114,9 +167,19 @@ def shortfalls(picked: Sequence[Mapping[str, str]], *, per_decile: int) -> dict[
     return {index: per_decile - count for index, count in counted.items() if count < per_decile}
 
 
-def run_days(records: Iterable[Mapping[str, str]], *, scorer_version: str) -> set[str]:
-    """Distinct run-days at one instrument. The collection requirement counts these."""
-    return {record["date"] for record in eligible(records, scorer_version=scorer_version)}
+def run_days(
+    records: Iterable[Mapping[str, str]],
+    *,
+    scorer_version: str,
+    pipeline_fingerprint: str,
+) -> set[str]:
+    """Distinct run-days at one pair. The collection requirement counts these."""
+    return {
+        record["date"]
+        for record in eligible(
+            records, scorer_version=scorer_version, pipeline_fingerprint=pipeline_fingerprint
+        )
+    }
 
 
 def columns() -> tuple[str, ...]:
