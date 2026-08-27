@@ -672,6 +672,25 @@ contends with the first.
   browser suite, not by hand.
 - **`locator.scrollIntoViewIfNeeded()` times out on a page that keeps relaying
   out.** Use `page.evaluate` with `scrollIntoView` instead.
+- **`locator.click()` cannot succeed here at all**, for the same reason: layout
+  is never driven, so Playwright's actionability check waits for an element that
+  never becomes stable and then reports `Element is outside of the viewport`.
+  Observed 2026-08-27 on the archive's Search button, which renders correctly and
+  reads correctly in the snapshot. `{ force: true }` does not help - it fails on
+  the viewport check instead of the stability one. Drive it from the DOM, which
+  sends the same event a reader does:
+
+  ```js
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((b) => b.textContent.trim() === 'Search');
+    button.click();
+  });
+  ```
+
+  Read the error before rewriting the selector: `outside of the viewport` and
+  `waiting for element to be visible, enabled and stable` on an element the
+  snapshot shows are this quirk, not a broken locator.
 - **`getBoundingClientRect()` returns zero width for every element on the
   console.** Layout is not being driven in a hidden page, so a bar that draws
   perfectly still measures 0. The `style` attribute is still correct and still
