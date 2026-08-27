@@ -45,6 +45,7 @@ from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
+from idhazh.fingerprint import text_digest
 
 BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
 CONFIG_FILES: dict[str, type[Contract]] = {
@@ -343,6 +344,21 @@ def test_the_eval_ledger_columns_are_defined_once() -> None:
     assert len(set(columns)) == len(columns)
     for required in ("date", "source_url", "title", "url_key", "band", "version"):
         assert required in columns, "a ledger row must still mean something after a prune"
+
+
+def test_the_recorded_premise_digest_names_the_article_fixture() -> None:
+    """The populated shape, checked against text this repository holds.
+
+    A fixture digest nobody can recompute proves the field parses and nothing
+    else. This one is the digest of `article/ok.json`'s sanitized text, so the
+    fixture also pins the convention: sha256 over the UTF-8 bytes, all 64 hex
+    characters, which is what `text_digest` spells everywhere else.
+    """
+    source = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    scored = EvalRow.from_json(read_text(CONTRACT_FIXTURES_DIR / "eval-row" / "premise-recorded.json"))
+
+    assert scored.source_digest == text_digest(source.text or "")
+    assert scored.source_digest != scored.output_digest
 
 
 def test_the_item_health_ledger_columns_are_defined_once() -> None:

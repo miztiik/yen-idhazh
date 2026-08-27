@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added source_digest, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-08-27",
+      "why": "The row named the words that came out and never the text they were scored against. A person re-reading an item to label it by hand had no way to prove the article in front of them was the sanitized, truncated premise the scorer read, so a disagreement between the two measured premise mismatch and not scorer error. Empty on the 2,232 rows that predate it: those runs recorded no premise, and a digest computed today would name text nobody read. Recorded only - no band reads it, so METRICS_VERSION did not move."
+    },
+    {
       "change": "Added self_repetition, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
       "version": "2026-08-26",
       "why": "Every n-gram column here reads the summary against the article. Nothing read the summary against itself, so a summary that says the same clause three times scored clean on all eleven quality columns - greedy decoding has no sampling noise to break a loop, and a repeated sentence is still perfectly supported by the source. Null and not zero on the rows that predate it: zero means measured and not repeating. Recorded only - no band reads it, so METRICS_VERSION did not move."
@@ -186,6 +191,20 @@
       "description": "Share of the summary's 4-word windows that repeat one it already used. The only column that reads the summary against ITSELF: every other n-gram column reads it against the article, and a repeated sentence is perfectly supported by the article. Zero means no window repeats. Recorded only, never banded. Null on a row scored before 2026-08-26.",
       "title": "Self Repetition"
     },
+    "source_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The premise the faithfulness scorer read, digested whole: the article text after sanitizing and truncation. Not the fetched page, and not the summary - `output_digest` already names those words. It exists so a person labelling this item by hand can prove they are reading the same text the scorer read; without it a disagreement between them measures a premise mismatch rather than a scorer error. Null on a row scored before 2026-08-27.",
+      "title": "Source Digest"
+    },
     "source_seen_word_count": {
       "default": 0,
       "description": "What the model actually got, after truncation.",
@@ -256,7 +275,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-08-27",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -294,5 +313,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-08-27"
 }
