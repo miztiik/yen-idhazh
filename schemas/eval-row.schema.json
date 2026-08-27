@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added self_repetition, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-08-26",
+      "why": "Every n-gram column here reads the summary against the article. Nothing read the summary against itself, so a summary that says the same clause three times scored clean on all eleven quality columns - greedy decoding has no sampling noise to break a loop, and a repeated sentence is still perfectly supported by the source. Null and not zero on the rows that predate it: zero means measured and not repeating. Recorded only - no band reads it, so METRICS_VERSION did not move."
+    },
+    {
       "change": "Added evidential_density and speculative_density, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
       "version": "2026-08-23",
       "why": "Every other column scores our summary against the article. These two score the article, which nothing did: a faithful summary of an unsourced rumour scores high on all of them and is still an unsourced rumour. First columns to land after the ledger had rows in it, hence appended rather than filed by meaning, and null rather than zero on the ten rows that predate them. Recorded only - no band reads them until enough rows exist to say what a normal value is (Rule #10)."
@@ -166,6 +171,21 @@
       "title": "Scorer Version",
       "type": "string"
     },
+    "self_repetition": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Share of the summary's 4-word windows that repeat one it already used. The only column that reads the summary against ITSELF: every other n-gram column reads it against the article, and a repeated sentence is perfectly supported by the article. Zero means no window repeats. Recorded only, never banded. Null on a row scored before 2026-08-26.",
+      "title": "Self Repetition"
+    },
     "source_seen_word_count": {
       "default": 0,
       "description": "What the model actually got, after truncation.",
@@ -236,7 +256,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-08-23",
+      "default": "2026-08-26",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -274,5 +294,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-23"
+  "version": "2026-08-26"
 }
