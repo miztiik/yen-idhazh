@@ -670,8 +670,19 @@ test('a failure panel draws in CSS pixels, so its type is the size it declares',
 }) => {
 	await page.goto('/console/');
 
+	// The skip reads the window, which is the fixture's own fact, and never a
+	// locator count. Counting `[data-panel]` here meant that renaming the
+	// attribute drew zero panels, skipped this test, and left the suite green.
+	// `span` answers 0 for a missing attribute, so the skip cannot fire on one.
+	const viewport = page.locator('[data-viewport-control]');
+	const start = await viewport.getAttribute('data-window-start');
+	const end = await viewport.getAttribute('data-window-end');
+	test.skip(span(start, end) === 1, 'the fixture window holds one day, so no panel draws');
+
+	// One panel per stage - fetch, extract and summarize. A renamed attribute
+	// fails here instead of switching the test off.
 	const panels = page.locator('[data-panel]');
-	test.skip((await panels.count()) === 0, 'the fixture window holds one day, so no panel draws');
+	await expect(panels, 'a window of more than one day draws one panel per stage').toHaveCount(3);
 
 	// A `viewBox` is a scale factor, not a unit. Stretched from 360 units into a
 	// 163px panel it put `font-size="10"` on screen at 4.5px.
