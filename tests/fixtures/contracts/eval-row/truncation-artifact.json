@@ -20,6 +20,7 @@
   "score_ms": 0,
   "scored_at": "2026-08-21T06:19:41Z",
   "scorer_version": "hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-1;bands=0.80/0.50",
+  "self_repetition": null,
   "source_seen_word_count": 1875,
   "source_url": "https://newsroom.example-grid.com/2026/08/reactor-order",
   "source_word_count": 4310,

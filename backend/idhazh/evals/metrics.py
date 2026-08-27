@@ -6,7 +6,7 @@ half, and they are deliberately model-free - they are pure string and token
 work, they run on every item forever, and they are what still measures the
 pipeline if the faithfulness scorer turns out not to fit the runner.
 
-Two of them see defects nothing else here can:
+Three of them see defects nothing else here can:
 
 - `unsupported_numbers` catches a *wrong* number. Recall-style metrics see an
   omitted number and are structurally blind to an invented one, and a wrong
@@ -14,6 +14,10 @@ Two of them see defects nothing else here can:
 - `hedge_dropped` catches a rumour becoming a fact. A faithfulness scorer marks
   it generously, because the entity and the relation are both present - only the
   uncertainty went missing.
+- `self_repetition` catches a summary that says the same thing twice. It is the
+  only measure here that reads the summary against itself, and it is the only
+  defect that scores BETTER on every other metric the worse it gets: a repeated
+  sentence is still perfectly supported by the article.
 
 The two densities are the odd pair here: they score the ARTICLE, not our summary
 of it. Everything else asks whether we were faithful to the source. They ask what
@@ -31,8 +35,13 @@ from typing import Final
 
 from idhazh.contracts.app_config import EvaluationConfig
 
-#: Bumped whenever any definition below changes. Part of the derived
-#: `scorer_version`, so a ledger row keeps meaning what it meant when written.
+#: Bumped whenever a definition below changes what an existing column means.
+#: Part of the derived `scorer_version`, so a ledger row keeps meaning what it
+#: meant when written. `self_repetition` was added on 2026-08-26 without moving
+#: it: no band and no derived column reads that column, so every row written
+#: under `metrics-3` still says exactly what it said. Moving it would have
+#: restarted the ten-run-day count `docs/concepts/evaluation.md` requires before
+#: any threshold can move, to record a fact no threshold reads.
 METRICS_VERSION: Final = "3"
 
 LEAD_SENTENCES: Final = 3
@@ -248,6 +257,36 @@ def verbatim_run(summary: str, source: str) -> float:
                 length += 1
             longest = max(longest, length)
     return longest / len(summary_tokens)
+
+
+def self_repetition(summary: str) -> float:
+    """How much of the summary is a phrase the summary already used.
+
+    Every other n-gram measure in this file reads our summary against the
+    SOURCE. None of them can see a summary that repeats itself, because a
+    repeated sentence is still perfectly supported by the article. This is the
+    one defect that looks more faithful the worse it gets.
+
+    Greedy decoding is what makes it possible. At temperature zero a model that
+    falls into a loop has no sampling noise to break out of it, so it says the
+    same clause again until the token budget runs out.
+
+    Zero is a summary in which every four-word window is different, which is
+    what ordinary prose looks like. The number rises toward one as more of the
+    text repeats a window it has already used. A four-word phrase said three
+    times instead of once puts two windows on repeat, so a 100-word summary
+    reads 0.02; a whole sentence said twice reads far higher, because every
+    window inside it repeats. Recorded only - no band reads it
+    (`docs/concepts/evaluation.md`).
+
+    The same window size as `extractiveness`, deliberately. Two n-gram sizes in
+    one file are two numbers a reader has to reconcile.
+    """
+    tokens = _normalise(words(summary))
+    windows = len(tokens) - _NGRAM + 1
+    if windows < 1:
+        return 0.0
+    return 1.0 - len(_ngrams(tokens)) / windows
 
 
 def _checkable_numbers(text: str) -> set[str]:

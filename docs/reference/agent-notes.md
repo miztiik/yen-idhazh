@@ -77,6 +77,27 @@ Print that path before every gate run. If it does not name your worktree, every
 result after it is about somebody else's code. Verified 2026-08-25 across ten
 worktrees.
 
+**A header migration cannot survive a rebase, because `state/*.csv` is
+`merge=union`.** Union merge keeps every line from both sides, which is exactly
+right for an append-only ledger and exactly wrong for a file whose every line
+changed. Rebase a branch that widened `state/scores.csv` and git hands back both
+copies concatenated - main's 2,232 narrow rows, then your header again as row
+2,233, then your 2,232 wide rows. Measured 2026-08-27: 4,349 data rows where
+2,232 were expected, and the tell was a data row whose `run_id` cell read
+`run_id`.
+
+Do not resolve it by hand. Take the tip's copy and redo the migration on top:
+
+```powershell
+git checkout origin/main -- state/scores.csv
+<re-run your migration script>
+```
+
+Migrate in the commit you push and expect to redo it on every rebase. Two
+guards make the redo safe: refuse to write unless an unmodified read-write
+round trip is byte-identical, and refuse if the rows are not all one width -
+the second one is what catches the doubled file.
+
 **`origin/main` moves under you.** The scheduled pipeline pushes `plan:` and
 `digest:` commits to `main` several times an hour, and the editor auto-fetches.
 A branch created "from `origin/main`" and a merge done "against `origin/main`"
