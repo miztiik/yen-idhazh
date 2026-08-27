@@ -1542,6 +1542,22 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     assert not any(_mid_rebase(runner) for runner in runners)
 
 
+def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
+    """Why assemble cannot append a row a shard already pushed.
+
+    Assemble checks out main as it was when the run was queued, so its copy of
+    these two ledgers predates the shards' pushes and its own push always loses
+    the race. The loop answers a lost race by restoring the rebuilt paths from
+    the tip it wants and running the producer again - so the assemble that
+    finally commits reads the file the workers wrote and files against it. A
+    staged path missing from that refresh set would be rebased instead, and
+    `merge=union` keeps both appends.
+    """
+    refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
+
+    assert set(COMMIT_STAGED_PATHS["work"]) <= set(refreshed)
+
+
 @requires_bash
 @pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
 def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
