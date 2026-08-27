@@ -110,7 +110,16 @@ all. Without the second, a concurrency measurement that shows no gain cannot
 separate "more slots did not help" from "more slots were never used". The
 endpoint is llama-server's own loopback surface inside a CI job. No reader
 reaches it, so Rule #1 is untouched. `digest.yml` reads it once at the end of
-each `work` job and keeps the raw body in that shard's runtime artifact.
+each `work` job, keeps the raw body in that shard's runtime artifact, and
+commits the counters that matter as one row of `state/runtime-counters.csv` -
+the artifact keeps them for two days and the row keeps them forever, which is
+what makes the read rate on
+[../architecture/summarize/throughput.md](../architecture/summarize/throughput.md)
+checkable rather than merely reported.
+
+Turning `metrics` off is therefore not free any more. It costs the log lines it
+always did, and it also leaves every later run's counter row empty, so the
+reconciliation has nothing to hold the ledger against.
 
 `n_parallel: null` and `n_parallel: 1` are not the same runtime. `null` omits
 `-np`, so llama.cpp picks its own slot count and reports unified KV; any
