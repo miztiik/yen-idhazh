@@ -5,19 +5,19 @@
   "tolerance_basis": "4 builds of identical source, route /, 2026-08-25, this repo: 49193 / 49198 / 49198 / 49205. Range 12 B, and the cause is named - SvelteKit stamps a version string into the entry chunk. 64 B is 5.3x that range; four samples underestimate a true range, so the multiple is the margin. Derived, not measured. If a build ever fails inside 64 B, re-derive it from more builds and more routes rather than nudging it.",
   "routes": {
     "/": {
-      "bytes": 49549,
+      "bytes": 49634,
       "measured": "2026-08-27",
-      "why": "SvelteKit runtime, the app shell, and the reader item chunk every day view shares - item cards, the in-place topic filter and the per-day read mark. It grew 430 B when the archive's search started rendering a result through that same item component: Vite cuts a chunk by which routes use a module, so the shared reader chunk absorbed the archive's search code too. Read as a difference, not an absolute - an untouched base build of this tree read 49,119 B and passed this gate on every route, and the changed one reads 49,549 B on the same machine and the same node."
+      "why": "SvelteKit runtime, the app shell, and the reader item chunk every day view shares - item cards, the in-place topic filter and the per-day read mark. It grew 88 B when the item's meta line learned to carry the day a search result was found on, as the link back to it, which is what lets a result drop the second date line it used to print above itself. Read as a difference: the base source built on this tree, this machine and this node read 49,546 B against a record of 49,549, so the 88 B is this change and nothing else."
     },
     "/<date>/": {
-      "bytes": 49422,
+      "bytes": 49507,
       "measured": "2026-08-27",
-      "why": "The same runtime, shell and reader item chunk as /, on one day's items, and the same +430 B from that shared chunk. Control on this tree: 48,992 B."
+      "why": "The same runtime, shell and reader item chunk as /, on one day's items, and the same day-link branch on the meta line. Control on this tree: 49,421 B, so +86 B is this change."
     },
     "/<date>/<topic>/": {
-      "bytes": 49514,
+      "bytes": 49600,
       "measured": "2026-08-27",
-      "why": "The same runtime, shell and reader item chunk as /, on one topic of one day, and the same +428 B from that shared chunk. Control on this tree: 49,086 B."
+      "why": "The same runtime, shell and reader item chunk as /, on one topic of one day, and the same day-link branch on the meta line. Control on this tree: 49,512 B, so +88 B is this change."
     },
     "/404": {
       "bytes": 40753,
@@ -25,9 +25,9 @@
       "why": "Runtime and app shell and nothing route-specific. This is the floor every other route sits on. It fell 105 B in the same chunk re-cut that raised /: one module left this route's preload list. Control on this tree: 40,858 B."
     },
     "/archive/": {
-      "bytes": 49988,
+      "bytes": 50839,
       "measured": "2026-08-27",
-      "why": "Runtime and shell plus the archive route, which lists stories and now searches them: the month-index fetch and decode, the newest-first regrouping, the paged list and its Show-more control, the encoder guard, and - new here - the int8 vector decode, the day-payload fetch and cache a result renders from, and the digest's own item component that renders it. That is +4,277 B against an untouched base build of this tree at 45,711 B, and what it buys is 1,763,770 gzipped bytes off the document: the page no longer inlines every committed day. A dynamic import of the item component was measured and rejected on 2026-08-27 - it moves this route to 46,988 B but costs / another 310 B, because a separate chunk compresses worse than the shared one it left."
+      "why": "Runtime and shell plus the archive route, which lists stories and searches them: the month-index fetch and decode, the newest-first regrouping, the paged list and its Show-more control, the encoder guard, the int8 vector decode, the day-payload fetch and cache a result renders from, and the digest's own item component that renders it. New here, +851 B against a control build of the base source on this tree at 49,988 B: the search control's five model-state sentences, the cache-storage probe that answers whether the 43 MB is already on the device, the byte counter behind the progress line, the stop and the retry, and the one list a search now replaces and a link restores. What it buys is the two-step enable click gone, one gesture from typing to an answer, and a second list that no longer exists."
     },
     "/console/": {
       "bytes": 66056,
