@@ -248,11 +248,13 @@
           "type": "string"
         },
         "site_bytes": {
+          "description": "Bytes under frontend/public/digest/ after this run - the committed payload tree, not the published site and not what the Pages cap is measured against.",
           "minimum": 0,
           "title": "Site Bytes",
           "type": "integer"
         },
         "site_files": {
+          "description": "Files under frontend/public/digest/ after this run.",
           "minimum": 0,
           "title": "Site Files",
           "type": "integer"
@@ -345,6 +347,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "site_bytes and site_files now say which tree they measure.",
+      "version": "2026-08-27T11:00",
+      "why": "They always held the committed payload tree, and this document said they measured the ceiling. Measured 2026-08-27, that tree was 7,027,075 bytes while the published site was 128,064,853 - eighteen times larger. A field that reads as the site cap and holds a tree eighteen times smaller is how the alarm came to watch the wrong thing. No value changed and no payload needs migrating; only the description did."
+    },
+    {
       "change": "The embedded ModelRef gained an optional revision.",
       "version": "2026-08-26T20:00",
       "why": "A manifest says which model ran. Until now it could not say which upload of that model, because the weights were fetched from a branch. The reason for the field is on the app-config schema; this entry exists because the manifest embeds the same shape and its own document changed with it. Optional, so every published manifest still validates (section 11)."
@@ -396,7 +403,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-26T20:00",
+      "default": "2026-08-27T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -408,5 +415,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-26T20:00"
+  "version": "2026-08-27T11:00"
 }
