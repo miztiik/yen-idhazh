@@ -24,12 +24,105 @@
  * vector file. `run.json` is not staged - nothing fetches it. Telemetry is
  * different again: the console fetches a projected CSV that has already dropped
  * URL keys, canonical URLs and free text.
+ *
+ * **A day payload is projected on the way across, not copied.** The committed
+ * file is the whole day - every field the digest page renders, plus the vector
+ * block the backend's index rebuild reads. A search result renders far less
+ * than that, and a reader who searches downloads one of these per day a result
+ * of theirs sits on. Staging it whole put a second full copy of every day's
+ * text and vectors in the bundle. Measured 2026-08-27 on Intel Core i7-1265U /
+ * Windows 11 / node 24.12.0, six committed days, 2,237 items: the tree went
+ * 6,966,247 -> 3,883,127 bytes, a 44.3 percent cut. The floor is not zero
+ * because 1,055,600 bytes of it is 87 rendered images, which this step must not
+ * touch.
  */
 
-import { cpSync, existsSync, mkdirSync, readdirSync, rmSync, statSync } from 'node:fs';
+import {
+	cpSync,
+	existsSync,
+	mkdirSync,
+	readdirSync,
+	readFileSync,
+	rmSync,
+	statSync,
+	writeFileSync
+} from 'node:fs';
 import { join, resolve } from 'node:path';
 
 const IMAGE_SUFFIXES = ['.svg', '.webp', '.png', '.jpg', '.jpeg'];
+
+// The fields a search result renders, and no others. Traced along the render
+// path rather than guessed: `assist/day.ts` fetches the file,
+// `routes/archive/+page.svelte` hands one item to `DigestItem`, and that
+// component with `ItemMeta`, `ItemVisual`, `ConfidenceChip`, `ReadAloud` and
+// `SourceLink` reads exactly this list. `source_url` is on it because it is the
+// reader's way out to the source, which is the most important thing on a result
+// after the summary itself.
+//
+// `published_at` is not, and that is the one entry worth explaining.
+// `ItemMeta` reads it only in the branch where no day was passed, and a search
+// result always passes one. It stays in the committed payload; it never had a
+// reader here.
+const ITEM_FIELDS = [
+	'item_id',
+	'vertical',
+	'title',
+	'summary',
+	'reader_note',
+	'band',
+	'band_reason',
+	'truncated',
+	'visual',
+	'source_name',
+	'source_id',
+	'source_kind',
+	'source_url'
+];
+
+// The three `ItemVisual` reads. `kind` is read at build time off the committed
+// tree, for the console's chart count, and never from a staged copy.
+const VISUAL_FIELDS = ['state', 'path', 'alt'];
+
+// One key. `assist/day.ts` refuses a payload whose `items` is not an array, so
+// this is the entire contract the fetched file answers to.
+const DAY_FIELDS = ['items'];
+
+// Names that may never reach a staged copy, whoever widens the lists above.
+// `embeddings` is why this projection exists: it is the vector block, its only
+// production reader is the backend's index rebuild, and it was 40.0 percent of
+// a day page. The other four are bulk the digest page renders and a search
+// result does not.
+const FORBIDDEN_FIELDS = ['embeddings', 'key_points', 'lenses', 'events', 'entities'];
+
+// The build fails here rather than shipping a widened payload, because a
+// projection that has quietly grown looks exactly like one that has not.
+const staged = new Set([...DAY_FIELDS, ...ITEM_FIELDS, ...VISUAL_FIELDS]);
+const leaked = FORBIDDEN_FIELDS.filter((name) => staged.has(name));
+if (leaked.length > 0) {
+	throw new Error(`copy-visuals: a staged day may never carry ${leaked.join(', ')}`);
+}
+
+/** Keep only the named fields, in one fixed order. */
+const project = (source, fields) =>
+	Object.fromEntries(fields.map((name) => [name, source[name] ?? null]));
+
+/** One item, as a search result renders it. */
+function projectItem(item) {
+	const kept = project(item, ITEM_FIELDS);
+	kept.visual = item.visual ? project(item.visual, VISUAL_FIELDS) : null;
+	return kept;
+}
+
+/** The day, narrowed to its items.
+ *
+ * Compact, where the committed payload is pretty-printed. That indent is worth
+ * paying for a file whose diff a person reviews by eye, and not for one a
+ * reader downloads.
+ */
+function projectDay(text) {
+	const day = JSON.parse(text);
+	return JSON.stringify({ items: (day.items ?? []).map(projectItem) });
+}
 
 // The same root the payload loader reads, so a canary build stages its own
 // visuals rather than the real day's.
@@ -98,7 +191,7 @@ const walk = (relative) => {
 			// on screen. The archive used to inline every one of these instead, which
 			// charged every browsing visitor the whole corpus.
 			mkdirSync(join(target, relative), { recursive: true });
-			cpSync(join(source, next), join(target, next));
+			writeFileSync(join(target, next), projectDay(readFileSync(join(source, next), 'utf8')));
 			payloads += 1;
 		} else if (IMAGE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))) {
 			mkdirSync(join(target, relative), { recursive: true });
@@ -109,7 +202,8 @@ const walk = (relative) => {
 };
 walk('');
 console.log(
-	`rendered visuals: staged ${copied} image(s) and ${payloads} day payload(s) into static/digest.`
+	`rendered visuals: staged ${copied} image(s) and projected ${payloads} day payload(s) ` +
+		`into static/digest, ${ITEM_FIELDS.length} field(s) an item.`
 );
 
 if (!existsSync(telemetrySource)) {

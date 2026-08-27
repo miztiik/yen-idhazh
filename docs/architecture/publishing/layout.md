@@ -138,13 +138,53 @@ The fix is the shape `publish_telemetry` already had: the index root is derived 
 
 **The day payloads are staged because a search result renders from the day it names.** The index carries no summary on purpose, so the result has to come from somewhere, and the alternative is a 6.35-times-larger index that every browsing visitor pays for. `run.json` is not staged; nothing fetches it.
 
-That is a second copy of the day text in the published bundle, and it is worth stating plainly rather than discovering later. **Only a reader who searches ever downloads one**, and only for a day a result of theirs sits on - the reading path is still one prerendered document and zero requests. What it costs the 1 GB site cap (Rule #2) is the same order as the day pages themselves, so it moves retention forward rather than introducing a new kind of growth.
+That is a second copy of the day in the published bundle, and it is worth stating plainly rather than discovering later. **Only a reader who searches ever downloads one**, and only for a day a result of theirs sits on - the reading path is still one prerendered document and zero requests.
+
+**It is not a second copy of the day, though, because it is a projection.** The staged file carries thirteen fields an item - the ones a search result actually renders - and nothing else. That is settled below, with what it cost and what it bought.
 
 **The staging source is derived from the digest root, in the script and in the page loader alike**, because an index is a projection of exactly those days. One switch rather than two is what stops a canary build serving the real archive's stories.
 
 **The archive fetches the index rather than inlining it, and that is the whole point.** Every other committed payload this site renders is read at build time and baked into the HTML, which is right for a day page: the day is bounded and the reader came to read it. The archive is the corpus. Inlining it would grow one document by about 50 gzipped bytes an item forever, which is the defect this index exists to end. The console already settled this shape - a bounded seed in the HTML, older months fetched from `static/` on demand - and the archive uses the same mechanism rather than inventing a second one. What the archive page still carries from its own data is a compact day row, three counts and about twenty topic names: all of it grows per day or per month, none of it per story.
 
 **A missing index is a designed state.** The page falls back to the day row and one plain sentence. It never white-screens ([../../../CLAUDE.md](../../../CLAUDE.md) section 12).
+
+### Two projections, and what one day costs
+
+Two copies of every day used to carry the vector block, and no browser has ever opened it. Its one production reader is the backend's index rebuild, which reads `frontend/public/` off the filesystem. So both copies are narrowed on the way out, in the two places the narrowing can happen:
+
+- **`payload.ts` `loadDay` drops `embeddings` after the parse.** Whatever that function returns is inlined into every prerendered document that renders the day, and there are twelve of those per day - six documents and their six `__data.json` twins.
+- **`copy-visuals.mjs` stages a projection rather than a copy.** A named allow-list of thirteen item fields, a one-line projector, and a guard that fails the build if a forbidden name ever reaches the list. That is the shape [../../../backend/idhazh/publish_telemetry.py](../../../backend/idhazh/publish_telemetry.py) already uses to keep URL keys and free text out of the console, and it is copied on purpose: a projection that has quietly widened looks exactly like one that has not.
+
+`frontend/public/` keeps the whole day, block and all. It is committed, it is in git, and it is the only store the vectors have.
+
+Measured 2026-08-27 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the six committed days, 2,237 items and 2,235 vectors. Page weights are `gzip -9` of the prerendered HTML, taken by the bundle gate itself, heaviest page per route. Site totals are the sum of file sizes under `frontend/build/`, which agreed with CI's own `du -sb build` on the same tree to 0.0006 percent.
+
+| Measured | Before | After | Saved |
+| --- | ---: | ---: | ---: |
+| `/<date>/`, gzipped | 581,557 B | 349,259 B | 232,298 B, 39.9 percent |
+| `/<date>/<topic>/`, gzipped | 581,034 B | 348,566 B | 232,468 B, 40.0 percent |
+| `/`, gzipped | 499,670 B | 302,122 B | 197,548 B, 39.5 percent |
+| `static/digest/`, on disk | 6,976,807 B | 3,620,375 B | 3,356,432 B, 48.1 percent |
+| The whole published site | 146,696,452 B | 128,064,853 B | 18,631,599 B, 12.7 percent |
+| One published day | 22,200,123 +/- 1,785,970 B | 16,641,956 +/- 1,294,368 B | 25.0 percent |
+
+Two of those rows are worth reading rather than scanning. **Two fifths of a day page was a block nobody could open**, which on the 10 Mbit reference line is about 0.19 seconds a reader waited for nothing, on every dated page they ever opened. And **the per-day row is the one that moves the cap**, because it is what the site charges for tomorrow rather than what it charges for the past.
+
+The per-day figures are the three mature days only - 2026-08-24, -25 and -26, at 731, 724 and 621 items. The first three days ran 4, 10 and 147 items, and mixing them halves the answer. The spread is the sample standard deviation over those three days. The before figure lands 3,419 bytes from the 22,196,704 the same rate was measured at independently the same day, which is 0.015 percent, so the two measurements are the same measurement.
+
+**The staged tree does not fall to nothing, and the floor is pictures.** 1,055,600 bytes of it is 87 rendered SVGs that the day pages fetch at runtime, and a projection must not touch those. The `digest.json` half went 5,921,207 -> 2,564,775 bytes, which is 56.7 percent off.
+
+### The revisit trigger, with a date on it
+
+**This does not solve the 1 GB cap (Rule #2). It buys about six weeks.**
+
+At the rate above, the published site reaches 1,073,741,824 bytes on **2026-10-22**, which is fifty-six more published days counted from 2026-08-27. Before this change the date was **2026-10-07**, forty-one days. Across the measured spread on the rate, it runs from 2026-10-19 to 2026-10-28.
+
+Almost all of that is the rate rather than the level: the 18.6 MB taken off the site today is worth 0.8 of a published day, and the 5.6 MB taken off every future day is worth 14.2.
+
+**Nothing fires when that date arrives.** No gate measures the whole-site total against the cap - the bundle gate holds single pages, and the marker count holds what a page inlines. So the trigger is a date and not an alarm: **re-measure the site total and the per-day rate by 2026-09-22, one month before the date, and act on the answer.**
+
+What to act on is already named. The prerendered dated route trees are 50,598,258 bytes, 39.5 percent of the whole site, and every one of them is a document that a reader who opens some other day never reads. They were 65,197,022 bytes and 44.4 percent before this change, so narrowing the payload made them smaller without making them a smaller share of the problem. That is the next lever, and retention (below) is the one after it.
 
 ## Retention
 
@@ -194,6 +234,20 @@ This page used to say "A revision is visible or it does not happen", which reads
 
 Retention was demoted to third lever after the byte arithmetic showed that encoding and the existing visual rule together move the ceiling from months to years. A policy that deletes a reader's archive to reclaim a fraction of a percent of the bytes would have been solving the wrong problem.
 
+### The vectors are projected out, not moved out (2026-08-27)
+
+Two copies of every day carried a block no browser opens, and there were two ways to end that.
+
+**(a) Project at each boundary, which is what shipped.** `frontend/public/` keeps the whole day; each copy that leaves it drops what its own reader does not use. Two edits, no persisted shape moves, and it reverses by putting two lines back.
+
+**(b) Move the vectors out of the day payload into a committed sibling file**, so there is nothing left to project. That is the tidier drawing, and it costs far more than it looks. `DigestDay` is `extra="forbid"` like every persisted model here, so a model without `embeddings` rejects every payload that carries one - all six committed days, 2,237 items. The bill is a read-side migration that strips the key forever, or a rewrite of every committed payload, plus a breaking schema stamp and its migration in the same commit ([../../../CLAUDE.md](../../../CLAUDE.md) section 11). Retention deletes nothing today, so waiting for the old shape to age out is not on offer either. And the reader ends up exactly where (a) already puts them: the block reaches no browser under either.
+
+So (b) is a persisted-contract change that buys a cleaner diagram and zero bytes. (a) was taken on that arithmetic rather than on taste. If a real reason to split the file turns up - a second encoder, or a day payload too large to fetch whole - (b) is still there, and this paragraph is its price list.
+
+**What (a) costs instead is a list that can drift.** Thirteen field names in [../../../frontend/scripts/copy-visuals.mjs](../../../frontend/scripts/copy-visuals.mjs) decide what a search result is able to render, and dropping one fails nothing: the result comes out slightly shorter and the reader never learns what they lost. Three things hold it. The script asserts that no forbidden name is on the list and fails the build if one is, which is the shape `publish_telemetry.py` uses for the same class of mistake. `frontend/tests/staged-day.spec.ts` keeps its own copy of the thirteen names, so widening the script without widening the promise fails. And `frontend/tests/search.spec.ts` drives the field where the loss would hurt most - the link out to the source - from the staged bytes through to the rendered link.
+
+**The field that nearly came off the list is `source_url`.** A narrower set of title, summary, source name and band renders a result that looks complete and has no way out to the original. That is the reader's only means of checking what we wrote, so a projection that drops it trades their trust for about ten bytes an item.
+
 ### Two append paths, and only one of them deduplicates (2026-08-27)
 
 `idhazh.ledger._append` writes every row it is handed. `idhazh.evals.writer.append` refuses a row whose address, inputs, words and scorer version it already holds. That looked like one of them being wrong, and it is not: **the two write different kinds of row.** An eval row is a measurement, so re-measuring an item nothing changed about has nothing new to say. A state row is a fact about a run - this feed answered at this hour, this item finished - and a run that runs twice did happen twice. Collapsing those would turn a count of runs into a count of days.
@@ -218,6 +272,8 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 | base64 vectors inside the index JSON | 322.55 gzipped bytes an item against 249.82 - 22.5 percent more - and it charges every browsing visitor the vectors as well. |
 | HTTP range requests into the vector file | One request per result, against a static host that has to answer each one. The whole file already transfers compressed. |
 | A summary, source or band on an index entry | Measured 2026-08-26: 6.35 times the entry, and a month at the observed rate goes from 518 KB to 3.21 MB. A result renders from the day payload it names instead. |
+| Moving the vectors out of the day payload into a sibling committed file | A persisted-contract change that buys no bytes. `extra="forbid"` means a `DigestDay` without `embeddings` rejects all 2,237 committed items, so the price is a read-side migration forever or a rewrite of every day - and the block already reaches no browser. See [The vectors are projected out, not moved out](#the-vectors-are-projected-out-not-moved-out-2026-08-27). |
+| Staging the day payload whole and narrowing only the prerendered pages | Measured 2026-08-27: the staged tree is 6,976,807 bytes of the 146,696,452-byte site, and leaving it whole gives back 3,356,432 of the 18,631,599 this change saved. Same two files open, one of the two edits skipped. |
 | A positional vector index instead of a byte offset | Every reader then has to count how many entries above it were skipped, and an off-by-one decodes cleanly and ranks nonsense. |
 | Omitting an item that has no vector | It disappears from the browse list as well as from search, which is the larger loss. Two of 2,237 committed items are in this state today. |
 | A padded zero vector for an item that has none | It scores against every query. A null says "not searchable"; a zero says "equally close to everything". |
