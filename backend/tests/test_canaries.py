@@ -17,22 +17,31 @@ No mocks and no network (Rule #7): every attack is a committed fixture.
 from __future__ import annotations
 
 import ast
+import html
 import json
 from pathlib import Path
 from typing import Any, Literal
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
+from idhazh import cli, config, extract
 from idhazh.contracts.app_config import VisualsConfig
-from idhazh.contracts.base import Model
+from idhazh.contracts.article import Article, ArticleStatus
+from idhazh.contracts.base import Model, derive_url_key
+from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.qualification import CanaryObservation
 from idhazh.contracts.route import VisualKind
+from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
+from idhazh.contracts.taxonomy import SourceTier
+from idhazh.fetch import FetchResult
 from idhazh.route import numeric_facts, reachable_kinds
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, sanitize, untrusted_block
 
 CANARY_DIR = FIXTURES_DIR / "canaries"
+EXTRACT = config.load(CONFIG_DIR).app.extract
 
 #: The acceptance gate names these five and no fewer. A canary file that
 #: disappears is a control that stopped being asserted.
@@ -71,6 +80,47 @@ def canaries() -> list[Canary]:
 
 
 ALL = canaries()
+
+
+def payload_of(canary: Canary) -> dict[str, object]:
+    """The fixture as `_canary_article` reads it: a plain decoded document."""
+    payload: dict[str, object] = json.loads(read_text(CANARY_DIR / f"{canary.name}.json"))
+    return payload
+
+
+def as_a_real_page(canary: Canary) -> Article:
+    """The article `extract` builds when a real host serves these same bytes.
+
+    Not a mock (Rule #7): the fixture's own paragraphs go into a page, and the
+    real extractor and the real sanitizer read it. It is the only honest way to
+    check the canary adapter, because an assertion that re-states the adapter's
+    own arithmetic passes even when both sides are wrong together.
+    """
+    url = canary.source_url
+    body = "\n".join(
+        f"<p>{html.escape(block)}</p>" for block in canary.raw_text.split("\n\n") if block.strip()
+    )
+    page = (
+        f"<!DOCTYPE html><html><head><title>{html.escape(canary.raw_title)}</title></head>"
+        f"<body><article>{body}</article></body></html>"
+    )
+    item = PlannedItem(
+        item_id="canary-01",
+        url_key=derive_url_key(url),
+        source_url=url,
+        canonical_url=url,
+        source_id="canary",
+        tier=SourceTier.INSTITUTION,
+        vertical="canary",
+        rank_score=0.0,
+        title=canary.raw_title,
+    )
+    return extract.to_article(
+        item,
+        FetchResult(outcome=FetchOutcome.OK, status=200, body=page.encode("utf-8")),
+        config=EXTRACT,
+        fetched_at="2026-08-27T00:00:00Z",
+    )
 
 
 # --- The Oracle: nothing injects -------------------------------------------
@@ -171,6 +221,107 @@ def test_a_page_demanding_a_chart_never_reaches_the_router() -> None:
     chart_only = VisualsConfig(enabled_kinds=[VisualKind.CHART])
     assert facts, "the canary must carry quantities, or it proves nothing about the gate"
     assert reachable_kinds(facts, visuals=chart_only) == []
+
+
+# --- The live arm's adapter ------------------------------------------------
+
+
+@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
+def test_the_canary_article_is_the_one_extract_would_have_built(canary: Canary) -> None:
+    """The live arm must not invent a page shape the pipeline cannot produce.
+
+    The length counts and the brief flag decide which prompt the attack arrives
+    in, so an adapter that guesses them runs the canary against a prompt no
+    article of that length is ever given. The adapter counted the raw bytes and
+    hardcoded `brief=False`, so all five attacks took the long band.
+    """
+    real = as_a_real_page(canary)
+    assert real.status is ArticleStatus.OK, "the page must extract, or this compares two failures"
+    mine = cli._canary_article(
+        payload_of(canary), extract_config=EXTRACT, fetched_at="2026-08-27T00:00:00Z"
+    )
+    assert mine.status is real.status
+    assert mine.source_word_count == real.source_word_count
+    assert mine.word_count == real.word_count
+    assert mine.token_count == real.token_count
+    assert mine.brief is real.brief
+    assert mine.failure_code is real.failure_code
+    assert mine.truncated is real.truncated
+
+
+def test_a_canary_is_sized_by_the_words_that_survive_the_boundary() -> None:
+    """One fixture straddles the brief threshold, and it settles which count is used.
+
+    `fake-system-delimiter` clears `min_source_words` on its raw bytes and falls
+    under it on the words that survive sanitization. The words that do not
+    survive are not words the model is shown, so they cannot decide its prompt.
+    """
+    canary = next(c for c in ALL if c.name == "fake-system-delimiter")
+    raw_words = len(canary.raw_text.split())
+    kept_words = len(sanitize(canary.raw_text).split())
+    assert raw_words >= EXTRACT.min_source_words > kept_words, (
+        "this fixture no longer straddles the brief threshold, so it proves nothing here"
+    )
+
+    article = cli._canary_article(
+        payload_of(canary), extract_config=EXTRACT, fetched_at="2026-08-27T00:00:00Z"
+    )
+    assert article.source_word_count == kept_words
+    assert article.band_source_words == kept_words
+    assert article.brief is True
+
+
+@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
+def test_the_canary_hands_the_fence_the_raw_bytes(canary: Canary) -> None:
+    """The one place the adapter must not copy `extract`, asserted so it stays.
+
+    `untrusted_block` sanitizes what it is given rather than trusting a caller
+    to have done it earlier, and the live arm is the only assertion of that.
+    Handing it pre-cleaned text would exercise the boundary against text that
+    had already crossed it.
+    """
+    article = cli._canary_article(
+        payload_of(canary), extract_config=EXTRACT, fetched_at="2026-08-27T00:00:00Z"
+    )
+    assert article.text == canary.raw_text
+
+
+def test_the_canary_arm_writes_what_it_saw_and_fails_closed(tmp_path: Path) -> None:
+    """`CLAUDE.md` section 4: a stage runs on its own, a file in and a file out.
+
+    The arm was reachable only from inside `stage_qualify` at shard zero, so the
+    only way to read what a canary did was a job that runs for hours. A canary
+    that never replied still fails, because a control test that did not run is
+    not a control test that passed.
+    """
+    held = [CanaryObservation(name=name, replied=True) for name in sorted(REQUIRED_ATTACKS)]
+    assert cli._canary_report(held, root=tmp_path, required=len(held)) == 0
+    written = json.loads(read_text(tmp_path / "canaries.json"))
+    assert [row["name"] for row in written] == sorted(REQUIRED_ATTACKS)
+    assert written[0]["failure_code"] is None
+
+    silent = [
+        held[0].model_copy(update={"replied": False, "failure_code": "model_unreachable"}),
+        *held[1:],
+    ]
+    assert cli._canary_report(silent, root=tmp_path, required=len(held)) == 1
+    assert json.loads(read_text(tmp_path / "canaries.json"))[0]["failure_code"] == (
+        "model_unreachable"
+    )
+
+
+def test_the_canary_arm_is_a_stage_the_cli_answers_to(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Registered by name, so nobody runs a whole qualification to run the attacks.
+
+    Reading the config is what stops this short of a live call. Argparse has
+    already accepted or rejected the stage name by then, so a stage that lost
+    its registration says `invalid choice` here instead.
+    """
+    with pytest.raises(FileNotFoundError):
+        cli.main(["qualify-canaries", "--config", str(tmp_path / "absent")])
+    assert "invalid choice" not in capsys.readouterr().err
 
 
 # --- Housekeeping the fixtures have to keep --------------------------------

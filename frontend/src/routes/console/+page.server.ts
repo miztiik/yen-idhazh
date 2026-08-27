@@ -1,4 +1,4 @@
-import type { RateSpread, StageTimingDay, ThroughputDay } from '$lib/charts/series';
+import type { RateSpread, StageTiming, StageTimingDay, ThroughputDay } from '$lib/charts/series';
 import { modelByDate, modelWork } from '$lib/server/model-work';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
@@ -101,9 +101,15 @@ function chartDays(days: RunSummary[], charts: Map<string, number>): ChartDay[] 
 	});
 }
 
-function median(values: number[]): number {
-	if (values.length === 0) return 0;
-	const sorted = [...values].sort((a, b) => a - b);
+/** Null when nothing was timed. Zero is a measurement - a cheap stage really
+ * does finish inside a millisecond clock's own resolution - so it can never
+ * stand in for the absence of one.
+ *
+ * It takes a `Sample` rather than an array so that a hand-built list of
+ * numbers, and any zero invented to fill an empty cell, has nowhere to land. */
+function median(of: Sample): number | null {
+	if (of.values.length === 0) return null;
+	const sorted = [...of.values].sort((a, b) => a - b);
 	const middle = Math.floor(sorted.length / 2);
 	return sorted.length % 2 ? sorted[middle] : (sorted[middle - 1] + sorted[middle]) / 2;
 }
@@ -113,6 +119,30 @@ function measured(row: Record<string, string>, name: string): number | null {
 	if (raw === undefined || raw === '') return null;
 	const value = Number(raw);
 	return Number.isFinite(value) ? value : null;
+}
+
+/** One column of one group of rows, and how many rows could have filled it.
+ *
+ * `timed` against `total` is the fact a bare array cannot carry: eight items
+ * timed out of ten and ten out of ten arrive as the same list of numbers.
+ */
+interface Sample {
+	values: number[];
+	timed: number;
+	total: number;
+}
+
+function sample(rows: Record<string, string>[], name: string): Sample {
+	const values = rows
+		.map((row) => measured(row, name))
+		.filter((value): value is number => value !== null);
+	return { values, timed: values.length, total: rows.length };
+}
+
+/** A sample reduced to what the chart draws: one median, and the two counts
+ * that say whether the day was timed in full, in part, or not at all. */
+function timing(of: Sample): StageTiming {
+	return { ms: median(of), timed: of.timed, total: of.total };
 }
 
 function byDate(rows: Record<string, string>[]): Map<string, Record<string, string>[]> {
@@ -288,22 +318,21 @@ export function load() {
 	const itemHealthByDate = byDate(itemRows);
 	const modelOnDate = modelByDate(rows);
 
+	// A day is kept when something on it was timed. Judging it by its medians
+	// would drop a day whose only measurement was a zero, which is the same
+	// mistake one level up.
 	const timingDays: TimingStats[] = [...itemHealthByDate.entries()]
-		.map(([date, group]) => {
-			const nums = (name: string) =>
-				group.map((row) => measured(row, name)).filter((value) => value !== null);
-			const scoreGroup = scoresByDate.get(date) ?? [];
-			const scoreMs = scoreGroup.map((row) => Number(row.score_ms ?? 0) || 0);
-			return {
-				date,
-				items: group.length,
-				fetchMs: median(nums('fetch_ms')),
-				extractMs: median(nums('extract_ms')),
-				summarizeMs: median(nums('summarize_ms')),
-				scoreMs: median(scoreMs)
-			};
-		})
-		.filter((day) => day.fetchMs > 0 || day.extractMs > 0 || day.summarizeMs > 0 || day.scoreMs > 0)
+		.map(([date, group]) => ({
+			date,
+			items: group.length,
+			fetch: timing(sample(group, 'fetch_ms')),
+			extract: timing(sample(group, 'extract_ms')),
+			summarize: timing(sample(group, 'summarize_ms')),
+			score: timing(sample(scoresByDate.get(date) ?? [], 'score_ms'))
+		}))
+		.filter((day) =>
+			[day.fetch, day.extract, day.summarize, day.score].some((stage) => stage.timed > 0)
+		)
 		.sort((a, b) => b.date.localeCompare(a.date));
 
 	// Two different statistics, both kept on purpose. The candle is the spread of

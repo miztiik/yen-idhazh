@@ -88,10 +88,20 @@ Run from `frontend/`.
 npm run check
 npm run build
 npm run bundle-gate
+python -m idhazh site-weight --site-tree build
 ```
 
 `check` is `svelte-check`. `build` is the strongest of the three: every route is
 prerendered, so a contract-invalid payload fails the build rather than the page.
+
+`site-weight` is the fourth, and it is the only one that measures the whole
+site rather than one page. It sums `frontend/build/` - the directory the Pages
+deploy uploads - and holds it against two lines: over `retention.site_budget_mb`
+in `config/idhazh.json` it prints a warning and passes, and past the 1 GiB Pages
+cap it fails. **Point it at anything else and the suite fails**, because the tree
+is read back off `pages.yml`'s own upload step. It measures nothing until the
+site is built, so run it after `npm run build`, and a run that reports zero files
+fails rather than passes.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it compares every route's first-load JavaScript against the weight
@@ -169,10 +179,27 @@ npm run build:canary
 npm run test:browser
 ```
 
-83 tests in 7 files (2026-08-25), one of which skips itself when the fixture
-window holds a single day. Twelve of them are pure-function tests over
-`frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
-frontend unit-test runner, so a pure module proves itself here.
+127 tests in 11 files (2026-08-27), one of which skips itself. The failure
+panels are held by a pair of tests, one for a window of a single day and one for
+a window of several, so exactly one of the pair applies to whatever the fixture
+holds. Twelve of them are pure-function tests over `frontend/src/lib/charts/`,
+run in Node by the same runner. There is no separate frontend unit-test runner,
+so a pure module proves itself here.
+
+**A skip condition must never read a locator count.** Written as
+`test.skip((await panels.count()) === 0, ...)`, a test turns itself off the
+moment the attribute it counts is renamed: nothing matches, the count is zero,
+the skip fires, and the suite reports green. Read the skip against a fact the
+fixture owns instead - the window the console publishes in an attribute, the
+number of days the corpus carries - and then assert the selector matched, with
+`await expect(locator, 'why this must exist').toHaveCount(n)`. Measured on
+2026-08-27 by renaming `data-panel` in `FailurePanels.svelte`: the count guard
+reported `1 skipped` and exit 0, and the same test with the assertion reported
+`1 failed` and exit 1, naming the attribute and the count it expected. A skip is
+right only when the environment genuinely varies. It is never right for a
+selector this repository controls, and the same mistake had already switched off
+an injection canary in `canaries.spec.ts`
+([../reference/agent-notes.md](../reference/agent-notes.md#running-the-gates)).
 
 **The canary day carries every ledger the console reads.** The run manifest, the
 feed-health rows and the score rows are all written by `build_canary_day.py`;

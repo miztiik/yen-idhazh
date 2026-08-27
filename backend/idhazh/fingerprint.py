@@ -34,6 +34,7 @@ from types import MappingProxyType
 from typing import Final, NamedTuple
 
 from idhazh.contracts.app_config import InferenceConfig, ModelRef
+from idhazh.contracts.base import derive_text_digest
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.ledger import require_matching_header
 
@@ -70,7 +71,7 @@ _READ_CHUNK: Final = 1024 * 1024
 
 
 def text_digest(text: str) -> str:
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
+    return derive_text_digest(text)
 
 
 def file_digest(path: Path) -> str:

@@ -68,6 +68,23 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-27",
+            change=(
+                "Added source_digest, nullable, at the end of the row. The ledger's "
+                "header is migrated in the same commit."
+            ),
+            why=(
+                "The row named the words that came out and never the text they were "
+                "scored against. A person re-reading an item to label it by hand had no "
+                "way to prove the article in front of them was the sanitized, truncated "
+                "premise the scorer read, so a disagreement between the two measured "
+                "premise mismatch and not scorer error. Empty on the 2,232 rows that "
+                "predate it: those runs recorded no premise, and a digest computed today "
+                "would name text nobody read. Recorded only - no band reads it, so "
+                "METRICS_VERSION did not move."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-26",
             change=(
                 "Added self_repetition, nullable, at the end of the row. The ledger's "
@@ -251,6 +268,20 @@ class EvalRow(Contract):
             "reads it against the article, and a repeated sentence is perfectly supported "
             "by the article. Zero means no window repeats. Recorded only, never banded. "
             "Null on a row scored before 2026-08-26."
+        ),
+    )
+    # Appended for the same layout reason again. Null rather than a digest of the
+    # empty string: an empty premise is a real and different thing from a premise
+    # nobody wrote down, and only one of the two is a defect.
+    source_digest: Sha256 | None = Field(
+        default=None,
+        description=(
+            "The premise the faithfulness scorer read, digested whole: the article text "
+            "after sanitizing and truncation. Not the fetched page, and not the summary - "
+            "`output_digest` already names those words. It exists so a person labelling "
+            "this item by hand can prove they are reading the same text the scorer read; "
+            "without it a disagreement between them measures a premise mismatch rather "
+            "than a scorer error. Null on a row scored before 2026-08-27."
         ),
     )
 

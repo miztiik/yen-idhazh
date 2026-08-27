@@ -68,7 +68,7 @@ That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). T
 
 ### A shard-grain fact is its own contract, not a field on the run manifest
 
-`RuntimeCountersRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a counter snapshot is one shard, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires in a day and is not uploaded at all when a job is cancelled, and a cancelled shard's counters are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: `TODO/20260825-qwen35-9b-swap-plan.md` rows 2 to 4 also open `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
+`RuntimeCountersRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a counter snapshot is one shard, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires in a day and is not uploaded at all when a job is cancelled, and a cancelled shard's counters are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
 
 What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
 
@@ -124,6 +124,14 @@ A reader built on `csv.DictReader` maps cells by name off the file's own header,
 The rewrite is a committed one-shot utility rather than an ad-hoc script, so a fork or a stale branch can reproduce the same migration. `backend/utilities/migrate_published_ledger.py` is the worked example: it refuses a ledger that is already narrow, and it refuses to write at all unless the rewritten file carries the same rows, in the same order, with the same values in the cells the read path opens. `PublishedRow` lost `canonical_url` this way on 2026-08-26 ([../sources/freshness.md](../sources/freshness.md)).
 
 A migrated row keeps the `version` cell it was written with. The base contract accepts an older stamp on purpose, so a later read-side migration has something to branch on; restamping every row would erase the only marker of which rows predate the change.
+
+### Widening a row ledger writes an empty cell, never a value invented today
+
+Adding a column is the same commit shape as dropping one, and for the same reason: `require_matching_header` compares the header tuple exactly, so the contract change and the file rewrite land together or the next append stops the run.
+
+What differs is the cell. A column is appended at the end of the row and never filed by meaning, because a cell inserted in the middle shifts every historical value one place right under a reader that maps by position. The new field is nullable, and every row that predates it gets an **empty** cell. Zero, or a value recomputed today, would claim the older run measured something it never looked at - and for a digest that is worse than silence, because the whole point of a digest is that somebody can check it.
+
+The rewrite is small enough to be reviewed as a diff rather than run as a utility: the header gains one name and each row gains one comma, and nothing else in the file moves. `EvalRow` gained `self_repetition` this way on 2026-08-26 and `source_digest` on 2026-08-27. A committed test appends to a byte copy of the real ledger and asserts every historical cell is where it was, which is the check a fork actually needs.
 
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 

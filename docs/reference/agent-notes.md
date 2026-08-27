@@ -77,6 +77,23 @@ Print that path before every gate run. If it does not name your worktree, every
 result after it is about somebody else's code. Verified 2026-08-25 across ten
 worktrees.
 
+**And the same variable is what breaks the NEXT worktree.** `PYTHONPATH` leaks
+into every terminal the editor opens afterwards, and it beats a correct `.pth`
+just as reliably as it beats a wrong one. A worktree with its own venv, its own
+`pip install -e .` and its own correct `_editable_impl_idhazh.pth` still imported
+a sibling worktree's `idhazh`, so `python -m idhazh.contracts.export` wrote
+`schemas/` into the OTHER tree and `git status` here stayed clean - which reads
+exactly like the exporter ignoring a new contract. Clear it first, then print the
+path:
+
+```powershell
+$env:PYTHONPATH=''
+& .\.venv\Scripts\python.exe -c "import idhazh; print(idhazh.__file__)"
+```
+
+Set the variable only when you are deliberately borrowing another checkout's
+venv. Observed 2026-08-27.
+
 **A header migration cannot survive a rebase, because `state/*.csv` is
 `merge=union`.** Union merge keeps every line from both sides, which is exactly
 right for an append-only ledger and exactly wrong for a file whose every line
@@ -701,6 +718,25 @@ contends with the first.
   browser suite, not by hand.
 - **`locator.scrollIntoViewIfNeeded()` times out on a page that keeps relaying
   out.** Use `page.evaluate` with `scrollIntoView` instead.
+- **`locator.click()` cannot succeed here at all**, for the same reason: layout
+  is never driven, so Playwright's actionability check waits for an element that
+  never becomes stable and then reports `Element is outside of the viewport`.
+  Observed 2026-08-27 on the archive's Search button, which renders correctly and
+  reads correctly in the snapshot. `{ force: true }` does not help - it fails on
+  the viewport check instead of the stability one. Drive it from the DOM, which
+  sends the same event a reader does:
+
+  ```js
+  await page.evaluate(() => {
+    const button = [...document.querySelectorAll('button')]
+      .find((b) => b.textContent.trim() === 'Search');
+    button.click();
+  });
+  ```
+
+  Read the error before rewriting the selector: `outside of the viewport` and
+  `waiting for element to be visible, enabled and stable` on an element the
+  snapshot shows are this quirk, not a broken locator.
 - **`getBoundingClientRect()` returns zero width for every element on the
   console.** Layout is not being driven in a hidden page, so a bar that draws
   perfectly still measures 0. The `style` attribute is still correct and still

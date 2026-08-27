@@ -494,6 +494,20 @@ class EvaluationConfig(Model):
     summary_words_max: int = Field(
         default=250, ge=1, description="Above this it is a copy. Absolute, not a ratio."
     )
+    verbatim_reject_ceiling: float = Field(
+        default=0.75,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Above this share of the summary copied from the source in one unbroken "
+            "run, the item is refused rather than published. A starting point and not a "
+            "calibrated threshold (Rule #10): it is the midpoint of the band left open "
+            "by one run-day of eight brief items on 2026-08-26, where seven scored at "
+            "or below 0.241 and the eighth scored 1.000, and eight items is not a "
+            "distribution. It must sit above brief_compression_ceiling, or the brief "
+            "copying gate loses the band it can still fail in."
+        ),
+    )
     spot_checks_per_week: int = Field(default=10, ge=0)
     labellers: list[Slug] = Field(
         default_factory=list,
@@ -566,6 +580,14 @@ class EvaluationConfig(Model):
             raise ValueError("band_medium_min must sit below band_high_min")
         if self.summary_words_min >= self.summary_words_max:
             raise ValueError("summary_words_min must sit below summary_words_max")
+        # The reject drops the item before it can be scored, so anything it catches
+        # leaves the corpus the brief-copying gate reads. Set the two equal and the
+        # gate has no band left to fail in - and it stops failing silently, which
+        # reads exactly like a fixed pipeline.
+        if self.verbatim_reject_ceiling <= self.brief_compression_ceiling:
+            raise ValueError(
+                "verbatim_reject_ceiling must sit above brief_compression_ceiling"
+            )
         return self
 
 
@@ -949,15 +971,42 @@ class AssistConfig(Model):
         ge=1,
         le=12,
         description=(
-            "How many month shards a search reads, newest first. The reader waits on "
-            "the download, not on the arithmetic: measured 2026-08-26, one month is a "
-            "518 KB vector file and about 2.1 seconds on a 10 Mbit line at the rate "
-            "the committed days ran, or 4.8 seconds at the structural ceiling, against "
-            "74 to 159 milliseconds of ranking. The fetch is 9 to 30 times the ranking "
-            "at every scope, so this knob buys download seconds and never compute "
-            "seconds. Three months is a 14.4 second download, so one month is the only "
-            "scope whose first search starts inside about five seconds. The page names "
-            "the months it read, so widening this widens a sentence a reader can see."
+            "How many month shards a search always reads, newest first. The reader "
+            "waits on the download, not on the arithmetic: measured 2026-08-26, one "
+            "month is a 2.53 MB vector file beside a 518 KB browse index, about 2.1 "
+            "seconds on a 10 Mbit line at the rate the committed days ran, or 4.8 "
+            "seconds at the structural ceiling, against 74 to 159 milliseconds of "
+            "ranking. The fetch is 9 to 30 times the ranking at every scope, so this "
+            "knob buys download seconds and never compute seconds. Three months is a "
+            "14.4 second download, so one month is the only scope whose first search "
+            "starts inside about five seconds. This is a floor rather than a ceiling: "
+            "assist.search_min_days can add one more shard when the newest one is "
+            "thin. The page names the days it read, so a wider scope is a sentence a "
+            "reader can see."
+        ),
+    )
+    search_min_days: int = Field(
+        default=7,
+        ge=1,
+        le=366,
+        description=(
+            "The fewest days of published stories a search tries to reach. The scope "
+            "is month shards, and a calendar month is not a window: on the last day "
+            "of a month the newest shard holds 31 days, and on the next morning it "
+            "holds one. That is 31 times less reach for a reason no reader can see, "
+            "and a search that finds nothing then looks exactly like a story that was "
+            "never published. When the shards search_months names cover fewer days "
+            "than this, a search reads ONE more shard - one more and no more, so the "
+            "cost is bounded at a single extra fetch. Seven, because a week is already "
+            "this site's unit for what a reader still has in mind: ui.read_mark_days "
+            "keeps a read mark for seven days and console.min_window_days will not "
+            "draw a narrower window. At the observed rate of 353.5 items a day the "
+            "extra fetch fires on the first 6 days of a month, 20 percent of them, "
+            "and it fires only when the shard a search already reads is small: "
+            "measured 2026-08-26, an entry costs 50.03 gzipped bytes of browse index "
+            "and 249.79 of vector, so the two shards together on 1 September move "
+            "about what the one shard on 30 September already moves. The bytes are "
+            "levelled across the month rather than doubled."
         ),
     )
     recall_min: float = Field(
@@ -986,6 +1035,52 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27T12:00",
+            change=(
+                "evaluation.verbatim_reject_ceiling added, defaulting to 0.75, and "
+                "EvaluationConfig now refuses a value at or below "
+                "evaluation.brief_compression_ceiling."
+            ),
+            why=(
+                "Summarize had no rule that refused a summary which merely copies the "
+                "source, so a brief published on 2026-08-26 was 44 words of which every "
+                "word was one unbroken copy of its 53-word source - republishing an "
+                "article body, which CLAUDE.md section 0a forbids outright. The number "
+                "is a second knob rather than a reuse of brief_compression_ceiling: a "
+                "refused item writes no score, so it leaves the corpus the brief-copying "
+                "gate reads, and one shared number would have made that gate unable to "
+                "fail. It sits in evaluation and not summarize because summarize is "
+                "hashed whole into the pipeline fingerprint, and a rule that refuses a "
+                "reply moves not one word the model writes. 0.75 is the midpoint of the "
+                "empty band those eight brief items left - seven at or below 0.241, one "
+                "at 1.000 - and it is a starting point, not a calibration (Rule #10). "
+                "The invariant is the control: without it an operator editing one line "
+                "silences the gate instead of tightening it. Additive with a default, so "
+                "an older config still validates and no read-side migration is needed "
+                "(section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-27T09:00",
+            change=(
+                "assist.search_min_days added, defaulting to 7, and "
+                "assist.search_months restated as a floor rather than the whole scope."
+            ),
+            why=(
+                "assist.search_months named a count of calendar shards, so the reach a "
+                "search had was whatever the current month happened to hold - 31 days "
+                "on 31 August and one day on 1 September. A reader who searched that "
+                "morning got nothing back and could not tell it from a story we never "
+                "published. A day floor makes the reach a promise instead of an "
+                "accident, and capping the extra read at one shard keeps the cost "
+                "bounded: measured 2026-08-26 the extra shard fires on 6 days of a "
+                "30-day month and only when the shard already being read is small, so "
+                "the bytes a search moves are levelled across the month rather than "
+                "doubled. Additive with a default, so an older config still validates "
+                "and no read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27T05:00",
             change=(

@@ -22,6 +22,8 @@
         "output_truncated",
         "bad_shape",
         "length_out_of_range",
+        "copied_source",
+        "leaked_address",
         "unknown"
       ],
       "title": "FailureCode",
@@ -53,6 +55,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added the copied_source and leaked_address summarize failure codes.",
+      "version": "2026-08-27",
+      "why": "Two things the project forbids outright had no code to record them. A brief published on 2026-08-26 was a 44-word summary of which every word was one unbroken copy of its 53-word source, which republishes an article body (CLAUDE.md section 0a); and nothing on the output side refused an address in our own text, so the sanitizer running before the model was the only control on Rule #11. Both codes are source-neutral: a copied brief and a leaked address are the model's failures, and counting either against the feed would quarantine a wire service for a defect we own. Additive and the vocabulary is closed, so a row an earlier run wrote still validates."
+    },
     {
       "change": "Added the context_exceeded summarize failure code.",
       "version": "2026-08-25",
@@ -302,7 +309,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-25",
+      "default": "2026-08-27",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -326,5 +333,5 @@
   ],
   "title": "ItemHealthRow",
   "type": "object",
-  "version": "2026-08-25"
+  "version": "2026-08-27"
 }
