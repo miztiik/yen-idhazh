@@ -87,7 +87,16 @@ class RunConfig(Model):
     shard_timeout_minutes: int = Field(
         default=150,
         ge=1,
-        description="Derived from the WORST-case article, not the blended figure.",
+        description=(
+            "The work job's own timeout, which digest.yml reads from here. A backstop, "
+            "never a budget: a worker has no clock of its own, and one killed at this "
+            "bound uploads nothing, so the run loses every item that worker held. Sized "
+            "at half again the slowest worker measured at run.safety_ceiling_per_run - "
+            "94.5 minutes on 2026-08-26 - and it still clears the 117.5-minute worst of "
+            "2026-08-24, when a day handed a worker 50 items instead of 40. A slow "
+            "worker is answered by lowering the ceiling, never by raising this "
+            "(Rule #2)."
+        ),
     )
     route_budget_minutes: int = Field(
         default=40,
@@ -974,7 +983,7 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-08-27T00:30",
+            version="2026-08-27T02:30",
             change="assist.search_months added, defaulting to 1.",
             why=(
                 "Archive search used to rank over every committed day, because the page "
@@ -990,13 +999,34 @@ class AppConfig(Contract):
             ),
         ),
         ChangelogEntry(
-            version="2026-08-27",
+            version="2026-08-27T02:00",
             change="ui.archive_page_size added, defaulting to 25.",
             why=(
                 "The archive now lists every published story instead of a row per day, "
                 "and a list of thousands needs a first screen. The number belongs in "
                 "config rather than in the page (Rule #6). Additive with a default, so "
                 "an older config still validates and no read-side migration is needed "
+                "(section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-27",
+            change=(
+                "run.shard_timeout_minutes gained the derivation behind its 150, and "
+                "digest.yml now reads the work job's timeout from it. Same field, same "
+                "type, same value."
+            ),
+            why=(
+                "The knob had no reader anywhere and said only 'derived from the "
+                "WORST-case article'. digest.yml set the work job to 330 minutes, so "
+                "config declared 150 while production ran 330 - a wrong answer with a "
+                "schema behind it, and the number a model adoption sizes against. "
+                "Reading the wall-clock of 106 work jobs over 27 runs settled which one "
+                "was wrong: across 16 full days at four workers the slowest worker of a "
+                "run took 83.5 to 117.5 minutes, and at today's item ceiling the worst "
+                "was 94.5. 150 is half again that and 330 was 3.5x it, so the workflow's "
+                "number moved and the config number did not. Description only, so every "
+                "committed config still validates and no read-side migration is needed "
                 "(section 11)."
             ),
         ),

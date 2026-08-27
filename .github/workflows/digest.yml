@@ -78,6 +78,7 @@ jobs:
       day_dir: ${{ steps.decide.outputs.day_dir }}
       shards: ${{ steps.fanout.outputs.shards }}
       matrix: ${{ steps.fanout.outputs.matrix }}
+      shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
       faithfulness: ${{ steps.decide.outputs.faithfulness }}
       summarize_repo: ${{ steps.models.outputs.summarize_repo }}
       summarize_revision: ${{ steps.models.outputs.summarize_revision }}
@@ -161,6 +162,28 @@ jobs:
                   print(f"{role}_{field}={value}")
           PY
 
+      # How long a worker may take, read from the one file that says so. It
+      # travels as a job OUTPUT for the same reason the model refs do: a job's
+      # `timeout-minutes` resolves from `needs` before that job's first step,
+      # and `steps` is not readable there.
+      #
+      # Asserted to be a bare positive whole number here, at the one point that
+      # writes it. `timeout-minutes` takes whatever it is handed, so a value
+      # Actions cannot read as a number leaves the worker with no bound at all
+      # and the run finds out six hours later.
+      - id: bounds
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+
+          run = json.load(open("config/idhazh.json", encoding="utf-8"))["run"]
+          minutes = run["shard_timeout_minutes"]
+          if type(minutes) is not int or minutes < 1:
+              raise SystemExit("run.shard_timeout_minutes must be a whole number of minutes, 1 or more")
+          print(f"shard_timeout_minutes={minutes}")
+          PY
+
       # No weights load here. The plan job is feed reads and arithmetic, and it
       # finishes in seconds - which is what makes fanning out afterwards cheap.
       - name: Plan the day
@@ -171,10 +194,12 @@ jobs:
       # so a small day spends fewer jobs and restores the weights fewer times
       # (Rule #2). The derivation is bounded by `run.max_parallel`, which is
       # four, so a scheduled run still never asks for more workers than the four
-      # it has always had - the eight below is the ceiling an operator may
-      # dispatch to, and moving the automatic path onto it needs the three
-      # conditions in docs/reference/measurements.md, not this step. A dispatch
-      # input still wins, which is why the guard stays a hard failure there.
+      # it has always had - the eight in the dispatch form above is the ceiling
+      # an operator may ask for, and moving the automatic path onto it needs the
+      # three conditions in docs/reference/measurements.md, not this step. A
+      # dispatch input still wins, which is why the guard stays a hard failure
+      # there. What this step writes is also what caps the workers that run at
+      # once, so the fan-out and its concurrency cap cannot disagree.
       - id: fanout
         run: |
           set -euo pipefail
@@ -219,16 +244,32 @@ jobs:
           path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
           retention-days: 1
 
+  # This bound is the backstop, not the budget, and it is written in exactly one
+  # place: `run.shard_timeout_minutes` in config/idhazh.json, which the plan job
+  # publishes above. It used to say 330 here while config said 150, so anyone
+  # sizing a model against config was reading a number production ignored.
+  #
+  # 150 minutes is half again the slowest worker ever measured at the current
+  # item ceiling - 94.5 minutes on 2026-08-26 - and it still sits above the
+  # 117.5-minute slowest worker of 2026-08-24, when a day handed each worker 50
+  # items instead of 40. Raising it is not the fix for a slow worker (Rule #2);
+  # lowering `run.safety_ceiling_per_run` is, and that is the lever the ceiling
+  # was last moved with.
   work:
     needs: plan
     runs-on: ubuntu-latest
-    timeout-minutes: 330
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.shard_timeout_minutes) }}
     strategy:
       fail-fast: false
-      # Matches the shard ceiling, so a dispatch at the ceiling runs every
-      # worker at once. Eight workers plus the router is well inside Rule #2's
-      # 20 concurrent jobs, and `route` waits on `work` rather than racing it.
-      max-parallel: 8
+      # The run's own worker count, so no worker ever waits for a sibling on
+      # either path: a scheduled run derives four from config, and a dispatch
+      # may name up to eight. A fixed number here is a second answer to how wide
+      # the fan-out is, and the two can disagree - at four it would have queued
+      # half of an eight-shard dispatch and handed back the wall-clock the
+      # fan-out buys. Eight workers plus the router is nine, well inside Rule
+      # #2's 20 concurrent jobs, and `route` waits on `work` rather than racing
+      # it.
+      max-parallel: ${{ fromJSON(needs.plan.outputs.shards) }}
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
