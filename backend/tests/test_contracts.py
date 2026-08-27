@@ -214,8 +214,14 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     """`frontend/scripts/bundle-gate.mjs` reads the file, never the model, and
     the model default is empty - so the committed config is the only place the
     capped routes live. If it lost them the gate would check nothing while every
-    other knob still read correctly, and a route that grows with the corpus is
-    deliberately absent so a fixed ceiling never fails on an ordinary publish.
+    other knob still read correctly.
+
+    `/archive/` is capped again since 2026-08-27, because it stopped inlining the
+    day payloads and now grows by one day link a day. The assertion below is on
+    its size rather than on its presence: a ceiling at the megabyte the page used
+    to weigh is a gate that never fires, so the number has to stay in the
+    thousands. `/console/` grows with the ledger its charts read and nobody has
+    priced that growth, so it is deliberately still absent.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     ceilings = committed.page_weight.ceilings_bytes
@@ -223,7 +229,10 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     assert PageWeightConfig().ceilings_bytes == {}, "the model default must stay empty"
     assert ceilings["/404"] > 0
     assert ceilings["/evals/"] > 0
-    assert "/archive/" not in ceilings, "a route that grows with the corpus is not capped"
+    assert ceilings["/archive/"] < 100_000, (
+        "the archive ceiling is back above the weight of the payloads row #4 removed - "
+        "a ceiling that high never fires again"
+    )
     assert "/console/" not in ceilings, "a route that grows with the ledger is not capped"
 
 

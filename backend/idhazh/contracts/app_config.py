@@ -838,14 +838,16 @@ class PageWeightConfig(Model):
     committed config is the single source, and this model owns only the shape
     and the validation (Rule #6).
 
-    Only a route whose HTML does not grow with the published corpus is worth a
-    fixed ceiling. `/404` and `/evals/` render no day and no ledger, so their
-    weight is a function of source alone. `/archive/` inlines every committed
-    day and `/console/` grows with the ledger its charts read, so a byte ceiling
-    on either fails on an ordinary publish rather than catching a regression;
-    the marker count in `frontend/tests/payload-weight.spec.ts` covers the class
-    those two belong to, and a route the config does not name is reported by the
-    gate without failing it.
+    A route is worth a fixed ceiling when its HTML either does not grow with the
+    published corpus, or grows by a bounded amount a person can price for a
+    year. `/404` and `/evals/` render no day and no ledger, so their weight is a
+    function of source alone and their ceiling is the heaviest build plus the
+    64-byte noise floor. `/archive/` grows, but only by one day link a day since
+    it stopped inlining the day payloads, so its ceiling carries a year of that
+    growth as measured headroom. `/console/` grows with the ledger its charts
+    read and nobody has priced that growth, so it stays uncapped; the marker
+    count in `frontend/tests/payload-weight.spec.ts` covers it, and a route the
+    config does not name is reported by the gate without failing it.
     """
 
     ceilings_bytes: dict[str, int] = Field(
@@ -855,9 +857,11 @@ class PageWeightConfig(Model):
             "reach. The committed values live in config/idhazh.json, which the gate "
             "reads; this default is empty so the numbers are not duplicated here where "
             "they could drift from the file the gate enforces (Rule #6). A route the "
-            "object does not name is measured and reported by the gate but not failed, "
-            "so only routes whose weight does not grow with the published corpus - "
-            "/404 and /evals/ today - carry a ceiling."
+            "object does not name is measured and reported by the gate but not failed. "
+            "A route earns a ceiling when its growth is priced: /404 and /evals/ grow "
+            "only when the source does, and /archive/ grows by one day link a day, so "
+            "its ceiling carries a measured year of that. /console/ grows with the "
+            "ledger and stays uncapped until somebody measures it."
         ),
     )
 
@@ -982,6 +986,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27T05:00",
+            change=(
+                "page_weight.ceilings_bytes gained /archive/ again, at 7,553, and "
+                "PageWeightConfig now says a route earns a ceiling when its growth is "
+                "priced rather than when it does not grow."
+            ),
+            why=(
+                "/archive/ was dropped on 2026-08-26 because it inlined every committed "
+                "day, grew about 170 KB a publish, and was raised twice in one day to "
+                "silence it - a countdown, not a bound. Search reads the month index "
+                "now, so the page grows by one day link instead of by every story: "
+                "measured 2026-08-27 at 2,906 bytes gzipped against 1,766,585 on main, "
+                "and a year of publishing adds 4,476 more. With no ceiling the 99.8 "
+                "percent saving had nothing holding it, and restoring the eager load "
+                "would have passed every gate. Committed value only - the model default "
+                "stays empty, the shape and the validation are unchanged, and every "
+                "older config still validates, so no read-side migration (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27T02:30",
             change="assist.search_months added, defaulting to 1.",
