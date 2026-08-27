@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -2298,12 +2298,117 @@ how close a 16 GB runner came to its limit. The samples upload inside
 
 The sampler's artifact cost is bounded, not estimated: a row is five
 tab-separated fields and at most about 60 bytes. The `work` job's configured
-bound is 330 minutes, so one shard writes at most 1,320 rows, about 79 KB; four
-shards at most about 317 KB and eight at most about 634 KB - 0.06% and 0.13% of
-the 500 MB artifact budget (Rule #2). A 105-minute shard writes about a third of
-that. Raising the shard ceiling scales this term with the shard count and leaves
-the `items-*` total flat, because the plan is divided between workers rather
-than copied to each of them.
+bound is 150 minutes, so one shard writes at most 600 rows, about 36 KB; four
+shards at most about 144 KB and eight at most about 288 KB - 0.03% and 0.06% of
+the 500 MB artifact budget (Rule #2). A 105-minute shard writes about two thirds
+of that. Raising the shard ceiling scales this term with the shard count and
+leaves the `items-*` total flat, because the plan is divided between workers
+rather than copied to each of them.
+
+## What a work shard costs
+
+**Measured 2026-08-27** from the GitHub jobs API: every `work` job of every
+`digest.yml` run the repository holds - 106 jobs across 27 runs. Wall-clock is
+`completed_at - started_at` for the job, so no queue time is inside any figure.
+Hardware is GitHub-hosted `ubuntu-latest`, 4 vCPU and 16 GB, and which CPU model
+a job draws is not ours to choose: the same page records a 3.4x prefill swing
+between the four CPU models one run drew
+([Which machine a shard drew moved its rate 3.4x](#which-machine-a-shard-drew-moved-its-rate-34x)).
+Summarizer `Qwen3-8B-Q4_K_M.gguf` through `llama-server`, llama.cpp `b10598`.
+
+**The slowest worker of a full day takes 83.5 to 117.5 minutes, and 94.5 at
+today's item ceiling. The `work` job was bounded at 330.** That bound was 3.5
+times the worst thing it has ever had to allow. It was also a second answer:
+`config/idhazh.json` said `run.shard_timeout_minutes: 150` and nothing read it,
+so a person sizing a model against config read a number production ignored.
+
+### The full days, run by run
+
+Sixteen runs planned a full day - 100 items or more - between 2026-08-23 15:23
+and 2026-08-26 20:09 UTC. Every one fanned out to four workers, so this is one
+shard count and not a mixture. `Items a worker` is
+`ceil(items_planned / 4)`, and `items_planned` is read from that day's committed
+`run.json` rather than from a log. Five of the sixteen runs ended `cancelled` or
+were dispatches, but all 64 `work` jobs concluded `success`, so every clock here
+is a worker that finished its share.
+
+| Run | Plan started (UTC) | Items planned | Items a worker | Slowest worker | Minutes an item |
+| --- | --- | --- | --- | --- | --- |
+| `33008629212` | 2026-08-26 20:09 | 160 | 40 | 83.5 min | 2.09 |
+| `32986307407` | 2026-08-26 15:57 | 160 | 40 | **94.5 min** | **2.36** |
+| `32960510065` | 2026-08-26 10:56 | 160 | 40 | 92.5 min | 2.31 |
+| `32941554666` | 2026-08-26 07:15 | 194 | 49 | 88.7 min | 1.81 |
+| `32926523936` | 2026-08-26 03:30 | 198 | 50 | 107.7 min | 2.15 |
+| `32887038177` | 2026-08-25 19:33 | 200 | 50 | 103.8 min | 2.08 |
+| `32863921985` | 2026-08-25 15:11 | 200 | 50 | 110.6 min | 2.21 |
+| `32839359536` | 2026-08-25 10:55 | 200 | 50 | 102.4 min | 2.05 |
+| `32820339599` | 2026-08-25 07:14 | 200 | 50 | 93.6 min | 1.87 |
+| `32804437110` | 2026-08-25 03:17 | 200 | 50 | 106.9 min | 2.14 |
+| `32766098026` | 2026-08-24 19:08 | 200 | 50 | 105.3 min | 2.11 |
+| `32742672105` | 2026-08-24 15:08 | 200 | 50 | 113.1 min | 2.26 |
+| `32719349248` | 2026-08-24 11:00 | 200 | 50 | **117.5 min** | 2.35 |
+| `32701966659` | 2026-08-24 07:35 | 200 | 50 | 108.9 min | 2.18 |
+| `32680268454` | 2026-08-24 01:38 | 200 | 50 | 98.3 min | 1.97 |
+| `32648218952` | 2026-08-23 15:23 | 200 | 50 | 114.7 min | 2.29 |
+
+| Quantity, over those 16 runs | Lowest | Median | Highest |
+| --- | --- | --- | --- |
+| Slowest worker of the run | 83.5 min | 104.5 min | **117.5 min** |
+| Minutes that worker spent an item | 1.81 | 2.15 | **2.36** |
+
+**The spread on the per-item rate is 1.30x, not the 3.4x the host lottery moves
+prefill by.** A worker is prefill plus decode, and this page already records that
+the hosts which read a prompt fastest write a summary slowest, so the two swings
+partly cancel over 40 items. That is why a shard clock is a steadier thing to
+size a bound against than a tokens-a-second figure.
+
+### The fixed cost, and what a worker costs an item
+
+Three earlier runs planned a 17-item day, which gave each worker 5 items:
+`32634191910`, `32624081323` and `32571647176`, on 2026-08-22 and 2026-08-23.
+Their slowest workers took 12.4, 13.7 and 14.4 minutes. Two points on the same
+line - 5 items and 40 items, worst against worst - give:
+
+- **about 3 minutes a worker spends before it summarizes anything**: checkout,
+  `pip install`, the cache restore (30-73 s, median 45) and the weights load.
+- **about 2.29 minutes an item after that.**
+
+That predicts `3 + 40 x 2.29 = 94.6` minutes for a worker at today's item
+ceiling. The worst one measured is 94.5. The arithmetic is a check on the
+measurement here, not a substitute for it.
+
+### Where the 150-minute bound comes from
+
+`run.safety_ceiling_per_run` is 160 and `run.max_parallel` is 4, so a worker on
+the automatic path draws `ceil(160 / 4) = 40` items and cannot draw more. The
+bound is **half again the slowest worker measured at that ceiling, rounded up to
+the next half hour**: `94.5 x 1.5 = 141.8`, so **150 minutes**.
+
+What that margin covers, in order of how likely each is:
+
+| The bound is | Against |
+| --- | --- |
+| 1.59x | the slowest worker measured at today's 40-item ceiling, 94.5 min |
+| 1.28x | the slowest worker this project has ever run, 117.5 min - at 50 items, under the 200-item ceiling that was replaced on 2026-08-26 |
+| 1.15x | a day of 40 items every one of which costs the worst rate ever seen, 2.36 min, on a worker that also drew the worst fixed cost |
+
+**A bound above about 165 minutes cannot be honoured anyway.** The five
+scheduled runs are four hours apart and every run shares one concurrency group
+with `cancel-in-progress: false`, so a run that overruns does not get cancelled -
+the next one queues behind it. A worker that hangs to a 150-minute bound still
+lets `route` (50) and `assemble` (20) finish about 223 minutes after `plan`
+starts, inside the 240-minute gap. At 330 it could not, and one stuck worker
+delayed the next two digests a reader was waiting for.
+
+**This does not size the Qwen3.5-9B candidate, and the two derivations on record
+for it disagree.** [The qualification budget](#the-qualification-budget-derived-2026-08-26)
+puts a 40-item 9B worker at about 130 minutes, from a live production
+observation; the older length-interpolation and decode-ratio derivations quoted
+in [../concepts/config.md](../concepts/config.md) put it at 254 and 276. The
+first fits this bound and the second two do not. Neither is a measurement of a
+9B worker, so neither may move a live bound (Rule #10). An adoption measures its
+own worst worker and moves `run.shard_timeout_minutes` with that number, in the
+commit that adopts the model.
 
 ## Eight work shards
 
