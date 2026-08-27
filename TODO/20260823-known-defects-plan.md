@@ -22,7 +22,7 @@ decision; each row is a defect with its evidence and where the fix landed.
 | # | Defect | Level | Status |
 | --- | --- | --- | --- |
 | 1 | The published band ignores two of its own counterweights | 2 | FIXED - PR #18 |
-| 2 | The faithfulness thresholds have no labelled error rate | 5 | **INSTRUMENT BUILT - 0 of 60 labels, 1 of 10 run-days** |
+| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN, INSTRUMENT BUILT - 0 of 60 labels, 1 of 10 run-days, and the 9B adoption resets the run-days again** |
 | 3 | `/evals` and `/console` answer the same question twice | 3 | FIXED - PR #30 |
 | 4 | `EmptyDay` points at a notice that is not on the page | 1 | FIXED - PR #14 |
 | 5 | The home page bakes the build date and calls it today | 2 | FIXED - PR #14 |
@@ -410,8 +410,9 @@ The threshold question is still open for four different reasons:
 
 - There are no human labels, so no cut has a measured error rate behind it.
 - The evidence base is thin on distinct run-days.
-- Five source URLs appear under both committed `pipeline_fingerprint` values.
-  Every one moved downward: -0.105, -0.595, -0.114, -0.079 and -0.034. That
+- Five source URLs appear under two different `pipeline_fingerprint` values - the
+  only two the ledger held when this was measured; there are five now. Every one
+  moved downward: -0.105, -0.595, -0.114, -0.079 and -0.034. That
   uniform shift points at a producer change in a way scattered noise would not.
 - The recorded `band` column predates the counterweight caps and must be
   re-banded before it is read as a distribution.
@@ -432,10 +433,23 @@ Closing steps, in order:
    ten deciles with no shortfall on today's ledger. Recorded in
    [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md).
 3. Collect at least 10 distinct run-days at one `scorer_version` and one
-   `pipeline_fingerprint`. **1 of 10.** Measured 2026-08-24: 731 eligible rows,
-   all on `2026-08-24`, all under fingerprint `969b1917...d2b945`, at scorer
-   `hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30`.
-4. Label the 60 rows. **0 of 60.** Human work. No AI judge, and the contract has
+   `pipeline_fingerprint`. **1 of 10, and the best ever reached is 3 of 10.**
+   Measured 2026-08-27 over `state/scores.csv` at commit `5d8ba60`: 2,232 rows
+   from 18 runs across 5 scored run-days carry 5 distinct fingerprints and 4
+   distinct scorer versions. The live pair is 116 rows on `2026-08-26` alone, at
+   `hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30`
+   and fingerprint `f0d4ecc7...9ad669`. The longest streak in the ledger's whole
+   history is `2026-08-24` to `2026-08-26` under `969b1917...d2b945`, which is
+   where the stale "1 of 10, 731 eligible rows on 2026-08-24" figure came from.
+   **Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moves
+   `model_sha256`, so the next run mints a sixth fingerprint and this count
+   restarts at zero again.** The reset mechanism and its measured rate are stated
+   once, in
+   [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md#design-rationale).
+4. Label the 60 rows. **0 of 60**, and `state/labels.csv` does not exist. Worse,
+   the decile draw can only fill 38 of 60 from the live instrument's 116 rows,
+   short in 7 of the 10 deciles - so the pool has to grow before 60 is even
+   drawable. Human work. No AI judge, and the contract has
    nowhere to put one.
 5. Re-test the cuts by stratum against the labels.
 
@@ -443,13 +457,18 @@ Closing steps, in order:
 and a calendar prerequisite. Anyone reading this later: the instrument is built
 and nothing about it entitles a threshold to move.
 
-One risk worth surfacing now. The pipeline fingerprint moved at least twice in
-three days, so ten consecutive days under one fingerprint may be unreachable
-while the pipeline is under active change. The falsifiable relaxation is "10
-run-days at one `scorer_version`, with `pipeline_fingerprint` recorded per row and
-reported as a stratum" - the threshold belongs to the scorer, and a producer
-change is a covariate rather than a disqualification. That would change this
-plan's text, so it is the owner's call.
+One risk is no longer a risk. It is measured. The pipeline fingerprint moved four
+times across five scored run-days (2026-08-27, `state/scores.csv` at `5d8ba60`),
+the scorer version moved three times over the same five days, and no
+(`scorer_version`, `pipeline_fingerprint`) pair has ever held for more than three
+consecutive run-days. Ten consecutive days under one pair is not merely hard
+while the pipeline is under active change - it has never happened. The
+falsifiable relaxation is "10 run-days at one `scorer_version`, with
+`pipeline_fingerprint` recorded per row and reported as a stratum" - the threshold
+belongs to the scorer, and a producer change is a covariate rather than a
+disqualification. The other answer is to freeze the pipeline for ten days and pay
+for the window in shipped improvements. Both change this plan's text, so both are
+the owner's call.
 
 `evaluation.spot_checks_per_week` is already 10, and the spot-check has never
 run. The missing instrument was labels, not more rows. The instrument now exists;

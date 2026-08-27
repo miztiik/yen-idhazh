@@ -233,20 +233,31 @@ containing exact source and summary text plus source digest, and globally
 shuffles the selected rows before display. Article bodies remain local and
 uncommitted.
 
-**The exact remaining requirement**, counted on the committed ledger 2026-08-24:
+**The exact remaining requirement**, counted 2026-08-27 over `state/scores.csv`
+and `state/fingerprints.csv` as committed at `5d8ba60`. These are exact counts
+over two committed files rather than a timing, so there is no spread: the same
+commit gives the same numbers on any machine.
 
 | What | Have | Need |
 | --- | --- | --- |
-| Labels | **0** | 60 |
-| Distinct run-days at one `scorer_version` AND one `pipeline_fingerprint` | **1** (`2026-08-24`) | 10 |
-| Eligible rows | 731 | not the constraint |
+| Labels | **0** - `state/labels.csv` does not exist | 60 |
+| Distinct run-days at the live `scorer_version` AND its `pipeline_fingerprint` | **1** (`2026-08-26`) | 10 |
+| Longest run of consecutive run-days at any one pair, ever reached | **3** (`2026-08-24` to `2026-08-26`) | 10 |
+| Eligible rows at the live instrument | 116 of the ledger's 2,232 | not the constraint |
+| Rows the decile draw can fill from those 116 | **38**, short in 7 of the 10 deciles | 60 |
 
-Fixed `scorer_version`:
-`hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30`.
-Fixed `pipeline_fingerprint`: `969b1917...d2b945`. Note the band values sit
-**inside** the scorer version string, so moving a threshold mints a new scorer
-version and restarts the count. That is correct, and it is also why a cut cannot
-move halfway through a collection.
+The live instrument is
+`hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30` at
+`pipeline_fingerprint` `f0d4ecc7...9ad669`, first written by run `2026-08-26-5`.
+Note the band values sit **inside** the scorer version string, so moving a
+threshold mints a new scorer version and restarts the count. That is correct, and
+it is also why a cut cannot move halfway through a collection.
+
+Read the second row and the third one together. The live pair is one day old, and
+no pair in the ledger's whole history has ever held for more than three days - so
+the shortfall is not nine more days of patience. What moves the count back to
+zero, how often it has moved, and what that costs are in
+[Design rationale](#design-rationale) below.
 
 **Nothing here may move a threshold.** The instrument exists; the labels do not.
 Until both the label count and the run-day count are met, any re-cut is a number
@@ -316,7 +327,13 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 
 **One column reads the summary against itself (2026-08-26).** Eleven quality columns, and every n-gram machine in `backend/idhazh/evals/metrics.py` intersected the summary's n-grams with the *source's*. Nothing could see a summary that repeated itself, which greedy decoding makes possible and which every other column scores *better* on the worse it gets. Proved on committed fixtures rather than argued: two 26-word summaries of the same article, one saying a clause three times and one saying it once, score exactly equal on `extractiveness` (0.000), `verbatim_run` (0.077) and `coverage` (0.333), and 0.000 against 0.391 on the new one. Authority: Andre's blind-spot finding; nullable and appended, Fowler's layout rule.
 
-**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count stands at 1 of 10. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
+**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count is stated once, in [The human labels](#the-human-labels-the-instrument-and-what-it-still-needs), and it has never reached 10. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
+
+**A fingerprint change restarts the run-day count at zero (2026-08-27).** The requirement above has asked for ten run-days at one `scorer_version` and one `pipeline_fingerprint` since it was written, and the page never said what happens when one of the two moves. The count goes back to zero, and it has to. The fingerprint exists so that ten days of scores are ten days of the *same* pipeline; a count carried across a model swap would average two different systems and present the result as one measurement. This is not a policy bolted on afterwards. `model_sha256` is a declared field of `PipelineInputs` in [`../../backend/idhazh/contracts/fingerprint.py`](../../backend/idhazh/contracts/fingerprint.py), and the stamp is a digest over that model's own serialization, so a model swap cannot leave the stamp still - and neither can a reworded prompt, a llama.cpp rebuild, a changed truncation cap, or any other declared input. Authority: the determinism contract, read rather than argued.
+
+**The measured reset rate (2026-08-27, `state/scores.csv` and `state/fingerprints.csv` at commit `5d8ba60`).** 2,232 eval rows, written by 18 runs across **5 scored run-days** (`2026-08-22` to `2026-08-26`), carry **5 distinct `pipeline_fingerprint` values** and **4 distinct `scorer_version` values** - one new pipeline stamp per scored day, on average. `2026-08-26` alone carried three different (`scorer_version`, `pipeline_fingerprint`) pairs: the stamp moved at that day's second run and again at its fifth, and the scorer version moved at the fifth with it. Every one of those 2,232 rows names the same `model_id`, `qwen3-8b-q4-k-m` - the model did not change once and the stamp still moved four times, so a model swap is *one* cause of a reset rather than the cause. `state/fingerprints.csv` holds a single row, because the ledger that expands a stamp into its inputs only started on 2026-08-26; four of the five stamps can no longer be expanded at all. Authority: measurement.
+
+**The consequence, plainly: the ten-day window has never once been reached (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. The live pair stands at 1 of 10, and adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moves `model_sha256`, so the first run after that commit starts a sixth fingerprint at zero again. At the observed rate of pipeline change, every model or runtime improvement spends the whole window. That is a live tension between shipping a better pipeline and measuring the one already running, and **this page does not resolve it.** Two answers exist - freeze the pipeline for ten days, or count run-days at one `scorer_version` and carry `pipeline_fingerprint` as a reported stratum instead of a disqualification - and the second is written up as a falsifiable relaxation in [`../../TODO/20260823-known-defects-plan.md`](../../TODO/20260823-known-defects-plan.md). Both are the owner's call. Nothing here moves a threshold. Authority: owner.
 
 ## Rejected alternatives
 
