@@ -435,25 +435,38 @@ def test_moving_search_to_the_index_cost_no_recall(
 
 
 def test_a_reader_only_searches_the_months_the_knob_names(config: AppConfig) -> None:
-    """`assist.search_months` is what a tab reads, so it is what this asserts.
+    """`assist.search_months` and `assist.search_min_days` are what a tab reads.
 
-    The scope buys download seconds rather than compute seconds - a month of
-    vectors is 518 KB and the ranking over it is 74 to 159 milliseconds - so the
-    knob is the only thing standing between a reader and a fourteen-second wait
-    at three months.
+    The scope buys download seconds rather than compute seconds - one month is a
+    2.53 MB vector file and the ranking over it is 74 to 159 milliseconds - so
+    the knobs are the only thing standing between a reader and a fourteen-second
+    wait at three months. The floor is the other half: a calendar shard is not a
+    window, so on the first of a month `search_months` alone reaches one day.
     """
     whole = retrieval.load_index_corpus(REPO_ROOT)
     if not whole.items:
         pytest.skip("no committed month index in this checkout")
 
-    scoped = retrieval.load_index_corpus(REPO_ROOT, months=config.assist.search_months)
+    scoped = retrieval.load_index_corpus(
+        REPO_ROOT,
+        months=config.assist.search_months,
+        min_days=config.assist.search_min_days,
+    )
     assert scoped.items, "the configured scope reads no month at all"
 
     months = {item.date[:7] for item in scoped.items}
-    assert len(months) <= config.assist.search_months
-    assert months <= {item.date[:7] for item in whole.items}
+    every = {item.date[:7] for item in whole.items}
+    # One extra shard when the floor bites, and one only. Never more.
+    assert len(months) <= config.assist.search_months + 1
+    assert months <= every
     # Newest first, so the scope always holds the months a reader would expect.
-    assert months == set(sorted({item.date[:7] for item in whole.items}, reverse=True)[: len(months)])
+    assert months == set(sorted(every, reverse=True)[: len(months)])
+    # And the floor is met, unless there is no older shard left to meet it with.
+    days = {item.date for item in scoped.items if item.vector is not None}
+    assert len(days) >= config.assist.search_min_days or months == every, (
+        f"the scope covers {len(days)} days against a floor of "
+        f"{config.assist.search_min_days}, with {len(every) - len(months)} shards unread"
+    )
 
 
 def test_the_floor_lets_the_empty_state_fire(corpus: Corpus, config: AppConfig) -> None:

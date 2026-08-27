@@ -34,11 +34,20 @@ export function dayMonth(date: string): string {
 	return `${day} ${MONTHS[month - 1]!.slice(0, 3)}`;
 }
 
-/** "2026-08" -> "August 2026". What a reader is told a search covered. */
-export function monthName(month: string): string {
-	const [year, index] = month.split('-').map(Number);
-	if (!year || !index || index < 1 || index > 12) return month;
-	return `${MONTHS[index - 1]} ${year}`;
+/** "1 to 20 August 2026" - the days a search covered, in the reader's words.
+ *
+ * A month name is not a window, and printing one over a partial month reads as
+ * a promise the search cannot keep: on 1 September "September 2026" looks like
+ * thirty days and holds one.
+ */
+export function dayRange(oldest: string, newest: string): string {
+	const [year, month, day] = oldest.split('-').map(Number);
+	if (oldest === newest || !year || !month || !day) return longDate(newest);
+	if (oldest.slice(0, 7) === newest.slice(0, 7)) return `${day} to ${longDate(newest)}`;
+	if (year === Number(newest.slice(0, 4))) {
+		return `${day} ${MONTHS[month - 1]} to ${longDate(newest)}`;
+	}
+	return `${longDate(oldest)} to ${longDate(newest)}`;
 }
 
 export function clockUtc(timestamp: string): string {
