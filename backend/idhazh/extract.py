@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import re
-from typing import Final
+from typing import Final, NamedTuple
 from urllib.parse import urlsplit
 
 import trafilatura
@@ -202,6 +202,19 @@ def _lines(text: str) -> list[str]:
     return [line.strip() for line in text.splitlines() if line.strip()]
 
 
+class Extracted(NamedTuple):
+    """The payload, and the body it was cut from.
+
+    `source_text` is the sanitized article before `truncation_cap_tokens` cut
+    it. It is never persisted and never republished (Rule #1): it exists so the
+    work stage can score the summary against the whole article in the same
+    process that produced it. Empty whenever there was no body to keep.
+    """
+
+    article: Article
+    source_text: str
+
+
 def to_article(
     item: PlannedItem,
     result: FetchResult,
@@ -211,44 +224,70 @@ def to_article(
     seen_elsewhere: set[str] | None = None,
 ) -> Article:
     """One planned item plus one fetch outcome becomes exactly one payload."""
+    return to_article_with_source(
+        item, result, config=config, fetched_at=fetched_at, seen_elsewhere=seen_elsewhere
+    ).article
+
+
+def to_article_with_source(
+    item: PlannedItem,
+    result: FetchResult,
+    *,
+    config: ExtractConfig,
+    fetched_at: str,
+    seen_elsewhere: set[str] | None = None,
+) -> Extracted:
+    """The payload, plus the untruncated body that only lives in this process."""
     if item.url_key != derive_url_key(item.canonical_url):
         raise ValueError("a planned item arrived with an identity it does not own")
 
     if not result.ok:
-        return _failed(
-            item,
-            status=_FAILURE_STATUS[result.outcome],
-            detail=result.detail or result.outcome.value,
-            fetched_at=fetched_at,
+        return Extracted(
+            _failed(
+                item,
+                status=_FAILURE_STATUS[result.outcome],
+                detail=result.detail or result.outcome.value,
+                fetched_at=fetched_at,
+            ),
+            "",
         )
 
     if _is_pdf(item):
-        return _failed(
-            item,
-            status=ArticleStatus.EXTRACT_FAILED,
-            detail="feed item is an unsupported PDF",
-            fetched_at=fetched_at,
-            failure_code=FailureCode.UNSUPPORTED_FORM,
+        return Extracted(
+            _failed(
+                item,
+                status=ArticleStatus.EXTRACT_FAILED,
+                detail="feed item is an unsupported PDF",
+                fetched_at=fetched_at,
+                failure_code=FailureCode.UNSUPPORTED_FORM,
+            ),
+            "",
         )
 
     html = result.body.decode("utf-8", errors="replace")
     if is_paywalled(html, config):
-        return _failed(
-            item,
-            status=ArticleStatus.EXTRACT_FAILED,
-            detail="publisher declared a paywall",
-            fetched_at=fetched_at,
-            failure_code=FailureCode.PAYWALLED,
+        return Extracted(
+            _failed(
+                item,
+                status=ArticleStatus.EXTRACT_FAILED,
+                detail="publisher declared a paywall",
+                fetched_at=fetched_at,
+                failure_code=FailureCode.PAYWALLED,
+            ),
+            "",
         )
 
     body = extract_text(html)
     if body is None:
-        return _failed(
-            item,
-            status=ArticleStatus.EXTRACT_FAILED,
-            detail="extractor found no article text",
-            fetched_at=fetched_at,
-            failure_code=FailureCode.NO_TEXT,
+        return Extracted(
+            _failed(
+                item,
+                status=ArticleStatus.EXTRACT_FAILED,
+                detail="extractor found no article text",
+                fetched_at=fetched_at,
+                failure_code=FailureCode.NO_TEXT,
+            ),
+            "",
         )
 
     text, truncated, cut_at = truncate_to_tokens(body, config.truncation_cap_tokens)
@@ -263,51 +302,60 @@ def to_article(
         signal_code = FailureCode.TOO_SHORT
 
     if signal_code is FailureCode.BOILERPLATE and config.reject_boilerplate:
-        return _failed(
-            item,
-            status=ArticleStatus.EXTRACT_FAILED,
-            detail="extracted text is mostly sibling boilerplate",
-            fetched_at=fetched_at,
-            failure_code=FailureCode.BOILERPLATE,
+        return Extracted(
+            _failed(
+                item,
+                status=ArticleStatus.EXTRACT_FAILED,
+                detail="extracted text is mostly sibling boilerplate",
+                fetched_at=fetched_at,
+                failure_code=FailureCode.BOILERPLATE,
+            ),
+            "",
         )
     if signal_code is FailureCode.NOT_PROSE and config.reject_not_prose:
-        return _failed(
-            item,
-            status=ArticleStatus.EXTRACT_FAILED,
-            detail="extracted text does not match prose shape",
-            fetched_at=fetched_at,
-            failure_code=FailureCode.NOT_PROSE,
+        return Extracted(
+            _failed(
+                item,
+                status=ArticleStatus.EXTRACT_FAILED,
+                detail="extracted text does not match prose shape",
+                fetched_at=fetched_at,
+                failure_code=FailureCode.NOT_PROSE,
+            ),
+            "",
         )
 
-    return Article(
-        version=Article.schema_version(),
-        item_id=item.item_id,
-        url_key=item.url_key,
-        source_url=item.source_url,
-        canonical_url=item.canonical_url,
-        source_id=item.source_id,
-        tier=item.tier,
-        vertical=item.vertical,
-        carried_by=item.carried_by,
-        rank_score=item.rank_score,
-        title=item.title,
-        text=text,
-        word_count=len(text.split()),
-        source_word_count=total_words,
-        token_count=approx_tokens(len(text.split())),
-        brief=(
-            item.source_form is SourceForm.ABSTRACT
-            or total_words < config.min_source_words
-            or signal_code is not None
+    return Extracted(
+        Article(
+            version=Article.schema_version(),
+            item_id=item.item_id,
+            url_key=item.url_key,
+            source_url=item.source_url,
+            canonical_url=item.canonical_url,
+            source_id=item.source_id,
+            tier=item.tier,
+            vertical=item.vertical,
+            carried_by=item.carried_by,
+            rank_score=item.rank_score,
+            title=item.title,
+            text=text,
+            word_count=len(text.split()),
+            source_word_count=total_words,
+            token_count=approx_tokens(len(text.split())),
+            brief=(
+                item.source_form is SourceForm.ABSTRACT
+                or total_words < config.min_source_words
+                or signal_code is not None
+            ),
+            truncated=truncated,
+            truncated_at_tokens=cut_at,
+            published_at=item.published_at,
+            fetched_at=fetched_at,
+            status=ArticleStatus.OK,
+            failure_code=signal_code,
+            extractor_version=EXTRACTOR_VERSION,
+            sanitizer_version=SANITIZER_VERSION,
         ),
-        truncated=truncated,
-        truncated_at_tokens=cut_at,
-        published_at=item.published_at,
-        fetched_at=fetched_at,
-        status=ArticleStatus.OK,
-        failure_code=signal_code,
-        extractor_version=EXTRACTOR_VERSION,
-        sanitizer_version=SANITIZER_VERSION,
+        body,
     )
 
 

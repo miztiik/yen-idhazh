@@ -98,6 +98,7 @@ from idhazh.evals.hhem import (
     HhemScorer,
     dual_score,
     is_pinned,
+    score_over_chunks,
     weights_digest,
 )
 from idhazh.fingerprint import (
@@ -508,6 +509,7 @@ def shard_of(plan: RunPlan, *, shard: int, shards: int) -> list[PlannedItem]:
 class _FetchedWorkItem(NamedTuple):
     item: PlannedItem
     article: Article
+    source_text: str
     fetch_ms: int
     extract_ms: int
     started: float
@@ -568,7 +570,7 @@ def stage_work(
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
         started = time.monotonic()
-        article, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
+        article, source_text, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
@@ -577,6 +579,7 @@ def stage_work(
             _FetchedWorkItem(
                 item=item,
                 article=article,
+                source_text=source_text,
                 fetch_ms=fetch_ms,
                 extract_ms=extract_ms,
                 started=started,
@@ -605,11 +608,14 @@ def stage_work(
             continue
 
         seen = article.text or ""
+        # The article before the cap, so hhem_full answers a different question
+        # from hhem. Falls back to the cut text when nothing was cut away.
+        whole = work.source_text or seen
         score_started = time.monotonic()
         hhem, hhem_full = dual_score(
             scorer,  # type: ignore[arg-type]
             seen_text=seen,
-            full_text=seen,
+            full_text=whole,
             summary=summary.summary or "",
         )
         score_ms = int((time.monotonic() - score_started) * 1000)
@@ -617,7 +623,7 @@ def stage_work(
             item=item,
             article=article,
             summary=summary,
-            full_text=seen,
+            full_text=whole,
             premise=seen,
             hhem=hhem,
             hhem_full=hhem_full,
@@ -688,22 +694,24 @@ def _stamps(items_dir: Path) -> list[FingerprintRow]:
 
 def _fetch_one(
     item: PlannedItem, settings: config.Settings, read_url: Fetcher
-) -> tuple[Article, int, int]:
-    """The article plus how long the network and the extractor each took.
+) -> tuple[Article, str, int, int]:
+    """The article, the body it was cut from, and how long each step took.
 
-    Separated because a slow item is either a slow host or a slow extractor, and
-    only one of those is ours to fix.
+    The timings are separated because a slow item is either a slow host or a
+    slow extractor, and only one of those is ours to fix. The untruncated body
+    travels beside the payload rather than inside it: the scorer needs it, and
+    nothing persists it (Rule #1).
     """
     started = time.monotonic()
     result = read_url(item.canonical_url)
     fetch_ms = int((time.monotonic() - started) * 1000)
 
     started = time.monotonic()
-    article = extract.to_article(
+    article, source_text = extract.to_article_with_source(
         item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
     )
     article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)
-    return article, fetch_ms, int((time.monotonic() - started) * 1000)
+    return article, source_text, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
 def _log_no_reply(
@@ -1066,7 +1074,7 @@ def stage_validate(
     scores: list[float] = []
 
     for index, item in enumerate(plan.items, start=1):
-        article, _, _ = _fetch_one(item, settings, read_url)
+        article, _, _, _ = _fetch_one(item, settings, read_url)
         if article.status is not ArticleStatus.OK:
             LOG.warning("validation article unavailable url=%s", item.canonical_url)
             continue
@@ -1075,11 +1083,12 @@ def stage_validate(
             LOG.warning("validation article did not summarize url=%s", item.canonical_url)
             continue
         text = article.text or ""
-        hhem, _ = dual_score(
+        # One score, asked for as one score. Validation compares against a
+        # leaderboard number and has no use for a truncation gap.
+        hhem = score_over_chunks(
             scorer,  # type: ignore[arg-type]
-            seen_text=text,
-            full_text=text,
-            summary=summary.summary or "",
+            text,
+            summary.summary or "",
         )
         scores.append(hhem)
         LOG.info("validation scored %s/%s hhem=%.3f", index, len(plan.items), hhem)
@@ -1182,6 +1191,7 @@ class _Frozen(NamedTuple):
     row: CorpusItem
     item: PlannedItem
     article: Article
+    seen_text: str
     full_text: str
 
 
@@ -1267,11 +1277,12 @@ def _freeze(
         if len(pool) >= floor and not _unmet(pool, share=share, bands=bands):
             break
         attempted += 1
-        article, _, _ = _fetch_one(item, settings, read_url)
+        article, source_text, _, _ = _fetch_one(item, settings, read_url)
         if article.status is not ArticleStatus.OK or not article.text:
             LOG.info("corpus item unavailable url=%s", item.canonical_url)
             continue
         seen = article.text
+        whole = source_text or seen
         pool.append(
             _Frozen(
                 row=CorpusItem(
@@ -1289,11 +1300,12 @@ def _freeze(
                     seen_word_count=len(seen.split()),
                     seen_token_count=article.token_count,
                     seen_text_sha256=text_digest(seen),
-                    full_text_sha256=text_digest(seen),
+                    full_text_sha256=text_digest(whole),
                 ),
                 item=item,
                 article=article,
-                full_text=seen,
+                seen_text=seen,
+                full_text=whole,
             )
         )
     chosen = _stratified(pool, keep=keep, bands=bands, share=share)
@@ -1434,7 +1446,7 @@ def _score_item(
     text = summary.summary or ""
     hhem, hhem_full = dual_score(
         scorer,  # type: ignore[arg-type]
-        seen_text=frozen.full_text,
+        seen_text=frozen.seen_text,
         full_text=frozen.full_text,
         summary=text,
     )
