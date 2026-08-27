@@ -533,6 +533,49 @@ jobs:
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }}
 
+      # llama-server counts these already and only publishes them under
+      # `--metrics`, which `config/idhazh.json` turns on. Read once, at the end:
+      # they are cumulative over the job, so a per-request scrape would add
+      # requests to the thing it measures and still report only the last one.
+      # One server serves one shard for a whole job, so one read covers it all.
+      #
+      # Between the two ledger steps, and not after them, because the row it
+      # writes is committed by the step below. Until it was committed these
+      # numbers reached only this job log, which keeps them for two days - and
+      # that is what made the prefill rate the throughput doc and the console
+      # publish impossible to check against anything (Rule #10). See
+      # docs/architecture/summarize/throughput.md.
+      #
+      # `always()`, because the shard that died is the shard whose context high
+      # water mark matters most. `continue-on-error` for the reason written above
+      # the record step: an unreadable scrape costs one observation row, a failed
+      # shard costs the day a worker. The endpoint is llama-server's own loopback
+      # surface inside this job - nothing a reader can reach (Rule #1).
+      - name: What the server counted
+        if: always()
+        continue-on-error: true
+        run: |
+          curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
+          if [ -s llama-metrics.prom ]; then
+            # The whole counter set, so a llama.cpp rename is visible rather than
+            # silently absent, and then the two that decide a run.
+            grep -E '^llamacpp:' llama-metrics.prom || true
+            for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max; do
+              grep -m1 "^${series} " llama-metrics.prom \
+                || echo "${series}: this build does not publish it"
+            done
+          else
+            echo "no metrics: llama-server was already gone, or models.inference.metrics is off"
+          fi
+          # A row lands either way. A shard whose server was already gone and a
+          # shard that never ran are different facts, and pooling a run has to be
+          # able to see the shard that contributed nothing.
+          python -m idhazh counters \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard ${{ matrix.shard }} \
+            --shards ${{ needs.plan.outputs.shards }} \
+            --counters-file llama-metrics.prom
+
       # The shape the plan job uses, for the reason written there, and the same
       # script - eight shards racing one branch is what its rebase loop and the
       # `merge=union` attribute on these two paths are for. It cannot rebuild
@@ -541,8 +584,10 @@ jobs:
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `publish_telemetry` copies every row into
       # the file the console reads. `ledger.append_item_health` keys a row by run
-      # and item and `evals.writer.append` keys one by observation, so assemble's
-      # copy of these rows is the same row and lands once.
+      # and item, `evals.writer.append` keys one by observation, and
+      # `ledger.append_runtime_counters` keys one by run and shard - so assemble's
+      # copy of these rows, or a re-run of this job, is the same row and lands
+      # once.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -552,7 +597,7 @@ jobs:
           PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
         run: >-
           bash .github/scripts/commit-and-push.sh
-          state/item-health state/scores.csv
+          state/item-health state/scores.csv state/runtime-counters.csv
 
       - name: Prompt cache log summary
         if: always()
@@ -599,29 +644,6 @@ jobs:
           else
             echo "rss-samples.tsv not found"
           fi
-
-      # llama-server counts both of these already and only publishes them under
-      # `--metrics`, which `config/idhazh.json` now turns on. Read once, at the
-      # end: both are cumulative over the job, so a per-request scrape would add
-      # requests to the thing it measures and still only report the last one.
-      # `always()`, because the shard that died is the shard whose context
-      # high-water mark matters most. The endpoint is llama-server's own
-      # loopback surface inside this job - nothing a reader can reach (Rule #1).
-      - name: What the server counted
-        if: always()
-        run: |
-          curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
-          if [ ! -s llama-metrics.prom ]; then
-            echo "no metrics: llama-server was already gone, or models.inference.metrics is off"
-            exit 0
-          fi
-          # The whole counter set, so a llama.cpp rename is visible rather than
-          # silently absent, and then the two that decide a run.
-          grep -E '^llamacpp:' llama-metrics.prom || true
-          for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max; do
-            grep -m1 "^${series} " llama-metrics.prom \
-              || echo "${series}: this build does not publish it"
-          done
 
       - name: Upload runtime log
         if: always()
@@ -947,6 +969,7 @@ jobs:
             state/published.csv
             state/scores.csv
             state/item-health
+            state/runtime-counters.csv
           REGENERATE_COMMAND: >-
             python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
             --commit ${{ github.sha }} --runner ubuntu-latest

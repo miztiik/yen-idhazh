@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -52,12 +52,25 @@ The shapes, and where each one lives once written:
 | `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
+| `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
+
+### A new row ledger ships with its header, not with its first run
+
+`.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns()`.
+
+That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
+
+### A shard-grain fact is its own contract, not a field on the run manifest
+
+`RuntimeCountersRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a counter snapshot is one shard, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires in a day and is not uploaded at all when a job is cancelled, and a cancelled shard's counters are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: `TODO/20260825-qwen35-9b-swap-plan.md` rows 2 to 4 also open `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
+
+What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
 
 ### A ledger shards by month only when its read carries a window
 
@@ -73,6 +86,7 @@ carry a time window?**
 | `state/published.csv` | one file | have we already published this? | no - published is forever |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
 | `state/scores.csv` | one file | how did every scored item do? | no |
+| `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 
 A window turns a shard into a skipped file open. `ledger._shards_in_window`
 walks the days the window can touch and opens only those stems, so a plan run

@@ -1,0 +1,1 @@
+version,date,run_id,shard,shards,scraped_at,prompt_tokens_total,prompt_tokens_cached_total,prompt_seconds_total,tokens_predicted_total,tokens_predicted_seconds_total,n_decode_total,n_tokens_max,n_busy_slots_per_decode

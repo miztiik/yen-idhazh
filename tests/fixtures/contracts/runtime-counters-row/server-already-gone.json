@@ -1,0 +1,16 @@
+{
+  "date": "2026-08-26",
+  "n_busy_slots_per_decode": null,
+  "n_decode_total": null,
+  "n_tokens_max": null,
+  "prompt_seconds_total": null,
+  "prompt_tokens_cached_total": null,
+  "prompt_tokens_total": null,
+  "run_id": "2026-08-26-5",
+  "scraped_at": "2026-08-26T21:21:40Z",
+  "shard": 2,
+  "shards": 4,
+  "tokens_predicted_seconds_total": null,
+  "tokens_predicted_total": null,
+  "version": "2026-08-27"
+}

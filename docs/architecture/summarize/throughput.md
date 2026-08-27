@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
@@ -19,12 +19,51 @@ The runtime charges a summary in two parts, and they run at different speeds:
 | **read** (prefill) | The model taking the article in. Batched, so the machine works on many tokens at once. | 10.95 tok/s, 91.3 ms per token |
 | **write** (decode) | The model producing the summary. One token at a time, each conditioned on all the ones before it. | 5.05 tok/s, 198 ms per token |
 
+**Read is 10.95 tokens the model actually read per second, not 10.95 tokens of
+prompt per second.** The two differ by a factor of about 1.8, because roughly
+half of every prompt is reused from the cache rather than read. The figure is
+`input_tokens - cached_tokens` over `prefill_ms`, and the console draws the same
+subtraction. Counting the cached half in would report 19.96 tok/s on a run whose
+real rate was 11.09 - a rate the machine never ran at. Whenever this page or the
+console prints a read rate, that is the one it means.
+
 Read is about 2.2x write. That ratio is a property of how the two phases work,
 not of this model, and it is why `summarize_ms` was split: one blended number
 cannot say whether a slow day was long articles or long summaries.
 
 Measurements, with hardware and date, are in
 [`../../reference/measurements.md`](../../reference/measurements.md).
+
+## The read rate is checked against the server, and it holds
+
+Every timing above is a field the summarize stage copied out of one model reply.
+The model server counts the same work for itself and publishes the totals on
+`/metrics`, which is a second instrument that shares none of the first one's
+failure modes. Until 2026-08-27 those counters reached only a job log that keeps
+them for two days, so this page published a rate nothing committed could check -
+and under Rule #10 a number that cannot be reconciled cannot justify a design.
+
+Each `work` shard now commits its server's counters as one row of
+`state/runtime-counters.csv`, and
+`backend/utilities/reconcile_prefill.py` pools both sides of one run and prints
+the gap. **Measured on run `2026-08-26-5`: the ledger says 11.1755 tok/s and the
+server says 11.1796, which is 0.037 percent apart against a 5 percent bound
+written down before either side was read.** Tokens read, tokens reused and
+tokens written match to the token on both sides. The full figures are under
+[The ledger and the server agree about the read rate](../../reference/measurements.md#the-ledger-and-the-server-agree-about-the-read-rate).
+
+Two things follow for anyone reading a number off this page:
+
+- **The ledger was never the suspect.** The premise this work started from was
+  "we cannot tell", not "the ledger is wrong", and the reconciliation says the
+  ledger is right.
+- **A run figure is a sum over a sum.** Each shard has its own row, and the run
+  rate is the total tokens over the total seconds. A mean of the four shard
+  rates would weigh a shard that read 23,411 tokens the same as one that read
+  30,538.
+
+One run is an observation, not a property. Re-run the utility after a few more
+days, and especially after a day where a shard died mid-item.
 
 ## Nothing carries over between articles
 
@@ -213,6 +252,10 @@ at the width it occupies, so one unit is one pixel. The server draws at
 | Keep two requests in flight per worker to overlap read and write | Measured 2026-08-25: aggregate write rises 1.055x for a second sequence, spread 0.022, against a 1.4x gate. That is about 1.9 percent of a run. Four sequences reach 1.133x and oversubscribe the 4 vCPU. Cancelled, not deferred. |
 | Report one blended `summarize_ms` rate | Cannot separate a long-article day from a long-summary day, which is the question the chart exists for. |
 | Average the per-item rates for the day figure | A rate is a ratio. Averaging weighs a 60-word release note the same as a 2000-word feature. |
+| Raise `retention-days` on `runtime-log-*` and reconcile the read rate by hand | Two days becomes thirty and the answer still expires. Rule #10 wants the evidence to survive with the claim, and a committed row is the only thing that does. |
+| Trust the ledger and delete the metrics scrape | The ledger sums a client-side field per request. The server's counters are the independent instrument, and deleting the second instrument to end a disagreement is how a wrong number becomes permanent. |
+| Put the counter snapshot on `RunManifest` | Wrong grain (a manifest run record is one run, a snapshot is one shard), wrong producer (the manifest is written hours later in another job, so the numbers would have to survive an artifact that expires in a day and is skipped on cancel), and wrong audience (`run.json` is a payload a reader fetches; this is measurement evidence and belongs under `state/`). |
+| Scrape the counters per request instead of once at job end | Both counters are cumulative, so a per-request scrape adds requests to the thing it measures and still reports only the last one. |
 | Keep the zero-anchored domain | Spends most of the plot on rates nothing ran at. Zero on a candle chart is not a landmark, it is padding. |
 | Draw prompt reuse as a single marker on a one-day window | One point compares to nothing. |
 | Hide the chart until two days exist | Five order statistics is a real shape on day one. |
@@ -221,6 +264,7 @@ at the width it occupies, so one unit is one pixel. The server draws at
 ## See also
 
 - [`../sources/item-health.md`](../sources/item-health.md) - the columns, and how a rate is derived.
+- [`../contracts/schemas.md`](../contracts/schemas.md) - `RuntimeCountersRow`, and why the snapshot is its own contract.
 - [`prompt.md`](prompt.md) - the bands, and why the ask changes with article length.
 - [`../../reference/measurements.md`](../../reference/measurements.md) - every number here, with hardware and date.
 - [`../../concepts/pipeline-loop.md`](../../concepts/pipeline-loop.md) - why a worker may reorder inside its shard.
