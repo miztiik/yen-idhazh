@@ -78,6 +78,11 @@ tests/fixtures/** text eol=lf
 frontend/public/**/*.json text eol=lf
 frontend/public/**/*.md text eol=lf
 
+# The month search index's vector sibling: raw int8 laid end to end, not text.
+# An end-of-line conversion here would rewrite bytes inside a vector, and every
+# offset after it, and each one would still decode without complaint.
+frontend/public/assist/index/*.bin binary
+
 # Downloaded, not authored: never diff or eol-convert these.
 *.gguf binary
 *.png binary

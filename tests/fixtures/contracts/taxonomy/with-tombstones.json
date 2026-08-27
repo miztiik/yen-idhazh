@@ -2,63 +2,76 @@
   "events": [
     {
       "display_name": "Release",
-      "id": "release"
+      "id": "release",
+      "keywords": []
     },
     {
       "display_name": "Deal",
-      "id": "deal"
+      "id": "deal",
+      "keywords": []
     },
     {
       "display_name": "Acquisition",
-      "id": "acquisition"
+      "id": "acquisition",
+      "keywords": []
     },
     {
       "display_name": "Funding",
-      "id": "funding"
+      "id": "funding",
+      "keywords": []
     },
     {
       "display_name": "Capital spending",
-      "id": "capex"
+      "id": "capex",
+      "keywords": []
     },
     {
       "display_name": "Earnings",
-      "id": "earnings"
+      "id": "earnings",
+      "keywords": []
     },
     {
       "display_name": "Regulation",
-      "id": "regulation"
+      "id": "regulation",
+      "keywords": []
     },
     {
       "display_name": "Research",
-      "id": "research"
+      "id": "research",
+      "keywords": []
     },
     {
       "display_name": "Incident",
-      "id": "incident"
+      "id": "incident",
+      "keywords": []
     }
   ],
   "lenses": [
     {
       "display_name": "China",
       "id": "china",
+      "keywords": [],
       "retired_on": null,
       "status": "active"
     },
     {
       "display_name": "Return on AI investment",
       "id": "ai-roi",
+      "keywords": [],
       "retired_on": null,
       "status": "active"
     },
     {
       "display_name": "Markets",
       "id": "markets",
+      "keywords": [],
       "retired_on": null,
       "status": "active"
     },
     {
       "display_name": "Cyber",
       "id": "cyber",
+      "keywords": [],
       "retired_on": "2026-06-01",
       "status": "retired"
     }

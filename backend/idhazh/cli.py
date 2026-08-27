@@ -44,6 +44,7 @@ from idhazh import (
     retention,
     route,
     summarize,
+    tag,
     telemetry,
 )
 from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, RunConfig
@@ -112,6 +113,7 @@ QUALIFICATION_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "qualificatio
 #: The planted attacks, run live against a candidate before it is adopted.
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
+INDEX_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "assist" / "index"
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
@@ -252,7 +254,20 @@ def stage_plan(
     ledger.append_health(state, date, health)
     already_published = frozenset(ledger.load_published(state))
 
-    watchlist_keys: frozenset[str] = frozenset()
+    # The bonus is decided on the feed title, because that is all a plan has: the
+    # page has not been fetched yet. An article whose body names an entity its
+    # title does not still earns the published tag at Extract - the tag says what
+    # the item is about, the bonus says what we were already watching for.
+    entity_terms = settings.watchlist.entity_terms()
+    watchlist_keys = frozenset(
+        candidate.url_key for candidate in candidates if tag.tags(entity_terms, candidate.title)
+    )
+    LOG.info(
+        "watchlist matched candidates=%s of %s entities=%s",
+        len(watchlist_keys),
+        len(candidates),
+        len(entity_terms),
+    )
     verticals = []
     items: list[PlannedItem] = []
     for vertical in settings.taxonomy.verticals:
@@ -641,6 +656,7 @@ def _fetch_one(
     article = extract.to_article(
         item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
     )
+    article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)
     return article, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
@@ -1840,6 +1856,12 @@ def stage_assemble(
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 
+    # The month shard is a projection of the days on disk, so it is rebuilt after
+    # the day is written and never patched in place.
+    index = assemble.rebuild_search_index(
+        digest_root=PUBLIC_ROOT, index_root=INDEX_ROOT, month=assemble.month_of(plan.date)
+    )
+
     site_bytes, site_files = assemble.site_size(PUBLIC_ROOT)
     site_alarm = retention.budget_alarm(
         retention.SiteSize(site_bytes, site_files), settings.app.retention
@@ -1872,7 +1894,7 @@ def stage_assemble(
     publish_telemetry.publish(state_root=STATE_ROOT, public_root=PUBLIC_ROOT.parent / "telemetry")
     LOG.info(
         "published date=%s items=%s partial=%s eval_rows=%s addresses=%s item_health_rows=%s "
-        "new_fingerprints=%s",
+        "new_fingerprints=%s search_index=%s/%s",
         plan.date,
         len(day.items),
         day.partial,
@@ -1880,6 +1902,8 @@ def stage_assemble(
         published,
         item_health,
         [row.pipeline_fingerprint[:12] for row in stamps],
+        len(index.entries),
+        index.vector_bytes // index.dimensions,
     )
     return day
 
@@ -1889,9 +1913,17 @@ def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
 
     The digest item knows the item id and the plan knows the key, so the two are
     joined here rather than widening the published payload with anything the
-    skip read does not open. Only what this run introduced is recorded: a day
-    carries yesterday's items forward, and re-recording them would move their
-    published date every morning.
+    skip read does not open.
+
+    That join is also the filter, and it is load-bearing: `ledger._append`
+    writes every row it is handed, so nothing downstream would collapse a
+    repeat. A day carries yesterday's items forward, and re-recording them would
+    move their published date every morning. They do not survive the join
+    because `rank.plan_vertical` has already dropped every address
+    `load_published` returned, and an item id comes from its address - so a
+    carried item's id is absent from this run's plan and it is skipped. The
+    filter reads as "everything the day holds" and behaves as "what this run
+    added", and the two only agree while those upstream facts hold.
     """
     addresses = {item.item_id: item for item in plan.items}
     rows: list[PublishedRow] = []
@@ -2002,7 +2034,9 @@ def needs_backfill(day: DigestDay, embedder: Embedder) -> bool:
     return set(block.vectors) != earns_a_vector(day, embedder)
 
 
-def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int:
+def stage_backfill_vectors(
+    *, root: Path, index_root: Path, today: str, embedder: Embedder
+) -> int:
     """Re-encode every closed day whose vectors are not the set its items earned.
 
     `build_day` replaced a day's embeddings block instead of merging it, so a
@@ -2029,6 +2063,10 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
     dispatch twice. A day it does rewrite is written whole, which also lifts an
     older payload to the current schema shape.
 
+    Rewriting a day makes its month's search index stale, so every month this
+    touched is rebuilt before it returns. That is the same obligation assemble
+    carries, and this is the only other writer of a committed day payload.
+
     This one fails rather than degrades. `build_embeddings` returns nothing
     when the encoder is missing because a day that cannot be searched still
     publishes; here there is no digest at risk and the vectors are the entire
@@ -2039,6 +2077,7 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
         return 1
 
     repaired = 0
+    months: set[str] = set()
     for path in published_days(root):
         day = DigestDay.from_json(path.read_text(encoding="utf-8"))
         if not is_closed(day.date, today=today):
@@ -2064,6 +2103,7 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
         )
         assemble.write_atomic(path, repaired_day.to_json())
         repaired += 1
+        months.add(assemble.month_of(day.date))
         LOG.info(
             "backfilled date=%s items=%s earned=%s vectors_before=%s vectors_after=%s",
             day.date,
@@ -2071,6 +2111,17 @@ def stage_backfill_vectors(*, root: Path, today: str, embedder: Embedder) -> int
             len(earned),
             before,
             len(fresh.vectors),
+        )
+
+    for month in sorted(months):
+        index = assemble.rebuild_search_index(
+            digest_root=root, index_root=index_root, month=month
+        )
+        LOG.info(
+            "rebuilt search index month=%s entries=%s vectors=%s",
+            month,
+            len(index.entries),
+            index.vector_bytes // index.dimensions,
         )
 
     LOG.info("backfill complete days_rewritten=%s", repaired)
@@ -2252,6 +2303,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         # day is the one the scheduled pipeline is appending to.
         return stage_backfill_vectors(
             root=PUBLIC_ROOT,
+            index_root=INDEX_ROOT,
             today=min(date, _today()),
             embedder=Embedder(config.REPO_ROOT, settings.app.assist),
         )

@@ -75,6 +75,51 @@ LLAMA_DIGEST_CHECK: Final = 'echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256su
 LLAMA_PINNED_ENDPOINT: Final = (
     "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}"
 )
+# One spelling for every download in the repository, weights and runtime alike.
+# `-f` is the load-bearing letter: without it curl writes an HTTP error body
+# into the file and exits 0. For a `.gguf` that matters twice over, because
+# `backend/models` is a cache path in the daily run - the bad file is then saved
+# under the pinned key and handed to every later run until the entry is evicted.
+WEIGHTS_FETCH_FORM: Final = "curl -fsSL --retry 3 --retry-all-errors"
+RELEASE_LOOKUP_FORM: Final = "curl -fsS -H"
+# Every job in the repository that downloads a `.gguf`: the step that fetches
+# it, the step that checks it, the first step that reads it, and the one place
+# the expected digest is written. Discovery is closed-world - a tenth workflow
+# that fetches weights fails the test until it appears here with a check.
+WEIGHTS_CHECKS: Final = {
+    ("digest.yml", "work"): (
+        "Fetch runtime and weights",
+        "Verify the weights",
+        "Start the model",
+        '["models"]["summarize"]["sha256"]',
+    ),
+    ("digest.yml", "route"): (
+        "Fetch runtime and router weights",
+        "Verify the router weights",
+        "Start the router",
+        '["models"]["route"]["sha256"]',
+    ),
+    ("measure.yml", "runtime"): (
+        "Fetch runtime and weights",
+        "Verify the weights",
+        "Measure runtime candidate",
+        '["models"]["summarize"]["sha256"]',
+    ),
+    ("measure.yml", "batched"): (
+        "Download the summarizer weights",
+        "Verify the weights",
+        "Benchmark parallel decode",
+        '["models"]["summarize"]["sha256"]',
+    ),
+    # The one candidate whose digest is not a config field: the plan job decides
+    # it once, from the dispatch input or from config, and republishes it.
+    ("validate.yml", "qualify"): (
+        "Fetch the runtime and the candidate",
+        "Verify the candidate bytes",
+        "Start the candidate",
+        "${{ needs.plan.outputs.candidate_sha256 }}",
+    ),
+}
 # The refs the daily run needs and the one place they are written. The
 # `plan` job reads `config/idhazh.json` and republishes them, so the workflow
 # holds no model repo, no weights filename and no upload of those weights.
@@ -188,7 +233,12 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
-    "assemble": ["frontend/public/digest", "frontend/public/telemetry", "state"],
+    "assemble": [
+        "frontend/public/digest",
+        "frontend/public/telemetry",
+        "frontend/public/assist/index",
+        "state",
+    ],
 }
 COMMIT_IDENTITY: Final = (
     "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
@@ -214,6 +264,7 @@ COMMIT_REFRESH_PATHS: Final = {
         f"{SUBSTITUTED_DAY_DIR}/digest.json",
         f"{SUBSTITUTED_DAY_DIR}/run.json",
         "frontend/public/telemetry",
+        "frontend/public/assist/index",
         "state/published.csv",
         "state/scores.csv",
         "state/item-health",
@@ -369,6 +420,30 @@ def _llama_fetch_scripts(workflow: dict[str, object]) -> list[tuple[str, object,
         if isinstance(script := step.get("run"), str)
         and "ggml-org/llama.cpp/releases" in script
     ]
+
+
+def _weights_fetch_steps(
+    workflows: Mapping[str, dict[str, object]],
+) -> dict[tuple[str, str], tuple[str, str]]:
+    """Every step in the repository that downloads a `.gguf`, found not listed.
+
+    Keyed by workflow and job, valued by the step's name and its shell. The
+    search is over every workflow file, so a new one that fetches weights turns
+    up here whether or not anybody remembered to pin it.
+    """
+    found: dict[tuple[str, str], tuple[str, str]] = {}
+    for filename, workflow in workflows.items():
+        for job_name in _mapping(workflow.get("jobs"), "jobs"):
+            for step in _steps(workflow, job_name):
+                script = step.get("run")
+                if not (isinstance(script, str) and "huggingface.co/" in script):
+                    continue
+                name = step.get("name")
+                assert isinstance(name, str), f"{filename}/{job_name}: name the fetch step"
+                where = (filename, job_name)
+                assert where not in found, f"{filename}/{job_name} fetches weights twice"
+                found[where] = (name, script)
+    return found
 
 
 def _runtime_cache_keys(workflow: dict[str, object]) -> list[tuple[str, str]]:
@@ -1349,24 +1424,54 @@ def test_a_rebuild_that_fails_spends_the_attempts_and_says_which(tmp_path: Path)
     assert not _mid_rebase(runner)
 
 
-def test_the_work_job_checks_the_weights_before_it_starts_the_server() -> None:
-    """The Oracle. Wrong bytes fail here, not five hours later as wrong summaries.
+def test_every_weights_fetch_fails_loudly() -> None:
+    """One spelling, everywhere, so a fourth workflow cannot reintroduce the bug.
 
-    The check has no `if:` on purpose. A restored cache entry is the one case
-    where nobody watched the bytes arrive, so it is the case that most needs it.
+    `digest.yml` fetched both its models with a bare `curl -sSL`. Without `-f`
+    curl writes an HTTP error body into the .gguf and exits 0, and
+    `backend/models` is a cache path - so a rate-limited minute produced a
+    junk file that was then saved under the pinned key and served to every
+    later run until the entry was evicted.
     """
-    workflow = _load_workflows()["digest.yml"]
-    names = [step.get("name") for step in _steps(workflow, "work")]
+    fetches = _weights_fetch_steps(_load_workflows())
+    assert fetches, "some workflow must still download weights"
 
-    assert names.index("Fetch runtime and weights") < names.index("Verify the weights")
-    assert names.index("Verify the weights") < names.index("Start the model")
+    for (filename, job_name), (step_name, script) in sorted(fetches.items()):
+        where = f"{filename}/{job_name}/{step_name}"
+        assert WEIGHTS_FETCH_FORM in script, where
+        assert "curl -sSL" not in script, f"{where} must fail on an HTTP error"
+        assert "resolve/main" not in script, f"{where} must name an immutable revision"
 
-    verify = _step(workflow, "work", "name", "Verify the weights")
-    assert "if" not in verify, "a restored cache is what most needs checking"
-    script = verify.get("run")
-    assert isinstance(script, str)
-    assert '["models"]["summarize"]["sha256"]' in script, "read the expectation from config"
-    assert "sha256sum --check" in script
+
+def test_every_fetched_weight_is_checked_before_anything_reads_it() -> None:
+    """The Oracle. Wrong bytes fail on one step, not hours later as wrong output.
+
+    Closed-world: the fetches are discovered by reading every workflow, and the
+    discovered set must equal the table. A tenth workflow that downloads a
+    `.gguf` fails here until it carries a check of its own.
+
+    No check carries an `if:`, on purpose. A restored cache entry is the one
+    case where nobody watched the bytes arrive, so it is the case that most
+    needs checking.
+    """
+    workflows = _load_workflows()
+    assert set(_weights_fetch_steps(workflows)) == set(WEIGHTS_CHECKS)
+
+    for (filename, job_name), expected in sorted(WEIGHTS_CHECKS.items()):
+        fetch_name, check_name, reader_name, digest_source = expected
+        where = f"{filename}/{job_name}"
+        names = [step.get("name") for step in _steps(workflows[filename], job_name)]
+
+        for expected_name in (fetch_name, check_name, reader_name):
+            assert expected_name in names, f"{where} has no step named {expected_name!r}"
+        assert names.index(fetch_name) < names.index(check_name), where
+        assert names.index(check_name) < names.index(reader_name), where
+
+        check = _step(workflows[filename], job_name, "name", check_name)
+        assert "if" not in check, f"{where}: a restored cache is what most needs checking"
+        script = _script(check, f"{where}/{check_name}")
+        assert digest_source in script, f"{where} must read one recorded digest"
+        assert "sha256sum --check" in script, where
 
 
 def test_the_health_check_names_the_weights_that_answered() -> None:
@@ -1770,6 +1875,8 @@ def test_every_llama_cpp_fetch_is_pinned_and_digest_checked() -> None:
             where = f"{filename}/{job_name}/{step_name}"
             assert LLAMA_PINNED_ENDPOINT in script, f"{where} must ask for one tag"
             assert LLAMA_DIGEST_CHECK in script, f"{where} must check the archive digest"
+            assert RELEASE_LOOKUP_FORM in script, f"{where} must fail on an HTTP error"
+            assert WEIGHTS_FETCH_FORM in script, f"{where} must fail on an HTTP error"
 
 
 def test_no_workflow_takes_whichever_llama_cpp_release_is_newest() -> None:

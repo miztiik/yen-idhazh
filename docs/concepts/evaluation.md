@@ -340,13 +340,29 @@ three or more items; the relevant set is exactly the items carrying that slug.
 Nobody's judgement is in it, so nothing can bias it, and it fires the moment the
 encoder or the committed vectors break.
 
-It produces **zero queries**, because no published item carries an entity slug.
-`DigestItem.entities` is copied from `Article.entities` and no stage in the
-pipeline ever writes that field - nor `lenses`, nor `events`. Three declared
-taxonomy dimensions are empty on all 2,121 committed items. The tier is built to
-its specification anyway, so that it becomes the instrument it was designed to be
-on the day entities are populated, and a test asserts the emptiness by name so
-that the day it stops being true somebody is told.
+It produced **zero queries** for its first five days, because no published item
+carried an entity slug. `DigestItem.entities` is copied from `Article.entities`
+and no stage in the pipeline ever wrote that field - nor `lenses`, nor `events`.
+Three declared taxonomy dimensions were empty on every committed item.
+
+**A deterministic tagger now writes all three (2026-08-26).** The rule and its
+measured coverage live in
+[`../architecture/sources/discovery.md`](../architecture/sources/discovery.md).
+What it means for this tier, measured on the committed corpus by running the
+real `entity_queries` over items the matcher had tagged: **0 queries becomes
+25**, covering **616 of 2,237 items**, from `entity-asml` at 3 items to
+`entity-google` at 105.
+
+**That is what the corpus supports, not what the tier reports today.** The
+tagger only touches items published from now on; no committed payload was
+rewritten, so the tier stays at zero and climbs as new days land. Read the 25 as
+the instrument being live rather than as a score.
+
+Two properties of the tier survive the change and are worth restating, because
+they are why it was built before it could fire: the relevant set is exactly the
+items carrying the slug, so no labeller can bias it, and a slug is assigned by a
+whole-word match on a curated alias rather than by a model, so a page cannot
+choose which query it answers.
 
 **Tier two is 60 hand-labelled intent queries** in
 [`tests/fixtures/search/retrieval-queries.json`](../../tests/fixtures/search/retrieval-queries.json),

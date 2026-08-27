@@ -34,7 +34,7 @@ A JSON Schema is a good interchange format and a poor authoring format: it canno
 | `schemas/<name>.schema.json` | Generated. One flat file per model. |
 | `frontend/src/lib/payload/types.ts` | The published payload's TypeScript shapes, mirroring `schemas/digest-day.schema.json`. Hand-written today, generated later. |
 
-The seventeen shapes, and where each one lives once written:
+The shapes, and where each one lives once written:
 
 | Model | Schema | Persisted as |
 | --- | --- | --- |
@@ -55,6 +55,7 @@ The seventeen shapes, and where each one lives once written:
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
+| `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
@@ -131,6 +132,8 @@ Every persisted payload is written by one function: **sorted keys, two-space ind
 - A payload that is read and re-written is byte-identical, so a re-run that changed nothing produces an empty diff.
 - A diff shows a **changed value** rather than a reshuffled dict, which is what makes reviewing a committed payload possible at all.
 - The drift gate can compare bytes rather than parsed structures.
+
+**One payload takes the indent out, and only the indent.** `SearchIndex` serializes through `compact_json`, which is the same function with `separators` closed up: still sorted keys, still ASCII-escaped, still one trailing newline, so all three properties above still hold. It is the one payload a reader downloads whole with entries counted in thousands, and the indent roughly doubles it for whitespace nobody reads. Every other payload keeps the indent, because being able to review a committed diff by eye is worth more than its bytes.
 
 Timestamps are pinned as text - UTC, second precision, `Z` - rather than as a date type, for the same reason: one spelling, no offset ambiguity, and no serializer whose formatting can drift underneath a committed file.
 
