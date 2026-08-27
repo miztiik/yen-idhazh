@@ -2,18 +2,13 @@
 
 **Last Updated**: 2026-08-27
 
-Three defects remain open, and none of the three closes on engineering alone.
+**One defect remains open, and it does not close on engineering.** Defect 2
+needed three repairs before a person could label anything, and all three
+shipped. What is left is 60 human labels, nine more run-days at one scorer and
+one pipeline, and one owner ruling on how that window is counted. None of the
+three is code, so **this file cannot be deleted by writing more of it.**
 
-Defect 2 needed three engineering repairs before a person could label anything.
-All three shipped on 2026-08-27. What is left is 60 human labels and a run-day
-window that has never once been met, and neither of those is code.
-
-Defects 16 and 17 were found on 2026-08-27 while shipping defect 2, and both
-were found by measuring the committed ledger rather than by reading it. Each
-changes what a column means across 2,232 committed rows, so each is a Level-5
-call for the owner.
-
-Defect 15 closed on 2026-08-27.
+Defects 15, 16 and 17 closed on 2026-08-27.
 
 Closed rows are removed after checking their current production code, regression
 tests and canonical docs. Git history holds their execution record; the living
@@ -26,8 +21,8 @@ decision. Current project behaviour belongs in `docs/` (Rule #4).
 | --- | --- | --- | --- |
 | 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - queue repaired; 0 of 60 labels; 1 of 10 run-days, and 10 has never been reached** |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 3 | CLOSED 2026-08-27 (PR #180) |
-| 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | **OPEN - owner approved 2026-08-27; not yet shipped** |
-| 17 | Two different word counters share one string and read as truncation | 5 | **OPEN - owner approved 2026-08-27; not yet shipped** |
+| 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | CLOSED 2026-08-27 |
+| 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
 
 ## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
 
@@ -97,89 +92,13 @@ Remaining steps, in order:
 The canonical measurement contract lives in
 [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md).
 
-## 16 - The truncation-gap detector has never been fed (OPEN)
+## What closed, and where it went
 
-`dual_score` exists to tell two different defects apart. Its own docstring says
-the gap between its two numbers "is the only thing that separates them": a model
-that invented something, and a model that faithfully summarized the half we gave
-it.
-
-Its only production caller hands it the same string twice.
-
-```python
-seen = article.text or ""
-hhem, hhem_full = dual_score(scorer, seen_text=seen, full_text=seen, summary=...)
-```
-
-Measured 2026-08-27 over the whole committed `state/scores.csv`, 2,232 rows:
-`hhem_delta` is **exactly 0.0 on 2,232 of 2,232 rows**, and `hhem` equals
-`hhem_full` on all 2,232. The detector has never once carried information.
-
-There are two consequences, and the second one pays for the first.
-
-- **`article.text` is post-truncation.** `extract.truncate_to_tokens` returns the
-  cut string and `to_article` keeps only that, so the untruncated text is gone
-  before the scorer is called. Keeping it in memory through the work stage needs
-  no new field and no schema stamp.
-- **The run already pays for the wasted pass.** `dual_score` does not
-  short-circuit on identical input, so every item is scored twice for an answer
-  that cannot differ. Measured on `ubuntu-latest`, 2026-08-26, run
-  `2026-08-26-5`: one pass over a 900-word chunk takes 2.88 to 3.08 s (n=5), and
-  `score_ms` wraps both passes. The duplicate costs about 2.0 s per item on
-  average, which is **21 to 24 minutes of runner wall-clock a day, thrown away**
-  at the observed 621 to 731 items.
-
-Carmack ruled on 2026-08-27: fix it properly, and short-circuit as well. About
-97 percent of items are untruncated, so the second pass is skipped for almost
-all of them and saves roughly 19 minutes a day; the truncated remainder costs 2
-to 15 minutes back. **The result is break-even to about 17 minutes a day cheaper
-than what runs now**, and the detector starts working. Deleting the three
-columns was considered and rejected: they have never carried information because
-they have never been fed, which argues for feeding the socket rather than
-pulling it out.
-
-The same defect sits in `_score_item` and `stage_validate`, and `_freeze`
-digests one string into both `seen_text_sha256` and `full_text_sha256`.
-
-**Why this goes to the owner.** The in-memory plumbing is Level 3. Changing what
-`hhem_full` and `hhem_delta` *mean* is a semantic shift on a persisted contract
-across 2,232 committed rows: every one of them says "these two numbers were
-equal", and after the change that sentence means something else. Section 11 asks
-for a version stamp and a read-side migration, and section 6 sends a semantic
-shift on a persisted contract to Level 5.
-
-## 17 - Two different word counters share one string (OPEN)
-
-`score.to_eval_row` writes `source_word_count` from `metrics.word_count(full_text)`
-and `source_seen_word_count` from `article.word_count`. Both come from the **same
-post-cap string**, counted two different ways: `len(_WORD.findall(text))`
-against `len(text.split())`. The pair looks like "before truncation" and "after
-truncation" and is nothing of the kind.
-
-Measured 2026-08-27 over all 2,232 committed rows:
-
-| What | Rows |
-| --- | --- |
-| The two counters agree | 287 |
-| `source_word_count` is larger - reads as truncation | 1,355 |
-| `source_seen_word_count` is larger - **impossible if one is a cut of the other** | **590** |
-| `source_seen_word_count` sits exactly on the 1,923-word cap | 141 |
-
-Those 590 rows are the proof. A truncated string cannot hold more words than the
-string it was cut from, so a column pair that disagrees in both directions is
-measuring two counters, not one cut.
-
-Read the pair as a truncation signal and it says **87 percent of items were
-truncated**. Count the rows sitting on the cap and it says **6.3 percent**. The
-first number is wrong by a factor of fourteen. It was quoted inside this project
-before Carmack caught it, which is the argument for fixing the column rather
-than writing the caveat down.
-
-The fix is one line - write `article.source_word_count`, the pre-cap count the
-`Article` already carries. It is Level 5 for the same reason as defect 16: it
-changes what a column means across every committed row, and anything that has
-ever read those two columns as a truncation rate read a number that was not
-there.
+| # | Defect | Fix |
+| --- | --- | --- |
+| 15 | `median()` returned `0` for an empty sample, so all four stage timings lost the difference between "not measured" and "measured as zero" before the chart saw them. `StageTimings.svelte` reconstructed absence from the value, which is a repair on top of a lost fact. | 2026-08-27, PR #180. `median()` returns `null`, `StageTimingDay` carries `number | null`, and the console reads the null directly. Both a missing timing and a real zero are pinned in `frontend/tests/console.spec.ts`. Recorded in [`docs/architecture/publishing/frontend.md`](../docs/architecture/publishing/frontend.md). |
+| 16 | `dual_score` exists to tell "the model invented something" from "the model faithfully summarized the half we gave it", and its only production caller handed it `article.text` twice. Measured over the whole committed ledger: `hhem_delta` exactly 0.0 on **2,232 of 2,232 rows**. The run also paid for the duplicate pass - about 2 s an item, 21 to 24 minutes of runner wall-clock a day. | 2026-08-27. `extract.to_article_with_source` returns the payload beside the untruncated body; the body stays in the process that extracted it and is never persisted or republished (Rule #1). The work stage scores against it, and `dual_score` scores identical texts once. About 97 percent of items are never cut, so most now pay one pass instead of two. Stamped `2026-08-27T20:30` with the read-side rule: a row older than that stamp recorded two scores of one text, so its zero means "never measured". Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
+| 17 | `source_word_count` came from `metrics.word_count(full_text)` and `source_seen_word_count` from `article.word_count` - the **same post-cap string** through two different counters. Read as a truncation signal the pair said 87 percent of items were truncated; the real rate is 6.3 percent. The proof is the impossible direction: `source_seen_word_count` was larger on **590 of 2,232 rows**, which cannot happen when one string is a cut of the other. | 2026-08-27. The column is `Article.source_word_count`, the pre-cap count the payload already carried, so one counter produces both numbers and the difference between them is the cut. An article written before that field existed reports its post-cap count rather than inventing a source length. Stamped `2026-08-27T20:00`. Proved by a test that builds its article through the real extractor, so the pair is a genuine cut. Recorded in [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md). |
 
 ## See also
 

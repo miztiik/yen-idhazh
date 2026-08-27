@@ -27,22 +27,50 @@ The primary measure is **faithfulness**: does the summary assert things the sour
 
 A single score cannot distinguish "the model invented something" from "the model faithfully summarized the half of the article we gave it". The **gap between the two** is the cost of truncation, and it is invisible unless you measure both. A large gap flags the item as a truncation artifact rather than a hallucination - a different defect with a different fix.
 
-### Current implementation gap
+### The gap, and the 2,232 rows that never measured it
 
-The production and validation callers currently pass `article.text` as both the
-model-visible text and the full text. `Article` persists only the truncated
-model-visible body. The two HHEM inputs are therefore identical and the
-documented truncation gap is zero by construction.
+The work stage carries the sanitized article twice: the cut text it shows the
+summarizer, and the whole body it shows the scorer. The whole body stays in the
+process that extracted it - `Article` persists only the cut text, and neither
+form is ever republished (Rule #1).
 
-Do not use `hhem_delta` as truncation evidence until extraction carries the
-sanitized full body to the scorer without sending it to the summarizer or
-publishing it. A model-adoption comparison must capture both forms once and
-replay the same bytes for every candidate.
+That was not true until 2026-08-27. Both the production and the validation
+callers passed `article.text` as both inputs, so the two HHEM scores read one
+string and the documented gap was zero by construction. Measured over the whole
+committed ledger at that date, `hhem_delta` is exactly 0.0 on **2,232 of 2,232
+rows** and `hhem` equals `hhem_full` on every one.
 
-Evaluator identity is now pinned. `HHEM_REVISION` is a full immutable commit,
-and `weights_digest()` hashes the loaded tensors rather than a model name.
+**A row stamped before `2026-08-27T20:30` recorded two scores of one text.** On
+those rows a zero gap means the gap was never measured, and reading them as
+evidence that truncation costs nothing is reading an instrument that was not
+plugged in.
+
+The scorer is deterministic, so identical texts are now scored once and the
+answer reused. About 97 percent of items are never cut, so most items pay one
+pass instead of two.
+
+Evaluator identity is pinned. `HHEM_REVISION` is a full immutable commit, and
+`weights_digest()` hashes the loaded tensors rather than a model name.
 `scorer_version` carries both observations. A scorer that has not loaded cannot
 name its weights and fails instead of minting a plausible identity.
+
+### The two source word counts are one counter, before and after the cap
+
+`source_word_count` is `Article.source_word_count`, the words in the extracted
+body before `extract.truncation_cap_tokens` cut it. `source_seen_word_count` is
+`Article.word_count`, the same counter applied to what survived. The difference
+between them is the cut, and nothing else.
+
+**A row stamped before `2026-08-27T20:00` measured something else.** Both cells
+came off the post-cap string through two different counters -
+`len(_WORD.findall(t))` against `len(t.split())` - so the difference measured
+the counters. Over the 2,232 rows written before that stamp the two agree on
+287, `source_word_count` is larger on 1,355, and `source_seen_word_count` is
+larger on **590**, which is impossible when one string is a cut of the other.
+Read as a truncation signal the pair said 87 percent of items were truncated;
+counting the rows sitting on the 1,923-word cap says 6.3 percent. The first
+number is wrong by a factor of fourteen, and it was quoted inside this project
+before anyone checked the impossible direction.
 
 ### The runtime must refuse, not shift
 
