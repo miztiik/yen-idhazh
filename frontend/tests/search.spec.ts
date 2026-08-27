@@ -174,6 +174,51 @@ test('a result carries the summary from the day it names', async ({ page }) => {
 	);
 });
 
+test('a result keeps the way out to the source', async ({ page }) => {
+	// The day a result renders from is a projection now - `copy-visuals.mjs`
+	// stages a named list of fields and drops the rest, which is how the second
+	// copy of every day stopped costing what the day itself costs. A field taken
+	// off that list disappears from every search result at once, renders as a
+	// slightly shorter meta line, and fails nothing.
+	//
+	// `source_url` is the field where that would cost the most. It is the
+	// reader's exit and their only means of checking what we wrote about a story
+	// - the most important thing on a result after the summary. So it gets an
+	// assertion of its own rather than sharing one with the summary above, and it
+	// is checked against the staged file rather than against a shape: the bytes
+	// on disk and the link on screen have to name the same address.
+	await page.goto('/archive/');
+	await ask(page, gold.queries[0]!.query);
+	await answered(page);
+
+	const first = page.locator('[data-story-list="rows"] li').first();
+	const article = first.locator('article');
+	await expect(article).toBeVisible();
+
+	const itemId = await article.getAttribute('id');
+	const back = await first.locator('[data-item-day]').getAttribute('href');
+	const date = /(\d{4})-(\d{2})-(\d{2})/.exec(back ?? '');
+	expect(date, `no date on the result's link back: ${back}`).not.toBeNull();
+
+	const staged = JSON.parse(
+		readFileSync(
+			resolve(process.cwd(), 'static', 'digest', date![1]!, date![2]!, date![3]!, 'digest.json'),
+			'utf8'
+		)
+	) as { items: { item_id: string; source_name: string; source_url: string }[] };
+	const item = staged.items.find((one) => one.item_id === itemId);
+	expect(item, `${itemId} is not in the staged day the result names`).toBeDefined();
+
+	const out = first.getByRole('link', { name: 'Read the original' });
+	await expect(out, 'a search result offers no link to its source').toHaveCount(1);
+	// A dropped field leaves `href` unset rather than wrong, so the attribute is
+	// what bites - the link text survives either way.
+	await expect(out).toHaveAttribute('href', item!.source_url);
+	// Who said it, on the same line. The summary is only worth as much as this.
+	await expect(article, 'the result names no source').toContainText(item!.source_name);
+});
+
+
 test('a search replaces the one story list, and a link gives it back', async ({ page }) => {
 	// One list, not two. Two lists side by side leave a reader working out which
 	// one answered them.

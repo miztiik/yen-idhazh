@@ -487,7 +487,9 @@ projection that drops `canonical_url`, `url_key` and `detail`
 Stage timing medians read from `state/item-health/<YYYY-MM>.csv`, not from
 `state/scores.csv`. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run. The score
-ledger still owns faithfulness and scorer time for the scored subset.
+ledger still owns faithfulness and scorer time for the scored subset, and
+`score_ms` is read through the same rule as the other three stages: an empty
+cell is one fewer item timed, never a zero.
 
 The viewport is a 30-day default window, not a retention policy. The window size
 and where today sits are `console.default_window_days` and
@@ -624,17 +626,42 @@ vertical resolution as `summarize`, so a 3x extractor regression - what a source
 changing its markup looks like - is as visible as a 3x model regression, and
 nothing else on the console carries that signal.
 
-**Three facts about a missing number, three renderings, never collapsed.** A day
-with no census breaks the line, because "no data" and "no time spent" are
-different facts. A day whose value is zero or negative breaks it identically and
-is never clamped to the axis floor - a clamped point draws a plunge to the
-bottom of the plot, which states that the stage got a thousand times faster.
-Then the gap is named in type under the legend, one line per affected stage,
-because a hole in a line is a mystery: `No time recorded for extract on 3 days
-in this window.` A stage with no number anywhere in the window leaves the plot
-and the legend together and says so. A run of one day draws a dot, so a stage
-that runs on alternate days is drawn rather than absent. With no days at all the
-section is one line.
+**Three facts about a missing number, three marks, and none of them a bare
+zero.** All three used to arrive at this chart as the number `0`: a day nothing
+timed, a day whose median really was zero, and a day timed for only some of its
+items. Each day now arrives as a `StageTiming` - the median, how many items the
+stage timed, and how many items there were - and each fact draws as itself:
+
+- **Nothing timed** breaks the line, because "no number" and "no time spent" are
+  different facts.
+- **A measured zero** breaks the line too, and draws an open dot in the stage
+  colour, centred on the baseline rule. It is never clamped into the bottom
+  decade: a clamped point draws a plunge to the floor of the plot, which states
+  that the stage got a thousand times faster. Zero has no position on a decade
+  axis, and the baseline rule is the one place on that axis which is not a claim
+  about size. A median of zero does not mean the stage took no time - it means
+  it finished faster than a 1 ms clock can measure, which is an ordinary state
+  for a cheap stage. `state/scores.csv` recorded exactly that for `score_ms` on
+  all ten rows of 2026-08-22.
+- **A day timed in part** draws the items it timed, and the line under the chart
+  says how many that was.
+
+One line of type per stage names whichever of the three happened, because a hole
+in a line is a mystery and three holes that look alike are worse than one: `We
+timed no fetch work on 3 of the 30 days. The line breaks there.`, `score took
+under 1 ms per item on 1 day, which is faster than we can time. The open dot on
+the baseline marks it.`, and `We timed 1,240 of the 1,480 items for extract on 2
+days. The line is the items we timed.` A stage timed in full on every day of the
+window has nothing to explain and gets no line at all.
+
+**A stage the window never timed is stated once, in the legend**: the row greys
+and prints `not timed` where a value would be. It used to be stated twice - the
+legend printed `no data` and a paragraph under it printed the same absence in
+longer words. The open dot gets no legend entry either; the line of type names
+it, and a key would be a second thing to read for a mark that appears on a
+handful of days a year. A run of one day draws a dot, so a stage that runs on
+alternate days is drawn rather than absent. With no days at all the section is
+one line.
 
 **The legend prints the newest day's value per stage, sorted by that value,
 descending.** The number an operator acts on is today's; a window median moves
@@ -646,7 +673,23 @@ bound to the stage and never to the rank**, so a reorder never repaints a line.
 The chart gains no linear/log toggle: a toggle is an admission that we could not
 decide which axis is correct.
 
-Authority: Jony, 2026-08-25.
+**The counts ride on the payload rather than being reconstructed from the
+value.** The chart used to rebuild "this is absent" from the number it was
+handed, which is how the three facts collapsed in the first place: `median()`
+returned `0` for an empty sample, and `score_ms` went through `Number(cell ?? 0)
+|| 0`, which invented a zero sample point out of an empty cell rather than only
+losing one. `sample()` is now the only way to build a `StageTiming`, and
+`median()` takes one rather than a `number[]`, so a bare array of numbers - and
+the fabricated zero that used to fill an empty cell - no longer type-checks.
+`svelte-check` is the gate for that: `StageTimingDay` is a hand-written
+prerender input, not a Pydantic contract and not a committed payload, so the
+schema versioning in `CLAUDE.md` section 11 does not apply to it. Telling the
+three apart cost the console route 509 B of gzipped first-load JavaScript, which
+is 0.8 percent of it, measured 2026-08-27 against `origin/main`'s own source
+built on the same tree and the same machine.
+
+Authority: Jony, 2026-08-25; the three marks and the counts behind them, Jony
+and Fowler, 2026-08-27.
 
 ## The bundle gate is a regression detector, not a performance budget
 
@@ -827,6 +870,10 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | Rendering every failed row in the window | 800 rows measured 7824px and pushed the compression chart to document y=9105. The rows are on demand. | Jony |
 | A virtual-scrolling failure table | A dependency and a scroll-position bug for something a cap and a button already solve. | Jony |
 | A per-day stacked bar list for stage timings | Thirty days is about 150 rows and no trend, and the trend is the only question the section is asked. | Jony |
+| Clamping a zero stage timing into the bottom decade | It draws a plunge to the floor of the plot, which says the stage got a thousand times faster on a day it was merely quick. | Jony |
+| A caret beside the line for a zero stage timing | A second shape for a fact the open dot already carries, and one more thing to learn before the chart can be read. | Jony |
+| A dashed bridge across a stage-timing gap | A slope between two days that share no measurement is a number nobody took. | Jony |
+| A fifth sub-millisecond decade on the stage-timing axis | It moves every mark on a 30-day chart to hold ten rows from one day. The axis is not the thing that was wrong. | Jony |
 | `uplot` on the compression scatter | It drew a second, smaller chart beneath a complete SVG, and the pan and zoom it was bought for live in the viewport control, not in the plot. | Jony, Rule #8 |
 | Fading the per-point band lines instead of collapsing them | The wash is a node count, not an alpha value. One fact drawn 1166 times is still drawn 1166 times at any opacity, and the fact has one value per configured band. | Jony, Carmack |
 | A drawing library for the console charts - `echarts`, `@observablehq/plot`, `chart.js`, a component library | 336 KB gz on canvas, 128 KB gz and a DOM shim to prerender, 67 KB gz on canvas, and a component set is worst of all where every chart is bespoke. All of them own the element and the theme; the console needed the arithmetic. | Jony, Carmack |
