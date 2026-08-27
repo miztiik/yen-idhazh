@@ -636,6 +636,20 @@ Verified 2026-08-20.
   88 routing decisions and 9 rendered charts existed on that runner and none of
   them left it. **Any upload step that carries a job's only copy of its output
   needs `if: always()`.**
+- **A pipeline intermediate is gone within two days, so "re-render the day from
+  its routes" is not a repair option for any day older than 24 hours.** Verified
+  2026-08-27. `digest.yml` sets `retention-days: 1` on the `routes` upload, the
+  one that carries `backend/var/run/<date>/items/*.route.json` and
+  `frontend/public/digest/`; `plan` and `items-<shard>` are also 1, and
+  `router-log` and `runtime-log-<shard>` are 2. Nothing under `backend/var/` is
+  committed either: `.gitignore` line 47 is `backend/var/`, and
+  `git ls-files backend/var` returns no files. **The committed record of a run
+  is the digest under `frontend/public/digest/` plus the rows under `state/`,
+  and never the intermediates.** Repairing an older day therefore means routing
+  it again and paying the `route` stage again - there is no cheaper path, and a
+  plan that assumes one is proposing something that cannot be done. Job *logs*
+  are the exception: they outlive every artifact here, which is why a question
+  about what a past run did is asked with `gh run view --job <id> --log`.
 
 ## See also
 
