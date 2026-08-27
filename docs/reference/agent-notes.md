@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -509,7 +509,18 @@ contends with the first.
   treats as message content.
 - **`git show <ref>:<path> | Set-Content` writes CRLF**, so a following
   `git diff --no-index` reports every line as changed. Compare in memory
-  instead.
+  instead. Adding `-NoNewline` is worse, not better: PowerShell splits the git
+  output into an array of lines and `-NoNewline` joins them with nothing, so a
+  Python file arrives as one line and fails to import while the copy still
+  reports success. To put a path back to another revision byte for byte, use
+  `git restore --source=<ref> --worktree -- <path>`, which touches no encoding
+  and leaves the index alone.
+- **`git add -- $paths` with a PowerShell array stages nothing and does not
+  say so.** The following `git commit` then lands one file instead of twelve.
+  Spell the paths out as separate arguments, and read
+  `git diff --cached --name-status` before committing - `git status --short`
+  puts a staged change in column 1 and an unstaged one in column 2, and the
+  two are one space apart.
 - **`npm` and `npx` are not on `PATH` in a freshly spawned terminal.** Use the
   absolute `C:\Program Files\nodejs\npx.ps1`.
 - **A sync terminal call can return "Command produced no output" without having

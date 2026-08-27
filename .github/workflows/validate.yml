@@ -74,6 +74,10 @@ env:
   LLAMA_CPP_BUILD: b10598
   LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+  # The one place this workflow says which port. `server_argv` binds it, every
+  # probe below reads it, and `idhazh.llm.server` reads it for the address the
+  # stage posts to - so the three cannot disagree (Rule #6).
+  LLAMA_PORT: '8080'
 
 jobs:
   # One plan, read once, for every shard. A long run can cross UTC midnight, so
@@ -282,15 +286,37 @@ jobs:
           fi
 
       - name: Start the candidate
+        env:
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.candidate_file }}
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
-          mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py \
-            --config backend/var/candidate-config \
-            --binary backend/bin/llama-server \
-            --weights "backend/models/${{ needs.plan.outputs.candidate_file }}" \
-            --alias "${{ needs.plan.outputs.candidate_id }}" \
-            --format nul)
+          mkdir -p backend/var
+          # The scratch config's `models.summarize` IS the candidate, so the
+          # alias and every flag come from the same place the run is judged
+          # against. This arm used to render the flag list from a second copy,
+          # which is how it went two changes without the context-shift refusal
+          # the daily run has had since PR #88.
+          python - <<'PY' > backend/var/llama-argv
+          import os
+          import sys
+          from pathlib import Path
+
+          from idhazh import config
+          from idhazh.llm.server import server_argv
+
+          settings = config.load(Path("backend/var/candidate-config"))
+          argv = server_argv(
+              binary=Path("backend/bin/llama-server"),
+              weights=Path(os.environ["LLAMA_WEIGHTS"]),
+              model=settings.app.models.summarize,
+              inference=settings.app.models.inference,
+              port=int(os.environ["LLAMA_PORT"]),
+          )
+          sys.stdout.write("\0".join(argv) + "\0")
+          PY
+          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
+          echo "starting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
           echo "$!" > llama-server.pid
 
@@ -298,15 +324,15 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 180); do
-            curl -sf http://127.0.0.1:8080/health > /dev/null && break
+            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
             sleep 5
           done
-          curl -sf http://127.0.0.1:8080/health > /dev/null || {
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
             echo "the candidate never became healthy" >&2
             tail -50 llama-server.log >&2
             exit 1
           }
-          SERVED=$(curl -sf http://127.0.0.1:8080/v1/models | jq -r '.data[0].id')
+          SERVED=$(curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[0].id')
           if [ "$SERVED" != "${{ needs.plan.outputs.candidate_id }}" ]; then
             echo "the server answers to ${SERVED}, not ${{ needs.plan.outputs.candidate_id }}" >&2
             exit 1
