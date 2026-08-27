@@ -308,6 +308,16 @@ with a redirect `gh api` does not follow. Ask through the run instead:
 gh run view <runId> --repo <owner/repo> --job <jobId> --log
 ```
 
+**No log of any kind is readable while the run is still going.** The command
+above exits 1 with `run <id> is still in progress; logs will be available when
+it is complete`, and so does the run-level `gh run view <runId> --log` - even for
+a job that finished twenty minutes ago. Redirecting to a file makes this worse,
+because the file is then 82 bytes of that sentence and reads like an empty log.
+What IS readable mid-run is the artifacts: `gh run download <runId> --name plan`
+gives the run plan, and each `items-<n>` and `runtime-log-<n>` appears as its
+shard finishes. So to answer "how many items is this run doing?" while it runs,
+read `plan.json` rather than the `plan` job's log.
+
 **`gh run download` can exit 0 on a partial artifact.** One download extracted
 25 of 37 items and returned success; a second attempt gave all 124 files. Count
 what you got against what you expected before you compute anything from it - a
@@ -512,6 +522,27 @@ conclude the environment is broken, and do not re-run `npm ci` - a second one
 contends with the first.
 
 ## Running the gates
+
+- **A `page.route` answering 500 does not simulate a failed download here.**
+  transformers.js only treats a *404* from a same-origin path as a miss. Any
+  other status is read as the file: it takes the error body as the model, fires
+  its own `done` event for it, and fails about 200 ms later inside the ONNX
+  runtime with `protobuf parsing failed`. So the failure is neither where the
+  route is nor in the library the route names. Two things follow for any test
+  that fakes a model failure. The route is not total - `tokenizer.json`,
+  `config.json`, `tokenizer_config.json` and the 21.6 MB ONNX runtime wasm all
+  still load, because the pattern matches only `.onnx` - and the file still
+  arriving is what made `search.spec.ts`'s retry test flaky, because it reported
+  progress after the failure. Fixed in the component on 2026-08-27; the test now
+  holds that file back on purpose, so the order is decided instead of raced.
+- **Each Playwright test gets its own CacheStorage, so a sibling test cannot
+  leave the encoder behind for the next one.** The `page` fixture is a fresh
+  browser context, and `caches.keys()` read at the start of a mid-file test on
+  2026-08-27 returned `[]`. transformers.js also caches only a 200, so a faked
+  error response is never written. When a download-failure test misbehaves, the
+  cache and the test order are the wrong suspects - read the trace's network
+  list instead, and if the request is in it with the status you faked, the route
+  fired and the cache was not consulted.
 
 - **A test that skips itself when it cannot find a control is a gate that turns
   off silently.** `canaries.spec.ts` looked for the old search offer button and

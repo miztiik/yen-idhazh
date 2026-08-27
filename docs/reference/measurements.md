@@ -179,7 +179,7 @@ anyway, knowingly, by owner decision (section 0).**
 | identity | sha256 `03b74727...b7e8` at 5,680,522,464 bytes, `unsloth/Qwen3.5-9B-GGUF` at revision `3885219b...d598a5` | config must match the file opened | pass |
 | budget | slowest job 95.2 min, slowest item 449 s | 330-minute bound | pass |
 | scored denominator | 30 of 30, from 160 addresses attempted | full attempted denominator | pass |
-| faithfulness | mean hhem **0.7149**, spread 0.0173 to 0.9762, `hhem_delta_mean` 0.0000 | 0.50 floor, pinned scorer | pass |
+| faithfulness | mean hhem **0.7149**, spread 0.0173 to 0.9762, `hhem_delta_mean` 0.0000 - the qualifier scored one text twice, so that zero is "not measured", not "no truncation cost" (fixed 2026-08-27) | 0.50 floor, pinned scorer | pass |
 | `injection_canaries` | **4 of 5** neutralised on live calls; `exfiltration-via-url` returned no summary, so nothing was checked | all 5 (Rule #11) | **FAIL** |
 | `brief_copying_ceiling` | **longest verbatim run 1.000** over 8 brief items | <= 0.5 (`evaluation.brief_compression_ceiling`) | **FAIL** |
 
@@ -2936,7 +2936,56 @@ first fits this bound and the second two do not. Neither is a measurement of a
 qualification run measured a 95.2-minute job, but that job replayed 30 frozen
 payloads under a different bound and is not a worker either. The first scheduled
 day the configured model runs is what settles this, and
-`run.shard_timeout_minutes` moves with that number rather than ahead of it.
+`run.shard_timeout_minutes` moves with that number rather than ahead of it. That
+day is now measured, immediately below.
+
+### The first scheduled day on the configured model (2026-08-27)
+
+**Measured 2026-08-27** from the GitHub jobs API and the day's committed
+`run.json`. Run `33073809079`, a scheduled `Content refresh`,
+GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB), four `work` jobs,
+`Qwen3.5-9B-Q4_K_M.gguf` summarizing and `Qwen3-4B-Q4_K_M.gguf` routing,
+llama.cpp `b10598`. 160 items planned, so 40 an item per worker - the same load
+the 8B rows above were measured at. Which CPU model each job drew was not
+recorded.
+
+**The 9B's slowest worker took 85.6 minutes, which is inside the 83.5-to-94.5
+range the 8B took at the same 40 items.** One run against three, so this says
+the model swap did not visibly cost the `work` phase, and it does not say the 9B
+is faster.
+
+| Job | Wall-clock |
+| --- | ---: |
+| `plan` | 3.2 min |
+| `work (2)` | 62.6 min |
+| `work (0)` | 76.7 min |
+| `work (3)` | 82.0 min |
+| `work (1)` | **85.6 min**, the slowest |
+| `route` | 22.1 min |
+| `assemble` | 1.2 min, success |
+| `plan` start to last job end | **112.2 min** |
+
+The four workers average 76.7 +/- 10.1 minutes (sample standard deviation), a
+1.37x spread within one run - the same host lottery the four-shard and
+eight-shard rows above both show, at the same order.
+
+**Against the bounds it has to clear:** the slowest worker is 85.6 minutes
+against `run.shard_timeout_minutes` of 150, so the bound is 1.75x the only
+measurement of the model it now governs. Nothing moves on one run; the number is
+recorded so the next one has something to be compared against.
+
+**`route` finished early for the first time on record: 20.4 minutes of a
+40-minute budget, with 49 percent of the budget unspent.** Every run of
+2026-08-25 and 2026-08-26 that routed anything spent 39.8 to 40.6 minutes, which
+is the budget in full. This one reached all 114 of the day's summarized items -
+52 decided on their own facts without posting, 62 asked the model at a mean of
+19.8 s each.
+
+**Read that as a smaller day, not a faster router.** The router is the same 4B on
+the same prompt; what changed is how much there was to route. The 9B published
+114 summaries from 160 planned where the 8B published 112 to 141 from 160, so a
+day that gives `route` 114 items instead of 141 finishes inside a budget that 141
+did not. One run, one day's supply.
 
 ## Eight work shards
 
@@ -3176,7 +3225,8 @@ make.
 
 ### Does this move the scheduled default to eight?
 
-Not yet, and what blocks it is not the fan-out.
+Not yet. **Authorized on 2026-08-27 by the owner: one dispatch at
+`shards = 8`, and not on 2026-08-27.** The reason for the wait is below.
 
 Three of the four conditions this section had set are met. The slowest `work`
 job fell from 113.1 to 58.8 minutes. The whole run finished in 104.8 minutes
@@ -3185,20 +3235,41 @@ Rule #2. The fourth - every shard's memory peak clear of 16 GB - is unread
 rather than failed, and the resident-set figure that stands in for it is a
 per-machine number the shard count does not change.
 
-Three things have to hold before `run.max_parallel` moves - the plan job's
-`SHARDS=4` fallback when this was written, and the config knob the derivation
-clamps by since 2026-08-26:
+**The measurement above is on a model that no longer runs.** Both arms of the
+1.92x - the four-shard baseline of 2026-08-24 and the eight-shard run of
+2026-08-25 - are `Qwen3-8B-Q4_K_M`, retired on 2026-08-27. Nothing about the
+fan-out argument depends on the weights, but every number in it does, and a
+number measured on retired weights may not size a live config (Rule #10).
 
-1. **A day at eight shards has to publish.** This one did not. Raising the
-   fan-out on the path a reader depends on, on the strength of a run that lost
-   its day at the last step, is the wrong order. The asset-name fix lands first.
-2. **A second run at eight, on a different day, that reaches `assemble`.** One
-   run cannot separate a fan-out effect from the host lottery this same run
-   shows at 3.4x.
-3. **`route` gets an answer.** At eight shards `route` is already 41% of the
-   clock and it stopped with 54 of 147 items unrouted. Making the workers
-   faster while `route` drops a third of the day's visuals moves the failure
-   rather than removing it.
+Three things have to hold before `run.max_parallel` moves, and where each one
+stands on 2026-08-27:
+
+1. **A day at eight shards has to publish.** Still open, and no longer blocked.
+   Run `32869125768` lost its day at the commit step to an asset-name conflict,
+   and that cause is gone: a rendered chart is filed under its item's own id, so
+   two runs cannot pick one path for two stories
+   ([../architecture/publishing/visuals.md](../architecture/publishing/visuals.md)).
+2. **A second run at eight, on a different day, that reaches `assemble`.** Still
+   open, and the same dispatch answers it. One run cannot separate a fan-out
+   effect from the host lottery, which this page measures at 3.4x on prefill and
+   1.37x on a whole worker's clock.
+3. **`route` gets an answer.** Met in the sense that mattered and not in the
+   sense that was written. The worry was a stage that spends its whole budget and
+   drops a third of the day; the fix argued for was sharding it, which the asset
+   name blocked. Sharding is now unblocked and unbuilt - and on the day it
+   became unblocked `route` reached every item it was given, in 20.4 of its 40
+   minutes ([The first scheduled day on the configured model](#the-first-scheduled-day-on-the-configured-model-2026-08-27)).
+   One day, at 114 items rather than 141.
+
+**Why the dispatch waits for a settled four-worker baseline on the configured
+model.** A dispatch fired today would compare eight 9B workers against four 8B
+workers from two days ago - a third unpaired comparison on top of the four this
+page already lists. There is exactly one four-worker 9B run on record, and its
+slowest worker sits inside the range the 8B produced, so the baseline is not yet
+distinguishable from the model it replaced. Firing after the model has run a full
+day of scheduled slots makes the comparison same-model and same-supply, which is
+the closest to paired this project can get without spending a second day of
+runner time to make it exact.
 
 Then `run.max_parallel` moves, in its own commit, naming the run it rests on.
 This section does not move it.
@@ -3211,12 +3282,12 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
-| **Whether a day at eight work shards publishes** | **the work phase is measured, the day was not published** | run `32869125768` halved the slowest worker and then lost the day when `assemble` hit an asset-name conflict ([Eight work shards](#eight-work-shards)). A second dispatch at `shards = 8`, after the asset-name fix, that reaches `assemble` and commits its day. |
+| **Whether a day at eight work shards publishes** | **the work phase is measured, the day was not published, and the cause is now fixed** | run `32869125768` halved the slowest worker and then lost the day when `assemble` hit an asset-name conflict ([Eight work shards](#eight-work-shards)). That conflict cannot recur: a chart is filed under its item's own id since 2026-08-27. One dispatch at `shards = 8` is authorized and waits on a settled four-worker baseline for the configured model ([Does this move the scheduled default to eight](#does-this-move-the-scheduled-default-to-eight)). |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate, and now to the CPU part; one observation per part** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names). The first run to use them narrows it further: in run `32869125768` the two `work` shards on Intel Xeon parts prefilled at 37.5 and 37.7 tok/s while the six on AMD EPYC parts prefilled at 10.7 to 11.3, same day, same build, same weights, same prompt, with decode again moving the other way ([Eight work shards](#eight-work-shards)). That is one observation per CPU model, so it names a suspect rather than proving a cause; a `route` job on each part, on the same day, would settle it. |
-| **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
+| **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | A production day payload | fixture figure above | the first real pipeline run |

@@ -268,7 +268,7 @@ def visual_for(index: int, item_id: str, target: Path) -> Route | None:
         # The payload stores `digest/<Y>/<M>/<D>/...`, so the root here is the
         # parent of the digest directory - exactly as the real pipeline does it.
         public_root=target.parent,
-        relpath=asset_relpath(DATE, "ai", index + 1),
+        relpath=asset_relpath(DATE, item_id),
     )
 
 

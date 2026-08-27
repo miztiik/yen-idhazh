@@ -58,6 +58,20 @@ by then the feeds have been read, and a config the guard disagrees with must
 cost the tail of the fan-out rather than the whole day. Only a dispatched value
 is a hard failure.
 
+**A queued dispatch can be cancelled by the next scheduled run, silently.** The
+workflow sets `concurrency: group: digest` with `cancel-in-progress: false`, so a
+dispatch fired while a run is going does not interrupt it - it waits. GitHub
+keeps only **one** pending run per concurrency group, and a newer pending run
+cancels the older one. So a dispatch parked behind an in-flight run is cancelled
+the moment a cron creates the next one, and the operator sees a cancelled run
+rather than an error. Fire a dispatch within minutes of a run completing, not
+while one is going. The crons are `20 2,6,10,14,18` UTC and a scheduled run
+normally starts 40-70 minutes after its cron minute, but GitHub deprioritises
+schedules under load: on 2026-08-27 the 02:20 and 06:20 slots produced no run at
+all and the 10:20 slot started at 12:50, two and a half hours late. Read
+`gh run list --workflow digest.yml` for what actually exists rather than working
+from the cron.
+
 Rule #2 allows 20 concurrent jobs. Eight workers plus the router is nine, and
 `route` waits on `work` rather than racing it, so the ceiling is nowhere near
 the platform limit. Every shard restores the same cache key, so more shards buy
@@ -175,24 +189,28 @@ which is why it is regenerated and not unioned: a union of two rewrites is a fil
 with every row twice.
 
 **The charts in that directory are the other way to lose the day, and they get
-their own answer.** A chart is filed as `<vertical>-<NN>.svg`, numbered from the
-day's directory, and two runs of one day overlap by hours - so both read the same
-highest number and both write `energy-03.svg` for different items. Run
+their own answer.** A chart used to be filed as `<vertical>-<NN>.svg`, numbered
+from the day's directory, and two runs of one day overlap by hours - so both read
+the same highest number and both wrote `energy-03.svg` for different items. Run
 `32869125768` finished eight workers and a router and then died at this step on
 `CONFLICT (add/add)` over four such paths, because git cannot rebase two adds of
 one path. `REFRESH_PATHS` cannot help: hand-back would delete this run's charts
 while the rebuilt `digest.json` still names them.
 
-`RENUMBER_COMMAND` is the answer. Before each rebase attempt the loop lists the
-asset paths the tip already publishes - `git ls-tree -r --name-only FETCH_HEAD`
-over the same staged paths - and pipes them to that command. Anything local
-standing on one of those paths moves to the next free number for its vertical,
-and the route payload naming it moves with it, so the rebuild that follows writes
-a day whose every asset path is really in the tree. The tip's file never moves: it
-is published, and a reader may already hold that address. `RENUMBER_COMMAND`
-without `REGENERATE_COMMAND` is rejected at startup, because only a job that
-rebuilds can commit the moves. Why it is a rename and not a merge side is in
-[`../architecture/publishing/visuals.md`](../architecture/publishing/visuals.md).
+Since 2026-08-27 a chart is filed under its item's own id, so two stories can no
+longer land on one path at all. What is left is two runs rendering the same item
+to different bytes, and `DROP_RACED_ASSETS_COMMAND` is the answer to that. Before
+each rebase attempt the loop lists the asset paths the tip already publishes -
+`git ls-tree -r --name-only FETCH_HEAD` over the same staged paths - and pipes
+them to that command, which deletes this run's copy of any of them. The tip's
+file never moves: it is published, a reader may already hold that address, and
+the rebuild keeps the tip's item over this run's in any case - so this run's copy
+is the one nothing would have referenced. The route payload keeps naming the same
+path, because the tip's file is sitting at it after the rebase, so the rebuilt day
+still names a file that is really in the tree. `DROP_RACED_ASSETS_COMMAND` without
+`REGENERATE_COMMAND` is rejected at startup, because only a job that rebuilds can
+commit the drops. Why it is a drop and not a merge side, a refresh or a rename is
+in [`../architecture/publishing/visuals.md`](../architecture/publishing/visuals.md).
 
 **Every command in the loop is guarded.** Until 2026-08-25 `git pull --rebase
 origin main` was the only unguarded one, so under `bash -e` a conflict ended the

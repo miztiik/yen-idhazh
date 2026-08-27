@@ -241,34 +241,59 @@ is the platform, so the feature goes rather than the budget. The `image` member
 stays in the enum because a payload must be able to say it; the config gate is
 what makes it unreachable.
 
-Both write SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<vertical>-<NN>.svg`, beside the
+Both write SVG into `frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg`, beside the
 payload that references them. A render failure records why and the item publishes without a
 picture. No failure path raises.
 
-**The number continues across a day's runs.** A day runs several times, and a per-process counter
-that restarts at 1 makes the second run overwrite the first run's file while the digest still
-references both items. That happened on 2026-08-24: 32 declared visuals over 18 files, fourteen
-paths claimed twice, and `india-01.svg` shared by a stock-market story and a defence-stocks story -
-so one of them showed a chart of the other's numbers under alt text describing figures that were
-not in the picture. The router now seeds each vertical's counter from the highest `<vertical>-<NN>`
-already on disk for that day.
+**The name is the item's own id, so a path is a function of the item and of nothing else.**
+`energy-4821903756.svg` - the same `<vertical>-<ten digits>` a reader already lands on as an anchor
+([`layout.md`](layout.md)). Two items cannot share a path, so nothing has to notice that they did.
 
-**Seeding from disk answers one run at a time, and two runs of a day overlap.** A run takes about
-three hours and the day is refreshed five times, so a second run is routing while the first is still
-summarizing. Neither checkout can see what the other has not pushed yet, so both read the same
-highest ordinal and both write `energy-03.svg` for different items with different bytes. The router
-never finds out. The push does: run `32869125768` finished eight workers and a router, then lost the
-whole day at the commit step on `CONFLICT (add/add)` over four asset paths, because git cannot
-rebase two adds of one path. Every summary in the day expired with the `items-*` artifacts.
+That is the third answer to one defect, and the first two are worth keeping on the page because they
+are what a counter costs. **A per-process counter** restarted at 1 in every run, so the second run of
+2026-08-24 overwrote the first run's file while the digest still referenced both items: 32 declared
+visuals over 18 files, fourteen paths claimed twice, and `india-01.svg` shared by a stock-market
+story and a defence-stocks story - one of them showing a chart of the other's numbers under alt text
+describing figures that were not in the picture. **A counter seeded from the day's directory** fixed
+that and could not fix the next one: a run takes about three hours and the day is refreshed five
+times, so a second run is routing while the first is still summarizing, neither checkout can see what
+the other has not pushed, and both read the same highest ordinal. Both wrote `energy-03.svg` for
+different items with different bytes. The router never found out; the push did, and run
+`32869125768` lost eight workers and a router at `CONFLICT (add/add)` over four asset paths, because
+git cannot rebase two adds of one path. Every summary in the day expired with the `items-*`
+artifacts.
 
-**The tip's chart never moves; this run's does.** Before each rebase attempt the commit step lists
-the asset paths the tip already publishes and hands them to
-[`backend/utilities/renumber_racing_assets.py`](../../../backend/utilities/renumber_racing_assets.py).
-Any local file standing on one of those paths is moved to the next free `<vertical>-<NN>` for the
-day - free against both sides at once, not one past the highest of whichever side was read - and the
-route payload that names it moves with it. The rebuild then re-reads the routes, so the `digest.json`
-that lands names a file that is really in the tree. A published address is one a reader may already
-hold, which is why the side that has never been published is always the side that gives way.
+The common factor is that a counter has to be seeded from something a process can observe, and two
+processes observed different things. **An identity cannot be read from a directory.** That is the
+whole of the fix, and it is why no third seeding rule was tried.
+
+**What is left is one story rendered twice, and it has one right answer.** Two overlapping runs can
+still both plan the same item, render it, and disagree about the bytes. That path is now the same
+item on both sides, never two stories under one name - so there is nothing to choose between. The
+tip's copy is published and a reader may already hold that address, and `build_day` keeps the tip's
+item over this run's in any case, which makes this run's file the one nothing will reference. Before
+each rebase attempt the commit step lists the asset paths the tip already publishes and hands them to
+[`backend/utilities/drop_raced_assets.py`](../../../backend/utilities/drop_raced_assets.py), which
+deletes this run's copy of any of them. The route payload is left naming the same path, because after
+the rebase the tip's file is sitting at it.
+
+**Neither control repairs the day it already happened on.** Both stop a run standing on a path
+another run published; neither revisits a payload that already names one file twice. 2026-08-24 kept
+its 32 declared visuals over 18 files until it was repaired by hand on 2026-08-27, and it is the only
+committed day that ever held one - the other five are one path per item. The repair nulls the visual
+on **all 28** items that claimed a shared path, not one of each pair: nothing committed says which of
+the two stories a chart was drawn for, so keeping one is a guess wearing a record's clothes. The four
+singly claimed files keep their items. The 14 files nobody names any more are deleted - 172,164
+bytes, three quarters of that day's picture weight, dead against the 1 GB Pages cap (Rule #2). No
+reader-facing string was added: no picture is the common and correct answer and the page says nothing
+about it, so a repaired item reads exactly like the 699 that never had one.
+
+**`test_every_published_picture_belongs_to_exactly_one_item` is what would have caught it.** It reads
+every committed day and holds the three ways a payload and its directory disagree: no two items share
+a path, every declared path is a file that is there, and every file in a day directory is named by an
+item. Against the pre-repair payload the first one fires and names all fourteen paths. It is
+parametrized over the days it finds, so a second test asserts that count is not zero - a scan with no
+input reports the same "no problems" as a scan that finds none.
 
 Measured 2026-08-22 (Windows 11, 8 vCPU, `vl-convert-python` 1.9.0.post1): a Vega-Lite render takes
 2568 ms for the first call in a process and 49 ms warm, and produces about 7 KB of SVG. The cold
@@ -362,22 +387,24 @@ the page a reader can neither verify nor act on. `items_failed` stays, because a
 something the reader actually lost. The router's failure belongs where an operator looks: the run
 manifest's `items_routed` and `route_ms`, and the console.
 
-**Why a colliding chart is renumbered rather than merged, refreshed or picked between.** The three
-cheaper-looking answers all publish a wrong picture instead of failing, which is worse than losing a
-day because nobody finds out. Adding the day's directory to `REFRESH_PATHS` makes the rebuild's
-hand-back delete every chart this run added that the tip lacks, while the regenerated `digest.json`
-still names them - `assemble` copies the path from the route payload and cannot render anything - so
-the day publishes with broken images. It also overwrites the colliding file with the tip's bytes,
-which is the 2026-08-24 defect above, restored: one story's picture under another story's alt text.
-Resolving the add/add by a stated side has the same two outcomes and no third one; `-X theirs` gives
-our item the tip's picture, `-X ours` overwrites an asset a reader may already hold. Renumbering is
-the only option where both runs' charts survive and every path in the published day resolves.
+**Why a raced chart is dropped rather than merged, refreshed, renumbered or picked between.**
+Authority: the owner, 2026-08-27. Every cheaper-looking answer publishes a wrong picture instead of
+failing, which is worse than losing a day because nobody finds out. Adding the day's directory to
+`REFRESH_PATHS` makes the rebuild's hand-back delete every chart this run added that the tip lacks,
+while the regenerated `digest.json` still names them - `assemble` copies the path from the route
+payload and cannot render anything - so the day publishes with broken images. Resolving the add/add
+by a stated side has two outcomes and no third one; `-X theirs` gives our item the tip's picture,
+`-X ours` overwrites an address a reader may already hold. **Renumbering was the answer while a path
+could mean two different stories**, and it is the wrong answer now: the path names one item, so
+moving this run's copy to some other name would file that item's picture under a name that is not
+its own, and leave two files where the day references one. Dropping is what is left, and it costs
+nothing - the rebuild keeps the tip's item, so this run's copy was never going to be referenced.
 
-**Why the move happens in the shell's retry loop and not inside `assemble`.** The rebase is what
+**Why the drop happens in the shell's retry loop and not inside `assemble`.** The rebase is what
 fails, and it runs before `REGENERATE_COMMAND` does, so a fix that runs after it never gets to run
 at all. The naming rule itself stays in `backend/idhazh/render/write.py`, which owns it: the shell
-lists paths and pipes them, and a small argv wrapper under `backend/utilities/` does the arithmetic
-and rewrites the JSON. Bash never learns what `<vertical>-<NN>` means (Rule #3).
+lists paths and pipes them, and a small argv wrapper under `backend/utilities/` does the work.
+Bash never learns what an item id means (Rule #3).
 
 **Why the budget became a stop rather than a louder warning.** `run.route_budget_minutes` already
 existed and already logged when the stage went over. It fired after the fact, into a log nobody
@@ -423,13 +450,15 @@ to learn to null the item's `visual` as it deletes the file before it can be ena
 | A model filter or a model legend on the console Charts table | A filter over two values hides half the data and saves nobody any work. When a second model has run enough days to compare, the ledger it is read from has to be truthful first. |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
 | Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
-| Shard the `route` job across a matrix | Still the strongest remaining lever, and still blocked on the same thing. Asset filenames come from a per-vertical counter seeded by reading the day's directory, so four shards would each read the same highest ordinal and two would write `energy-01.svg` - the exact collision fixed on 2026-08-24, reintroduced fourfold. The 2026-08-25 renumbering does not unblock it: that runs once, at the commit step, against paths the tip already publishes, and four shards collide inside one run when their artifacts unpack over each other - long before any commit, and silently. Sharding needs the published asset path to come from the item's own identity first, and that is a published-payload change. Take the budget stop now, measure again, shard if a day still cannot finish. |
-| Name the asset from the item's own identity, `<vertical>-<url_key prefix>.svg` | The full fix. It removes the counter, so no two runs and no two shards can ever choose one path, and it is what sharding is waiting for. It is also a published-payload change to a shape [`layout.md`](layout.md) states deliberately - no hash appears in any path, filename or URL - so it is CLAUDE.md section 6 Level 5 and belongs to the owner, not to a defect fix. Escalated 2026-08-25, not shipped. |
+| Shard the `route` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because `route` spends its whole 40-minute budget on every run. Nobody has measured what a sharded router costs in cache restores and model loads against what it saves, and that measurement is the work. |
+| Keep the per-vertical counter and seed it better | Every seeding rule reads something a process can observe, and the defect is that two processes observe different things. A per-process counter lost 2026-08-24; a directory-seeded counter lost run `32869125768`. There is no third thing to read. |
+| Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/test_contracts.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
 | Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
 | Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.image_months` is `-1`, which switches the prune off entirely, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
 | Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
 | Re-render the 2026-08-24 day from its committed routes | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `routes` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's routes expired on 2026-08-25, before anyone read the handover. |
+| Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |
 | Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
 | Give a budget-stopped item a `Route` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
@@ -446,7 +475,7 @@ to learn to null the item's `visual` as it deletes the file before it can be ena
 ## See also
 
 - [`../../concepts/digest.md`](../../concepts/digest.md) - the visual rule this serves.
-- [`../../reference/github-actions.md`](../../reference/github-actions.md) - the commit loop that renumbers a raced chart.
+- [`../../reference/github-actions.md`](../../reference/github-actions.md) - the commit loop that drops a raced chart.
 - [`../sources/trust-boundary.md`](../sources/trust-boundary.md) - why article text is data.
 - [`../contracts/determinism.md`](../contracts/determinism.md) - why decoding is pinned in one place.
 - [`../../concepts/evaluation.md`](../../concepts/evaluation.md) - how a stage gets measured.
