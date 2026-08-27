@@ -4,6 +4,11 @@
 	 * Order is deliberate: what it is, then what it says, then where it came
 	 * from and how sure we are. The confidence claim is about the summary, so it
 	 * sits after it, next to the link that lets you check.
+	 *
+	 * A search result adds one thing to that line and removes one: the day the
+	 * archive found it on, as the link back to it, in place of the day the
+	 * publisher put on it. The two are the same day or one apart, and printing
+	 * both puts two dates on a line that is already four facts long.
 	 */
 	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
 	import { shortDate } from '$lib/format';
@@ -16,8 +21,15 @@
 	let {
 		item,
 		showMark = true,
+		day,
 		onRead
-	}: { item: DigestItem; showMark?: boolean; onRead?: () => void } = $props();
+	}: {
+		item: DigestItem;
+		showMark?: boolean;
+		/** The digest day this item was found on, and the way back to it. */
+		day?: { date: string; href: string };
+		onRead?: () => void;
+	} = $props();
 	const kindWorthSaying = $derived(KIND_WORTH_SAYING.includes(item.source_kind));
 </script>
 
@@ -35,7 +47,11 @@
 		<span class="text-text-tertiary">{SOURCE_KINDS[item.source_kind]}</span>
 	{/if}
 
-	{#if item.published_at}
+	{#if day}
+		<a href={day.href} class="text-text-tertiary hover:underline" data-item-day={day.date}>
+			{shortDate(day.date)}
+		</a>
+	{:else if item.published_at}
 		<span class="text-text-tertiary">{shortDate(item.published_at.slice(0, 10))}</span>
 	{/if}
 

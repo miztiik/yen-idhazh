@@ -32,6 +32,25 @@ export interface SearchHit {
 	score: number;
 }
 
+/** One search, and every fact the page states about it.
+ *
+ * The page states the count over the scope that was searched rather than over
+ * the archive, because a count over a corpus this did not read would be the
+ * archive claiming an answer it does not hold. `capped` is what lets the page
+ * say the limit bit instead of printing a total that is really a ceiling.
+ */
+export interface SearchOutcome {
+	/** What the reader typed, trimmed. */
+	query: string;
+	hits: SearchHit[];
+	/** How many stories were ranked, over the months searched. */
+	searched: number;
+	/** Those months in the reader's words: "August 2026". */
+	scope: string;
+	/** True when the result limit may have cut something off. */
+	capped: boolean;
+}
+
 /** One stored vector back to the unit vector the runner produced, or null.
  *
  * The scale comes from the shard's own header rather than from a constant here.
