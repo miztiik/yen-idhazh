@@ -277,6 +277,24 @@ each rebase attempt the commit step lists the asset paths the tip already publis
 deletes this run's copy of any of them. The route payload is left naming the same path, because after
 the rebase the tip's file is sitting at it.
 
+**Neither control repairs the day it already happened on.** Both stop a run standing on a path
+another run published; neither revisits a payload that already names one file twice. 2026-08-24 kept
+its 32 declared visuals over 18 files until it was repaired by hand on 2026-08-27, and it is the only
+committed day that ever held one - the other five are one path per item. The repair nulls the visual
+on **all 28** items that claimed a shared path, not one of each pair: nothing committed says which of
+the two stories a chart was drawn for, so keeping one is a guess wearing a record's clothes. The four
+singly claimed files keep their items. The 14 files nobody names any more are deleted - 172,164
+bytes, three quarters of that day's picture weight, dead against the 1 GB Pages cap (Rule #2). No
+reader-facing string was added: no picture is the common and correct answer and the page says nothing
+about it, so a repaired item reads exactly like the 699 that never had one.
+
+**`test_every_published_picture_belongs_to_exactly_one_item` is what would have caught it.** It reads
+every committed day and holds the three ways a payload and its directory disagree: no two items share
+a path, every declared path is a file that is there, and every file in a day directory is named by an
+item. Against the pre-repair payload the first one fires and names all fourteen paths. It is
+parametrized over the days it finds, so a second test asserts that count is not zero - a scan with no
+input reports the same "no problems" as a scan that finds none.
+
 Measured 2026-08-22 (Windows 11, 8 vCPU, `vl-convert-python` 1.9.0.post1): a Vega-Lite render takes
 2568 ms for the first call in a process and 49 ms warm, and produces about 7 KB of SVG. The cold
 cost is engine boot, paid once per run rather than once per item.
