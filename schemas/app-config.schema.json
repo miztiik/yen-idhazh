@@ -1185,7 +1185,7 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "page_weight.ceilings_bytes gained /archive/ again, at 7,446, and PageWeightConfig now says a route earns a ceiling when its growth is priced rather than when it does not grow.",
+      "change": "page_weight.ceilings_bytes gained /archive/ again, at 7,553, and PageWeightConfig now says a route earns a ceiling when its growth is priced rather than when it does not grow.",
       "version": "2026-08-27T05:00",
       "why": "/archive/ was dropped on 2026-08-26 because it inlined every committed day, grew about 170 KB a publish, and was raised twice in one day to silence it - a countdown, not a bound. Search reads the month index now, so the page grows by one day link instead of by every story: measured 2026-08-27 at 2,906 bytes gzipped against 1,766,585 on main, and a year of publishing adds 4,476 more. With no ceiling the 99.8 percent saving had nothing holding it, and restoring the eager load would have passed every gate. Committed value only - the model default stays empty, the shape and the validation are unchanged, and every older config still validates, so no read-side migration (section 11)."
     },

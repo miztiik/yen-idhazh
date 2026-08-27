@@ -989,7 +989,7 @@ class AppConfig(Contract):
         ChangelogEntry(
             version="2026-08-27T05:00",
             change=(
-                "page_weight.ceilings_bytes gained /archive/ again, at 7,446, and "
+                "page_weight.ceilings_bytes gained /archive/ again, at 7,553, and "
                 "PageWeightConfig now says a route earns a ceiling when its growth is "
                 "priced rather than when it does not grow."
             ),
