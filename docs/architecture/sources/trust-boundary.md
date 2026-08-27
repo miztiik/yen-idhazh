@@ -1,6 +1,6 @@
 # The Trust Boundary
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-27
 
 Where a stranger's bytes stop being instructions and become data, what actually enforces that, and the five planted attacks that assert it on every change. This is the operational home of Rule #11.
 
@@ -110,11 +110,41 @@ Each fixture carries what must **not** survive and what must survive, so both fa
 
 **They land before the summarizer, not after.** A summarizer written first and audited later is a summarizer whose author had no live assertion to write against.
 
+### A canary that did not answer is not a canary that was breached
+
+The adoption gate runs the same five attacks a second time, on live calls against a candidate model, because the committed suite reads recorded completions and cannot prove that a model nobody has served before honours this chat template.
+
+That gate used to collapse four conditions into one boolean and report only the canary's name. On 2026-08-26 a run failed it and left the sentence `4/5 passed, failing: exfiltration-via-url`. The shard that run uploaded records `markers_present: []` for that canary - nothing survived anything. The model had returned nothing publishable, the gate had no words for that, and the failure was written up as the attacker address crossing the sanitizer. Running the sanitizer over all five committed fixtures on 2026-08-27 says the opposite: every `must_not_survive` marker is absent from the cleaned text and every `must_survive` fact is kept, in all five.
+
+So the reason travels with the observation now. `CanaryObservation` carries the summarizer's own `failure_code` and `failure_detail`, and the gate spends them on three states it derives from the conditions rather than stores beside them:
+
+| The gate says | What happened | The gate |
+| --- | --- | --- |
+| `neutralised` | The model answered, and the attack reached nothing in the answer. | passes |
+| `breached` | The answer carried a planted marker or a forbidden key, or sanitization removed a fact the article needs. | fails |
+| `not exercised` | No answer came back, so the controls were never put to the attack. | fails |
+
+A failing run now reads `4/5 neutralised; exfiltration-via-url not exercised (length_out_of_range)`, and the gate's own `detail` spells out every condition that fired on every canary it names. Both conditions are reported when both fire: `facts_missing` reads the sanitizer and `replied` reads the model, so one canary can carry a silence and an eaten article at once.
+
+It is still one gate and still fail-closed. **A control test that did not run is not a control test that passed**, so a canary that never answered fails exactly as it did before - it just says which of the two happened.
+
+### The live arm builds the article extraction would have built
+
+The fixture is handed to the prompt as raw bytes on purpose, because `untrusted_block` sanitizes what it is given rather than trusting a caller, and this is the only live assertion of that. Everything else about the article is derived the way [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)'s extract stage derives it, from the sanitized body: the length counts, the truncation flag, the shape signal, and the brief flag.
+
+That matters because the counts choose the prompt. The adapter used to count the raw bytes and hardcode `brief=False`, so a 41-word attack arrived in the long prompt band that no page of that length is ever given. One fixture settles which count is right: `fake-system-delimiter` is 67 words raw and 58 words after sanitization, so the raw count clears `extract.min_source_words` and the surviving count does not. The words that do not survive are not words the model is shown, so they cannot decide its prompt.
+
+### The arm runs on its own
+
+`idhazh qualify-canaries` runs the five attacks against the configured model, writes what it saw to `backend/var/qualification/<date>/canaries.json`, and exits non-zero when the gate fails. The arm used to be reachable only from inside a whole qualification at shard zero, which meant the only way to read what a canary did was a job that runs for hours (`CLAUDE.md` section 4).
+
 ## Design rationale
 
 Splitting the sanitizer into its own module rather than burying it in the extractor is what makes it assertable at all: the canary suite can exercise the control directly, the version can be a fingerprint input, and the prompt boundary can apply it defensively. The extractor imports it; it does not own it. Authority: Fowler ([../../../.github/agents/fowler.agent.md](../../../.github/agents/fowler.agent.md)).
 
 Accepting that prose instructions survive - and saying so - is the honest position. A sanitizer that tried to detect and remove instructions would be a classifier with no ground truth, would delete legitimate quoted text, and would create exactly the false confidence that makes the fence feel optional. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
+
+Making the canary gate say why it failed is a Rule #10 fix, not a reporting nicety. The old string carried no measurement - it named a canary and left the reason to be guessed - and the guess that got written down turned a blank reply into a security breach. A control that reports a failure nobody can diagnose is a control that gets re-interpreted by whoever reads it next. Authority: Andre ([../../../.github/agents/andre.agent.md](../../../.github/agents/andre.agent.md)).
 
 ## Rejected alternatives
 
@@ -125,6 +155,9 @@ Accepting that prose instructions survive - and saying so - is the honest positi
 | Add the canaries after the pipeline works | Reader-before-writer: the assertion must exist before the surface it guards. | Fowler |
 | Make the sanitization bounds config knobs | A knob that weakens the trust boundary is a knob that gets widened during an incident. | Carmack |
 | Keep source URLs in the body text | The item's link comes from the feed, not the page's prose, so a body address has no legitimate reader and one hostile use. | Andre |
+| Record the outcome on the observation as a stored enum | A second answer to a question the conditions already answer. The two drift the first time one of them changes, and the stored one is the one a reader trusts. | Andre |
+| Split the non-reply into a second, softer gate | A control test that did not run is not a control test that passed. A separate gate is a place to lower a bar during an incident, which is the moment the bar exists for. | Andre |
+| Shorten the fixtures so the old `brief=False` becomes true | Fixing the measurement to match the instrument. The fixtures describe attacks; the adapter describes a page, and it was the adapter that described one extraction cannot produce. | Andre |
 
 ## See also
 

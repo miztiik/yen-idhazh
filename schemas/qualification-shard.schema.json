@@ -2,7 +2,7 @@
   "$defs": {
     "CanaryObservation": {
       "additionalProperties": false,
-      "description": "One planted attack, run live against the candidate.\n\nThe unit suite proves the sanitizer and the schema against recorded\ncompletions. It cannot prove that a model nobody has served before follows\nthis chat template, so the canaries run again here on live calls (Rule #11).",
+      "description": "One planted attack, run live against the candidate.\n\nThe unit suite proves the sanitizer and the schema against recorded\ncompletions. It cannot prove that a model nobody has served before follows\nthis chat template, so the canaries run again here on live calls (Rule #11).\n\n`replied` is false for two very different reasons - the attack was never put\nto the model, or the model answered with nothing publishable - and neither\nis a marker that survived. The run on 2026-08-26 failed here with every\nmarker list empty, and it was written up as a sanitizer breach, so the\nreason travels with the observation now rather than living in a log line\nthe next reader no longer has.",
       "properties": {
         "facts_missing": {
           "description": "`must_survive` facts the boundary ate.",
@@ -11,6 +11,34 @@
           },
           "title": "Facts Missing",
           "type": "array"
+        },
+        "failure_code": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why no reply came back. Null when the candidate replied.",
+          "title": "Failure Code"
+        },
+        "failure_detail": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The summarizer's own words about that failure.",
+          "title": "Failure Detail"
         },
         "forbidden_keys_present": {
           "description": "`forbidden_output` keys the raw reply carried.",
@@ -453,6 +481,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional failure_code and failure_detail to CanaryObservation.",
+      "version": "2026-08-27",
+      "why": "A canary that never replied and a canary whose reply carried the attack both landed as `replied: false` with nothing to tell them apart, so a blank reply was read as a sanitizer breach. Both fields are nullable, so a shard written before today still validates."
+    },
+    {
       "change": "Initial shape: the frozen corpus, every call, every score and the canaries.",
       "version": "2026-08-26",
       "why": "Row #10 qualifies one model on absolute gates, so the evidence a shard hands the decider is a persisted contract rather than a log line."
@@ -549,7 +582,7 @@
       "type": "integer"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-08-27",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -571,5 +604,5 @@
   ],
   "title": "QualificationShard",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-08-27"
 }

@@ -27,6 +27,7 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
+from idhazh.contracts.article import UntrustedLine
 from idhazh.contracts.base import (
     ChangelogEntry,
     Contract,
@@ -219,10 +220,23 @@ class CanaryObservation(Model):
     The unit suite proves the sanitizer and the schema against recorded
     completions. It cannot prove that a model nobody has served before follows
     this chat template, so the canaries run again here on live calls (Rule #11).
+
+    `replied` is false for two very different reasons - the attack was never put
+    to the model, or the model answered with nothing publishable - and neither
+    is a marker that survived. The run on 2026-08-26 failed here with every
+    marker list empty, and it was written up as a sanitizer breach, so the
+    reason travels with the observation now rather than living in a log line
+    the next reader no longer has.
     """
 
     name: Slug
     replied: bool = Field(description="A schema-valid, non-blank reply came back.")
+    failure_code: str | None = Field(
+        default=None, description="Why no reply came back. Null when the candidate replied."
+    )
+    failure_detail: UntrustedLine | None = Field(
+        default=None, description="The summarizer's own words about that failure."
+    )
     markers_present: list[str] = Field(
         default_factory=list, description="`must_not_survive` strings that reached the reply."
     )
@@ -244,6 +258,16 @@ class QualificationShard(Contract):
 
     __schema_stem__: ClassVar[str] = "qualification-shard"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27",
+            change="Added optional failure_code and failure_detail to CanaryObservation.",
+            why=(
+                "A canary that never replied and a canary whose reply carried the attack "
+                "both landed as `replied: false` with nothing to tell them apart, so a "
+                "blank reply was read as a sanitizer breach. Both fields are nullable, so "
+                "a shard written before today still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26",
             change="Initial shape: the frozen corpus, every call, every score and the canaries.",
