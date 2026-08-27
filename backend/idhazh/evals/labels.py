@@ -13,6 +13,10 @@ all - and a boundary-weighted draw could not answer it: it would speak about
 0.75 to 0.85 and stay silent about the majority of the ledger. Re-weighting a
 uniform draw to the live distribution recovers an overall rate; the reverse is
 not available.
+
+The strata are how the rows are chosen and never how they are ordered. The queue
+comes back in one global `label_id` order, so the sequence says nothing about
+which decile a row came from.
 """
 
 from __future__ import annotations
@@ -85,9 +89,13 @@ def draw(
     that quietly includes another stratum's rows is not the stratum it is named
     after. The shortfall is visible in the result and belongs in the report.
 
-    Rows come back in decile order, then by key. **Never in score order** - a
-    queue sorted by score is the single worst leak, because a labeller reads the
-    gradient off the sequence.
+    Rows come back in one global `label_id` order. Hiding the number while
+    emitting decile after decile hid nothing: a labeller working down the queue
+    still read the confidence gradient off the sequence, and the first twenty
+    rows were the bottom three deciles entire. `label_id` is a hash over the
+    address, the inputs, the words, the instrument and the draw, so sorting the
+    whole picked set by it is a shuffle that needs no seed and stays
+    reproducible - which matters the moment two labellers compare notes.
     """
     pool = eligible(records, scorer_version=scorer_version)
     buckets: dict[int, list[dict[str, str]]] = {index: [] for index in range(DECILES)}
@@ -99,7 +107,7 @@ def draw(
     for index in range(DECILES):
         bucket = sorted(buckets[index], key=lambda row: row["label_id"])
         picked.extend(bucket[:per_decile])
-    return picked
+    return sorted(picked, key=lambda row: row["label_id"])
 
 
 def shortfalls(picked: Sequence[Mapping[str, str]], *, per_decile: int) -> dict[int, int]:

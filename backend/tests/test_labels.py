@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import csv
+from itertools import pairwise
 from pathlib import Path
 
 import pytest
@@ -62,11 +63,14 @@ def a_label(**overrides: object) -> LabelRow:
 
 class TestTheDraw:
     def test_the_same_ledger_and_draw_id_give_the_same_queue(self) -> None:
+        """Same rows and same order. Two labellers compare notes by position."""
         records = ledger()
         scorer = live_scorer(records)
         first = labels.draw(records, draw_id="d1", scorer_version=scorer, per_decile=6)
         second = labels.draw(records, draw_id="d1", scorer_version=scorer, per_decile=6)
-        assert [row["label_id"] for row in first] == [row["label_id"] for row in second]
+        drawn = [row["label_id"] for row in first]
+        assert drawn == [row["label_id"] for row in second]
+        assert drawn == sorted(drawn), "the queue is not in its promised global key order"
 
     def test_a_different_draw_id_is_a_different_draw(self) -> None:
         records = ledger()
@@ -111,6 +115,24 @@ class TestTheDraw:
         scores = [float(row["hhem"]) for row in drawn]
         assert scores != sorted(scores)
         assert scores != sorted(scores, reverse=True)
+
+    def test_the_queue_is_not_emitted_one_decile_at_a_time(self) -> None:
+        """The score is hidden; the stratum was not.
+
+        A decile-blocked queue passes a monotonic-score check and still hands the
+        labeller the confidence gradient in order, because every row of decile 0
+        arrives before every row of decile 1. The test that bites counts runs of
+        equal decile: blocked order gives exactly one run per decile, and a
+        shuffled queue gives many more.
+        """
+        records = ledger()
+        drawn = labels.draw(
+            records, draw_id="d1", scorer_version=live_scorer(records), per_decile=6
+        )
+        deciles = [labels.decile_of(float(row["hhem"])) for row in drawn]
+        assert deciles != sorted(deciles), "the queue climbs decile by decile"
+        runs = 1 + sum(1 for here, then in pairwise(deciles) if here != then)
+        assert runs > len(set(deciles)), "the queue is still emitted one decile at a time"
 
     def test_a_top_score_lands_in_the_top_decile(self) -> None:
         assert labels.decile_of(1.0) == 9
