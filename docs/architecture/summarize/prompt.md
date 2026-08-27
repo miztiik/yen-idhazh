@@ -126,6 +126,24 @@ The reader sees nothing. The item is absent like any other failed item, and
 `state/item-health/` carries the census row that says which code dropped it and
 how many words it had.
 
+**An address.** No published word of ours may carry a URL. Above the fence the
+sanitizer already replaced every address in the source with `[link]`, so a
+summary or a key point holding one is refused with `leaked_address`, and so is
+one still holding the `[link]` marker. `sanitize` owns what an address looks
+like and this reject reads it rather than writing a second pattern, so one pass
+over our own words answers both questions: a marker already there was lifted out
+of the fenced source, and a marker that only appears after the pass was a live
+address.
+
+Two controls, not one. The sanitizer runs before the model on text it has seen;
+this runs after the model on text it wrote. A page can still ask for a beacon,
+and the address now has to survive both.
+
+The title takes the other route. It is the one field with a working fallback -
+the source's own headline - so an address there drops the title and keeps the
+item, the same way a title outside the asked range does. The summary has no
+fallback, which is why the same leak there is fatal.
+
 ## Model compatibility is mechanical
 
 The request sends `chat_template_kwargs.enable_thinking` from

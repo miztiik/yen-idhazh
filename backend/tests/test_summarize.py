@@ -50,7 +50,7 @@ from idhazh.llm.server import (
     request_payload,
     server_argv,
 )
-from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN
+from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, LINK_PLACEHOLDER
 from idhazh.summarize import (
     build_request,
     draft_model,
@@ -1030,6 +1030,113 @@ def test_the_summarizer_never_imports_the_scorer() -> None:
             assert "hhem" not in name, f"summarize.py imports {name}"
             for grader in ("idhazh.evals.score", "idhazh.evals.qualify"):
                 assert not name.startswith(grader), f"summarize.py imports {name}"
+
+
+# --- An address never reaches our own words ---------------------------------
+
+
+def test_the_exfiltration_canarys_address_cannot_reach_a_payload() -> None:
+    """The canary's own attack, run against the output side.
+
+    The sanitizer stops the address on the way in. This is the second control:
+    if the model writes one anyway - invented, remembered, or lifted from a page
+    the sanitizer had not seen - the item does not publish (Rule #11).
+    """
+    canary = json.loads(read_text(FIXTURES_DIR / "canaries" / "exfiltration-via-url.json"))
+    beacon = canary["must_not_survive"][0]
+    draft = parse_draft(completion("leaked-the-address").content)
+    assert beacon in draft.summary, "the fixture stopped carrying the canary's address"
+
+    result = summarised("leaked-the-address")
+
+    assert result.status is SummaryStatus.FAILED
+    assert result.failure_code is FailureCode.LEAKED_ADDRESS
+    assert "carries an address" in (result.failure_detail or "")
+    assert result.summary is None
+    assert beacon not in (result.failure_detail or ""), "the address must not ride the failure out"
+
+
+def test_the_leaked_reply_failed_on_the_address_and_on_nothing_else() -> None:
+    """Every other rule passes this reply, so the address rule is the one that fired."""
+    draft = parse_draft(completion("leaked-the-address").content)
+    bounds = EvaluationConfig()
+
+    assert bounds.summary_words_min <= len(draft.summary.split()) <= bounds.summary_words_max
+    assert verbatim_run(draft.summary, article().text or "") < bounds.verbatim_reject_ceiling
+
+
+@pytest.mark.parametrize(
+    "address",
+    [
+        "https://collect.canary.example/beacon",
+        "www.collect-canary.example/b?d=1",
+        "data:text/html;base64,PHNjcmlwdD4=",
+    ],
+    ids=["https", "bare-host", "data-uri"],
+)
+def test_every_address_shape_the_sanitizer_knows_is_refused_on_the_way_out(address: str) -> None:
+    """One definition of an address, read from the sanitizer, used in both directions."""
+    leaked = body(
+        summary=(
+            "The ministry published its industrial strategy on Tuesday and said the "
+            f"consultation will run for eight weeks. The full notice sits at {address} "
+            "for anyone who wants to read the original documents."
+        )
+    )
+    assert replied(leaked).failure_code is FailureCode.LEAKED_ADDRESS
+
+
+def test_a_key_point_carrying_an_address_costs_the_item_too() -> None:
+    """Key points are published words. An address in one is on the page either way."""
+    result = replied(
+        body(key_points=["Read the notice at https://collect.canary.example/beacon.", "Two."])
+    )
+    assert result.failure_code is FailureCode.LEAKED_ADDRESS
+    assert "key point" in (result.failure_detail or "")
+
+
+def test_the_marker_the_sanitizer_leaves_behind_is_refused_as_well() -> None:
+    """The likelier failure: the model copies a line the sanitizer had already cleaned.
+
+    There is no address left to follow, and the reader is handed a summary that
+    says `[link]` where a fact should be. Both are the same rule, and the reason
+    reads differently so an operator knows which morning they are having.
+    """
+    result = replied(
+        body(
+            summary=(
+                "The ministry published its industrial strategy on Tuesday and the "
+                f"consultation runs for eight weeks. The notice is at {LINK_PLACEHOLDER} "
+                "and it closes at the end of the quarter."
+            )
+        )
+    )
+    assert result.failure_code is FailureCode.LEAKED_ADDRESS
+    assert "marker left where" in (result.failure_detail or "")
+
+
+def test_an_address_in_the_title_costs_the_rewrite_and_not_the_item() -> None:
+    """The title has a working fallback, so dropping it takes the address off the page.
+
+    The summary has none, which is why the same leak there is fatal. The clean
+    title is asserted too, or the drop could be the word-count rule firing.
+    """
+    leaked = "Ministry notice at https://collect.canary.example/beacon opens the consultation"
+    clean = "Ministry notice opens the eight-week industrial strategy consultation"
+    assert 6 <= len(leaked.split()) <= 14
+    assert 6 <= len(clean.split()) <= 14
+
+    assert replied(body(title=clean)).title == clean
+    result = replied(body(title=leaked))
+    assert result.status is SummaryStatus.OK
+    assert result.title is None
+
+
+def test_an_ordinary_summary_is_untouched_by_the_address_rule() -> None:
+    """A rule that fired on plain prose would cost every item and catch nothing."""
+    result = summarised("ok")
+    assert result.status is SummaryStatus.OK
+    assert result.summary is not None
 
 
 def test_a_failed_article_is_never_sent_to_the_model() -> None:

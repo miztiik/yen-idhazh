@@ -1,6 +1,6 @@
 """Turn one article payload into one summary payload, deterministically.
 
-Four things here are controls rather than preferences, and each one is the
+Five things here are controls rather than preferences, and each one is the
 reason a specific failure cannot happen:
 
 - The article text goes in the user turn, fenced and labelled, and never in the
@@ -13,6 +13,9 @@ reason a specific failure cannot happen:
 - A reply that copies the source instead of summarizing it is refused, because
   republishing an article body is a non-goal (CLAUDE.md section 0a) and not a
   quality score to be tuned.
+- A reply that carries an address into our own words is refused. The sanitizer
+  runs before the model; this runs after it, so an address a page asked for has
+  to survive two controls rather than one (Rule #11).
 
 Every number the prompt states is substituted from config at render time
 (Rule #6). That is not only tidiness: what we ask for is one of the inputs
@@ -38,7 +41,7 @@ from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.summary import Summary, SummaryStatus
 from idhazh.evals.metrics import verbatim_run
 from idhazh.llm.server import Completion, request_payload
-from idhazh.sanitize import untrusted_block
+from idhazh.sanitize import LINK_PLACEHOLDER, sanitize, untrusted_block
 
 PROMPT_PATH: Final = Path(__file__).parent / "prompts" / "summarize.txt"
 
@@ -315,16 +318,35 @@ def _failed(
     )
 
 
+def _leaked_address(text: str) -> str | None:
+    """Why these words may not be published, or nothing.
+
+    `sanitize` owns what an address looks like, and it replaces one with
+    `LINK_PLACEHOLDER`. So one pass over our own text answers both questions at
+    once: a placeholder already there was lifted out of the fenced source, and a
+    placeholder that appears only after the pass was a live address.
+    """
+    if LINK_PLACEHOLDER in text:
+        return "it carries the marker left where the source's address was taken out"
+    if LINK_PLACEHOLDER in sanitize(text):
+        return "it carries an address, and the item's own link is the only one we publish"
+    return None
+
+
 def _publishable_title(raw: str, ask: SummarizeConfig) -> str | None:
     """The drafted title, or nothing if it missed the range it was asked for.
 
     Nothing, and not a failure. A title is the one part of the payload with a
     working fallback - the source's own headline - so a bad one costs the
     rewrite and not the item (section 1a). The summary has no such fallback,
-    which is why the same miss there is fatal.
+    which is why the same miss there is fatal. An address in the title takes the
+    same route out for the same reason: dropping it removes the address from the
+    page, and the summary is checked on its own.
     """
     title = " ".join(raw.split())
     if not ask.title_words_min <= len(title.split()) <= ask.title_words_max:
+        return None
+    if _leaked_address(title) is not None:
         return None
     return title
 
@@ -415,6 +437,19 @@ def to_summary(
             generated_at=generated_at,
             failure_code=FailureCode.COPIED_SOURCE,
         )
+
+    published: list[tuple[str, str]] = [("summary", draft.summary)]
+    published += [("key point", point) for point in draft.key_points]
+    for field, text in published:
+        leaked = _leaked_address(text)
+        if leaked is not None:
+            return _failed(
+                article,
+                model_id=model_id,
+                detail=f"the {field} may not be published: {leaked}",
+                generated_at=generated_at,
+                failure_code=FailureCode.LEAKED_ADDRESS,
+            )
 
     title = _publishable_title(draft.title, ask)
     return Summary(
