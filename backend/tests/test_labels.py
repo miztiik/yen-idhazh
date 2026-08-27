@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import ast
 import csv
+import sys
 from itertools import pairwise
 from pathlib import Path
 
@@ -23,8 +24,12 @@ from pydantic import ValidationError
 from idhazh import config
 from idhazh.contracts.label_row import LabelRow
 from idhazh.evals import labels
+from utilities import label_queue
 
 SCORES = REPO_ROOT / "state" / "scores.csv"
+
+#: A pair no run has ever written, so a draw for it is empty on any ledger.
+NO_SUCH_PIPELINE = "0" * 64
 
 
 def ledger() -> list[dict[str, str]]:
@@ -34,6 +39,10 @@ def ledger() -> list[dict[str, str]]:
 
 def live_scorer(records: list[dict[str, str]]) -> str:
     return records[-1]["scorer_version"]
+
+
+def live_pipeline(records: list[dict[str, str]]) -> str:
+    return records[-1]["pipeline_fingerprint"]
 
 
 def a_label(**overrides: object) -> LabelRow:
@@ -65,31 +74,101 @@ class TestTheDraw:
     def test_the_same_ledger_and_draw_id_give_the_same_queue(self) -> None:
         """Same rows and same order. Two labellers compare notes by position."""
         records = ledger()
-        scorer = live_scorer(records)
-        first = labels.draw(records, draw_id="d1", scorer_version=scorer, per_decile=6)
-        second = labels.draw(records, draw_id="d1", scorer_version=scorer, per_decile=6)
+        first = labels.draw(
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
+        )
+        second = labels.draw(
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
+        )
         drawn = [row["label_id"] for row in first]
         assert drawn == [row["label_id"] for row in second]
         assert drawn == sorted(drawn), "the queue is not in its promised global key order"
 
     def test_a_different_draw_id_is_a_different_draw(self) -> None:
         records = ledger()
-        scorer = live_scorer(records)
-        first = labels.draw(records, draw_id="d1", scorer_version=scorer, per_decile=6)
-        second = labels.draw(records, draw_id="d2", scorer_version=scorer, per_decile=6)
+        first = labels.draw(
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
+        )
+        second = labels.draw(
+            records,
+            draw_id="d2",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
+        )
         assert {row["label_id"] for row in first} != {row["label_id"] for row in second}
 
     def test_an_older_scorer_is_not_in_the_pool(self) -> None:
         """A stratum computed across two instruments is not a stratum."""
         records = ledger()
         scorer = live_scorer(records)
-        drawn = labels.draw(records, draw_id="d1", scorer_version=scorer, per_decile=6)
+        drawn = labels.draw(
+            records,
+            draw_id="d1",
+            scorer_version=scorer,
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
+        )
         assert {row["scorer_version"] for row in drawn} == {scorer}
+
+    def test_another_pipeline_is_not_in_the_pool(self) -> None:
+        """A producer change is a covariate. Two producers are two samples."""
+        records = ledger()
+        pipeline = live_pipeline(records)
+        drawn = labels.draw(
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=pipeline,
+            per_decile=6,
+        )
+        assert drawn
+        assert {row["pipeline_fingerprint"] for row in drawn} == {pipeline}
+
+    def test_neither_half_of_the_pair_has_a_default(self) -> None:
+        """No call site can forget the pipeline and still get a draw."""
+        records = ledger()
+        scorer = live_scorer(records)
+        with pytest.raises(TypeError):
+            labels.eligible(records, scorer_version=scorer)  # type: ignore[call-arg]
+        with pytest.raises(TypeError):
+            labels.run_days(records, scorer_version=scorer)  # type: ignore[call-arg]
+        with pytest.raises(TypeError):
+            labels.draw(  # type: ignore[call-arg]
+                records, draw_id="d1", scorer_version=scorer, per_decile=6
+            )
+
+    def test_a_pair_no_run_wrote_draws_nothing(self) -> None:
+        records = ledger()
+        drawn = labels.draw(
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=NO_SUCH_PIPELINE,
+            per_decile=6,
+        )
+        assert drawn == []
 
     def test_no_decile_gets_more_than_it_was_asked_for(self) -> None:
         records = ledger()
         drawn = labels.draw(
-            records, draw_id="d1", scorer_version=live_scorer(records), per_decile=6
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
         )
         counts: dict[int, int] = {}
         for row in drawn:
@@ -101,7 +180,11 @@ class TestTheDraw:
         """A stratum that quietly includes another stratum's rows is not that stratum."""
         records = ledger()
         drawn = labels.draw(
-            records, draw_id="d1", scorer_version=live_scorer(records), per_decile=6
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
         )
         missing = labels.shortfalls(drawn, per_decile=6)
         assert len(drawn) == 60 - sum(missing.values())
@@ -110,7 +193,11 @@ class TestTheDraw:
         """A queue sorted by score leaks the gradient to the labeller."""
         records = ledger()
         drawn = labels.draw(
-            records, draw_id="d1", scorer_version=live_scorer(records), per_decile=6
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
         )
         scores = [float(row["hhem"]) for row in drawn]
         assert scores != sorted(scores)
@@ -127,7 +214,11 @@ class TestTheDraw:
         """
         records = ledger()
         drawn = labels.draw(
-            records, draw_id="d1", scorer_version=live_scorer(records), per_decile=6
+            records,
+            draw_id="d1",
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+            per_decile=6,
         )
         deciles = [labels.decile_of(float(row["hhem"])) for row in drawn]
         assert deciles != sorted(deciles), "the queue climbs decile by decile"
@@ -142,8 +233,79 @@ class TestTheDraw:
     def test_short_source_rows_stay_in_the_pool(self) -> None:
         """Extraction failures are the sample, not noise to be tidied out of it."""
         records = ledger()
-        pool = labels.eligible(records, scorer_version=live_scorer(records))
+        pool = labels.eligible(
+            records,
+            scorer_version=live_scorer(records),
+            pipeline_fingerprint=live_pipeline(records),
+        )
         assert any(int(row["source_word_count"]) < 50 for row in pool)
+
+
+class TestWhatTheLedgerHolds:
+    """The inventory a refusal prints, so an empty pool is a status report."""
+
+    def test_every_pair_is_listed_with_its_rows_and_dates(self) -> None:
+        records = ledger()
+        found = labels.pairs(records)
+        assert {(pair.scorer_version, pair.pipeline_fingerprint) for pair in found} == {
+            (row["scorer_version"], row["pipeline_fingerprint"]) for row in records
+        }
+        assert sum(pair.rows for pair in found) == len(records)
+        for pair in found:
+            dates = [
+                row["date"]
+                for row in records
+                if row["scorer_version"] == pair.scorer_version
+                and row["pipeline_fingerprint"] == pair.pipeline_fingerprint
+            ]
+            assert (pair.rows, pair.first_date, pair.last_date) == (
+                len(dates),
+                min(dates),
+                max(dates),
+            )
+
+    def test_the_pairs_come_back_oldest_first(self) -> None:
+        found = labels.pairs(ledger())
+        assert [pair.first_date for pair in found] == sorted(pair.first_date for pair in found)
+
+
+class TestTheOperatorTool:
+    def test_the_default_pair_comes_from_the_configured_summarizer(self) -> None:
+        """Not from the newest row, which can belong to a summarizer config retired."""
+        records = ledger()
+        model_id = config.load(CONFIG_DIR).app.models.summarize.id
+        written = label_queue.configured_pipelines(records, model_id=model_id)
+        wrote = [row["pipeline_fingerprint"] for row in records if row["model_id"] == model_id]
+        assert written == list(dict.fromkeys(wrote))
+
+    def test_an_empty_pool_exits_non_zero_and_says_what_the_ledger_holds(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Silence on an empty pool is what makes the gate invisible."""
+        monkeypatch.setattr(
+            sys, "argv", ["label_queue.py", "--pipeline-fingerprint", NO_SUCH_PIPELINE]
+        )
+        assert label_queue.main() != 0
+
+        printed = capsys.readouterr().out
+        assert "eligible rows    0" in printed
+        assert NO_SUCH_PIPELINE in printed
+        for pair in labels.pairs(ledger()):
+            assert pair.scorer_version in printed
+            assert pair.pipeline_fingerprint in printed
+            assert f"{pair.rows} rows, {pair.first_date} to {pair.last_date}" in printed
+
+    def test_an_empty_pool_draws_nothing_at_all(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """No fallback and no widening: a draw from a pair nobody asked for is not a draw."""
+        monkeypatch.setattr(
+            sys, "argv", ["label_queue.py", "--pipeline-fingerprint", NO_SUCH_PIPELINE]
+        )
+        label_queue.main()
+        printed = capsys.readouterr().out
+        assert "drawn            " not in printed
+        assert "NOT YET RECALIBRATABLE" not in printed
 
 
 class TestTheRow:
