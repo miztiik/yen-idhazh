@@ -20,6 +20,7 @@
 import type { MonthIndex } from './month';
 import type { SearchIndexEntry } from '$lib/payload/types';
 import { ENCODER_DIMENSIONS, ENCODER_ID } from './encoder';
+import { longDate, MONTHS } from '../format';
 
 /** One month with its vectors in hand. Both halves, or the month is not searched. */
 export interface SearchableMonth {
@@ -129,6 +130,26 @@ export function searchedDays(indexes: MonthIndex[]): string[] {
 		}
 	}
 	return [...days].sort();
+}
+
+/** "1 to 20 August 2026" - the days a search covered, in the reader's words.
+ *
+ * A month name is not a window, and printing one over a partial month reads as
+ * a promise the search cannot keep: on 1 September "September 2026" looks like
+ * thirty days and holds one.
+ *
+ * It lives here rather than in `format.ts` because every route carries that
+ * module: measured 2026-08-27, one build with it there put 64 gzipped bytes on
+ * `/404`, which never prints a date range at all.
+ */
+export function dayRange(oldest: string, newest: string): string {
+	const [year, month, day] = oldest.split('-').map(Number);
+	if (oldest === newest || !year || !month || !day) return longDate(newest);
+	if (oldest.slice(0, 7) === newest.slice(0, 7)) return `${day} to ${longDate(newest)}`;
+	if (year === Number(newest.slice(0, 4))) {
+		return `${day} ${MONTHS[month - 1]} to ${longDate(newest)}`;
+	}
+	return `${longDate(oldest)} to ${longDate(newest)}`;
 }
 
 /** The shards a search reads, newest first.

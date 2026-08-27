@@ -44,6 +44,7 @@
 	import { loadIndex, loadVectors } from '$lib/assist/index';
 	import type { MonthIndex } from '$lib/assist/month';
 	import {
+		dayRange,
 		rank,
 		readScope,
 		searchedDays,
@@ -51,7 +52,7 @@
 		type SearchableMonth,
 		type SearchOutcome
 	} from '$lib/assist/search';
-	import { dayRange, plural } from '$lib/format';
+	import { plural } from '$lib/format';
 
 	// Every knob comes from `config/idhazh.json` through the route's load, so
 	// nothing here decides how many months to read, how many results to show, or

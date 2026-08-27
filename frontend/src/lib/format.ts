@@ -1,6 +1,12 @@
-/** Formatting a reader sees. Deterministic, so two builds agree. */
+/** Formatting a reader sees. Deterministic, so two builds agree.
+ *
+ * Every route carries this module, so a formatter only one route prints does
+ * not belong here - it lands on the first-load path of six pages that never
+ * call it. `dayRange` sat here for one build and cost 64 gzipped bytes on
+ * `/404`; it lives in `assist/search.ts` with the page that says it.
+ */
 
-const MONTHS = [
+export const MONTHS = [
 	'January',
 	'February',
 	'March',
@@ -32,22 +38,6 @@ export function dayMonth(date: string): string {
 	const [year, month, day] = date.split('-').map(Number);
 	if (!year || !month || !day) return date;
 	return `${day} ${MONTHS[month - 1]!.slice(0, 3)}`;
-}
-
-/** "1 to 20 August 2026" - the days a search covered, in the reader's words.
- *
- * A month name is not a window, and printing one over a partial month reads as
- * a promise the search cannot keep: on 1 September "September 2026" looks like
- * thirty days and holds one.
- */
-export function dayRange(oldest: string, newest: string): string {
-	const [year, month, day] = oldest.split('-').map(Number);
-	if (oldest === newest || !year || !month || !day) return longDate(newest);
-	if (oldest.slice(0, 7) === newest.slice(0, 7)) return `${day} to ${longDate(newest)}`;
-	if (year === Number(newest.slice(0, 4))) {
-		return `${day} ${MONTHS[month - 1]} to ${longDate(newest)}`;
-	}
-	return `${longDate(oldest)} to ${longDate(newest)}`;
 }
 
 export function clockUtc(timestamp: string): string {
