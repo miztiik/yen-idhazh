@@ -318,25 +318,20 @@ export function load() {
 	const itemHealthByDate = byDate(itemRows);
 	const modelOnDate = modelByDate(rows);
 
+	// A day is kept when something on it was timed. Judging it by its medians
+	// would drop a day whose only measurement was a zero, which is the same
+	// mistake one level up.
 	const timingDays: TimingStats[] = [...itemHealthByDate.entries()]
-		.map(([date, group]) => {
-			const scoreGroup = scoresByDate.get(date) ?? [];
-			const scoreMs = scoreGroup.map((row) => Number(row.score_ms ?? 0) || 0);
-			return {
-				date,
-				items: group.length,
-				fetch: timing(sample(group, 'fetch_ms')),
-				extract: timing(sample(group, 'extract_ms')),
-				summarize: timing(sample(group, 'summarize_ms')),
-				score: timing({ values: scoreMs, timed: scoreMs.length, total: scoreGroup.length })
-			};
-		})
-		.filter(
-			(day) =>
-				(day.fetch.ms ?? 0) > 0 ||
-				(day.extract.ms ?? 0) > 0 ||
-				(day.summarize.ms ?? 0) > 0 ||
-				(day.score.ms ?? 0) > 0
+		.map(([date, group]) => ({
+			date,
+			items: group.length,
+			fetch: timing(sample(group, 'fetch_ms')),
+			extract: timing(sample(group, 'extract_ms')),
+			summarize: timing(sample(group, 'summarize_ms')),
+			score: timing(sample(scoresByDate.get(date) ?? [], 'score_ms'))
+		}))
+		.filter((day) =>
+			[day.fetch, day.extract, day.summarize, day.score].some((stage) => stage.timed > 0)
 		)
 		.sort((a, b) => b.date.localeCompare(a.date));
 

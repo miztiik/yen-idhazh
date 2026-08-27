@@ -445,12 +445,12 @@ test('a stage with no number draws a gap, never a plunge to the axis floor', asy
 	await page.goto('/console/');
 
 	// The canary scores one day of the window, so `score` has a number on that
-	// day and none on the rest. A zero clamped onto a log axis would draw the
-	// line falling to the bottom of the plot, which says the stage got a
+	// day and none on the other two. A zero clamped onto a log axis would draw
+	// the line falling to the bottom of the plot, which says the stage got a
 	// thousand times faster. The chart breaks the line and names the loss.
 	await expect(page.locator('[data-stage-mark="score"]')).not.toHaveCount(0);
 	await expect(page.locator('[data-timing-gap="score"]')).toHaveText(
-		'No time recorded for score on 1 day in this window.'
+		'No time recorded for score on 2 days in this window.'
 	);
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
@@ -635,7 +635,7 @@ test('the telemetry viewport renders the published projection', async ({ page })
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 	await expect(page.locator('[data-compression]')).toBeVisible();
-	await expect(page.locator('[data-viewport-control]')).toContainText('7 rows in view');
+	await expect(page.locator('[data-viewport-control]')).toContainText('11 rows in view');
 });
 
 test('a failure panel prints its rate in type, not only in a tooltip', async ({ page }) => {
