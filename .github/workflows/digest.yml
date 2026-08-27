@@ -98,10 +98,31 @@ jobs:
         run: pip install -e .
 
       - id: decide
+        env:
+          # Through `env`, not pasted into the program below. A value read by
+          # name is a value, whatever it contains.
+          DISPATCH_DATE: ${{ inputs.date }}
         run: |
           set -euo pipefail
-          DATE="${{ inputs.date }}"
+          DATE="${DISPATCH_DATE:-}"
           [ -n "$DATE" ] || DATE=$(date -u +%F)
+          # The shape check runs AFTER the default, so one pattern covers both
+          # paths and the scheduled one is the case it is proved against:
+          # `date -u +%F` writes 2026-08-27 and the pattern accepts it. The
+          # month and the day are bounded as well as counted, because
+          # 2026-13-45 is as publishable as 2026-08-27 and nothing downstream
+          # reads either one as a calendar date.
+          #
+          # This is a correctness check, not a permission check. Dispatching
+          # this workflow already needs write access, so the person typing the
+          # date could commit to `main` by hand. What they cannot see is the
+          # cost of a typo: `2026-8-27`, or a trailing space, publishes a day
+          # directory at an address no reader and no archive page will ever
+          # look at, silently, after a run of about three hours.
+          if ! [[ "$DATE" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]]; then
+            echo "date must be YYYY-MM-DD, and it becomes the day's address" >&2
+            exit 1
+          fi
           # A scheduled run has no inputs at all, so every one of these is the
           # empty string and every one needs its default here. `faithfulness`
           # is normalized to a STRING for the same reason: read as a boolean,
