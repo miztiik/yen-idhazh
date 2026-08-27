@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -1336,7 +1336,47 @@ exists rather than a reason to leave the corpus empty: before the backfill,
 1,175 of the 1,614 items a reader can search for had no vector at all, so the
 page was heavy AND could not find them.
 
-### The encoder reproduces itself, and the committed days did not
+### The archive stops carrying the corpus
+
+Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-27. Method:
+one checkout, one set of committed day payloads, built twice - once with the
+frontend source at `9d25827` and once with search reading the month index. Only
+`frontend/src` and `frontend/scripts` differ between the arms, so nothing the
+pipeline published between builds can move the number.
+
+| Route | Eager day payloads | Month index | Change |
+| --- | ---: | ---: | ---: |
+| `/archive/` | 1,766,682 | 2,912 | **-1,763,770, which is 99.8 percent** |
+| Every prerendered page, summed | 13,247,645 | 11,483,881 | -1,763,764 |
+
+Two builds of each arm agree to 1 byte on the old source and to 8 bytes on the
+new one, so the noise floor is far below anything here. **1.7 MB is what the
+archive charged a reader for opening a page to find one story**, and the whole
+of it was the day payloads on-device search read the vectors out of.
+
+**Growth per published day, which is the shape rather than the size.** The same
+two sources built over two fixture corpora that differ by exactly one real
+committed day - 2026-08-26, which holds 621 items:
+
+| Source | 5 days, 1,616 items | 6 days, 2,237 items | One day of 621 items costs |
+| --- | ---: | ---: | ---: |
+| Eager day payloads | 1,276,839 | 1,766,682 | **+489,843**, or 788.8 bytes an item |
+| Month index | 2,888 | 2,912 | **+24**, or 0.039 bytes an item |
+
+24 bytes is the day's own link in the compact row and the digits of two counts.
+It does not move with how many stories the day published, which is the property
+the index exists to buy: **the page now grows per day, and it used to grow per
+story.** At the old rate a year of publishing added 179 MB to one document; at
+the new one it adds 8.8 KB.
+
+**What it costs elsewhere, stated rather than left to be discovered.** The
+bundle gains the two files search now fetches and the day payloads a result
+renders from: `static/assist/index` goes from 378,869 bytes to 1,237,109 (the
+sibling `.bin` joins the JSON), and `static/digest` from 1,055,600 to 6,976,807
+(six `digest.json` join 87 rendered images). That is 6.78 MB on disk against
+1.76 MB off the page, and the two are paid by different people - every visitor
+pays the page, and only a reader who searches and then opens a result pays a day
+payload.
 
 Hardware: Intel Core i7-1265U, Windows, onnxruntime 1.29.0. Date: 2026-08-26.
 Method: decode each committed vector, re-encode its item's `title. summary`

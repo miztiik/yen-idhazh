@@ -154,7 +154,7 @@ Real cross-day search belongs on the archive, later, where the question "where w
 
 ## The archive lists stories, and fetches them a month at a time
 
-`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on this checkout at `3a38497`, six committed days and 2,237 items: **1,766,580 gzipped bytes**, growing 140 to 170 KB with every published day. The page a reader opened to find one story carried all of them.
+`/archive/` used to list five dates and no articles, and it inlined every committed day whole so on-device search could read the vectors without a request. Measured 2026-08-27 on one checkout, six committed days and 2,237 items: **1,766,682 gzipped bytes**, growing **489,843 bytes** for the one extra day that carried 621 stories. The page a reader opened to find one story carried all of them. It is **2,912 bytes** now, and one more day of 621 stories costs it **24 bytes** ([../../reference/measurements.md](../../reference/measurements.md#the-archive-stops-carrying-the-corpus)).
 
 What it renders now, top to bottom:
 

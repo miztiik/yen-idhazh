@@ -17,7 +17,7 @@
  * falsehood, which they cannot.
  */
 
-import type { MonthIndex } from './index';
+import type { MonthIndex } from './month';
 import type { SearchIndexEntry } from '$lib/payload/types';
 import { ENCODER_ID } from './encoder';
 

@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { ENCODER_DIMENSIONS, ENCODER_ID } from '../src/lib/assist/encoder';
-import { indexOf, type MonthIndex } from '../src/lib/assist/index';
+import { indexOf, type MonthIndex } from '../src/lib/assist/month';
 import { searchable } from '../src/lib/assist/search';
 
 /**
@@ -18,7 +18,9 @@ import { searchable } from '../src/lib/assist/search';
  * reader's tab reads now. The day payloads still carry their own embeddings
  * block; nothing in the browser opens it.
  *
- * Pure functions over the committed shards, so no page is loaded.
+ * Pure functions over the committed shards, so no page is loaded. Both modules
+ * it imports are free of `$app`, which is what lets this run in Node at all -
+ * the fetching half lives in `assist/index.ts` and cannot.
  */
 
 const INDEX = resolve(process.cwd(), 'public', 'assist', 'index');

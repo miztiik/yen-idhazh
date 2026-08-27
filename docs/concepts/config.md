@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 

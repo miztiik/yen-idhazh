@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -455,6 +455,39 @@ artifact, and the bar will keep sliding for a reason that is not a regression.
 carries `unlabelled_share` - the share of filled slots holding an item no
 labeller judged either way - and a test asserts it is above zero, so the day the
 labels catch up somebody is told to delete this caveat.
+
+### Moving search to the month index cost nothing, 2026-08-27
+
+The archive stopped carrying every committed day and started fetching
+`assist/index/<YYYY-MM>.json` with its sibling vector file. That is 1.7 MB off
+the page, and the question a byte saving can never answer on its own is whether
+the index lost information the day payload carried.
+
+Measured on the same checkout, same 60 queries, same labels, same ranking, same
+embedded queries - the only difference is which file the vectors came out of:
+
+| Arm | recall@10 | MRR | Corpus |
+| --- | ---: | ---: | --- |
+| Day payloads, the surface being deleted | 0.756 +/- 0.037 | 0.816 | 2,235 of 2,237 carry a vector |
+| Month index, the surface being shipped | 0.756 +/- 0.037 | 0.816 | 2,235 of 2,237 carry a vector |
+
+**Identical to three decimals on every number the report carries.** That is the
+expected result rather than a lucky one: the index projects the same int8 bytes
+the day payload held, and it decodes them with the `scale` its own header states
+rather than a constant, so nothing about the arithmetic changed.
+
+**The reader-facing number moved from 0.767 to 0.756, and the index is not
+why.** The baseline above was taken over 2,121 published items; this checkout
+holds 2,237. Both arms moved together, which is exactly the pooling drift the
+paragraphs above predict - 116 more items competing for the same ten slots
+against a frozen label set, and 66.6 percent of filled slots now hold an item no
+labeller judged, up from 65.6 percent. 0.756 is 0.3 standard errors under the
+baseline and 0.066 above the `assist.recall_min` bar.
+
+`backend/tests/test_retrieval_eval.py` holds the comparison rather than this
+page: it fails when the two arms disagree by more than one standard error, so
+the day the index starts losing something, a gate says so instead of a byte
+count looking like a win.
 
 ### The bar, and what it is worth
 
