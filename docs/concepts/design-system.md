@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -58,6 +58,45 @@ There is almost no motion here, and that is the correct amount. This is a page a
 - The whole named set: `fadeIn` (content arriving), `shimmer` (skeleton while a payload parses), `toastIn` (the rare notice). Anything beyond these needs an argument.
 
 There is no network in the loop, so **there is no excuse for a spinner.**
+
+**One control on the whole site does wait on a network, and it still gets no
+spinner.** The archive's search downloads a 43 MB encoder the first time a
+reader uses it. What it shows meanwhile is bytes as type, taken from the
+library's own count of what has arrived - a measurement, not an animation. When
+the weights land that count goes blind, because the runtime behind them reports
+nothing to anybody, so the line stops printing numbers and prints a word. A bar
+that keeps moving on no measurement is a bar that is making it up.
+
+## A machine's state is a sentence, never a dot
+
+Colour is one signal and never the only one, and that rule has a second edge: a
+dot says nothing until it carries a word, and once it carries a word it is a
+sentence. So a state a reader has to act on is written out in full.
+
+The archive's on-device search is the whole example, and it has five states:
+
+| State | The sentence |
+| --- | --- |
+| Not downloaded | `Search runs on your device. The first search downloads 43 MB, once. Nothing you type leaves your browser.` |
+| Downloading | `Downloading - 12.4 MB of 43 MB.` and, once the count goes blind, `Getting ready to search.` |
+| Ready | `Search runs on your device. Nothing you type leaves your browser. The download is done.` |
+| The encoder changed | `The search files changed since your last visit. The next search downloads 43 MB again, once. Nothing you type leaves your browser.` |
+| This browser cannot run it | `Search is unavailable here - this browser cannot run it. Everything above still works.` |
+
+Three rules hold under them:
+
+- **The cost is named before the click, never after it.** Whether the download
+  has already been paid for is read out of the browser's own cache storage. That
+  is this device's disk, so nothing is reported anywhere and Rule #1 is intact.
+  When it cannot be read the whole size is printed, because overstating a cost
+  is honest and understating one is not.
+- **Every wait offers a stop, and stopping leaves the page as it was.** Nothing
+  greys out while a download runs, and the list a reader was reading stays live.
+- **A failure offers a retry.** One flaky connection may not turn a feature off
+  for the rest of a page's life.
+
+The shape generalises past this one control: any state worth a colour is worth a
+sentence, and a state a reader cannot act on is worth neither.
 
 ## Icons
 

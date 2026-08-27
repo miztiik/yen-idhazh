@@ -202,7 +202,9 @@ first search starts inside about five seconds.
 2026 - 2235 stories.`, and `Older months are not searched.` when the archive
 holds more months than the scope. A reader who gets nothing back has to be able
 to tell "never published" from "not in the months this read", and the knob is
-invisible to them otherwise.
+invisible to them otherwise. The line is there **before** the first search, and
+costs nothing to put there: the story list above has already fetched that month,
+and the count of searchable stories is in the file it fetched.
 
 **A result renders from the day it names.** The index carries no title-plus-
 summary pair on purpose - [layout.md](layout.md) prices that at 6.35 times the
@@ -215,12 +217,82 @@ never fetched twice, and neither is a month. Until a day arrives, and if it
 never does, the result is the title, the date and the topic the index carried -
 so a failed fetch costs a summary and never a result.
 
+The day a result was found on sits **on the item's own meta line**, as the link
+back to it, in place of the day the publisher put on the article. The two are
+the same day or one apart, and printing both put two dates on a line that
+already carries four facts.
+
 **Two files a month fail independently, and both are designed states.** No index
-leaves the story list saying so. No `.bin` leaves the list working and search
-saying `Search is unavailable here - these stories cannot be searched on this
-device.` The check runs **before** the 43 MB encoder download, alongside the
-encoder-identity check that was already there: a reader who cannot be helped by
-those bytes is not asked to spend them.
+leaves the story list saying so, and search says `these stories cannot be
+searched on this device` without a click, because the identity check reads the
+index the list already has. No `.bin` leaves the list working and search saying
+the same thing on the first search, because 518 KB of vectors is fetched then
+and not before. Either way the check runs **before** the 43 MB encoder download:
+a reader who cannot be helped by those bytes is not asked to spend them.
+
+## The search box is a field, and one click is the whole gesture
+
+The box used to be a link that turned a search box on, and then a search box.
+Nobody wants to enable anything; they want an answer. So the field is there
+before a byte moves, a reader types the question first, and one click fetches
+the vectors, downloads the encoder and runs what is already in the box.
+
+**The model's state is a sentence, never a dot.** Five of them, and the copy is
+in [../../concepts/design-system.md](../../concepts/design-system.md): not
+downloaded, downloading, ready, the encoder changed since last time, and this
+browser cannot run it. Whether the download has already been paid for is read
+out of the browser's own cache storage - this device's disk, so nothing is
+reported anywhere - and when that cannot be read the whole 43 MB is printed,
+because overstating a cost is honest and understating one is not.
+
+**Progress is bytes, and it stops when the measurement stops.** The count is the
+library's own, so it covers the encoder's own files and not the ONNX runtime
+behind them, which reports nothing to anybody. When the weights land the line
+gives up on numbers and prints `Getting ready to search.` A percentage bar over
+the part nobody can see would be an invention.
+
+**A stop is offered throughout, and it leaves the page as it was.** Nothing greys
+out, the story list above stays live, and the offer comes back unchanged. The
+bytes already asked for keep arriving - a browser fetch cannot be called back -
+and the loader holds that one request, so a second search joins it rather than
+starting another. What stops is the waiting. **A failed download offers a
+retry**, because one flaky connection may not turn the feature off for the rest
+of a page's life.
+
+**There is one list, and a search replaces what is in it.** The heading changes
+from `Stories` to `Search results`, the count line changes with it, and
+`Show all stories` gives the browse list back. Two lists side by side would
+leave a reader working out which one answered them - and it is what makes the
+browse list the search's empty state: a query that matches nothing leaves the
+page exactly where it was, under one line naming the month.
+
+**The count is over the stories searched, and the cap is stated when it bites.**
+`10 results from the 2235 stories searched. Only the closest 10 are shown.` A
+total over the whole archive would be a count across months this did not read,
+and `10 of 10` printed as a total is a ceiling wearing a number.
+
+**A weak result stays dropped, and no score reaches the page.**
+`assist.similarity_floor` is a selector, not a grade. A weak hit shown is the
+archive claiming an answer it does not hold, and a percentage beside it is a
+number a reader can do nothing with. The zero case is the whole disclosure.
+
+Rejected here, all Jony's, all with a reason that outlives the row:
+search-as-you-type (every keystroke is a forward pass, and submit is the honest
+gesture); a search box in the site header (the day page already has an in-place
+filter, and two boxes meaning different things is the worst outcome); a separate
+search route or a query in the URL (a shared link would land a stranger on a
+page with no encoder and no results, and it cannot be prerendered); a percentage
+bar or a spinner (no measured source of truth, and both are refused by
+[../../concepts/design-system.md](../../concepts/design-system.md)); highlighting
+the query inside a result (semantic search has no matched substring, so a
+highlight fakes a lexical match that never happened); a weak-matches section, a
+percentage or a did-you-mean; the model name, its width or the score; and two
+lists side by side.
+
+The whole block is still secondary by construction. Delete
+`frontend/static/assist/` and the archive renders complete, the list pages, and
+the first search reports the download did not finish and offers to try again.
+No digest assertion moves.
 
 ## The archive names its encoder, and refuses vectors from any other
 
