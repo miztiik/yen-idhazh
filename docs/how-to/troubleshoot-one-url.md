@@ -1,6 +1,6 @@
 # Troubleshoot One URL Locally
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-27
 
 Use the real network, extraction boundary and local model to inspect one article
 without publishing a digest.
@@ -69,16 +69,10 @@ updates the seen and feed-health ledgers under `state/`.
 2. Install llama.cpp and the configured summary model as described in
    [set-up-local-inference.md](set-up-local-inference.md).
 
-3. Print the server command from current config:
-
-   ```powershell
-   .venv\Scripts\python.exe backend\utilities\llama_server_argv.py `
-     --config config `
-     --binary backend\bin\llama-server.exe `
-     --weights backend\models\Qwen3-8B-Q4_K_M.gguf `
-     --alias qwen3-8b-q4-k-m `
-     --format shell
-   ```
+3. Print the server command from current config with the program in
+   [test-models-locally.md](test-models-locally.md#serve-a-model). Save it to a
+   file and run `.venv\Scripts\python.exe <file>`; it is the same program CI
+   runs, so a flag typed by hand here is a different server.
 
 4. Run the printed command in a separate terminal. Do not retype or change its
    flags.

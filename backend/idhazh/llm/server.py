@@ -13,6 +13,7 @@ recorded (`docs/architecture/contracts/determinism.md`).
 from __future__ import annotations
 
 import json
+import os
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Final
@@ -21,8 +22,15 @@ from urllib.parse import urlsplit, urlunsplit
 
 from idhazh.contracts.app_config import InferenceConfig, ModelRef
 
-DEFAULT_ENDPOINT: Final = "http://127.0.0.1:8080/v1/chat/completions"
-DEFAULT_HEALTH: Final = "http://127.0.0.1:8080/health"
+# One port per job. A workflow declares it once as `LLAMA_PORT`, and both halves
+# read it here: the argv the server binds with, and the address the stage posts
+# to. Two answers would leave a server listening on one port and a summarizer
+# posting to another, and every item would fail as "model unreachable".
+# It is a process-boundary value, not a tunable, so it is not a config field and
+# `idhazh.fingerprint` has nothing to classify (Rule #6, `CLAUDE.md` section 11).
+DEFAULT_PORT: Final = int(os.environ.get("LLAMA_PORT") or 8080)
+DEFAULT_ENDPOINT: Final = f"http://127.0.0.1:{DEFAULT_PORT}/v1/chat/completions"
+DEFAULT_HEALTH: Final = f"http://127.0.0.1:{DEFAULT_PORT}/health"
 
 # llama.cpp maps ERROR_TYPE_EXCEED_CONTEXT_SIZE to HTTP 400 and names it here.
 # The message beside it states the token counts and its wording moves between
@@ -82,9 +90,18 @@ class Completion:
 
 
 def server_argv(
-    *, binary: Path, weights: Path, model: ModelRef, inference: InferenceConfig, port: int = 8080
+    *,
+    binary: Path,
+    weights: Path,
+    model: ModelRef,
+    inference: InferenceConfig,
+    port: int = DEFAULT_PORT,
 ) -> list[str]:
     """The exact process the run stands up.
+
+    The only function in this repository that spells a `llama-server` flag.
+    Every workflow that starts a server imports it; nothing renders the same
+    list a second time, because a second rendering is a second server.
 
     The list is built from config, not written out by hand at the call site, so
     one config edit moves the local server and the workflow together.
