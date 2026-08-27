@@ -189,6 +189,13 @@ removed, hidden or re-ranked, and the whole topic is one prerendered click away.
 A day that ran to a single topic ignores it, because a lone heading over the
 whole page states what the page already says.
 
+`ui.archive_page_size` (25) is how many stories the archive's list adds each
+time a reader asks for more. The day page pages at twelve because a day is short
+and the reader came to read it; the archive holds thousands and the reader came
+to find one, so it opens on the same twenty-five the console's failure list
+does. Like `items_per_topic` it hides nothing - every story is one more click
+away, and the order is the published one.
+
 The `assist` block is on-device search. The runner embeds the day and commits
 the vectors; a reader's tab embeds only the query. Both knobs say how much of an
 item the encoder is allowed to read, so both are set from what the encoder can

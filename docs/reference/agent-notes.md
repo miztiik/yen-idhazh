@@ -543,6 +543,36 @@ contends with the first.
   each reached for `bundle-baseline.json` over this. Do not: CI pins node 22, the
   local toolchain here is node 24, and re-recording moves a number CI is happy
   with onto a toolchain CI never runs.
+- **The ratchet can fail in CI while passing on this machine, and then the record
+  really is the thing to change.** The entry above says do not re-record. It is
+  about a gate that failed *locally*, and it stays. The opposite case happened on
+  2026-08-27: three routes passed the local gate at -40 to -46 B and CI failed
+  them at -65 and -66 B against a +/-64 tolerance. The cause was not the branch.
+  `origin/main` was already building 56 to 59 B under its own record on five
+  routes and was green, because it sat 5 to 8 B inside the tolerance; a branch
+  that saved 6 to 10 more B on the shell every route loads tipped three of them
+  out. A 10-byte saving failed a 64-byte gate.
+
+  Get main's own CI numbers before deciding whose bytes moved. They are in the
+  `site` job's log, not in the check-run summary:
+
+  ```powershell
+  $j = gh api "repos/<owner>/<repo>/commits/<main sha>/check-runs" --jq '.check_runs[]|select(.name=="site")|.id'
+  $r = gh api "repos/<owner>/<repo>/actions/runs?per_page=60" --jq '[.workflow_runs[]|select(.head_sha|startswith("<main sha>"))]|.[0].id'
+  gh run view $r --repo <owner>/<repo> --job $j --log
+  ```
+
+  Read the branch and main side by side, both from CI, on the same day. The
+  difference between those two is what the branch did; the gap between main and
+  the record is somebody else's drift. Recording CI's measured value puts the
+  route back in the middle of the band, which is where a ratchet is useful - a
+  route sitting 2 B inside the tolerance fails on the next unrelated merge and
+  costs the next person the same hour. Say both numbers in the `why`, so nobody
+  has to guess which part of the change was yours.
+
+  **Read the failing route names before anything else.** Three routes failed and
+  `/archive/` - the only route the change touched - was not among them. That is
+  the tell that the record, not the branch, is the thing that moved.
 
 ## PowerShell
 
@@ -632,6 +662,17 @@ contends with the first.
   per worktree before running the browser suite. Two agents on one port do not
   collide loudly: `reuseExistingServer` is on outside CI, so the second one
   silently tests the first one's bytes.
+- **`vite preview --outDir build` still serves static assets out of
+  `.svelte-kit/output/client`.** So the section 12 step-5 check - delete the
+  page's data file and confirm it degrades - fails to prove anything if you only
+  remove the file from `build/`: the page loads it anyway and the smoke reads as
+  a pass. On 2026-08-27 that took two attempts to spot, because the served copy
+  came back HTTP 200 with the directory renamed. Hide every copy -
+  `build/`, `.svelte-kit/output/client/` and `static/` - and clear the browser
+  cache through CDP (`Network.clearBrowserCache` plus
+  `Network.setCacheDisabled`), or the second reload is served from memory.
+  Expect `vite preview` to die with an unhandled `ENOENT` when a file it is
+  streaming disappears; that is the server, not the page.
 
 ## Measuring with the committed encoder
 
