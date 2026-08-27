@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import datetime
 import hashlib
 import io
 import json
@@ -19,7 +20,7 @@ from typing import Final, cast
 
 import pytest
 import yaml  # type: ignore[import-untyped]
-from conftest import CONFIG_DIR, REPO_ROOT, read_text
+from conftest import CONFIG_DIR, REPO_ROOT, llama_server_flags, read_text
 
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
 from utilities.measure_llm import ModelRef as MeasureModelRef
@@ -43,6 +44,69 @@ EXPECTED_WORKFLOWS: Final = {
 
 CONTENT_REFRESH_CRON: Final = "20 2,6,10,14,18 * * *"
 CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
+# Every `workflow_dispatch` input in the repository, and the evidence that its
+# value is shaped before anything acts on it. Discovery is closed-world, so a
+# new input fails here until somebody writes down which of the three it is and
+# the test finds the evidence in the file.
+#
+# `CHOICE` and `BOOLEAN` are the platform's own enumeration: GitHub renders a
+# menu or a checkbox and no other value can be submitted. `READ_BY_NAME` means
+# the value never lands in a script - it reaches a step as an environment
+# variable, and the program that reads it decides what it means. Anything else
+# is an anchored pattern the workflow matches the value against, and the value
+# is one somebody could publish a wrong day with.
+DISPATCH_CHOICE: Final = "choice"
+DISPATCH_BOOLEAN: Final = "boolean"
+DISPATCH_READ_BY_NAME: Final = "read by name"
+DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
+    ("backfill.yml", "commit"): DISPATCH_BOOLEAN,
+    # The one that decides a published address. See the two tests that run the
+    # step for what it accepts and what it now stops.
+    ("digest.yml", "date"): "^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$",
+    ("digest.yml", "faithfulness"): DISPATCH_BOOLEAN,
+    ("digest.yml", "shards"): DISPATCH_CHOICE,
+    ("drift.yml", "baseline_days"): "^[0-9]{1,4}$",
+    ("drift.yml", "recent_days"): "^[0-9]{1,4}$",
+    ("measure.yml", "corpus_links"): "^[1-9][0-9]{0,4}$",
+    ("measure.yml", "models"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "runtime_candidate"): DISPATCH_CHOICE,
+    ("measure.yml", "runtime_threads"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
+    ("measure.yml", "target"): DISPATCH_CHOICE,
+    ("measure.yml", "threads"): "^[1-9][0-9]*$",
+    ("validate.yml", "candidate_bytes"): "^[0-9]{1,15}$",
+    ("validate.yml", "candidate_file"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "candidate_id"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "candidate_quantisation"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "candidate_repo"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "candidate_revision"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "candidate_sha256"): DISPATCH_READ_BY_NAME,
+    ("validate.yml", "corpus_per_shard"): "^[1-9][0-9]{0,3}$",
+    ("validate.yml", "job_budget_minutes"): "^[1-9][0-9]{0,3}$",
+    ("validate.yml", "repeats"): "^[1-9][0-9]{0,3}$",
+    ("validate.yml", "shards"): "^[1-8]$",
+}
+# The one variable digest.yml's `decide` step reads. Nothing else in that
+# script may be an expression: a value pasted into a script is text before it
+# is a value, and no pattern below the paste can see what it already changed.
+DECIDE_ENV: Final = "DISPATCH_DATE"
+# What a person types when they mean a day. Each of these publishes to an
+# address no reader and no archive page looks at, and none of them fails
+# anywhere else in the run.
+UNPUBLISHABLE_DATES: Final = (
+    "2026-8-27",
+    "2026-08-27 ",
+    " 2026-08-27",
+    "2026/08/27",
+    "27-08-2026",
+    "2026-13-45",
+    "yesterday",
+)
+# The shell linter and the one directory it reads. It cannot see a `run:` body,
+# so the shell written inline in a workflow is held by the tests in this file
+# instead.
+SHELLCHECK_STEP: Final = "Lint the shell"
+SHELLCHECK_COMMAND: Final = "shellcheck --severity=style .github/scripts/*.sh"
 # The ceiling, not the dispatch rule. Rule #2 allows 20 concurrent jobs; a regex
 # held the fan-out at four. The empty-input default below stays at four, because
 # that is what every scheduled run gets and no eight-shard run is measured yet.
@@ -170,6 +234,22 @@ RUNTIME_IDENTITY_JOBS: Final = {
     "route": ("router.log", "route_file"),
 }
 RUNTIME_IDENTITY_STEP: Final = "What this runner is"
+# One loopback port per workflow, declared once. `server_argv` binds it, every
+# probe reads it, and `idhazh.llm.server` reads it for the address the stage
+# posts to - so a moved port cannot leave a server on one and a client on
+# another (Rule #6).
+LLAMA_PORT_ENV: Final = "LLAMA_PORT"
+LLAMA_PORT_VALUE: Final = "8080"
+LLAMA_PORT_READ: Final = "http://127.0.0.1:${LLAMA_PORT}"
+# Every step in the repository that stands a llama-server up, and the config
+# root each one reads. Discovery in the test is closed-world, so a new one fails
+# here until it appears with an install ahead of it.
+SERVER_STARTERS: Final = {
+    ("digest.yml", "work"): ("Start the model", "config"),
+    ("digest.yml", "route"): ("Start the router", "config"),
+    ("measure.yml", "runtime"): ("Measure runtime candidate", None),
+    ("validate.yml", "qualify"): ("Start the candidate", "backend/var/candidate-config"),
+}
 RUNTIME_LOG_SUMMARY_STEPS: Final = {
     "work": ("Prompt cache log summary", "llama-server.log"),
     "route": ("Router cache log summary", "router.log"),
@@ -194,7 +274,7 @@ CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
 # came to `n_ctx`. Both spellings were read from `tools/server/README.md` in
 # ggml-org/llama.cpp on 2026-08-25.
 METRICS_FILE: Final = "llama-metrics.prom"
-METRICS_ENDPOINT: Final = "http://127.0.0.1:8080/metrics"
+METRICS_ENDPOINT: Final = "http://127.0.0.1:${LLAMA_PORT}/metrics"
 METRICS_SERIES: Final = ("llamacpp:n_busy_slots_per_decode", "llamacpp:n_tokens_max")
 RUNTIME_CANDIDATES: Final = frozenset(
     {
@@ -315,6 +395,36 @@ def _string_list(value: object, description: str) -> list[str]:
 def _dispatch_inputs(workflow: dict[str, object]) -> dict[str, object]:
     dispatch = _mapping(_triggers(workflow).get("workflow_dispatch"), "workflow_dispatch")
     return _mapping(dispatch.get("inputs"), "workflow_dispatch inputs")
+
+
+def _declared_dispatch_inputs(workflow: dict[str, object]) -> dict[str, object]:
+    """The dispatch inputs a workflow declares, and `{}` when it declares none.
+
+    `ci.yml` and `pages.yml` take a dispatch with no form at all, so the
+    enumeration below has to tell "no inputs" apart from "a shape nobody wrote
+    down" rather than failing on the first workflow it reads. A key with no
+    value loads as the empty string, not as `None`.
+    """
+    dispatch = _triggers(workflow).get("workflow_dispatch")
+    if not dispatch:
+        return {}
+    inputs = _mapping(dispatch, "workflow_dispatch").get("inputs")
+    if not inputs:
+        return {}
+    return _mapping(inputs, "workflow_dispatch inputs")
+
+
+def _run_bodies(workflow: dict[str, object]) -> list[str]:
+    return [
+        script
+        for job_name in _mapping(workflow.get("jobs"), "jobs")
+        for step in _steps(workflow, job_name)
+        if isinstance(script := step.get("run"), str)
+    ]
+
+
+def _names_the_input(text: str, name: str) -> bool:
+    return re.search(rf"inputs\.{re.escape(name)}\b", text) is not None
 
 
 def _job(workflow: dict[str, object], name: str) -> dict[str, object]:
@@ -537,6 +647,57 @@ def _run_the_models_step(script: str, config_root: Path) -> dict[str, str]:
         for line in result.stdout.splitlines()
         if line
     )
+
+
+def _decide_script(step: dict[str, object]) -> str:
+    """digest.yml's `decide` step, with its one remaining expression resolved.
+
+    A scheduled run passes no inputs at all, so `faithfulness` stands in as the
+    empty string a schedule really delivers. Nothing else may be an expression:
+    the date has to arrive as a variable, or the pattern below it is reading a
+    script somebody else already edited.
+    """
+    script = _script(step, "digest.yml/plan/decide").replace(
+        _expression("inputs.faithfulness"), ""
+    )
+    assert "${{" not in script, "the decide step reads the dispatch date by name, not by paste"
+    return script
+
+
+def _run_the_decide_step(
+    dispatch_date: str, tmp_path: Path
+) -> tuple[subprocess.CompletedProcess[str], dict[str, str]]:
+    """Run the shipped `decide` step against one dispatch value, and read its output.
+
+    The step redirects into `$GITHUB_OUTPUT`, so that file IS what the rest of
+    the run reads. Running the shipped bytes is what makes this a test of the
+    step rather than of a second copy of its pattern.
+    """
+    bash = _bash()
+    assert bash is not None
+    workflow = _load_workflows()["digest.yml"]
+    step = _step(workflow, "plan", "id", "decide")
+    script = tmp_path / "decide.sh"
+    script.write_text(_decide_script(step), encoding="ascii", newline="\n")
+    written = tmp_path / "github-output"
+    written.write_text("", encoding="ascii")
+    completed = subprocess.run(
+        [bash, script.as_posix()],
+        cwd=tmp_path,
+        env={
+            **os.environ,
+            DECIDE_ENV: dispatch_date,
+            "GITHUB_OUTPUT": written.as_posix(),
+        },
+        capture_output=True,
+        text=True,
+    )
+    outputs = dict(
+        cast(tuple[str, str], tuple(line.split("=", 1)))
+        for line in written.read_text(encoding="utf-8").splitlines()
+        if line
+    )
+    return completed, outputs
 
 
 def _grep_pattern(script: str, description: str) -> re.Pattern[str]:
@@ -834,6 +995,119 @@ def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
 
     for filename in ("backfill.yml", "digest.yml", "measure.yml", "validate.yml"):
         assert {"pull_request", "push"}.isdisjoint(_triggers(workflows[filename]))
+
+
+def test_every_dispatch_input_is_shaped_before_anything_acts_on_it() -> None:
+    """A dispatch form is free text unless somebody constrained it, and a wrong
+    value here is not loud - it is a run that finishes and publishes to an
+    address nobody looks at.
+
+    Discovery is closed-world. A new input turns up here whether or not anybody
+    remembered it, and fails until it is written down as an enumeration, as a
+    value read by name, or with the pattern the workflow matches it against.
+    """
+    workflows = _load_workflows()
+    found = {
+        (filename, name)
+        for filename, workflow in workflows.items()
+        for name in _declared_dispatch_inputs(workflow)
+    }
+    assert found == set(DISPATCH_INPUT_SHAPES), (
+        "a dispatch input was added or removed without saying how its value is shaped"
+    )
+
+    for (filename, name), shape in sorted(DISPATCH_INPUT_SHAPES.items()):
+        workflow = workflows[filename]
+        where = f"{filename} input {name}"
+        declared = _mapping(_declared_dispatch_inputs(workflow)[name], where)
+        if shape == DISPATCH_CHOICE:
+            assert declared.get("type") == "choice", f"{where} must be a choice"
+            assert _string_list(declared.get("options"), f"{where} options"), (
+                f"{where} is a choice with nothing to choose from"
+            )
+            continue
+        if shape == DISPATCH_BOOLEAN:
+            assert declared.get("type") == "boolean", f"{where} must be a boolean"
+            continue
+        if shape == DISPATCH_READ_BY_NAME:
+            assert not any(_names_the_input(body, name) for body in _run_bodies(workflow)), (
+                f"{where} is read by name, so it may not be pasted into a script"
+            )
+            assert any(
+                _names_the_input(str(value), name)
+                for _, scope in _every_env(workflow)
+                for value in scope.values()
+            ), f"{where} must reach a step through env"
+            continue
+        assert shape.startswith("^") and shape.endswith("$"), (
+            f"{where}: an unanchored pattern matches a prefix, which is not a shape"
+        )
+        assert any(f"=~ {shape}" in body for body in _run_bodies(workflow)), (
+            f"{where} must be matched against {shape} before anything acts on it"
+        )
+
+
+@requires_bash
+def test_a_scheduled_run_still_decides_its_own_date(tmp_path: Path) -> None:
+    """The pattern runs after the default, so the automatic path is the one it
+    is proved against. A schedule passes no inputs at all, and a guard that
+    rejected the empty string would take down every run this workflow makes.
+    """
+    before = datetime.datetime.now(datetime.UTC).date().isoformat()
+    completed, outputs = _run_the_decide_step("", tmp_path)
+    after = datetime.datetime.now(datetime.UTC).date().isoformat()
+
+    assert completed.returncode == 0, completed.stderr
+    assert outputs["date"] in {before, after}, "a scheduled run dates itself in UTC"
+    assert outputs["day_dir"] == f"frontend/public/digest/{outputs['date'].replace('-', '/')}"
+    assert outputs["faithfulness"] == "true"
+
+
+@requires_bash
+def test_a_dispatched_date_becomes_the_day_it_names(tmp_path: Path) -> None:
+    completed, outputs = _run_the_decide_step("2026-08-25", tmp_path)
+
+    assert completed.returncode == 0, completed.stderr
+    assert outputs["date"] == "2026-08-25"
+    assert outputs["day_dir"] == "frontend/public/digest/2026/08/25"
+
+
+@requires_bash
+@pytest.mark.parametrize("dispatched", UNPUBLISHABLE_DATES)
+def test_a_date_that_is_not_a_day_stops_before_it_costs_a_run(
+    dispatched: str, tmp_path: Path
+) -> None:
+    """Each of these reads as a date and publishes as a directory nobody visits.
+    None of them fails anywhere else: the stages take the string, the commit
+    lands, and the day is simply not where the site looks for it.
+    """
+    completed, outputs = _run_the_decide_step(dispatched, tmp_path)
+
+    assert completed.returncode == 1, f"{dispatched!r} was accepted as a day"
+    assert "YYYY-MM-DD" in completed.stderr
+    assert outputs == {}, "a rejected date must not become a fact the run reads"
+
+
+def test_the_gates_job_lints_the_shell_it_ships() -> None:
+    """`ruff` and `mypy` stop at Python. The one script under .github/scripts/
+    is the retry loop both daily commit steps run, and a bug in it costs a whole
+    day's digest - so it gets a linter of its own, from the same manifest that
+    pins the other two.
+    """
+    steps = _steps(_load_workflows()["ci.yml"], "gates")
+    step = _step(_load_workflows()["ci.yml"], "gates", "name", SHELLCHECK_STEP)
+    assert _script(step, f"ci.yml/gates/{SHELLCHECK_STEP}").strip() == SHELLCHECK_COMMAND
+
+    names = [item.get("name") for item in steps]
+    assert names.index("Install") < names.index(SHELLCHECK_STEP), (
+        "shellcheck arrives as a dev dependency, so the install has to run first"
+    )
+    manifest = tomllib.loads(read_text(REPO_ROOT / "pyproject.toml"))
+    dev = manifest["project"]["optional-dependencies"]["dev"]
+    assert any(requirement.startswith("shellcheck-py") for requirement in dev), (
+        "the linter is pinned by the manifest, not fetched by the step"
+    )
+    assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
 def test_assemble_holds_the_site_to_its_weight_before_it_pushes() -> None:
@@ -1955,6 +2229,114 @@ def test_every_setup_python_pin_is_inside_the_declared_interpreter_range() -> No
         assert match is not None, f"{where} must pin a major.minor, not {version}"
         minor = (int(match.group(1)), int(match.group(2)))
         assert floor <= minor < ceiling, f"{where} pins {version}, outside {declared}"
+
+
+def _server_starters(
+    workflows: Mapping[str, dict[str, object]],
+) -> dict[tuple[str, str], str]:
+    """Every step that reaches `server_argv`, found by reading, not by listing.
+
+    A step that stands a server up any other way is a second answer to what the
+    run executes, so the set this returns is compared by equality.
+    """
+    found: dict[tuple[str, str], str] = {}
+    for filename, workflow in workflows.items():
+        for job_name in _mapping(workflow.get("jobs"), "jobs"):
+            for step in _steps(workflow, job_name):
+                script = step.get("run")
+                if not (isinstance(script, str) and "server_argv" in script):
+                    continue
+                name = step.get("name")
+                assert isinstance(name, str), f"{filename}/{job_name}: name the step"
+                where = (filename, job_name)
+                assert where not in found, f"{filename}/{job_name} starts two servers"
+                found[where] = name
+    return found
+
+
+def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
+    """The Oracle. One function spells a llama-server flag and everything reaches it.
+
+    `backend/utilities/llama_server_argv.py` was a second copy of that list. It
+    existed for one reason: `digest.yml` started its server before
+    `pip install -e .` ran, so the package was not importable yet. The install
+    moved one step earlier and the copy went. While it existed the two halves
+    drifted, and the arm that drifted was the one nobody diffed - `validate.yml`
+    qualified a candidate on a server the daily run does not run.
+
+    The install ordering is the whole reason, so it is asserted here rather than
+    left as a comment: a job that installs after it starts is a job that needs a
+    second copy again.
+    """
+    workflows = _load_workflows()
+    starters = _server_starters(workflows)
+    assert starters == {where: name for where, (name, _) in SERVER_STARTERS.items()}
+
+    for (filename, job_name), (step_name, config_root) in sorted(SERVER_STARTERS.items()):
+        where = f"{filename}/{job_name}/{step_name}"
+        names = [step.get("name") for step in _steps(workflows[filename], job_name)]
+        assert "Install" in names, f"{where} must install the package it imports"
+        assert names.index("Install") < names.index(step_name), (
+            f"{where} imports idhazh, so the install runs first"
+        )
+
+        script = _script(_step(workflows[filename], job_name, "name", step_name), where)
+        assert "from idhazh.llm.server import server_argv" in script, where
+        if config_root is None:
+            continue
+        assert f'config.load(Path("{config_root}"))' in script, f"{where} reads {config_root}"
+        # NUL-separated, so a flag value carrying a space stays one argument.
+        assert "mapfile -d '' LLAMA_ARGV" in script, where
+        assert 'port=int(os.environ["LLAMA_PORT"])' in script, where
+
+    # The other side of the same Oracle: no command a runner executes renders
+    # the list itself. Only `run:` scripts are read, because a dispatch-form
+    # description that names `-tb` tells an operator what an input tunes and
+    # starts nothing.
+    flags = llama_server_flags()
+    for filename, workflow in sorted(workflows.items()):
+        for job_name in _mapping(workflow.get("jobs"), "jobs"):
+            for step in _steps(workflow, job_name):
+                body = step.get("run")
+                if not isinstance(body, str):
+                    continue
+                where = f"{filename}/{job_name}/{step.get('name')}"
+                commands = _uncommented(body)
+                for flag in flags:
+                    # A whole token: `-fa` sits inside `fail-fast`, so a
+                    # substring search reports a flag nobody wrote.
+                    spelled = re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", commands)
+                    assert not spelled, f"{where} spells {flag} instead of importing it"
+
+
+@pytest.mark.parametrize("filename", ["digest.yml", "validate.yml"])
+def test_the_loopback_port_is_declared_once_per_workflow(filename: str) -> None:
+    """Nine literals in one file and three in another, all saying 8080 (Rule #6).
+
+    Every one of them had to move together or the job broke in a way that reads
+    as an unreachable model. One declaration, and the argv, the probes and the
+    client all read it.
+    """
+    text = read_text(WORKFLOWS_DIR / filename)
+    assert text.count(LLAMA_PORT_VALUE) == 1, f"{filename} must name the port once"
+
+    workflow = _load_workflows()[filename]
+    for scope, env in _every_env(workflow):
+        if scope == "workflow":
+            assert env.get(LLAMA_PORT_ENV) == LLAMA_PORT_VALUE, f"{filename} declares the port"
+            continue
+        assert LLAMA_PORT_ENV not in env, f"{filename}/{scope} declares a second port"
+
+    for job_name in _mapping(workflow.get("jobs"), "jobs"):
+        for step in _steps(workflow, job_name):
+            script = step.get("run")
+            if not (isinstance(script, str) and "127.0.0.1" in script):
+                continue
+            where = f"{filename}/{job_name}/{step.get('name')}"
+            assert LLAMA_PORT_READ in script, f"{where} must read the declared port"
+            assert not re.search(r"127\.0\.0\.1:(?!\$\{LLAMA_PORT\})", script), (
+                f"{where} names a port of its own"
+            )
 
 
 def test_every_inference_job_names_its_host_binary_and_weights() -> None:

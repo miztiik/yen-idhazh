@@ -71,13 +71,38 @@ Optimising for faithfulness alone therefore drives the system toward bland copyi
 | **Unsupported numbers** | A figure the summary asserts that appears nowhere in the full article. Coverage sees an *omitted* number and is structurally blind to an *invented* one, and a wrong figure is the most damaging thing a news summary can carry. |
 | **Dropped hedge** | The source said "reportedly" and the summary said it flat. A rumour became a fact. Faithfulness marks this generously, because the entity and the relation are both present - only the uncertainty went missing. |
 | **Extractiveness** | How much of the summary is lifted verbatim, as 4-gram overlap plus the longest unbroken copied run. High extractiveness *plus* high faithfulness means copying, not summarizing. |
+| **Self-repetition** | How much of the summary is a phrase the summary already used. Every counterweight above reads our summary against the *article*; this one reads it against *itself*. **Recorded, never flagged** - see below. |
 | **Compression** | Summary length over source length. **Recorded, never flagged** - see below. |
 
 These are deterministic and cost effectively nothing, which is why they are preferred over an additional model pass. They also run whether or not a faithfulness model is available, which makes them the floor the whole instrument rests on rather than an accessory to it.
 
+## The one column that reads the summary against itself
+
+Every metric above compares our summary to the article, so a summary that says the same clause three times scores clean on all of them. It is the only defect here that reads *better* on every other instrument the worse it gets: a repeated sentence is still perfectly supported by the source, so faithfulness rises, and the repeat is still not copied from the article, so extractiveness does not move.
+
+Greedy decoding is what makes it possible. At temperature zero a model that falls into a loop has no sampling noise to break out of it, so it says the same clause again until the token budget runs out.
+
+**`self_repetition` is the share of the summary's four-word windows that repeat a window it already used.** In plain words: how much of what you are reading, you have already read. Zero means every four-word window in the summary is different, which is what ordinary prose looks like - it is the value a good summary and a bad-but-varied summary both get, so the direction that is bad is *up*.
+
+The window is four words, the same size as extractiveness, because two n-gram sizes in one file are two numbers a reader has to reconcile.
+
+What the numbers mean, measured 2026-08-26 on the fixtures in `backend/tests/test_evals.py`:
+
+| Summary | `self_repetition` | What it is |
+| --- | --- | --- |
+| Ordinary prose | **0.000** | The zero point. Nothing is said twice. |
+| One four-word phrase said three times in 100 words | **0.021** | Two of 97 windows on repeat. A wobble. |
+| One six-word clause said three times in 26 words | **0.391** | A loop. This is what the column exists for. |
+
+**It is recorded and never banded.** No threshold reads it and no reader sees it. The moment a band reads the column it becomes a promise to a reader, and re-cutting a band is a separate decision that needs human labels the ledger does not have yet - see [The human labels](#the-human-labels-the-instrument-and-what-it-still-needs).
+
+**It did not move `metrics-3`.** The scorer version folds `METRICS_VERSION` in, and this page requires ten distinct run-days at one `scorer_version` before any threshold moves. A column that no band and no derived column reads changes nothing a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. `compression` is the precedent: recorded, diagnostic, and not a pass/fail input.
+
+**This is not the ranker's `repetition_weight`, and the names collide.** `collect.repetition_weight` in [config.md](config.md) is a *ranking* knob: `backend/idhazh/rank.py` multiplies a story's authority by `1 + repetition_weight * (carriers - 1)`, so it rewards a story that **several sources** carried. That is repetition across the web. `self_repetition` is repetition inside one summary we wrote. They share a word and nothing else.
+
 ## Two columns that score the article, not the summary
 
-Every metric above compares our summary to the article. None of them asks what the article was worth. A faithful, well-covered, correctly-hedged summary of an unsourced rumour scores high on all of them and is still an unsourced rumour.
+Everything so far scores our summary - against the article, or against itself. None of it asks what the article was worth. A faithful, well-covered, correctly-hedged summary of an unsourced rumour scores high on all of them and is still an unsourced rumour.
 
 Two columns measure the source itself. Both are marker counts over the article's own words, and both are recorded rather than banded:
 
@@ -289,6 +314,10 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 
 **A re-observation writes no row (2026-08-24).** The page has said since it was written that an item whose inputs did not change writes no row at all, and the writer did not enforce it. The rule was the better one - a ledger of measurements, not of times the pipeline looked - so the code changed. Authority: Fowler, closing known defect 6.
 
+**One column reads the summary against itself (2026-08-26).** Eleven quality columns, and every n-gram machine in `backend/idhazh/evals/metrics.py` intersected the summary's n-grams with the *source's*. Nothing could see a summary that repeated itself, which greedy decoding makes possible and which every other column scores *better* on the worse it gets. Proved on committed fixtures rather than argued: two 26-word summaries of the same article, one saying a clause three times and one saying it once, score exactly equal on `extractiveness` (0.000), `verbatim_run` (0.077) and `coverage` (0.333), and 0.000 against 0.391 on the new one. Authority: Andre's blind-spot finding; nullable and appended, Fowler's layout rule.
+
+**`METRICS_VERSION` did not move for it (2026-08-26).** The constant is folded into `scorer_version`, and this page requires ten distinct run-days at one `scorer_version` before a threshold can move. The count stands at 1 of 10. A column no band and no derived column reads changes nothing that a row written under `metrics-3` says, so bumping would have spent a banked run-day to record a fact about nothing. Authority: Andre.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -298,6 +327,12 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 | Delete the four duplicate rows the old writer left in the ledger | They are an honest record of a run that really did re-summarize those items. The ledger is append-only, and rewriting history to make a denominator tidier is the band-aid, not the fix. | Fowler |
 | Store `band_reason` on the eval row as well | It is derivable from four columns already on the row, and adding a column to a committed append-only CSV is a migration bought for nothing. | Fowler |
 | Print both reasons when both counterweights fail | Two sentences on one item in a meta row is a paragraph. A reader gets one thing to check. | Reader |
+| Bump `METRICS_VERSION` to 4 for `self_repetition` | It sits inside `scorer_version`, so it would restart the ten-run-day count this page requires before any threshold can move - to record a fact no threshold reads. `compression` is the precedent: recorded, diagnostic, not a pass/fail input. | Andre |
+| Give `self_repetition` its own n-gram size | Two window sizes in one file are two numbers a reader has to reconcile, and 4 is already the size the extractiveness figure on this page is stated at. | Andre |
+| Band `self_repetition`, or alarm on it | The moment a band reads it, it is a promise to a reader and a threshold decision - and no threshold may move until the labels exist. Recorded first, banded later or never. | Andre |
+| Detect the loop at generation time and retry at a non-zero temperature | That turns the monitor into the selector, which is the first of the two rules above. It also changes what the digest publishes to fix a fault nobody has counted yet. | Andre |
+| Point `verbatim_run` at the summary instead of the source | It is the column that names copying from the article. Repurposing it would delete a measurement to buy a different one and would silently change what every historical row means. | Fowler |
+| Put the measurement on the item-health row | Item health records what a stage *did* with an item. This is a property of the words that came out, which is what the eval ledger is. | Fowler |
 
 ## Why this is a census and not a sample
 
@@ -631,6 +666,8 @@ Any of the four differing makes it a new measurement and it lands: different wor
 Four rows written before this rule are still committed - four items on 2026-08-23 that a second day re-summarized because `state/published.csv` had no record of the day before. They are honest history and stay. Anything counting the whole ledger de-duplicates on those four columns first.
 
 The 2026-08-23 repair kept positions stable. It measured `state/scores.csv` with Python's `csv` module: 33 header names and 19 data rows, all with 33 cells. Ten historical rows predated `score_ms`, so they now carry the contract default `0`. All 19 rows predated `evidential_density` and `speculative_density`, so those cells stay empty as CSV nulls.
+
+**Adding a column is a data migration, every time.** `self_repetition` landed on 2026-08-26 and the committed ledger moved with it in the same commit: one name on the header line and one empty cell on each of 2,116 data rows. Measured before and after - the file went from 1,548,111 to 1,550,243 bytes, which is 2,117 commas plus the 15 characters of the column name and not one byte more, and the line count did not change. The rows are padded rather than left short because the contract test above fails a row whose cell count differs from its header, and empty is the honest cell: those rows were scored by a build that never measured the thing.
 
 **The row is self-describing.** It carries the date, the source link and the title, not only the scores - so that a row still means something after the day it describes has been pruned from the published site. Those columns exist from the first row, because adding them after a prune cannot recover what was already lost.
 

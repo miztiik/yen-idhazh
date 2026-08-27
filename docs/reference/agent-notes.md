@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -76,6 +76,27 @@ $env:PYTHONPATH='<absolute path to your worktree>\backend'
 Print that path before every gate run. If it does not name your worktree, every
 result after it is about somebody else's code. Verified 2026-08-25 across ten
 worktrees.
+
+**A header migration cannot survive a rebase, because `state/*.csv` is
+`merge=union`.** Union merge keeps every line from both sides, which is exactly
+right for an append-only ledger and exactly wrong for a file whose every line
+changed. Rebase a branch that widened `state/scores.csv` and git hands back both
+copies concatenated - main's 2,232 narrow rows, then your header again as row
+2,233, then your 2,232 wide rows. Measured 2026-08-27: 4,349 data rows where
+2,232 were expected, and the tell was a data row whose `run_id` cell read
+`run_id`.
+
+Do not resolve it by hand. Take the tip's copy and redo the migration on top:
+
+```powershell
+git checkout origin/main -- state/scores.csv
+<re-run your migration script>
+```
+
+Migrate in the commit you push and expect to redo it on every rebase. Two
+guards make the redo safe: refuse to write unless an unmodified read-write
+round trip is byte-identical, and refuse if the rows are not all one width -
+the second one is what catches the doubled file.
 
 **`origin/main` moves under you.** The scheduled pipeline pushes `plan:` and
 `digest:` commits to `main` several times an hour, and the editor auto-fetches.
@@ -488,7 +509,18 @@ contends with the first.
   treats as message content.
 - **`git show <ref>:<path> | Set-Content` writes CRLF**, so a following
   `git diff --no-index` reports every line as changed. Compare in memory
-  instead.
+  instead. Adding `-NoNewline` is worse, not better: PowerShell splits the git
+  output into an array of lines and `-NoNewline` joins them with nothing, so a
+  Python file arrives as one line and fails to import while the copy still
+  reports success. To put a path back to another revision byte for byte, use
+  `git restore --source=<ref> --worktree -- <path>`, which touches no encoding
+  and leaves the index alone.
+- **`git add -- $paths` with a PowerShell array stages nothing and does not
+  say so.** The following `git commit` then lands one file instead of twelve.
+  Spell the paths out as separate arguments, and read
+  `git diff --cached --name-status` before committing - `git status --short`
+  puts a staged change in column 1 and an unstaged one in column 2, and the
+  two are one space apart.
 - **`npm` and `npx` are not on `PATH` in a freshly spawned terminal.** Use the
   absolute `C:\Program Files\nodejs\npx.ps1`.
 - **A sync terminal call can return "Command produced no output" without having

@@ -56,6 +56,15 @@ dev = [
     # One observation, so no spread. Beneficiary: workflow routing regression gate.
     "PyYAML>=6.0",
     "ruff>=0.9",
+    # ShellCheck for .github/scripts/. It arrives as a wheel so the same
+    # manifest that pins ruff and mypy pins it; a CI step that downloaded the
+    # binary would be an unpinned fetch, which is the shape this repository has
+    # already had to remove once. Dev-only; measured 2026-08-27 on Windows 11,
+    # Python 3.12: 34782285 installed bytes across 8 files, from an 8.0 MB
+    # wheel. One observation, so no spread, and a Linux runner installs a
+    # different wheel. The bytes are a statically linked Haskell binary.
+    # Beneficiary: the commit-and-push loop both daily jobs run.
+    "shellcheck-py>=0.10",
 ]
 # Only for backend/utilities/bench_image.py, which times CPU diffusion models on
 # a runner. Multi-hundred-megabyte wheels, so they are never in the default set.

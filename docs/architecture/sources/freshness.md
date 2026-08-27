@@ -95,6 +95,18 @@ at the observed rate. It needs its own plan, its own migration and its own
 rewrite of the committed ledger. It is recorded here so nobody re-derives the
 byte arithmetic, and so nobody removes the column believing it costs nothing.
 
+**The reader would not notice the column leave; the writer would refuse it.**
+Reading by name is the whole of it: `load_published` returns the same mapping
+from a five-column file and from a four-column one, measured 2026-08-26 over two
+fixtures of eleven real rows in
+`backend/tests/test_ledger.py::test_load_published_answers_the_same_from_either_header`.
+The header equality check `require_matching_header` is called from `_append` and
+from nothing on the read path, so it is the append that would stop - a run that
+tried to write a four-column row onto the committed five-column file raises
+`Migrate the ledger before appending to it`. A migration therefore rewrites the
+committed ledger in the same commit that narrows the contract, and needs no
+read-side transition at all.
+
 ## An item's name comes from its address
 
 `item_id` is `<vertical>-<ten digits>`, derived from the URL key and nothing else.

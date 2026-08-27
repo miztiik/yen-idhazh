@@ -64,6 +64,10 @@ env:
   LLAMA_CPP_BUILD: b10598
   LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
   LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+  # The one place this workflow says which port. `server_argv` binds it, every
+  # probe below reads it, and `idhazh.llm.server` reads it for the address the
+  # stage posts to - so the three cannot disagree (Rule #6).
+  LLAMA_PORT: '8080'
 
 jobs:
   plan:
@@ -94,10 +98,31 @@ jobs:
         run: pip install -e .
 
       - id: decide
+        env:
+          # Through `env`, not pasted into the program below. A value read by
+          # name is a value, whatever it contains.
+          DISPATCH_DATE: ${{ inputs.date }}
         run: |
           set -euo pipefail
-          DATE="${{ inputs.date }}"
+          DATE="${DISPATCH_DATE:-}"
           [ -n "$DATE" ] || DATE=$(date -u +%F)
+          # The shape check runs AFTER the default, so one pattern covers both
+          # paths and the scheduled one is the case it is proved against:
+          # `date -u +%F` writes 2026-08-27 and the pattern accepts it. The
+          # month and the day are bounded as well as counted, because
+          # 2026-13-45 is as publishable as 2026-08-27 and nothing downstream
+          # reads either one as a calendar date.
+          #
+          # This is a correctness check, not a permission check. Dispatching
+          # this workflow already needs write access, so the person typing the
+          # date could commit to `main` by hand. What they cannot see is the
+          # cost of a typo: `2026-8-27`, or a trailing space, publishes a day
+          # directory at an address no reader and no archive page will ever
+          # look at, silently, after a run of about three hours.
+          if ! [[ "$DATE" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]]; then
+            echo "date must be YYYY-MM-DD, and it becomes the day's address" >&2
+            exit 1
+          fi
           # A scheduled run has no inputs at all, so every one of these is the
           # empty string and every one needs its default here. `faithfulness`
           # is normalized to a STRING for the same reason: read as a boolean,
@@ -215,6 +240,18 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      # Before anything that imports `idhazh`, which now includes the step that
+      # builds the server command. It used to run after that step, and the whole
+      # reason a second copy of the flag list existed was to be readable from a
+      # job that had not installed the package yet.
+      - name: Install
+        run: |
+          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
+            pip install -e .
+          else
+            pip install -e ".[faithfulness]"
+          fi
+
       - uses: actions/download-artifact@v8
         with:
           name: plan
@@ -301,49 +338,52 @@ jobs:
           echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.summarize_file }}" | sha256sum --check
 
       - name: Start the model
+        env:
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.summarize_file }}
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
-          MODEL_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["id"])')
-          MODEL_ARGV=$(python backend/utilities/llama_server_argv.py --config config \
-            --binary backend/bin/llama-server \
-            --weights "backend/models/${{ needs.plan.outputs.summarize_file }}" \
-            --alias "$MODEL_ALIAS" \
-            --format shell)
-          mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py --config config \
-            --binary backend/bin/llama-server \
-            --weights "backend/models/${{ needs.plan.outputs.summarize_file }}" \
-            --alias "$MODEL_ALIAS" \
-            --format nul)
-          echo "starting: $MODEL_ARGV"
+          mkdir -p backend/var
+          python - <<'PY' > backend/var/llama-argv
+          import os
+          import sys
+          from pathlib import Path
+
+          from idhazh import config
+          from idhazh.llm.server import server_argv
+
+          settings = config.load(Path("config"))
+          argv = server_argv(
+              binary=Path("backend/bin/llama-server"),
+              weights=Path(os.environ["LLAMA_WEIGHTS"]),
+              model=settings.app.models.summarize,
+              inference=settings.app.models.inference,
+              port=int(os.environ["LLAMA_PORT"]),
+          )
+          sys.stdout.write("\0".join(argv) + "\0")
+          PY
+          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
+          echo "starting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
           echo "$!" > llama-server.pid
           sleep 2
           kill -0 "$(cat llama-server.pid)" || {
-            echo "llama-server exited before install" >&2
+            echo "llama-server exited before it could answer" >&2
             tail -50 llama-server.log >&2
             exit 1
           }
-
-      - name: Install
-        run: |
-          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
-            pip install -e .
-          else
-            pip install -e ".[faithfulness]"
-          fi
 
       - name: Check model health
         run: |
           set -euo pipefail
           for _ in $(seq 1 120); do
-            curl -sf http://127.0.0.1:8080/health && break
+            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
             sleep 5
           done
           # Assert it, do not hope. Without this the loop simply ends, every
           # item fails as "model unreachable", and the run publishes an empty
           # day that looks like a quiet news day.
-          curl -sf http://127.0.0.1:8080/health > /dev/null || {
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
             echo "llama-server never became healthy" >&2
             tail -50 llama-server.log >&2
             exit 1
@@ -352,16 +392,16 @@ jobs:
           # answers for, and every summary and eval row is filed under the
           # config alias whether or not the server agrees.
           MODEL_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["id"])')
-          curl -sf http://127.0.0.1:8080/v1/models \
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
             | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
             echo "the server does not serve ${MODEL_ALIAS}" >&2
-            curl -s http://127.0.0.1:8080/v1/models >&2 || true
+            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
             exit 1
           }
-          curl -sf http://127.0.0.1:8080/props \
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/props" \
             | jq -e --arg file "${{ needs.plan.outputs.summarize_file }}" '[.. | strings | select(endswith($file))] | length > 0' > /dev/null || {
             echo "the loaded weights are not ${{ needs.plan.outputs.summarize_file }}" >&2
-            curl -s http://127.0.0.1:8080/props >&2 || true
+            curl -s "http://127.0.0.1:${LLAMA_PORT}/props" >&2 || true
             exit 1
           }
 
@@ -483,9 +523,9 @@ jobs:
       - name: What the server counted
         if: always()
         run: |
-          curl -sf --max-time 30 http://127.0.0.1:8080/metrics -o llama-metrics.prom || true
+          curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
           if [ ! -s llama-metrics.prom ]; then
-            echo "no metrics: llama-server was already gone, or --metrics is off"
+            echo "no metrics: llama-server was already gone, or models.inference.metrics is off"
             exit 0
           fi
           # The whole counter set, so a llama.cpp rename is visible rather than
@@ -540,6 +580,11 @@ jobs:
           cache: pip
           cache-dependency-path: pyproject.toml
 
+      # Before the step that builds the server command, for the same reason the
+      # work job installs early: that step imports `idhazh`.
+      - name: Install
+        run: pip install -e .
+
       # Same key shape as the work job, and the same reason: the fetch below runs
       # only on a miss, so the key is what dates the binary, the weights and the
       # upload of those weights.
@@ -592,32 +637,40 @@ jobs:
           echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.route_file }}" | sha256sum --check
 
       - name: Start the router
+        env:
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.route_file }}
         run: |
           set -euo pipefail
           chmod +x backend/bin/llama-server
-          ROUTE_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["route"]["id"])')
-          ROUTE_ARGV=$(python backend/utilities/llama_server_argv.py --config config \
-            --binary backend/bin/llama-server \
-            --weights "backend/models/${{ needs.plan.outputs.route_file }}" \
-            --alias "$ROUTE_ALIAS" \
-            --format shell)
-          mapfile -d '' LLAMA_ARGV < <(python backend/utilities/llama_server_argv.py --config config \
-            --binary backend/bin/llama-server \
-            --weights "backend/models/${{ needs.plan.outputs.route_file }}" \
-            --alias "$ROUTE_ALIAS" \
-            --format nul)
-          echo "starting: $ROUTE_ARGV"
+          mkdir -p backend/var
+          python - <<'PY' > backend/var/llama-argv
+          import os
+          import sys
+          from pathlib import Path
+
+          from idhazh import config
+          from idhazh.llm.server import server_argv
+
+          settings = config.load(Path("config"))
+          argv = server_argv(
+              binary=Path("backend/bin/llama-server"),
+              weights=Path(os.environ["LLAMA_WEIGHTS"]),
+              model=settings.app.models.route,
+              inference=settings.app.models.inference,
+              port=int(os.environ["LLAMA_PORT"]),
+          )
+          sys.stdout.write("\0".join(argv) + "\0")
+          PY
+          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
+          echo "starting: ${LLAMA_ARGV[*]}"
           LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > router.log 2>&1 &
           echo "$!" > router.pid
           sleep 2
           kill -0 "$(cat router.pid)" || {
-            echo "the router exited before install" >&2
+            echo "the router exited before it could answer" >&2
             tail -50 router.log >&2
             exit 1
           }
-
-      - name: Install
-        run: pip install -e .
 
       - uses: actions/download-artifact@v8
         with:
@@ -634,10 +687,10 @@ jobs:
         run: |
           set -euo pipefail
           for _ in $(seq 1 120); do
-            curl -sf http://127.0.0.1:8080/health && break
+            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
             sleep 5
           done
-          curl -sf http://127.0.0.1:8080/health > /dev/null || {
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
             echo "the router never became healthy" >&2
             tail -50 router.log >&2
             exit 1
