@@ -26,9 +26,13 @@
 	const commit = __BUILD_COMMIT__;
 	const builtOn = __BUILD_DATE__;
 	const short = $derived(commit.slice(0, 7));
+	// The knob is `retention.image_months`, and the job it drives may delete a
+	// rendered chart and nothing else - never a day, never a story, never a link
+	// (docs/architecture/publishing/layout.md). This line used to say days were
+	// removed, which promised the opposite of what the code does.
 	const retention = $derived(
 		facts && facts.retention_window_months > 0
-			? `Days older than ${facts.retention_window_months} months are removed.`
+			? `Charts older than ${facts.retention_window_months} months are deleted.`
 			: 'Nothing is deleted.'
 	);
 </script>

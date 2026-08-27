@@ -1003,6 +1003,13 @@
       "additionalProperties": false,
       "description": "The published surface's knobs.\n\n`sections` is the modularity story: reordering the page is a config edit,\nnot a code change. What is deliberately absent is a per-element layout\nengine - on the surface that matters, a phone, there is no left and no\nright, and a per-reader layout would break the promise that a shared link\nshows the recipient what the sender saw.",
       "properties": {
+        "archive_page_size": {
+          "default": 25,
+          "description": "How many stories the archive's list adds each time a reader asks for more. The day page pages at twelve because a day is short and the reader came to read it; the archive holds thousands and the reader came to find one, so it opens on the same twenty-five the console's failure list does.",
+          "minimum": 1,
+          "title": "Archive Page Size",
+          "type": "integer"
+        },
         "items_per_topic": {
           "default": 3,
           "description": "How many of a topic's stories the all-topics page shows before it links to the rest. One long queue has no usable first screen: its opening items are whichever topic sorts first. Nothing is removed or re-ranked - every item stays one click away on its own topic page.",
@@ -1169,6 +1176,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ui.archive_page_size added, defaulting to 25.",
+      "version": "2026-08-27T02:00",
+      "why": "The archive now lists every published story instead of a row per day, and a list of thousands needs a first screen. The number belongs in config rather than in the page (Rule #6). Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
+    },
     {
       "change": "run.shard_timeout_minutes gained the derivation behind its 150, and digest.yml now reads the work job's timeout from it. Same field, same type, same value.",
       "version": "2026-08-27",
@@ -1372,7 +1384,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-27",
+      "default": "2026-08-27T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1386,5 +1398,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-27"
+  "version": "2026-08-27T02:00"
 }

@@ -174,6 +174,7 @@
     "title_words_min": 6
   },
   "ui": {
+    "archive_page_size": 25,
     "items_per_topic": 3,
     "read_mark_days": 7,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
@@ -189,7 +190,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-26T10:10",
+  "version": "2026-08-27",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

@@ -112,11 +112,33 @@ A month shard is rebuilt whole from the day payloads that are on disk at the tim
 
 The rebuild costs one pass over the month's committed payloads: **88 to 122 milliseconds for 2,237 items**, and about one second projected at the structural ceiling of 24,000, against the assemble job's 20-minute timeout. That is one tenth of one percent of the budget (Rule #2).
 
-The obligation that does need stating: **every writer of a committed day payload owes its month a rebuild.** There are two - the assemble stage and the one-shot `backfill-vectors` command - and both call it. A third would have to.
+The obligation that does need stating: **every writer of a committed day payload owes its month a rebuild.** There are three - the assemble stage, the one-shot `backfill-vectors` command, and `backend/utilities/build_canary_day.py`, which writes twenty fixture days for the browser suite to browse. A fourth would have to.
 
-### Nothing serves it yet
+### The suite rewrote the shard it was meant to project (2026-08-27)
 
-`frontend/public/` is where `backend/` writes and the site reads **through the filesystem at build time**. Only `frontend/static/` is copied into the served bundle, which is why `frontend/scripts/copy-visuals.mjs` stages rendered images and the telemetry projection across. The index has no such staging step, so a browser cannot fetch it today. Whoever makes a page read it adds the staging there, in the commit that earns it.
+The writer was right from its first commit and the shard on `main` was not. It held **one** entry - `ai-01`, "Example Lab releases a smaller model" - against six committed days holding 2,237 items, and no published day holds that item at all. A rebuild over the committed tree produces 2,237 entries and 2,235 vectors, so the arithmetic was never in question.
+
+The cause was the path. `cli.stage_assemble` took the index root from a module constant while every pipeline test redirects `PUBLIC_ROOT` at a temporary tree, so **running the backend suite rebuilt the published shard out of fixture days**, on any machine that ran it. Nothing failed; the file was simply wrong afterwards, and it was committed that way.
+
+The fix is the shape `publish_telemetry` already had: the index root is derived from the digest root at the call site rather than kept as a constant of its own, so a caller that moves the days moves the index with them. Two tests hold it - one that the derived root follows a redirected `PUBLIC_ROOT` out of the repository, and one that the shard on disk names exactly the days on disk. The second is the reader-facing half: the archive lists what that file holds, so a shard that disagrees with the tree is a page listing the wrong stories.
+
+**The general shape is worth more than the instance.** A constant that names an output path is safe only until a caller redirects a *sibling* path, and the failure is silent by construction: the code runs, the file is written, and the only symptom is in a file nobody re-reads.
+
+### How it reaches a browser
+
+`frontend/public/` is where `backend/` writes and the site reads **through the filesystem at build time**. Only `frontend/static/` is copied into the served bundle, which is why [../../../frontend/scripts/copy-visuals.mjs](../../../frontend/scripts/copy-visuals.mjs) stages rendered images and the telemetry projection across. The month index now rides that same step: `<YYYY-MM>.json` is copied into `static/index/` before the build.
+
+**It is staged beside the encoder, never inside it.** `static/assist/` is the on-device encoder and its wasm - authored files, committed, and secondary by contract: the bundle must render complete with that directory deleted ([../../../CLAUDE.md](../../../CLAUDE.md) section 0a), and CI proves it by parking `static/assist`, building, and asserting the bundle carries no `assist/` at all. Browsing the archive is not a model feature. It is how the page lists anything, so the data it needs cannot live in a directory whose whole contract is that it can be removed. The index therefore gets its own top-level tree, the same shape `static/digest/` and `static/telemetry/` already have: one directory per staged projection, ignored by git, rebuilt every build.
+
+**The first placement was inside `static/assist/index/`, and CI caught it the same day.** The staging step ran during `npm run build`, so it recreated `static/assist/` after the gate had parked it, `build/assist` existed, and the gate failed - on a build that had otherwise succeeded. Read as a gate problem it invites an exclusion. It was a path problem: two different things, one directory.
+
+**The sibling `.bin` is not staged.** Nothing fetches a vector yet, and staging it would put megabytes into the bundle for a file no page opens. Whoever makes search read it stages it in the commit that earns it.
+
+**The staging source is derived from the digest root, in the script and in the page loader alike**, because an index is a projection of exactly those days. One switch rather than two is what stops a canary build serving the real archive's stories.
+
+**The archive fetches the index rather than inlining it, and that is the whole point.** Every other committed payload this site renders is read at build time and baked into the HTML, which is right for a day page: the day is bounded and the reader came to read it. The archive is the corpus. Inlining it would grow one document by about 50 gzipped bytes an item forever, which is the defect this index exists to end. The console already settled this shape - a bounded seed in the HTML, older months fetched from `static/` on demand - and the archive uses the same mechanism rather than inventing a second one. What the archive page still carries from its own data is a compact day row, three counts and about twenty topic names: all of it grows per day or per month, none of it per story.
+
+**A missing index is a designed state.** The page falls back to the day row and one plain sentence. It never white-screens ([../../../CLAUDE.md](../../../CLAUDE.md) section 12).
 
 ## Retention
 
@@ -135,6 +157,8 @@ What the job may do: delete rendered visuals older than a configured age, never 
 What it must never touch: a day's JSON payload, a date directory, the eval ledger, the golden fixtures including retired ones, the injection canaries, or any schema changelog. The ledger and the fixtures are three orders of magnitude smaller than the images and are the only reason a year-over-year quality claim can be interpreted at all.
 
 Two promises to the reader, both non-negotiable: **the window is stated before anything is deleted**, on the archive page and on the missing-day page; and a pruned day lands in the designed missing state, **never a silent redirect to today**. A reader who cannot distinguish a dead link from a live one has lost the ability to trust any link.
+
+The archive states it in its own header from 2026-08-27, and **the sentence names what is actually deleted**. The knob is `retention.image_months` and the job it drives may remove a rendered chart and nothing else, so "Charts older than N months are deleted. Every story and every link stays." is the promise, and "Nothing here is deleted." is what ships today at `image_months: -1`. The footer used to say days were removed, which promised the opposite of what the code does; it now says the same thing the archive does, because two sentences disagreeing about deletion on one page is the exact failure this section exists to prevent.
 
 ## The frontend stack
 
@@ -192,6 +216,10 @@ So the blind path stays blind, and each caller that owns a repeat is now named n
 | Omitting an item that has no vector | It disappears from the browse list as well as from search, which is the larger loss. Two of 2,237 committed items are in this state today. |
 | A padded zero vector for an item that has none | It scores against every query. A null says "not searchable"; a zero says "equally close to everything". |
 | An incremental read-modify-write of a shard | Two runs of one day race on it, and the repair for that race is a rebuild - so the rebuild is the only path and the race never exists. |
+| Inlining the month index at prerender time | It is the same defect one order of magnitude smaller: the archive document would still grow about 50 gzipped bytes an item, forever. It also cannot be smoke-tested - "delete the file and reload" needs a runtime fetch to have anything to fail at. |
+| Staging the whole index directory, `.bin` included | Megabytes in the bundle for a file no page opens. It is staged in the commit that reads it. |
+| A second environment switch for the index root | An index is a projection of a specific set of days. Two switches means one of them can be set alone, and a canary build then serves the real archive's stories. |
+| A `latest` symlink or a committed month list | Both are the committed-pointer objection again: the build lists the directory instead. |
 | A per-vector half-precision scale | Two bytes an item to describe a quantisation that is identical for every vector in the file. One header field says it once. |
 | Binary quantisation now | 48 bytes a vector against 384 is real, and what it costs recall is unmeasured. The revisit trigger is written down instead. |
 | DuckDB-WASM, `sql.js` or `wa-sqlite` in the browser | Megabytes of engine to answer a dot product over a file that is already fetched, on a site whose whole point is that the bundle is the runtime. |

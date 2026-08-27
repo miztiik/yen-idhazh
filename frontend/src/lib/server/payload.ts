@@ -42,6 +42,17 @@ export const TELEMETRY_ROOT = process.env.TELEMETRY_ROOT
 	? resolve(process.env.TELEMETRY_ROOT)
 	: join(process.cwd(), 'public', 'telemetry');
 
+/** Where the month indexes are read from.
+ *
+ * Derived from the digest root rather than given a switch of its own, because
+ * an index is a projection of exactly those days. `scripts/copy-visuals.mjs`
+ * derives the staging source the same way, so a canary build cannot end up
+ * listing the real archive's stories.
+ */
+export const INDEX_ROOT = process.env.DIGEST_ROOT
+	? resolve(process.env.DIGEST_ROOT, '..', 'assist', 'index')
+	: join(process.cwd(), 'public', 'assist', 'index');
+
 const DATE_PART = /^\d{2,4}$/;
 
 /** Every published date, newest first. Read from the committed tree, not an index file. */
@@ -174,6 +185,20 @@ export function telemetryMonths(root: string = TELEMETRY_ROOT): string[] {
 		.filter((name) => /^\d{4}-\d{2}\.csv$/.test(name))
 		.map((name) => name.slice(0, 7))
 		.sort();
+}
+
+/** Every month with an index on disk, newest first.
+ *
+ * The names only. The stories inside them are fetched by the browser, which is
+ * what keeps the archive page a fixed size while the corpus grows.
+ */
+export function indexMonths(root: string = INDEX_ROOT): string[] {
+	if (!existsSync(root)) return [];
+	return readdirSync(root)
+		.filter((name) => /^\d{4}-\d{2}\.json$/.test(name))
+		.map((name) => name.slice(0, 7))
+		.sort()
+		.reverse();
 }
 
 const DAY_MS = 86_400_000;
