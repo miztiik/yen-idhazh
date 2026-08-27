@@ -1,6 +1,6 @@
 """Read and append the committed ledgers under `state/`.
 
-Four files, all append-only, all written by CI and read by a later run. They
+Five files, all append-only, all written by CI and read by a later run. They
 exist because the pipeline has no memory of its own: every run starts on a
 fresh machine with a fresh checkout, so anything one run needs to tell the next
 has to be committed (Rule #1).
@@ -29,6 +29,11 @@ row per feed per run, read through `HEALTH_WINDOW_DAYS`, so it shards.
 row per planned item per run - the fastest-growing of the four. The console
 reads it a month at a time through the published projection, so it shards.
 
+`state/runtime-counters.csv` answers "what did the model server itself count?"
+One row per work shard per run, read one run at a time by an audit that carries
+no time window - so it is one file. It is also the slowest-growing: eight shards
+times five runs a day is 40 rows, and a year is 14,600.
+
 No reader fails on a missing file. A fresh clone has no history, and a run with
 no history is a run where nothing was seen, nothing was published and no feed
 has a record yet - which is exactly what an empty result says.
@@ -48,6 +53,7 @@ from typing import Final
 
 from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 
 STATE_DIRNAME: Final = "state"
@@ -55,6 +61,22 @@ SEEN_DIRNAME: Final = "seen"
 HEALTH_DIRNAME: Final = "feed-health"
 ITEM_HEALTH_DIRNAME: Final = "item-health"
 PUBLISHED_FILENAME: Final = "published.csv"
+RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
+
+#: What makes two item-health rows the same record. One row per planned item per
+#: run, which is what the ledger has always meant - written down here because two
+#: stages now write it. The worker commits a row as soon as its item settles, and
+#: assemble writes the whole day's census afterwards, so both see the same item
+#: under the same run and the second one has nothing new to say.
+ITEM_HEALTH_KEY: Final = ("date", "run_id", "item_id")
+
+#: What makes two runtime-counter rows the same record. One work shard, one run.
+#: The counters are cumulative for a server process, so a re-run of a failed job
+#: would append a second row for the same shard and a run-level sum would count
+#: that shard twice. The first row wins, which matches `ITEM_HEALTH_KEY`: a
+#: re-run's items are skipped there too, so the two files stay describing the
+#: same attempt.
+RUNTIME_COUNTERS_KEY: Final = ("date", "run_id", "shard")
 
 #: How far back a health read looks. Not a policy - just enough history to reach
 #: into last month's shard, so a quarantine decided on the first of the month can
@@ -92,6 +114,15 @@ def item_health_path(state_dir: Path, date: str) -> Path:
 
 def published_path(state_dir: Path) -> Path:
     return state_dir / PUBLISHED_FILENAME
+
+
+def runtime_counters_relpath() -> str:
+    """`state/runtime-counters.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{RUNTIME_COUNTERS_FILENAME}"
+
+
+def runtime_counters_path(state_dir: Path) -> Path:
+    return state_dir / RUNTIME_COUNTERS_FILENAME
 
 
 def _shards_in_window(today: str, within_days: int) -> list[str]:
@@ -145,11 +176,17 @@ def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]
       returned. Measured on this checkout 2026-08-27: 2,097 rows and 2,097
       distinct addresses. `load_published` keeps the earliest date, so a repeat
       costs bytes and never moves a publication date.
-    - **feed-health and item-health** - one row per feed, and per planned item,
-      per run. A repeat needs a run to run twice under one `run_id`, which
-      `cli._next_run_n` reads off the committed manifest to prevent. This is the
-      one pair where a repeat is not free: `discover.resting` counts failures to
-      decide a quarantine, so a duplicated failure counts twice.
+    - **feed-health** - one row per feed per run. A repeat needs a run to run
+      twice under one `run_id`, which `cli._next_run_n` reads off the committed
+      manifest to prevent. It is the one caller where a repeat is not free:
+      `discover.resting` counts failures to decide a quarantine, so a duplicated
+      failure counts twice.
+    - **item-health** - two stages write it, so it cannot rely on a caller's own
+      guarantee. `append_item_health` filters against `ITEM_HEALTH_KEY` instead.
+    - **runtime-counters** - one writer, but the row is a cumulative total rather
+      than an event, so a re-run of a failed shard would make a run-level sum
+      count that shard twice. `append_runtime_counters` filters against
+      `RUNTIME_COUNTERS_KEY`.
     """
     if not payloads:
         return 0
@@ -219,9 +256,82 @@ def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> 
 
 
 def append_item_health(state_dir: Path, date: str, rows: Iterable[ItemHealthRow]) -> int:
-    """Append this run's verdict on every planned item."""
-    payloads = [row.csv_row() for row in rows]
+    """Append this run's verdict on every planned item it has not already recorded.
+
+    The only ledger here that filters, because it is the only one with two
+    writers. The `work` job commits a row the moment its item settles, so the
+    rows survive a run that dies before it publishes; `stage_assemble` then
+    writes the whole day's census, which covers the same items again. A repeat is
+    not free: `publish_telemetry` copies every row into the file the console
+    reads, so one duplicated row is one item counted twice on the dashboard.
+
+    `merge=union` on the shard cannot help - it keeps the lines from both sides,
+    which is right for two runs appending different rows and exactly wrong for
+    two writers appending the same one. The filter runs before the write, on the
+    committed file each writer can see.
+
+    Returns how many landed, so a caller can log the count.
+    """
+    already = recorded_item_health(item_health_path(state_dir, date))
+    payloads = []
+    for row in rows:
+        payload = row.csv_row()
+        key = tuple(payload[name] for name in ITEM_HEALTH_KEY)
+        if key in already:
+            continue
+        already.add(key)
+        payloads.append(payload)
     return _append(item_health_path(state_dir, date), ItemHealthRow.csv_columns(), payloads)
+
+
+def recorded_item_health(path: Path) -> set[tuple[str, ...]]:
+    """Every planned item this month's shard already has a verdict for.
+
+    A missing file is a shard with no history, which is what the first run of a
+    month has.
+    """
+    return {tuple(row[name] for name in ITEM_HEALTH_KEY) for row in _read_rows(path)}
+
+
+def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow]) -> int:
+    """Append what each work shard's model server counted. Never windowed.
+
+    Filters against `RUNTIME_COUNTERS_KEY` because the cells are cumulative
+    totals rather than events: a second row for a shard is not a second fact, it
+    is the same shard's tokens added to themselves by whatever pools the run.
+
+    Returns how many landed, so a caller can log the count.
+    """
+    path = runtime_counters_path(state_dir)
+    already = recorded_runtime_counters(path)
+    payloads = []
+    for row in rows:
+        payload = row.csv_row()
+        key = tuple(payload[name] for name in RUNTIME_COUNTERS_KEY)
+        if key in already:
+            continue
+        already.add(key)
+        payloads.append(payload)
+    return _append(path, RuntimeCountersRow.csv_columns(), payloads)
+
+
+def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
+    """Every shard the file already carries a snapshot for."""
+    return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
+
+
+def load_runtime_counters(state_dir: Path, *, run_id: str) -> list[RuntimeCountersRow]:
+    """Every shard's snapshot for one run, in shard order.
+
+    One run at a time, because the question this file answers is about one run.
+    A caller that wants a trend reads several runs and says so.
+    """
+    rows = [
+        RuntimeCountersRow.from_csv_row(row)
+        for row in _read_rows(runtime_counters_path(state_dir))
+        if row["run_id"] == run_id
+    ]
+    return sorted(rows, key=lambda row: row.shard)
 
 
 def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHealthRow]:
