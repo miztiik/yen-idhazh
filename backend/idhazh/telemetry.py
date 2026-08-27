@@ -14,6 +14,33 @@ from idhazh.sanitize import sanitize
 _FORMULA_PREFIXES: Final = ("=", "+", "-", "@", "\t", "\r")
 _HTTP_DETAIL = re.compile(r"^HTTP (?P<status>[0-9]{3})$")
 
+#: Extract signals that end an item without failing it. The article is kept, the
+#: model is never asked, and the row publishes as `ok` carrying the signal.
+DEGRADED_BUT_DONE: Final = frozenset(
+    {FailureCode.TOO_SHORT, FailureCode.NOT_PROSE, FailureCode.BOILERPLATE}
+)
+
+
+def is_final(article: Article | None, summary: Summary | None) -> bool:
+    """Has this item stopped, or is a payload simply not written yet?
+
+    `classify_item` answers for every planned item, including ones nothing ever
+    touched, because assemble needs the denominator in the same file as the
+    count. A worker recording rows while the run is still going needs the
+    narrower question. It writes an article payload for every item it reaches and
+    a summary payload for every item that got as far as the model, so an article
+    the extractor accepted with no summary beside it means the shard stopped
+    mid-item - and a row filed then would record an interruption as a failure
+    that no later run can correct.
+    """
+    if article is None:
+        return False
+    if article.status is not ArticleStatus.OK:
+        return True
+    if article.failure_code in DEGRADED_BUT_DONE:
+        return True
+    return summary is not None
+
 
 def detail_cell(text: str) -> str:
     """Sanitize an unknown-failure detail for a CSV cell."""
@@ -59,11 +86,7 @@ def classify_item(
         )
 
     if summary is None:
-        if article.failure_code in {
-            FailureCode.TOO_SHORT,
-            FailureCode.NOT_PROSE,
-            FailureCode.BOILERPLATE,
-        }:
+        if article.failure_code in DEGRADED_BUT_DONE:
             return _row(
                 planned=planned,
                 date=date,
