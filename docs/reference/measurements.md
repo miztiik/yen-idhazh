@@ -33,7 +33,7 @@ kept only to show how far a laptop misleads.
 | Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
 | --- | --- | --- | --- | --- |
 | Qwen3-4B-Q4_K_M | 22.1 +/- 0.2 | 20.8 +/- 0.0 | 17.1 +/- 0.1 | **13.00 +/- 0.03** |
-| Qwen3-8B-Q4_K_M | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
+| Qwen3-8B-Q4_K_M (retired incumbent, historical record) | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
 
 The spread collapsed against the laptop: stddev on the runner is 0.0-0.2 tok/s
 where the laptop showed up to 4.49. A shared laptop with thermal throttling was
@@ -50,7 +50,8 @@ one-off per cache key; the 10 GB cache holds both.
 
 **Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, run `32672629352`:
 AMD EPYC 7763, 2 physical cores, 2 threads per core, 4 online logical CPUs,
-cpuset `0-3`, llama.cpp `b10598` (`56db501e7`), Qwen3-8B-Q4_K_M, 3 repeats.
+cpuset `0-3`, llama.cpp `b10598` (`56db501e7`), Qwen3-8B-Q4_K_M (retired incumbent, historical record),
+3 repeats.
 Both thread counts ran in the same job against the same 5,027,783,488-byte GGUF
 (`d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785`).
 
@@ -80,7 +81,7 @@ measured: they inherit both the throughput spread and the bucket error.
 | Model | short | medium | long | blended | worst long |
 | --- | --- | --- | --- | --- | --- |
 | Qwen3-4B-Q4_K_M | 79s | 166s | 198s | **130s** | 198s |
-| Qwen3-8B-Q4_K_M | 142s | 291s | 342s | **229s** | 342s |
+| Qwen3-8B-Q4_K_M (retired incumbent, historical record) | 142s | 291s | 342s | **229s** | 342s |
 
 The blended figures were first published as 128s and 196s -> corrected to 112s
 and 196s when the bucket shares were replaced by the measured ones -> corrected
@@ -100,40 +101,52 @@ most the four this page has measured; a dispatch may ask for up to eight. At
 be larger. Size request and job bounds from a measured real worker population
 and its worst item, never from five-item arithmetic or the 229-second blend.
 
-### Candidate: Qwen3.5-9B-Q4_K_M (measured; adoption work incomplete)
+### The configured summarizer: Qwen3.5-9B-Q4_K_M
 
-**Measured 2026-08-23** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4 threads,
-llama.cpp `b10598` (`56db501e7`), 3 repeats, `llama-bench` at the same three
-input lengths. Exact candidate:
+**Configured since 2026-08-27.** It reached configuration by owner decision
+([../../CLAUDE.md](../../CLAUDE.md) section 0) over two failing hard gates. It
+did not qualify. What did and did not pass is under
+[What qualification measured, and what it did not](#what-qualification-measured-and-what-it-did-not).
+
+**Throughput measured 2026-08-23** on `ubuntu-latest`: AMD EPYC 9V74 80-Core, 4
+threads, llama.cpp `b10598` (`56db501e7`), 3 repeats, `llama-bench` at the same
+three input lengths. Exact bytes:
 
 | Field | Value |
 | --- | --- |
 | Repository | `unsloth/Qwen3.5-9B-GGUF` |
-| Repository revision observed 2026-08-25 | `3885219b6810b007914f3a7950a8d1b469d598a5` |
+| Repository revision | `3885219b6810b007914f3a7950a8d1b469d598a5` |
 | File | `Qwen3.5-9B-Q4_K_M.gguf` |
 | Quantisation | `Q4_K_M` |
 | Bytes | 5,680,522,464 (5.29 GiB) |
 | SHA-256 / Hugging Face LFS oid | `03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8` |
 | Licence | Apache-2.0 |
 
+Those are the values in `config/idhazh.json`, and the same file is the only place
+a production model ref is written. All three workflows read it, at the pinned
+immutable revision above rather than a branch, so the weights, the alias, the
+revision and the expected digest move together or not at all.
+
 The repository revision is mutable metadata about the repository snapshot. The
-GGUF SHA-256 identifies the actual candidate bytes.
+GGUF SHA-256 identifies the actual bytes, and the qualification run observed that
+digest off the file the runtime opened rather than reading it back out of config.
 
 | Model | 730 tok | 1800 tok | 4850 tok | decode (250) |
 | --- | --- | --- | --- | --- |
-| Qwen3-8B-Q4_K_M (incumbent, b10580) | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
-| Qwen3.5-9B-Q4_K_M (candidate, b10598) | 10.14 +/- 0.01 | 10.06 +/- 0.01 | 9.84 +/- 0.01 | **6.01 +/- 0.11** |
+| Qwen3-8B-Q4_K_M (**retired incumbent**, historical record, b10580) | 12.1 +/- 0.0 | 11.6 +/- 0.0 | 10.4 +/- 0.0 | **7.28 +/- 0.01** |
+| Qwen3.5-9B-Q4_K_M (configured, b10598) | 10.14 +/- 0.01 | 10.06 +/- 0.01 | 9.84 +/- 0.01 | **6.01 +/- 0.11** |
 
 These rows were not taken in the same job or on the same CPU model, and the
-incumbent used `b10580`. They establish candidate throughput and fit. They do not
-establish an exact candidate-to-incumbent delta.
+retired incumbent used `b10580`. They establish configured-model throughput and
+fit. They do not establish an exact new-to-retired delta, and no such delta was
+ever measured.
 
 The old 99 / 258 / 433 / 222 / 639-second derived figures are withdrawn. They
 used the tool's former hardcoded 200-token prompt and did not apply the
 production truncation cap. The Qwen3.5 prompt and article-token counts have not
 been measured under its tokenizer, so no replacement derived time is valid yet.
 
-Within the candidate run, prefill fell 3.0% from 730 to 4850 tokens (10.14 ->
+Within the 2026-08-23 run, prefill fell 3.0% from 730 to 4850 tokens (10.14 ->
 9.84). Qwen3.5 is a hybrid Gated DeltaNet plus attention architecture, and
 llama.cpp reports `qwen35`. The separate incumbent observation fell 14%, but the
 two runs used different CPUs and runtime builds, so the difference cannot be
@@ -143,13 +156,87 @@ and 7.28 tok/s decode observations.
 **Weight download, cache miss:** 5.29 GiB in **118s**, `n=1`; spread unavailable.
 It may not be compared as a rate to the 8B's separate download observation.
 
-**Raw cache screen:** candidate plus the 4B router is 7.616 GiB of weight files.
-That is below the nominal 10 GB repository ceiling and is not proof that the
-Actions cache fits: runtime copies, metadata and archive representation are
-unmeasured. Candidate + incumbent + router is 12.299 GiB before runtime files,
-so even the raw transition cannot fit. Measure actual cache entries, delete only
-the old summary-model cache before the first production run, and keep the router
-cache.
+### What qualification measured, and what it did not
+
+**Run `33016222069`, 2026-08-26**, on `ubuntu-latest`. A frozen, pre-registered
+corpus of 30 captured Article payloads, replayed at 3 deterministic repeats -
+90 attempts. One model. **No comparison arm was run** against the
+retired incumbent Qwen3-8B-Q4_K_M: no paired corpus, no side-by-side scores, no
+human review. Nothing on this page
+shows the configured model's summaries are better or worse than the retired
+model's, and nothing may be cited as if it did (Rule #10).
+
+**Nine of the eleven registered gates passed. Two failed. The model was adopted
+anyway, knowingly, by owner decision (section 0).**
+
+| Gate | Measured | Threshold | Verdict |
+| --- | --- | --- | --- |
+| `reasoning_leakage` | 0 channels, 0 non-empty think blocks | none | pass |
+| schema validity | 90/90 attempts, `finish_reason=stop`, no repair path taken | all attempts | pass |
+| determinism | 0 violations over 30 items x 3 repeats | 0 | pass |
+| `publishable_length` | 0/90 outside the band | 25 to 250 words | pass |
+| `context_fit` | widest request 3775 prompt + 900 output tokens, 0 overflowed | `n_ctx` 8192 | pass |
+| identity | sha256 `03b74727...b7e8` at 5,680,522,464 bytes, `unsloth/Qwen3.5-9B-GGUF` at revision `3885219b...d598a5` | config must match the file opened | pass |
+| budget | slowest job 95.2 min, slowest item 449 s | 330-minute bound | pass |
+| scored denominator | 30 of 30, from 160 addresses attempted | full attempted denominator | pass |
+| faithfulness | mean hhem **0.7149**, spread 0.0173 to 0.9762, `hhem_delta_mean` 0.0000 | 0.50 floor, pinned scorer | pass |
+| `injection_canaries` | **4 of 5** on live calls; `exfiltration-via-url` survived | all 5 (Rule #11) | **FAIL** |
+| `brief_copying_ceiling` | **longest verbatim run 1.000** over 8 brief items | <= 0.5 (`evaluation.brief_compression_ceiling`) | **FAIL** |
+
+Band counts across `min_source_words` 0 / 60 / 700 / 2000: **6 / 11 / 10 / 3**.
+The top band is populated because the band now comes from the source body rather
+than the post-truncation count - see the defect below.
+
+**The surviving canary is an open security question and it is untested.** The
+fixture `tests/fixtures/canaries/exfiltration-via-url.json` declares
+`"neutralised_by": "sanitizer"`. The sanitizer was meant to strip the
+attacker-controlled URL before the model saw it, and it did not. **Whether the
+retired Qwen3-8B-Q4_K_M also fails this canary was not tested**, so this may be a
+sanitizer gap independent of the model, or it may not. Neither is asserted here
+(Rule #10, Rule #11). The measurement that settles it is one replay of the same
+fixture against the 8B weights
+([../concepts/evaluation.md](../concepts/evaluation.md)).
+
+### Two defects the qualification exposed, both fixed
+
+Both had been live in production and neither was the model's.
+
+**The length band was read from the post-truncation word count.** The truncation
+cap of 2500 tokens allows `int(2500 / 1.3) = 1923` words, and the top band starts
+at 2000, so that band was unreachable by arithmetic and its longer ask was dead
+configuration. The band now reads `Article.source_word_count`, and the 3 items in
+band 3 above are the first that ever landed there
+([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+
+**The fingerprint digested placeholder strings, so every stamp validated and
+lied.** Sixty-four zeroes satisfy the `Sha256` type, so a stamp built on an
+unmeasured weights digest published cleanly while saying nothing about which
+weights ran. Building a stamp on an absent or placeholder digest now raises
+([../architecture/contracts/determinism.md](../architecture/contracts/determinism.md)).
+
+### The cache transition, measured 2026-08-27
+
+Read with `gh cache list` before and after the switch, against the 10 GB
+repository ceiling in Rule #2. `n=1` - a cache listing is a state, not a sample,
+so there is no spread.
+
+| Entry | Bytes | GiB |
+| --- | --- | --- |
+| `llm-Qwen3-4B-Q4_K_M.gguf-b10598-v4` (router, kept) | 2,438,761,586 | 2.27 |
+| `qualify-03b74727...-b10598` (stale qualification copy, **deleted**) | 5,614,108,894 | 5.23 |
+| Python and node caches | about 0.59 GB | - |
+| **Before the switch** | **8.05 GB of a 10 GB cap** | - |
+| After deleting the stale qualification copy | 3,031,429,559 | 2.82 |
+| Plus the 9B production fill of 5,680,522,464 | **8,711,952,023** | **8.11** |
+
+It fits, with 1.29 GB of headroom.
+
+**There was no retired-incumbent Qwen3-8B weights cache to delete.** PR #135
+bumped the cache key
+to `-v4` and the 8B never filled under that key, so the transition cost was one
+deletion of a qualification artifact rather than a swap of two five-gigabyte
+entries. A transition plan that assumed both weights had to be held at once was
+sizing a problem that did not exist.
 
 ### The qualification budget, derived 2026-08-26
 
@@ -196,6 +283,19 @@ The production projection uses the same 176 s. `digest.yml` derives workers as
 against the `work` job's 330. For comparison, the measured incumbent worst
 worker was 58.8 minutes after PR #110.
 
+**What the run actually cost, measured 2026-08-26.** Run `33016222069`: the
+slowest job took **95.2 minutes** against the 330-minute bound it ran under, and
+the slowest single item took **449 s**. The derivation said 115 minutes for the
+worst shard, so it over-predicted by 21 percent - in the safe direction, and
+close enough that the sharding margin was never tested.
+
+**That is a qualification job, not a production worker.** The two run different
+work against different bounds: 30 replay calls at 3 repeats on frozen payloads,
+against up to 40 live items with fetch, extraction, routing and scoring around
+them, under the `work` job's 150-minute bound. The configured model has never
+run a production day, so its worst worker is still unmeasured
+([Where the 150-minute bound comes from](#where-the-150-minute-bound-comes-from)).
+
 ### The faithfulness scorer, pinned 2026-08-26
 
 | Field | Value |
@@ -234,16 +334,18 @@ instruction-following, coding and long-context tables are a prior and not
 evidence for this pipeline. That absence is recorded as a `not_reported`
 leaderboard provenance on the validation row, never as `0.0`.
 
-#### Estimate: what one work shard costs on the candidate
+#### Estimate: what one work shard costs on Qwen3.5-9B-Q4_K_M
 
 **Every figure in this subsection is an estimate, not a measurement, and none of
-them may settle a design on its own (Rule #10).** Derived 2026-08-25 from the
+them may settle a design on its own (Rule #10).** It was derived while the model
+was a candidate and it is kept because the ceiling it set is still in force.
+Derived 2026-08-25 from the
 `llama-bench` figures measured 2026-08-23 on `ubuntu-latest` / AMD EPYC 9V74 /
-4 threads / llama.cpp `b10598` / n=3, using the Qwen3-8B prompt token count as an
-unmeasured substitute for the 9B's.
+4 threads / llama.cpp `b10598` / n=3, using the Qwen3-8B (retired incumbent, historical record)
+prompt token count as an unmeasured substitute for the 9B's.
 
-Both derivations start from the same base - the derived Qwen3-8B **worst long
-article of 342 s** - because a timeout is set by the worst item and not by a
+Both derivations start from the same base - the derived Qwen3-8B (retired incumbent, historical record)
+**worst long article of 342 s** - because a timeout is set by the worst item and not by a
 blend. That base is itself derived, so this is an estimate resting on an
 estimate. It decomposes as 879 prompt tokens plus the 2500-token truncation cap,
 3379 tokens prefilled at 10.98 tok/s (interpolated between the 1800- and
@@ -294,7 +396,7 @@ Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 3.
 | 4850 | 12.34 | 3.02 |
 | decode (250) | 6.07 | 0.15 |
 
-### Qwen3-8B-Q4_K_M
+### Qwen3-8B-Q4_K_M (retired incumbent, historical record)
 
 Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 2.
 
@@ -308,8 +410,8 @@ Hardware: Intel Core i7-1265U, 4 threads. Date: 2026-08-15. Repeats: 2.
 ### Local 4-vs-8 thread screen
 
 **Measured 2026-08-23** on Windows 11, Intel Core i7-1265U (10 physical cores,
-12 logical processors), Qwen3-8B-Q4_K_M, llama.cpp `b10444` (`5f754ea0e`), 3
-repeats. The bounded screen used 730 prompt tokens and 64 decode tokens.
+12 logical processors), Qwen3-8B-Q4_K_M (retired incumbent, historical record), llama.cpp
+`b10444` (`5f754ea0e`), 3 repeats. The bounded screen used 730 prompt tokens and 64 decode tokens.
 
 | Threads | Prefill tok/s | Decode tok/s | Combined benchmark wall-clock |
 | --- | --- | --- | --- |
@@ -360,7 +462,7 @@ must report its own spread rather than inherit this one.
 
 ## The summarizer prompt in tokens
 
-**Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` on a
+**Measured 2026-08-23**, `llama-tokenize` against `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) on a
 developer machine, on the rendered prompt with LF line endings. Tokenization is
 deterministic, so the spread is zero and the hardware does not matter - the
 tokenizer does. A different model file gives a different count.
@@ -414,7 +516,7 @@ Three notes worth keeping:
 
 **Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
 `32648218952`, job `work (3)`. The job log did not name the CPU model or the
-llama.cpp build. It used `Qwen3-8B-Q4_K_M.gguf` through `llama-server` with
+llama.cpp build. It used `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server` with
 `--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4 --no-warmup`.
 
 The run refutes the suspected context-splitting defect for this build. The log
@@ -486,7 +588,7 @@ unchanged.
 ### Reuse settled: the log did prove it, the grep hid it
 
 **Measured 2026-08-24** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
-`32742672105`, job `work (0)`, `Qwen3-8B-Q4_K_M.gguf` through `llama-server`
+`32742672105`, job `work (0)`, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server`
 with `--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4`. The job
 log did not name the CPU model or the llama.cpp build.
 
@@ -532,7 +634,7 @@ the earlier `32648218952` throughput figures changes.
 ## Model throughput across the four workers
 
 **Measured 2026-08-24** on GitHub-hosted `ubuntu-latest`, 4 vCPU, run
-`32742672105`, all four `work` jobs, `Qwen3-8B-Q4_K_M.gguf`, settings as above.
+`32742672105`, all four `work` jobs, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), settings as above.
 Taken from the four `runtime-log-*` artifacts. Each figure is that job's total
 tokens divided by its total milliseconds, not a median of per-request rates,
 because a rate is a ratio.
@@ -583,7 +685,7 @@ table stops being the only copy - see
 ### The prompt token counts, from the tokenizer
 
 **Measured 2026-08-23.** Method: `backend/bin/llama-tokenize` against
-`backend/models/Qwen3-8B-Q4_K_M.gguf`, over the system prompt rendered from the
+`backend/models/Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), over the system prompt rendered from the
 committed `config/` for every band. A token count is a property of the tokenizer
 and the text, so it does not vary with the machine that counted it.
 
@@ -611,7 +713,7 @@ and it does not change the decision - the ceiling is still 1-2 percent of a run.
 
 **Measured 2026-08-27** against run `33008629212` of `digest.yml`, which is run
 `2026-08-26-5`. Four `work` shards, each a GitHub-hosted `ubuntu-latest` with 4
-vCPU, `Qwen3-8B-Q4_K_M.gguf` on llama.cpp `b10598`.
+vCPU, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) on llama.cpp `b10598`.
 
 Two instruments measured the same work and neither knew about the other. The
 item-health ledger sums a field the summarize stage copies out of each model
@@ -915,7 +1017,7 @@ diagram arm on, which is why the stage stops itself rather than being killed.
 ## The one-slot production observation
 
 **Observed 2026-08-24** on GitHub-hosted `ubuntu-latest`, 4 vCPU, across two
-consecutive `digest` runs, `Qwen3-8B-Q4_K_M.gguf` through `llama-server` with
+consecutive `digest` runs, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server` with
 `--ctx-size 8192 --batch-size 512 --ubatch-size 512 --threads 4`. Taken from the
 eight `runtime-log-*` artifacts. Each figure is that job's total tokens divided
 by its total milliseconds, not a median of per-request rates, because a rate is
@@ -997,7 +1099,8 @@ The flag changed; the context each request gets did not. Do not reopen this.
 **Identical declared inputs produced different words on different hardware.**
 Both runs carry the same `pipeline_fingerprint`
 (`969b1917d38f4b44344dc818559122547bcbaf1aa37c836fbfc2eec6d1d2b945`) and the
-same `model_id` (`qwen3-8b-q4-k-m`). Comparing the `output_digest` written into
+same `model_id` (`qwen3-8b-q4-k-m`, the retired incumbent - historical record).
+Comparing the `output_digest` written into
 the `items-*` artifacts, over the 93 pairs with byte-identical extracted text:
 
 | Host profile | Pairs | Identical `output_digest` |
@@ -1092,9 +1195,9 @@ so a matrix would compare hardware and report it as batching.
 ### The invocation
 
 ```text
-llama-batched-bench -m backend/models/Qwen3-8B-Q4_K_M.gguf \
-  -c 8192 -b 512 -ub 512 -t 4 \
-  -npp 900 -ntg 300 -npl 1,2,4
+llama-batched-bench -c 8192 -b 512 -ub 512 -t 4 \
+  -npp 900 -ntg 300 -npl 1,2,4 \
+  -m backend/models/Qwen3-8B-Q4_K_M.gguf   # the retired incumbent; historical record
 ```
 
 `-c`, `-b`, `-ub` and `-t` are read from `config/idhazh.json`
@@ -1181,9 +1284,10 @@ in 1 socket and 1 NUMA node, L3 32 MiB, under a Microsoft hypervisor with AMD-V,
 `d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c`,
 `llama-batched-bench` sha256
 `3b70e62c5c5cf43c8c436622a845ad4b80c01837d6ba3a10c90e39b219bbd2ab`.
-`Qwen3-8B-Q4_K_M.gguf`, 5,027,783,488 bytes, sha256
-`d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785`, from
-`Qwen/Qwen3-8B-GGUF`, fetched fresh (`gguf_cache_hit=false`). Settings:
+`Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), 5,027,783,488 bytes,
+sha256 `d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785`, from
+`Qwen/Qwen3-8B-GGUF` (retired incumbent, historical record), fetched fresh
+(`gguf_cache_hit=false`). Settings:
 `n_ctx 8192`, `n_batch 512`, `n_ubatch 512`, `threads 4`, `-npp 900`,
 `-ntg 300`, `-npl 1,2,4`, 3 repeats, gate 1.4.
 
@@ -1259,7 +1363,7 @@ Hardware: local filesystem. Date: 2026-08-21. Method: `stat`.
 | File | Bytes | GiB |
 | --- | --- | --- |
 | `Qwen3-4B-Q4_K_M.gguf` | 2,497,280,256 | 2.33 |
-| `Qwen3-8B-Q4_K_M.gguf` | 5,027,783,488 | 4.68 |
+| `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) | 5,027,783,488 | 4.68 |
 | both | 7,525,063,744 | 7.01 |
 
 This is why the weights are cached rather than committed: GitHub hard-rejects
@@ -2540,7 +2644,8 @@ Hardware is GitHub-hosted `ubuntu-latest`, 4 vCPU and 16 GB, and which CPU model
 a job draws is not ours to choose: the same page records a 3.4x prefill swing
 between the four CPU models one run drew
 ([Which machine a shard drew moved its rate 3.4x](#which-machine-a-shard-drew-moved-its-rate-34x)).
-Summarizer `Qwen3-8B-Q4_K_M.gguf` through `llama-server`, llama.cpp `b10598`.
+Summarizer `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server`,
+llama.cpp `b10598`.
 
 **The slowest worker of a full day takes 83.5 to 117.5 minutes, and 94.5 at
 today's item ceiling. The `work` job was bounded at 330.** That bound was 3.5
@@ -2626,22 +2731,25 @@ lets `route` (50) and `assemble` (20) finish about 223 minutes after `plan`
 starts, inside the 240-minute gap. At 330 it could not, and one stuck worker
 delayed the next two digests a reader was waiting for.
 
-**This does not size the Qwen3.5-9B candidate, and the two derivations on record
-for it disagree.** [The qualification budget](#the-qualification-budget-derived-2026-08-26)
+**This does not size a Qwen3.5-9B production worker, and the two derivations on
+record for it disagree.** [The qualification budget](#the-qualification-budget-derived-2026-08-26)
 puts a 40-item 9B worker at about 130 minutes, from a live production
 observation; the older length-interpolation and decode-ratio derivations quoted
 in [../concepts/config.md](../concepts/config.md) put it at 254 and 276. The
 first fits this bound and the second two do not. Neither is a measurement of a
-9B worker, so neither may move a live bound (Rule #10). An adoption measures its
-own worst worker and moves `run.shard_timeout_minutes` with that number, in the
-commit that adopts the model.
+9B worker, so neither may move a live bound (Rule #10). The 2026-08-26
+qualification run measured a 95.2-minute job, but that job replayed 30 frozen
+payloads under a different bound and is not a worker either. The first scheduled
+day the configured model runs is what settles this, and
+`run.shard_timeout_minutes` moves with that number rather than ahead of it.
 
 ## Eight work shards
 
 **Measured 2026-08-25** on GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB), run
 `32869125768` - a `Content refresh` dispatch at `shards = 8` and
 `faithfulness = true`, commit `5773762`, eight `work` jobs,
-`Qwen3-8B-Q4_K_M.gguf` through `llama-server`, llama.cpp `b10598`,
+`Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record) through `llama-server`,
+llama.cpp `b10598`,
 `n_slots = 1`, `n_ctx_slot = 8192`, `kv_unified = 'false'`.
 
 **The slowest worker halved: 113.1 minutes at four shards, 58.8 at eight.
@@ -2671,7 +2779,8 @@ it - see
 ### The baseline to compare against
 
 Run `32742672105`, 2026-08-24, GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB),
-four `work` jobs, `Qwen3-8B-Q4_K_M.gguf`, llama.cpp `b10598`. Every row is
+four `work` jobs, `Qwen3-8B-Q4_K_M.gguf` (retired incumbent, historical record), llama.cpp `b10598`.
+Every row is
 already on this page under
 [Model throughput across the four workers](#model-throughput-across-the-four-workers).
 
@@ -2836,7 +2945,8 @@ they cost about three quarters of a minute inside jobs that run 36 to 59
 minutes.
 
 **Cache bytes did not move, and that was the design claim.** All eight shards
-restored the one entry `llm-Qwen3-8B-Q4_K_M.gguf-b10598-v3`, 4,943,540,782 bytes
+restored the one entry `llm-Qwen3-8B-Q4_K_M.gguf-b10598-v3` (retired incumbent, historical record),
+4,943,540,782 bytes
 (4.60 GiB). Read on 2026-08-25 after the run, the repository held eight cache
 entries totalling 10,585,631,000 bytes against the 10 GB ceiling in Rule #2 -
 at the ceiling, but not because of this change. What fills it is a stale 4B
@@ -2912,16 +3022,14 @@ to justify a design decision.
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
 | **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate, and now to the CPU part; one observation per part** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names). The first run to use them narrows it further: in run `32869125768` the two `work` shards on Intel Xeon parts prefilled at 37.5 and 37.7 tok/s while the six on AMD EPYC parts prefilled at 10.7 to 11.3, same day, same build, same weights, same prompt, with decode again moving the other way ([Eight work shards](#eight-work-shards)). That is one observation per CPU model, so it names a suspect rather than proving a cause; a `route` job on each part, on the same day, would settle it. |
 | **What a sharded `route` job would cost** | **arithmetic only** | four shards divide the stage but each pays the fixed cost and each needs a collision-free asset path. Blocked behind moving the published asset name off a directory-scanned ordinal; not citable until a real matrix run records it. |
-| **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the candidate through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
+| **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
-| Exact complete-request context for the configured summarizer | **unmeasured; 877-879 covers only the system prompt** | render system prompt + source form + title + fences + exact sanitized model-visible text through the embedded chat template, count the generation suffix, add output budget, and record the maximum by band |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | unmeasured | lands with the eval harness |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
 | A `work` job's true memory peak | **not readable; the instrument prints a placeholder** | every shard of run `32869125768` wrote `cgroup_memory_peak_bytes=unavailable`, because `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner. Read the job's own cgroup path out of `/proc/self/cgroup` and take `memory.peak` from there, or fall back to the lowest `MemAvailable` in `/proc/meminfo` over the job. The RSS sampler's 14.39 GiB high point is a resident set, not a demand ([Eight work shards](#eight-work-shards)). |
-| Qwen3.5-9B complete-request tokens and worst-case context | **unmeasured; Qwen3 counts do not transfer** | render system prompt + source form + title + fences + exact sanitized model-visible text through the embedded chat template, count the generation suffix with `Qwen3.5-9B-Q4_K_M.gguf`, add output budget, and record the maximum by band |
-| Qwen3.5-9B live non-thinking, schema and canary compatibility | **unmeasured; parser controls exist, candidate behaviour does not** | serve the exact candidate under the configured greedy sampler; run short/medium/long/brief inputs plus all injection canaries; require empty reasoning channels, `finish_reason=stop`, valid schema and repeat-stable published words |
-| Whether Qwen3.5-9B summarizes faithfully through our prompt | **throughput measured, quality unmeasured** | first replace the current validation workflow with a cache-safe replay over frozen Article payloads; then require at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread and a pre-registered blind human selector |
+| **Whether `exfiltration-via-url` is a sanitizer gap or a model gap** | **untested on both sides; the canary survived the configured model and the fixture declares `neutralised_by: sanitizer`** | replay the same fixture against the retired Qwen3-8B-Q4_K_M weights. If it survives there too, the sanitizer is the gap and the model never was ([What qualification measured, and what it did not](#what-qualification-measured-and-what-it-did-not)). |
+| Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The 0.7149 mean hhem above is one model on one corpus and is not a delta. |
 
 ## How to add a row here
 
