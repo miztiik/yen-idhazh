@@ -13,10 +13,14 @@
  * 3. **Absent, not broken.** Every failure path returns a reason. A reader who
  *    declines, or whose browser cannot run this, sees a page that is missing a
  *    secondary control - never a page that is broken.
+ * 4. **The download is described from measurement, never from a guess.** What
+ *    has already arrived is read out of the browser's own cache storage, and
+ *    what is arriving now is the library's own byte count. Reading this
+ *    device's disk is not telemetry: nothing is sent anywhere (Rule #1).
  */
 
 import { base } from '$app/paths';
-import { ENCODER_PATH } from './encoder';
+import { ENCODER_ID, ENCODER_PATH } from './encoder';
 
 /** What a reader is told before a single byte moves.
  *
@@ -48,11 +52,31 @@ export const DOWNLOAD_MB = 43;
  */
 export const MAX_TOKENS = 256;
 
-export type AssistState =
-	| { status: 'idle' }
-	| { status: 'loading' }
-	| { status: 'ready' }
-	| { status: 'unavailable'; reason: string };
+/** How much of the download has arrived, from the library's own numbers.
+ *
+ * `loaded` counts the encoder's own files and nothing else: the ONNX runtime is
+ * fetched by onnxruntime-web, which reports no progress to anybody. That is why
+ * the sentence reading this stops printing bytes once the weights land and
+ * prints a word instead - the counter can no longer see what is happening, and
+ * a bar that keeps moving on no measurement is a bar that is making it up.
+ */
+export interface EncoderProgress {
+	/** Bytes of the encoder's own files that have arrived. */
+	loaded: number;
+	/** True once the weights are in hand and only the start-up is left. */
+	landed: boolean;
+}
+
+/** What this device's cache storage says about the encoder, before a byte moves.
+ *
+ * `stale` is the state a reader cannot guess at: the weights moved, so the path
+ * moved with them, and a returning searcher pays the whole download again. It
+ * is worth its own sentence for exactly that reason.
+ */
+export type CachedEncoder = 'present' | 'stale' | 'absent' | 'unknown';
+
+/** transformers.js writes model files here. Its constant, not ours. */
+const MODEL_CACHE = 'transformers-cache';
 
 type Extractor = (
 	text: string | string[],
@@ -67,8 +91,53 @@ export function supported(): boolean {
 	return typeof WebAssembly === 'object' && typeof Worker === 'function';
 }
 
+/** Ask this device whether the download has already been paid for.
+ *
+ * The library caches every model file it fetches under a same-origin key, so
+ * the answer is a lookup on local disk. Nothing is sent, and nothing is
+ * fetched - a reader who never searches never learns this was asked.
+ *
+ * `unknown` is returned rather than guessed whenever the cache cannot be read.
+ * The sentence that reads it then prints the whole download, because
+ * overstating a cost is honest and understating one is not.
+ */
+export async function cachedEncoder(): Promise<CachedEncoder> {
+	if (typeof caches === 'undefined') return 'unknown';
+	try {
+		if (!(await caches.has(MODEL_CACHE))) return 'absent';
+		const cache = await caches.open(MODEL_CACHE);
+		const models = `${base}/assist/models/`;
+		if (await cache.match(`${models}${ENCODER_PATH}/onnx/model_quantized.onnx`)) return 'present';
+		// Some version of this encoder is here, and it is not the one this build
+		// reads. The path carries the date the weights were fetched, so an older
+		// one is a different URL and a whole second download.
+		const keys = await cache.keys();
+		const older = keys.some((request) => request.url.includes(`${models}${ENCODER_ID}/`));
+		return older ? 'stale' : 'absent';
+	} catch {
+		return 'unknown';
+	}
+}
+
+/** Turn the library's per-file events into one running byte count. */
+function watch(report: (progress: EncoderProgress) => void) {
+	const byFile = new Map<string, number>();
+	let landed = false;
+	return (event: { status: string; file?: string; loaded?: number }) => {
+		// The weights are the last and by far the largest file, so the moment they
+		// finish is the moment a byte count stops being able to say anything.
+		if (event.status === 'done' && event.file?.endsWith('.onnx')) landed = true;
+		if (event.status === 'progress' && event.file && typeof event.loaded === 'number') {
+			byFile.set(event.file, event.loaded);
+		}
+		let loaded = 0;
+		for (const bytes of byFile.values()) loaded += bytes;
+		report({ loaded, landed });
+	};
+}
+
 /** Load the encoder. Idempotent, and safe to call twice from an impatient click. */
-export async function load(): Promise<Extractor> {
+export async function load(onProgress?: (progress: EncoderProgress) => void): Promise<Extractor> {
 	if (extractor) return extractor;
 	if (inFlight) return inFlight;
 
@@ -92,6 +161,7 @@ export async function load(): Promise<Extractor> {
 
 		const pipe = await transformers.pipeline('feature-extraction', ENCODER_PATH, {
 			dtype: 'q8',
+			progress_callback: onProgress ? watch(onProgress) : undefined,
 			// WASM, not WebGPU. WebGPU is not the baseline.
 			//
 			// This does not pick the binary. The only runtime committed under
@@ -117,8 +187,11 @@ export async function load(): Promise<Extractor> {
 }
 
 /** Embed one query. The browser never embeds an item - those vectors are committed. */
-export async function embedQuery(text: string): Promise<number[]> {
-	const pipe = await load();
+export async function embedQuery(
+	text: string,
+	onProgress?: (progress: EncoderProgress) => void
+): Promise<number[]> {
+	const pipe = await load(onProgress);
 	const output = await pipe(text, { pooling: 'mean', normalize: true });
 	return output.tolist()[0];
 }

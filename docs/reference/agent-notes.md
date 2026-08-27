@@ -467,6 +467,16 @@ contends with the first.
 
 ## Running the gates
 
+- **A test that skips itself when it cannot find a control is a gate that turns
+  off silently.** `canaries.spec.ts` looked for the old search offer button and
+  called `test.skip` when the count was zero, so renaming that control switched
+  off an injection canary and the suite still reported green - `2 skipped` in a
+  125-line pass list that nobody reads to the end. Observed 2026-08-27. Two
+  rules fall out: read the skip count on every suite run and account for each
+  one, and write the guard as `await expect(locator, 'why this matters')
+  .toHaveCount(1)` rather than a skip whenever the fixture is supposed to
+  provide the thing. A skip is right only when the environment genuinely varies;
+  it is never right for a selector you control.
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
   `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
   then shows progress dots and an exit code and nothing else, which reads like
@@ -598,6 +608,13 @@ contends with the first.
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **`Select-String` matches case-insensitively unless you say otherwise**, so a
+  search for a constant finds the helper that replaced it. Hunting a merge
+  failure on 2026-08-27, `Select-String -Pattern 'INDEX_ROOT'` reported five
+  hits in a file whose real content was five `_index_root()` calls, which read
+  as "the constant is still there" and pointed the diagnosis at the wrong side
+  of the merge for ten minutes. Pass `-CaseSensitive` whenever the question is
+  about an identifier.
 - **`Select-String` has no `-Recurse`.** Use
   `Get-ChildItem -Recurse | Select-String`, or the editor's own search.
 - **A relative path inside a `[System.IO.File]` call does not follow
