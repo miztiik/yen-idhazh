@@ -51,7 +51,12 @@ from idhazh import (
     tag,
     telemetry,
 )
-from idhazh.contracts.app_config import EvaluationConfig, InferenceConfig, RunConfig
+from idhazh.contracts.app_config import (
+    EvaluationConfig,
+    ExtractConfig,
+    InferenceConfig,
+    RunConfig,
+)
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import canonical_json, derive_url_key
 from idhazh.contracts.digest_day import DigestDay
@@ -1312,14 +1317,35 @@ def _stratified(
     return chosen
 
 
-def _canary_article(payload: dict[str, object], *, fetched_at: str) -> Article:
-    """One planted attack, shaped like an article so it takes the real path.
+def _canary_article(
+    payload: dict[str, object], *, extract_config: ExtractConfig, fetched_at: str
+) -> Article:
+    """One planted attack, shaped like the article `extract` would have built.
 
-    The fixture's raw text is handed over unsanitized on purpose: `user_turn`
-    fences and sanitizes what it is given, so this exercises the boundary
-    instead of stepping around it (Rule #11).
+    The raw text is handed on unsanitized on purpose: `user_turn` fences and
+    sanitizes what it is given, so this exercises the boundary instead of
+    stepping around it (Rule #11). Every count is taken from the sanitized body
+    all the same, because those are the words the model is shown, and because a
+    count of the raw text can exceed the count of the body it survives into -
+    which the payload refuses. The earlier version counted the raw text and
+    hardcoded `brief=False`, so a 41-word canary took the long prompt band no
+    page of that length is ever given.
     """
     url = str(payload["source_url"])
+    raw = str(payload["raw_text"])
+    body = sanitize(raw)
+    seen, truncated, cut_at = extract.truncate_to_tokens(
+        body, extract_config.truncation_cap_tokens
+    )
+    words = len(seen.split())
+    source_words = len(body.split())
+    # `extract` reads three shape signals here. The third compares an item
+    # against its siblings from the same host, and a canary has none.
+    signal: FailureCode | None = None
+    if extract.is_not_prose(body, extract_config):
+        signal = FailureCode.NOT_PROSE
+    elif source_words < extract_config.min_source_words:
+        signal = FailureCode.TOO_SHORT
     return Article(
         version=Article.schema_version(),
         item_id="canary-01",
@@ -1331,11 +1357,16 @@ def _canary_article(payload: dict[str, object], *, fetched_at: str) -> Article:
         vertical="canary",
         rank_score=0.0,
         title=str(payload["raw_title"]),
-        text=str(payload["raw_text"]),
-        word_count=len(str(payload["raw_text"]).split()),
-        token_count=len(str(payload["raw_text"]).split()) * 2,
+        text=raw,
+        word_count=words,
+        source_word_count=source_words,
+        token_count=extract.approx_tokens(words),
+        brief=source_words < extract_config.min_source_words or signal is not None,
+        truncated=truncated,
+        truncated_at_tokens=cut_at,
         fetched_at=fetched_at,
         status=ArticleStatus.OK,
+        failure_code=signal,
         extractor_version=extract.EXTRACTOR_VERSION,
         sanitizer_version=SANITIZER_VERSION,
     )
@@ -1456,7 +1487,9 @@ def _run_canaries(
     observations: list[CanaryObservation] = []
     for path in sorted(CANARY_DIR.glob("*.json")):
         payload = json.loads(path.read_text(encoding="utf-8"))
-        article = _canary_article(payload, fetched_at=assemble.utc_now())
+        article = _canary_article(
+            payload, extract_config=settings.app.extract, fetched_at=assemble.utc_now()
+        )
         summary, completion, _ = _one_call(article, settings, fingerprint, endpoint=endpoint)
         reply = " ".join([summary.title or "", summary.summary or "", *(summary.key_points or [])])
         cleaned = sanitize(str(payload["raw_text"]))
@@ -1465,13 +1498,76 @@ def _run_canaries(
             CanaryObservation(
                 name=str(payload["name"]),
                 replied=summary.status is SummaryStatus.OK and bool(summary.summary),
+                # The summary already classified why it failed and said it in
+                # words. Dropping them here is what left a run recording only
+                # `replied: false`, with nothing to read but the canary's name.
+                failure_code=summary.failure_code.value if summary.failure_code else None,
+                failure_detail=summary.failure_detail,
                 markers_present=[m for m in payload["must_not_survive"] if str(m) in reply],
                 facts_missing=[f for f in payload["must_survive"] if str(f) not in cleaned],
                 forbidden_keys_present=[k for k in payload["forbidden_output"] if str(k) in raw],
             )
         )
-        LOG.info("canary run name=%s replied=%s", payload["name"], observations[-1].replied)
+        LOG.info(
+            "canary run name=%s replied=%s failure_code=%s",
+            payload["name"],
+            observations[-1].replied,
+            observations[-1].failure_code,
+        )
     return observations
+
+
+def _canary_report(
+    observations: Sequence[CanaryObservation], *, root: Path, required: int
+) -> int:
+    """Write what the attacks did, then say whether the gate holds.
+
+    Split from the calls so the file-out half is reachable without a served
+    model. Fail-closed: a gate that cannot speak for every planted attack
+    returns non-zero.
+    """
+    assemble.write_atomic(
+        root / "canaries.json",
+        canonical_json([observation.model_dump(mode="json") for observation in observations]),
+    )
+    outcome = qualify.injection_canaries(observations, required=required)
+    LOG.info("canary gate %s: %s", outcome.status.value, outcome.measured)
+    LOG.info("canary detail: %s", outcome.detail)
+    return 0 if outcome.status is GateStatus.PASSED else 1
+
+
+def stage_qualify_canaries(
+    *, settings: config.Settings, date: str, model_endpoint: str = DEFAULT_ENDPOINT
+) -> int:
+    """The five planted attacks alone, against the configured model.
+
+    The arm was reachable only from inside `stage_qualify` at shard zero, so the
+    only way to see what a canary did was a whole qualification (`CLAUDE.md`
+    section 4). The fixtures are the file in, `canaries.json` is the file out,
+    and the exit code is the gate.
+    """
+    inference = settings.app.models.inference
+    model = settings.app.models.summarize
+    observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
+    inputs = build_inputs(
+        model=model,
+        model_sha256=model.sha256,
+        inference=inference,
+        truncation_cap_tokens=settings.app.extract.truncation_cap_tokens,
+        runtime_build=runtime_build(),
+        chat_template=str(observed.get("chat_template") or UNRECORDED_TEMPLATE),
+        prompt=summarize.prompt_inputs(settings.app.summarize),
+        output_schema=summarize.output_schema_text(settings.app.summarize, settings.app.evaluation),
+        runner_class=runner_class(),
+        extractor_version=extract.EXTRACTOR_VERSION,
+        sanitizer_version=SANITIZER_VERSION,
+    )
+    observations = _run_canaries(settings, inputs.fingerprint(), endpoint=model_endpoint)
+    return _canary_report(
+        observations,
+        root=QUALIFICATION_ROOT / date,
+        required=len(sorted(CANARY_DIR.glob("*.json"))),
+    )
 
 
 def stage_qualify(
@@ -2286,6 +2382,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "validate",
             "decide",
             "qualify",
+            "qualify-canaries",
             "qualify-decide",
             "backfill-vectors",
         ),
@@ -2414,6 +2511,9 @@ def main(argv: Sequence[str] | None = None) -> int:
             fetcher=read_url,
         )
         return 0
+
+    if args.stage == "qualify-canaries":
+        return stage_qualify_canaries(settings=settings, date=date)
 
     if args.stage == "backfill-vectors":
         # `--date` names the day this treats as still open, and it is clamped to
