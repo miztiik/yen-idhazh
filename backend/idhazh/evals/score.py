@@ -18,6 +18,7 @@ from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.evals import metrics
+from idhazh.fingerprint import text_digest
 
 _DELTA_PLACES: Final = 6
 _UNTITLED: Final = "Untitled item"
@@ -98,6 +99,7 @@ def to_eval_row(
     article: Article,
     summary: Summary,
     full_text: str,
+    premise: str,
     hhem: float,
     hhem_full: float,
     config: EvaluationConfig,
@@ -113,6 +115,13 @@ def to_eval_row(
     `full_text` is the whole article, not the truncated text the model saw. The
     gap between the two faithfulness scores is the cost of truncation, and it is
     invisible unless both are measured.
+
+    `premise` is the text the faithfulness scorer was handed as `seen_text` - the
+    article after sanitizing and truncation - and it is digested, never stored.
+    It is a parameter rather than something read back off `article` on purpose:
+    the caller passes the one variable it also passed the scorer, so a later
+    change that scores something else cannot leave the digest quietly naming the
+    text the scorer used to read.
 
     The two densities take `full_text` alone. They are the only columns that
     score the article rather than the summary, and they are recorded and not
@@ -173,6 +182,7 @@ def to_eval_row(
         summary_word_count=metrics.word_count(text),
         pipeline_fingerprint=summary.pipeline_fingerprint,
         output_digest=summary.output_digest,
+        source_digest=text_digest(premise),
         determinism_violation=determinism_violation,
         scorer_version=scorer_version,
         scored_at=scored_at,

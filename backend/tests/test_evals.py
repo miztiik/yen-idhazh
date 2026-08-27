@@ -333,6 +333,7 @@ def test_the_ledger_row_carries_the_repetition_and_leaves_faithfulness_alone() -
             article=article,
             summary=written.model_copy(update={"summary": text}),
             full_text=ARTICLE,
+            premise=ARTICLE,
             hhem=0.91,
             hhem_full=0.89,
             config=EvaluationConfig(),
@@ -370,7 +371,10 @@ def test_an_eval_row_written_before_this_column_still_loads() -> None:
 
     assert before.self_repetition is None
     assert before.version == "2026-08-21T03:00", "an older stamp still validates"
-    assert EvalRow.csv_columns()[-1] == "self_repetition", "appended, so no cell shifts right"
+    columns = EvalRow.csv_columns()
+    assert columns.index("self_repetition") > columns.index("speculative_density"), (
+        "appended, so no cell shifts right"
+    )
 
 
 # --- Recorded, never flagged -------------------------------------------------

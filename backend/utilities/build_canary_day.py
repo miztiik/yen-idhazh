@@ -567,6 +567,7 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         summary_word_count=measured.summary_words,
         pipeline_fingerprint=_fixture_digest("pipeline", DATE),
         output_digest=_fixture_digest("summary", item.item_id),
+        source_digest=_fixture_digest("premise", item.item_id),
         determinism_violation=False,
         scorer_version=_scorer_version(evaluation),
         scored_at=f"{DATE}T06:12:00Z",

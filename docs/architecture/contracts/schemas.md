@@ -125,6 +125,14 @@ The rewrite is a committed one-shot utility rather than an ad-hoc script, so a f
 
 A migrated row keeps the `version` cell it was written with. The base contract accepts an older stamp on purpose, so a later read-side migration has something to branch on; restamping every row would erase the only marker of which rows predate the change.
 
+### Widening a row ledger writes an empty cell, never a value invented today
+
+Adding a column is the same commit shape as dropping one, and for the same reason: `require_matching_header` compares the header tuple exactly, so the contract change and the file rewrite land together or the next append stops the run.
+
+What differs is the cell. A column is appended at the end of the row and never filed by meaning, because a cell inserted in the middle shifts every historical value one place right under a reader that maps by position. The new field is nullable, and every row that predates it gets an **empty** cell. Zero, or a value recomputed today, would claim the older run measured something it never looked at - and for a digest that is worse than silence, because the whole point of a digest is that somebody can check it.
+
+The rewrite is small enough to be reviewed as a diff rather than run as a utility: the header gains one name and each row gains one comma, and nothing else in the file moves. `EvalRow` gained `self_repetition` this way on 2026-08-26 and `source_digest` on 2026-08-27. A committed test appends to a byte copy of the real ledger and asserts every historical cell is where it was, which is the check a fork actually needs.
+
 `backend/idhazh/contracts/` **must not import any other subpackage** of `backend/idhazh/`. Contracts are the bottom of the dependency graph; everything else depends on them (`CLAUDE.md` section 4). A contract that imports a stage is a contract that cannot be loaded by a test of that stage.
 
 ## Every contract carries version and changelog
