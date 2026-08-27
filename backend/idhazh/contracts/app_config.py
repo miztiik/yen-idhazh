@@ -949,15 +949,42 @@ class AssistConfig(Model):
         ge=1,
         le=12,
         description=(
-            "How many month shards a search reads, newest first. The reader waits on "
-            "the download, not on the arithmetic: measured 2026-08-26, one month is a "
-            "518 KB vector file and about 2.1 seconds on a 10 Mbit line at the rate "
-            "the committed days ran, or 4.8 seconds at the structural ceiling, against "
-            "74 to 159 milliseconds of ranking. The fetch is 9 to 30 times the ranking "
-            "at every scope, so this knob buys download seconds and never compute "
-            "seconds. Three months is a 14.4 second download, so one month is the only "
-            "scope whose first search starts inside about five seconds. The page names "
-            "the months it read, so widening this widens a sentence a reader can see."
+            "How many month shards a search always reads, newest first. The reader "
+            "waits on the download, not on the arithmetic: measured 2026-08-26, one "
+            "month is a 2.53 MB vector file beside a 518 KB browse index, about 2.1 "
+            "seconds on a 10 Mbit line at the rate the committed days ran, or 4.8 "
+            "seconds at the structural ceiling, against 74 to 159 milliseconds of "
+            "ranking. The fetch is 9 to 30 times the ranking at every scope, so this "
+            "knob buys download seconds and never compute seconds. Three months is a "
+            "14.4 second download, so one month is the only scope whose first search "
+            "starts inside about five seconds. This is a floor rather than a ceiling: "
+            "assist.search_min_days can add one more shard when the newest one is "
+            "thin. The page names the days it read, so a wider scope is a sentence a "
+            "reader can see."
+        ),
+    )
+    search_min_days: int = Field(
+        default=7,
+        ge=1,
+        le=366,
+        description=(
+            "The fewest days of published stories a search tries to reach. The scope "
+            "is month shards, and a calendar month is not a window: on the last day "
+            "of a month the newest shard holds 31 days, and on the next morning it "
+            "holds one. That is 31 times less reach for a reason no reader can see, "
+            "and a search that finds nothing then looks exactly like a story that was "
+            "never published. When the shards search_months names cover fewer days "
+            "than this, a search reads ONE more shard - one more and no more, so the "
+            "cost is bounded at a single extra fetch. Seven, because a week is already "
+            "this site's unit for what a reader still has in mind: ui.read_mark_days "
+            "keeps a read mark for seven days and console.min_window_days will not "
+            "draw a narrower window. At the observed rate of 353.5 items a day the "
+            "extra fetch fires on the first 6 days of a month, 20 percent of them, "
+            "and it fires only when the shard a search already reads is small: "
+            "measured 2026-08-26, an entry costs 50.03 gzipped bytes of browse index "
+            "and 249.79 of vector, so the two shards together on 1 September move "
+            "about what the one shard on 30 September already moves. The bytes are "
+            "levelled across the month rather than doubled."
         ),
     )
     recall_min: float = Field(
@@ -986,6 +1013,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27T09:00",
+            change=(
+                "assist.search_min_days added, defaulting to 7, and "
+                "assist.search_months restated as a floor rather than the whole scope."
+            ),
+            why=(
+                "assist.search_months named a count of calendar shards, so the reach a "
+                "search had was whatever the current month happened to hold - 31 days "
+                "on 31 August and one day on 1 September. A reader who searched that "
+                "morning got nothing back and could not tell it from a story we never "
+                "published. A day floor makes the reach a promise instead of an "
+                "accident, and capping the extra read at one shard keeps the cost "
+                "bounded: measured 2026-08-26 the extra shard fires on 6 days of a "
+                "30-day month and only when the shard already being read is small, so "
+                "the bytes a search moves are levelled across the month rather than "
+                "doubled. Additive with a default, so an older config still validates "
+                "and no read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27T05:00",
             change=(

@@ -198,8 +198,8 @@ away, and the order is the published one.
 
 The `assist` block is on-device search. The runner embeds the day and commits
 the vectors; a reader's tab embeds only the query. The first two knobs say how
-much of an item the encoder is allowed to read, and the third says how much of
-the archive a search reads at all. All three are set from what was measured
+much of an item the encoder is allowed to read, and the last two say how much of
+the archive a search reads at all. All four are set from what was measured
 rather than from taste.
 
 - `assist.max_tokens` (256) is how far into an item's text the encoder reads
@@ -223,15 +223,28 @@ rather than from taste.
   "mostly not in our alphabet", and the corpus says the exact number does not
   matter: 3 of 1889 items score 0.0 and the next lowest scores 0.9975, so every
   threshold between 0.01 and 0.99 picks the same three items.
-- `assist.search_months` (1) is how many month shards a search reads, newest
-  first. The reader waits on the download and never on the arithmetic: a month
-  of vectors is 518 KB on the wire and about 2.1 seconds on a 10 Mbit line at
-  the rate the committed days ran, against 74 to 159 milliseconds of ranking.
-  The fetch is 9 to 30 times the ranking at every scope, so this knob buys
-  download seconds and never compute seconds, and three months is a 14.4 second
-  wait before the first result. One month is the only scope whose first search
-  starts inside about five seconds. Widening it is visible to a reader rather
-  than silent: the page prints the months it searched under the box.
+- `assist.search_months` (1) is how many month shards a search always reads,
+  newest first. The reader waits on the download and never on the arithmetic: one
+  month is a 2.53 MB vector file beside a 518 KB browse index, about 2.1 seconds
+  on a 10 Mbit line at the rate the committed days ran, against 74 to 159
+  milliseconds of ranking. The fetch is 9 to 30 times the ranking at every scope,
+  so this knob buys download seconds and never compute seconds, and three months
+  is a 14.4 second wait before the first result. One month is the only scope
+  whose first search starts inside about five seconds.
+- `assist.search_min_days` (7) is the fewest days of published stories a search
+  tries to reach, and it is what stops a calendar shard being mistaken for a
+  window. On 31 August the newest shard held 31 days; on 1 September it held one,
+  so the same search reached 31 times less for a reason no reader could see, and
+  finding nothing looked exactly like a story we never published. Below this
+  floor a search reads one more shard, and one more only, so the cost is bounded
+  at a single extra fetch. Seven days because a week is already this site's unit
+  for what a reader still has in mind - `ui.read_mark_days` keeps a read mark for
+  seven days and `console.min_window_days` will not draw a narrower window. The
+  extra fetch fires on the first 6 days of a month, 20 percent of them, and only
+  when the shard already being read is small, so the bytes a search moves are
+  levelled across the month rather than doubled. Widening either knob is visible
+  to a reader rather than silent: the page prints the days it searched under the
+  box.
 
 The browser keeps its own copy of the token cap in
 `frontend/src/lib/assist/loader.ts`, because the config reader is server-only and

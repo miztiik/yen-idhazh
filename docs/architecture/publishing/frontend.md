@@ -186,29 +186,46 @@ The degraded states, and each one is designed rather than discovered:
 | JavaScript off | The day row, and a `<noscript>` line saying the list needs it. The day links are prerendered, so navigation still works |
 | Nothing published at all | "Nothing has been published yet.", as before |
 
-## Search reads the same month index, and says which months it read
+## Search reads the same month index, and says how far back it read
 
 Search used to rank over the whole day payloads the page carried, which is why
 the page carried them. It now reads `index/<YYYY-MM>.json` and its
 sibling `<YYYY-MM>.bin`, and the eager payloads are gone. That is the last 1.7
 MB of the archive's weight, and it is the reason this row exists.
 
-**The scope is one month, and it is a knob.** `assist.search_months` defaults to
-1. The reader waits on the download and never on the arithmetic: measured
-2026-08-26, a month of vectors is 518 KB on the wire and about 2.1 seconds on a
-10 Mbit line at the rate the committed days ran, or 4.8 seconds at the
-structural ceiling, against 74 to 159 milliseconds of ranking. The fetch is 9 to
-30 times the ranking at every scope, so widening this buys nothing but waiting -
-three months is a 14.4 second download, and one month is the only scope whose
-first search starts inside about five seconds.
+**The scope is a floor of days, filled by whole month shards.**
+`assist.search_months` (1) is how many shards a search always reads, newest
+first. `assist.search_min_days` (7) is the fewest days it tries to reach: when
+the shards `search_months` names cover fewer days than that, a search reads one
+more shard - one more and no more, so the cost is bounded at a single extra
+fetch.
 
-**The page says what it searched**, in one line under the box: `Searching August
-2026 - 2235 stories.`, and `Older months are not searched.` when the archive
-holds more months than the scope. A reader who gets nothing back has to be able
-to tell "never published" from "not in the months this read", and the knob is
-invisible to them otherwise. The line is there **before** the first search, and
-costs nothing to put there: the story list above has already fetched that month,
-and the count of searchable stories is in the file it fetched.
+The reader waits on the download and never on the arithmetic: measured
+2026-08-26, one month is a 2.53 MB vector file beside a 518 KB browse index -
+about 2.1 seconds on a 10 Mbit line at the rate the committed days ran, or 4.8
+seconds at the structural ceiling - against 74 to 159 milliseconds of ranking.
+The fetch is 9 to 30 times the ranking at every scope, so a wider scope buys
+nothing but waiting: three months is a 14.4 second download, and one month is
+the only scope whose first search starts inside about five seconds.
+
+**The extra shard levels the bytes across the month instead of doubling them.**
+It fires only when the newest shard is thin, and a thin shard is a small
+download. At the observed rate of 353.5 items a day it fires on the first 6 days
+of a month - 20 percent of them - and on 1 September the two shards together
+move about what the single shard on 30 September already moves. The rejected
+version of this rule reached a full month back from the newest published day on
+every date, which fetches two whole shards on 29 days out of 30 and charges a
+second browse index to every visitor who only browses.
+
+**The page says how far back it searched**, in one line under the box:
+`Searching 1 to 20 August 2026 - 8 stories.`, and `Older stories are not
+searched.` when the archive holds more than the scope read. It names days rather
+than months because the month name is what hid the defect: on 1 September
+`September 2026` reads like a month and holds one day. A reader who gets nothing
+back has to be able to tell "never published" from "outside what this read", and
+the knobs are invisible to them otherwise. The line is there **before** the first
+search, and costs nothing to put there: the story list above has already fetched
+that month, and the count of searchable stories is in the file it fetched.
 
 **A result renders from the day it names.** The index carries no title-plus-
 summary pair on purpose - [layout.md](layout.md) prices that at 6.35 times the
@@ -230,9 +247,10 @@ already carries four facts.
 leaves the story list saying so, and search says `these stories cannot be
 searched on this device` without a click, because the identity check reads the
 index the list already has. No `.bin` leaves the list working and search saying
-the same thing on the first search, because 518 KB of vectors is fetched then
-and not before. Either way the check runs **before** the 43 MB encoder download:
-a reader who cannot be helped by those bytes is not asked to spend them.
+the same thing on the first search, because the vectors - 2.53 MB a month at the
+observed rate - are fetched then and not before. Either way the check runs
+**before** the 43 MB encoder download: a reader who cannot be helped by those
+bytes is not asked to spend them.
 
 ## The search box is a field, and one click is the whole gesture
 
@@ -268,7 +286,7 @@ from `Stories` to `Search results`, the count line changes with it, and
 `Show all stories` gives the browse list back. Two lists side by side would
 leave a reader working out which one answered them - and it is what makes the
 browse list the search's empty state: a query that matches nothing leaves the
-page exactly where it was, under one line naming the month.
+page exactly where it was, under one line naming the days it read.
 
 **The count is over the stories searched, and the cap is stated when it bites.**
 `10 results from the 2235 stories searched. Only the closest 10 are shown.` A
@@ -738,6 +756,24 @@ changed. `/evals/` stays as a static entry point because `CLAUDE.md` section 3
 says the published dashboard keeps the route. Authority: Jony and owner defect
 3.
 
+The search scope is a floor of days rather than a count of calendar shards,
+because a calendar shard is not a window. `assist.search_months` on its own made
+the reach whatever the current month happened to hold: 31 days on the evening of
+31 August and one day the next morning. A reader who searched that morning got
+nothing back and had no way to tell it from a story we never published, and
+nothing they did caused the change. The alternative that was explored and
+rejected is the obvious one - reach a full month back from the newest published
+day, on every date. It gives a constant window and it costs two whole shards on
+29 days out of 30, plus a second browse index charged to every visitor who only
+browses: 518 KB gzipped a month at the observed rate, measured 2026-08-26,
+against an archive page that is 2,912 bytes. A seven-day floor buys the same
+reach on the days that were broken, fires on 6 days of 30, and fires only when
+the shard already being read is small - so the bytes a search moves are levelled
+across the month instead of doubled. Seven, because a week is already this
+site's unit for what a reader still has in mind: `ui.read_mark_days` keeps a
+read mark for seven days and `console.min_window_days` will not draw a narrower
+window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
+
 ## Rejected alternatives
 
 | Option | Why rejected | Authority |
@@ -762,6 +798,8 @@ says the published dashboard keeps the route. Authority: Jony and owner defect
 | Reconciling the encoder identifier to the upstream `all-MiniLM-L6-v2` | `embeddings.model_id` is a slug, so that spelling can never be written into a payload. Adopting it means widening a persisted contract to fit a capital letter, and re-stamping five committed days to buy nothing. | Fowler, Andre |
 | A config knob for the encoder identifier or its version | The guard compares a payload against this string. A knob is a way to turn the guard off by accident, which is the same reason `embed.py` refuses one for its own copy. | Andre |
 | Telling the reader their vectors are stale and offering to update | There is no update for them to take - the encoder is whatever this build committed. A prompt with no action behind it is a notification asking for thanks. | Jony, Reader |
+| Reaching a full month back from the newest published day on every date | A constant window, bought with two whole shards on 29 days out of 30 and a second 518 KB browse index charged to every visitor who only browses. | Carmack |
+| Naming the months a search read, rather than the days | On 1 September "September 2026" reads like thirty days and holds one. The month name is what hid the collapse it was meant to disclose. | Jony |
 | Padding every sequence to the token cap so batch composition stops mattering | It was the first proposal and the measurement refused it. Fixed padding removes the *shape* a batch imposes, not the *scale* it sets: pad-to-cap against no padding still moved a component by 1.56e-2, and padding also moves the runner further from a browser that pads nothing. | Carmack, Rule #10 |
 | Accepting host variation and gating a re-encode on cosine alone | A cosine tolerance is the right check for a backfill, but leaving the arithmetic unpinned makes every future re-encode a fresh argument about which machine was right. | Carmack |
 | A console listing every feed, healthy ones included | Naming all seventy sources hides the four that are broken. | owner |

@@ -19,7 +19,8 @@
 
 import type { MonthIndex } from './month';
 import type { SearchIndexEntry } from '$lib/payload/types';
-import { ENCODER_ID } from './encoder';
+import { ENCODER_DIMENSIONS, ENCODER_ID } from './encoder';
+import { longDate, MONTHS } from '../format';
 
 /** One month with its vectors in hand. Both halves, or the month is not searched. */
 export interface SearchableMonth {
@@ -45,7 +46,7 @@ export interface SearchOutcome {
 	hits: SearchHit[];
 	/** How many stories were ranked, over the months searched. */
 	searched: number;
-	/** Those months in the reader's words: "August 2026". */
+	/** The days those stories were published on: "1 to 20 August 2026". */
 	scope: string;
 	/** True when the result limit may have cut something off. */
 	capped: boolean;
@@ -105,6 +106,85 @@ export function searchable(index: MonthIndex, dimensions: number): boolean {
 	return (
 		index.model_id === ENCODER_ID && index.dtype === 'int8' && index.dimensions === dimensions
 	);
+}
+
+/** How wide a search reaches. Both values come from `config/idhazh.json`. */
+export interface ScopeOptions {
+	/** `assist.search_months` - how many shards a search always reads. */
+	months: number;
+	/** `assist.search_min_days` - the fewest days it tries to reach. */
+	minDays: number;
+}
+
+/** The days a set of shards can actually answer for, oldest first.
+ *
+ * A day with no searchable story is not one of them. An entry carrying no
+ * vector browses and is never ranked, so counting its day here would let the
+ * page name a day it cannot search.
+ */
+export function searchedDays(indexes: MonthIndex[]): string[] {
+	const days = new Set<string>();
+	for (const index of indexes) {
+		for (const entry of index.entries) {
+			if (entry.vector !== null && entry.vector !== undefined) days.add(entry.date);
+		}
+	}
+	return [...days].sort();
+}
+
+/** "1 to 20 August 2026" - the days a search covered, in the reader's words.
+ *
+ * A month name is not a window, and printing one over a partial month reads as
+ * a promise the search cannot keep: on 1 September "September 2026" looks like
+ * thirty days and holds one.
+ *
+ * It lives here rather than in `format.ts` because every route carries that
+ * module: measured 2026-08-27, one build with it there put 64 gzipped bytes on
+ * `/404`, which never prints a date range at all.
+ */
+export function dayRange(oldest: string, newest: string): string {
+	const [year, month, day] = oldest.split('-').map(Number);
+	if (oldest === newest || !year || !month || !day) return longDate(newest);
+	if (oldest.slice(0, 7) === newest.slice(0, 7)) return `${day} to ${longDate(newest)}`;
+	if (year === Number(newest.slice(0, 4))) {
+		return `${day} ${MONTHS[month - 1]} to ${longDate(newest)}`;
+	}
+	return `${longDate(oldest)} to ${longDate(newest)}`;
+}
+
+/** The shards a search reads, newest first.
+ *
+ * **A calendar month is not a window.** Reading `months` shards and stopping
+ * meant the reach was whatever the current month happened to hold: 31 days on
+ * 31 August and one day on the morning of 1 September, for a reason no reader
+ * can see. `minDays` is the floor that ends that - below it, one more shard is
+ * read, and one more only, so a search can never cost more than a single extra
+ * fetch. The extra one fires when the newest shard is thin, and a thin shard is
+ * a small download, so the bytes are levelled across the month rather than
+ * doubled.
+ *
+ * `load` is the same month loader the browse list uses, handed in rather than
+ * imported, so this rule can be driven in Node - `index.ts` imports
+ * `$app/paths` and only resolves in a browser or a SvelteKit build.
+ *
+ * A shard whose header names another encoder is dropped rather than ranked. It
+ * would decode perfectly into a different space, so every score it made would
+ * still look like a score.
+ */
+export async function readScope(
+	months: string[],
+	options: ScopeOptions,
+	load: (month: string) => Promise<MonthIndex | null>
+): Promise<MonthIndex[]> {
+	const wanted = Math.max(options.months, 1);
+	const ceiling = Math.min(months.length, wanted + 1);
+	const read: MonthIndex[] = [];
+	for (let at = 0; at < ceiling; at += 1) {
+		if (read.length >= wanted && searchedDays(read).length >= options.minDays) break;
+		const index = await load(months[at]!);
+		if (index && searchable(index, ENCODER_DIMENSIONS)) read.push(index);
+	}
+	return read;
 }
 
 /** How the archive is searched. All three values come from `config/idhazh.json`.

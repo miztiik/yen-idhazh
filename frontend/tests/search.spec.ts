@@ -1,6 +1,7 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync } from 'node:fs';
 import { resolve } from 'node:path';
+import { longDate } from '../src/lib/format';
 
 /**
  * Does on-device search actually work, or does it merely run?
@@ -70,6 +71,19 @@ async function answered(page: Page): Promise<void> {
 	});
 }
 
+/** The newest day the canary build published, read off the day row. */
+async function newestDay(page: Page): Promise<string> {
+	const hrefs = await page
+		.locator('[data-day-row] a')
+		.evaluateAll((links) => links.map((link) => link.getAttribute('href') ?? ''));
+	const dates = hrefs
+		.map((href) => /(\d{4}-\d{2}-\d{2})/.exec(href)?.[1])
+		.filter((date): date is string => date !== undefined)
+		.sort();
+	if (dates.length === 0) throw new Error(`no dates in the day row: ${hrefs.join(', ')}`);
+	return dates[dates.length - 1]!;
+}
+
 /** The newest month the canary build published, read off the day row. */
 async function newestMonth(page: Page): Promise<string> {
 	const hrefs = await page.locator('[data-day-row] a').evaluateAll((links) =>
@@ -127,16 +141,18 @@ test('the retrieval bar, on hand-labelled queries', async ({ page }) => {
 	expect(recall, `misses:\n${misses.join('\n')}`).toBeGreaterThanOrEqual(gold.pass_bar.minimum);
 });
 
-test('the page says which months it searched, before anything is downloaded', async ({ page }) => {
+test('the page says how far back it searched, before anything is downloaded', async ({ page }) => {
 	// A reader who gets nothing back must be able to tell "never published" from
-	// "not in the months this searched". The scope is a config knob, so the
-	// sentence is the only place a reader can see what it is set to - and it has
-	// to be there before they spend 43 MB finding out.
+	// "outside what this read". The scope is a floor of days filled by whole month
+	// shards, so it has to name days: a month name over a partial month promises
+	// thirty days and holds one, which is the defect this replaced. And it has to
+	// be there before they spend 43 MB finding out.
 	await page.goto('/archive/');
 
-	await expect(page.locator('[data-search-scope]')).toHaveText(
-		/^Searching [A-Z][a-z]+ \d{4}( to [A-Z][a-z]+ \d{4})? - \d+ (story|stories)\./
-	);
+	const scope = page.locator('[data-search-scope]');
+	await expect(scope).toHaveText(/^Searching .+ - \d+ (story|stories)\.$/);
+	// The newest day it can answer for is named in full, never rounded to a month.
+	await expect(scope).toContainText(longDate(await newestDay(page)));
 });
 
 test('a result carries the summary from the day it names', async ({ page }) => {
@@ -187,9 +203,10 @@ test('a query with no answer leaves the story list where it was', async ({ page 
 	await ask(page, 'medieval basket weaving techniques of rural Anatolia');
 	await answered(page);
 
-	await expect(page.locator('[data-search-empty]')).toHaveText(
-		/^Nothing in [A-Z][a-z]+ \d{4} is close to that\.$/
-	);
+	const empty = page.locator('[data-search-empty]');
+	await expect(empty).toHaveText(/^No story from .+ is close to that\.$/);
+	// The same days the line under the box named, so a miss is answerable.
+	await expect(empty).toContainText(longDate(await newestDay(page)));
 	await expect(page.locator('h2').first()).toHaveText('Stories');
 	expect(await titles(page)).toEqual(browsed);
 });
