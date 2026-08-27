@@ -1,6 +1,6 @@
 # Visual routing and rendering
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 How an item gets a chart, a diagram, or - most of the time - nothing at all.
 
@@ -377,6 +377,35 @@ cancelled and had already binned its artifact. A warning that only ever describe
 control. The same field now stops the loop, which is the smallest change that makes the job fit its
 bound by design instead of by which host it drew (Rule #2).
 
+**Why the 2026-08-24 day was repaired by nulling every shared claim.** Authority: owner,
+2026-08-27. Seeding the counter from disk stopped the next collision; it did nothing for the day
+that already had one. `frontend/public/digest/2026/08/24/digest.json` declared **32 visuals over 18
+files** - fourteen SVGs each sat under two different stories. For each of those fourteen pairs one
+item is the story the chart was drawn for and the other is not, and the payload does not say which,
+so 28 of the day's 731 items carried a picture that may be somebody else's, under alt text naming
+figures that are not in it. Counting every committed day, that day is the only one affected:
+2026-08-21 published no visual at all, 2026-08-22 and 2026-08-23 published one each, and 2026-08-25
+(27 visuals over 27 files) and 2026-08-26 (40 over 40) are one file per item throughout.
+
+The repair nulls the `visual` on all 28 items that named a shared path, then deletes the 14 SVGs
+that leaves unreferenced. Every one of the day's 731 items keeps its text, and the 4 pictures that
+only ever had one claimant survive. Keeping one picture of each pair would have published a guess
+dressed as a fact, and a wrong picture under confident alt text is worse than no picture - not
+least because no picture is already the ordinary answer for an item, so nobody is surprised by one.
+
+**The guard is a test over the committed archive, not a rule to remember.**
+`backend/tests/test_published_assets.py` reads every committed day and asserts three things: no two
+items name one visual path, every declared path resolves to a file on disk, and no SVG in a day's
+directory is unreferenced. The first is the 2026-08-24 defect. The second and third are the two
+ways a repair or a renumbering leaves the payload and the directory disagreeing about what the day
+published.
+
+One live interaction is known, and it is the guard working rather than a false alarm. The prune -
+`visuals_older_than` in [`retention.py`](../../../backend/idhazh/retention.py) - deletes an old
+day's SVGs and leaves the payload that names them alone, on purpose: it removes visuals, never a
+day. So switching the prune on fails the second assertion on the first day it prunes. The prune has
+to learn to null the item's `visual` as it deletes the file before it can be enabled.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -389,6 +418,9 @@ bound by design instead of by which host it drew (Rule #2).
 | Name the asset from the item's own identity, `<vertical>-<url_key prefix>.svg` | The full fix. It removes the counter, so no two runs and no two shards can ever choose one path, and it is what sharding is waiting for. It is also a published-payload change to a shape [`layout.md`](layout.md) states deliberately - no hash appears in any path, filename or URL - so it is CLAUDE.md section 6 Level 5 and belongs to the owner, not to a defect fix. Escalated 2026-08-25, not shipped. |
 | Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
+| Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.image_months` is `-1`, which switches the prune off entirely, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
+| Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
+| Re-render the 2026-08-24 day from its committed routes | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `routes` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's routes expired on 2026-08-25, before anyone read the handover. |
 | Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
 | Give a budget-stopped item a `Route` saying so | It would land in `items_prefiltered`, which counts one specific cause, and it would freeze a `none` into the published day that a later run can never lift. Not writing a payload is what an unreached item already looks like. |
