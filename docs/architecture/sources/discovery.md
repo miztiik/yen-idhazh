@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -87,8 +87,6 @@ The site is the open question, and the two candidates carry different contract c
 Whichever is chosen, one boundary rule holds. A matcher that reads article text reads a stranger's page, so it runs after `sanitize` and it may only ever emit a member of a closed enum ([trust-boundary.md](trust-boundary.md), Rule #11). A hostile page can then win itself a tag we already publish. It can never invent one, and it never reaches a prompt.
 
 **There is a third outcome, and it is cheaper than either.** Fowler, consulted 2026-08-26: before asking how to build the tagger, ask whether the surface should exist. Three fields, two schemas, a frontend type and a config vocabulary are rent paid every day by a feature with no reader-facing consumer today. The consultation therefore weighs three options, not two - tag at Extract, tag in the plan job, or delete the three dimensions and their vocabularies and stop paying. Deleting is itself a breaking contract change needing a read-side migration (section 11), so it is the same class of work; it is not the cheap way out, only the honest third choice.
-
-Filed as defect 17 in [`../../../TODO/20260823-known-defects-plan.md`](../../../TODO/20260823-known-defects-plan.md).
 
 ## The match rule
 

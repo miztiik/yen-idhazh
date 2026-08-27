@@ -72,8 +72,8 @@ This is where Reader and the owner disagreed, and it is worth recording properly
 | Band | On the item |
 | --- | --- |
 | `high` | **Nothing.** Ink spent on the absence of a problem, and colour-only |
-| `medium` | A 6px dot and "Mostly matches the source" |
-| `low` | A 6px dot and "May not match the source", the label in the low token |
+| `medium` | A 6px dot and the sentence named by `band_reason`. An older payload with no reason falls back to "Mostly matches the source" |
+| `low` | A 6px dot and the sentence named by `band_reason`, in the low token. An older payload with no reason falls back to "May not match the source" |
 
 It sits **on the meta line, after the summary and beside the source link** - never above the title. A caveat above the title pre-judges an item before the reader has read a word. The reading order is: what it is, what it says, then where it came from and how sure we are.
 
@@ -119,7 +119,11 @@ Pills rather than tabs. Tabs assert a fixed exhaustive set of panels; the vertic
 
 Each pill is a link to a prerendered route, so middle-click, share and back all work. Lenses and events are not on the pill row: thirteen mostly-zero controls above seventeen items is a control bar longer than some days.
 
-"Mostly-zero" understates it. All thirteen are zero, on all 1889 published items, because nothing in the pipeline assigns a lens or an event - measured 2026-08-26 and diagnosed in [../sources/discovery.md](../sources/discovery.md). The ruling holds either way, and it would still hold if the fields were populated tomorrow.
+The committed days still carry no lens, event or entity on any of their 2,237
+items because they were not backfilled. The pipeline now assigns all three on
+newly extracted articles through the deterministic rule in
+[../sources/discovery.md](../sources/discovery.md). The UI ruling holds either
+way: sparse, payload-dependent dimensions do not get a permanent control row.
 
 ## The read mark is held per day, and it expires
 
