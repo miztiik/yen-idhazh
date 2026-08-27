@@ -28,6 +28,15 @@ would be about different documents. Extracted text alone would hide the case
 where the extractor grabbed navigation chrome, which is what `not_the_article`
 is for.
 
+**The text comes from an evidence package, and a row without one is refused.**
+The committed ledger holds digests, never text, so the article and the summary
+travel out of the run in `backend/var/evidence/`, which is gitignored, and reach
+another machine as a workflow artifact. `--evidence` names the copy to read. A
+row whose premise cannot be proved to be the one the scorer read is skipped with
+the reason printed, because a labeller reading different text from the scorer
+measures nothing. That includes every row scored before 2026-08-27, when no run
+recorded a premise at all.
+
 Both the summary and the article body are untrusted (Rule #11). They print as
 inert terminal text and are sanitized on the way to the note field.
 """
@@ -46,7 +55,7 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 
 from idhazh import config  # noqa: E402
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict  # noqa: E402
-from idhazh.evals import labels  # noqa: E402
+from idhazh.evals import evidence, labels  # noqa: E402
 from idhazh.evals.writer import LEDGER_RELPATH as SCORES_RELPATH  # noqa: E402
 from idhazh.sanitize import sanitize  # noqa: E402
 
@@ -120,18 +129,48 @@ def report(
         )
 
 
+def package_report(
+    queue: Sequence[dict[str, str]], package: dict[str, Path], *, where: str
+) -> None:
+    """How much of the draw can be judged at all, counted before anybody starts.
+
+    Said once and up front. The alternative is a labeller meeting the same
+    refusal sixty times and inferring the answer from the pattern, which is
+    slower and is how somebody talks themselves into judging a row anyway.
+    """
+    reasons: dict[str, int] = {}
+    for record in queue:
+        refusal = evidence.look_up(package, record).refusal
+        if refusal:
+            reasons[refusal] = reasons.get(refusal, 0) + 1
+    blocked = sum(reasons.values())
+
+    print(f"evidence         {where} -> {len(package)} file(s)")
+    print(f"labellable       {len(queue) - blocked} of {len(queue)}")
+    for refusal, count in sorted(reasons.items()):
+        print(f"  {count} skipped: {refusal}")
+    print(RULE)
+
+
 def _prompt(
-    item: dict[str, str], *, index: int, total: int
+    item: dict[str, str], found: evidence.Evidence, *, index: int, total: int
 ) -> tuple[LabelVerdict, LabelTag] | object | None:
     """Show one item and take one answer. `None` stops, `SKIP` passes on the row."""
     print()
     print(RULE)
     print(f"[{index}/{total}]  {item['date']}  {item['source_url']}")
     print(RULE)
+    if found.item is None:
+        print(f"NOT LABELLABLE: {found.refusal}.")
+        print("Nothing recorded for this row.")
+        return SKIP
     print(f"Source headline: {item['title']}")
     print()
+    print("THE ARTICLE, as the scorer read it")
+    print(found.item.premise)
+    print()
     print("OUR SUMMARY")
-    print(item.get("summary") or "(the ledger holds no summary text for this row)")
+    print(found.item.summary)
     print()
     print("Does this assert anything the article does not support?")
     print("  [y] yes   [n] no   [s] skip   [q] stop")
@@ -144,7 +183,7 @@ def _prompt(
         return (LabelVerdict.SUPPORTED, LabelTag.NONE)
     if answer != "y":
         print("not one of the options; nothing recorded")
-        return _prompt(item, index=index, total=total)
+        return _prompt(item, found, index=index, total=total)
 
     print("Which defect?")
     for key, tag in TAG_KEYS.items():
@@ -161,6 +200,15 @@ def main() -> int:
     ap.add_argument("--draw-id", default="", help="Defaults to <today>-decile-<n>.")
     ap.add_argument("--label", action="store_true", help="Label the queue, one row at a time.")
     ap.add_argument("--labeller", default="", help="Your name. Must be in evaluation.labellers.")
+    ap.add_argument(
+        "--evidence",
+        default="",
+        help=(
+            f"The evidence package to read the article and the summary from. Defaults to "
+            f"{evidence.EVIDENCE_ROOT_RELPATH}, which a local run writes. Point it at a "
+            "downloaded artifact directory for a day CI produced."
+        ),
+    )
     args = ap.parse_args()
 
     settings = config.load(REPO_ROOT / "config")
@@ -176,6 +224,10 @@ def main() -> int:
         per_decile=evaluation.label_draw_per_decile,
     )
     report(queue, records, settings)
+
+    named = Path(args.evidence) if args.evidence else REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
+    package = evidence.index(named)
+    package_report(queue, package, where=evidence.posix_relpath(named, base=REPO_ROOT))
 
     if not args.label:
         print("\nread-only. Pass --label --labeller <name> to record verdicts.")
@@ -197,7 +249,7 @@ def main() -> int:
         if (item["label_id"], args.labeller) in done:
             continue
         started = time.monotonic()
-        answer = _prompt(item, index=index, total=len(queue))
+        answer = _prompt(item, evidence.look_up(package, item), index=index, total=len(queue))
         if answer is None:
             break
         if answer is SKIP:
