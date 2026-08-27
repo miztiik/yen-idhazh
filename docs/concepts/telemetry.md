@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-08-27
 
 The structured-event vocabulary: the envelope every event carries, the standard event names, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -59,10 +59,28 @@ planned item as `ok` or `failed`, with a closed `FailureCode` vocabulary. A log
 line is evidence that the event happened; the ledger row is the record a later
 run or dashboard reads.
 
-Assemble writes that census once per run after it has merged the worker payloads.
-It writes one row for every planned item, including a `not_attempted` row when no
-article payload arrived. That keeps the denominator in the same file as the
-failure count.
+Two stages write that census, and one row identity keeps them from disagreeing.
+
+A worker commits the rows for its own items as soon as each one settles. Until
+it did, a shard's verdicts left the runner only inside a run artifact that
+expires in a day and is skipped entirely when a job is cancelled - so a run
+stopped between the workers and the publish had measured every item and recorded
+none of it. A bad day is exactly the day worth measuring.
+
+Assemble then writes the whole day's census, including a `not_attempted` row for
+every planned item no article payload arrived for. That keeps the denominator in
+the same file as the failure count.
+
+**A row is one planned item on one run**: `(date, run_id, item_id)`. The ledger
+filters on that identity before it writes, so assemble's copy of a row the worker
+already committed is the same row and lands once. That filter is what makes a
+second writer safe: `merge=union` keeps the lines from both sides rather than
+collapsing them, the published projection copies every row into the file the
+console reads, and an append-only ledger cannot correct a row afterwards.
+
+A worker records only items that have settled. An item whose summary payload is
+simply not written yet was interrupted, not failed, and assemble classifies it
+later once the difference no longer matters.
 
 ## No network sink
 

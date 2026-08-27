@@ -103,6 +103,7 @@ class TestTheStageAssembledTwice:
         settings = config.load(CONFIG_DIR)
         monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
         monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        monkeypatch.setattr(cli, "INDEX_ROOT", tmp_path / "public" / "assist" / "index")
         monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
         monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
         items_dir = tmp_path / "run" / full_plan().date / "items"
@@ -134,6 +135,7 @@ class TestTheStageAssembledTwice:
         settings = config.load(CONFIG_DIR)
         monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
         monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        monkeypatch.setattr(cli, "INDEX_ROOT", tmp_path / "public" / "assist" / "index")
         monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
         monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
         items_dir = tmp_path / "run" / full_plan().date / "items"

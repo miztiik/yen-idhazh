@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-26
+**Last Updated**: 2026-08-27
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -41,7 +41,7 @@ In order, with what each one owns:
 | **Evaluate** | Scoring the summary, and knowing what each score cannot see. See [evaluation.md](evaluation.md). | One eval row per item, appended to the committed ledger. |
 | **Route** | Deciding whether an item gets a chart, a diagram, an illustration, or nothing - where "nothing" is a frequent and correct answer. It stops at its own budget rather than waiting to be killed, and it visits the best story first so what it cannot reach is the day's weakest items. When the model gives no answer, the run log separates a request the server refused because the prompt was too long from a server that never answered at all: the item is decided with no visual either way, but only one of the two means a process is down. See [../architecture/publishing/visuals.md](../architecture/publishing/visuals.md). | A route decision per item, for the items it reached. |
 | **Render** | Producing the visual the route asked for. A render failure degrades the item to no visual; it never fails the item. | The visual asset, or nothing. |
-| **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. It also writes the item-health census once per run, because it is the only stage that sees every planned item and every finished payload. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md). | One dated day payload plus its run manifest under `frontend/public/digest/`, and one item-health row per planned item under `state/item-health/`. |
+| **Assemble** | Collecting whatever finished into the published digest, including when some items did not finish. It also completes the item-health census, because it is the only stage that sees every planned item - a worker has already committed the rows for the items it settled, and Assemble adds the rest. See [../architecture/publishing/layout.md](../architecture/publishing/layout.md). | One dated day payload plus its run manifest under `frontend/public/digest/`, and one item-health row per planned item under `state/item-health/`. |
 
 **Collect and Assemble are the only stages that see the whole day.** Everything between them sees exactly one item, which is what allows the middle of the pipeline to run as many independent workers.
 
@@ -103,12 +103,12 @@ ledger contract sit under `state/`:
 | `state/published.csv` | Assemble | Have we already published this address? |
 | `state/feed-health/<YYYY-MM>.csv` | Collect | What did every feed do, on every run? |
 | `state/fingerprints.csv` | not wired; intended single writer is Assemble | Which observed pipeline identities have run? The committed file currently has only its header. |
-| `state/item-health/<YYYY-MM>.csv` | Assemble | What did every planned item do in this run? |
+| `state/item-health/<YYYY-MM>.csv` | the worker, then Assemble | What did every planned item do in this run? |
 
 Three rules hold for all of them:
 
 - **Append, never rewrite.** A mutable flag would turn an append into a read-modify-write over the whole history, and two runs racing on that lose rows.
-- **The stage that can honestly answer is the stage that writes.** Assemble writes the published ledger, not Collect - until a digest is committed, nothing was published, and a run that dies mid-way must not leave a claim that it finished.
+- **The stage that can honestly answer is the stage that writes.** Assemble writes the published ledger, not Collect - until a digest is committed, nothing was published, and a run that dies mid-way must not leave a claim that it finished. It is also why the worker writes the item-health row for an item it settled, as soon as it settles: it can answer for that item, and by the time Assemble runs the answer may already have been thrown away with the run. A row is one planned item on one run, so the two writers cannot count the same item twice.
 - **Nothing under `state/` is ever served.** The console reads it at build time and bakes the numbers into the page. A reader gets the figures, never the file.
 
 See [../architecture/sources/freshness.md](../architecture/sources/freshness.md) for the first two and [../architecture/sources/health.md](../architecture/sources/health.md) for the third.
