@@ -124,12 +124,12 @@ updates its baseline cannot fail.
 **The page ceiling is one-sided, and it bounds the document rather than the
 script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
 `gzip -9` size each named route's prerendered HTML may reach. A page that got
-lighter needs no permission, so there is no lower bound. Only routes whose HTML
-does not grow with the published data are named - `/404` and `/evals/` today. A
-day page weighs what the day published, and `/archive/` and `/console/` grow the
-same way, so a fixed ceiling on any of them would cap the news or fail on an
-ordinary publish instead of catching a regression; those are covered by the
-marker count in `frontend/tests/payload-weight.spec.ts`, which runs in the
+lighter needs no permission, so there is no lower bound. A route is named when
+its growth has been priced: `/404` and `/evals/` move only when the source moves,
+and `/archive/` grows by one day link a published day. A day page weighs what the
+day published and `/console/` weighs what the ledger holds, so a fixed ceiling on
+either would cap the news instead of catching a regression; those are covered by
+the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in the
 browser suite. A route the config does not name is reported by the gate without
 failing it.
 
@@ -142,15 +142,20 @@ When a named route is over, two failures are worth telling apart:
   number lives in that file alone - the `PageWeightConfig` default is empty - so
   there is no second copy to move.
 
-**`/archive/` and `/console/` are not capped, and that is deliberate.**
-`/console/` grows with the ledger its charts read. `/archive/` used to inline
-every committed day to feed the on-device search and grew about 170 KB gzipped
-per published day; it stopped on 2026-08-27, and what is left grows per day and
-per month rather than per story. A fixed ceiling on either was a countdown, not
-a bound: it fired on an ordinary publish and was raised to silence it -
-`/archive/` twice in one day on 2026-08-26 - which is a gate that never actually
-held. Their growth belongs to the marker count above
-([../reference/measurements.md](../reference/measurements.md#the-prerendered-page-on-the-wire)).
+**A ceiling is not raised to buy time.** `/archive/` was capped, raised twice in
+one day on 2026-08-26 to silence a gate that fired on ordinary publishes, and
+then uncapped, because a page that inlined every committed day could not hold a
+fixed number. It is capped again since 2026-08-27 at 7,446 bytes, which is the
+heaviest of five builds plus a measured year of publishing plus the 64-byte
+noise floor. That headroom shrinks 12 to 17 bytes on every publish and expires by
+design: when the gate fires on an ordinary day about a year from now, the answer
+is to re-measure and re-derive the number, not to add a digit
+([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
+
+**`/console/` is not capped, and that is deliberate.** It grows with the ledger
+its charts read, and nobody has measured what a day of ledger costs it, so there
+is no number to derive a ceiling from. Its growth belongs to the marker count
+above.
 
 ## The browser suite
 

@@ -1214,15 +1214,18 @@ These are the numbers behind `page_weight.ceilings_bytes` in
 `config/idhazh.json`, which
 [../how-to/run-the-gates.md](../how-to/run-the-gates.md) explains.
 
-**Superseded 2026-08-26: only `/404` and `/evals/` are still enforced.** The
-`/archive/` and `/console/` ceilings below were removed from the committed
-config after they behaved as the countdowns this section already documents -
-firing on ordinary publishes and being raised to silence them rather than
-catching any regression. Both routes grow with the published corpus and the
-ledger, so their growth is covered by the marker count in
-`frontend/tests/payload-weight.spec.ts` and, for `/archive/`, by its own plan.
+**Superseded 2026-08-26, and partly reversed 2026-08-27.** The `/archive/` and
+`/console/` ceilings below were removed from the committed config after they
+behaved as the countdowns this section documents - firing on ordinary publishes
+and being raised to silence them rather than catching any regression.
+`/console/` is still uncapped: it grows with the ledger its charts read and
+nobody has priced that growth. `/archive/` is capped again, because it stopped
+inlining the day payloads and now grows by one day link a day rather than by
+every story - see
+[The ceiling that holds the saving](#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from).
 The tables that follow stay as the dated record of what those ceilings were and
-why a fixed byte number could not hold them (Rule #10).
+why a fixed byte number could not hold them while the page carried the corpus
+(Rule #10).
 
 | Route | Build 1 | Build 2 | Build 3 | Range | Ceiling committed |
 | --- | ---: | ---: | ---: | ---: | ---: |
@@ -1377,6 +1380,80 @@ sibling `.bin` joins the JSON), and `static/digest` from 1,055,600 to 6,976,807
 1.76 MB off the page, and the two are paid by different people - every visitor
 pays the page, and only a reader who searches and then opens a result pays a day
 payload.
+
+#### The ceiling that holds the saving, and where its headroom comes from
+
+Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-27. Commit
+`c0e6780`, which is the archive branch with `origin/main` at `48d6207` merged
+in. Method: `npm run build` then `frontend/scripts/bundle-gate.mjs`, five builds
+of one tree, six committed days, 2,237 items.
+
+| Route | 1 | 2 | 3 | 4 | 5 | Range | Ceiling committed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/archive/` | 2,904 | 2,899 | 2,902 | 2,906 | 2,904 | 7 | **7,446** |
+
+**The number this replaces is not a smaller one, it is no number at all.** The
+`/archive/` ceiling was deleted on 2026-08-26 because a page that inlined every
+committed day could not hold one. So the page went from 1,766,585 bytes with
+nothing above it - measured by CI on `origin/main` at `48d6207`, run
+`33032515368` - to 2,906 bytes with a ceiling 237 times smaller than the weight
+it used to carry.
+
+**The headroom is a measured year of publishing, not a round number.** The other
+two capped routes sit 58 to 71 bytes under their ceilings, because `/404` and
+`/evals/` move only when the source moves and 64 bytes is the build noise floor.
+`/archive/` is deliberately not on that convention: it renders one link per
+published day, so the tight convention would fire on the fourth ordinary publish
+- which is exactly the countdown that got the last `/archive/` ceiling deleted.
+
+What a day costs was measured directly on the built page rather than derived
+from the two-corpus table above: take `build/archive/index.html`, add k future
+days to both places a day appears - the compact day row and the serialized
+`days` array - give each one a real item count cycled from the six committed
+days, add the month keys those days need, and `gzip -9` the result.
+
+| Days added | `gzip -9` | Added | Bytes a day |
+| ---: | ---: | ---: | ---: |
+| 0 | 2,902 | 0 | - |
+| 1 | 2,919 | 17 | 17.00 |
+| 7 | 3,034 | 132 | 18.86 |
+| 30 | 3,370 | 468 | 15.60 |
+| 90 | 4,103 | 1,201 | 13.34 |
+| **365** | **7,378** | **4,476** | **12.26** |
+| 730 | 11,381 | 8,479 | 11.62 |
+
+The marginal day gets cheaper as the page grows, from 17 bytes for the next one
+to 12.26 averaged over a year, because each day link is nearly a copy of the one
+above it and gzip charges less for a repeat. So the arithmetic is:
+
+```text
+2,906  heaviest of five builds
++ 4,476  a year of ordinary publishing, measured
++    64  the build noise floor already derived in bundle-baseline.json
+= 7,446
+```
+
+**What the headroom cannot absorb.** 4,540 bytes of slack sounds generous until
+it is priced in the unit of the regression: a day payload back on the page costs
+788.8 gzipped bytes an item (measured above), so the ceiling fires the moment
+six items' payloads return. The regression it exists to catch is not six items -
+it is the whole corpus, 1,763,781 bytes, which is **388 times the headroom**.
+Restoring the eager load was run against this ceiling on 2026-08-27: the page
+built at 1,766,687 bytes and the gate failed with `/archive/ weighs 1,766,687 B
+(1766.7 KB), 1,759,243 B over the 7,444 B ceiling`, at the 7,444 this was set to
+before a fifth build moved the base two bytes.
+
+**The headroom tightens on its own.** It is at its loosest the day it is set and
+shrinks 12 to 17 bytes every publish, so by day 300 there is about 840 bytes of
+slack - one item. A ceiling that gets stricter without anybody editing it is the
+opposite of the one this replaces, which got looser every time somebody raised
+it.
+
+**Revisit at a year, or when the archive page starts rendering something new.**
+At 366 days of publishing the page passes 7,446 and the gate fires on an
+ordinary publish. That is the design: re-measure and re-derive then, rather than
+add a digit. If the page ever renders per-story markup again the per-day figure
+above is void and the ceiling has to be re-derived before it is raised.
 
 Hardware: Intel Core i7-1265U, Windows, onnxruntime 1.29.0. Date: 2026-08-26.
 Method: decode each committed vector, re-encode its item's `title. summary`

@@ -779,13 +779,13 @@
     },
     "PageWeightConfig": {
       "additionalProperties": false,
-      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nOnly a route whose HTML does not grow with the published corpus is worth a\nfixed ceiling. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone. `/archive/` inlines every committed\nday and `/console/` grows with the ledger its charts read, so a byte ceiling\non either fails on an ordinary publish rather than catching a regression;\nthe marker count in `frontend/tests/payload-weight.spec.ts` covers the class\nthose two belong to, and a route the config does not name is reported by the\ngate without failing it.",
+      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when its HTML either does not grow with the\npublished corpus, or grows by a bounded amount a person can price for a\nyear. `/404` and `/evals/` render no day and no ledger, so their weight is a\nfunction of source alone and their ceiling is the heaviest build plus the\n64-byte noise floor. `/archive/` grows, but only by one day link a day since\nit stopped inlining the day payloads, so its ceiling carries a year of that\ngrowth as measured headroom. `/console/` grows with the ledger its charts\nread and nobody has priced that growth, so it stays uncapped; the marker\ncount in `frontend/tests/payload-weight.spec.ts` covers it, and a route the\nconfig does not name is reported by the gate without failing it.",
       "properties": {
         "ceilings_bytes": {
           "additionalProperties": {
             "type": "integer"
           },
-          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed, so only routes whose weight does not grow with the published corpus - /404 and /evals/ today - carry a ceiling.",
+          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed. A route earns a ceiling when its growth is priced: /404 and /evals/ grow only when the source does, and /archive/ grows by one day link a day, so its ceiling carries a measured year of that. /console/ grows with the ledger and stays uncapped until somebody measures it.",
           "title": "Ceilings Bytes",
           "type": "object"
         }
@@ -1185,6 +1185,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "page_weight.ceilings_bytes gained /archive/ again, at 7,446, and PageWeightConfig now says a route earns a ceiling when its growth is priced rather than when it does not grow.",
+      "version": "2026-08-27T05:00",
+      "why": "/archive/ was dropped on 2026-08-26 because it inlined every committed day, grew about 170 KB a publish, and was raised twice in one day to silence it - a countdown, not a bound. Search reads the month index now, so the page grows by one day link instead of by every story: measured 2026-08-27 at 2,906 bytes gzipped against 1,766,585 on main, and a year of publishing adds 4,476 more. With no ceiling the 99.8 percent saving had nothing holding it, and restoring the eager load would have passed every gate. Committed value only - the model default stays empty, the shape and the validation are unchanged, and every older config still validates, so no read-side migration (section 11)."
+    },
+    {
       "change": "assist.search_months added, defaulting to 1.",
       "version": "2026-08-27T02:30",
       "why": "Archive search used to rank over every committed day, because the page carried every committed day. It now reads month shards, so how many months it reads is a real choice and it was about to become a literal in the ranking module (Rule #6). One month, because the reader waits on the download and not on the arithmetic: measured 2026-08-26, a month of vectors is 518 KB and about 2.1 seconds on a 10 Mbit line at the rate the committed days ran, against 74 to 159 milliseconds of ranking, and three months is a 14.4 second download. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
@@ -1397,7 +1402,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-27T02:30",
+      "default": "2026-08-27T05:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1411,5 +1416,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-27T02:30"
+  "version": "2026-08-27T05:00"
 }
