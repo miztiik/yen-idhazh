@@ -1923,9 +1923,9 @@ def stage_assemble(
 def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
     """What this digest actually carried, as addresses a later run can skip.
 
-    The digest item knows the item id and the plan knows the address, so the
-    two are joined here rather than widening the published payload with a hash
-    no reader will ever look at.
+    The digest item knows the item id and the plan knows the key, so the two are
+    joined here rather than widening the published payload with anything the
+    skip read does not open.
 
     That join is also the filter, and it is load-bearing: `ledger._append`
     writes every row it is handed, so nothing downstream would collapse a
@@ -1947,7 +1947,6 @@ def _published_rows(day: DigestDay, plan: RunPlan) -> list[PublishedRow]:
             PublishedRow(
                 version=PublishedRow.schema_version(),
                 url_key=planned.url_key,
-                canonical_url=planned.canonical_url,
                 published_on=day.date,
                 item_id=item.item_id,
             )

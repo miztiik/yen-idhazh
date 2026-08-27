@@ -60,7 +60,7 @@ An article published at 23:00 on Monday is seven hours old at 06:00 on Tuesday. 
 
 So the assemble stage appends to `state/published.csv`, and the planning step skips any address already in it. **The assemble stage writes it, not the planning step** - until a digest is committed, nothing was published, and a run that dies mid-way must not leave behind a claim that it finished.
 
-Neither ledger is ever rewritten. A mutable `published` flag on a seen row would turn an append into a read-modify-write over the whole file, and two runs racing on that would lose rows.
+No run ever rewrites either ledger. A mutable `published` flag on a seen row would turn an append into a read-modify-write over the whole file, and two runs racing on that would lose rows. A one-shot migration by an operator is the one exception, and it has happened once - see below.
 
 ### The published ledger is one file, and the read has no window
 
@@ -72,28 +72,61 @@ always read whole adds file opens and removes nothing, and filtering rows after
 reading them saves no I/O at all. The general rule is in
 [../contracts/schemas.md](../contracts/schemas.md).
 
-The bound this costs, measured 2026-08-25 and recorded in
-[../../reference/measurements.md](../../reference/measurements.md): 1,449 rows
-at 214.9 B, so 78.4 MB a year at the structural ceiling of 1,000 rows a day.
-`load_published` peaks at 716 B a row while it reads, which is 261 MB at that
-ceiling - 1.6 percent of the runner's 16 GB, in the one job that loads no model.
+The bound this costs, measured 2026-08-26 and recorded in
+[../../reference/measurements.md](../../reference/measurements.md): 2,213 rows
+at 110.7 B, so 40.4 MB a year at the structural ceiling of 1,000 rows a day.
+`load_published` peaks at 498.1 B a row while it reads, which is 182 MB at that
+ceiling - 1.1 percent of the runner's 16 GB, in the one job that loads no model.
 
-**`canonical_url` is 48.5 percent of the row and no code reads it.**
+**`canonical_url` was 48.6 percent of the row, and it is gone.**
 `load_published` reads `url_key` and `published_on` by name, and nothing else
-opens the file. The address is recoverable forever by joining `item_id` and
-`published_on` against that day's payload, where it is already published as
-`source_url`. What the column actually buys is that a person can grep the ledger
-for an address and get the day and the item id back. Without it the same
-question needs the sha256 of the canonicalised URL computed first, which is a
-tool run rather than a look
+opens the file, so the column was paying for a lookup no run ever made. It left
+on 2026-08-26: the contract narrowed, and
+`backend/utilities/migrate_published_ledger.py` rewrote the committed ledger in
+the same commit. The file went from 476,809 B to 244,910 B - 231,899 B and
+104.8 B off every row - on a ledger that has no time bound and therefore never
+stops growing. That is 21.2 MB a year at the rate the ledger itself records and
+38.2 MB at the structural ceiling. The saving was worth taking only because the
+ledger is unbounded and the migration was one file and one pass; the same
+arithmetic over a file that stops growing would not have earned a contract
+break.
+
+**One commit, because the reader never cared and the writer never bargains.**
+`load_published` maps cells by name, so it returns the same mapping from a
+five-column file and from a four-column one - measured 2026-08-26 over two
+fixtures of eleven real rows in
+`backend/tests/test_ledger.py::test_load_published_answers_the_same_from_either_header`.
+The check that does care is `require_matching_header`, and it is called from
+`_append` and from nothing on the read path: a run that tried to append a
+four-column row onto a five-column file raises `Migrate the ledger before
+appending to it`. So the shape change and the file rewrite are one atomic act,
+and there was no read-side transition to stage.
+
+**What it cost, and how to get an address back.** What the column bought was
+that a person could grep the ledger for an address and get the day and the item
+id back. That look is now a two-step join, and the answer is exact:
+
+1. Find the row in `state/published.csv`. It gives `published_on` and `item_id`.
+2. Open `frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json` for that date and
+   read `source_url` off the item with that `item_id`.
+
+Worked, on a real row:
+
+```text
+2026-08-26,india-4491424356
+-> frontend/public/digest/2026/08/26/digest.json
+-> https://newslaundry.com/2026/08/26/knives-pistols-and-aura-farming-inside-delhis-teen-gangs
+```
+
+The join holds for the whole ledger rather than in principle: all 2,213
+committed rows resolve to a `source_url`, with no absent day and no absent item
+(measured 2026-08-26). It keeps holding because retention may never touch a
+day's JSON payload ([../publishing/layout.md](../publishing/layout.md)) - it
+deletes old visuals and nothing else. The direction that got harder is address
+to row: that now needs the sha256 of the canonicalised URL computed first, which
+is a tool run rather than a grep
 ([../../how-to/troubleshoot-one-url.md](../../how-to/troubleshoot-one-url.md)
 shows how much canonicalisation sits between a pasted URL and its key).
-
-The column stays. Dropping it is a breaking change to a persisted contract
-(`CLAUDE.md` section 11) that unblocks no behaviour and saves about 11 MB a year
-at the observed rate. It needs its own plan, its own migration and its own
-rewrite of the committed ledger. It is recorded here so nobody re-derives the
-byte arithmetic, and so nobody removes the column believing it costs nothing.
 
 ## An item's name comes from its address
 
@@ -186,7 +219,7 @@ and guessing it is what this refusal is about.
 | Sharding `state/published.csv` by month | The question has no time bound, so every shard is opened on every run. It adds file opens and removes nothing. |
 | Windowing the dedupe read without sharding the file | Filtering rows after reading them saves no I/O. A window pays only when it can decide which files to skip. |
 | Pruning the published ledger | It is the only record of what a digest carried. Pruning makes a re-publish look new, which is the exact failure the ledger exists to stop. |
-| Dropping `canonical_url` to shrink the row | A breaking change to a persisted contract for about 11 MB a year, unblocking no behaviour. It needs its own plan and its own migration. |
+| Keeping `canonical_url` on the published row for forensics | Dropped 2026-08-26. It was 48.6 percent of a row on a ledger with no time bound, no reader ever opened it, and all 2,213 committed rows recover their address by joining `item_id` and `published_on` against a day payload retention may not touch. |
 
 ## See also
 

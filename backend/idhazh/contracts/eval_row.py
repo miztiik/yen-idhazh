@@ -68,6 +68,22 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-26",
+            change=(
+                "Added self_repetition, nullable, at the end of the row. The ledger's "
+                "header is migrated in the same commit."
+            ),
+            why=(
+                "Every n-gram column here reads the summary against the article. Nothing "
+                "read the summary against itself, so a summary that says the same clause "
+                "three times scored clean on all eleven quality columns - greedy decoding "
+                "has no sampling noise to break a loop, and a repeated sentence is still "
+                "perfectly supported by the source. Null and not zero on the rows that "
+                "predate it: zero means measured and not repeating. Recorded only - no "
+                "band reads it, so METRICS_VERSION did not move."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-23",
             change=(
                 "Added evidential_density and speculative_density, nullable, at the end "
@@ -220,6 +236,21 @@ class EvalRow(Contract):
             "Unresolved-claim markers as a share of the ARTICLE's words. Read against "
             "evidential_density: speculation nobody is cited for is the fragile case. "
             "Null on a row scored before metrics-2."
+        ),
+    )
+    # Appended for the same layout reason as the pair above, and null for the
+    # same meaning reason: 0.0 says the summary was read and never repeated
+    # itself, which is not what a row written before 2026-08-26 can claim.
+    self_repetition: Score | None = Field(
+        default=None,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "Share of the summary's 4-word windows that repeat one it already used. The "
+            "only column that reads the summary against ITSELF: every other n-gram column "
+            "reads it against the article, and a repeated sentence is perfectly supported "
+            "by the article. Zero means no window repeats. Recorded only, never banded. "
+            "Null on a row scored before 2026-08-26."
         ),
     )
 

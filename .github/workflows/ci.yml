@@ -40,6 +40,16 @@ jobs:
       - name: Lint
         run: ruff check .
 
+      # The shell nothing else checks. `ruff` and `mypy` stop at Python, and
+      # .github/scripts/ holds the loop both daily commit steps run - an unset
+      # variable or an unquoted expansion there costs a whole day's digest.
+      # `--severity=style` is the strictest level, so a warning is a failure
+      # rather than a note somebody scrolls past. It reads a file, not a `run:`
+      # body, so the shell written inline in a workflow is covered by the
+      # workflow contract test instead.
+      - name: Lint the shell
+        run: shellcheck --severity=style .github/scripts/*.sh
+
       - name: Type-check
         run: mypy
 
