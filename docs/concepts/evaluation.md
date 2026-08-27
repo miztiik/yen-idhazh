@@ -39,11 +39,10 @@ sanitized full body to the scorer without sending it to the summarizer or
 publishing it. A model-adoption comparison must capture both forms once and
 replay the same bytes for every candidate.
 
-Evaluator identity also needs repair. `HHEM_REVISION` is the mutable string
-`main`, and `weights_digest()` hashes the model name plus that string rather than
-the loaded weight bytes. A scorer version can therefore stay constant while the
-Hub serves different weights. Pin an immutable revision and observe the loaded
-weights before using HHEM to select a model.
+Evaluator identity is now pinned. `HHEM_REVISION` is a full immutable commit,
+and `weights_digest()` hashes the loaded tensors rather than a model name.
+`scorer_version` carries both observations. A scorer that has not loaded cannot
+name its weights and fails instead of minting a plausible identity.
 
 ### The runtime must refuse, not shift
 
@@ -226,31 +225,39 @@ The current queue cannot show the evidence this section requires.
 `state/scores.csv` carries neither summary text nor extracted article text, and
 `label_queue.py` prints a missing-summary fallback. The draw is emitted in
 sequential HHEM-decile blocks, which leaks the hidden score gradient through
-order.
+order. `labels.eligible()` filters only on `scorer_version`, so one draw can also
+mix pipeline fingerprints while the collection rule below requires one fixed
+pair.
 
 Calibration is blocked until the queue joins to a frozen local evidence package
 containing exact source and summary text plus source digest, and globally
-shuffles the selected rows before display. Article bodies remain local and
+shuffles the selected rows before display. It must also select one pipeline
+fingerprint. Treating fingerprints as reported strata instead would change the
+calibration rule and needs owner approval. Article bodies remain local and
 uncommitted.
 
-**The exact remaining requirement**, counted on the committed ledger 2026-08-24:
+**The exact remaining requirement**, checked against the committed ledger and
+current code on 2026-08-27:
 
 | What | Have | Need |
 | --- | --- | --- |
 | Labels | **0** | 60 |
-| Distinct run-days at one `scorer_version` AND one `pipeline_fingerprint` | **1** (`2026-08-24`) | 10 |
-| Eligible rows | 731 | not the constraint |
+| Distinct run-days at the current `scorer_version` AND current `pipeline_fingerprint` | **0** | 10 |
+| Eligible rows at that pair | 0 | not the constraint |
 
-Fixed `scorer_version`:
-`hhem-2.1-open@6a30c896;weights-cffb0b41;metrics-3;bands=0.80/0.50;lead=0.30`.
-Fixed `pipeline_fingerprint`: `969b1917...d2b945`. Note the band values sit
-**inside** the scorer version string, so moving a threshold mints a new scorer
-version and restarts the count. That is correct, and it is also why a cut cannot
-move halfway through a collection.
+The current scorer is
+`hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30`.
+The latest 116 rows use it with the retired Qwen3-8B summarizer. The current
+config uses Qwen3.5-9B, and the summarizer weight digest is part of the pipeline
+fingerprint, so the current pair has not produced a row yet. The previous
+three-day series uses the old scorer and cannot be joined to this one. The band
+values sit **inside** the scorer version string, so moving a threshold also
+mints a new scorer version and restarts the count. That is correct, and it is
+why a cut cannot move halfway through a collection.
 
-**Nothing here may move a threshold.** The instrument exists; the labels do not.
-Until both the label count and the run-day count are met, any re-cut is a number
-chosen so a chart looks humbler.
+**Nothing here may move a threshold.** The label contract and writer exist; the
+usable queue and the labels do not. Until both the label count and the run-day
+count are met, any re-cut is a number chosen so a chart looks humbler.
 
 ## The band says what is missing, not how good the item is
 
