@@ -243,9 +243,10 @@ already carries four facts.
 leaves the story list saying so, and search says `these stories cannot be
 searched on this device` without a click, because the identity check reads the
 index the list already has. No `.bin` leaves the list working and search saying
-the same thing on the first search, because 518 KB of vectors is fetched then
-and not before. Either way the check runs **before** the 43 MB encoder download:
-a reader who cannot be helped by those bytes is not asked to spend them.
+the same thing on the first search, because the vectors - 2.53 MB a month at the
+observed rate - are fetched then and not before. Either way the check runs
+**before** the 43 MB encoder download: a reader who cannot be helped by those
+bytes is not asked to spend them.
 
 ## The search box is a field, and one click is the whole gesture
 

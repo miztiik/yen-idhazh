@@ -167,8 +167,9 @@
 
 	/** Fetch the vectors of every month in scope, before the encoder and not after.
 	 *
-	 * 518 KB a month against 43 MB. A reader the big download cannot help is not
-	 * asked to spend it, which is the same rule the encoder-identity check follows.
+	 * 2.53 MB a month against 43 MB, measured 2026-08-26 at the rate the committed
+	 * days ran. A reader the big download cannot help is not asked to spend it,
+	 * which is the same rule the encoder-identity check follows.
 	 */
 	async function readVectors(): Promise<boolean> {
 		if (scope.length > 0) return true;
