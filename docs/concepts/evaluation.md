@@ -264,22 +264,45 @@ summary defects, and dropping them would bias the sample toward well-extracted
 items - the sampling error this whole page argues against. `unjudgeable` carries
 them, and the rate is reported with and without.
 
-### Current label-queue implementation gap
+### The label queue: three repairs, and what they left
 
-The current queue cannot show the evidence this section requires.
-`state/scores.csv` carries neither summary text nor extracted article text, and
-`label_queue.py` prints a missing-summary fallback. The draw is emitted in
-sequential HHEM-decile blocks, which leaks the hidden score gradient through
-order. `labels.eligible()` filters only on `scorer_version`, so one draw can also
-mix pipeline fingerprints while the collection rule below requires one fixed
-pair.
+The queue could not be used by a person until 2026-08-27. Three things were
+wrong with it, and all three are now fixed.
 
-Calibration is blocked until the queue joins to a frozen local evidence package
-containing exact source and summary text plus source digest, and globally
-shuffles the selected rows before display. It must also select one pipeline
-fingerprint. Treating fingerprints as reported strata instead would change the
-calibration rule and needs owner approval. Article bodies remain local and
-uncommitted.
+**It never showed the labeller the article.** `state/scores.csv` carries no
+summary text and no source text, so `label_queue.py` printed a missing-summary
+fallback on every row. That fallback was not a degradation - it was the only
+branch that could ever run, because `summary` is not a column in that file at
+all. The run now writes the exact premise the scorer read, plus the summary, to
+`backend/var/evidence/<date>/`, and records a `source_digest` on the eval row.
+The CLI shows both texts and refuses any row whose text does not match its
+recorded digest, so a labeller cannot judge text the scorer did not read. A row
+scored before that column existed is marked not labellable rather than guessed
+at, and all 2,232 rows written before 2026-08-27 are in that state.
+
+**The draw leaked the hidden score gradient through its order.** `draw()`
+returned rows in sequential HHEM-decile blocks. The number was hidden and the
+stratum was not. It now returns one global `label_id` sort. `label_id` is
+already a sha256 over the address, the inputs, the words, the instrument and the
+draw, so the shuffle needs no seed and stays reproducible - two labellers can
+compare notes by position. **The strata are how rows are chosen, never how they
+are ordered.** Measured over the 38 rows at `draw_id=d1`: 9 runs of equal decile
+before, 28 after.
+
+**A global hash shuffle does not balance a prefix, and the first version of this
+rule said it did.** Over those same 38 rows the first ten deciles run 9, 9, 8, 9,
+9, 9, 5, 8, 9, 7. Balance is a property in expectation, not per draw. Stopping
+early gives a roughly balanced sample, not a guaranteed one, and a partial draw
+may not be reported as stratified.
+
+**One draw is one `(scorer_version, pipeline_fingerprint)` pair, enforced rather
+than warned about.** `eligible()`, `draw()` and `run_days()` all require both
+halves with no default, so the pool can no longer hold two pipelines. An empty
+pool exits non-zero and prints every pair in the ledger with its row count and
+date range, because a tool that says "0 rows at your pipeline, here is what does
+exist" is a usable status report and silence is not. Treating fingerprints as
+reported strata instead would change the calibration rule and still needs owner
+approval. Article bodies remain local and uncommitted.
 
 **The exact remaining requirement**, checked against the committed ledger and
 current code on 2026-08-27. These are exact counts over committed files rather
@@ -289,16 +312,17 @@ any machine.
 | What | Have | Need |
 | --- | --- | --- |
 | Labels | **0** | 60 |
-| Distinct run-days at the current `scorer_version` AND current `pipeline_fingerprint` | **0** | 10 |
+| Distinct run-days at the current `scorer_version` AND current `pipeline_fingerprint` | **1** | 10 |
 | Longest run of consecutive run-days at any one pair, ever reached | **3** (`2026-08-24` to `2026-08-26`) | 10 |
-| Eligible rows at that pair | 0 | not the constraint |
+| Eligible rows at that pair | 114 | not the constraint |
 
 The current scorer is
 `hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30`.
-The latest 116 rows use it with the retired Qwen3-8B summarizer. The current
-config uses Qwen3.5-9B, and the summarizer weight digest is part of the pipeline
-fingerprint, so the current pair has not produced a row yet. The previous
-three-day series uses the old scorer and cannot be joined to this one. The band
+The configured Qwen3.5-9B summarizer wrote its first day under it on
+`2026-08-27`, 114 rows at fingerprint `6a23e277`, and that is the whole window.
+Every earlier row was written by the retired Qwen3-8B, whose weight digest is
+part of the pipeline fingerprint, so none of them can be joined to this series.
+The previous three-day run also uses the old scorer. The band
 values sit **inside** the scorer version string, so moving a threshold also
 mints a new scorer version and restarts the count. That is correct, and it is
 why a cut cannot move halfway through a collection.
@@ -309,9 +333,9 @@ ever held for more than three consecutive run-days, so the gate has never once
 been met. What sends the count back to zero, how often it has gone back, and
 what that costs are in [Design rationale](#design-rationale) below.
 
-**Nothing here may move a threshold.** The label contract and writer exist; the
-usable queue and the labels do not. Until both the label count and the run-day
-count are met, any re-cut is a number chosen so a chart looks humbler.
+**Nothing here may move a threshold.** The queue is usable now; the labels are
+not collected and the run-days are not banked. Until both counts are met, any
+re-cut is a number chosen so a chart looks humbler.
 
 ## The band says what is missing, not how good the item is
 
@@ -383,7 +407,7 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 
 **The measured reset rate (2026-08-27, `state/scores.csv` and `state/fingerprints.csv` at commit `c08d8b5`).** 2,232 eval rows, written by 18 runs across **5 scored run-days** (`2026-08-22` to `2026-08-26`), carry **5 distinct `pipeline_fingerprint` values** and **4 distinct `scorer_version` values** - one new pipeline stamp per scored day, on average. `2026-08-26` alone carried three different (`scorer_version`, `pipeline_fingerprint`) pairs: the stamp moved at that day's second run and again at its fifth, and the scorer version moved at the fifth with it. Every one of those 2,232 rows names the same `model_id`, `qwen3-8b-q4-k-m` - the model did not change once and the stamp still moved four times, so a model swap is *one* cause of a reset rather than the cause. `state/fingerprints.csv` holds a single row, because the ledger that expands a stamp into its inputs only started on 2026-08-26; four of the five stamps can no longer be expanded at all. Authority: measurement.
 
-**The consequence, plainly: the ten-day window has never once been reached (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. The last pair the ledger holds reached one day and was then superseded: adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moves `model_sha256`, so the configured pipeline has written no row yet and the count stands at 0 of 10. At the observed rate of pipeline change, every model or runtime improvement spends the whole window. That is a live tension between shipping a better pipeline and measuring the one already running, and **this page does not resolve it.** Two answers exist - freeze the pipeline for ten days and pay for the window in shipped improvements, or count run-days at one `scorer_version` and carry `pipeline_fingerprint` as a reported stratum instead of a disqualification. The second is the rule change [Current label-queue implementation gap](#current-label-queue-implementation-gap) says needs owner approval. Both are the owner's call. Nothing here moves a threshold. Authority: owner.
+**The consequence, plainly: the ten-day window has never once been reached (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. That reset opened the current window: the 9B wrote its first 114 rows the same day, under `hhem-2.1-open@8e4a2e6e` and `6a23e277`, so the count stands at 1 of 10 and none of the 2,232 earlier rows can join it. At the observed rate of pipeline change, every model or runtime improvement spends the whole window. That is a live tension between shipping a better pipeline and measuring the one already running, and **this page does not resolve it.** Two answers exist - freeze the pipeline for ten days and pay for the window in shipped improvements, or count run-days at one `scorer_version` and carry `pipeline_fingerprint` as a reported stratum instead of a disqualification. The second is the rule change [The label queue: three repairs, and what they left](#the-label-queue-three-repairs-and-what-they-left) says needs owner approval. Both are the owner's call. Nothing here moves a threshold. Authority: owner.
 
 ## Rejected alternatives
 
