@@ -33,11 +33,10 @@ export function load() {
 		// read the knob. `layout.md` requires the archive to say it before
 		// anything is ever deleted.
 		retentionMonths: loaded[0]?.retention_window_months ?? -1,
-		// The same payloads, whole, for on-device search. They are already on this
-		// page's prerendered data - no extra request, which is the constraint the
-		// layout row fixed - and the vectors inside them are what makes the search
-		// possible without the browser embedding anything but a query.
-		payloads: loaded,
+		// The knobs search reads, and nothing search searches. The day payloads used
+		// to be here so on-device search could reach the vectors inside them, which
+		// cost every browsing visitor 1.7 MB gzipped. Search reads the month index
+		// now, and fetches a day only when a result from it is on screen.
 		assist: assistConfig()
 	};
 }

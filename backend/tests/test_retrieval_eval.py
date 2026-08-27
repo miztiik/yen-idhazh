@@ -299,10 +299,18 @@ def test_every_labelled_answer_is_still_in_the_archive(
 
 
 @pytest.fixture(scope="session")
+def embedded(queries: tuple[LabelledQuery, ...]) -> list[list[float]]:
+    """One forward pass per query, shared by every measurement below."""
+    return retrieval.embed_queries(REPO_ROOT, queries)
+
+
+@pytest.fixture(scope="session")
 def report(
-    corpus: Corpus, queries: tuple[LabelledQuery, ...], config: AppConfig
+    corpus: Corpus,
+    queries: tuple[LabelledQuery, ...],
+    embedded: list[list[float]],
+    config: AppConfig,
 ) -> RetrievalReport:
-    embedded = retrieval.embed_queries(REPO_ROOT, queries)
     return retrieval.evaluate(
         corpus,
         queries,
@@ -352,6 +360,100 @@ def test_the_reader_facing_number_is_reported_with_its_coverage(
     assert 0.0 <= report.recall <= report.recall_reachable
     assert report.gold_coverage <= 1.0
     assert report.unanswerable + len(report.answerable) == report.n
+
+
+# --------------------------------------------------------------------------
+# The index is what a reader actually searches
+# --------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="session")
+def index_corpus() -> Corpus:
+    """Every committed month, read the way a reader's tab reads it."""
+    return retrieval.load_index_corpus(REPO_ROOT)
+
+
+@pytest.fixture(scope="session")
+def index_report(
+    index_corpus: Corpus,
+    queries: tuple[LabelledQuery, ...],
+    embedded: list[list[float]],
+    config: AppConfig,
+) -> RetrievalReport:
+    return retrieval.evaluate(
+        index_corpus,
+        queries,
+        embedded,
+        limit=config.assist.result_limit,
+        floor=config.assist.similarity_floor,
+    )
+
+
+def test_the_index_names_every_published_item(corpus: Corpus, index_corpus: Corpus) -> None:
+    """The archive stopped carrying day payloads, so the index is the corpus.
+
+    Membership first, because a lost item is a different failure from a lost
+    vector and only one of them shows up in recall as a small number.
+    """
+    if not index_corpus.items:
+        pytest.skip("no committed month index in this checkout")
+
+    assert {item.address for item in index_corpus.items} == {
+        item.address for item in corpus.items
+    }
+    assert len(index_corpus.searchable) == len(corpus.searchable)
+
+
+def test_moving_search_to_the_index_cost_no_recall(
+    report: RetrievalReport, index_report: RetrievalReport
+) -> None:
+    """The load-bearing half of this row's Oracle.
+
+    A page that got lighter while search got worse is a regression, and the only
+    thing that can tell the difference is this number. Both arms use the same
+    queries, the same labels, the same ranking and the same embedded queries -
+    the only difference is whether the vectors came out of the day payloads the
+    page used to inline or out of the month shard it now fetches.
+
+    One standard error is the band, because that is the precision the instrument
+    has at n=60. Anything tighter would fail on arithmetic noise; anything wider
+    would miss the effect it is here to catch.
+    """
+    if not index_report.outcomes or index_report.corpus_items == 0:
+        pytest.skip("no committed month index in this checkout")
+
+    print("\nday payloads: " + report.summary())
+    print("month index:  " + index_report.summary())
+
+    drift = abs(index_report.recall - report.recall)
+    assert drift <= report.standard_error, (
+        f"the index lost information the day payloads carried: recall@"
+        f"{report.result_limit} is {index_report.recall:.3f} off the index against "
+        f"{report.recall:.3f} off the payloads, a gap of {drift:.3f} against one "
+        f"standard error of {report.standard_error:.3f}"
+    )
+
+
+def test_a_reader_only_searches_the_months_the_knob_names(config: AppConfig) -> None:
+    """`assist.search_months` is what a tab reads, so it is what this asserts.
+
+    The scope buys download seconds rather than compute seconds - a month of
+    vectors is 518 KB and the ranking over it is 74 to 159 milliseconds - so the
+    knob is the only thing standing between a reader and a fourteen-second wait
+    at three months.
+    """
+    whole = retrieval.load_index_corpus(REPO_ROOT)
+    if not whole.items:
+        pytest.skip("no committed month index in this checkout")
+
+    scoped = retrieval.load_index_corpus(REPO_ROOT, months=config.assist.search_months)
+    assert scoped.items, "the configured scope reads no month at all"
+
+    months = {item.date[:7] for item in scoped.items}
+    assert len(months) <= config.assist.search_months
+    assert months <= {item.date[:7] for item in whole.items}
+    # Newest first, so the scope always holds the months a reader would expect.
+    assert months == set(sorted({item.date[:7] for item in whole.items}, reverse=True)[: len(months)])
 
 
 def test_the_floor_lets_the_empty_state_fire(corpus: Corpus, config: AppConfig) -> None:
