@@ -773,6 +773,35 @@ contends with the first.
   shape of the trap generalises - a fixture builder that is not idempotent turns
   every later gate into a coin toss.
 
+## A clean merge is not a working merge
+
+- **A branch that deletes a name, merged with a `main` that added callers of
+  it, merges without a single conflict and fails at import time.** Seen
+  2026-08-27: `feat/search-reads-the-index` replaced the module constant
+  `cli.INDEX_ROOT` with `cli._index_root()`, derived from `PUBLIC_ROOT`, and
+  removed every test that patched the constant. `main` then added eleven tests
+  that patch it. Git took the branch's `cli.py` and main's tests, reported
+  "Merge made by the 'ort' strategy", and eleven tests failed with
+  `AttributeError: module 'idhazh.cli' has no attribute 'INDEX_ROOT'`. Nothing
+  in the merge output hinted at it.
+- **Read the failure before blaming your own change.** All eleven named one
+  attribute and none of them touched the surface the row was about. A whole
+  file of failures with one identical `AttributeError` is a rename that crossed
+  a branch, not a bug you wrote.
+- **Whoever merges owns the semantic conflict, not the branch author.** The fix
+  belongs in the merge commit, and it has to be checked rather than assumed:
+  here every site already patched `PUBLIC_ROOT` at `tmp/public/digest` on the
+  line above, and `_index_root()` returns `PUBLIC_ROOT.parent / "assist" /
+  "index"`, so deleting the line preserved the identical isolation. Confirm the
+  replacement resolves to the same value before removing anything.
+- **Delete repeated identical lines with a script that asserts the count**, not
+  with an edit tool. Four sites carried byte-identical text, so an editor match
+  is ambiguous and a silent partial edit looks like a fix. Assert the expected
+  count before and `not in` after.
+- The cheap early warning: after any merge into a long-lived feature branch,
+  `git grep` the names that branch deleted. `git diff --name-only main...HEAD`
+  tells you which files to look in.
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.

@@ -334,12 +334,13 @@ if (moved.length > 0) {
  *
  * config/idhazh.json decides what is capped. A route it names is measured and
  * failed when it is over; a route it does not name is measured and printed
- * here, but never failed. So only routes whose HTML does not grow with the
- * published corpus carry a ceiling: /404 and /evals/ today. /archive/ inlines
- * every committed day and /console/ grows with the ledger its charts read, so a
- * fixed byte ceiling on either fails on an ordinary publish rather than
- * catching a regression - `tests/payload-weight.spec.ts` covers the class those
- * two belong to by counting a marker instead.
+ * here, but never failed. A route earns a ceiling when somebody priced its
+ * growth: /404 and /evals/ move only when the source moves, and /archive/ grows
+ * by one day link a published day, so its number carries a measured year of
+ * that. /console/ grows with the ledger its charts read and nobody has priced
+ * it, so a fixed byte ceiling there would fail on an ordinary publish rather
+ * than catch a regression - `tests/payload-weight.spec.ts` covers that class by
+ * counting a marker instead.
  */
 const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
 

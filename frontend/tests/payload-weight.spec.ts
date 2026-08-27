@@ -18,9 +18,11 @@ import { join, relative, resolve, sep } from 'node:path';
  * disk.
  *
  * What a count of markers cannot see, `scripts/bundle-gate.mjs` bounds: it holds
- * the routes named in `config/idhazh.json` under a gzip ceiling. `/archive/` and
- * `/console/` are not among them - they grow with the published corpus and the
- * ledger, so this marker count is the only gate they answer to.
+ * the routes named in `config/idhazh.json` under a gzip ceiling. `/archive/`
+ * joined them on 2026-08-27, at a ceiling 237 times under the weight it used to
+ * carry. `/console/` is not among them - it grows with the ledger its charts
+ * read and nobody has priced that growth, so this marker count is the only gate
+ * it answers to.
  *
  * `/archive/` was excluded from the rule below until 2026-08-27, because it
  * inlined every committed day so on-device search could read the vectors
