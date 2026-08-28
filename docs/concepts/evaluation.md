@@ -72,6 +72,31 @@ counting the rows sitting on the 1,923-word cap says 6.3 percent. The first
 number is wrong by a factor of fourteen, and it was quoted inside this project
 before anyone checked the impossible direction.
 
+**Two things now stop it happening again.** `EvalRow` refuses a row whose seen
+count exceeds its full count, mirroring the rule `Article` already enforces -
+the pair could only stay wrong while nothing compared the two cells. And
+`source_word_count` is nullable, so a row can say it does not know instead of
+naming a number nobody measured.
+
+**The committed rows were rewritten**, by
+`backend/utilities/migrate_score_ledger.py`, in the commit that added the rule
+(`CLAUDE.md` section 11). It recovers rather than guesses. An article under the
+cap **is** the text the model saw - `truncate_to_tokens` returns the body
+unchanged, and `Article.word_count` counts that same string - so its full length
+equals its recorded seen length exactly, and **2,204 rows got a real number
+back**. The **142** rows sitting on the cap were emptied: extract discarded that
+body, and copying the seen count into them would have replaced a wrong number
+with a different wrong number. Null is the fact; zero would say the article was
+empty. Rows are selected by their own `version` stamp, so the **220** rows the
+fixed writer had already produced were left alone.
+
+Two readers were taught what an empty cell means in the same commit. The drift
+benchmark keeps such a row and steps over it only in the length rule, so its
+faithfulness and extractiveness still count. The label queue stopped reading the
+column at all - a labeller judges the summary against the premise in front of
+them, which is the truncated text, so `LabelRow` carries
+`source_seen_word_count` and can never be handed a blank.
+
 ### The runtime must refuse, not shift
 
 A llama.cpp server shifts an oversized prompt by default. It drops the middle

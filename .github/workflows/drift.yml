@@ -70,22 +70,31 @@ jobs:
               raise SystemExit(0)
 
           recent, baseline = [], []
+          unknown_length = 0
           for row in csv.DictReader(ledger.open(encoding="utf-8")):
               try:
                   when = datetime.date.fromisoformat(row["date"])
+                  # Empty means the article's length was never recorded, not that
+                  # it was zero. Those rows keep their two other signals.
+                  words = row["source_word_count"]
                   observation = Observation(
                       row["source_url"],
                       float(row["hhem"]),
                       float(row["extractiveness"]),
-                      int(row["source_word_count"]),
+                      int(words) if words else None,
                   )
               except (KeyError, ValueError):
                   continue
+              if observation.source_word_count is None:
+                  unknown_length += 1
               age = (today - when).days
               if age <= recent_days:
                   recent.append(observation)
               elif age <= recent_days + baseline_days:
                   baseline.append(observation)
+
+          if unknown_length:
+              print(f"{unknown_length} rows do not record the article's length")
 
           findings = compare(recent, baseline)
           if not findings:
