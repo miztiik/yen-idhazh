@@ -532,9 +532,21 @@ class EvaluationConfig(Model):
         default=10,
         ge=1,
         description=(
-            "Distinct run-days at one scorer version and one pipeline fingerprint before "
-            "a draw is worth finalising. A draw over one day is a draw over one day's "
-            "sources."
+            "Distinct run-days at one scorer version before a draw is worth finalising. "
+            "A draw over one day is a draw over one day's sources. The pipeline "
+            "fingerprint is reported per stratum rather than required to hold still: "
+            "requiring both made the gate unreachable, and no pair has ever held for "
+            "more than three consecutive run-days."
+        ),
+    )
+    label_min_stratum_rows: int = Field(
+        default=20,
+        ge=1,
+        description=(
+            "Rows one pipeline must contribute to a draw before a result read off that "
+            "stratum may move a threshold. Below it the stratum is printed and marked "
+            "too thin to cut on, because a rate over a handful of rows from one producer "
+            "is noise wearing a decimal point (Rule #10)."
         ),
     )
     golden_set_size: int = Field(default=20, ge=1)
@@ -1035,6 +1047,28 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-27T21:00",
+            change=(
+                "evaluation.label_min_stratum_rows added, defaulting to 20, and "
+                "evaluation.label_min_run_days now counts run-days at one scorer version "
+                "rather than at one (scorer_version, pipeline_fingerprint) pair."
+            ),
+            why=(
+                "The old rule was unreachable, not strict. The pipeline stamp digests "
+                "seventeen inputs - a reworded prompt, a llama.cpp rebuild, a sanitizer "
+                "fix - so shipping any summarize-side improvement reset the count to "
+                "zero. Measured over the whole committed ledger on 2026-08-27: six "
+                "distinct stamps across six scored run-days, and the longest unbroken "
+                "run at one pair is three. Ten was never once reached. What is being "
+                "calibrated is the scorer's cut, which lives inside scorer_version, so "
+                "the pipeline is a covariate: it is reported per stratum and a stratum "
+                "under label_min_stratum_rows is marked too thin to cut on. The trade is "
+                "named rather than hidden - a pooled rate over several producers is a "
+                "prior with wide bounds, never a calibration. Owner decision, 2026-08-27. "
+                "Additive plus a widened meaning; an older config still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27T12:00",
             change=(
