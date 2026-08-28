@@ -30,7 +30,32 @@ Knobs, by the surface they tune:
 
 These are the *surfaces*, not a field list. The field-level truth is `schemas/app-config.schema.json`, generated from the model - read it there rather than restating it here, because a list copied into prose is a list that goes stale.
 
-The knobs are spread across four files rather than one, along the line of who edits them and how often: `config/idhazh.json` for behaviour, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+The knobs are spread across five files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+
+## `config/appearance.json` - the published surface's own file
+
+Split off `config/idhazh.json` on 2026-08-29 on the same argument the source model was split on, one surface later: curating a reading surface and pinning a decode temperature have different review cadences, and one file meant every appearance edit touched the file that holds the sampler seed.
+
+Its blocks:
+
+| Block | What it tunes |
+| --- | --- |
+| `digest` | The day page. Formerly `idhazh.json`'s `ui` block, unchanged in shape. |
+| `console` | The operator viewport. Formerly `idhazh.json`'s `console` block. |
+| `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
+| `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
+| `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
+| `chart` | Drawn height and server-side width, whether a chart answers a pointer, the palette, tick density, and the sparkline and donut geometry. |
+| `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
+| `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
+
+The contract is `backend/idhazh/contracts/appearance_config.py`, and it imports `UiConfig`, `ConsoleConfig` and `AssistConfig` from `app_config` rather than copying them: the file moved, the contract did not fork. `AppConfig` keeps the three moved blocks, and the frontend loader merges three layers - defaults, then the legacy block, then the new file - so a checkout that has not been migrated resolves to exactly what it resolved to before (`CLAUDE.md` section 11). The legacy block is a middle layer rather than a discarded one so a partly migrated file cannot snap a knob back to a default nobody chose.
+
+### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
+
+The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts every bound in both directions.
+
+One cross-block rule is worth naming because it is the one that bites in production rather than in review: `chart.width_px` may not exceed `frame.console_max_px`. The server prerenders every chart at `width_px` because a prerendered chart has no element to measure, and the client re-measures once a script runs. Draw wider than the container can ever be and every first paint is wrong and then visibly snaps - on the one kind of site whose whole premise is that the page is finished before any script runs.
 
 Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml`, `measure.yml` and `validate.yml` each read `models.summarize` and `models.route` from here and republish them as job outputs, including into the weights cache key ([../reference/github-actions.md](../reference/github-actions.md)).
 
