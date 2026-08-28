@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -143,6 +143,32 @@ correct. Do not force it.
    time.
 6. Prove zero loss: `git diff wip/snapshot-<date> HEAD -- <changed paths>` must
    be empty.
+
+**A dirty checkout can be a restored checkpoint, not unfinished work.** The agent
+host commits the whole tree at the start of a turn to
+`refs/agents/<session>/checkpoints/turn/<n>`. Those refs are reachable but sit on
+no branch, and a tree restored from one reads in `git status` as ordinary
+uncommitted work. The tell is the direction of the diff. Measured 2026-08-28, the
+shared checkout held 21 changed files that added 132 lines and removed 5,240 -
+it deleted about 40 times what it added, because yesterday's content was lying
+over today's branch. It was un-writing committed work: a contract field, its
+validator, its changelog entry and its fixture, all still on the branch.
+
+Confirm by matching blobs, not by reading the diff. A file that is byte-identical
+to a checkpoint is that checkpoint, whatever the timestamps say:
+
+```powershell
+git for-each-ref --sort=-committerdate --format='%(committerdate:iso) %(refname)' refs/agents/
+git diff <checkpoint-sha> -- .      # empty across the tracked paths means the tree IS that checkpoint
+git hash-object <path>              # for untracked files, which the line above ignores
+```
+
+Then restore by explicit path. Never `git restore .` (section 8). Discarding
+costs nothing here, because the checkpoint ref holds every byte and stays
+reachable. Check the untracked files by hash too: the same 2026-08-28 tree
+carried a 441 KB `search.ts` at the repo root that was byte-identical to
+`state/published.csv`, and a plan-doc that #112 had closed and deleted on
+purpose.
 
 **Before deleting a leftover branch**, all three legs must hold: the PR reads
 `MERGED` from a live `gh pr view` (not a cached `gh pr list`), its `mergeCommit`
