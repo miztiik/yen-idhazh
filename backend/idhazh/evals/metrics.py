@@ -34,6 +34,7 @@ from collections.abc import Iterable, Sequence
 from typing import Final
 
 from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.evals.hhem import CHUNK_ANCHOR
 
 #: Bumped whenever a definition below changes what an existing column means.
 #: Part of the derived `scorer_version`, so a ledger row keeps meaning what it
@@ -42,6 +43,12 @@ from idhazh.contracts.app_config import EvaluationConfig
 #: under `metrics-3` still says exactly what it said. Moving it would have
 #: restarted the ten-run-day count `docs/concepts/evaluation.md` requires before
 #: any threshold can move, to record a fact no threshold reads.
+#:
+#: It did not move on 2026-08-28 either, when the faithfulness chunker gained a
+#: configured window and an anchored last window. Nothing in this file changed,
+#: so bumping it would assert a change to the counterweights that did not happen.
+#: The new `window=` field in `scorer_version` records that change where it
+#: belongs.
 METRICS_VERSION: Final = "3"
 
 LEAD_SENTENCES: Final = 3
@@ -410,12 +417,17 @@ def scorer_version(
     A hand-bumped string is wrong within a quarter and every row after it
     becomes uninterpretable. A bare digest would be interpretable by nobody, so
     this spells its components instead of hashing them.
+
+    Order is identity, then geometry, then the cuts. `window=` names the premise
+    the number was measured over, which is part of the instrument and not part
+    of the decision made from it.
     """
     return ";".join(
         (
             f"{scorer_id}@{scorer_revision[:8]}",
             f"weights-{weights_sha256[:8]}",
             f"metrics-{METRICS_VERSION}",
+            f"window={evaluation.chunk_words}/{evaluation.chunk_overlap_words}/{CHUNK_ANCHOR}",
             (
                 f"bands={evaluation.band_high_min:.2f}/{evaluation.band_medium_min:.2f};"
                 f"lead={evaluation.lead_coverage_min:.2f}"

@@ -14,6 +14,7 @@ import json
 
 import pytest
 from conftest import CONTRACT_FIXTURES_DIR, read_text
+from pydantic import ValidationError
 
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.article import Article
@@ -525,8 +526,48 @@ def test_scorer_version_spells_its_components() -> None:
     assert (
         version
         == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};"
-        "bands=0.80/0.50;lead=0.30"
+        "window=900/150/anchored;bands=0.80/0.50;lead=0.30"
     )
+
+
+def test_the_counterweights_version_did_not_move_for_the_window() -> None:
+    """`METRICS_VERSION` names the definitions in `metrics.py`, and none changed.
+
+    Moving it would assert a change to the counterweights that did not happen,
+    and it is the same string the ten-run-day label gate counts on. The window
+    geometry is recorded by its own field instead.
+    """
+    assert METRICS_VERSION == "3"
+
+
+def test_a_moved_window_moves_the_scorer_version() -> None:
+    """A different premise is a different measurement, so rows must not pool.
+
+    Both halves of the geometry count. The size decides how much article one
+    score saw; the overlap decides how many windows the max is taken over.
+    """
+    args = {
+        "scorer_id": "hhem-2.1-open",
+        "scorer_revision": "a1b2c3d4e5f6",
+        "weights_sha256": "9f8e7d6c" + "0" * 56,
+    }
+    assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
+        evaluation=EvaluationConfig(chunk_words=1800), **args
+    )
+    assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
+        evaluation=EvaluationConfig(chunk_overlap_words=300), **args
+    )
+
+
+def test_an_overlap_at_or_above_the_window_is_refused() -> None:
+    """The chunker clamps the step to one word, so it walks rather than fails.
+
+    A 4,000-word article at a zero step is 3,101 scorer passes instead of six.
+    That is a job that never finishes, which is the worst way for a config typo
+    to show up.
+    """
+    with pytest.raises(ValidationError, match="chunk_overlap_words must sit below"):
+        EvaluationConfig(chunk_words=900, chunk_overlap_words=900)
 
 
 def test_a_moved_band_moves_the_scorer_version() -> None:

@@ -47,6 +47,8 @@
     "band_high_min": 0.85,
     "band_medium_min": 0.55,
     "brief_compression_ceiling": 0.5,
+    "chunk_overlap_words": 120,
+    "chunk_words": 800,
     "golden_set_size": 40,
     "label_draw_per_decile": 6,
     "label_min_run_days": 10,
