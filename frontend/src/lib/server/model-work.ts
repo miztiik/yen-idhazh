@@ -7,12 +7,34 @@
  * multiplied out, so a raw ratio has no route to the markup.
  *
  * `null` is a designed state and it is not zero. A day the scorer never ran on
- * has summaries nobody counted, and a day whose runtime wrote no timing spent
- * no *measured* time; printing either as zero would say the model did nothing.
+ * has summaries nobody counted, a day whose runtime wrote no timing spent no
+ * *measured* time, and a day whose rows predate a column's redefinition holds
+ * no answer to the question the column asks now; printing any of the three as
+ * zero would say the model did nothing.
  *
  * Imports nothing: the browser suite loads this module in plain Node, where no
  * Vite alias resolves, and it reads the same ledgers the page reads.
  */
+
+/** The ledger stamp from which `truncation_flagged` means extract cut the body.
+ *
+ * A row stamped before this carries the same column under an older meaning: the
+ * gap between two faithfulness scores. That is a different fact about a
+ * different thing, so the two cannot be added together - one number over two
+ * questions is not a count. A day made only of older rows therefore reads as
+ * unknown.
+ *
+ * The stamp compared is the row's own `version` cell, the date-stamp
+ * `CLAUDE.md` section 11 puts on every persisted shape. That format is
+ * ASCII-sortable on purpose, so a plain string compare orders a stamp carrying
+ * a time correctly against a bare date: `2026-08-27T20:30` is before
+ * `2026-08-28`, and `2026-08-28T09:00` is after it. A row with no stamp at all
+ * reads as older, which is the safe direction.
+ *
+ * Not a config knob. It records when a shipped column changed meaning, and a
+ * run that moved it would make the page lie about rows already committed.
+ */
+export const CUT_FLAG_MEANS_A_CUT_FROM = '2026-08-28';
 
 /** One day, as the two committed ledgers describe it. */
 export interface ModelDay {
@@ -25,7 +47,12 @@ export interface ModelDay {
 	unsupportedNumbers: number | null;
 	/** Summaries that turned the article's "might" into "did". */
 	hedgeDropped: number | null;
-	/** Summaries written from the start of an article the model never finished. */
+	/** Summaries written from the start of an article extract cut short.
+	 *
+	 * Counted over the day's rows stamped `CUT_FLAG_MEANS_A_CUT_FROM` or later,
+	 * and null where the day holds none of those. An older row's flag answers a
+	 * different question, so it is not counted and not read as a zero.
+	 */
 	readInPart: number | null;
 	/** Median share of a summary lifted word for word, as whole percent. */
 	copiedPct: number | null;
@@ -105,13 +132,19 @@ function day(
 	const share = median(scores.map(copied));
 	const count = (of: (row: Record<string, string>) => boolean) =>
 		scored ? scores.filter(of).length : null;
+	// Only the rows whose cut flag still means a cut. The rest answer an older
+	// question, so they are excluded from the count rather than folded into it.
+	const cutKnown = scores.filter((row) => (row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM);
 	return {
 		date,
 		summaries: scored ? scores.length : null,
 		notSure: count((row) => row.band === 'low'),
 		unsupportedNumbers: count((row) => (measured(row.unsupported_numbers) ?? 0) > 0),
 		hedgeDropped: count((row) => flag(row.hedge_dropped)),
-		readInPart: count((row) => flag(row.truncation_flagged)),
+		readInPart:
+			cutKnown.length === 0
+				? null
+				: cutKnown.filter((row) => flag(row.truncation_flagged)).length,
 		copiedPct: share === null ? null : Math.round(share * 100),
 		perItemMs: median(times),
 		totalMs: times.length === 0 ? null : times.reduce((total, ms) => total + ms, 0),
