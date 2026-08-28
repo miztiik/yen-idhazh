@@ -10,7 +10,7 @@ Everything durable is written in [`docs/`](docs/), reviewed in a PR and versione
 
 ## Voice (CLAUDE.md section 0b)
 
-Write in plain, direct language. Use short sentences with one idea each. Use the active voice. Do not use corporate or self-invented tech jargon. Lead with the core answer. Skip all introductory fluff. Keep answers short unless asked for depth. Say what a number means, next to the number - `1.055x` is not an answer, "5.5 percent faster, and we needed 40 percent" is. A term from a subsystem is not a term for a user. Use ASD-STE100.
+Write in simple, plain, direct language. Use ASD-STE100. Use short sentences with one idea each. Use the active voice. Do not use corporate or self-invented tech jargon. Lead with the core answer. Skip all introductory fluff. Keep answers short unless asked for depth. Say what a number means, next to the number - `1.055x` is not an answer, "5.5 percent faster, and we needed 40 percent" is. A term from a subsystem is not a term for a user.
 
 This applies to every answer, every doc, every commit message, and every reader-facing string. [`CLAUDE.md`](CLAUDE.md) section 0b is the canonical version; this copy exists because some agent tools read this file and not that one.
 
