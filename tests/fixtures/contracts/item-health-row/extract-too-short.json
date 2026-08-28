@@ -17,6 +17,7 @@
   "source_chars": 410,
   "source_id": "example-dispatch",
   "source_words": 48,
+  "source_words_before_cap": null,
   "stage": "extract",
   "summarize_ms": null,
   "summary_words": null,

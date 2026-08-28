@@ -82,6 +82,7 @@ def classify_item(
             http_status=status,
             source_chars=len(article.text or "") if article.text is not None else None,
             source_words=article.word_count or None,
+            source_words_before_cap=article.source_word_count,
             detail=detail,
         )
 
@@ -96,6 +97,7 @@ def classify_item(
                 code=article.failure_code,
                 source_chars=len(article.text or ""),
                 source_words=article.word_count,
+                source_words_before_cap=article.source_word_count,
             )
         return _row(
             planned=planned,
@@ -106,6 +108,7 @@ def classify_item(
             code=FailureCode.UNKNOWN,
             source_chars=len(article.text or ""),
             source_words=article.word_count,
+            source_words_before_cap=article.source_word_count,
             detail=detail_cell("summary payload missing"),
         )
 
@@ -120,6 +123,7 @@ def classify_item(
             code=code,
             source_chars=len(article.text or ""),
             source_words=article.word_count,
+            source_words_before_cap=article.source_word_count,
             fetch_ms=summary.fetch_ms,
             extract_ms=summary.extract_ms,
             summarize_ms=summary.summarize_ms,
@@ -139,6 +143,7 @@ def classify_item(
         code=article.failure_code,
         source_chars=len(article.text or ""),
         source_words=article.word_count,
+        source_words_before_cap=article.source_word_count,
         summary_words=len((summary.summary or "").split()),
         fetch_ms=summary.fetch_ms,
         extract_ms=summary.extract_ms,
@@ -172,6 +177,7 @@ def _row(
     input_tokens: int | None = None,
     output_tokens: int | None = None,
     cached_tokens: int | None = None,
+    source_words_before_cap: int | None = None,
 ) -> ItemHealthRow:
     return ItemHealthRow(
         version=ItemHealthRow.schema_version(),
@@ -198,6 +204,7 @@ def _row(
         input_tokens=input_tokens,
         output_tokens=output_tokens,
         cached_tokens=cached_tokens,
+        source_words_before_cap=source_words_before_cap,
     )
 
 

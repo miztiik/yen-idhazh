@@ -62,7 +62,7 @@ function writeItemHealthCanary() {
 		'version', 'date', 'run_id', 'item_id', 'url_key', 'canonical_url', 'vertical',
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
-		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens'
+		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
@@ -78,14 +78,24 @@ function writeItemHealthCanary() {
 		source_id: 'canary'
 	});
 
-	/** An item that reached the digest, so every stage timed itself. */
-	const published = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model) =>
+	/** An item that reached the digest, so every stage timed itself.
+	 *
+	 * `cut` is `[source_chars, source_words, source_words_before_cap]` and those
+	 * three numbers are fixture values, not measurements - unlike every token and
+	 * millisecond above. The truncation cap never fired in the run this canary was
+	 * taken from, so the one state the new column exists for, a body trimmed before
+	 * the model read it, is unreachable without them. 1923 is
+	 * `int(extract.truncation_cap_tokens / 1.3)` at the committed cap of 2500, so
+	 * the post-cap count sits on the ceiling a real cut leaves it on. A row without
+	 * `cut` leaves the cell empty, which is what every run before 2026-08-28 wrote.
+	 */
+	const published = (rowDate, run, id, [fetchMs, extractMs, summarizeMs], model, cut) =>
 		line({
 			...item(rowDate, run, id),
 			stage: 'publish',
 			outcome: 'ok',
-			source_chars: 1200,
-			source_words: 180,
+			source_chars: cut?.[0] ?? 1200,
+			source_words: cut?.[1] ?? 180,
 			summary_words: 45,
 			fetch_ms: fetchMs,
 			extract_ms: extractMs,
@@ -94,7 +104,8 @@ function writeItemHealthCanary() {
 			decode_ms: model[1],
 			input_tokens: model[2],
 			output_tokens: model[3],
-			cached_tokens: model[4]
+			cached_tokens: model[4],
+			source_words_before_cap: cut?.[2]
 		});
 
 	/** An item the extractor threw away. Not a failure: dropping a page that is
@@ -135,7 +146,9 @@ function writeItemHealthCanary() {
 			published(date, 1, 'ai-01', [100, 20, 600], [79100, 29062, 942, 170, 0]),
 			published(date, 1, 'ai-02', [150, 25, 650], [7120, 28206, 975, 167, 900]),
 			published(date, 2, 'ai-03', [250, 35, 750], [8883, 22537, 999, 129, 900]),
-			published(date, 2, 'ai-04', [300, 40, 800], [82146, 33203, 1337, 189, 383]),
+			// The one cut row, so both shapes of the cell are on the day: a body the
+			// cap trimmed from 2612 words to 1923, beside four rows that carry nothing.
+			published(date, 2, 'ai-04', [300, 40, 800], [82146, 33203, 1337, 189, 383], [12800, 1923, 2612]),
 			// A whole page parsed, then thrown away for boilerplate. It makes the
 			// newest day a partly timed one for summarize: four items of five. Its
 			// fetch and extract are that day's own medians, so neither median moves
