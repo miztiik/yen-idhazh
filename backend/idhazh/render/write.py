@@ -41,6 +41,25 @@ def asset_relpath(date: str, item_id: str) -> str:
     return f"digest/{year}/{month}/{day}/{item_id}{SUFFIX}"
 
 
+def assets_in_day(public_root: Path, date: str) -> set[str]:
+    """Every asset sitting in this day's directory, as `asset_relpath` writes it.
+
+    The inverse of `asset_relpath`: that one asks what a path an item should
+    have, this one asks what is actually on disk. Reading the directory is no
+    longer allowed to decide a *name* - that is what raced two runs onto one
+    path - but a caller that needs to compare the directory against a payload
+    has to read it. `test_published_assets` is that caller: a file no item names
+    is a picture the reader paid for and will never see.
+
+    Relative to `public_root`, matching the strings a payload carries.
+    """
+    year, month, day = date.split("-")
+    folder = public_root / "digest" / year / month / day
+    if not folder.is_dir():
+        return set()
+    return {f"digest/{year}/{month}/{day}/{path.name}" for path in folder.glob(f"*{SUFFIX}")}
+
+
 def write_bytes_atomic(path: Path, payload: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     handle = tempfile.NamedTemporaryFile("wb", dir=path.parent, delete=False)

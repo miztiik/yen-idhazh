@@ -868,6 +868,26 @@ contends with the first.
 - The cheap early warning: after any merge into a long-lived feature branch,
   `git grep` the names that branch deleted. `git diff --name-only main...HEAD`
   tells you which files to look in.
+- **GitHub can do this to you when nobody ran a merge at all.** Seen 2026-08-27
+  on `main` itself: #186 deleted `assets_in_day` from `render/write.py`,
+  correctly, because it had no remaining caller. #166 then landed
+  `tests/test_published_assets.py`, which imports it. Neither pull request
+  touched a line the other did, both were green, both merged, and the result
+  could not collect its test suite - an ImportError at collection aborts the
+  run, so zero of the 1,288 tests executed. Two green checks, one red `main`,
+  and no merge conflict anywhere.
+- **A green check on a pull request is not a statement about `main`.** GitHub
+  does not re-run a pull request's checks when the base moves under it, so the
+  result you are reading describes a base that may no longer exist. That gap is
+  the whole hazard: #186 landed in it, between the run that passed on #166 and
+  the press that merged #166.
+- The check that closes the gap, before merging anything into a base that has
+  moved: merge `origin/main` into the branch locally and run the suite on the
+  merged tree. It is the only thing that tests the tree the merge will actually
+  produce. When that is too slow to do per pull request, the narrow version is
+  `git log --oneline -S '<name>' origin/main` for each symbol the branch newly
+  imports - if the newest commit named there is the one that deleted it, the
+  green check is already stale.
 
 ## See also
 
