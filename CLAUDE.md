@@ -195,6 +195,7 @@ The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how
 - [ ] Lint (`ruff`), type-check (`mypy --strict`), tests all pass.
 - [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
+- [ ] For reader-facing and operator-facing surfaces: the sufficiency checks in [`docs/concepts/design-system.md`](docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not. A surface can fail by being too little.
 - [ ] Canonical docs updated in `docs/` (right tier).
 - [ ] Schemas version-stamped + changelogged (and migrated if breaking) when any persisted contract changed (section 11).
 - [ ] Module `AGENTS.md` updated if structure or invariants changed.
@@ -289,13 +290,14 @@ Per tier:
 
 ## 14. Agent Roster
 
-Six persona advisors live under `.github/agents/`, each at a distinct altitude:
+Seven persona advisors live under `.github/agents/`, each at a distinct altitude:
 
 | Agent                               | File               | Altitude                                                                      |
 | ----------------------------------- | ------------------ | ----------------------------------------------------------------------------- |
 | Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes?                 |
 | Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall, what to trade when a budget binds |
 | Jony (UI/UX)                        | `jony.agent.md`    | the published surface: page, typography, chart-vs-diagram, the dashboard      |
+| Susan (Craft & Delight)             | `susan.agent.md`   | whether a surface is good enough to ship - the demand side of design review   |
 | Andre (AI / LLM)                    | `andre.agent.md`   | model pick, prompt strategy, eval design, the injection surface               |
 | Fowler (Architecture & Engineering) | `fowler.agent.md`  | architecture + contracts + commits + tests                                    |
 | Carmack (Engine & Runtime)          | `carmack.agent.md` | inference runtime, runner budget, throughput, cache and shard economics       |
@@ -303,6 +305,14 @@ Six persona advisors live under `.github/agents/`, each at a distinct altitude:
 Rule: adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
 
 Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
+
+Where Jony and Susan both touch the page: **Jony rules what survives on the page, Susan rules whether what survived is good enough to ship.** They are the two halves of one review and neither is sufficient alone.
+
+### Design rationale
+
+**Susan was added on 2026-08-29 because the roster was six vetoes and no demand.** Jony removes before adding, Fowler owns when to delete, Carmack refuses on bytes, and Reader and Editor report rather than demand. Nothing in the roster asked whether a surface was good enough to be worth a stranger's attention, and a system of pure vetoes converges on the minimum that passes every veto - measured 2026-08-28 as a published surface using 40.6 percent of a 1536px screen, with two responsive breakpoints in the whole frontend, no elevation scale, no gradient, two icons and no interactive chart. Every one of those outcomes passed a review.
+
+The rejected alternative was giving Jony the demand mandate as well. One head holding both "remove before adding" and "this is not enough" resolves to the veto every time, which is exactly the observed outcome. The second rejected alternative was making sufficiency advisory rather than a section 9 line; an advisory check is the one that is skipped on the day it would have bitten. Authority: owner, 2026-08-29, with Fowler on the roster shape.
 
 ## See also
 
