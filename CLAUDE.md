@@ -289,17 +289,20 @@ Per tier:
 
 ## 14. Agent Roster
 
-Five persona advisors live under `.github/agents/`, each at a distinct altitude:
+Six persona advisors live under `.github/agents/`, each at a distinct altitude:
 
 | Agent                               | File               | Altitude                                                                      |
 | ----------------------------------- | ------------------ | ----------------------------------------------------------------------------- |
 | Reader                              | `reader.agent.md`  | the person the digest is for - is it worth their two minutes?                 |
+| Editor                              | `editor.agent.md`  | what the digest covers and at what length - story selection, where a cut may fall, what to trade when a budget binds |
 | Jony (UI/UX)                        | `jony.agent.md`    | the published surface: page, typography, chart-vs-diagram, the dashboard      |
 | Andre (AI / LLM)                    | `andre.agent.md`   | model pick, prompt strategy, eval design, the injection surface               |
 | Fowler (Architecture & Engineering) | `fowler.agent.md`  | architecture + contracts + commits + tests                                    |
 | Carmack (Engine & Runtime)          | `carmack.agent.md` | inference runtime, runner budget, throughput, cache and shard economics       |
 
 Rule: adding a new agent requires justifying a distinct altitude not already covered. Two agents at the same altitude collapse into one.
+
+Where Reader and Editor both touch content: **Reader reports what reading it was like, Editor rules what should have run and how long.** Reader does not propose; Editor does not speak for the reader's experience of the page.
 
 ## See also
 
