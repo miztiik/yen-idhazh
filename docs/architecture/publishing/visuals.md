@@ -422,6 +422,22 @@ cancelled and had already binned its artifact. A warning that only ever describe
 control. The same field now stops the loop, which is the smallest change that makes the job fit its
 bound by design instead of by which host it drew (Rule #2).
 
+**Two things about the 2026-08-24 repair are not in the record above.** Authority: owner,
+2026-08-27.
+
+The first is that no other committed day needs it. 2026-08-21 published no visual at all,
+2026-08-22 and 2026-08-23 published one each, and 2026-08-25 (27 visuals over 27 files) and
+2026-08-26 (40 over 40) name one file per item throughout. 2026-08-24 is the only day that ever
+pointed two items at one picture, so the repair is a one-day event and not the first of a series.
+
+The second is what that test - `backend/tests/test_published_assets.py` - costs the prune, and the
+cost is the guard working rather than a false alarm. The prune - `visuals_older_than` in
+[`retention.py`](../../../backend/idhazh/retention.py) - deletes an old day's SVGs and leaves the
+payload that names them alone, on purpose: it removes visuals, never a day. So switching the prune
+on fails the second of the test's three assertions - every declared path is a file that is there -
+on the first day it prunes. The prune has to learn to null the item's `visual` as it deletes the
+file before it can be enabled.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -435,6 +451,9 @@ bound by design instead of by which host it drew (Rule #2).
 | Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/test_contracts.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
 | Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
 | Resolve the add/add with `-X ours` or `-X theirs` | `theirs` puts the tip's picture under our alt text; `ours` overwrites an address a reader may already hold. Neither side of a coin flip is a correct answer to "whose chart is this". |
+| Leave the 2026-08-24 day as history and let retention prune it | Retention never removes it. `retention.image_months` is `-1`, which switches the prune off entirely, and the prune deletes visuals rather than days, so it would never reach a payload even switched on. "Let it age out" is not a thing that happens here; the day stays wrong until somebody edits it. |
+| Keep the first claimant's chart and null only the second | The order two items sit in a payload is not evidence of which one the chart was drawn for. This repairs 14 items by guessing on the other 14, and a guess that publishes is the failure being fixed. |
+| Re-render the 2026-08-24 day from its committed routes | Not rejected - impossible. It was offered as the thorough option in a handover and could never have been taken: the `routes` artifact carries `retention-days: 1` and nothing under `backend/var/` is committed, so that day's routes expired on 2026-08-25, before anyone read the handover. |
 | Renumber a raced chart instead of dropping it | Right while a path could mean two different stories, wrong now that it names one item. Moving this run's copy would file that item's picture under a name that is not its own, and leave two files where the day references one. |
 | Cap the number of items the router may consider | A count has to be set for the worst host, so a fast host would route 88 items and then idle for half an hour. The clock is the thing that runs out, so bound the clock. The same proposal moved back to the planning step was refused on 2026-08-25 for this reason and three more, including that it would delete about 436 items from a 731-item day - [../sources/freshness.md](../sources/freshness.md). |
 | A `skip_unreachable` config flag | A knob whose `false` setting means "spend 21 measured seconds proving a theorem you already proved". Nobody would set it. The predicate is derived from `min_chart_points` and `enabled_kinds`, which are already config. |
