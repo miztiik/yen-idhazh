@@ -5,16 +5,20 @@ another language model: a judge built from the same technology shares the
 failure modes of the thing it judges and agrees with it for exactly the reasons
 you needed an independent check (`CLAUDE.md` section 0a).
 
-Two mechanics matter more than they look:
+Three mechanics matter more than they look:
 
 - The scorer is loaded once and reused. It is small next to the summarizer, but
   loading it per item would pay the cost once per article instead of once per
   shard.
-- A long article is scored in overlapping chunks and aggregated **max over
-  chunks, never mean**. A claim is supported if any part of the article
+- A long article is scored in overlapping windows and aggregated **max over
+  windows, never mean**. A claim is supported if any part of the article
   supports it; averaging drives the score down as the article gets longer,
   which would manufacture a large truncation delta on exactly the longest
   articles and invert the flag that exists to catch it.
+- **Every window is the same size, the last one included.** The last window is
+  anchored to the end of the premise instead of being whatever the walk had
+  left over. A max over windows compares them against each other, so a runt
+  window is a rival that was never given the same premise to work with.
 
 The dependency is heavy and optional. Absent it, the run fails at this stage
 with a readable message rather than shipping unscored summaries.
@@ -27,6 +31,8 @@ import re
 from collections.abc import Sequence
 from dataclasses import dataclass
 from typing import Any, Final, Protocol
+
+from idhazh.contracts.app_config import EvaluationConfig
 
 #: Pinned to an immutable revision, not to a branch. The model card requires
 #: remote code, which is code executed on the build machine, so "latest" is a
@@ -45,10 +51,14 @@ HHEM_SCORER_ID: Final = "hhem-2.1-open"
 #: branch or a tag is not: it names wherever that pointer happens to be today.
 _IMMUTABLE_REVISION: Final = re.compile(r"^[0-9a-f]{40}$")
 
-#: Words per chunk and the overlap between them. Attention is quadratic in the
-#: premise, so a whole long article in one pass is the expensive shape.
-CHUNK_WORDS: Final = 900
-CHUNK_OVERLAP_WORDS: Final = 150
+#: How the last window is placed. `metrics.scorer_version` spells this beside the
+#: window size, so a ledger row records the geometry that produced it.
+#:
+#: A code constant and not a config knob (Rule #6 is about tunables). The window
+#: size and the overlap are numbers an operator can reasonably move; "should the
+#: last window be the same size as the others" is not a question anyone answers
+#: twice.
+CHUNK_ANCHOR: Final = "anchored"
 
 _MISSING = "HHEM is not installed. Install the faithfulness extra: pip install -e '.[faithfulness]'"
 
@@ -59,18 +69,39 @@ class Scorer(Protocol):
     def score(self, premise: str, hypothesis: str) -> float: ...
 
 
-def chunks(text: str, size: int = CHUNK_WORDS, overlap: int = CHUNK_OVERLAP_WORDS) -> list[str]:
-    """Overlapping windows, so a claim spanning a boundary is still supported somewhere."""
+def chunks(text: str, size: int, overlap: int) -> list[str]:
+    """Overlapping windows of exactly `size` words, the last one ending on the last word.
+
+    Overlap is why a claim spanning a boundary is still supported somewhere.
+    Anchoring is why the tail of an article is read the same way as the middle.
+
+    Until 2026-08-28 the walk stepped past the end and the final window was
+    whatever remained. That window was short on **every** premise longer than
+    one window - 3,100 of 3,100 lengths from 901 to 4,000 words, as little as
+    one word and 370 words on average against 900-word rivals. The aggregation
+    is a max, so a partial premise competed with full ones on every long
+    article.
+
+    Anchoring also drops a window where the leftover was small, though not at
+    today's lengths: an article at the 1,923-word cap takes 3 windows either
+    way. At 3,846 words it is 6 windows before and 5 after, which is 16.7
+    percent less scorer work - a saving that arrives when the cap does.
+    """
     words = text.split()
     if len(words) <= size:
         return [text] if words else []
     step = max(size - overlap, 1)
-    return [" ".join(words[start : start + size]) for start in range(0, len(words), step)]
+    starts = list(range(0, len(words) - size + 1, step))
+    if starts[-1] + size < len(words):
+        starts.append(len(words) - size)
+    return [" ".join(words[start : start + size]) for start in starts]
 
 
-def score_over_chunks(scorer: Scorer, premise: str, hypothesis: str) -> float:
-    """Max over chunks. A mean would penalise length rather than measure faithfulness."""
-    windows = chunks(premise)
+def score_over_chunks(
+    scorer: Scorer, premise: str, hypothesis: str, *, evaluation: EvaluationConfig
+) -> float:
+    """Max over windows. A mean would penalise length rather than measure faithfulness."""
+    windows = chunks(premise, evaluation.chunk_words, evaluation.chunk_overlap_words)
     if not windows:
         return 0.0
     return max(scorer.score(window, hypothesis) for window in windows)
@@ -134,7 +165,12 @@ def weights_digest(scorer: HhemScorer) -> str:
 
 
 def dual_score(
-    scorer: Scorer, *, seen_text: str, full_text: str, summary: str
+    scorer: Scorer,
+    *,
+    seen_text: str,
+    full_text: str,
+    summary: str,
+    evaluation: EvaluationConfig,
 ) -> tuple[float, float]:
     """Against what the model saw, and against the whole article.
 
@@ -150,10 +186,10 @@ def dual_score(
     chunk takes 2.88 to 3.08 s (n=5), so the pass this skips is worth roughly
     2 s an item.
     """
-    seen = score_over_chunks(scorer, seen_text, summary)
+    seen = score_over_chunks(scorer, seen_text, summary, evaluation=evaluation)
     if seen_text == full_text:
         return (seen, seen)
-    return (seen, score_over_chunks(scorer, full_text, summary))
+    return (seen, score_over_chunks(scorer, full_text, summary, evaluation=evaluation))
 
 
 def band_edges(values: Sequence[float]) -> tuple[float, float]:
