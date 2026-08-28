@@ -51,5 +51,5 @@ This stanza is the canonical reference for the autonomy POLICY (AUTO by default,
 - [`../how-to/author-a-plan.md`](../how-to/author-a-plan.md) - authoring an execution-ready plan-doc.
 - [`../how-to/execute-a-plan.md`](../how-to/execute-a-plan.md) - the orchestrator execution contract.
 - [`../concepts/pipeline-loop.md`](../concepts/pipeline-loop.md) - the stages and what each one owns.
-- [`../../.github/agents/`](../../.github/agents/) - the five persona advisors that run this ritual.
+- [`../../.github/agents/`](../../.github/agents/) - the seven persona advisors that run this ritual.
 - [`../../CLAUDE.md`](../../CLAUDE.md) - the engineering contract.
