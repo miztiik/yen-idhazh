@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -238,10 +238,70 @@ Each of these was specified one way, and the arithmetic says otherwise:
 - **A compression *band* is a length detector.** At a fixed output budget, the ratio is dominated by how long the article was. A band on it would flag every short article forever, for a reason that is never about the summary. The ratio is recorded as a diagnostic; the real failures - a headline, or a copy - are detected directly by absolute word bounds.
 - **Verbatim overlap must be contiguous.** Measured as a longest common *subsequence*, function words match in order in almost any document, which puts a floor under the score and makes it move with length instead of with copying. Contiguous n-grams and the longest unbroken run do not have that floor.
 
-For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` flags
-truncation. The default is 0.5. This is the arithmetic ceiling that makes a
-30-word ask possible at a 60-word source floor. It is not a confidence threshold.
-The confidence band stays on the faithfulness axis.
+For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` is the
+copying gate the qualification run reads. The default is 0.5. This is the
+arithmetic ceiling that makes a 30-word ask possible at a 60-word source floor.
+It is not a confidence threshold. The confidence band stays on the faithfulness
+axis.
+
+Until 2026-08-29 that same comparison also set `truncation_flagged`. It no
+longer does. One column answers one question, and a brief the model copied is a
+fact `verbatim_run` and `extractiveness` already carry.
+
+## The cut flag says the article was cut
+
+`truncation_flagged` is `Article.truncated`: extract found the body longer than
+`extract.truncation_cap_tokens` allows and cut it. Nothing else. Extract is the
+only stage that cuts, so it is the only stage that knows, and the column carries
+that fact rather than inferring it.
+
+**It used to be inferred from the faithfulness gap, and the gap cannot answer
+the question.** The rule was `hhem - hhem_full > evaluation.truncation_gap_max`,
+defaulting to `0.1`. That reads as sound - a wide gap means the model saw less
+than the scorer did - and the chunker makes it false. The score is the best of
+overlapping windows, and a cut article's last window is **not** a window of the
+whole article, so the two maxima are taken over different premises. The window
+sets are not nested and the difference is not a cost.
+
+Measured 2026-08-28 over all 2,683 committed rows of `state/scores.csv`, which
+are exact counts over a committed file and so carry no spread:
+
+| What | Count |
+| --- | --- |
+| Rows genuinely cut - post-cap word count below pre-cap | **22** |
+| Of those, rows the old flag fired on | **0** |
+| Rows the old flag fired on, in the whole ledger | **1** |
+| Words that one row read, of an article that long | **748 of 748** |
+| Range of `hhem_delta` over the 22 cut rows | **-0.1235 to +0.0381** |
+
+The threshold it was tested against is `+0.1`, so no cut row could reach it, and
+the one row that did fire was never cut - it fired on the brief-copying clause
+above. A column that is right about 1 row in 2,683 and wrong about all 22 of the
+rows it exists for is not a threshold that needs retuning. Retuning was the
+rejected alternative: to catch the widest cut in the ledger the threshold would
+have to sit at or below `+0.038`, and at that level it fires on chunk-boundary
+noise on articles nobody cut.
+
+**`hhem`, `hhem_full` and `hhem_delta` all stay.** They answer what the cut
+cost, which is a different question from whether there was a cut, and n=22 is
+not a distribution to set a threshold from (Rule #10). The knob went with its
+last caller in the same commit, so there was never a state where the number
+existed and nothing read it.
+
+**A row stamped before `2026-08-29T09:00` is unknown, not false**, and the two
+sub-cases are not recoverable from the row. A row before `2026-08-27T20:30`
+holds two scores of one text, so its gap could not be non-zero. A row between
+the two stamps holds a real gap read by the wrong rule. The published console
+therefore counts the column only over rows stamped from `2026-08-28` and prints
+absence as absence
+([../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)).
+
+**`METRICS_VERSION` did not move.** Nothing in
+`backend/idhazh/evals/metrics.py` changed, `truncation_flagged` is not a
+`band()` input, and no derived column reads it - so every row written under
+`metrics-3` still says exactly what it said. Bumping it would restart the
+ten-run-day count below to record a change that did not happen to the
+counterweights.
 
 ## Two rules that are easy to break by accident
 
@@ -546,6 +606,11 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 | Detect the loop at generation time and retry at a non-zero temperature | That turns the monitor into the selector, which is the first of the two rules above. It also changes what the digest publishes to fix a fault nobody has counted yet. | Andre |
 | Point `verbatim_run` at the summary instead of the source | It is the column that names copying from the article. Repurposing it would delete a measurement to buy a different one and would silently change what every historical row means. | Fowler |
 | Put the measurement on the item-health row | Item health records what a stage *did* with an item. This is a property of the words that came out, which is what the eval ledger is. | Fowler |
+| Retune `evaluation.truncation_gap_max` down instead of deleting it | Over the 22 cut rows the gap runs -0.1235 to +0.0381, so any cut inside that band fires on chunk-boundary noise rather than on truncation. There is no value that separates the two. | Fowler, corrected by measurement |
+| Keep `truncation_flagged` on the gap and add a second column for the cut | The column's name says "was it cut" and its one consumer prints exactly that sentence. Two columns would leave the wrong one wired to the page. | Fowler |
+| Add a "the cut cost us" flag now | It needs a threshold with a measured basis. Twenty-two rows is not one, and `hhem_delta` is already recorded for when there are enough. | Fowler |
+| Keep the brief-item verbatim clause on the same boolean | `verbatim_run` and `extractiveness` already carry that fact and the console already prints it as "Copied, not rewritten". One predicate per column. | Fowler |
+| Move `METRICS_VERSION` to be safe | It is folded into `scorer_version`, so it would restart the ten-run-day count for a column no threshold reads. Nothing in `metrics.py` changed. | Fowler |
 
 ## Why this is a census and not a sample
 

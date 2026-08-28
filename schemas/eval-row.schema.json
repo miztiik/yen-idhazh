@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "truncation_flagged is Article.truncated - whether extract cut the article body. It was hhem_delta above evaluation.truncation_gap_max, or a brief item copied past evaluation.brief_compression_ceiling. No column was added or removed and no row was rewritten.",
+      "version": "2026-08-29T09:00",
+      "why": "The column's name says the article was cut short and its only consumer prints exactly that sentence, and it was reading a faithfulness gap instead. The gap cannot answer the question: score_over_chunks takes the best of overlapping windows, and a cut article's last window is not a window of the whole article, so the two maxima are taken over different premises and the difference is not a cost. Measured 2026-08-28 over all 2,683 committed rows of state/scores.csv: 22 rows were genuinely cut, hhem_delta over them runs -0.1235 to +0.0381 against a threshold of +0.100, and the flag fired on 0 of them. It fired on exactly one row in the whole ledger, and that row read 748 words of a 748-word article. The brief-copying clause went with it: verbatim_run and extractiveness already carry that fact, and one column answers one question. A row stamped before this is UNKNOWN and never False, in both directions: a row before 2026-08-27T20:30 held two scores of one text so its gap could not be non-zero, and a row between the two stamps held a real gap read by the wrong rule. Neither state is recoverable from the row, so frontend/src/lib/server/model-work.ts counts the column only over rows stamped at or after 2026-08-28 and prints absence as absence."
+    },
+    {
       "change": "source_word_count is nullable, source_seen_word_count may not exceed it, and the committed ledger is rewritten to obey that.",
       "version": "2026-08-27T21:00",
       "why": "The stamp below fixed the writer and left the committed rows carrying the old meaning. Measured over all 2,566 rows: 610 have the seen count LARGER than the full count, and every one of them was written by the old writer - none of the 220 rows the fixed writer produced reads that way. Nothing compared the two cells, which is how the pair stayed wrong for months, so the rule is a validator now rather than a habit. Null and not zero where the length cannot be recovered: extract discards the pre-cap body, so a truncated row written before this has no full length anywhere and zero would say the article was empty. backend/utilities/migrate_score_ledger.py is the read-side migration. It recovers rather than guesses - an article under the cap IS the text the model saw, so its two counts are equal by construction, and 2,204 rows got a real number back while 142 were emptied."
@@ -274,6 +279,7 @@
       "type": "string"
     },
     "truncation_flagged": {
+      "description": "Extract cut the article body before the model read it - Article.truncated, not a score. On a row stamped before 2026-08-29T09:00 this column holds a different fact: hhem_delta above a configured gap, which is unknown rather than False about the cut. Read it only on rows stamped from 2026-08-28.",
       "title": "Truncation Flagged",
       "type": "boolean"
     },
@@ -298,7 +304,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-08-27T21:00",
+      "default": "2026-08-29T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -335,5 +341,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-27T21:00"
+  "version": "2026-08-29T09:00"
 }
