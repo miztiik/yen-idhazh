@@ -4,9 +4,10 @@
 
 **One defect remains open, and it does not close on engineering.** Defect 2
 needed three repairs before a person could label anything, and all three
-shipped. What is left is 60 human labels, nine more run-days at one scorer and
-one pipeline, and one owner ruling on how that window is counted. None of the
-three is code, so **this file cannot be deleted by writing more of it.**
+shipped. The owner settled the counting rule on 2026-08-27, which took the
+draw from 32 of 60 to 60 of 60. What is left is **60 human labels** and eight
+more run-days at one scorer. Neither is code, so **this file cannot be deleted
+by writing more of it.**
 
 Defects 15, 16 and 17 closed on 2026-08-27.
 
@@ -19,7 +20,7 @@ decision. Current project behaviour belongs in `docs/` (Rule #4).
 
 | # | Defect | Level | Status |
 | --- | --- | --- | --- |
-| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - queue repaired; 0 of 60 labels; 1 of 10 run-days, and 10 has never been reached** |
+| 2 | The faithfulness thresholds have no labelled error rate | 5 | **OPEN - queue repaired, counting rule settled; 0 of 60 labels; 2 of 10 run-days** |
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 3 | CLOSED 2026-08-27 (PR #180) |
 | 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | CLOSED 2026-08-27 |
 | 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
@@ -62,32 +63,34 @@ guaranteed one.
 
 **0 of 60 labels.** No `state/labels.csv` is committed.
 
-**1 of 10 run-days, and 10 has never been reached.** The longest run of
-consecutive run-days under a single pair is 3 - `2026-08-24` to `2026-08-26`,
-under fingerprint `969b1917...d2b945` - and the stamp moved four times across
-the five scored run-days the ledger held before today. The configured summarizer
-`qwen3-5-9b-q4-k-m` wrote its first 114 rows on `2026-08-27`, under scorer
-`hhem-2.1-open@8e4a2e6e` and fingerprint `6a23e277`, so the current window opened
-today at one day. No earlier row can join it: every one of the 2,232 rows before
-it was written by the retired `qwen3-8b-q4-k-m`. The reset mechanism, the
-measured rate and the two ways out are stated once, in
+**2 of 10 run-days.** The owner settled the counting rule on 2026-08-27: count
+run-days at one `scorer_version`, and carry `pipeline_fingerprint` as a reported
+stratum rather than a disqualification. The pair rule it replaced was
+unreachable - the stamp digests seventeen inputs, so a reworded prompt or a
+sanitizer fix reset the count, and no pair ever held for more than three
+consecutive run-days. Measured effect on the same ledger: the drawable sample
+went from 32 of 60 with seven deciles short to **60 of 60**, over 450 eligible
+rows at `hhem-2.1-open@8e4a2e6e`. What it gives up is stated wherever a result
+prints: a rate over a pooled draw is a prior with wide bounds, and a stratum
+under `evaluation.label_min_stratum_rows` may not move a threshold. The rule,
+the rejected freeze and the measured reset rate are stated once, in
 [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md#design-rationale).
+
+**The evidence packages are not on this machine.** `label_queue.py` reports
+`labellable 0 of 60`: 34 rows have no package here, and 26 predate the
+`source_digest` column and can never be proved against their article. The run
+writes packages to `backend/var/evidence/<date>/` and the `work` job uploads
+them, so a labeller downloads that artifact before starting. Nothing is broken;
+the evidence simply lives where the run put it.
 
 Remaining steps, in order:
 
-1. **The owner decides how the window is counted.** Freeze the pipeline for ten
-   days and pay for the window in shipped improvements, or count run-days at one
-   `scorer_version` and carry `pipeline_fingerprint` as a reported stratum. The
-   first buys a narrow claim about one frozen pipeline, and that claim expires at
-   the next fingerprint. The second fills now, but it confounds
-   between-pipeline variance into the estimate, so it is a prior with honest wide
-   bounds rather than a calibration. Nothing below can start until this is
-   answered.
-2. Collect the run-days the chosen rule asks for.
-3. Draw and label 60 rows, six per HHEM decile. Keep the score, band,
+1. Download the evidence artifact for the run-days in the draw.
+2. Draw and label 60 rows, six per HHEM decile. Keep the score, band,
    counterweights, model identity, fingerprint and running tally hidden.
+3. Collect the remaining run-days at `hhem-2.1-open@8e4a2e6e`.
 4. Re-test the cuts by stratum. Move a threshold only when the labels support
-   the new cut.
+   the new cut, and never on a stratum under the floor.
 
 The canonical measurement contract lives in
 [`docs/concepts/evaluation.md`](../docs/concepts/evaluation.md).
