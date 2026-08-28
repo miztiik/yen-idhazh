@@ -30,6 +30,18 @@ ITEMS: Final = build_canary_day.published_items(EVALUATION, FIXTURES_DIR / "cana
 ROWS: Final = build_canary_day.score_rows(ITEMS, EVALUATION)
 
 
+def source_words(row: EvalRow) -> int:
+    """The fixture always records the article's length. A real ledger row may not.
+
+    `EvalRow.source_word_count` is nullable because a row written before
+    2026-08-27 whose article was truncated has no full length anywhere. The
+    canary builder writes every one of its own, so a None here is a broken
+    fixture rather than a row the chart has to survive.
+    """
+    assert row.source_word_count is not None, f"{row.item_id} records no article length"
+    return row.source_word_count
+
+
 def test_every_published_item_is_scored() -> None:
     """A day whose ledger names items the digest does not carry disagrees with itself."""
     assert [row.item_id for row in ROWS] == [item.item_id for item in ITEMS]
@@ -58,12 +70,12 @@ def test_the_truncation_flag_follows_the_configured_rule() -> None:
         assert row.truncation_flagged == (row.hhem_delta > EVALUATION.truncation_gap_max)
         # A cut page is a page the model saw less of. The two columns are the
         # only record of how much less.
-        assert (row.source_seen_word_count < row.source_word_count) == row.truncation_flagged
+        assert (row.source_seen_word_count < source_words(row)) == row.truncation_flagged
 
 
 def test_source_lengths_cross_more_than_one_decade() -> None:
     """The x axis is a log one and labels whole decades, so one decade labels once."""
-    lengths = [row.source_word_count for row in ROWS]
+    lengths = [source_words(row) for row in ROWS]
     assert min(lengths) * 10 < max(lengths)
 
 
@@ -80,7 +92,7 @@ def test_every_configured_target_zone_carries_a_mark() -> None:
         under = [
             row
             for row in ROWS
-            if row.source_word_count >= floor and (ceiling is None or row.source_word_count < ceiling)
+            if source_words(row) >= floor and (ceiling is None or source_words(row) < ceiling)
         ]
         assert under, f"no scored item sits in the target zone above {floor} source words"
 

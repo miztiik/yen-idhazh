@@ -56,7 +56,7 @@ def a_label(**overrides: object) -> LabelRow:
         "output_digest": "b" * 64,
         "pipeline_fingerprint": "c" * 64,
         "summary_word_count": 90,
-        "source_word_count": 900,
+        "source_seen_word_count": 900,
         "scorer_version": "hhem-2.1-open@6a30c896;metrics-3;bands=0.80/0.50;lead=0.30",
         "hhem_at_label": 0.91,
         "band_at_label": "high",
@@ -263,7 +263,7 @@ class TestTheDraw:
             scorer_version=live_scorer(records),
             pipeline_fingerprint=live_pipeline(records),
         )
-        assert any(int(row["source_word_count"]) < 50 for row in pool)
+        assert any(int(row["source_seen_word_count"]) < 50 for row in pool)
 
 
 class TestWhatTheLedgerHolds:

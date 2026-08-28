@@ -30,7 +30,7 @@ from urllib.parse import urlsplit
 
 #: Bumped when a rule below changes, because a fired alert has to be
 #: interpretable against the rules in force when it fired.
-DRIFT_VERSION: Final = "idhazh-drift-1"
+DRIFT_VERSION: Final = "idhazh-drift-2"
 
 WORD_COUNT_DROP: Final = 0.40
 EXTRACTIVENESS_RISE: Final = 0.15
@@ -45,12 +45,20 @@ class Alert(StrEnum):
 
 @dataclass(frozen=True, slots=True)
 class Observation:
-    """One eval row, reduced to what a trend needs."""
+    """One eval row, reduced to what a trend needs.
+
+    `source_word_count` is None when the ledger does not know how long the
+    article was. A row written before 2026-08-27 whose article was truncated is
+    the case: the pre-cap body was discarded at extract, so that length exists
+    nowhere. Such a row still carries a faithfulness score and an extractiveness
+    score, so it is kept and only the length rule steps over it - dropping the
+    whole observation would take two working signals away with the missing one.
+    """
 
     source_url: str
     hhem: float
     extractiveness: float
-    source_word_count: int
+    source_word_count: int | None
 
 
 @dataclass(frozen=True, slots=True)
@@ -76,6 +84,16 @@ def _median(values: Sequence[float]) -> float:
     return float(median(values)) if values else 0.0
 
 
+def _median_words(rows: Sequence[Observation]) -> float:
+    """The median over the rows that know their own length. Zero when none do.
+
+    A zero reads as "no comparison" downstream, because both length rules are
+    guarded on `words_before > 0`. That is the honest answer for a window made
+    entirely of rows whose article length was never recorded.
+    """
+    return _median([row.source_word_count for row in rows if row.source_word_count is not None])
+
+
 def compare(recent: Sequence[Observation], baseline: Sequence[Observation]) -> list[Finding]:
     """Every alert this pair of windows justifies, per domain.
 
@@ -91,9 +109,11 @@ def compare(recent: Sequence[Observation], baseline: Sequence[Observation]) -> l
         if not earlier:
             continue
 
-        words_now = _median([row.source_word_count for row in current])
-        words_before = _median([row.source_word_count for row in earlier])
-        shorter = words_before > 0 and words_now < words_before * (1 - WORD_COUNT_DROP)
+        words_now = _median_words(current)
+        words_before = _median_words(earlier)
+        shorter = words_before > 0 and words_now > 0 and words_now < words_before * (
+            1 - WORD_COUNT_DROP
+        )
 
         extract_now = _median([row.extractiveness for row in current])
         extract_before = _median([row.extractiveness for row in earlier])

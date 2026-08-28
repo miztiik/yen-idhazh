@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import csv
+import io
 from pathlib import Path
 
 import pytest
@@ -10,9 +11,11 @@ from conftest import FIXTURES_DIR
 
 from idhazh import ledger
 from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from utilities import migrate_score_ledger as migrate
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
 
@@ -170,6 +173,110 @@ def test_narrowing_an_already_narrow_published_ledger_is_refused() -> None:
 
     with pytest.raises(ValueError, match="nothing to migrate"):
         narrow(already)
+
+
+def _scores(**cells: str) -> str:
+    """One committed-shaped eval ledger, with only the cells a test cares about set."""
+    columns = EvalRow.csv_columns()
+    base = dict.fromkeys(columns, "0")
+    base.update(
+        {
+            "version": "2026-08-23",
+            "date": "2026-08-23",
+            "run_id": "2026-08-23-1",
+            "item_id": "energy-01",
+            "url_key": "a" * 64,
+            "source_url": "https://newsroom.example-grid.com/a",
+            "title": "A title",
+            "vertical": "energy",
+            "model_id": "qwen3-8b-q4-k-m",
+            "band": "high",
+            "scorer_version": "hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
+            "scored_at": "2026-08-23T06:18:02Z",
+            "truncation_flagged": "False",
+            "hedge_dropped": "False",
+            "extraction_suspect": "False",
+            "determinism_violation": "False",
+        }
+    )
+    base.update(cells)
+    out = io.StringIO(newline="")
+    writer = csv.DictWriter(out, fieldnames=columns, lineterminator="\n")
+    writer.writeheader()
+    writer.writerow(base)
+    return out.getvalue()
+
+
+def test_an_untruncated_row_recovers_the_article_length_it_already_recorded() -> None:
+    """The whole article IS the text the model saw, so the count is not a guess.
+
+    `truncate_to_tokens` returns the body unchanged below the cap, and
+    `Article.word_count` counts that same string, so the recovered value is
+    exactly what today's writer would put there.
+    """
+    report = migrate.honest(_scores(source_word_count="1201", source_seen_word_count="1210"))
+    row = next(csv.DictReader(report.text.splitlines()))
+
+    assert report.rows_recovered == 1
+    assert report.rows_emptied == 0
+    assert row["source_word_count"] == "1210", "the seen count was the honest one all along"
+
+
+def test_a_truncated_row_says_it_does_not_know_rather_than_saying_zero() -> None:
+    """Extract discarded the pre-cap body, so the length exists nowhere."""
+    report = migrate.honest(
+        _scores(source_word_count="1921", source_seen_word_count=str(migrate.SEEN_WORD_CAP))
+    )
+    row = next(csv.DictReader(report.text.splitlines()))
+
+    assert report.rows_emptied == 1
+    assert row["source_word_count"] == ""
+    assert row["source_seen_word_count"] == str(migrate.SEEN_WORD_CAP)
+
+
+def test_the_score_migration_moves_no_cell_it_does_not_own() -> None:
+    """The Oracle: every other column comes out byte-identical, row for row."""
+    before = _scores(source_word_count="900", source_seen_word_count="905", hhem="0.91")
+    report = migrate.honest(before)
+
+    was = next(csv.DictReader(before.splitlines()))
+    now = next(csv.DictReader(report.text.splitlines()))
+
+    assert report.rows_in == 1
+    assert {name: value for name, value in now.items() if name != "source_word_count"} == {
+        name: value for name, value in was.items() if name != "source_word_count"
+    }
+
+
+def test_a_row_the_fixed_pipeline_wrote_is_left_alone() -> None:
+    """Selection is by the row's own stamp, so a later run's real count survives."""
+    with pytest.raises(ValueError, match="already the whole article"):
+        migrate.honest(
+            _scores(
+                version=migrate.FIXED_FROM,
+                source_word_count="5240",
+                source_seen_word_count="4310",
+            )
+        )
+
+
+def test_the_committed_score_ledger_never_reads_more_than_the_article_holds() -> None:
+    """The read-side migration for the nullable column is the file itself.
+
+    Every row the pipeline writes from 2026-08-27 goes through the `EvalRow`
+    validator that refuses this shape. The committed rows predate it, so the
+    file is what has to prove it.
+    """
+    path = REPO_ROOT / "state" / "scores.csv"
+    with path.open(encoding="utf-8", newline="") as handle:
+        impossible = [
+            row["item_id"]
+            for row in csv.DictReader(handle)
+            if row["source_word_count"]
+            and int(row["source_seen_word_count"]) > int(row["source_word_count"])
+        ]
+
+    assert impossible == [], f"{len(impossible)} rows say the model read more than the article"
 
 
 def test_the_committed_published_ledger_has_the_shape_the_contract_writes() -> None:
