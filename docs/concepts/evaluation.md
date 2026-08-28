@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -107,6 +107,65 @@ the extractor. The server therefore runs with `--no-context-shift`, so a prompt
 that does not fit is refused, and the item records `context_exceeded` rather
 than a score nobody can read
 ([../architecture/sources/item-health.md](../architecture/sources/item-health.md)).
+
+### The window a score was measured over
+
+An article longer than one window is read in overlapping windows and the score
+is the **best** window, never the average. A claim is supported if any part of
+the article supports it, and a mean would drive the score down as the article
+got longer - which would manufacture a large truncation gap on exactly the
+longest articles and invert the flag that exists to catch it.
+
+The geometry is two knobs, `evaluation.chunk_words` (900) and
+`evaluation.chunk_overlap_words` (150). They were constants in code until
+2026-08-28.
+
+**Neither default moves today.** HHEM-2.1-Open has no maximum input length, so a
+wider window is mechanically allowed. What is missing is a reason to pick a
+number: **0 of 60 drawn rows carry a human label**, so nothing here can say
+whether a wider window scores more truthfully or just differently, and a sweep
+would show only that the number moves (Rule #10). Moving it is a measurement
+this project cannot yet take, not a tuning nobody got around to.
+
+**Every window is now the full window, the last one included.** Until 2026-08-28
+the walk stepped past the end of the article and the final window was whatever
+remained. That window was short on **every** premise longer than one window -
+3,100 of 3,100 lengths from 901 to 4,000 words, as little as one word and 370
+words on average against 900-word rivals. Because the aggregation is a max, a
+partial premise competed against full ones on every long article, and it could
+win: a stray window holding one supporting sentence and nothing to contradict it
+scores high on almost anything. The last window is now anchored to the end of the
+article, so it holds the same 900 words every other window does.
+
+Anchoring buys correctness now and time later. At today's cap of 1,923 words
+(`extract.truncation_cap_tokens` of 2500) an article takes 3 windows either way.
+At 3,846 words it takes 6 windows unanchored and 5 anchored, which is 16.7
+percent less scorer work on a full-length item - a saving that arrives when the
+cap does.
+
+**Anchoring does not restore `hhem_full >= hhem`.** The two window sets are still
+not nested: a cut article's last window is not a window of the whole article, so
+the two maxima are taken over different premises and the gap can still come out
+positive. Anchoring removes the runt as one cause of that. Only re-scoring the
+cut items says what is left.
+
+**What this reset cost, stated rather than implied.** `scorer_version` now spells
+the geometry as `window=900/150/anchored`, between the instrument's identity and
+the thresholds read off it. That is a new string, and the ten-run-day gate below
+counts run-days at **one** `scorer_version`, so the count goes back to **zero of
+ten**. Measured by `backend/utilities/label_queue.py` on 2026-08-28, immediately
+before the change: **3 run-days of 10** (2026-08-26, 2026-08-27, 2026-08-28) over
+567 eligible rows. Those 3 days are the price. It is a real cost and a small one:
+the gate has never once been met, the longest run at any one scorer is 3 days,
+and 0 of the 60 drawn rows is labellable, so nothing that was going to be decided
+this week is delayed. The alternative - leaving the geometry out of the string -
+is worse, because rows measured over a 900-word premise and rows measured over a
+runt would pool silently and nobody could tell them apart afterwards.
+
+`METRICS_VERSION` did **not** move, and stays at `3`. It names the deterministic
+counterweights in `backend/idhazh/evals/metrics.py`, and none of their
+definitions changed when the chunker did. Bumping it would assert a change that
+did not happen.
 
 ## Why faithfulness alone is not enough
 
