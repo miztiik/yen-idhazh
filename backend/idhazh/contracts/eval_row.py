@@ -68,6 +68,37 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-29T09:00",
+            change=(
+                "truncation_flagged is Article.truncated - whether extract cut the "
+                "article body. It was hhem_delta above evaluation.truncation_gap_max, "
+                "or a brief item copied past evaluation.brief_compression_ceiling. No "
+                "column was added or removed and no row was rewritten."
+            ),
+            why=(
+                "The column's name says the article was cut short and its only consumer "
+                "prints exactly that sentence, and it was reading a faithfulness gap "
+                "instead. The gap cannot answer the question: score_over_chunks takes "
+                "the best of overlapping windows, and a cut article's last window is not "
+                "a window of the whole article, so the two maxima are taken over "
+                "different premises and the difference is not a cost. Measured "
+                "2026-08-28 over all 2,683 committed rows of state/scores.csv: 22 rows "
+                "were genuinely cut, hhem_delta over them runs -0.1235 to +0.0381 "
+                "against a threshold of +0.100, and the flag fired on 0 of them. It "
+                "fired on exactly one row in the whole ledger, and that row read 748 "
+                "words of a 748-word article. The brief-copying clause went with it: "
+                "verbatim_run and extractiveness already carry that fact, and one "
+                "column answers one question. "
+                "A row stamped before this is UNKNOWN and never False, in both "
+                "directions: a row before 2026-08-27T20:30 held two scores of one text "
+                "so its gap could not be non-zero, and a row between the two stamps held "
+                "a real gap read by the wrong rule. Neither state is recoverable from "
+                "the row, so frontend/src/lib/server/model-work.ts counts the column "
+                "only over rows stamped at or after 2026-08-28 and prints absence as "
+                "absence."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-27T21:00",
             change=(
                 "source_word_count is nullable, source_seen_word_count may not exceed "
@@ -230,7 +261,14 @@ class EvalRow(Contract):
     hhem_delta: Score = Field(
         description="hhem - hhem_full. The cost of truncation, invisible unless both are scored."
     )
-    truncation_flagged: bool
+    truncation_flagged: bool = Field(
+        description=(
+            "Extract cut the article body before the model read it - Article.truncated, "
+            "not a score. On a row stamped before 2026-08-29T09:00 this column holds a "
+            "different fact: hhem_delta above a configured gap, which is unknown rather "
+            "than False about the cut. Read it only on rows stamped from 2026-08-28."
+        )
+    )
     coverage: Score = Field(
         ge=0.0,
         le=1.0,
