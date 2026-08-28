@@ -6,7 +6,8 @@
 		rowsInWindow,
 		type CompressionPoint,
 		type SummaryBand,
-		type TelemetryRow
+		type TelemetryRow,
+		type UnplottedDay
 	} from '$lib/charts/series';
 	import {
 		defaultWindow,
@@ -26,7 +27,8 @@
 		today,
 		config,
 		compressionPoints,
-		bands
+		bands,
+		unplotted
 	}: {
 		initialRows: TelemetryRow[];
 		availableMonths: string[];
@@ -39,6 +41,7 @@
 		};
 		compressionPoints: CompressionPoint[];
 		bands: SummaryBand[];
+		unplotted: UnplottedDay[];
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -178,6 +181,7 @@
 				points={compressionPoints}
 				viewport={viewport}
 				{bands}
+				{unplotted}
 				height={config.chart_height}
 				width={config.chart_width}
 			/>
