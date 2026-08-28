@@ -25,7 +25,7 @@ from pytest import MonkeyPatch
 from idhazh import assemble, cli, config, extract, ledger, telemetry
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import SHA256_PATTERN, derive_output_digest
+from idhazh.contracts.base import SHA256_PATTERN
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
@@ -332,10 +332,15 @@ def test_the_truncation_gap_is_computed_not_asserted() -> None:
     assert not built.truncation_flagged
 
 
-def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
-    item = plan().items[0]
+def test_a_wide_gap_does_not_flag_an_article_nobody_cut() -> None:
+    """The test that would have caught the rule this column used to carry.
+
+    A 0.33 gap is three times the ceiling the old rule compared against, and the
+    fixture article was never cut. The flag reads the payload now, so the wide
+    gap has to leave it alone while both faithfulness columns keep the gap.
+    """
     built = to_eval_row(
-        item=item,
+        item=plan().items[0],
         article=article(),
         summary=summary(),
         full_text=FULL_TEXT,
@@ -348,44 +353,10 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
         scorer_version="v",
         scored_at="2026-08-21T06:18:02Z",
     )
-    assert built.truncation_flagged
 
-
-def test_a_copied_brief_is_flagged_as_truncation_not_confidence() -> None:
-    copied = "alpha beta gamma delta epsilon zeta eta theta"
-    source = article().model_copy(update={"brief": True})
-    brief_summary = summary().model_copy(
-        update={
-            "summary": "alpha beta gamma delta epsilon",
-            "key_points": ["short copied point"],
-        }
-    )
-    brief_summary = brief_summary.model_copy(
-        update={
-            "output_digest": derive_output_digest(
-                brief_summary.summary, brief_summary.key_points, title=brief_summary.title
-            )
-        }
-    )
-
-    built = to_eval_row(
-        item=plan().items[0],
-        article=source,
-        summary=brief_summary,
-        full_text=copied,
-        premise=copied,
-        hhem=0.94,
-        hhem_full=0.93,
-        config=EvaluationConfig(),
-        date="2026-08-21",
-        run_id="2026-08-21-1",
-        scorer_version="v",
-        scored_at="2026-08-21T06:18:02Z",
-    )
-
-    assert built.band is ConfidenceBand.HIGH
-    assert built.verbatim_run > 0.5
-    assert built.truncation_flagged
+    assert not article().truncated
+    assert built.hhem_delta == pytest.approx(0.33)
+    assert not built.truncation_flagged
 
 
 def test_the_row_scores_the_article_and_not_only_the_summary() -> None:

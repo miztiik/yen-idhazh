@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -101,11 +101,13 @@ the ledger says how big. Measured 2026-08-28 over all 2,683 committed rows of
 `state/scores.csv`: 22 rows are genuinely cut - their post-cap word count is
 below their pre-cap one - and `truncation_flagged` is true on **0 of those 22**.
 It is true on exactly one row in the whole ledger, and that row read 748 words
-of a 748-word article, so it was never cut at all. The column tests a
-faithfulness delta against `evaluation.truncation_gap_max` (`0.1`), and the
-delta over those 22 cut rows runs from `-0.1235` to `+0.0381` - it cannot reach
-the threshold. The page was printing "The article was too long, so the machine
-read the start and stopped" from a cell that never said that.
+of a 748-word article, so it was never cut at all. Those rows were written by a
+writer that set the column from a faithfulness delta against a configured
+ceiling of `0.1`, and the delta over the 22 cut rows runs from `-0.1235` to
+`+0.0381` - it could not reach the threshold. The page was printing "The article
+was too long, so the machine read the start and stopped" from a cell that never
+said that. The writer was fixed on 2026-08-29 and the ceiling deleted with it;
+the column now carries `Article.truncated`.
 
 Restamping the older rows to today would delete the branch instead of writing
 it, and is refused: the stamp is the only marker of which rows predate the
@@ -136,6 +138,8 @@ summarize stage. Everything else prints as absence rather than as zero:
   currently stamped before `2026-08-28`, so every day reads `-` under `Article
   read only in part`. The count returns on its own once a run stamps a row on
   the new side of the boundary; nothing has to be edited for that to happen.
+  `EvalRow` is stamped `2026-08-29T09:00` from the commit that made the column
+  mean a cut, so the next run writes rows on the new side.
 
 ## The compression plot leaves items out and does not say so
 
