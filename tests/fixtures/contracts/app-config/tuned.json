@@ -50,6 +50,7 @@
     "golden_set_size": 40,
     "label_draw_per_decile": 6,
     "label_min_run_days": 10,
+    "label_min_stratum_rows": 20,
     "labellers": [],
     "lead_coverage_min": 0.3,
     "qualification_pool_multiple": 6,

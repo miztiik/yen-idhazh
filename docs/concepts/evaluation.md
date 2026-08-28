@@ -348,34 +348,44 @@ rule said it did.** Over those same 38 rows the first ten deciles run 9, 9, 8, 9
 early gives a roughly balanced sample, not a guaranteed one, and a partial draw
 may not be reported as stratified.
 
-**One draw is one `(scorer_version, pipeline_fingerprint)` pair, enforced rather
-than warned about.** `eligible()`, `draw()` and `run_days()` all require both
-halves with no default, so the pool can no longer hold two pipelines. An empty
-pool exits non-zero and prints every pair in the ledger with its row count and
-date range, because a tool that says "0 rows at your pipeline, here is what does
-exist" is a usable status report and silence is not. Treating fingerprints as
-reported strata instead would change the calibration rule and still needs owner
-approval. Article bodies remain local and uncommitted.
+**One draw is one `scorer_version`. The pipeline is a covariate the draw reports,
+not a filter it applies (owner decision, 2026-08-27).** `eligible()`, `draw()`
+and `run_days()` require the scorer with no default, because the cuts being
+calibrated live inside that string: a row read by a different instrument answers
+a different question. `pipeline_fingerprint` is optional, and omitting it is the
+normal case. `strata()` splits the drawn rows by producer, and the tool prints
+that split with any stratum under `evaluation.label_min_stratum_rows` marked too
+thin to cut on.
+
+Requiring both was unreachable rather than strict. The stamp digests seventeen
+inputs, so a reworded prompt, a llama.cpp rebuild or a sanitizer fix reset the
+count to zero, and no pair has ever held for more than three consecutive
+run-days. The trade is stated rather than hidden: **a rate read off a pooled
+draw is a prior with wide bounds, never a calibration.** Report it split by
+stratum. The tool says so on any draw carrying more than one producer, and it
+refuses to let the split go unprinted. An empty pool still exits non-zero and
+prints every pair in the ledger with its rows and dates. Article bodies remain
+local and uncommitted.
 
 **The exact remaining requirement**, checked against the committed ledger and
-current code on 2026-08-27. These are exact counts over committed files rather
+current code on 2026-08-28. These are exact counts over committed files rather
 than a timing, so there is no spread: the same commit gives the same numbers on
 any machine.
 
 | What | Have | Need |
 | --- | --- | --- |
 | Labels | **0** | 60 |
-| Distinct run-days at the current `scorer_version` AND current `pipeline_fingerprint` | **1** | 10 |
+| Distinct run-days at the current `scorer_version` | **2** (`2026-08-26`, `2026-08-27`) | 10 |
 | Longest run of consecutive run-days at any one pair, ever reached | **3** (`2026-08-24` to `2026-08-26`) | 10 |
-| Eligible rows at that pair | 114 | not the constraint |
+| Eligible rows at that scorer | 450 | not the constraint |
+| Rows the draw can fill | **60 of 60**, no decile short | 60 |
 
 The current scorer is
 `hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;bands=0.80/0.50;lead=0.30`.
-The configured Qwen3.5-9B summarizer wrote its first day under it on
-`2026-08-27`, 114 rows at fingerprint `6a23e277`, and that is the whole window.
-Every earlier row was written by the retired Qwen3-8B, whose weight digest is
-part of the pipeline fingerprint, so none of them can be joined to this series.
-The previous three-day run also uses the old scorer. The band
+Two producers wrote those rows: `6a23e277` (the configured Qwen3.5-9B, 48 of the
+60 drawn) and `f0d4ecc7` (12 drawn, under the floor and marked). Under the old
+rule the same ledger filled 32 of 60 with seven deciles short, which is the
+measured cost of the pair requirement. The band
 values sit **inside** the scorer version string, so moving a threshold also
 mints a new scorer version and restarts the count. That is correct, and it is
 why a cut cannot move halfway through a collection.
@@ -460,7 +470,7 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 
 **The measured reset rate (2026-08-27, `state/scores.csv` and `state/fingerprints.csv` at commit `c08d8b5`).** 2,232 eval rows, written by 18 runs across **5 scored run-days** (`2026-08-22` to `2026-08-26`), carry **5 distinct `pipeline_fingerprint` values** and **4 distinct `scorer_version` values** - one new pipeline stamp per scored day, on average. `2026-08-26` alone carried three different (`scorer_version`, `pipeline_fingerprint`) pairs: the stamp moved at that day's second run and again at its fifth, and the scorer version moved at the fifth with it. Every one of those 2,232 rows names the same `model_id`, `qwen3-8b-q4-k-m` - the model did not change once and the stamp still moved four times, so a model swap is *one* cause of a reset rather than the cause. `state/fingerprints.csv` holds a single row, because the ledger that expands a stamp into its inputs only started on 2026-08-26; four of the five stamps can no longer be expanded at all. Authority: measurement.
 
-**The consequence, plainly: the ten-day window has never once been reached (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. That reset opened the current window: the 9B wrote its first 114 rows the same day, under `hhem-2.1-open@8e4a2e6e` and `6a23e277`, so the count stands at 1 of 10 and none of the 2,232 earlier rows can join it. At the observed rate of pipeline change, every model or runtime improvement spends the whole window. That is a live tension between shipping a better pipeline and measuring the one already running, and **this page does not resolve it.** Two answers exist - freeze the pipeline for ten days and pay for the window in shipped improvements, or count run-days at one `scorer_version` and carry `pipeline_fingerprint` as a reported stratum instead of a disqualification. The second is the rule change [The label queue: three repairs, and what they left](#the-label-queue-three-repairs-and-what-they-left) says needs owner approval. Both are the owner's call. Nothing here moves a threshold. Authority: owner.
+**The consequence, and how it was resolved (2026-08-27).** The longest run of consecutive run-days under a single (`scorer_version`, `pipeline_fingerprint`) pair is **3** - `2026-08-24` to `2026-08-26`, under `969b1917...d2b945` - and the pair survived only the first of five runs on the third of those days. Three of ten, once, in the ledger's whole history. Adopting Qwen3.5-9B-Q4_K_M (commit `5d8ba60`, 2026-08-27) moved `model_sha256` and `chat_template_sha256` together, which is the one reset `state/fingerprints.csv` can expand into its cause. At the observed rate of pipeline change, every model or runtime improvement spent the whole window, so the pair requirement was unreachable rather than strict - a live tension between shipping a better pipeline and measuring the one already running. **The owner resolved it on 2026-08-27: count run-days at one `scorer_version`, and carry `pipeline_fingerprint` as a reported stratum rather than a disqualification.** The rejected alternative was to freeze the pipeline for ten days; it was declined because the claim it buys expires at the next prompt change, so the freeze would be paid repeatedly, and because a repository shipping several fixes a day cannot stand still that long. What the chosen rule gives up is stated wherever a result is printed: a rate over a pooled draw is a prior with wide bounds, not a calibration, and a stratum under `evaluation.label_min_stratum_rows` may not move a threshold at all. Measured effect on the same ledger: the drawable sample went from 32 of 60 with seven deciles short to **60 of 60**. Nothing here moves a threshold. Authority: owner.
 
 ## Rejected alternatives
 
