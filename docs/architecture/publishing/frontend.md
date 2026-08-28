@@ -434,7 +434,7 @@ The run is the data's provenance; the commit is the site's. They move independen
 
 ## The console answers "is it working", in one screen
 
-`/console/` is the operator's surface. The digest tells a reader what happened in the world; the console tells the owner what happened to the pipeline. It is instrumentation, it earns no design budget, and its only obligation is to be correct ([../../concepts/vision.md](../../concepts/vision.md)).
+`/console/` is the operator's surface. The digest tells a reader what happened in the world; the console tells the owner what happened to the pipeline. It is instrumentation: it takes no ornament and spends no reader attention, and what it owes instead is legibility - a figure readable at a glance, a table that fits the screen it is on, and a page that can be scanned in one pass ([../../concepts/vision.md](../../concepts/vision.md)).
 
 `/evals/` remains a published entry point for old bookmarks. It carries a
 prerendered meta refresh, a canonical link and a plain link to `/console/`.
