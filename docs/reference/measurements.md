@@ -891,6 +891,60 @@ re-run job, or a build that renames a series. Re-run
 `python backend/utilities/reconcile_prefill.py --run <run-id>` after a few more
 days before treating the agreement as a property rather than an observation.
 
+## The two source word counts, 2026-08-27
+
+**Measured 2026-08-27** on `state/scores.csv` at commit `860e7cd`, n=2,566.
+Method: Python `csv.DictReader` over the committed ledger. Deterministic
+arithmetic, so hardware and spread are not applicable.
+
+The same reading was taken twice earlier the same day, at n=2,232 and n=2,346
+([../concepts/evaluation.md](../concepts/evaluation.md)). The scheduled pipeline
+adds rows several times an hour, so each is correct for the file in front of it.
+The numbers below are the ones the migration acted on.
+
+| Reading | Rows | Share |
+| --- | --- | --- |
+| `source_seen_word_count` **greater** than `source_word_count` | 610 | 23.8% |
+| seen less than full | 1,450 | 56.5% |
+| the two equal | 506 | 19.7% |
+| sitting exactly on the 1,923-word cap | 157 | 6.1% |
+
+The first row is the finding. If one string is a cut of the other, the seen
+count cannot be the larger one, so 610 rows read in a direction that is
+arithmetically impossible. The cause was not truncation: `source_word_count` was
+`len(_WORD.findall(article.text))` and `source_seen_word_count` was
+`len(article.text.split())` - two counters over one post-cap string. The gap
+between them was tokenisation noise.
+
+**The fix is visible as a natural experiment in this same file.** 2,346 rows
+were written by the old writer and 220 by the one `ad630f7` shipped. **All 610
+impossible rows sit in the 2,346. None sit in the 220.**
+
+**The real truncation rate is 6.1 percent, not 87.** A rate derived from the
+pair reads as 87 percent of items truncated and is wrong by about 14x. The
+honest count is the rows sitting exactly on `int(2500 / 1.3) = 1923`, the only
+truncation cap this repository has ever committed. No row in the ledger exceeds
+it and only 6 rows sit in the 1,900-to-1,922 range, so the cluster at the cap is
+the cut and not the distribution.
+
+The ledger was rewritten in the same commit as the contract change:
+
+| Rows | What the migration did |
+| --- | --- |
+| 2,204 | given the article's own length - it sat below the cap, so it is the text the model saw and the two counts are equal by construction |
+| 142 | emptied - it sat on the cap, and extract discarded that body |
+| 220 | left alone, because their own `version` stamp says the fixed writer produced them |
+
+Header identical, row count identical, and every cell outside the migrated
+column byte-identical.
+
+**A CSV ledger must not be auto-merged.** Rebasing this rewrite onto a main that
+had appended 220 rows produced a file git called a clean merge and which held
+**2,569 rows against main's 2,566**, with 2 impossible rows surviving. The
+line-based merge interleaved three rows that no reader would have questioned.
+The safe move is to take the incoming file whole and re-run the migration over
+it, which is what the committed file is.
+
 ## Evaluation ledger re-band
 
 **Measured 2026-08-23** on `state/scores.csv` at commit `6c332c7`, n=156.
