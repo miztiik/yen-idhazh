@@ -340,7 +340,7 @@ def main() -> int:
                 "output_digest": item["output_digest"],
                 "pipeline_fingerprint": item["pipeline_fingerprint"],
                 "summary_word_count": int(item["summary_word_count"]),
-                "source_word_count": int(item["source_word_count"]),
+                "source_seen_word_count": int(item["source_seen_word_count"]),
                 "scorer_version": item["scorer_version"],
                 "hhem_at_label": float(item["hhem"]),
                 "band_at_label": item["band"],
