@@ -22,7 +22,7 @@ Before any non-trivial work in this repo:
 4. For plan execution, follow [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md); it owns the parallel-dispatch mechanics.
 5. Before claiming a change is done, run [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
-Five persona advisors live in [`.github/agents/`](.github/agents/), each at a distinct altitude: Reader, Jony (UI/UX), Andre (AI/LLM), Fowler (Architecture & Engineering), Carmack (Engine & Runtime).
+Seven persona advisors live in [`.github/agents/`](.github/agents/), each at a distinct altitude: Reader, Editor, Jony (UI/UX), Susan (Craft & Delight), Andre (AI/LLM), Fowler (Architecture & Engineering), Carmack (Engine & Runtime). Jony rules what survives on the page; Susan rules whether what survived is good enough to ship. A veto must name what the reader loses.
 
 The build-time producer is `backend/` (Python; runs in CI, never at runtime); the published surface is `frontend/` (static: it renders committed payloads and may fetch static assets, but never calls a service we run). They meet only through committed data and the contracts generated from `backend/idhazh/contracts/`.
 

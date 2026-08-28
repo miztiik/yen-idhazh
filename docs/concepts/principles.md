@@ -44,9 +44,11 @@ There is no log sink, because there is nothing to send logs to. On a developer m
 
 The pipeline stores and serves a URL and our own summary. The source text is fetched, used, and never committed. This is a copyright rule and a scope rule at once, and it is also why the link to the original is a first-class element of every item rather than a footnote.
 
-## 11. Delete before you build
+## 11. Delete before you build, and build before you settle
 
 One developer, weekends. Every kept line is rent paid forever. Before asking how to build something well, ask whether it should exist: name the consumer and name what concretely breaks without it. If neither is concrete, the honest answer is not to build it.
+
+The second clause is not a softening, it is the other failure. **A surface nobody would choose to look at has not been simplified, it has been abandoned.** Deleting is free and building is not, so a project that only rewards the first ratchets one way until what is left is correct and unloved. When the answer is that the thing should exist, it is then owed the craft that makes it worth someone's attention - and "it works" is not that.
 
 ## Design rationale
 
