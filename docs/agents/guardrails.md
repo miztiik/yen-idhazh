@@ -8,7 +8,7 @@ Loaded by [`bootstrap.md`](bootstrap.md) as part of every persona's startup ritu
 
 Agent/customization Markdown is ASCII-only: write "-", "->", ">=", and "section" instead of fancy symbols.
 
-**Authority assignment** (resolves stalled agent debates). The five personas live under [`.github/agents/`](../../.github/agents/); each owns one altitude (`CLAUDE.md` section 14):
+**Authority assignment** (resolves stalled agent debates). The six personas live under [`.github/agents/`](../../.github/agents/); each owns one altitude (`CLAUDE.md` section 14):
 
 | Decision class | Authority |
 | --- | --- |
@@ -16,11 +16,12 @@ Agent/customization Markdown is ASCII-only: write "-", "->", ">=", and "section"
 | Architecture / persisted contracts (stage payloads, eval ledger, run manifest, config, published payloads) / schema versioning / test tiers / refactor safety / module structure / when to delete | **Fowler** (Architecture & Engineering) |
 | Model pick on quality grounds / prompt strategy / constrained decoding / eval design and metric choice / the prompt-injection surface | **Andre** (AI / LLM) |
 | The published surface: page and typography, chart vs diagram vs nothing, the eval dashboard, what a visual must earn | **Jony** (UI/UX) |
+| What the digest covers and at what length: story selection, where a cut may fall by kind of writing, which themes to trade when a budget binds, whether a source earns its slot | **Editor** |
 | Reader reality check (is this worth two minutes? is the language plain? does the page work on a slow connection?) | **Reader** |
 
-Where Carmack and Andre both touch the model: **Andre owns whether a model is good enough, Carmack owns whether it fits.** A model that fails either test is not the pick. Where Andre and Carmack both touch injection: **Andre owns the prompt and schema shape, Carmack owns the process boundary** (no model output becomes a shell argument, a file path, or a URL to fetch).
+Where Carmack and Andre both touch the model: **Andre owns whether a model is good enough, Carmack owns whether it fits.** A model that fails either test is not the pick. Where Andre and Carmack both touch injection: **Andre owns the prompt and schema shape, Carmack owns the process boundary** (no model output becomes a shell argument, a file path, or a URL to fetch). Where Editor and Andre both touch quality: **Editor names the content failure, Andre chooses the instrument that measures it.** Where Editor and Reader both touch content: **Reader reports what reading it was like, Editor rules what should have run.**
 
-Adding a sixth persona requires a distinct altitude not already covered; two personas at the same altitude collapse into one (`CLAUDE.md` section 14).
+Adding a seventh persona requires a distinct altitude not already covered; two personas at the same altitude collapse into one (`CLAUDE.md` section 14).
 
 **User approval supersedes every agent and every rule.**
 

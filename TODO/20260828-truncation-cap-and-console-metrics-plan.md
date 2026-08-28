@@ -15,7 +15,7 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | Why this plan exists | 6.10 percent of published items are cut at 1923 words and no committed number says what the cut costs, so the cap has never been tuned on evidence. |
 | Hard scope - in | `extract.truncation_cap_tokens` 2500 -> 5000; `truncation_flagged` redefined to the exact fact; one new `ItemHealthRow` column carrying the pre-cap word count; five cut figures and one source table on `/console/`; a pointer readout on two charts; a `/console/` page-weight ceiling; two written rollback triggers; one new Editor persona. |
 | Hard scope - out | `n_ctx`, `max_output_tokens`, `request_timeout_minutes`, `run.shard_timeout_minutes`, `run.safety_ceiling_per_run`, shard sizing. Re-cutting any confidence band. Head-plus-tail reading. Deleting `hhem_full` or `hhem_delta`. Generating `frontend/src/lib/payload/types.ts`. Renaming `Item telemetry viewport`. |
-| ESCALATE triggers | (1) Any row that requires moving `METRICS_VERSION` from `"3"`. (2) Any row that requires moving `n_ctx`, `request_timeout_minutes` or `run.shard_timeout_minutes`. (3) Rollback trigger A or B firing after Row 8 (see Row 7). (4) A widest-request reading above 7,800 prompt-plus-output tokens on the first run at the new cap - the cap comes down to 4000, the context window does not go up. |
+| ESCALATE triggers | (1) Any row that requires moving `METRICS_VERSION` from `"3"`. **Corrected 2026-08-28 by Andre: this trigger was aimed at the wrong symbol.** Defect 2's counter is run-days at one `scorer_version`, and *any* edit to that string resets it - the band thresholds already sit inside it. Row 10 edits it with the owner's authorisation, so the real trigger is: no row may edit `scorer_version` **beyond Row 10's `window=` field** without saying what the reset costs. (2) Any row that requires moving `n_ctx`, `request_timeout_minutes` or `run.shard_timeout_minutes`. (3) Rollback trigger A or B firing after Row 8 (see Row 7). (4) A widest-request reading above 7,800 prompt-plus-output tokens on the first run at the new cap - the cap comes down to 4000, the context window does not go up. |
 | Chosen strategy | Land the instrument before the change: the console must be able to see a cut before the cap moves, or the change is unmeasurable (Rule #10). Reader-before-writer twice - Row 1 before Row 2, Row 5 before Row 8. Ruled by Fowler (Architecture and Engineering), costed by Carmack (Engine and Runtime), surface ruled by Jony (UI/UX). |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3. |
 
@@ -53,7 +53,9 @@ Three claims that look like measurements and are not, stated so a later reader c
 | 6 | `/console/` gains a page-weight ceiling | 5 | D | PENDING | - | - | - |
 | 7 | The two rollback triggers, written down and checkable | - | A | PENDING | - | - | - |
 | 8 | `extract.truncation_cap_tokens` 2500 -> 5000 | 2, 5, 6, 7 | E | PENDING | - | - | - |
-| 9 | The Editor persona | - | A | PENDING | - | - | - |
+| 9 | The Editor persona | - | A | **DONE** | - | - | - |
+| 10 | Chunk geometry into config, anchored, and version-stamped | - | A | PENDING | - | - | - |
+| 11 | The truncation note carries the scale, and stops being swallowed | - | A | PENDING | - | - | - |
 
 ---
 
@@ -419,6 +421,80 @@ Empty states: `Nothing has recorded an article length yet. This fills as runs pu
 | 3 | Give the Editor authority over the cap | The cap is a runtime cost decision (Carmack) with a quality half (Andre). The Editor names what a cut loses; it does not set the number. | Fowler |
 
 ---
+
+---
+
+## Section 11 - Row #10 - Chunk geometry into config, anchored, and version-stamped
+
+- **Scope:** the faithfulness grader's window size stops being a hardcoded constant, its last window stops being a runt, and the ledger records which geometry produced each row.
+- **Files touched:**
+  - `backend/idhazh/evals/hhem.py`
+  - `backend/idhazh/evals/metrics.py` (`scorer_version`)
+  - `backend/idhazh/contracts/app_config.py` (`EvaluationConfig`)
+  - `config/idhazh.json`, `schemas/app-config.schema.json`
+  - `backend/idhazh/cli.py` (three `scorer_version` call sites), `backend/utilities/build_canary_day.py`
+  - `backend/tests/test_pipeline.py`, `backend/tests/test_evals.py`
+  - `docs/concepts/evaluation.md`
+- **Acceptance gates:** `ruff check .`; `mypy --strict`; full `pytest`; contract drift gate; `METRICS_VERSION` still `"3"`; `grep` for `CHUNK_WORDS` outside `hhem.py` returns zero hits.
+- **Oracle:** for every premise length from 901 to 4000 words, **every window `chunks()` returns is exactly `chunk_words` long** and the last one ends on the final word. Today the last window is *always* short - at most `((len-1) mod 750) + 1` words, averaging about 375 against 900-word rivals - so the assertion fails on main and passes only after the fix. A test that only checks the count would pass either way.
+
+**The two changes, and why each is not the other.**
+
+1. **To config (Rule #6).** `chunk_words` default 900, `chunk_overlap_words` default 150, both in `evaluation` - the section `scorer_version` already receives. **The default does not move today.** Andre: HHEM-2.1-Open has no maximum input length (the 512 is vestigial from `flan-t5-base`; `predict()` never passes `truncation=True`), so a bigger window is mechanically allowed - but with **0 of 60 human labels** there is no ground truth to tune against, and a sweep would show only that the number moves, not which value is right (Rule #10).
+2. **Anchored last window.** `starts = list(range(0, len(words) - size + 1, step))`, then append `len(words) - size` when the tail is uncovered. At 3846 words this goes from 6 windows to 5 - **a 17 percent cut in grader time on an at-cap item**, which partly pays for Row 8.
+
+**New `scorer_version` format:** `hhem-2.1-open@8e4a2e6e;weights-841b70e0;metrics-3;window=900/150/anchored;bands=0.80/0.50;lead=0.30`. Geometry sits after identity and before the decision thresholds. `anchored` is a code constant, not a config flag - a knob for "should the chunker be correct" is a knob nobody turns.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The owner's premise was that this slicer degrades **summarization**. It does not: `chunks()` has four call sites, all scoring, and `summarize.build_request` sends the whole post-cap article in one request. Verified twice, independently. The row proceeds on the real defects, not the reported one. | measurement, confirmed by Andre |
+| 2 | The trailing window is **always** short, not occasionally. Every article over 900 words is graded today with at least one partial-premise draw in its max. That is the defect worth fixing, and it is bigger than the `+0.0381` it was found through. | Andre |
+| 3 | Do **not** change the max aggregation. A mean penalises length worse. The fix is to drive the window count toward 1, which is what config plus anchoring do. | Andre |
+| 4 | Do **not** move `METRICS_VERSION`. It names the deterministic counterweights in `metrics.py`, none of which change when the chunker changes; moving it would assert a change that did not happen. Adding `window=` resets Defect 2's counter on its own. | Andre |
+| 5 | The owner accepted the comparability loss explicitly. What he is buying: rows written before this land under a geometry no string records, so they cannot be pooled with later rows. The cost is **2 banked run-days out of a gate of 10 that has never once been met** (longest run at any one scorer is 3). | Andre, owner |
+| 6 | Anchoring does **not** restore `hhem_full >= hhem`. The two window sets are still not nested. It removes the runt as a source of the positive delta; only a re-score of the 22 shows what is left. | Andre |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Raise the window above 900 in this row | Unmeasured. With 0 of 60 labels nothing can say which value is right, and `flan-t5-base` buckets every token pair past 128 positions together, so a much larger window may not buy proportionally more. | Andre |
+| 2 | Switch max to mean | Trades a length bias for a bigger one. | Andre |
+| 3 | Make `anchored` a config flag | A knob nobody turns. | Andre |
+| 4 | Hash the geometry into `scorer_version` | `scorer_version`'s own docstring: "A bare digest would be interpretable by nobody." | Andre |
+
+---
+
+## Section 12 - Row #11 - The truncation note carries the scale, and stops being swallowed
+
+- **Scope:** a reader can tell a 9 percent cut from a 54 percent cut, and an abstract that was also cut stops saying nothing about the cut.
+- **Files touched:**
+  - `backend/idhazh/assemble.py` (`reader_note`)
+  - `backend/tests/test_assemble*.py`, `frontend/tests/`
+  - `docs/concepts/digest.md`
+- **Acceptance gates:** `ruff check .`; `mypy --strict`; full `pytest`; browser smoke per CLAUDE.md section 12.
+- **Oracle:** an article that is both `SourceForm.ABSTRACT` and `truncated` carries **both** facts. On main it carries only the abstract note - `reader_note` returns on the first branch - so a cut is silently dropped. And two articles losing 9 percent and 54 percent do not produce the same string.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Publish every long article. **No item is ever dropped for being long.** `extract.min_source_words` is a readability floor; there must never be a ceiling. Not publishing is the only option of three that is invisible to the reader, and invisibility is the failure the Editor polices hardest. | Editor |
+| 2 | The note must name the scale. One sentence covers a 1.3 percent loss (25 words of 1,948) and a 77 percent loss (6,519 of 8,442) today. After Row 8 the range is still 9 to 54 percent. A word that means both means nothing. | Editor |
+| 3 | The exact sentence is Jony's. That it must distinguish those two cases is the Editor's. | Editor, Jony |
+| 4 | `reader_note` returning abstract-or-truncation and never both is the exact shape of a silent cut. It is inert today because abstracts do not reach the cap - and it should not be left standing. | Editor, verified |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Drop the 8,000-word items rather than half-summarise them | The reader loses the item and does not know. | Editor |
+| 2 | Keep today's note and rely on the link | The reader cannot tell whether "the first part" means 91 percent or 46 percent, so they cannot decide whether to click. | Editor |
+| 3 | Judge the note by whether readers click through | Rule #1 forbids that telemetry. The note is judged on whether it is true and legible. | Editor |
+
+---
+
+## Open, not a row - for owner sign-off
+
+**Split the top summary-length band.** `summarize.bands` runs 2000+ with no upper bound, so an 8,442-word investigation and a 2,000-word feature get the same 110-200 word ask - a 42-to-1 compression on the first. The Editor's reading: past about 8,000 words a piece carries several findings under one headline, and a summary that can name only one reads complete while omitting the rest. The measured seam is real - 17 of 22 cut articles sit under 3,600 words, two at 4,212 and 4,444, then a 3,800-word gap to 8,207 and 8,442.
+
+Cost, so the decision is priced: the top band is about 3 of every 109 articles, writing runs at 4.88 tok/s, so every extra 100 words asked of that band costs about 27 s an item and **about 80 s a run** - under a tenth of Row 8's own cost and inside the host-draw noise. Whoever takes this should check `summarize.key_points_max` at the same time: on an investigation the binding constraint may be how many points are allowed, not how many words.
+
+**A warning to carry into it.** If the top band splits and summaries start drawing on both the opening and the closing of a long piece, no single 900-word window supports the whole summary and `hhem` **falls while the summary improves**. Do not read that as a regression.
 
 ## See also
 
