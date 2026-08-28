@@ -56,6 +56,7 @@ Three claims that look like measurements and are not, stated so a later reader c
 | 9 | The Editor persona | - | A | **DONE** | - | - | - |
 | 10 | Chunk geometry into config, anchored, and version-stamped | - | A | PENDING | - | - | - |
 | 11 | The truncation note carries the scale, and stops being swallowed | - | A | PENDING | - | - | - |
+| 12 | Measure which way the grader's length bias runs | 10 | B | PENDING | - | - | - |
 
 ---
 
@@ -488,11 +489,53 @@ Empty states: `Nothing has recorded an article length yet. This fills as runs pu
 
 ---
 
+## Section 13 - Row #12 - Measure which way the grader's length bias runs
+
+- **Scope:** one recorded number saying whether the faithfulness grader over-scores or under-scores long articles, so `evaluation.chunk_words` can ever be tuned on evidence instead of left at its default forever.
+- **Files touched:**
+  - `backend/utilities/` - one read-only comparison script, no pipeline code
+  - `docs/reference/measurements.md`
+  - `docs/concepts/evaluation.md`
+- **Acceptance gates:** `ruff check .`; `mypy --strict`; full `pytest`; the recorded figure carries hardware, date, n and spread (Rule #10).
+- **Oracle:** **the same (premise, summary) pair is scored twice and nothing else varies.** Each item is its own control, so a difference cannot be explained by long articles simply being more summarizable - which is the confound that makes the obvious query (mean `hhem` above and below 900 words) worthless. A comparison across two different item populations fails this row.
+
+**The measurement, exactly.** Take the committed evidence pairs under `backend/var/evidence/<date>/*.json` - each carries the exact premise and summary the grader read. Score each pair twice: once at today's geometry, once at a window wide enough that **every item is a single slice**. Report, split by today's slice count:
+
+| Figure | Why it is the answer |
+| --- | --- |
+| Mean and spread of (today's score - single-slice score), for items at 1 slice | Must be zero. It is the control that proves the harness is sound. |
+| The same, for items at 2, 3, 4+ slices | **Systematically positive means best-of-N over-scoring wins. Systematically negative means the mark-down for depth wins.** |
+| The same, split by whether the article was cut | The cap doubling changes slice counts, so the two effects must be separable from it |
+| Seconds per pass at each window size | Carmack's input for whether a one-slice window is affordable at all |
+
+**No human labels are needed and that is the point.** Defect 2 needs 60 labels because it asks whether the score is *right*. This asks whether the score *changes with slicing* - a within-item question the pairs answer on their own. It is the one grader question that is not blocked on the label queue.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The grader is biased in two directions at once and both strengthen with length. Best-of-N rises with N, and N is `ceil(len / step)` - so a 901-word article gets two draws where an 899-word one gets one. Separately, the grader is handed the whole summary, so a summary drawing on an article's opening and closing has no single slice supporting all of it and is marked down for depth. | Andre |
+| 2 | Row 10 reduces the first effect and does not remove it, and does not touch the second. Anchoring cuts an at-cap item from 6 slices to 5; the count still grows with length. | Andre |
+| 3 | This row measures and records. It changes no default. `chunk_words` stays 900 until a number exists. | Andre, Rule #10 |
+| 4 | Depends on Row 10 because the comparison must be taken against the anchored geometry. Measuring the old runt-window behaviour would record an instrument about to be replaced. | Fowler |
+| 5 | Carry the Editor's warning into the reading: if the top band ever splits, summaries drawing on more of the article will score **lower** while getting better. A score drop is not automatically a regression. | Editor |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Compare mean `hhem` for articles under 900 words against those over | Confounded - long articles may simply be more summarizable, and the query cannot separate that from the instrument. | Andre |
+| 2 | Wait for the 60 human labels | This question does not need them. Blocking a within-item comparison on a ground-truth queue that has never once been filled is how a measurable thing stays unmeasured for a year. | Andre |
+| 3 | Fix the bias now instead of measuring it | Both candidate fixes - a much larger window, or a different aggregation - change every score with no way to tell whether they helped. Measure first. | Andre |
+| 4 | Fold this into Row 10 | Row 10 is a structural change with a mechanical oracle. This is a measurement with a statistical one. Mixed hats in one PR. | Fowler |
+
+---
+
 ## Open, not a row - for owner sign-off
 
-**Split the top summary-length band.** `summarize.bands` runs 2000+ with no upper bound, so an 8,442-word investigation and a 2,000-word feature get the same 110-200 word ask - a 42-to-1 compression on the first. The Editor's reading: past about 8,000 words a piece carries several findings under one headline, and a summary that can name only one reads complete while omitting the rest. The measured seam is real - 17 of 22 cut articles sit under 3,600 words, two at 4,212 and 4,444, then a 3,800-word gap to 8,207 and 8,442.
+**Split the top summary-length band.** `summarize.bands` runs 2000+ with no upper bound, so an 8,442-word investigation and a 2,000-word feature get the same 110-200 word ask. **Reviewed and not recommended, 2026-08-28.** The Editor's 42-to-1 figure measures the article's full length, but the band is chosen from the full length while the model is handed the **cut** text - so the compression the model actually faces is 10-to-1 on a 2,000-word feature and **19-to-1** on the 8,442-word piece after Row 8, a factor of two rather than a factor of four. Worse, the model sees only 46 percent of that piece, so a longer ask means more words from less text, which is a faithfulness risk and not a depth gain. Two articles in 2,688 published items sit past 8,000 words - 0.07 percent.
 
-Cost, so the decision is priced: the top band is about 3 of every 109 articles, writing runs at 4.88 tok/s, so every extra 100 words asked of that band costs about 27 s an item and **about 80 s a run** - under a tenth of Row 8's own cost and inside the host-draw noise. Whoever takes this should check `summarize.key_points_max` at the same time: on an investigation the binding constraint may be how many points are allowed, not how many words.
+The measured seam is still real - 17 of 22 cut articles sit under 3,600 words, two at 4,212 and 4,444, then a 3,800-word gap to 8,207 and 8,442 - and the Editor named its own falsification test: summarize the two longest pieces at the current ask and at a longer one, and count how many distinct findings each names. Same count, and the split buys nothing. Nobody has run it.
+
+Cost, so the decision stays priced if it is ever revisited: the top band is about 3 of every 109 articles, writing runs at 4.88 tok/s, so every extra 100 words asked of that band costs about 27 s an item and **about 80 s a run**. Whoever takes it should check `summarize.key_points_max` at the same time: on an investigation the binding constraint may be how many points are allowed, not how many words.
+
+**What helps those two articles instead is Row 11.** The problem with a half-read investigation is not that the summary is too short. It is that it does not admit what it is.
 
 **A warning to carry into it.** If the top band splits and summaries start drawing on both the opening and the closing of a long piece, no single 900-word window supports the whole summary and `hhem` **falls while the summary improves**. Do not read that as a regression.
 
