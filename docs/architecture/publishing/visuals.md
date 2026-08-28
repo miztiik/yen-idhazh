@@ -422,34 +422,21 @@ cancelled and had already binned its artifact. A warning that only ever describe
 control. The same field now stops the loop, which is the smallest change that makes the job fit its
 bound by design instead of by which host it drew (Rule #2).
 
-**Why the 2026-08-24 day was repaired by nulling every shared claim.** Authority: owner,
-2026-08-27. Seeding the counter from disk stopped the next collision; it did nothing for the day
-that already had one. `frontend/public/digest/2026/08/24/digest.json` declared **32 visuals over 18
-files** - fourteen SVGs each sat under two different stories. For each of those fourteen pairs one
-item is the story the chart was drawn for and the other is not, and the payload does not say which,
-so 28 of the day's 731 items carried a picture that may be somebody else's, under alt text naming
-figures that are not in it. Counting every committed day, that day is the only one affected:
-2026-08-21 published no visual at all, 2026-08-22 and 2026-08-23 published one each, and 2026-08-25
-(27 visuals over 27 files) and 2026-08-26 (40 over 40) are one file per item throughout.
+**Two things about the 2026-08-24 repair are not in the record above.** Authority: owner,
+2026-08-27.
 
-The repair nulls the `visual` on all 28 items that named a shared path, then deletes the 14 SVGs
-that leaves unreferenced. Every one of the day's 731 items keeps its text, and the 4 pictures that
-only ever had one claimant survive. Keeping one picture of each pair would have published a guess
-dressed as a fact, and a wrong picture under confident alt text is worse than no picture - not
-least because no picture is already the ordinary answer for an item, so nobody is surprised by one.
+The first is that no other committed day needs it. 2026-08-21 published no visual at all,
+2026-08-22 and 2026-08-23 published one each, and 2026-08-25 (27 visuals over 27 files) and
+2026-08-26 (40 over 40) name one file per item throughout. 2026-08-24 is the only day that ever
+pointed two items at one picture, so the repair is a one-day event and not the first of a series.
 
-**The guard is a test over the committed archive, not a rule to remember.**
-`backend/tests/test_published_assets.py` reads every committed day and asserts three things: no two
-items name one visual path, every declared path resolves to a file on disk, and no SVG in a day's
-directory is unreferenced. The first is the 2026-08-24 defect. The second and third are the two
-ways a repair or a renumbering leaves the payload and the directory disagreeing about what the day
-published.
-
-One live interaction is known, and it is the guard working rather than a false alarm. The prune -
-`visuals_older_than` in [`retention.py`](../../../backend/idhazh/retention.py) - deletes an old
-day's SVGs and leaves the payload that names them alone, on purpose: it removes visuals, never a
-day. So switching the prune on fails the second assertion on the first day it prunes. The prune has
-to learn to null the item's `visual` as it deletes the file before it can be enabled.
+The second is what that test - `backend/tests/test_published_assets.py` - costs the prune, and the
+cost is the guard working rather than a false alarm. The prune - `visuals_older_than` in
+[`retention.py`](../../../backend/idhazh/retention.py) - deletes an old day's SVGs and leaves the
+payload that names them alone, on purpose: it removes visuals, never a day. So switching the prune
+on fails the second of the test's three assertions - every declared path is a file that is there -
+on the first day it prunes. The prune has to learn to null the item's `visual` as it deletes the
+file before it can be enabled.
 
 ## Rejected alternatives
 
