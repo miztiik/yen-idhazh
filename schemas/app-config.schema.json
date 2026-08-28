@@ -284,9 +284,16 @@
         },
         "label_min_run_days": {
           "default": 10,
-          "description": "Distinct run-days at one scorer version and one pipeline fingerprint before a draw is worth finalising. A draw over one day is a draw over one day's sources.",
+          "description": "Distinct run-days at one scorer version before a draw is worth finalising. A draw over one day is a draw over one day's sources. The pipeline fingerprint is reported per stratum rather than required to hold still: requiring both made the gate unreachable, and no pair has ever held for more than three consecutive run-days.",
           "minimum": 1,
           "title": "Label Min Run Days",
+          "type": "integer"
+        },
+        "label_min_stratum_rows": {
+          "default": 20,
+          "description": "Rows one pipeline must contribute to a draw before a result read off that stratum may move a threshold. Below it the stratum is printed and marked too thin to cut on, because a rate over a handful of rows from one producer is noise wearing a decimal point (Rule #10).",
+          "minimum": 1,
+          "title": "Label Min Stratum Rows",
           "type": "integer"
         },
         "labellers": {
@@ -1201,6 +1208,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "evaluation.label_min_stratum_rows added, defaulting to 20, and evaluation.label_min_run_days now counts run-days at one scorer version rather than at one (scorer_version, pipeline_fingerprint) pair.",
+      "version": "2026-08-27T21:00",
+      "why": "The old rule was unreachable, not strict. The pipeline stamp digests seventeen inputs - a reworded prompt, a llama.cpp rebuild, a sanitizer fix - so shipping any summarize-side improvement reset the count to zero. Measured over the whole committed ledger on 2026-08-27: six distinct stamps across six scored run-days, and the longest unbroken run at one pair is three. Ten was never once reached. What is being calibrated is the scorer's cut, which lives inside scorer_version, so the pipeline is a covariate: it is reported per stratum and a stratum under label_min_stratum_rows is marked too thin to cut on. The trade is named rather than hidden - a pooled rate over several producers is a prior with wide bounds, never a calibration. Owner decision, 2026-08-27. Additive plus a widened meaning; an older config still validates."
+    },
+    {
       "change": "evaluation.verbatim_reject_ceiling added, defaulting to 0.75, and EvaluationConfig now refuses a value at or below evaluation.brief_compression_ceiling.",
       "version": "2026-08-27T12:00",
       "why": "Summarize had no rule that refused a summary which merely copies the source, so a brief published on 2026-08-26 was 44 words of which every word was one unbroken copy of its 53-word source - republishing an article body, which CLAUDE.md section 0a forbids outright. The number is a second knob rather than a reuse of brief_compression_ceiling: a refused item writes no score, so it leaves the corpus the brief-copying gate reads, and one shared number would have made that gate unable to fail. It sits in evaluation and not summarize because summarize is hashed whole into the pipeline fingerprint, and a rule that refuses a reply moves not one word the model writes. 0.75 is the midpoint of the empty band those eight brief items left - seven at or below 0.241, one at 1.000 - and it is a starting point, not a calibration (Rule #10). The invariant is the control: without it an operator editing one line silences the gate instead of tightening it. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
@@ -1428,7 +1440,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-27T12:00",
+      "default": "2026-08-27T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1442,5 +1454,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-27T12:00"
+  "version": "2026-08-27T21:00"
 }

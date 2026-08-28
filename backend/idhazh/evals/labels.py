@@ -17,6 +17,11 @@ not available.
 The strata are how the rows are chosen and never how they are ordered. The queue
 comes back in one global `label_id` order, so the sequence says nothing about
 which decile a row came from.
+
+One scorer version defines a pool; the pipeline fingerprint is a covariate the
+pool reports rather than a filter it applies. `strata()` is what makes that
+honest, and reading a rate off a mixed pool without printing the mix beside it
+is the thing this design trades away.
 """
 
 from __future__ import annotations
@@ -67,14 +72,20 @@ def eligible(
     records: Iterable[Mapping[str, str]],
     *,
     scorer_version: str,
-    pipeline_fingerprint: str,
+    pipeline_fingerprint: str | None = None,
 ) -> list[dict[str, str]]:
-    """Ledger rows one instrument read from the words of one producer.
+    """Ledger rows one instrument read, optionally narrowed to one producer.
 
-    Both halves of the pair are required and neither has a default. Refusing to
-    mix scorers while allowing mixed pipelines was incoherent: a new scorer
-    changes how the words are judged, and a new pipeline changes the words, so
-    either one crossing a stratum makes it two strata wearing one name.
+    `scorer_version` is required and is the stratum that matters: the cuts being
+    calibrated live inside that string, so a row read by a different instrument
+    answers a different question and can never join this one.
+
+    `pipeline_fingerprint` is optional, and leaving it out is the normal case.
+    Requiring it made the gate unreachable - the stamp moves on any of seventeen
+    inputs, including a sanitizer fix, and no pair has ever held for more than
+    three consecutive run-days. Pass it to narrow a pool to one producer;
+    otherwise every row carries its own stamp and `strata()` reports the mix,
+    which is a covariate to report rather than a reason to discard a row.
 
     Short-source rows are deliberately KEPT: they are extraction failures rather
     than summary defects, and dropping them would bias the sample toward
@@ -85,7 +96,10 @@ def eligible(
         dict(record)
         for record in records
         if record.get("scorer_version") == scorer_version
-        and record.get("pipeline_fingerprint") == pipeline_fingerprint
+        and (
+            pipeline_fingerprint is None
+            or record.get("pipeline_fingerprint") == pipeline_fingerprint
+        )
     ]
 
 
@@ -93,6 +107,15 @@ class Pair(NamedTuple):
     """One instrument-and-producer combination the ledger holds, and what it covers."""
 
     scorer_version: str
+    pipeline_fingerprint: str
+    rows: int
+    first_date: str
+    last_date: str
+
+
+class Stratum(NamedTuple):
+    """One producer inside a pool, and how much of the pool it wrote."""
+
     pipeline_fingerprint: str
     rows: int
     first_date: str
@@ -122,7 +145,7 @@ def draw(
     *,
     draw_id: str,
     scorer_version: str,
-    pipeline_fingerprint: str,
+    pipeline_fingerprint: str | None = None,
     per_decile: int,
 ) -> list[dict[str, str]]:
     """`per_decile` rows from each `hhem` decile, deterministic by hash.
@@ -171,15 +194,33 @@ def run_days(
     records: Iterable[Mapping[str, str]],
     *,
     scorer_version: str,
-    pipeline_fingerprint: str,
+    pipeline_fingerprint: str | None = None,
 ) -> set[str]:
-    """Distinct run-days at one pair. The collection requirement counts these."""
+    """Distinct run-days at one scorer. The collection requirement counts these."""
     return {
         record["date"]
         for record in eligible(
             records, scorer_version=scorer_version, pipeline_fingerprint=pipeline_fingerprint
         )
     }
+
+
+def strata(records: Iterable[Mapping[str, str]]) -> list[Stratum]:
+    """How a set of rows splits by producer, largest first.
+
+    This is what a relaxed pool costs and what has to be reported with any
+    result read off it. A rate computed over rows several producers wrote is a
+    prior with wide bounds, not a calibration, and the only thing that makes it
+    honest is printing the mix beside it.
+    """
+    dates: dict[str, list[str]] = {}
+    for record in records:
+        dates.setdefault(record["pipeline_fingerprint"], []).append(record["date"])
+    found = [
+        Stratum(fingerprint, len(seen), min(seen), max(seen))
+        for fingerprint, seen in dates.items()
+    ]
+    return sorted(found, key=lambda one: (-one.rows, one.pipeline_fingerprint))
 
 
 def columns() -> tuple[str, ...]:
