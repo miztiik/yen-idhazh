@@ -354,14 +354,6 @@
           "title": "Summary Words Min",
           "type": "integer"
         },
-        "truncation_gap_max": {
-          "default": 0.1,
-          "description": "Score gap that flags a truncation artifact rather than a hallucination.",
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Truncation Gap Max",
-          "type": "number"
-        },
         "validation_articles": {
           "default": 20,
           "description": "Golden articles a candidate must be scored on before its mean counts.",
@@ -1222,6 +1214,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "evaluation.truncation_gap_max removed.",
+      "version": "2026-08-29T09:00",
+      "why": "Its one caller stopped reading it in this commit, so the knob and its last reader go together and there is never a state where the number exists and nothing consults it. It set truncation_flagged from the gap between the two faithfulness scores, and that flag now carries Article.truncated - whether extract cut the body - because that is what its name says and what its one consumer prints. Retuning it was the alternative and it is not available: score_over_chunks takes the best of overlapping windows, a cut article's last window is not a window of the whole article, and the two window sets are not nested, so the gap can come out positive on an article that was never cut. Measured 2026-08-28 over all 2,683 committed rows of state/scores.csv, the gap on the 22 genuinely cut rows runs -0.1235 to +0.0381 against this knob's 0.100 default - no value in that range separates a cut from chunk-boundary noise (Rule #10). BREAKING: EvaluationConfig forbids unknown keys, so a config file that still names this key fails to load with a message naming it. The read-side migration is the deletion of the key from config/idhazh.json in this same commit (section 11); a fork carrying its own config deletes one line. hhem, hhem_full and hhem_delta all stay - they answer what the cut cost, which is a different question."
+    },
+    {
       "change": "evaluation.chunk_words added, defaulting to 900, and evaluation.chunk_overlap_words added, defaulting to 150. Both were constants in backend/idhazh/evals/hhem.py. EvaluationConfig now refuses an overlap at or above the window.",
       "version": "2026-08-28",
       "why": "The faithfulness scorer's window size decides what premise every score was measured over, so it is a tunable and belongs in config (Rule #6), and scorer_version now spells it as window=900/150/anchored so a ledger row records the geometry that produced it. Neither default moves today: with 0 of 60 human labels drawn there is no ground truth to tune against, and a sweep would show only that the number moves, not which value is right (Rule #10). The guard exists because the chunker steps chunk_words - chunk_overlap_words and clamps that step to one word, so an overlap at or above the window walks a long article one word at a time - a job that never finishes rather than one that fails. Additive; an older config still validates and gets both defaults."
@@ -1459,7 +1456,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-28",
+      "default": "2026-08-29T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1473,5 +1470,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-28"
+  "version": "2026-08-29T09:00"
 }
