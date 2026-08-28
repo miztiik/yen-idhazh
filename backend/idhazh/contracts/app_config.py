@@ -487,12 +487,6 @@ class EvaluationConfig(Model):
             "medium rather than forcing low."
         ),
     )
-    truncation_gap_max: float = Field(
-        default=0.10,
-        ge=0.0,
-        le=1.0,
-        description="Score gap that flags a truncation artifact rather than a hallucination.",
-    )
     summary_words_min: int = Field(
         default=25,
         ge=1,
@@ -1073,6 +1067,32 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-29T09:00",
+            change="evaluation.truncation_gap_max removed.",
+            why=(
+                "Its one caller stopped reading it in this commit, so the knob and its "
+                "last reader go together and there is never a state where the number "
+                "exists and nothing consults it. It set truncation_flagged from the gap "
+                "between the two faithfulness scores, and that flag now carries "
+                "Article.truncated - whether extract cut the body - because that is what "
+                "its name says and what its one consumer prints. Retuning it was the "
+                "alternative and it is not available: score_over_chunks takes the best "
+                "of overlapping windows, a cut article's last window is not a window of "
+                "the whole article, and the two window sets are not nested, so the gap "
+                "can come out positive on an article that was never cut. Measured "
+                "2026-08-28 over all 2,683 committed rows of state/scores.csv, the gap "
+                "on the 22 genuinely cut rows runs -0.1235 to +0.0381 against this "
+                "knob's 0.100 default - no value in that range separates a cut from "
+                "chunk-boundary noise (Rule #10). "
+                "BREAKING: EvaluationConfig forbids unknown keys, so a config file that "
+                "still names this key fails to load with a message naming it. The "
+                "read-side migration is the deletion of the key from config/idhazh.json "
+                "in this same commit (section 11); a fork carrying its own config "
+                "deletes one line. hhem, hhem_full and hhem_delta all stay - they answer "
+                "what the cut cost, which is a different question."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-28",
             change=(
