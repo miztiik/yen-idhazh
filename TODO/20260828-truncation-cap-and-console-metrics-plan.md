@@ -91,10 +91,10 @@ Three claims that look like measurements and are not, stated so a later reader c
   - `config/idhazh.json`
   - `schemas/eval-row.schema.json`, `schemas/app-config.schema.json`
   - `backend/tests/test_evals.py`
-  - `backend/tests/test_canary_day.py` - line 70 asserts the flag equals the delta rule and pins the defect; line 73, added by PR #191, already asserts the correct rule and must stay
+  - `backend/tests/test_canary_day.py` - **delete line 70** (`assert row.truncation_flagged == (row.hhem_delta > EVALUATION.truncation_gap_max)`), which asserts the old definition and would turn this row's fix red. Line 73, added by PR #191, already asserts the correct rule and **must stay** - it becomes the test that proves this row worked.
   - `docs/concepts/evaluation.md`
-- **Acceptance gates:** `ruff check .`; `mypy --strict`; full `pytest`; contract drift gate; `EvalRow.csv_columns()` byte-identical to the committed `state/scores.csv` header; assert `METRICS_VERSION == "3"`.
-- **Oracle:** an article built through the **real** `extract.to_article_with_source` from one fixture page longer than the cap and one shorter satisfies `row.truncation_flagged is article.truncated` on both. Building through the real extractor is what makes the cut genuine; restating the arithmetic in the test can pass when both sides are wrong together.
+- **Acceptance gates:** `ruff check .`; `mypy --strict`; full `pytest`; contract drift gate; `EvalRow.csv_columns()` byte-identical to the committed `state/scores.csv` header; assert `METRICS_VERSION == "3"`; **grep `backend/tests/` for `truncation_gap_max` and get zero hits** - a surviving reference means a test still encodes the deleted rule.
+- **Oracle:** an article built through the **real** `extract.to_article_with_source` from one fixture page longer than the cap and one shorter satisfies `row.truncation_flagged is article.truncated` on both. Building through the real extractor is what makes the cut genuine; restating the arithmetic in the test can pass when both sides are wrong together. **Second half of the same Oracle:** the canary suite passes with line 70 removed and line 73 intact, and fails if line 73 is also removed - so the row cannot be closed by deleting both assertions.
 
 | # | Decision | Authority |
 | --- | --- | --- |
@@ -172,7 +172,7 @@ source_words_before_cap: int | None = Field(
   - `frontend/bundle-baseline.json`
   - `docs/architecture/publishing/frontend.md`
 - **Acceptance gates:** `npm run check`; `npm run test:browser`; `npm run bundle-gate` (the readout is JavaScript and is priced in `bundle-baseline.json` with a sentence saying what those bytes buy); browser smoke per CLAUDE.md section 12 including a touch emulation pass.
-- **Oracle:** over a fixture window holding items cut at two different post-cap word counts, the chart draws exactly one dashed line per distinct value, each label names its own value and date range, and **no line is drawn for a cap no visible point was cut by**. A config-derived line would draw when the data holds nothing; a data-derived line cannot.
+- **Oracle:** over a fixture window holding items cut at two different post-cap word counts, the chart draws exactly one dashed line per distinct value, each label names its own value and date range, and **no line is drawn for a cap no visible point was cut by**. A config-derived line would draw when the data holds nothing; a data-derived line cannot. **Second half of the same Oracle:** over a fixture window holding rows with a null `source_word_count`, the not-plotted sentence appears and its `{n}` equals the count of those rows; over a window holding none, the sentence is absent. A chart that drops points without saying so fails this row.
 
 **The line's value comes from the data, never from config:**
 
@@ -181,6 +181,15 @@ capsInView = distinct source_seen_word_count
              among visible points where truncation_flagged
              and source_seen_word_count > 0
 ```
+
+**`{n}` in the not-plotted sentence is derived the same way - from the rows, never from a constant:**
+
+```
+n = count of rows in the visible window
+    where source_word_count is null or <= 0
+```
+
+That is the count `compressionPoint()` already discards. Deriving it anywhere else would let the sentence and the chart disagree.
 
 **Reader-facing strings, exact:**
 
