@@ -107,6 +107,15 @@ Three things changed, and each one addresses a different link in that chain:
 | `visuals.enabled_kinds` drops `diagram` | 46.9% of the day stops reaching the model at all, so far more items fit inside the same budget. |
 | The router skips what the day already published | Runs 2 to 5 stop re-deciding run 1's items for an answer the assembler discards. |
 
+**The budget stop is not a rare event, and that is now measured.** Over the eleven committed runs
+that routed anything, the stage spends its **whole** budget on ten of them and leaves items
+unrouted on nine, at a median of 48.9 seconds an asked item and a median of 18 items left
+([`../../reference/measurements.md`](../../reference/measurements.md#the-route-stages-per-item-cost-over-every-run)).
+So a run that hits the bound is the normal case rather than a symptom, and **a single run's figure
+must not be quoted as what the stage costs** - the fastest run on record is 1.7 times faster per
+item than the next, which is enough to make an ordinary run look like a regression. What would
+change the picture is sharding the stage, not tuning the number.
+
 **The router visits the best story first.** The plan is vertical-major, so stopping part-way down
 it would cost whole verticals their pictures while the weakest story in the first vertical kept
 one. `routable_items` sorts by `rank_score` before the loop, which is the rule
@@ -450,7 +459,7 @@ to learn to null the item's `visual` as it deletes the file before it can be ena
 | A model filter or a model legend on the console Charts table | A filter over two values hides half the data and saves nobody any work. When a second model has run enough days to compare, the ledger it is read from has to be truthful first. |
 | Ask the model for a Vega-Lite spec directly | A fabricated axis value becomes reachable, and verifying it afterwards means parsing an arbitrary spec to work out which numbers are data. |
 | Raise `route`'s `timeout-minutes` | The budget is the platform, not a preference (Rule #2). It also fixes nothing: the per-item cost doubles between runner hosts, so any bound is a coin toss until the work inside it is bounded. |
-| Shard the `route` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because `route` spends its whole 40-minute budget on every run. Nobody has measured what a sharded router costs in cache restores and model loads against what it saves, and that measurement is the work. |
+| Shard the `route` job across a matrix | **Unblocked on 2026-08-27 and still not built.** It was blocked on the asset name: a per-vertical counter seeded from the day's directory meant four shards would each read the same highest ordinal and two would write `energy-01.svg`, silently, long before any commit. Naming the asset from the item id removes that, so sharding is now an ordinary throughput change rather than a contract one - and it is the strongest lever left, because the stage spends its whole 40-minute budget on ten of the eleven runs on record. Nobody has measured what a sharded router costs in cache restores and model loads against what it saves, and that measurement is the work. |
 | Keep the per-vertical counter and seed it better | Every seeding rule reads something a process can observe, and the defect is that two processes observe different things. A per-process counter lost 2026-08-24; a directory-seeded counter lost run `32869125768`. There is no third thing to read. |
 | Name the asset from a hash of the address, `<vertical>-<url_key prefix>.svg` | It fixes the same defect as the item id and breaks a rule the item id does not: [`layout.md`](layout.md) says no hash appears in any path, filename or URL, and `backend/tests/test_contracts.py::test_no_hash_appears_in_any_published_path` holds it. The item id is already a published address - it is the anchor a reader lands on - so it costs the reader nothing that has not already been accepted. |
 | Add the day's directory to `REFRESH_PATHS` | The hand-back deletes what the tip lacks and restores what it has, so this run's own charts are deleted while the rebuilt `digest.json` still names them, and the colliding one comes back with the other story's bytes. A broken image and a wrong image, published, instead of a job that failed loudly. |
