@@ -93,6 +93,18 @@ class LabelRow(Contract):
     __schema_stem__: ClassVar[str] = "label-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-27",
+            change="source_word_count is now source_seen_word_count.",
+            why=(
+                "The queue filled it from the eval ledger's source_word_count, which now "
+                "means the whole article and is null when that length was never recorded. "
+                "A labeller cannot check a number against text nobody kept. The premise "
+                "they read is the truncated text, so the count beside it is the count of "
+                "that text, and it is never missing. No row is migrated because no label "
+                "has ever been written - state/labels.csv does not exist."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-24",
             change="Initial shape: the draw's identity, the scorer at draw time, and the label.",
             why=(
@@ -129,7 +141,15 @@ class LabelRow(Contract):
     )
     pipeline_fingerprint: Sha256
     summary_word_count: int = Field(ge=0)
-    source_word_count: int = Field(ge=0)
+    source_seen_word_count: int = Field(
+        ge=0,
+        description=(
+            "Words in the premise the labeller reads - the article after sanitizing and "
+            "truncation, which is what the scorer read too. Not the whole article: that "
+            "length is null on a ledger row that never recorded it, and a labeller cannot "
+            "check a number against text nobody kept."
+        ),
+    )
 
     # --- what the scorer said at draw time: recorded, never shown ----------
     scorer_version: str = Field(

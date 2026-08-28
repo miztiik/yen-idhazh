@@ -19,9 +19,14 @@ from idhazh.drift import (
 
 
 def rows(
-    url: str, *, words: int, hhem: float, extractiveness: float, n: int = 4
+    url: str, *, words: int | None, hhem: float, extractiveness: float, n: int = 4
 ) -> list[Observation]:
     return [Observation(url, hhem, extractiveness, words) for _ in range(n)]
+
+
+def lengths(observations: list[Observation]) -> list[int]:
+    """Every recorded article length. A row that never recorded one is not a zero."""
+    return [row.source_word_count for row in observations if row.source_word_count is not None]
 
 
 HEALTHY = "https://news.example.com/a"
@@ -35,6 +40,44 @@ def test_a_domain_is_the_host_without_www() -> None:
 def test_a_healthy_domain_raises_nothing() -> None:
     steady = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
     assert compare(steady, steady) == []
+
+
+# --- A row that does not know how long its article was ------------------------
+
+
+def test_a_row_with_no_recorded_length_still_carries_its_other_two_signals() -> None:
+    """The read-side migration for a nullable `source_word_count`.
+
+    A row written before 2026-08-27 whose article was truncated has no full
+    length anywhere. Dropping the whole observation would take its faithfulness
+    and its extractiveness with it, so the length rule steps over it and the
+    copying rule still sees it.
+    """
+    before = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.2)
+    after = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.9)
+    alerts = {finding.alert for finding in compare(after, before)}
+
+    assert Alert.MORE_COPYING in alerts
+    assert Alert.SHORTER_SOURCES not in alerts
+
+
+def test_a_window_that_knows_no_length_does_not_read_as_a_collapse() -> None:
+    """Unknown is not zero. A median of nothing must not fire a 100 percent drop."""
+    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    after = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.2)
+
+    assert compare(after, before) == []
+
+
+def test_the_rows_that_do_know_their_length_still_decide_the_alert() -> None:
+    """A mixed window is measured on the half that was measured."""
+    before = rows(HEALTHY, words=1200, hhem=0.85, extractiveness=0.2)
+    after = rows(HEALTHY, words=None, hhem=0.85, extractiveness=0.2, n=3) + rows(
+        HEALTHY, words=180, hhem=0.85, extractiveness=0.2, n=1
+    )
+    alerts = {finding.alert for finding in compare(after, before)}
+
+    assert Alert.SHORTER_SOURCES in alerts
 
 
 # --- The failure this row exists to catch -----------------------------------
@@ -66,8 +109,8 @@ def test_a_global_mean_would_have_missed_it() -> None:
     before = [*broken_before, *healthy]
     after = [*broken_after, *healthy]
 
-    global_before = sum(r.source_word_count for r in before) / len(before)
-    global_after = sum(r.source_word_count for r in after) / len(after)
+    global_before = sum(lengths(before)) / len(before)
+    global_after = sum(lengths(after)) / len(after)
     global_move = 1 - global_after / global_before
     assert global_move < 0.15, "a global threshold would not fire on this"
 

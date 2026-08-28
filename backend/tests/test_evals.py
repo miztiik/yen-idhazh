@@ -377,6 +377,120 @@ def test_an_eval_row_written_before_this_column_still_loads() -> None:
     )
 
 
+# --- The article's length, before the cap and after it ------------------------
+
+
+def _row_for(article: Article) -> EvalRow:
+    """One ledger row for one article, with everything else held still."""
+    item = RunPlan.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
+    ).items[0]
+    written = Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
+    return to_eval_row(
+        item=item,
+        article=article,
+        summary=written,
+        full_text=article.text or "",
+        premise=article.text or "",
+        hhem=0.91,
+        hhem_full=0.91,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+
+def test_a_truncated_article_files_two_different_lengths() -> None:
+    """The defect this pair exists to expose, and the assertion that was missing.
+
+    Until 2026-08-27 `source_word_count` was `metrics.word_count(full_text)` - a
+    regex over word shapes - while `source_seen_word_count` was
+    `len(article.text.split())`. Production handed the same truncated string to
+    both, so the pair was two counters over one text and the difference between
+    them was tokenisation noise, not truncation. On 610 of 2,346 committed rows
+    the seen count came out LARGER than the full count. Nothing compared the two
+    cells, which is why it survived for months.
+    """
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "truncated.json"))
+    row = _row_for(article)
+
+    assert article.truncated, "the fixture has to be an article that was actually cut"
+    assert row.source_word_count == article.source_word_count == 5240
+    assert row.source_seen_word_count == article.word_count == 4310
+    assert row.source_seen_word_count < row.source_word_count, "930 words never reached the model"
+
+
+def test_an_untruncated_article_reads_the_same_length_twice() -> None:
+    """Equal is the truth here: the whole article IS the text the model saw."""
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    row = _row_for(article)
+
+    assert not article.truncated
+    assert row.source_word_count == row.source_seen_word_count == 1320
+
+
+def test_the_lengths_do_not_move_when_the_scored_text_does() -> None:
+    """Both counts come off the `Article`, so no caller can make them disagree.
+
+    The three production callers pass `article.text` as `full_text`. Feeding a
+    different string used to change one cell of the pair and not the other,
+    which is exactly how the two ended up counting different things.
+    """
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "truncated.json"))
+    row = _row_for(article)
+    other = to_eval_row(
+        item=RunPlan.from_json(
+            read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json")
+        ).items[0],
+        article=article,
+        summary=Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json")),
+        full_text=ARTICLE,
+        premise=article.text or "",
+        hhem=0.91,
+        hhem_full=0.91,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+    assert other.source_word_count == row.source_word_count
+    assert other.source_seen_word_count == row.source_seen_word_count
+
+
+def test_an_old_payload_that_was_cut_cannot_say_how_long_the_article_was() -> None:
+    """None travels through rather than becoming a length nobody measured.
+
+    `Article.source_word_count` is None on a payload written before extract
+    recorded it. When that payload was truncated the pre-cap body is gone, so
+    the post-cap count would claim the article was exactly as long as the part
+    the model read.
+    """
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "truncated.json"))
+    row = _row_for(article.model_copy(update={"source_word_count": None}))
+
+    assert article.truncated
+    assert row.source_word_count is None
+    assert row.source_seen_word_count == 4310, "the seen count is still a measurement"
+
+
+def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
+    """The same recovery the ledger migration makes, at the writer.
+
+    Nothing was cut, so the article IS the text the model saw and the two counts
+    are equal by construction. Refusing to say so would throw away a fact.
+    """
+    article = Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))
+    row = _row_for(article.model_copy(update={"source_word_count": None}))
+
+    assert not article.truncated
+    assert row.source_word_count == row.source_seen_word_count == 1320
+
+
+
 # --- Recorded, never flagged -------------------------------------------------
 
 

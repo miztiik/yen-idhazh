@@ -134,18 +134,20 @@ def to_eval_row(
     `source_word_count` and `source_seen_word_count` both come off `article`,
     never off a text this function counts for itself. They are a before-the-cap
     and after-the-cap pair, and a pair is only readable when one counter
-    produced both numbers.
+    produced both numbers. The full count is None when it is not knowable, and
+    `EvalRow` refuses a row where the seen count is the larger of the two.
     """
     text = summary.summary or ""
     unsupported = metrics.unsupported_numbers(text, full_text)
     coverage = metrics.lead_coverage(text, full_text)
     hedge = metrics.hedge_dropped(text, full_text)
     verbatim = metrics.verbatim_run(text, full_text)
-    # An article written before the pre-cap count existed reports the post-cap
-    # one, so the pair says "no cut seen" rather than inventing a source length.
-    source_words = (
-        article.word_count if article.source_word_count is None else article.source_word_count
-    )
+    # An article payload written before extract recorded the pre-cap length knows
+    # its own full length only when nothing was cut. Otherwise it stays None: the
+    # post-cap count would say the article was exactly as long as the part we read.
+    source_words = article.source_word_count
+    if source_words is None and not article.truncated:
+        source_words = article.word_count
     delta = round(hhem - hhem_full, _DELTA_PLACES)
     truncation_flagged = delta > config.truncation_gap_max or (
         article.brief and verbatim > config.brief_compression_ceiling

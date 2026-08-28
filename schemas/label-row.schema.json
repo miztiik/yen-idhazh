@@ -39,6 +39,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "source_word_count is now source_seen_word_count.",
+      "version": "2026-08-27",
+      "why": "The queue filled it from the eval ledger's source_word_count, which now means the whole article and is null when that length was never recorded. A labeller cannot check a number against text nobody kept. The premise they read is the truncated text, so the count beside it is the count of that text, and it is never missing. No row is migrated because no label has ever been written - state/labels.csv does not exist."
+    },
+    {
       "change": "Initial shape: the draw's identity, the scorer at draw time, and the label.",
       "version": "2026-08-24",
       "why": "The faithfulness cuts are a reader-facing promise with no measured error rate behind them. Nothing can move a threshold until labels exist, and labels cannot exist until the shape that holds them does (Rule #3). Contracts before logic, and this one lands before a single row."
@@ -126,16 +131,17 @@
       "title": "Seconds Spent",
       "type": "integer"
     },
+    "source_seen_word_count": {
+      "description": "Words in the premise the labeller reads - the article after sanitizing and truncation, which is what the scorer read too. Not the whole article: that length is null on a ledger row that never recorded it, and a labeller cannot check a number against text nobody kept.",
+      "minimum": 0,
+      "title": "Source Seen Word Count",
+      "type": "integer"
+    },
     "source_url": {
       "maxLength": 2048,
       "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
       "title": "Source Url",
       "type": "string"
-    },
-    "source_word_count": {
-      "minimum": 0,
-      "title": "Source Word Count",
-      "type": "integer"
     },
     "summary_word_count": {
       "minimum": 0,
@@ -154,7 +160,7 @@
       "$ref": "#/$defs/LabelVerdict"
     },
     "version": {
-      "default": "2026-08-24",
+      "default": "2026-08-27",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -170,7 +176,7 @@
     "output_digest",
     "pipeline_fingerprint",
     "summary_word_count",
-    "source_word_count",
+    "source_seen_word_count",
     "scorer_version",
     "hhem_at_label",
     "band_at_label",
@@ -182,5 +188,5 @@
   ],
   "title": "LabelRow",
   "type": "object",
-  "version": "2026-08-24"
+  "version": "2026-08-27"
 }
