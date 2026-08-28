@@ -4,7 +4,7 @@
 
 **Level**: 5. Two persisted contracts move (`EvalRow`, `ItemHealthRow`) and the cap is a pipeline-fingerprint input.
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 3; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 3; honor the ESCALATE triggers in section 0.
 
 ---
 
@@ -57,6 +57,7 @@ Three claims that look like measurements and are not, stated so a later reader c
 | 10 | Chunk geometry into config, anchored, and version-stamped | - | A | PENDING | - | - | - |
 | 11 | The truncation note carries the scale, and stops being swallowed | - | A | PENDING | - | - | - |
 | 12 | Measure which way the grader's length bias runs | 10 | B | PENDING | - | - | - |
+| 13 | A fifth summary-length rung for articles past 3,000 words | 8 | E | PENDING | - | - | - |
 
 ---
 
@@ -527,17 +528,64 @@ Empty states: `Nothing has recorded an article length yet. This fills as runs pu
 
 ---
 
-## Open, not a row - for owner sign-off
+## Section 14 - Row #13 - A fifth summary-length rung for articles past 3,000 words
 
-**Split the top summary-length band.** `summarize.bands` runs 2000+ with no upper bound, so an 8,442-word investigation and a 2,000-word feature get the same 110-200 word ask. **Reviewed and not recommended, 2026-08-28.** The Editor's 42-to-1 figure measures the article's full length, but the band is chosen from the full length while the model is handed the **cut** text - so the compression the model actually faces is 10-to-1 on a 2,000-word feature and **19-to-1** on the 8,442-word piece after Row 8, a factor of two rather than a factor of four. Worse, the model sees only 46 percent of that piece, so a longer ask means more words from less text, which is a faithfulness risk and not a depth gain. Two articles in 2,688 published items sit past 8,000 words - 0.07 percent.
+- **Scope:** a long article read whole gets a summary proportionate to it, instead of the ask written for an article half its length.
+- **Files touched:**
+  - `config/idhazh.json` (`summarize.bands`)
+  - `backend/idhazh/contracts/app_config.py` (`_default_bands` - its docstring says "Three sizes" and there are four)
+  - `schemas/app-config.schema.json`
+  - `backend/tests/test_summarize.py`
+  - `docs/architecture/summarize/prompt.md` - a `## Design rationale` section carrying the lasting rule: the ladder tops out at the cut point, and honesty about a partial read is a sentence and never a word count
+- **Acceptance gates:** `ruff check .`; `mypy --strict`; full `pytest`; contract drift gate.
+- **Oracle:** **no rung floor ever sits above the cut point.** Assert `max(band.min_source_words) < int(extract.truncation_cap_tokens / TOKENS_PER_WORD)` - 3000 against 3846 today. A floor above the cut point asks for words the model was never handed, and this assertion is the one that fires if a later cap change inverts the relationship. A test that only checks the bands climb passes either way.
 
-The measured seam is still real - 17 of 22 cut articles sit under 3,600 words, two at 4,212 and 4,444, then a 3,800-word gap to 8,207 and 8,442 - and the Editor named its own falsification test: summarize the two longest pieces at the current ask and at a longer one, and count how many distinct findings each names. Same count, and the split buys nothing. Nobody has run it.
+### The ladder
 
-Cost, so the decision stays priced if it is ever revisited: the top band is about 3 of every 109 articles, writing runs at 4.88 tok/s, so every extra 100 words asked of that band costs about 27 s an item and **about 80 s a run**. Whoever takes it should check `summarize.key_points_max` at the same time: on an investigation the binding constraint may be how many points are allowed, not how many words.
+| Rung | `min_source_words` | `target_words_min` | `target_words_max` | Share of items | Change |
+| --- | --- | --- | --- | --- | --- |
+| 0 | 0 | 30 | 45 | 3.6 percent | unchanged |
+| 1 | 60 | 50 | 90 | 59.9 percent | unchanged |
+| 2 | 700 | 70 | 150 | 30.3 percent | unchanged |
+| 3 | 2000 | 110 | 200 | 3.9 percent | unchanged, now ends at 2,999 |
+| 4 | **3000** | **150** | **230** | **2.4 percent** | **new** |
 
-**What helps those two articles instead is Row 11.** The problem with a half-read investigation is not that the summary is too short. It is that it does not admit what it is.
+Shares measured 2026-08-28 over the 337 `state/scores.csv` rows carrying a true pre-cap length. Rung 4 is 8 of 337 items - 3 or 4 in a 110-146 item run.
 
-**A warning to carry into it.** If the top band splits and summaries start drawing on both the opening and the closing of a long piece, no single 900-word window supports the whole summary and `hhem` **falls while the summary improves**. Do not read that as a regression.
+**What a reader gets at each rung**, which is what justifies each number:
+
+| Rung | The item |
+| --- | --- |
+| 0 | A note. The single fact the post carries; the reader decides in seconds whether to open it. |
+| 1 | A news report. Who did what, how much, when - carryable into a conversation without opening the source. |
+| 2 | A feature or an analysis. The event, why it matters, the main caveat. |
+| 3 | A long feature. The event, the evidence, who disputes it, what is still open. |
+| 4 | An investigation or long read. The distinct things the piece established, named separately, plus the response from whoever it accuses and the qualification it ends on. **The one item on the page a reader may finish and treat as read** - that is what the extra 30 words buy. |
+
+**Cost, in the Editor's own arithmetic:** 4 items a run, ask midpoint 155 -> 190 words, so +35 words an item; at 27 s per 100 words (4.88 tok/s on the runner) that is 9 s an item and **about 38 seconds a run**. Under the three-minute line, so nothing is traded.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The floor is **3000, not 8000**. The 8,000-word reasoning rested on a 42-to-1 compression figure measured against the article's full length; the model only ever reads the cut text, so the real figure is about 19-to-1. The case that survives is a **2,000-word article and a 3,846-word article, both read whole, both getting the identical ask** - 10-to-1 against 19-to-1. 3000 is the midpoint of that whole-read range (2,923) rounded to a seam the measurement actually reports. | Editor, correcting its own earlier ruling |
+| 2 | **Rung 4 is the last rung. No rung floor ever sits above the cut point.** An 8,442-word piece and a 3,846-word piece are handed the same 3,846 words, so they get the same ask. A fifth rung asking 280 words of the 8,442-word piece pays for text that is not in the fenced block, and the model would fill the gap by elaborating the opening - which reads as completeness. | Editor |
+| 3 | **A shorter ask is not honesty.** Shortening a half-read item to 150 words tells the reader nothing: they cannot see the article's true length, so they read it as a short article. The instrument for honesty is Row 11's sentence, never a word count. | Editor |
+| 4 | **`key_points_max` stays 5 globally.** The Editor wanted 7 on rung 4 alone and gave its own fallback if the knob is not per-band. Verified: `SummaryBand` carries only `min_source_words`, `target_words_min` and `target_words_max`; `key_points_max` lives on `SummarizeConfig`. Raising it globally would put seven bullets on a 700-word analysis, which is padding. Making it per-band is a contract change and is not this row. | Editor's fallback, verified 2026-08-28 |
+| 5 | No existing rung moves. Rung 2 covers 30 percent of the day, so re-asking it would put a measured cost on a third of every run to fix a seam nobody has measured. Rung 3 across 2,000-2,999 words runs 10-to-1 to 27-to-1, the same compression rung 2 carries at its own top. It was never the broken one. | Editor |
+| 6 | 230 sits inside `evaluation.summary_words_max` of 250 with 20 words of slack, so no `evaluation` edit is needed and a small overshoot does not lose the item. 3000 > 2000, so `_the_bands_cover_every_article` passes. Both verified. | verified 2026-08-28 |
+| 7 | Depends on Row 8. The floor is derived from the post-Row-8 cut point of 3,846 words; landing it while the cut is still 1,923 would put the floor **above** the cut point, and every rung-4 item would be asked for 230 words of the 1,923 it was handed. | Fowler |
+| 8 | The failure case worth naming: an investigation's response-from-the-accused and its closing qualification both sit in the last third, and on the two half-read pieces the model never saw either. **A 230-word summary that reads as complete and omits the denial is the worst item this pipeline can publish.** Row 11's sentence is what stops it. | Editor |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A floor near 8,000 words | Rests on a compression figure measured against text the model never reads. | Editor |
+| 2 | A fifth rung above the cut point, for the 8,000-word pieces | Asks for words the model was not handed; it elaborates the opening and the result reads complete. | Editor |
+| 3 | A **shorter** ask for a half-read piece | The reader cannot see the article's length, so a short summary reads as a short article and not as a partial read. | Editor |
+| 4 | Raise `key_points_max` to 7 globally to buy rung 4 | Seven bullets on a 700-word analysis is padding. The Editor lists this under never-traded. | Editor |
+| 5 | Move rung 2 or rung 3 in the same row | 30 percent of the day, for a seam nobody has measured. | Editor |
+
+**The Editor's own falsification test, recorded so it can be taken later.** Summarize the 8 items at 3,000 words and up twice, at 110-200 and at 150-230, and count **distinct findings** - a fact a reader could act on that the other summary does not contain. If the longer summary names no more findings on 6 of the 8, the rung buys padding and the Editor withdraws it. It is a count, not a score, so it needs no labels and no grader. Second observation: if the two half-read pieces draw every fact from the first 40 percent of what the model read, the extra words went into elaborating the opening - drop those two to rung 3.
+
+**A warning to carry into the first run at the new ladder.** A rung-4 summary drawing on both the opening and the closing of a long piece has no single 900-word grader window supporting all of it, so `hhem` **falls while the summary improves**. Row 12 exists to say how much of that is instrument. Do not read a score drop on rung 4 as a regression.
 
 ## See also
 
