@@ -1,12 +1,14 @@
 # Known defects
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
-**One defect remains open, and it does not close on engineering.** Defect 2
+**Two defects are open and neither closes on more of the same code.** Defect 2
 needed three repairs before a person could label anything, and all three
 shipped. What is left is 60 human labels, nine more run-days at one scorer and
 one pipeline, and one owner ruling on how that window is counted. None of the
-three is code, so **this file cannot be deleted by writing more of it.**
+three is code. Defect 18 is the opposite shape: the code now works and the
+measurement it produces still cannot fire, so what it needs is a decision about
+which instrument to keep.
 
 Defects 15, 16 and 17 closed on 2026-08-27.
 
@@ -23,6 +25,43 @@ decision. Current project behaviour belongs in `docs/` (Rule #4).
 | 15 | A stage that did not run and a stage that took no time arrive as the same zero | 3 | CLOSED 2026-08-27 (PR #180) |
 | 16 | The truncation-gap detector has never been fed, and the run pays twice for the answer | 5 | CLOSED 2026-08-27 |
 | 17 | Two different word counters share one string and read as truncation | 5 | CLOSED 2026-08-27 |
+| 18 | The truncation flag still cannot fire, now for a different reason | 5 | **OPEN - not measurable without the scorer weights** |
+
+## 18 - The truncation flag still cannot fire, now for a different reason (OPEN)
+
+Row 16 fed the scorer the real pre-cap body, so `hhem_full` now reads a
+different text from `hhem`. The flag built on the gap between them still cannot
+fire, and the reason is the aggregation rather than the input.
+
+`score_over_chunks` takes the **maximum** over 900-word windows at a step of
+750. The seen text is a prefix of the full text, so the full pass sees the same
+first windows, one of them lengthened, plus every window after the cut. A
+maximum over a superset cannot be smaller than a maximum over the subset. So
+`hhem_full >= hhem` in almost every case, `hhem_delta = hhem - hhem_full` is
+zero or negative, and `truncation_flagged = delta > evaluation.truncation_gap_max`
+never clears a positive threshold.
+
+Two consequences follow, and only the first is certain:
+
+- The run pays a second cross-encoder pass on every truncated item for a number
+  that is negative by construction. At the measured 6.1 percent truncation rate
+  that is small, and it is not the argument for changing anything.
+- The console's "Article read only in part" counter reads `truncation_flagged`.
+  It said **1** when the committed ledger held **157** rows sitting on the cap.
+  `Article.truncated` is already persisted and answers that question exactly.
+
+**Why this is not closed by measurement.** No test may fetch the HHEM weights
+(Rule #7), so the monotonicity claim above is an argument about the aggregation
+rather than an observation of the scorer. Confirming it needs a run with the
+weights present, and the honest first step is to look at `hhem_delta` on the
+rows written since row 16 shipped rather than to reason further.
+
+**The decision, when the evidence exists.** Either the second pass earns its
+place under a different comparison, or `truncation_flagged` reads
+`Article.truncated`, `evaluation.truncation_gap_max` is deleted as a knob
+nothing reads, and the console counter is pointed at the flag that moved. The
+second changes what a committed column means and what an operator page reports,
+so it is Level 5 and needs an owner ruling before any of it is written.
 
 ## 2 - The faithfulness thresholds have no labelled error rate (OPEN)
 
