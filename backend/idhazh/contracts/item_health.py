@@ -126,6 +126,21 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-28",
+            change="Added nullable source_words_before_cap at the end of the row.",
+            why=(
+                "Nothing on this row said how long the body was before the truncation "
+                "cap cut it, so a cut could only be guessed at by comparing source_words "
+                "against int(extract.truncation_cap_tokens / 1.3) - a constant that moves "
+                "when the cap moves, and that mislabels an article sitting exactly on the "
+                "boundary. With the pre-cap count on the row beside the post-cap one, "
+                "source_words_before_cap > source_words is the cut and nothing else, and "
+                "the difference says by how much. Appended at the end and nullable, so a "
+                "row an earlier run wrote still reads: those runs measured nothing here "
+                "and their cell stays empty rather than carrying a number invented today."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-27",
             change="Added the copied_source and leaked_address summarize failure codes.",
             why=(
@@ -223,6 +238,16 @@ class ItemHealthRow(Contract):
     input_tokens: int | None = Field(default=None, ge=0)
     output_tokens: int | None = Field(default=None, ge=0)
     cached_tokens: int | None = Field(default=None, ge=0)
+    source_words_before_cap: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Words in the extracted body before extract.truncation_cap_tokens cut it, "
+            "taken from Article.source_word_count. source_words is the same counter "
+            "after the cut, so source_words_before_cap > source_words is the cut and "
+            "nothing else. A count, never the text. Null before 2026-08-28."
+        ),
+    )
 
     @property
     def counts_against_source(self) -> bool:
@@ -284,6 +309,7 @@ class ItemHealthRow(Contract):
             "input_tokens",
             "output_tokens",
             "cached_tokens",
+            "source_words_before_cap",
         )
         for name in optional_fields:
             if payload[name] == "":

@@ -14,7 +14,7 @@ shards on demand as the operator pans the viewport.
 
 The published columns are exactly:
 
-`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words`
+`date, run_id, item_id, vertical, source_id, stage, outcome, code, source_words, summary_words, source_words_before_cap`
 
 These source-ledger columns never cross to the browser:
 
@@ -24,6 +24,15 @@ These source-ledger columns never cross to the browser:
 
 This is a trust-boundary rule, not a size trick. `detail` is diagnostic free
 text, and the URL fields are not needed to draw failure rates or compression.
+
+`source_words_before_cap` joined the projection on 2026-08-28. It is a word
+count of our own extraction, the same class of cell as `source_words`, which
+the browser has always had - so it crosses on the same terms. What it buys is
+the one thing the browser could not work out for itself: a body was cut when
+`source_words_before_cap > source_words`, and by that difference. The cell is
+empty on every row written before that date, and empty is unknown rather than
+uncut. The column list, and why the count travels instead of the text, is
+[../sources/item-health.md](../sources/item-health.md).
 
 ## What the model did - read at build time, never published
 
