@@ -456,6 +456,26 @@ class SummarizeConfig(Model):
 
 
 class EvaluationConfig(Model):
+    chunk_words: int = Field(
+        default=900,
+        ge=1,
+        description=(
+            "Words of article the faithfulness scorer reads in one window. Attention is "
+            "quadratic in the premise, so a whole long article in one pass is the "
+            "expensive shape. The default has never been calibrated (Rule #10): with no "
+            "human labels there is nothing to tune it against, and a sweep would show "
+            "only that the number moves. Moving it moves `scorer_version`, which restarts "
+            "the run-day count in `evaluation.label_min_run_days`."
+        ),
+    )
+    chunk_overlap_words: int = Field(
+        default=150,
+        ge=0,
+        description=(
+            "Words shared between one window and the next, so a claim that straddles a "
+            "boundary is still whole somewhere. Must sit below `chunk_words`."
+        ),
+    )
     band_high_min: float = Field(default=0.80, ge=0.0, le=1.0)
     band_medium_min: float = Field(default=0.50, ge=0.0, le=1.0)
     lead_coverage_min: float = Field(
@@ -592,6 +612,12 @@ class EvaluationConfig(Model):
             raise ValueError("band_medium_min must sit below band_high_min")
         if self.summary_words_min >= self.summary_words_max:
             raise ValueError("summary_words_min must sit below summary_words_max")
+        # The chunker steps `chunk_words - chunk_overlap_words`. An overlap at or
+        # above the window makes that step zero or negative, and the clamp that
+        # stops it looping walks a long article one word at a time - a job that
+        # never finishes rather than a job that fails.
+        if self.chunk_overlap_words >= self.chunk_words:
+            raise ValueError("chunk_overlap_words must sit below chunk_words")
         # The reject drops the item before it can be scored, so anything it catches
         # leaves the corpus the brief-copying gate reads. Set the two equal and the
         # gate has no band left to fail in - and it stops failing silently, which
@@ -1047,6 +1073,28 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-28",
+            change=(
+                "evaluation.chunk_words added, defaulting to 900, and "
+                "evaluation.chunk_overlap_words added, defaulting to 150. Both were "
+                "constants in backend/idhazh/evals/hhem.py. EvaluationConfig now refuses "
+                "an overlap at or above the window."
+            ),
+            why=(
+                "The faithfulness scorer's window size decides what premise every score "
+                "was measured over, so it is a tunable and belongs in config (Rule #6), "
+                "and scorer_version now spells it as window=900/150/anchored so a ledger "
+                "row records the geometry that produced it. Neither default moves today: "
+                "with 0 of 60 human labels drawn there is no ground truth to tune "
+                "against, and a sweep would show only that the number moves, not which "
+                "value is right (Rule #10). The guard exists because the chunker steps "
+                "chunk_words - chunk_overlap_words and clamps that step to one word, so "
+                "an overlap at or above the window walks a long article one word at a "
+                "time - a job that never finishes rather than one that fails. Additive; "
+                "an older config still validates and gets both defaults."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27T21:00",
             change=(

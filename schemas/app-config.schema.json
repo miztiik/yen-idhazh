@@ -269,6 +269,20 @@
           "title": "Brief Compression Ceiling",
           "type": "number"
         },
+        "chunk_overlap_words": {
+          "default": 150,
+          "description": "Words shared between one window and the next, so a claim that straddles a boundary is still whole somewhere. Must sit below `chunk_words`.",
+          "minimum": 0,
+          "title": "Chunk Overlap Words",
+          "type": "integer"
+        },
+        "chunk_words": {
+          "default": 900,
+          "description": "Words of article the faithfulness scorer reads in one window. Attention is quadratic in the premise, so a whole long article in one pass is the expensive shape. The default has never been calibrated (Rule #10): with no human labels there is nothing to tune it against, and a sweep would show only that the number moves. Moving it moves `scorer_version`, which restarts the run-day count in `evaluation.label_min_run_days`.",
+          "minimum": 1,
+          "title": "Chunk Words",
+          "type": "integer"
+        },
         "golden_set_size": {
           "default": 20,
           "minimum": 1,
@@ -1208,6 +1222,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "evaluation.chunk_words added, defaulting to 900, and evaluation.chunk_overlap_words added, defaulting to 150. Both were constants in backend/idhazh/evals/hhem.py. EvaluationConfig now refuses an overlap at or above the window.",
+      "version": "2026-08-28",
+      "why": "The faithfulness scorer's window size decides what premise every score was measured over, so it is a tunable and belongs in config (Rule #6), and scorer_version now spells it as window=900/150/anchored so a ledger row records the geometry that produced it. Neither default moves today: with 0 of 60 human labels drawn there is no ground truth to tune against, and a sweep would show only that the number moves, not which value is right (Rule #10). The guard exists because the chunker steps chunk_words - chunk_overlap_words and clamps that step to one word, so an overlap at or above the window walks a long article one word at a time - a job that never finishes rather than one that fails. Additive; an older config still validates and gets both defaults."
+    },
+    {
       "change": "evaluation.label_min_stratum_rows added, defaulting to 20, and evaluation.label_min_run_days now counts run-days at one scorer version rather than at one (scorer_version, pipeline_fingerprint) pair.",
       "version": "2026-08-27T21:00",
       "why": "The old rule was unreachable, not strict. The pipeline stamp digests seventeen inputs - a reworded prompt, a llama.cpp rebuild, a sanitizer fix - so shipping any summarize-side improvement reset the count to zero. Measured over the whole committed ledger on 2026-08-27: six distinct stamps across six scored run-days, and the longest unbroken run at one pair is three. Ten was never once reached. What is being calibrated is the scorer's cut, which lives inside scorer_version, so the pipeline is a covariate: it is reported per stratum and a stratum under label_min_stratum_rows is marked too thin to cut on. The trade is named rather than hidden - a pooled rate over several producers is a prior with wide bounds, never a calibration. Owner decision, 2026-08-27. Additive plus a widened meaning; an older config still validates."
@@ -1440,7 +1459,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-27T21:00",
+      "default": "2026-08-28",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1454,5 +1473,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-27T21:00"
+  "version": "2026-08-28"
 }
