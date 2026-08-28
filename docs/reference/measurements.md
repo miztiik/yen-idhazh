@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -3152,6 +3152,181 @@ here says the stage got faster; this run drew a good hand. Reading it as the new
 normal is how the next ordinary run comes to look like a regression, and that
 mistake was made against this exact figure before the distribution was measured.
 
+## The first run at cap 5000, and the two triggers that revert it
+
+**No figure in this section is measured yet, and that is the point.**
+`extract.truncation_cap_tokens` moves from 2500 to 5000 in a later commit, and
+the first scheduled `digest.yml` run after it is what takes the numbers. The
+method and the two conditions that revert the change are written down first,
+because a rollback rule written after the run it judges is not a rule - it is a
+reading of that run.
+
+### How the figures here are taken
+
+**Hardware.** GitHub-hosted `ubuntu-latest`, 4 vCPU, 16 GB, no GPU.
+`Qwen3.5-9B-Q4_K_M.gguf` summarizing through `llama-server`,
+`Qwen3-4B-Q4_K_M.gguf` routing, llama.cpp `b10598`. Which CPU model a job draws
+is not recorded anywhere a later run can read, so it stays a covariate this
+comparison cannot hold ([Still unmeasured](#still-unmeasured)).
+
+**Date.** The date of the first scheduled run at cap 5000, filled in when that
+run happens.
+
+**n.** One run, four `work` jobs, 160 items planned, 40 items a worker.
+`run.max_parallel` is 4 and `run.safety_ceiling_per_run` is 160, so a scheduled
+run cannot hand a worker more. That is the same load
+[The first scheduled day on the configured model](#the-first-scheduled-day-on-the-configured-model-2026-08-27)
+carried, which is what makes its 85.6 minutes a like-for-like baseline rather
+than a number off a differently shaped day.
+
+**The query, for every wall-clock figure.** Job records live in the GitHub API
+and nowhere in this repository. Find the runs, then read one run's jobs:
+
+```
+gh run list --repo miztiik/yen-idhazh --workflow digest.yml --branch main \
+  --event schedule --limit 5 --json databaseId,createdAt,conclusion
+
+gh api "repos/miztiik/yen-idhazh/actions/runs/<id>/jobs?per_page=100" \
+  --jq '.jobs[]
+        | select(.name | startswith("work"))
+        | [.name, .conclusion,
+           ((.completed_at | fromdateiso8601)
+            - (.started_at | fromdateiso8601)) / 60]
+        | @tsv'
+```
+
+Wall-clock is `completed_at - started_at` for the job, so no queue time is
+inside any figure. A four-worker run holds seven jobs, so one page returns them
+all.
+
+**The query, for every ledger figure.** `state/item-health/<YYYY-MM>.csv` is one
+row per planned item per run. Save this and run it with `python`, naming the
+month file the run landed in:
+
+```python
+import csv
+
+rows = list(csv.DictReader(open("state/item-health/2026-09.csv", encoding="utf-8")))
+past_old_cap = [r for r in rows if r["source_words"] and int(r["source_words"]) > 1923]
+lost = [r for r in rows if r["code"] == "context_exceeded"]
+
+print("read past the old cap:", len(past_old_cap))
+print("context_exceeded:", len(lost))
+for row in lost:
+    print(row["date"], row["run_id"], row["item_id"], row["source_id"], row["source_words"])
+```
+
+Both triggers read those two numbers, and the first one is what stops a run that
+exercised nothing from reading as a pass.
+
+### Trigger A - the shard clock
+
+**Revert if the slowest `work` job exceeds 110 minutes on two of three
+consecutive scheduled runs.**
+
+110 minutes is 24.4 minutes above the only measurement of the configured model -
+85.6 minutes, run `33073809079`, 2026-08-27 - and 40 minutes below
+`run.shard_timeout_minutes`, which is 150 in `config/idhazh.json` and reaches
+the job through `needs.plan.outputs.shard_timeout_minutes` in `digest.yml`.
+Between those two it sits above every projected cost of the cap change except
+the pathological one, and below the point where a worker is killed and its
+whole share of the day is lost.
+
+| The slowest worker at | Minutes | Against the 110-minute trigger |
+| --- | ---: | --- |
+| today's cap, measured 2026-08-27 | 85.6 | 24.4 below |
+| the typical extra cost, +3.6 | 89.2 | 20.8 below |
+| a bad draw, +10.9 | 96.5 | 13.5 below |
+| the pathological draw, +43 to +46 | 128.6 to 131.6 | **18.6 to 21.6 above**, and still 18.4 to 21.4 below the 150-minute bound |
+
+**The three extra costs are projections, not measurements (Rule #10).** An
+at-cap item picks up about 1,312 extra input tokens at cap 5000, which is 1.8
+minutes at the 12.05 tok/s uncached read rate. Two such items on the heaviest
+shard is +3.6 minutes, six is +10.9, and the pathological case is all 12 landing
+on one shard with every one still clamped: 1,923 extra words each at the 1.35 to
+1.44 tokens a word this project has measured, so +43 to +46. Wall-clock moves by
+the slowest shard alone, because the run waits for the last worker.
+
+**Two of three, because one run is a draw.** The four workers of run
+`33073809079` spanned 62.6 to 85.6 minutes - 1.37x, on one day, one model and
+one item count. A single run over 110 is inside that lottery. Two of three is
+not.
+
+**A run counts as one of the three only if it exercised the change.** All four
+conditions, or the run is not evidence and the count does not advance:
+
+| Condition | Read from | Why it is there |
+| --- | --- | --- |
+| `items_planned` is 160 | `runs[].items_planned` in `frontend/public/digest/<Y>/<M>/<D>/run.json` | A smaller day hands a worker fewer than 40 items, so its clock is short for a reason that is not the cap. |
+| exactly four `work` jobs | the jobs query above | An eight-shard dispatch carries 20 items a worker and halves the clock on its own ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). |
+| every `work` job concluded `success` | the jobs query above | A job that was cancelled, or that hit its bound, has a clock that means nothing. |
+| `read past the old cap` is 1 or more | the ledger query above | A run that read nothing longer than 1,923 words never exercised the new cap, so its clock is a cap-2500 clock. |
+
+**That last table is the whole reason this trigger is checkable.** Without it a
+cancelled run, a quiet news day and an eight-shard dispatch all turn in a short
+slowest worker, and a short worker reads as a pass.
+
+### Trigger B - a lost item
+
+**Revert on the first row in `state/item-health/<YYYY-MM>.csv` with
+`code = context_exceeded`.** One occurrence is the finding, and one run is
+enough.
+
+`context_exceeded` is the summarize stage recording that the served context
+window refused a prompt - `n_ctx` is 8192 and the prompt plus the reply budget
+did not fit. It is a member of `FailureCode` in
+`backend/idhazh/contracts/item_health.py` and a value of the ledger's `code`
+column. **It has never appeared.** Counted 2026-08-28 over
+`state/item-health/2026-08.csv`: 2,527 items published and 985 failed across 19
+runs, and not one `context_exceeded` row among them.
+
+**It is written as a positive event on purpose.** "Zero `context_exceeded` rows
+on the first run" is the obvious test and it is the wrong one, because zero is
+the expected count whether the cap is safe or not. About 8 items a run sit at
+the cap - counted 2026-08-28, 153 rows at the cap over 19 runs, 8.1 a run, range
+1 to 12 - and at the new cap one of those overflows only at 1.59 tokens a word
+or worse, which is 10 to 21 percent above the worst prose measured here. An
+absence test on an event that will not fire passes on a run that did nothing,
+and this project has published that mistake once already, when a canary that
+returned no summary at all was written up as a sanitizer failure
+([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)).
+
+**What makes it fail on a run that exercised nothing.** The ledger's
+`source_words` is the post-cap count, and it cannot exceed
+`int(truncation_cap_tokens / 1.3)` - 1,923 words at cap 2500, 3,846 at cap 5000.
+Measured 2026-08-28 over the 2,541 rows in `state/item-health/2026-08.csv` that
+carry a length: the maximum is exactly 1,923, 153 rows sit on it, and none is
+above it. So the `read past the old cap` count is positive proof the new cap was
+read. **If it is zero, the `context_exceeded` count means nothing and this
+trigger has not been checked.**
+
+### The rollback action
+
+`extract.truncation_cap_tokens` back to `2500` in `config/idhazh.json`. One
+line, and nothing else moves - not `n_ctx`, not `request_timeout_minutes`, not
+`run.shard_timeout_minutes`.
+
+The cap is a field of `PipelineFingerprint`
+(`backend/idhazh/contracts/fingerprint.py`), so the change and the rollback each
+re-stamp the pipeline fingerprint and every item is summarized again. That
+over-invalidation is by design. It costs a run, not correctness.
+
+### The defect Trigger A depends on, recorded rather than fixed
+
+**No committed artifact carries a `work` job's wall-clock, so Trigger A is a
+person making an API call by hand.** The run manifest at
+`frontend/public/digest/<Y>/<M>/<D>/run.json` carries the whole run's
+`started_at` and `completed_at` and `runner: ubuntu-latest`, which is a label
+rather than a machine, and a run rather than a job.
+`state/runtime-counters.csv` holds one row per shard and counts tokens, not
+seconds of job wall-clock. So the only instrument this trigger reads lives
+outside the repository, on an API whose job records age out with the run.
+
+Fixing that is not this change's job. It is written here so it is not discovered
+during an incident, and it is the same gap
+[Still unmeasured](#still-unmeasured) already records for the CPU model a job
+drew: the run manifest is where a per-job fact would have to land.
+
 ## Eight work shards
 
 **Measured 2026-08-25** on GitHub-hosted `ubuntu-latest` (4 vCPU, 16 GB), run
@@ -3596,5 +3771,6 @@ happened three times on this page.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the rule that decides which ledgers shard.
 - [../concepts/pipeline-loop.md](../concepts/pipeline-loop.md) - the batch-size rule these numbers set.
 - [../architecture/summarize/prompt.md](../architecture/summarize/prompt.md) - the prompt the token count above measures.
+- [../architecture/summarize/throughput.md](../architecture/summarize/throughput.md) - what the read and write rates mean, and the cap every figure on that page was taken at.
 - [../how-to/evaluate-new-summarizer-model.md](../how-to/evaluate-new-summarizer-model.md) - the procedure these measurements gate.
 - [../how-to/set-up-local-inference.md](../how-to/set-up-local-inference.md) - reproducing the local runs.
