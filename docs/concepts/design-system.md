@@ -4,13 +4,15 @@
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
-The surface is small on purpose: a digest page, an item, and an eval dashboard. There is no application here - no session, no navigation tree, no state to lose. Restraint is not a style choice on this project; it falls out of the architecture ([vision.md](vision.md)).
+The surface is small on purpose: a digest page, an item, and an eval dashboard. There is no application here - no session, no navigation tree, no state to lose ([vision.md](vision.md)).
+
+**The architecture fixes how much surface there is. It does not fix how good that surface is.** Scope-restraint is inherited and not up for debate. Craft-restraint is a choice, and every instance of it needs an argument on the day it is made.
 
 ## Typography is the interface
 
 This is a reading surface before it is anything else. Measure, leading, hierarchy and the space between items do more work here than any component will, and a digest that is hard to skim has failed before a single control is considered.
 
-- **A reading measure**, not a full-width line. Long lines are where a skim turns into work.
+- **A reading measure on the text, and a fluid frame around it.** Long lines are where a skim turns into work, so the summary, the title and the key points are held to a measure. **The measure is a property of a text element and never of the shell.** Put it on the shell and the whole application inherits a paragraph's width: measured 2026-08-28, one `max-w-2xl` on the root layout capped every page at 624px and left 912px of a 1536px screen empty, including a console with five tables and six charts in it.
 - **A hierarchy of exactly three levels** on an item - what it is, what it says, where it came from. A fourth level means something on the item has not earned its place.
 - **Two faces at most**: one for reading, one for data (tabular numerals on the dashboard, so columns line up).
 
@@ -48,6 +50,30 @@ Theming is override, not a second set of names: dark mode overrides the same tok
 A confidence band carries a **word** as well as a tint. A route kind carries a shape or a position as well as a colour. This is a clarity rule for all readers, and it is also what keeps the page legible in a screenshot, in dark mode, and on a bad screen.
 
 Accessibility *audit tooling* is a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a); labelled controls, semantic landmarks and visible focus are simply good building and are in scope.
+
+### Decorative colour and semantic colour are not the same rule
+
+The rule above binds **colour that encodes meaning**. Read as a general ban on colour it says something it never meant, and for eleven months that is how it was read: no gradient was proposed on this surface, ever, and the reason was a rule that does not apply to one.
+
+- **Semantic colour is doubly constrained.** A tint that tells a reader something carries a word or a shape as well, and it may never borrow the confidence ramp's three hues. This is the whole of the rule above.
+- **Decorative colour is unconstrained.** Chrome, identity, a panel tint, an empty state, the wordmark, a page background. It encodes nothing, so there is nothing for a second signal to duplicate.
+
+The line is drawn by the question "would a reader be wrong about a fact if this were grey?" A gradient on the site header fails that question, so it is decoration. A gradient running red at the bad end of a chart passes it, so it is semantic and is refused - a reader would read the hue as the verdict.
+
+## Sufficiency is a gate, not a taste
+
+A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.
+
+The checks, applied to any reader-facing surface:
+
+- **Does it use the screen it is on?** Measured 2026-08-28: the digest used 40.6 percent of a 1536px viewport and had two responsive breakpoints in the entire site, one of which changed padding.
+- **Does it separate figure from ground?** A page with one surface colour and no elevation is a page where nothing is in front of anything.
+- **Is there one thing the eye lands on first?** If everything is the same weight, the page has no order to read it in.
+- **Does it look like it was made this year?** Not a matter of fashion. A surface that looks abandoned is read as abandoned, and the judgement transfers to the summaries.
+
+A surface that fails one of these ships only with a `## Design rationale` entry saying why. `CLAUDE.md` section 9 carries the Definition-of-Done line; Susan ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)) rules them.
+
+**And a veto costs something.** A ruling that removes must name what the reader loses. "Remove before adding" is a good instinct and a bad rule when it is free: a removal that states only what was removed is not a ruling and does not bind ([../agents/guardrails.md](../agents/guardrails.md)).
 
 ## Motion vocabulary
 
@@ -191,6 +217,14 @@ to them.
 
 ## Design rationale
 
+**Three sentences were struck on 2026-08-29, and the reason is one mechanism rather than three mistakes.** This page opened with "Restraint is not a style choice on this project; it falls out of the architecture", [ui-shell.md](ui-shell.md) and [vision.md](vision.md) said the operator surfaces "earn no design budget", and the reading measure was written as a property of the shell. All three are defensible sentences and all three are the same error: an architectural constraint restated as a design value. Rule #1 constrains what may *execute* at read time and says nothing about what may be *drawn* - a gradient, an elevation scale and a self-hosted face are bytes in a committed stylesheet that cost a reader nothing at read time and the runner nothing at build time. But a constraint stated as a value stops needing a justification, so every additive proposal had to argue against the project's own doctrine while every subtractive one was pre-approved.
+
+The measurements that settled it, taken in the integrated browser on 2026-08-28: 40.6 percent of a 1536px viewport used; the content column fixed at 624px from 1024px upward; **two** responsive breakpoints in the whole of `frontend/src`, one of which changes padding and the other of which divides an already-capped column into three 164px charts; seven horizontal scrollbars on the console while 582px of screen sat empty beside them. The rejected alternative was softening the three sentences rather than striking them, and it was rejected because a softened absolute is still read as an absolute. Authority: owner, 2026-08-29, over Jony's prior ruling.
+
+**The token list on this page specified a shadow scale and a space scale that were never built.** That is not a doctrine change and it is worth naming separately: the doctrine was right and the implementation stopped short, which is the quieter half of the same failure.
+
+**Sufficiency became a gate because the review roster was six vetoes and no demand.** Jony removes, Fowler deletes, Carmack refuses on budget, Reader and Editor report. Nothing asked whether the result was good enough to be worth a stranger's attention, and a system of pure vetoes converges on the minimum that passes every veto. The rejected alternative was giving Jony the demand mandate as well; one head holding both "remove before adding" and "this is not enough" resolves to the veto every time, which is the observed outcome. Susan was added at a distinct altitude instead, and a veto now has to name what the reader loses. Authority: owner and Fowler, 2026-08-29.
+
 Driving the look from fields the payload already carries - route kind, band, truncation - rather than from per-item styling decisions is what keeps the surface one component instead of many, and it means a new route kind or band arrives with a slot already waiting for it. The rejected alternative, bespoke treatment per item type, produces a page that must be edited every time the pipeline learns something new. Authority: Jony.
 
 Keeping the motion set to three named animations is a deliberate under-build. A reading surface that animates is a reading surface that interrupts. Authority: Jony, with Reader ([../../.github/agents/reader.agent.md](../../.github/agents/reader.agent.md)) as the check.
@@ -213,6 +247,8 @@ accepted.
 ## See also
 
 - [ui-shell.md](ui-shell.md) - the chrome that consumes these tokens.
+- [../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md) - who rules the sufficiency checks, and why the roster needed a demand side.
+- [../agents/guardrails.md](../agents/guardrails.md) - the authority table, and the rule that a veto must name what the reader loses.
 - [digest.md](digest.md) - the item shape this vocabulary dresses.
 - [evaluation.md](evaluation.md) - where the confidence bands come from.
 - [principles.md](principles.md) - the beliefs behind the restraint.
