@@ -657,6 +657,46 @@ def test_hhem_delta_is_rebuilt_not_trusted() -> None:
         EvalRow.model_validate(payload)
 
 
+def test_the_model_cannot_have_read_more_words_than_the_article_holds() -> None:
+    """The impossible direction, refused.
+
+    610 of 2,346 committed rows carried a seen count LARGER than the full
+    count, because the two cells were filled by two different counters over the
+    same truncated string. Nothing compared them, so nothing could see it.
+    """
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "eval-row" / "truncation-artifact.json",
+        source_word_count=1874,
+    )
+    with pytest.raises(ValueError, match="not more"):
+        EvalRow.model_validate(payload)
+
+
+def test_an_article_shorter_than_the_cap_reads_the_same_length_twice() -> None:
+    """Equal is the normal case, not an error: nothing was cut."""
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "eval-row" / "truncation-artifact.json",
+        source_word_count=1875,
+    )
+    assert EvalRow.model_validate(payload).source_word_count == 1875
+
+
+def test_an_eval_row_may_not_know_how_long_its_article_was() -> None:
+    """Null and not zero (section 11).
+
+    A row written before 2026-08-27 whose article was truncated has no full
+    length anywhere: extract discarded the pre-cap body. Zero would claim the
+    article was empty.
+    """
+    payload = mutate(
+        CONTRACT_FIXTURES_DIR / "eval-row" / "truncation-artifact.json",
+        source_word_count=None,
+    )
+    row = EvalRow.model_validate(payload)
+    assert row.source_word_count is None
+    assert row.source_seen_word_count == 1875, "the seen count is still a measurement"
+
+
 def test_an_ok_item_health_row_carries_only_recorded_extract_signals() -> None:
     payload = mutate(
         CONTRACT_FIXTURES_DIR / "item-health-row" / "published.json",

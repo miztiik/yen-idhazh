@@ -68,6 +68,28 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-27T21:00",
+            change=(
+                "source_word_count is nullable, source_seen_word_count may not exceed "
+                "it, and the committed ledger is rewritten to obey that."
+            ),
+            why=(
+                "The stamp below fixed the writer and left the committed rows carrying "
+                "the old meaning. Measured over all 2,566 rows: 610 have the seen count "
+                "LARGER than the full count, and every one of them was written by the "
+                "old writer - none of the 220 rows the fixed writer produced reads that "
+                "way. Nothing compared the two cells, which is how the pair stayed wrong "
+                "for months, so the rule is a validator now rather than a habit. Null "
+                "and not zero where the length cannot be recovered: extract discards the "
+                "pre-cap body, so a truncated row written before this has no full length "
+                "anywhere and zero would say the article was empty. "
+                "backend/utilities/migrate_score_ledger.py is the read-side migration. "
+                "It recovers rather than guesses - an article under the cap IS the text "
+                "the model saw, so its two counts are equal by construction, and 2,204 "
+                "rows got a real number back while 142 were emptied."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-27T20:30",
             change=(
                 "hhem_full is now scored against the article before the truncation cap, "
@@ -247,11 +269,14 @@ class EvalRow(Contract):
     )
     band: ConfidenceBand
 
-    source_word_count: int = Field(
+    source_word_count: int | None = Field(
+        default=None,
         ge=0,
         description=(
             "The article before the truncation cap, counted by Article.source_word_count. "
-            "Rows stamped before 2026-08-27T20:00 recount the post-cap text instead."
+            "Null when the length is not knowable: the pre-cap body is never persisted, "
+            "so a truncated row stamped before 2026-08-27T21:00 has no full length to "
+            "recover. Rows stamped before 2026-08-27T20:00 recount the post-cap text."
         ),
     )
     source_seen_word_count: int = Field(
@@ -349,6 +374,22 @@ class EvalRow(Contract):
         expected = round(self.hhem - self.hhem_full, _DELTA_PLACES)
         if abs(self.hhem_delta - expected) > 1e-9:
             raise ValueError("hhem_delta must be hhem - hhem_full, recomputed on read")
+        return self
+
+    @model_validator(mode="after")
+    def _the_model_cannot_have_read_more_than_the_article_holds(self) -> Self:
+        """The seen count is a cut of the full count, so it cannot be the larger one.
+
+        `Article` already refuses the same shape. Stating it here too is what
+        makes the pair a before-and-after pair rather than two numbers that
+        happen to sit side by side - the defect this rule closes was two
+        different counters over one string, and only a comparison could see it.
+        """
+        full = self.source_word_count
+        if full is not None and self.source_seen_word_count > full:
+            raise ValueError(
+                "source_seen_word_count is a cut of source_word_count, so it is not more"
+            )
         return self
 
     @classmethod

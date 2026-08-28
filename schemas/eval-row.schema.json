@@ -16,6 +16,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "source_word_count is nullable, source_seen_word_count may not exceed it, and the committed ledger is rewritten to obey that.",
+      "version": "2026-08-27T21:00",
+      "why": "The stamp below fixed the writer and left the committed rows carrying the old meaning. Measured over all 2,566 rows: 610 have the seen count LARGER than the full count, and every one of them was written by the old writer - none of the 220 rows the fixed writer produced reads that way. Nothing compared the two cells, which is how the pair stayed wrong for months, so the rule is a validator now rather than a habit. Null and not zero where the length cannot be recovered: extract discards the pre-cap body, so a truncated row written before this has no full length anywhere and zero would say the article was empty. backend/utilities/migrate_score_ledger.py is the read-side migration. It recovers rather than guesses - an article under the cap IS the text the model saw, so its two counts are equal by construction, and 2,204 rows got a real number back while 142 were emptied."
+    },
+    {
       "change": "hhem_full is now scored against the article before the truncation cap, so hhem_delta and truncation_flagged can be non-zero. No column was added or removed and no row was rewritten.",
       "version": "2026-08-27T20:30",
       "why": "dual_score exists to tell a model that invented something from a model that faithfully summarized the half we gave it, and its only production caller handed it the same string twice: extract.truncate_to_tokens returned the cut text and to_article kept only that. Measured over all 2,232 rows written before this, hhem_delta is exactly 0.0 on 2,232 of 2,232 and hhem equals hhem_full on every one. Those rows record two scores of one text, so 'the gap was zero' means 'the gap was never measured' and must not be read as evidence that truncation costs nothing. Recorded only - no band reads either column, so METRICS_VERSION did not move."
@@ -229,10 +234,18 @@
       "type": "string"
     },
     "source_word_count": {
-      "description": "The article before the truncation cap, counted by Article.source_word_count. Rows stamped before 2026-08-27T20:00 recount the post-cap text instead.",
-      "minimum": 0,
-      "title": "Source Word Count",
-      "type": "integer"
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The article before the truncation cap, counted by Article.source_word_count. Null when the length is not knowable: the pre-cap body is never persisted, so a truncated row stamped before 2026-08-27T21:00 has no full length to recover. Rows stamped before 2026-08-27T20:00 recount the post-cap text.",
+      "title": "Source Word Count"
     },
     "speculative_density": {
       "anyOf": [
@@ -285,7 +298,7 @@
       "type": "number"
     },
     "version": {
-      "default": "2026-08-27T20:30",
+      "default": "2026-08-27T21:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -314,7 +327,6 @@
     "compression",
     "extractiveness",
     "band",
-    "source_word_count",
     "summary_word_count",
     "pipeline_fingerprint",
     "output_digest",
@@ -323,5 +335,5 @@
   ],
   "title": "EvalRow",
   "type": "object",
-  "version": "2026-08-27T20:30"
+  "version": "2026-08-27T21:00"
 }
