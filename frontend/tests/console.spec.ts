@@ -3,7 +3,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
-import { modelWork } from '../src/lib/server/model-work';
+import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 
 /**
@@ -1199,13 +1199,20 @@ function modelCells(date: string): Record<string, string> {
 	const copied = scores.map((row) =>
 		Math.max(Number(row.extractiveness), Number(row.verbatim_run))
 	);
+	// The cut flag is read only over the rows that carry its current meaning. An
+	// older row's cell held a faithfulness gap, so adding the two would print one
+	// number over two questions.
+	const cutKnown = scores.filter((row) => (row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM);
 
 	return {
 		summaries: scores.length === 0 ? '-' : String(scores.length),
 		'not-sure': tally((row) => row.band === 'low'),
 		unsupported: tally((row) => Number(row.unsupported_numbers) > 0),
 		hedge: tally((row) => truthy(row.hedge_dropped)),
-		part: tally((row) => truthy(row.truncation_flagged)),
+		part:
+			cutKnown.length === 0
+				? '-'
+				: String(cutKnown.filter((row) => truthy(row.truncation_flagged)).length),
 		copied: scores.length === 0 ? '-' : `${Math.round(middle(copied) * 100)}%`,
 		'per-item': times.length === 0 ? '-' : units(middle(times), 1000),
 		minutes:
@@ -1387,4 +1394,62 @@ test('a day with no summaries gets no row, and a day with no health row gets no 
 	expect(scoredOnly).toHaveLength(1);
 	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.failed).toBeNull();
 	expect(scoredOnly[0].kind === 'day' && scoredOnly[0].day.perItemMs).toBeNull();
+});
+
+test('the cut flag is counted only over rows that carry the meaning it has now', () => {
+	// `truncation_flagged` changed meaning at `CUT_FLAG_MEANS_A_CUT_FROM`. Before
+	// that stamp the cell held the gap between two faithfulness scores; from it,
+	// the cell says extract cut the article body. Two rows on one day, one either
+	// side of the stamp, are what tell a reader of the new meaning apart from a
+	// reader that just counts the column.
+	const row = (version: string, flagged: string) => ({
+		date: '2026-08-28',
+		version,
+		model_id: 'one',
+		band: 'high',
+		truncation_flagged: flagged
+	});
+
+	// `2026-08-27T20:30` is the newest stamp the committed ledger actually
+	// carries. The date-stamp format is ASCII-sortable on purpose, so a stamp
+	// carrying a time orders before the bare date that follows it - which is the
+	// whole reason a plain string compare is enough here.
+	const before = '2026-08-27T20:30';
+	const after = CUT_FLAG_MEANS_A_CUT_FROM;
+	expect(before < after, 'a stamp carrying a time must order before the bare date').toBe(true);
+
+	const readInPart = (rows: Record<string, string>[]): number | null => {
+		const days = modelWork(rows, []).filter((entry) => entry.kind === 'day');
+		expect(days).toHaveLength(1);
+		// Throws rather than falling back to a number: a silent 0 here would be
+		// indistinguishable from the answer one of the assertions below expects.
+		if (days[0].kind !== 'day') throw new Error('the filter above kept a divider row');
+		return days[0].day.readInPart;
+	};
+
+	// One direction: the older row is flagged, the newer one is not. A reader that
+	// counted the whole column would print 1. Only the newer row carries the
+	// meaning, so the answer is 0 - a real number, and not the flagged row's.
+	expect(readInPart([row(before, 'True'), row(after, 'False')])).toBe(0);
+
+	// The other direction, the same pair with the flags swapped. The answer is 1,
+	// which is what stops this passing on a reader that always returns null.
+	expect(readInPart([row(before, 'False'), row(after, 'True')])).toBe(1);
+
+	// A day made only of older rows holds no answer at all. Zero would say the
+	// pipeline cut nothing, which those rows never measured.
+	expect(readInPart([row(before, 'True'), row(before, 'True')])).toBeNull();
+
+	// A stamp carrying a time on the boundary day is on the new side of it.
+	expect(readInPart([row('2026-08-28T09:00', 'True')])).toBe(1);
+
+	// An unstamped row reads as older. Unknown is the safe direction.
+	expect(
+		readInPart([{ date: '2026-08-28', model_id: 'one', truncation_flagged: 'True' }])
+	).toBeNull();
+
+	// The gate is on the one column whose meaning moved. Every other figure still
+	// counts every row the day holds.
+	const mixed = modelWork([row(before, 'True'), row(after, 'False')], [])[0];
+	expect(mixed.kind === 'day' && mixed.day.summaries).toBe(2);
 });
