@@ -6,12 +6,14 @@ network and no mocks.
 
 from __future__ import annotations
 
+import csv
 import json
+from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import config, extract, summarize, telemetry
+from idhazh import config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
@@ -411,3 +413,166 @@ def test_unknown_detail_is_sanitized_guarded_and_truncated() -> None:
     assert row.detail is not None
     assert not row.detail.startswith(("=", "+", "-", "@", "\t", "\r"))
     assert len(row.detail) <= 200
+
+
+# --- The length before the cap ----------------------------------------------
+
+
+def cut_article(*, before: int, after: int) -> Article:
+    """An article the truncation cap shortened, validated the way extract writes it."""
+    payload = article().model_dump(mode="json")
+    payload.update(
+        {
+            "word_count": after,
+            "source_word_count": before,
+            "truncated": True,
+            "truncated_at_tokens": 2500,
+        }
+    )
+    return Article.model_validate(payload)
+
+
+def records(path: Path) -> list[dict[str, str]]:
+    with path.open(encoding="utf-8", newline="") as handle:
+        return list(csv.DictReader(handle))
+
+
+def committed_shards() -> list[Path]:
+    return sorted((REPO_ROOT / "state" / ledger.ITEM_HEALTH_DIRNAME).glob("*.csv"))
+
+
+def test_a_cut_item_carries_both_counts_and_the_cut_is_the_difference() -> None:
+    """The comparison is the test for a cut, so both counters ride the same row.
+
+    `source_words == int(extract.truncation_cap_tokens / 1.3)` was the only other
+    way to spot a cut, and that constant moves whenever the cap moves - so a
+    window spanning the change would mix two cut points, and an article whose
+    body happens to end on the boundary would be called cut when it was not.
+    """
+    row = telemetry.classify_item(
+        planned=item(),
+        article=cut_article(before=2610, after=1923),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert (row.source_words, row.source_words_before_cap) == (1923, 2610)
+    assert row.source_words_before_cap is not None
+    assert row.source_words is not None
+    assert row.source_words_before_cap - row.source_words == 687
+
+
+def test_an_uncut_item_carries_the_same_number_twice() -> None:
+    """Equal is not cut. The row says so rather than leaving the reader to infer it."""
+    row = telemetry.classify_item(
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert row.source_words_before_cap == row.source_words
+
+
+def test_an_article_that_never_measured_the_full_body_writes_an_empty_cell() -> None:
+    """Never the post-cap count copied across: that would read as a clean article.
+
+    `Article.source_word_count` is None on a payload written before 2026-08-26,
+    and the pre-cap body is not kept, so nothing can recover the number later.
+    """
+    payload = article().model_dump(mode="json") | {"source_word_count": None}
+
+    row = telemetry.classify_item(
+        planned=item(),
+        article=Article.model_validate(payload),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert row.source_words_before_cap is None
+    assert row.csv_row()["source_words_before_cap"] == ""
+
+
+def test_a_row_written_before_the_pre_cap_column_reads_as_unmeasured() -> None:
+    old = ItemHealthRow(
+        version="2026-08-27",
+        date=plan().date,
+        run_id="2026-08-21-1",
+        item_id=item().item_id,
+        url_key=item().url_key,
+        canonical_url=item().canonical_url,
+        vertical=item().vertical,
+        source_id=item().source_id,
+        stage=ItemStage.PUBLISH,
+        outcome=ItemOutcome.OK,
+        source_words=1923,
+    ).csv_row()
+    old.pop("source_words_before_cap")
+
+    row = ItemHealthRow.from_csv_row(old)
+
+    assert row.source_words_before_cap is None
+
+
+def test_every_migrated_item_health_row_records_its_absence() -> None:
+    """The Oracle, first half: an empty cell, never a value invented today.
+
+    A run before 2026-08-28 never looked at the body's full length, and the
+    pre-cap text is gone, so no later pass can recover it. Writing anything into
+    those cells would make `source_words_before_cap > source_words` - the whole
+    test for a cut - answer on evidence nobody gathered. The row's own `version`
+    cell says which side of the change wrote it.
+    """
+    shards = committed_shards()
+    assert shards, "no item-health shard is committed, so this proves nothing"
+
+    for shard in shards:
+        relpath = shard.relative_to(REPO_ROOT).as_posix()
+        rows = records(shard)
+        assert rows, f"{relpath} has a header and no rows"
+        for number, record in enumerate(rows, start=2):
+            assert None not in record, f"{relpath}:{number} has more cells than the header names"
+            assert all(value is not None for value in record.values()), (
+                f"{relpath}:{number} has fewer cells than the header names"
+            )
+        predates = [record for record in rows if record["version"] < "2026-08-28"]
+        assert predates, f"{relpath} holds no row older than the column, so nothing was migrated"
+        assert {record["source_words_before_cap"] for record in predates} == {""}
+
+
+def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path) -> None:
+    """The Oracle, second half: append to a byte copy of what is committed.
+
+    `require_matching_header` compares the header tuple exactly, so the commit
+    that gave the contract this column stops the shard the pipeline is appending
+    to until the file is widened by the same column. That is a failed scheduled
+    run, not a failed lint. This is the run a release blocker would fail, and it
+    also proves the widened file can carry a real value - an absence check on
+    its own passes on a file nothing was ever written to.
+    """
+    committed = committed_shards()[-1]
+    date = f"{committed.stem}-01"
+    state = tmp_path / "state"
+    target = ledger.item_health_path(state, date)
+    target.parent.mkdir(parents=True)
+    target.write_bytes(committed.read_bytes())
+    before = records(target)
+    fresh = telemetry.classify_item(
+        planned=item(),
+        article=cut_article(before=2610, after=1923),
+        summary=summary(),
+        date=date,
+        run_id=f"{date}-9",
+    )
+    assert (date, fresh.run_id, fresh.item_id) not in ledger.recorded_item_health(target)
+
+    assert ledger.append_item_health(state, date, [fresh]) == 1
+
+    after = records(target)
+    assert ledger.read_header(target) == ItemHealthRow.csv_columns()
+    assert after[:-1] == before, "the append moved a cell an earlier run wrote"
+    assert after[-1]["source_words_before_cap"] == "2610"
+    assert after[-1]["source_words"] == "1923"
