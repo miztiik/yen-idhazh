@@ -1,0 +1,78 @@
+{
+  "assist": {
+    "max_tokens": 256,
+    "min_readable_letter_share": 0.5,
+    "recall_min": 0.69,
+    "result_limit": 10,
+    "search_min_days": 7,
+    "search_months": 1,
+    "similarity_floor": 0.35
+  },
+  "chart": {
+    "donut_thickness_px": 10,
+    "height_px": 220,
+    "hover_readout": true,
+    "palette": "categorical",
+    "sparkline_height_px": 36,
+    "tick_density": 6,
+    "width_px": 760
+  },
+  "console": {
+    "chart_height": 220,
+    "chart_width": 760,
+    "default_window_days": 30,
+    "failure_list_max": 25,
+    "max_window_days": 366,
+    "min_attempts_for_rate": 5,
+    "min_window_days": 7,
+    "pan_days": 7,
+    "today_anchor": "right",
+    "zoom_factor": 1.5
+  },
+  "digest": {
+    "archive_page_size": 25,
+    "items_per_topic": 3,
+    "read_mark_days": 7,
+    "repo_url": "https://github.com/miztiik/yen-idhazh",
+    "sections": [
+      "notice",
+      "topics",
+      "items"
+    ],
+    "show_filter": true,
+    "site_title": "yen-idhazh",
+    "source_mark": true,
+    "tagline": "A daily digest that checks its own work.",
+    "theme_default": "system",
+    "visual_side": "trailing"
+  },
+  "frame": {
+    "breakpoints_px": [
+      640,
+      1024,
+      1400
+    ],
+    "console_max_px": 1600,
+    "gutter_max_px": 32,
+    "gutter_min_px": 16,
+    "measure_ch": 68,
+    "reading_max_px": 1280
+  },
+  "icons": {
+    "size_px": 16,
+    "tint_mode": "semantic",
+    "topic_icons_enabled": true
+  },
+  "motion": {
+    "duration_base_ms": 200,
+    "duration_fast_ms": 120,
+    "enabled": true
+  },
+  "theme": {
+    "display_face_enabled": true,
+    "elevation_enabled": true,
+    "gradient_enabled": true,
+    "surface_tint_alpha": 0.07
+  },
+  "version": "2026-08-29"
+}

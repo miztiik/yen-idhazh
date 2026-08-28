@@ -1,6 +1,6 @@
 ---
 name: bootstrap
-description: Load project context before answering. Reads CLAUDE.md, guardrails, and the relevant subsystem and concept docs. Every persona (Reader, Jony, Andre, Fowler, Carmack) and every default-agent task crossing a subsystem boundary runs this first. Skip only for Level-0 / Level-1 single-file changes.
+description: Load project context before answering. Reads CLAUDE.md, guardrails, and the relevant subsystem and concept docs. Every persona (Reader, Editor, Jony, Susan, Andre, Fowler, Carmack) and every default-agent task crossing a subsystem boundary runs this first. Skip only for Level-0 / Level-1 single-file changes.
 ---
 
 # bootstrap
