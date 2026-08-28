@@ -123,6 +123,16 @@ minutes apart can disagree on `state/*.csv` purely because the tip moved. Run
 pushing. A `git diff main origin/main` that is non-empty right after a
 successful `--ff-only` means it moved again.
 
+**Your own feature branch can move under you too, and one of the two causes is
+benign.** Observed 2026-08-24: `git worktree list` named a commit nobody in the
+session had authored. `git reflog -8` is what tells the cases apart. An entry
+reading `merge origin/main: Fast-forward` is the harmless one - a background
+process advanced the branch and your commits are still there. An entry reading
+`checkout: moving from X to Y` is the dangerous one - a parallel agent switched
+branches in the checkout, so the tree you are about to stage is not the tree you
+think it is. Commit as soon as the gates are green, so there is a SHA of your
+own to compare everything against.
+
 **Local `main` is often behind on purpose.** When the shared checkout carries
 dirty files that overlap incoming commits, `git merge --ff-only` aborts. That is
 correct. Do not force it.
@@ -262,6 +272,25 @@ gh api "repos/<owner>/<repo>/commits/$head/check-runs" --jq '.check_runs[]|"\(.n
 
 An empty result means CI has not registered the new head yet, which is a
 different answer from `pass` and the one you actually needed.
+
+**"No checks reported" can mean CI never triggered at all, and waiting will not
+fix it.** That is a different cause from the empty check-run list above, where
+the head is new and the runner is catching up. Here the pull request was opened
+against a base stale enough that no workflow ever started for it, so the answer
+stays empty for as long as you watch it. Rebase onto current `origin/main` and
+push; the push is what starts the run.
+
+Expect that rebase to conflict on `backend/idhazh/contracts/app_config.py`,
+because both sides appended to its `changelog` array. Resolve by keeping both
+entries, newest first, then regenerate:
+
+```powershell
+& <shared venv>\Scripts\python.exe -m idhazh.contracts.export
+```
+
+Do not hand-merge `schemas/app-config.schema.json`. It is generated, so editing
+it is the anti-pattern the contract drift gate exists to catch, and the export
+is one command.
 
 **Deprecation warnings are check-run annotations, not log lines.** Grepping the
 log finds nothing. Read them, and always capture a baseline count from a
