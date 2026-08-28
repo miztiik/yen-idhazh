@@ -137,18 +137,43 @@ class TestTheDraw:
         assert drawn
         assert {row["pipeline_fingerprint"] for row in drawn} == {pipeline}
 
-    def test_neither_half_of_the_pair_has_a_default(self) -> None:
-        """No call site can forget the pipeline and still get a draw."""
+    def test_the_scorer_has_no_default_and_the_pipeline_does(self) -> None:
+        """The scorer is the stratum being calibrated, so no call site may omit it.
+
+        The pipeline is a covariate. Omitting it pools every producer one scorer
+        read, which is the reachable rule - requiring both never once held for
+        more than three consecutive run-days.
+        """
         records = ledger()
         scorer = live_scorer(records)
         with pytest.raises(TypeError):
-            labels.eligible(records, scorer_version=scorer)  # type: ignore[call-arg]
-        with pytest.raises(TypeError):
-            labels.run_days(records, scorer_version=scorer)  # type: ignore[call-arg]
-        with pytest.raises(TypeError):
-            labels.draw(  # type: ignore[call-arg]
-                records, draw_id="d1", scorer_version=scorer, per_decile=6
-            )
+            labels.eligible(records)  # type: ignore[call-arg]
+
+        pooled = labels.eligible(records, scorer_version=scorer)
+        narrowed = labels.eligible(
+            records, scorer_version=scorer, pipeline_fingerprint=live_pipeline(records)
+        )
+        assert pooled, "one scorer alone must select rows"
+        assert len(narrowed) <= len(pooled), "naming a pipeline can only narrow"
+        assert {row["scorer_version"] for row in pooled} == {scorer}
+
+    def test_a_pooled_draw_reports_the_producers_it_mixed(self) -> None:
+        """The trade Option B makes is only honest when the mix is printed.
+
+        A rate over rows several producers wrote is a prior with wide bounds. The
+        strata are what say so, so they are computed from the drawn rows rather
+        than from the whole ledger.
+        """
+        records = ledger()
+        pooled = labels.eligible(records, scorer_version=live_scorer(records))
+        found = labels.strata(pooled)
+
+        assert found, "a non-empty pool has at least one stratum"
+        assert sum(one.rows for one in found) == len(pooled), "every row lands in exactly one"
+        assert [one.rows for one in found] == sorted((one.rows for one in found), reverse=True)
+        assert len({one.pipeline_fingerprint for one in found}) == len(found), "no duplicates"
+        for one in found:
+            assert one.first_date <= one.last_date
 
     def test_a_pair_no_run_wrote_draws_nothing(self) -> None:
         records = ledger()
@@ -270,13 +295,35 @@ class TestWhatTheLedgerHolds:
 
 
 class TestTheOperatorTool:
-    def test_the_default_pair_comes_from_the_configured_summarizer(self) -> None:
-        """Not from the newest row, which can belong to a summarizer config retired."""
+    def test_the_default_pool_is_every_pipeline_at_the_live_scorer(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """Naming no pipeline is the normal case, and the report says so."""
+        monkeypatch.setattr(sys, "argv", ["label_queue.py"])
+        assert label_queue.main() == 0
+
+        printed = capsys.readouterr().out
+        assert "all at this scorer - reported, not filtered" in printed
+        assert "eligible rows    0" not in printed
+
+    def test_a_pooled_draw_names_every_producer_it_mixed(
+        self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+    ) -> None:
+        """The pooled rate is only honest beside the mix that produced it."""
+        monkeypatch.setattr(sys, "argv", ["label_queue.py"])
+        label_queue.main()
+
+        printed = capsys.readouterr().out
         records = ledger()
-        model_id = config.load(CONFIG_DIR).app.models.summarize.id
-        written = label_queue.configured_pipelines(records, model_id=model_id)
-        wrote = [row["pipeline_fingerprint"] for row in records if row["model_id"] == model_id]
-        assert written == list(dict.fromkeys(wrote))
+        evaluation = config.load(CONFIG_DIR).app.evaluation
+        drawn = labels.draw(
+            records,
+            draw_id=f"{records[-1]['date']}-decile-{evaluation.label_draw_per_decile}",
+            scorer_version=live_scorer(records),
+            per_decile=evaluation.label_draw_per_decile,
+        )
+        for one in labels.strata(drawn):
+            assert one.pipeline_fingerprint[:12] in printed, "every stratum is named"
 
     def test_an_empty_pool_exits_non_zero_and_says_what_the_ledger_holds(
         self, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]

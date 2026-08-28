@@ -1079,12 +1079,114 @@ Four candidate causes die here and one survives:
   because prefill is 56% to 86% of a request, the whole per-item figure follows
   it. What differs between hosts to produce a 3x prompt-eval swing alongside a
   *faster* decode is not recorded, because nothing logged the CPU. The `route`
-  job now prints `/proc/cpuinfo` model name, `nproc` and llama-server's
-  `system_info` line, so the next slow run answers it.
+  job began printing `/proc/cpuinfo` model name, `nproc` and llama-server's
+  `system_info` line on 2026-08-25, after all six of these runs. The nine runs
+  that do name their CPU are read in
+  [The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost),
+  and they rule the CPU model out rather than confirming it.
 
 The lever this points at is the prompt, not the runtime: `visuals.lead_words`
 (150) is most of each request's prefill, and prefill is most of the stage. It has
 never been swept.
+
+### The CPU model does not sort the route job's per-item cost
+
+**Measured 2026-08-27** from the `route` job log of every `digest.yml` run this
+repository holds - 27 runs, 2026-08-22 to 2026-08-26. Method:
+`gh run view --repo miztiik/yen-idhazh --job <id> --log` for each `route` job,
+then the `model name` line out of `/proc/cpuinfo` and the `route_ms` field of
+every `item routed` line that says `asked=True`. Skipped items are left out
+because a pre-filtered item costs 0 to 3 ms and would deflate the mean. The
+method reproduces the table above: it returns 40.3 s for run `32804437110`,
+which is the figure that row already carries.
+
+**None of the six runs above can ever be attributed a CPU.** The
+`What this runner is` step landed on 2026-08-25, after all six had run, and no
+line naming a processor appears anywhere in their job logs - checked across all
+27. Job logs outlive artifacts here, so this is not a retention problem that
+waiting would fix. The nine runs below are the whole of the evidence.
+
+| Run | Started (UTC) | CPU | `nproc` | `n_slots` | Items asked | Per item, mean | Median | Min | Max |
+| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
+| `32839359536` | 2026-08-25 10:51 | AMD EPYC 7763 64-Core | 4 | 1 | 62 | **48.9 s** | 47.3 s | 22.2 s | 72.0 s |
+| `32863921985` | 2026-08-25 15:08 | Intel Xeon Platinum 8573C | 4 | 1 | 54 | **44.4 s** | 44.7 s | 27.3 s | 79.2 s |
+| `32869125768` | 2026-08-25 15:58 | AMD EPYC 9V74 80-Core | 4 | 1 | 49 | **49.8 s** | 50.6 s | 32.6 s | 73.6 s |
+| `32887038177` | 2026-08-25 18:59 | AMD EPYC 9V74 80-Core | 4 | 1 | 70 | **34.2 s** | 33.2 s | 19.0 s | 64.0 s |
+| `32926523936` | 2026-08-26 03:27 | AMD EPYC 9V74 80-Core | 4 | 1 | 47 | **51.1 s** | 49.9 s | 27.7 s | 88.5 s |
+| `32941554666` | 2026-08-26 07:11 | AMD EPYC 9V74 80-Core | 4 | 1 | 44 | **54.8 s** | 54.2 s | 28.5 s | 87.5 s |
+| `32960510065` | 2026-08-26 10:53 | AMD EPYC 9V74 80-Core | 4 | 1 | 46 | **52.5 s** | 50.6 s | 30.8 s | 106.3 s |
+| `32986307407` | 2026-08-26 15:54 | AMD EPYC 9V74 80-Core | 4 | 1 | 48 | **50.1 s** | 51.3 s | 29.1 s | 80.7 s |
+| `33008629212` | 2026-08-26 20:05 | AMD EPYC 9V74 80-Core | 4 | 1 | 48 | **50.8 s** | 47.2 s | 27.5 s | 94.0 s |
+
+**One CPU string covers most of the swing, so the CPU string is not the
+answer.** Seven of the nine drew the same part, `AMD EPYC 9V74 80-Core
+Processor`, and their per-item means run 34.2 s to 54.8 s - **1.60x on a single
+CPU string**, against the 1.92x (21.0 s to 40.3 s) that opened this question.
+The other two parts land inside that band rather than outside it: the EPYC 7763
+run at 48.9 s and the Xeon 8573C run at 44.4 s. Group the nine by CPU and the
+groups overlap completely. Everything else a host could vary was held and read
+rather than assumed, because the job log prints it: `nproc` 4 and `n_slots` 1 on
+all nine, llama.cpp build 10598 commit `56db501e7` with `llama-server` sha256
+`9bcaf7569a1b...`, and weights `Qwen3-4B-Q4_K_M.gguf` sha256 `7485fe6f11af...`,
+the exact value `config/idhazh.json` pins.
+
+**This cuts against the suspect the `work` job named.**
+[Eight work shards](#eight-work-shards) found two Intel Xeon shards prefilling
+3.4x faster than six AMD EPYC ones on one day. Prefill is 85 percent of a route
+request in the slow mode, so if that vendor split reached this stage an Intel
+route job would cost about 40 percent of an AMD one - near 20 s an item, which
+is exactly the fast mode. The one Intel route job on record cost **44.4 s**, the
+middle of the AMD band. Either the split does not reach the route stage, or that
+Xeon job was not in the fast mode. Nothing here separates the two.
+
+**Only one route job has ever carried both a CPU model and a prefill rate.**
+Run `32839359536`: AMD EPYC 7763, **21.09 tok/s prefill** over 62 requests,
+median prompt 898 tokens, 48.9 s an item. 21.09 tok/s is the slow mode - the six
+runs above span 20.2 to 62.9 - and at 898 tokens prefill alone is 42.6 s of the
+48.9, which is 87 percent and matches the 85 to 86 percent the slow runs show.
+One observation in one group proves nothing about a group it cannot compare
+against.
+
+**The fast mode has not recurred.** Every one of the nine costs 34.2 s or more
+an item; the fast mode was 20.7 to 21.0 s. Nine consecutive runs over 33 hours
+and not one was fast. The comparison this question needs - a fast run and a slow
+run that both name their CPU - has nine observations on the slow side and none
+on the fast side.
+
+**Do not average these nine with the six above; they are different regimes.**
+`visuals.enabled_kinds` dropped to `[chart]` on 2026-08-25, which switched the
+pre-filter on: 35 to 73 items a run are now skipped with no model call, and the
+items still asked are the chart-eligible ones, which carry more numbers and more
+text. The one new run whose prompt size is readable medians 898 tokens against
+622 to 700 on the six - 28 percent more prompt, so 28 percent more prefill, and
+40.3 s x 898/700 is 51.7 s. That sits inside the 49.8 to 54.8 s band six of the
+nine occupy. The nine read as the slow mode carrying a bigger prompt, not as a
+new effect.
+
+**Two instruments added to answer this question do not work.** Both were checked
+on all nine runs:
+
+- `grep -m1 'system_info' router.log` **has matched zero times in nine runs.**
+  llama.cpp `b10598` writes no line containing that string, so the one line that
+  names the instruction sets - AVX2 against AVX-512, the obvious way two hosts
+  sharing a CPU model string could differ 3x on prefill - has never been
+  captured. The other five lines under
+  [What a job log names](#what-a-job-log-names) do print.
+- The log summary's `grep -E '^(srv|slot) '` **cannot match this build's
+  output.** Every line starts with a timestamp and a level, as in
+  `0.02.841.335 I srv load_model: initializing, n_slots = 1`, so the anchor
+  never fires; the one line that does reach the job log matches on the
+  `n_ctx_slot` alternative instead. `slot print_timing:`, which carries
+  `prompt eval time`, stopped reaching the job log when the older unanchored
+  `grep 'prompt eval time ='` was replaced. Those timings now survive only
+  inside the `router-log` artifact, which keeps them for two days.
+
+**The unmet prerequisite, exactly.** With both greps fixed: **two `route` runs
+carrying a prefill rate on each CPU model, at least one of them in the fast
+mode.** Today that count is 1 on the EPYC 7763, 0 on the EPYC 9V74 and 0 on the
+Xeon 8573C, so it is five more observations at minimum. No date goes with that
+number - which CPU a job draws is not ours to choose, and no fast run has
+appeared in nine.
 
 ### Why a cancelled run published nothing
 
@@ -2789,6 +2891,15 @@ say the job log did not name the CPU model or the build.
 | `sha256sum backend/bin/llama-server` | the exact binary bytes |
 | `sha256sum` of the weights file | the exact weight bytes |
 
+**Five of the six print. `system_info` does not.** Measured 2026-08-27 over the
+nine `route` jobs that carry the step: `grep -m1 'system_info' router.log`
+matched **zero times in nine runs**, because llama.cpp `b10598` writes no line
+holding that string. The row is kept in the table because the question it
+answers - which instruction sets the build uses - is still the open one, and
+because an instrument that silently returns nothing is worth naming. See
+[The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)
+for what that costs.
+
 The step also echoes `LLAMA_CPP_BUILD`, so a disagreement between the pin and
 what the binary says about itself is visible on one screen. The two digests are
 what let a number on this page name the bytes that produced it (Rule #10); the
@@ -3401,8 +3512,8 @@ to justify a design decision.
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
 | **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
-| **What makes a route host 21 s or 38 s an item** | **narrowed to the prefill rate, and now to the CPU part; one observation per part** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. Nothing logged the CPU when those six runs ran. The `work` job shows the same swing, 3.4x with the same inverted decode ([The one-slot production observation](#the-one-slot-production-observation)). Both inference jobs now print the six lines under [What a job log names](#what-a-job-log-names). The first run to use them narrows it further: in run `32869125768` the two `work` shards on Intel Xeon parts prefilled at 37.5 and 37.7 tok/s while the six on AMD EPYC parts prefilled at 10.7 to 11.3, same day, same build, same weights, same prompt, with decode again moving the other way ([Eight work shards](#eight-work-shards)). That is one observation per CPU model, so it names a suspect rather than proving a cause; a `route` job on each part, on the same day, would settle it. |
-| **Which CPU a `route` or `work` job drew** | **not recorded anywhere a later run can read** | the per-item cost of `route` swings 19.8 to 54.8 s across eleven runs and the host is the named suspect, but the run manifest carries only `runner: ubuntu-latest`. `state/fingerprints.csv` holds a CPU model for the `work` job alone, appended only when the fingerprint changes - two rows ever - so it cannot support a per-run comparison. Put the CPU model on the run manifest, then the swing becomes attributable instead of merely visible ([The route stage's per-item cost](#the-route-stages-per-item-cost-over-every-run)). |
+| **What makes a route host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine `route` runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)). Exactly one `route` run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. Then: **two `route` runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
+| **Which CPU a `route` or `work` job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven `route` runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. The run manifest carries only `runner: ubuntu-latest`, and `state/fingerprints.csv` appends a CPU model for the `work` job alone and only when the fingerprint changes, two rows ever. Put the CPU model on the run manifest and a swing becomes attributable from committed data rather than from a job log that ages out.
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |

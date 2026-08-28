@@ -15,13 +15,21 @@ to write more than one row per prompt. Producing labels from a model would mean
 writing a second writer, which is a new module in a diff in a pull request -
 which is the point (`CLAUDE.md` section 0a).
 
-**One scorer and one pipeline, or nothing.** A draw comes from exactly one
-(`scorer_version`, `pipeline_fingerprint`) pair. The scorer changes how the words
-are judged and the pipeline changes the words, so either one crossing the draw
-splits it into two samples wearing one name. A pair the ledger does not hold
-prints what the ledger does hold and exits non-zero. There is no fallback and no
-widening: a draw quietly assembled from a producer nobody asked for would answer
-a question nobody asked.
+**One scorer, and the pipeline reported beside it.** A draw comes from exactly
+one `scorer_version`, because the cuts being calibrated live inside that string
+and a row read by another instrument answers a different question. The pipeline
+fingerprint is a covariate: it is printed per stratum with every draw, and it is
+a filter only when `--pipeline-fingerprint` names one. Requiring both made the
+gate unreachable - the stamp moves on any of seventeen inputs, a sanitizer fix
+among them, and no pair has ever held for more than three consecutive run-days.
+A scorer the ledger does not hold prints what the ledger does hold and exits
+non-zero.
+
+**A mixed pool is a prior, not a calibration, and this says so every time.** Rows
+several producers wrote confound between-pipeline variance into the estimate.
+The mix is printed with the draw, a stratum under
+`evaluation.label_min_stratum_rows` is marked too thin to cut on, and the report
+refuses to call the result a calibration.
 
 **What the labeller sees and does not see.** They see the summary as published,
 the source's own headline, the date, the link, and the extracted article text -
@@ -98,35 +106,19 @@ def _live_scorer(records: Sequence[dict[str, str]]) -> str:
     return records[-1]["scorer_version"]
 
 
-def configured_pipelines(records: Sequence[dict[str, str]], *, model_id: str) -> list[str]:
-    """Pipeline stamps the configured summarizer has written, oldest first.
-
-    The stamp cannot be rebuilt here. It digests the chat template the server
-    applies, the build that decoded the weights and the class of machine that ran
-    them, and none of those exist on a machine that is only reading a CSV. The
-    ledger already records which stamps this summarizer wrote, so the tool reads
-    that rather than guessing one.
-    """
-    written: list[str] = []
-    for record in records:
-        if record["model_id"] == model_id and record["pipeline_fingerprint"] not in written:
-            written.append(record["pipeline_fingerprint"])
-    return written
-
-
 def refuse(records: Sequence[dict[str, str]], *, scorer: str, pipeline: str, reason: str) -> int:
     """Say the draw is empty, then say what the ledger does hold.
 
     An empty pool with no inventory beside it leaves the operator guessing
     whether the gate is one run-day away or unreachable. Printing every pair with
     its rows and dates answers that in one screen, and it is the only thing this
-    tool can honestly offer when the pair it was asked for holds nothing.
+    tool can honestly offer when the scorer it was asked for holds nothing.
     """
     print(RULE)
     print("NOTHING TO DRAW")
     print(RULE)
     print(f"scorer_version   {scorer}")
-    print(f"pipeline         {pipeline or 'none picked'}")
+    print(f"pipeline         {pipeline or 'every pipeline at this scorer'}")
     print("eligible rows    0")
     print(f"reason           {reason}")
     print(RULE)
@@ -139,8 +131,7 @@ def refuse(records: Sequence[dict[str, str]], *, scorer: str, pipeline: str, rea
         print(f"    scorer    {pair.scorer_version}{here}")
         print(f"    pipeline  {pair.pipeline_fingerprint}")
     print()
-    print("Name a pipeline with --pipeline-fingerprint, or run the pipeline until the pair")
-    print("you want has rows.")
+    print("Run the pipeline until the scorer above has rows.")
     return 1
 
 
@@ -150,17 +141,18 @@ def report(
     settings: config.Settings,
     *,
     scorer: str,
-    pipeline: str,
+    pipeline: str | None,
 ) -> None:
     """What the draw holds and what is still missing, both stated plainly."""
     evaluation = settings.app.evaluation
     pool = labels.eligible(records, scorer_version=scorer, pipeline_fingerprint=pipeline)
     days = sorted(labels.run_days(records, scorer_version=scorer, pipeline_fingerprint=pipeline))
     missing = labels.shortfalls(queue, per_decile=evaluation.label_draw_per_decile)
+    mix = labels.strata(queue)
 
     print(RULE)
     print(f"scorer_version   {scorer}")
-    print(f"pipeline         {pipeline}")
+    print(f"pipeline         {pipeline or 'all at this scorer - reported, not filtered'}")
     print(f"eligible rows    {len(pool)}")
     print(f"run-days         {len(days)} of {evaluation.label_min_run_days} -> {', '.join(days)}")
     print(f"drawn            {len(queue)} of {evaluation.label_draw_per_decile * labels.DECILES}")
@@ -169,12 +161,31 @@ def report(
         print(f"shortfall        {short}")
     print(RULE)
 
+    if mix:
+        print("pipelines in this draw - report any result split by these, never pooled:")
+        for one in mix:
+            thin = (
+                "  <- too thin to cut on"
+                if one.rows < evaluation.label_min_stratum_rows
+                else ""
+            )
+            print(
+                f"  {one.rows:>4} rows  {one.first_date} to {one.last_date}  "
+                f"{one.pipeline_fingerprint[:12]}{thin}"
+            )
+        print(RULE)
+
     if len(days) < evaluation.label_min_run_days:
         # Stated rather than blocked. Labelling early is not wrong; treating a
         # one-day draw as if it spoke for the corpus would be.
         print(
             f"NOT YET RECALIBRATABLE: {evaluation.label_min_run_days - len(days)} more run-days "
-            f"needed at this pair. A day at any other scorer or pipeline does not count."
+            f"needed at this scorer. A day at another scorer does not count."
+        )
+    elif len(mix) > 1:
+        print(
+            f"PRIOR, NOT A CALIBRATION: {len(mix)} pipelines wrote these rows, so part of any "
+            "spread is the producer rather than the cut. Report per stratum, with wide bounds."
         )
 
 
@@ -250,7 +261,7 @@ def main() -> int:
     ap.add_argument(
         "--pipeline-fingerprint",
         default="",
-        help="Which producer to draw from. Defaults to the configured summarizer's own stamp.",
+        help="Narrow the draw to one producer. Default is every pipeline at the live scorer.",
     )
     ap.add_argument("--label", action="store_true", help="Label the queue, one row at a time.")
     ap.add_argument("--labeller", default="", help="Your name. Must be in evaluation.labellers.")
@@ -270,21 +281,14 @@ def main() -> int:
     records = _ledger(REPO_ROOT / SCORES_RELPATH)
     scorer = _live_scorer(records)
 
-    summarizer = settings.app.models.summarize.id
-    pipeline = args.pipeline_fingerprint
-    if not pipeline:
-        stamps = configured_pipelines(records, model_id=summarizer)
-        if len(stamps) != 1:
-            reason = (
-                f"{summarizer} has scored nothing, so it has no pipeline stamp yet"
-                if not stamps
-                else f"{summarizer} has scored under {len(stamps)} pipelines; name one"
-            )
-            return refuse(records, scorer=scorer, pipeline="", reason=reason)
-        pipeline = stamps[0]
-
+    pipeline = args.pipeline_fingerprint or None
     if not labels.eligible(records, scorer_version=scorer, pipeline_fingerprint=pipeline):
-        return refuse(records, scorer=scorer, pipeline=pipeline, reason="no row carries this pair")
+        reason = (
+            "no row carries this pair"
+            if pipeline
+            else "no row carries this scorer, which cannot happen for the live one"
+        )
+        return refuse(records, scorer=scorer, pipeline=pipeline or "", reason=reason)
 
     draw_id = args.draw_id or f"{records[-1]['date']}-decile-{evaluation.label_draw_per_decile}"
 
