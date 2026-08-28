@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -163,6 +163,45 @@ it by subject:
 `git log origin/main --oneline --diff-filter=A -- <file the commit created>`.
 GitHub keeps `refs/pull/<n>/head` for a merged PR forever, so this is recoverable
 either way.
+
+**`git branch --merged` answers "none of them" in a repository that squash-merges,
+and that is not the same as "none of them are merged".** A squash rewrites the
+branch's commits into one new commit, so no branch tip is ever an ancestor of the
+base. Ask whether the branch would still change the base instead. When the merge
+result equals the base's tree, the branch contributes nothing:
+
+```bash
+main_tree=$(git rev-parse origin/main^{tree})
+[ "$(git merge-tree --write-tree origin/main <branch> | head -1)" = "$main_tree" ]
+```
+
+**That test has one false negative, and it is the common case for a plan-doc.**
+If the branch added a file and the squash added the same file, the merge is an
+add/add conflict, so the result tree differs from the base and the branch reads
+as unmerged. Compare the blobs before believing it. Identical object ids on both
+sides means the content landed verbatim and the branch is stale, not unmerged:
+
+```bash
+git rev-parse <branch>:<path> <squash commit>:<path>     # needs MSYS_NO_PATHCONV=1
+```
+
+Observed 2026-08-28: one branch of four flagged this way was fully merged and
+three genuinely held work. Do not delete on the `merge-tree` verdict alone.
+
+**`git worktree remove` can deregister a worktree and still fail to delete it.**
+On Windows the removal stops at the first locked path and reports
+`failed to delete ...: Invalid argument`, but the administrative entry is already
+gone - so `git worktree list` no longer shows it while thousands of files remain
+on disk. The usual holder is a build or watch process started inside that
+worktree, which keeps running after its own executable is unlinked. Find the
+holder by path rather than guessing:
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<worktree>*' }
+```
+
+Read the exit as "partly done" and re-run the filesystem delete after the holder
+is gone. Do not re-run `git worktree remove`; it has nothing left to deregister.
 
 **A file you can see in the editor may not be in the repository at all.** The
 editor's workspace is the shared checkout, and `TODO/` there collects untracked
@@ -680,6 +719,49 @@ contends with the first.
   a rule you can apply without checking, and on that day the ratchet failure was
   real. Build the base source on your own tree, run the gate on it, and only
   then decide whether the delta is yours.
+
+## Git Bash on Windows
+
+**MSYS rewrites any argument that looks like a POSIX path list, so a
+`<rev>:<path>` argument never reaches the program.** Git Bash converts `:` to
+`;` and `/` to `\` before the process starts. `git show "origin/main:docs/a.md"`
+is delivered as `origin\main;docs\a.md`, and git answers
+`fatal: Not a valid object name`. Every `<rev>:<path>` form is affected -
+`git show`, `git cat-file`, `git rev-parse`, `git diff <rev>:<a> <rev>:<b>` -
+and so is any other tool taking a colon-joined argument, such as
+`docker run -v <host>:<container>`.
+
+**The damage is done by the quiet version, not the loud one.** With `2>/dev/null`
+on the call, the fatal goes nowhere and the command simply writes nothing to
+stdout. A comparison built on it then reads the empty stream as content:
+
+```bash
+git show "origin/main:$rel" 2>/dev/null | diff -q - "$file"   # always "differs"
+git cat-file -e "origin/main:$rel" 2>/dev/null                # always "absent"
+```
+
+Observed 2026-08-28 while deciding whether three leftover directories held
+unsaved work. Every file was reported as differing from `main` or missing from
+it. Both answers were the shell, not the repository; the files were byte-
+identical to commits already in history. The failure mode is indistinguishable
+from the honest negative answer, which is what makes it expensive.
+
+Two responses, and prefer the second:
+
+```bash
+export MSYS_NO_PATHCONV=1                    # disables the rewrite for the shell
+git ls-tree <rev> -- <path>                  # no colon, so nothing to rewrite
+git hash-object <file>                       # then: git cat-file -e <40-hex sha>
+```
+
+**The general rule: when a check decides whether something can be deleted, build
+it on an argument the shell cannot rewrite.** A 40-character object id has no
+`:` and no `/` in it, so `git hash-object <file>` followed by
+`git cat-file -e <sha>` answers "is this content in the repository" through a
+path MSYS never touches. That is why it stayed correct on 2026-08-28 while the
+`<rev>:<path>` comparison beside it was wrong about 22 files. Reach for the
+colon-free form first and the environment variable only as a fallback, because
+the variable protects the shell you remember to set it in and nothing else.
 
 ## PowerShell
 
