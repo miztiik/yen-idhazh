@@ -6,22 +6,85 @@
 @custom-variant dark (&:where([data-theme='dark'], [data-theme='dark'] *));
 
 /* One source of truth: bg-surface and var(--color-surface) resolve to the same
-   value, so a token cannot drift from its utility. */
+   value, so a token cannot drift from its utility. Every non-exempt token in
+   tokens.css has a mirror here, and frontend/tests/tokens.spec.ts asserts it. */
 @theme inline {
 	--color-bg: var(--color-bg);
 	--color-surface: var(--color-surface);
+	--color-surface-raised: var(--color-surface-raised);
+	--color-surface-sunken: var(--color-surface-sunken);
 	--color-rule: var(--color-rule);
+	--color-rule-strong: var(--color-rule-strong);
 	--color-text: var(--color-text);
 	--color-text-secondary: var(--color-text-secondary);
 	--color-text-tertiary: var(--color-text-tertiary);
 	--color-accent: var(--color-accent);
+	--color-accent-strong: var(--color-accent-strong);
+	--color-on-accent: var(--color-on-accent);
 	--color-band-high: var(--band-high);
 	--color-band-medium: var(--band-medium);
 	--color-band-low: var(--band-low);
+
+	--color-chart-1: var(--chart-1);
+	--color-chart-2: var(--chart-2);
+	--color-chart-3: var(--chart-3);
+	--color-chart-4: var(--chart-4);
+	--color-chart-5: var(--chart-5);
+	--color-chart-6: var(--chart-6);
+	--color-chart-7: var(--chart-7);
+	--color-chart-8: var(--chart-8);
+	--color-chart-grid: var(--chart-grid);
+	--color-chart-axis: var(--chart-axis);
+	--color-chart-marker: var(--chart-marker);
+
+	--color-tint-accent: var(--tint-accent);
+	--color-tint-info: var(--tint-info);
+	--color-tint-good: var(--tint-good);
+	--color-tint-warn: var(--tint-warn);
+	--color-tint-bad: var(--tint-bad);
+	--color-tint-neutral: var(--tint-neutral);
+
+	--radius-sm: var(--radius-sm);
+	--radius-md: var(--radius-md);
+	--radius-lg: var(--radius-lg);
+	--radius-xl: var(--radius-xl);
+
+	--shadow-sm: var(--shadow-sm);
+	--shadow-md: var(--shadow-md);
+	--shadow-lg: var(--shadow-lg);
+	--shadow-panel: var(--shadow-panel);
+
+	--font-display: var(--font-display);
 	--font-reading:
 		ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
 		sans-serif;
 	--font-data: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* The display face carries headings only. The body keeps the system stack: it
+   renders on the first frame at zero bytes, and the body is what the reader
+   came for. Self-hosted rather than fetched - Rule #1 permits a third-party
+   static asset, but the HTTP cache is partitioned per site so the shared-cache
+   argument is dead, and script-src is 'self' only.
+
+   `swap` because a heading a reader cannot see is worse than one in the
+   fallback face for 40ms. The rule is here rather than inline in app.html so it
+   is bytes in one cached stylesheet instead of in every prerendered page; the
+   preload link stays in the head, where it has to be to start the fetch early.
+
+   The URL is relative to this file, which is what makes it correct under the
+   GitHub Pages project path without knowing what that path is. */
+@font-face {
+	font-family: 'InterVariable';
+	font-style: normal;
+	font-weight: 100 900;
+	font-display: swap;
+	src: url('/fonts/inter-latin-variable.woff2') format('woff2');
+}
+
+:root {
+	--font-display:
+		'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
 }
 
 html {
@@ -36,13 +99,50 @@ body {
 	min-height: 100dvh;
 }
 
+/* --- The frame ----------------------------------------------------------
+   The shell is fluid to a named maximum. The reading measure is NOT here; it
+   sits on the text elements that need it, because a measure on the shell gives
+   the whole application a paragraph's width (design-system.md). */
+.frame {
+	width: 100%;
+	margin-inline: auto;
+	padding-inline: var(--gutter);
+	max-width: var(--frame-reading);
+}
+
+.frame-console {
+	max-width: var(--frame-console);
+}
+
+/* The reading measure, applied where prose actually is. */
+.measure {
+	max-width: var(--measure);
+}
+
+/* A grid splits on the width it HAS, never on the width of the window. Asking
+   the viewport a question only the container could answer is what drew three
+   console charts at 164px each inside a 624px column. */
+.auto-grid {
+	display: grid;
+	gap: var(--space-4);
+	grid-template-columns: repeat(auto-fit, minmax(var(--auto-grid-min, 320px), 1fr));
+}
+
+.panel {
+	background: var(--color-surface);
+	border-radius: var(--radius-lg);
+	box-shadow: var(--shadow-panel);
+}
+
 :focus-visible {
 	outline: 2px solid var(--color-focus);
 	outline-offset: 2px;
 	border-radius: var(--radius-sm);
 }
 
-/* A reading surface that animates is a reading surface that interrupts. */
+/* A reading surface that animates is a reading surface that interrupts. This
+   sits ABOVE the motion switch in config/appearance.json on purpose: a reader
+   who asked their operating system for stillness is not overridden by a file. */
 @media (prefers-reduced-motion: reduce) {
 	*,
 	*::before,
