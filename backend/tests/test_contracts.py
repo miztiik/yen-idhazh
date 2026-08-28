@@ -391,6 +391,20 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
     )
 
 
+def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None:
+    """The canary's own copy of the header, held against the contract.
+
+    `frontend/scripts/build-canary.mjs` restates the column names because it is
+    JavaScript and the contract is Python. A name added to the row and not to
+    that array writes a canary `publish_telemetry` refuses, and until this test
+    existed the only thing that caught it was a frontend build in CI.
+    """
+    source = read_text(REPO_ROOT / "frontend" / "scripts" / "build-canary.mjs")
+    declared = re.search(r"const COLUMNS = \[(.*?)\];", source, re.DOTALL)
+    assert declared is not None, "build-canary.mjs no longer declares a COLUMNS array"
+    assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == ItemHealthRow.csv_columns()
+
+
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
     assert len(SOURCE_NEUTRAL_FAILURE_CODES) == 15
     assert FailureCode.NOT_ATTEMPTED in SOURCE_NEUTRAL_FAILURE_CODES
