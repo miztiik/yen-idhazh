@@ -43,7 +43,6 @@ EXPECTED_WORKFLOWS: Final = {
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
 
-CONTENT_REFRESH_CRON: Final = "20 2,6,10,14,18 * * *"
 CONTENT_REFRESH_UTC_HOURS: Final = (2, 6, 10, 14, 18)
 # Every `workflow_dispatch` input in the repository, and the evidence that its
 # value is shaped before anything acts on it. Discovery is closed-world, so a
@@ -1064,13 +1063,47 @@ def test_workflow_names_and_trigger_classes_are_pinned() -> None:
 
 
 def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
+    """Five one-slot lines, not one five-hour line, and the difference is load-bearing.
+
+    `github.event.schedule` hands a run the cron line that fired. With one
+    `20 2,6,10,14,18 * * *` line that string cannot say which of the five slots
+    it was, so a run could not report how late it started - and GitHub drops
+    scheduled slots under load without leaving a failed run behind.
+    """
     workflows = _load_workflows()
     schedule = _triggers(workflows["digest.yml"])["schedule"]
 
-    assert schedule == [{"cron": CONTENT_REFRESH_CRON}]
-    assert tuple(int(hour) for hour in CONTENT_REFRESH_CRON.split()[1].split(",")) == (
-        CONTENT_REFRESH_UTC_HOURS
+    assert schedule == [{"cron": f"20 {hour} * * *"} for hour in CONTENT_REFRESH_UTC_HOURS]
+    for entry in cast(list[dict[str, str]], schedule):
+        fields = entry["cron"].split()
+        assert len(fields) == 5, "a five-field cron"
+        assert "," not in fields[1], (
+            "one hour per line, so github.event.schedule names a single slot"
+        )
+
+
+def test_a_scheduled_run_reports_which_slot_it_is_and_how_late() -> None:
+    """The alarm is a report, not a gate. It cannot fix the platform.
+
+    Measured 2026-08-27 to 2026-08-29: 13 slots elapsed, 5 produced a run, and
+    every run that started succeeded. Nothing recorded the eight that were never
+    created, so this step is the only place the loss becomes visible.
+    """
+    plan_steps = _steps(_load_workflows()["digest.yml"], "plan")
+    late = [step for step in plan_steps if "how late" in str(step.get("name", ""))]
+
+    assert len(late) == 1, "exactly one step reports lateness"
+    step = late[0]
+    assert step.get("if") == "github.event_name == 'schedule'", (
+        "a dispatch has no slot to be late for"
     )
+    env = _mapping(step.get("env"), "the lateness step's env")
+    assert env.get("SLOT") == "${{ github.event.schedule }}", (
+        "the slot arrives through env, never pasted into the script (Rule #11)"
+    )
+    body = str(step.get("run", ""))
+    assert "::warning title=Late run::" in body, "it annotates the run summary"
+    assert "10#" in body, "every clock field is forced to base ten, or 08 is octal"
 
 
 def test_expensive_workflows_do_not_run_on_pull_request_or_push() -> None:
