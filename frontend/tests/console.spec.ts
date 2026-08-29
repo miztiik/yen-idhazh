@@ -4,15 +4,18 @@ import { join, resolve } from 'node:path';
 import {
 	capLabel,
 	capsInView,
+	compressionView,
 	grouped,
-	type CompressionPoint
+	parseTelemetryCsv,
+	placeRow,
+	type CompressionPoint,
+	type TelemetryRow
 } from '../src/lib/charts/series';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
 import {
 	CUT_FLAG_MEANS_A_CUT_FROM,
 	modelWork,
-	placeRow,
 	sourceCuts,
 	SOURCE_CUT_ROWS,
 	SOURCE_CUT_WINDOW_DAYS
@@ -165,36 +168,70 @@ function scoredItems(): number {
 	return raw.trim().split('\n').length - 1;
 }
 
-/** Every canary score row, read the way the page reads it. */
-function scoreRows(): Record<string, string>[] {
-	return readCsv(join(CANARY, 'state', 'scores.csv')).rows;
+/** The canary's own telemetry projection - the file the page fetches.
+ *
+ * The compression plot draws from these rows, so its oracle reads them. It used
+ * to read `state/scores.csv`, which the plot no longer touches: an oracle over
+ * a file the page has stopped reading passes while the page draws something
+ * else entirely.
+ */
+function telemetryProjection(): TelemetryRow[] {
+	const dir = join(CANARY, 'state', 'telemetry');
+	return readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.flatMap((name) => parseTelemetryCsv(readFileSync(join(dir, name), 'utf8')));
 }
 
-function words(row: Record<string, string>, column: string): number {
-	return Number(row[column] ?? 0) || 0;
+/** The rows the plot is about: an item that reached a reader.
+ *
+ * One entry per article per day, not per row. A re-run writes a second row for
+ * an article an earlier run already published, and the run that read the most
+ * of it is the one the plot draws. Recomputed here rather than imported, so an
+ * implementation that counted rows would fail against this instead of moving
+ * the oracle with it.
+ */
+function publishedRows(): TelemetryRow[] {
+	const perArticle = new Map<string, TelemetryRow>();
+	for (const row of telemetryProjection()) {
+		if (row.stage !== 'publish' || row.outcome !== 'ok') continue;
+		const key = `${row.date}-${row.item_id}`;
+		const held = perArticle.get(key);
+		if (held === undefined || articleWords(row) > articleWords(held)) perArticle.set(key, row);
+	}
+	return [...perArticle.values()];
+}
+
+/** The article's own length: before the cap where a run wrote one down, and
+ * what survived where it did not. Recomputed here rather than imported, so a
+ * reading that changed in the page would not change under the test with it. */
+function articleWords(row: TelemetryRow): number {
+	return row.source_words_before_cap ?? row.source_words ?? 0;
 }
 
 /** The rows the compression plot can place: both lengths written down. */
-function plottedRows(): Record<string, string>[] {
-	return scoreRows().filter(
-		(row) => words(row, 'source_word_count') > 0 && words(row, 'summary_word_count') > 0
+function plottedRows(): TelemetryRow[] {
+	return publishedRows().filter(
+		(row) => articleWords(row) > 0 && (row.summary_words ?? 0) > 0
 	);
 }
 
-/** The rows that recorded no article length before the cut, so they have no x. */
-function noLengthRows(): Record<string, string>[] {
-	return scoreRows().filter((row) => words(row, 'source_word_count') <= 0);
+/** The rows that recorded no article length at all, so they have no x. */
+function noLengthRows(): TelemetryRow[] {
+	return publishedRows().filter((row) => articleWords(row) <= 0);
 }
 
-/** The cut points the plot may mark: flagged, and stamped with the meaning the
- * flag has now. The same gate the day's count in the table reads, because a
- * plot claiming per item what the table refuses per day is one page telling two
- * stories about one column. */
-function cutRows(): Record<string, string>[] {
+/** The articles the cap cut: the body before it was longer than what survived.
+ *
+ * Two cells of one row and nothing else. It used to be a flag read through the
+ * ledger stamp that changed the flag's meaning; the projection needs no stamp,
+ * because a comparison of two lengths has only ever meant one thing.
+ */
+function cutRows(): TelemetryRow[] {
 	return plottedRows().filter(
 		(row) =>
-			(row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM &&
-			(row.truncation_flagged === 'True' || row.truncation_flagged === 'true')
+			row.source_words_before_cap !== null &&
+			row.source_words !== null &&
+			row.source_words_before_cap > row.source_words
 	);
 }
 
@@ -206,6 +243,21 @@ function span(start: string | null, end: string | null): number {
 			86_400_000 +
 		1
 	);
+}
+
+/** The oracle rows the page's own open window holds.
+ *
+ * The window is read off the page rather than recomputed, so a fixture that
+ * grows a day past the window moves the count with it. Comparing a chart drawn
+ * over a window against a corpus is how a test starts passing on the wrong
+ * number.
+ */
+async function inOpenWindow(page: Page, rows: TelemetryRow[]): Promise<TelemetryRow[]> {
+	const control = page.locator('[data-viewport-control]');
+	const start = (await control.getAttribute('data-window-start')) ?? '';
+	const end = (await control.getAttribute('data-window-end')) ?? '';
+	expect(start, 'the page published no window, so the filter below drops everything').not.toBe('');
+	return rows.filter((row) => row.date >= start && row.date <= end);
 }
 
 /** Every request the page made that came back missing. */
@@ -909,7 +961,7 @@ test('the compression view draws the data once', async ({ page }) => {
 	}
 });
 
-test('the compression view draws every article it can place, and marks only a cut the ledger still means', async ({
+test('the compression view draws every article it can place, and marks only the ones the cap cut', async ({
 	page
 }) => {
 	await page.goto('/console/');
@@ -920,26 +972,37 @@ test('the compression view draws every article it can place, and marks only a cu
 	const chart = page.locator('[data-compression]');
 	await expect(chart).not.toContainText('No scored items in this window');
 
+	const placeable = await inOpenWindow(page, plottedRows());
+	const cut = await inOpenWindow(page, cutRows());
+
 	const dots = await chart.locator('svg circle').count();
 	const diamonds = await chart.locator('svg rect').count();
 	expect(dots).toBeGreaterThan(0);
 	// Every row the plot can place reaches it, and no row it cannot does. A
 	// filter that dropped one either way would still leave a chart that looks
 	// right.
-	expect(dots + diamonds).toBe(plottedRows().length);
-	expect(plottedRows().length, 'the fixture places every row, so the count below is free').toBeLessThan(
-		scoredItems()
-	);
+	expect(dots + diamonds).toBe(placeable.length);
+	// And the plot is drawn from the published projection, not from every row of
+	// it: the fixture holds rows this predicate throws away, and it holds one
+	// article two runs both wrote a row for, so a plot that drew the whole file
+	// would land on a different number here.
+	expect(
+		placeable.length,
+		'the fixture holds only one row an article, so the filter cannot be seen to fire'
+	).toBeLessThan((await inOpenWindow(page, telemetryProjection())).length);
 
-	// The gate this row exists for. The plot used to read `truncation_flagged`
-	// straight off the row while the day's count in the table read it only over
-	// the rows stamped with its current meaning, so one page made two claims
-	// about one column. The fixture holds flagged rows either way, which is what
-	// makes the number below evidence rather than an absence.
-	const flagged = plottedRows().filter((row) => row.truncation_flagged === 'True').length;
-	expect(flagged, 'the fixture holds no flagged row, so the gate cannot be seen to fire').toBe(2);
-	expect(diamonds, 'a diamond is drawn for a cut the row still means, and for nothing else').toBe(
-		cutRows().length
+	// A diamond says the cap cut this article, which the projection carries as
+	// its pre-cap length standing above its post-cap one. The fixture holds
+	// articles on both sides of that, so the count below is evidence rather than
+	// an absence, and an unconditional diamond fails it in both directions.
+	expect(cut.length, 'the fixture cut nothing, so the mark cannot be seen to fire').toBeGreaterThan(
+		0
+	);
+	expect(cut.length, 'the fixture cut everything, so a diamond on every row would pass').toBeLessThan(
+		placeable.length
+	);
+	expect(diamonds, 'a diamond is drawn for an article the cap cut, and for nothing else').toBe(
+		cut.length
 	);
 
 	await expect(chart.locator('[data-band-zone]')).toHaveCount(1);
@@ -1009,8 +1072,8 @@ test('a dashed line is drawn for every cut length the window holds, and for no o
 	await page.goto('/console/');
 
 	const chart = page.locator('[data-compression]');
-	const caps = [...new Set(cutRows().map((row) => words(row, 'source_seen_word_count')))]
-		.filter((value) => value > 0)
+	const caps = [...new Set((await inOpenWindow(page, cutRows())).map((row) => row.source_words))]
+		.filter((value): value is number => value !== null && value > 0)
 		.sort((a, b) => a - b);
 
 	await expect(
@@ -1031,34 +1094,92 @@ test('the plot says how many articles it could not place, and the count is the r
 }) => {
 	await page.goto('/console/');
 
-	// The canary scores one day, so every unplaced row is inside the window the
-	// page opens on. A fixture that grew a second scored day would fail here
-	// rather than quietly compare a window against a corpus.
-	expect(new Set(scoreRows().map((row) => row.date)).size).toBe(1);
-	const dropped = noLengthRows().length;
-	expect(dropped, 'every fixture row records a length, so the sentence proves nothing').toBe(2);
+	// The count and the sentence out of one reading, either way round. Drawing
+	// the plot from the telemetry projection closed the gap this sentence used to
+	// declare: an article that published has a length, so nothing is dropped and
+	// the sentence stays off the page. It reads the rows rather than a constant,
+	// so a fixture that ever holds one again turns it back on and pins its number.
+	const dropped = (await inOpenWindow(page, noLengthRows())).length;
+	const sentence = page.locator('[data-compression-note="not-plotted"]');
 
-	await expect(page.locator('[data-compression-note="not-plotted"]')).toHaveText(
-		`${dropped} articles in this window recorded no length before the cut, so they are not plotted.`
+	if (dropped === 0) {
+		await expect(sentence).toHaveCount(0);
+	} else {
+		await expect(sentence).toHaveText(
+			`${dropped} articles in this window recorded no length before the cut, so they are not plotted.`
+		);
+	}
+
+	// And the rows really did all get placed, rather than the plot being empty.
+	await expect(page.locator('[data-compression] svg circle, [data-compression] svg rect')).not.toHaveCount(
+		0
 	);
 });
 
-test('a window with no unplaced article does not print that sentence at all', async ({ page }) => {
-	await page.goto('/console/');
+test('an unplaceable row is counted and never silently dropped', () => {
+	// The browser arm above cannot reach this state on the committed fixture, so
+	// the decision is driven here instead of left to a sentence that never
+	// prints. Three rows, one of each outcome, and the two outputs come out of
+	// one pass - a plot and a sentence that disagree about the same row is the
+	// failure this shape exists to prevent.
+	const row = (over: Partial<TelemetryRow>): TelemetryRow => ({
+		date: '2026-08-28',
+		run_id: '2026-08-28-1',
+		item_id: 'ai-01',
+		vertical: 'ai',
+		source_id: 'canary',
+		stage: 'publish',
+		outcome: 'ok',
+		code: '',
+		source_words: 1923,
+		summary_words: 205,
+		source_words_before_cap: 4200,
+		...over
+	});
 
-	const sentence = page.locator('[data-compression-note="not-plotted"]');
-	await expect(sentence, 'the opening window drops rows, so the absence below is a change').toHaveCount(
-		1
-	);
+	const view = compressionView([
+		row({ item_id: 'ai-cut' }),
+		row({ item_id: 'ai-whole', source_words: 880, source_words_before_cap: null }),
+		row({ item_id: 'ai-nolength', source_words: 0, source_words_before_cap: null }),
+		row({ item_id: 'ai-nosummary', summary_words: null }),
+		// A failure never had an article, so it is neither a point nor a row the
+		// sentence should count. Without the predicate it lands in the sentence and
+		// tells the operator articles went missing that never existed.
+		row({ item_id: 'ai-failed', stage: 'fetch', outcome: 'failed', code: 'http_error' }),
+		row({
+			item_id: 'ai-dropped',
+			stage: 'extract',
+			source_words: 0,
+			summary_words: null,
+			source_words_before_cap: null
+		}),
+		// The same article, written again by a second run of the same day. One
+		// article is one mark: drawing it twice draws one measurement twice, and
+		// the run that read the most of it is the one that counts.
+		row({ item_id: 'ai-whole', run_id: '2026-08-28-2', source_words: 300, source_words_before_cap: null })
+	]);
 
-	// Reached the way a reader reaches it: by panning off the day that has rows.
-	const viewport = page.locator('[data-viewport-control]');
-	await viewport.focus();
-	for (let index = 0; index < 8; index += 1) {
-		await page.keyboard.press('ArrowLeft');
-	}
+	expect(view.points.map((point) => point.item_id)).toEqual(['ai-cut', 'ai-whole']);
+	expect(view.points.find((point) => point.item_id === 'ai-whole')?.source_words).toBe(880);
+	expect(view.unplotted).toEqual([{ date: '2026-08-28', n: 1 }]);
 
-	await expect(sentence).toHaveCount(0);
+	// The cut is the two lengths and nothing else, and the second one is carried
+	// only where it says something the first does not.
+	const [cut, whole] = view.points;
+	expect(cut.source_words).toBe(4200);
+	expect(cut.source_seen_words).toBe(1923);
+	expect(cut.truncation_flagged).toBe(true);
+	expect(whole.source_words).toBe(880);
+	expect('source_seen_words' in whole).toBe(false);
+	expect(whole.truncation_flagged).toBe(false);
+
+	// The three outcomes, asserted on the one decision the view folds.
+	expect(placeRow(row({ source_words: 0, source_words_before_cap: null }))).toEqual({
+		kind: 'no-length',
+		date: '2026-08-28'
+	});
+	expect(placeRow(row({ summary_words: null })).kind).toBe('no-summary');
+	expect(placeRow(row({})).kind).toBe('point');
 });
 
 test('a mark reads out on the keyboard, and the readout closes on Escape', async ({ page }) => {
@@ -1889,58 +2010,48 @@ test('the day splits its writing time by the articles it read only the start of'
 	expect(scoredOnly.kind === 'day' && scoredOnly.day.refusedForLength).toBeNull();
 });
 
-test('a diamond is placed only on a row whose flag still means a cut', () => {
-	// The same boundary the day's count reads, asserted on the function that
-	// places one mark. It lived in the route module until this branch, where no
-	// pure test could reach it - and once every canary row moved to the new side
-	// of the stamp, a page with the gate and a page without it drew the same two
-	// diamonds. The browser could not tell them apart; these two rows can.
-	const row = (version: string, flagged: string) => ({
+test('the plot reads the cut off two lengths, so no ledger stamp can change what it means', () => {
+	// This used to assert a gate on the score ledger's `truncation_flagged`,
+	// which changed meaning at `CUT_FLAG_MEANS_A_CUT_FROM`: the plot read the
+	// column raw while the day's count in the table read it only over the rows
+	// stamped with its current meaning, so one page made two claims about one
+	// column. The projection ends the argument. A pre-cap length standing above
+	// a post-cap one has meant exactly one thing on every row ever written, so
+	// there is no stamp to read and no second meaning to gate.
+	const row = (before: number | null, after: number | null): TelemetryRow => ({
 		date: '2026-08-28',
+		run_id: '2026-08-28-1',
 		item_id: 'ai-01',
-		version,
-		source_word_count: '4200',
-		source_seen_word_count: '1923',
-		summary_word_count: '205',
-		truncation_flagged: flagged
+		vertical: 'ai',
+		source_id: 'canary',
+		stage: 'publish',
+		outcome: 'ok',
+		code: '',
+		source_words: after,
+		summary_words: 205,
+		source_words_before_cap: before
 	});
 
-	const marked = (cells: Record<string, string>): boolean => {
-		const placed = placeRow(cells);
+	const marked = (before: number | null, after: number | null): boolean => {
+		const placed = placeRow(row(before, after));
 		if (placed.kind !== 'point') throw new Error('the fixture row is placeable');
 		return placed.point.truncation_flagged;
 	};
 
-	// Same flag, one row either side of the stamp. Delete the gate and the first
-	// of these returns true, which is the assertion that bites.
-	expect(marked(row('2026-08-27T20:30', 'True'))).toBe(false);
-	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'True'))).toBe(true);
+	// Cut, and drawn at the length the article actually was.
+	expect(marked(4200, 1923)).toBe(true);
+	// Nothing was cut, on the two shapes a run can write: the cap did not fire,
+	// and the run predates the column that records what it did.
+	expect(marked(2000, 2000)).toBe(false);
+	expect(marked(null, 880)).toBe(false);
 
-	// And it is the flag being read, not the stamp: a new row that was not cut
-	// gets no diamond either, so this cannot pass by always returning the stamp.
-	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'False'))).toBe(false);
-
-	// The other two outcomes are the same decision, so they are asserted here
-	// rather than counted a second time somewhere else.
-	expect(placeRow({ date: '2026-08-28', summary_word_count: '205' })).toEqual({
-		kind: 'no-length',
-		date: '2026-08-28'
-	});
-	expect(placeRow({ date: '2026-08-28', source_word_count: '4200' }).kind).toBe('no-summary');
-
-	// An article nobody cut carries no second length. The page inlines every
-	// point, so a cell repeating "nothing was cut" is weight for no fact.
-	const whole = placeRow({
-		date: '2026-08-28',
-		item_id: 'ai-02',
-		version: CUT_FLAG_MEANS_A_CUT_FROM,
-		source_word_count: '880',
-		source_seen_word_count: '880',
-		summary_word_count: '96',
-		truncation_flagged: 'False'
-	});
-	expect(whole.kind === 'point' && 'source_seen_words' in whole.point).toBe(false);
-	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'True'))).toBe(true);
+	// A row written before 2026-08-28 records no pre-cap length, so it is drawn
+	// at the length that survived. That is the honest reading: the ledger holds
+	// no answer to what the article was, and inventing a diamond on it would
+	// claim a cut nobody measured.
+	const older = placeRow(row(null, 880));
+	expect(older.kind === 'point' && older.point.source_words).toBe(880);
+	expect(older.kind === 'point' && 'source_seen_words' in older.point).toBe(false);
 });
 
 /** What the canary's own item-health rows say the source table has to print.

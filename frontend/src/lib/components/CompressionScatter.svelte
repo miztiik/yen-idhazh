@@ -134,16 +134,6 @@
 		rowsInWindow(unplotted, viewport).reduce((total, day) => total + day.n, 0)
 	);
 
-	/** A cut point whose diamond sits on its own cap line rather than past it.
-	 *
-	 * Those rows were measured after the cut, so their recorded article length
-	 * is the length the model saw. Saying so is the only thing that stops the
-	 * plot reading as "the cut removed nothing".
-	 */
-	const measuredAfterCut = $derived(
-		visible.some((point) => point.truncation_flagged && seenWords(point) >= point.source_words)
-	);
-
 	/** One entry per drawn mark, in the order the day ran. The pointer takes the
 	 * nearest by x; the arrow keys walk this order, so a step moves forward in
 	 * time rather than to whatever is nearest on screen. */
@@ -203,12 +193,6 @@
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		Article length uses a log x axis, so a 100-word note and a 10,000-word feature both fit. A
 		diamond is an article that ran past the cap, so the machine read the start and stopped there.
-		{#if measuredAfterCut}
-			<span data-compression-note="measured-after"
-				>Articles read before 28 August were measured after the cut, so their diamonds sit on the
-				line rather than past it.</span
-			>
-		{/if}
 		{#if notPlotted > 0}
 			<span data-compression-note="not-plotted"
 				>{notPlotted} articles in this window recorded no length before the cut, so they are not

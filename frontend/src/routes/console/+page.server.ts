@@ -1,5 +1,4 @@
 import type {
-	CompressionPoint,
 	RateSpread,
 	StageTiming,
 	StageTimingDay,
@@ -8,7 +7,6 @@ import type {
 import {
 	modelByDate,
 	modelWork,
-	placeRow,
 	sourceCuts,
 	wasCut,
 	SOURCE_CUT_ROWS,
@@ -215,7 +213,8 @@ function publicTelemetry(row: Record<string, string>) {
 		outcome: row.outcome ?? '',
 		code: row.code ?? '',
 		source_words: measured(row, 'source_words'),
-		summary_words: measured(row, 'summary_words')
+		summary_words: measured(row, 'summary_words'),
+		source_words_before_cap: measured(row, 'source_words_before_cap')
 	};
 }
 
@@ -432,25 +431,12 @@ export function load() {
 	const results = feedResults();
 	// Seeded to the window the viewport opens on, not to every committed month:
 	// this list is inlined into the prerendered HTML, so an unbounded seed makes
-	// the page grow for as long as the pipeline runs.
+	// the page grow for as long as the pipeline runs. The compression plot is
+	// drawn from these same rows in the browser, so it costs the page nothing and
+	// grows by month fetch exactly as the failure panels do.
 	const publicRows = telemetryRows(TELEMETRY_ROOT, console.default_window_days).rows.map(
 		publicTelemetry
 	);
-	const placed = rows.map(placeRow);
-	const compression = placed
-		.filter((row): row is { kind: 'point'; point: CompressionPoint } => row.kind === 'point')
-		.map((row) => row.point)
-		.sort((a, b) => a.date.localeCompare(b.date));
-	// The rows the plot dropped for want of an article length, per day, so the
-	// sentence under the chart can count whatever window is open.
-	const missing = new Map<string, number>();
-	for (const row of placed) {
-		if (row.kind !== 'no-length') continue;
-		missing.set(row.date, (missing.get(row.date) ?? 0) + 1);
-	}
-	const unplotted = [...missing.entries()]
-		.map(([date, n]) => ({ date, n }))
-		.sort((a, b) => a.date.localeCompare(b.date));
 	return {
 		timingDays,
 		throughputDays,
@@ -484,8 +470,6 @@ export function load() {
 		telemetryRows: publicRows,
 		telemetryMonths: telemetryMonths(),
 		console,
-		compression,
-		unplotted,
 		summarizeBands: summarize.bands,
 		today: new Date().toISOString().slice(0, 10)
 	};
