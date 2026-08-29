@@ -540,6 +540,17 @@
       "weight": 1.0
     },
     {
+      "id": "fastcompany-tech",
+      "kind": "reporting",
+      "retired_on": null,
+      "status": "active",
+      "tier": 2,
+      "title": "Fast Company Technology",
+      "url": "https://www.fastcompany.com/technology/rss",
+      "vertical": "ai",
+      "weight": 1.0
+    },
+    {
       "id": "fed-press",
       "kind": "government",
       "retired_on": null,
@@ -2085,6 +2096,13 @@
   ],
   "salience": [
     {
+      "id": "hn-best",
+      "retired_on": null,
+      "status": "active",
+      "title": "Hacker News best",
+      "url": "https://hnrss.org/best"
+    },
+    {
       "id": "hn-frontpage",
       "retired_on": null,
       "status": "active",
@@ -2092,5 +2110,5 @@
       "url": "https://hnrss.org/frontpage"
     }
   ],
-  "version": "2026-08-22T10:00"
+  "version": "2026-08-30"
 }

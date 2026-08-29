@@ -11,5 +11,13 @@
       <title>Something nobody in the pool published</title>
       <link>https://elsewhere.example.net/2026/08/unrelated</link>
     </item>
+    <!-- What a link aggregator really serves: link is the article, comments is
+         its own discussion page. Voting for the discussion page would vote for
+         an address that is never in the pool. -->
+    <item>
+      <title>Example Trade Press on the same release</title>
+      <link>https://trade.example-press.net/2026/08/model-release-reaction</link>
+      <comments>https://aggregator.example.org/item?id=12345</comments>
+    </item>
   </channel>
 </rss>
