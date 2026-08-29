@@ -311,11 +311,11 @@ rather than the tree.
 on every route at once.** `frontend/bundle-baseline.json` names `node 22` and
 `ci.yml` installs 22. On node 24.12.0, measured 2026-08-29, `origin/main` itself
 read 81 to 87 B UNDER every one of the seven records - `/404`, `/archive/` and
-`/evals/`included, which no branch had touched. The tell is that the offset is
+`/evals/` included, which no branch had touched. The tell is that the offset is
 uniform and in one direction across routes that share nothing but the entry
 chunk. It reads exactly like "my change grew every page", and it is not.
 
-Take a control before you re-record anything. Extract `origin/main` and build it
+Take a control before you conclude anything. Extract `origin/main` and build it
 with the same installed tree, which is two minutes rather than a second
 `npm ci`:
 
@@ -324,13 +324,21 @@ git archive origin/main | tar -x -C $ctl
 New-Item -ItemType Junction -Path "$ctl\frontend\node_modules" -Target "<your worktree>\frontend\node_modules"
 ```
 
-Then record **the previous record plus the measured difference**, never this
-machine's absolute reading - the record is on CI's scale, and an absolute number
-from a different node is not the number CI compares against. That is also how
-the committed records were built: the `why` strings read as a chain of
-increments, not as one machine's output. Expect the gate to stay red locally by
-the machine offset after you re-record, and say so rather than nudging the
-number until it passes.
+**But do not record the local difference either.** The same change measured 176 B
+a route on node 24 and 108 B a route on node 22, so a local delta added to the
+old record still misses by about 66 B - which is inside nothing, because the
+tolerance is 64. The number the gate compares against is CI's, so read it out of
+CI's own failing run and paste that:
+
+```powershell
+gh run view <runId> --repo <owner/repo> --log > out.txt
+Select-String -Path out.txt -Pattern 'fell to|grew to'
+```
+
+That costs one deliberately failing CI run per weight change, and it is the only
+reading that is on the gate's own scale. Expect the gate to stay red locally
+afterwards by the machine offset, and say so rather than nudging the number
+until it passes.
 
 Remove the junction before deleting the control tree. `Remove-Item -Recurse` on
 a directory holding a junction is the one command here that could reach into
