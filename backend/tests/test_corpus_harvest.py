@@ -187,6 +187,120 @@ def test_the_faithfulness_score_is_never_what_selects_a_row() -> None:
     assert "hhem" not in body, "the alarm may veto a model; it may never select a row"
 
 
+# --- Reading a run's items directory ---------------------------------------
+
+
+def write_items(items_dir: Path, article: Article, *, eval_name: str | None = "high") -> None:
+    """One item's payloads, named the way the work stage names them."""
+    item = scored(article, "titled", eval_name)
+    items_dir.mkdir(parents=True, exist_ok=True)
+    (items_dir / f"{article.item_id}.article.json").write_text(
+        item.article.to_json(), encoding="utf-8", newline=""
+    )
+    (items_dir / f"{article.item_id}.summary.json").write_text(
+        item.summary.to_json(), encoding="utf-8", newline=""
+    )
+    if item.row is not None:
+        (items_dir / f"{article.item_id}.eval.json").write_text(
+            item.row.to_json(), encoding="utf-8", newline=""
+        )
+
+
+def test_a_flat_run_directory_and_a_downloaded_artifact_set_read_the_same(
+    tmp_path: Path, article: Article
+) -> None:
+    """A live run writes one directory; a download arrives one directory per shard.
+
+    They are the same run, so the reader has to see them as the same run - which
+    is what lets `backfill` replay a finished run from its artifacts alone.
+    """
+    flat = tmp_path / "flat"
+    write_items(flat, article)
+
+    nested = tmp_path / "nested"
+    write_items(nested / "items-2", article)
+
+    assert corpus.scored_from_items(flat) == corpus.scored_from_items(nested)
+    assert len(corpus.scored_from_items(flat)) == 1
+
+
+def test_an_article_with_no_summary_is_not_an_item(tmp_path: Path, article: Article) -> None:
+    """The work stage writes the article first, so a half-written pair is normal."""
+    write_items(tmp_path, article)
+    (tmp_path / f"{article.item_id}.summary.json").unlink()
+
+    assert corpus.scored_from_items(tmp_path) == []
+
+
+def test_an_item_with_no_eval_row_is_read_and_then_dropped_later(
+    tmp_path: Path, app: AppConfig, article: Article
+) -> None:
+    """Reading and filtering are different jobs, and only one of them is the corpus's."""
+    write_items(tmp_path, article, eval_name=None)
+    read = corpus.scored_from_items(tmp_path)
+
+    assert len(read) == 1
+    assert read[0].row is None
+    assert (
+        corpus.harvest_rows(
+            read, date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
+        )
+        == []
+    )
+
+
+def test_an_absent_items_directory_is_no_items_rather_than_a_crash(tmp_path: Path) -> None:
+    assert corpus.scored_from_items(tmp_path / "never-ran") == []
+
+
+def test_a_row_is_dated_by_its_own_eval_row_not_by_the_caller(
+    app: AppConfig, article: Article
+) -> None:
+    """One backfill can replay several runs, and each row belongs to its own day.
+
+    Dating every row by the argument would stamp a replay of last week's run with
+    the day somebody happened to run the replay, and the roll evicts by date.
+    """
+    item = scored(article, "titled", "high")
+    assert item.row is not None
+    dated = corpus.Scored(
+        item.article, item.summary, item.row.model_copy(update={"date": "2026-08-01"})
+    )
+
+    rows = corpus.harvest_rows(
+        [dated], date="2026-12-25", prompt_config=app.summarize, evaluation=app.evaluation
+    )
+
+    assert [row.date for row in rows] == ["2026-08-01"]
+
+
+def test_a_backfilled_row_is_the_same_bytes_as_a_harvested_row(
+    tmp_path: Path, app: AppConfig, article: Article
+) -> None:
+    """The whole claim of the backfill, asserted rather than assumed.
+
+    Both paths call `harvest_rows`, so this fails the day somebody gives the
+    replay its own reader and the two quietly drift apart.
+    """
+    write_items(tmp_path / "items", article)
+    from_disk = corpus.harvest_rows(
+        corpus.scored_from_items(tmp_path / "items"),
+        date=DATE,
+        prompt_config=app.summarize,
+        evaluation=app.evaluation,
+    )
+    in_memory = corpus.harvest_rows(
+        [scored(article, "titled", "high")],
+        date=DATE,
+        prompt_config=app.summarize,
+        evaluation=app.evaluation,
+    )
+
+    assert [corpus.to_line(row) for row in from_disk] == [
+        corpus.to_line(row) for row in in_memory
+    ]
+
+
 # --- The roll --------------------------------------------------------------
 
 
@@ -322,7 +436,8 @@ def test_the_census_is_recounted_from_the_window_never_incremented(
     assert meta.rows == len(corpus.read_rows(tmp_path))
     assert meta.verticals == {article.vertical: 1}
     assert meta.models == {"qwen3-8b-q4-k-m": 1}
-    assert meta.first_date == meta.last_date == DATE
+    # The row carries its eval row's date, not the harvest argument.
+    assert meta.first_date == meta.last_date == corpus.read_rows(tmp_path)[0].date
     assert meta.harvested_date == DATE
     assert meta.prompt_digest is not None
 
@@ -405,15 +520,25 @@ def test_stamping_the_prune_moves_one_field_and_no_other(tmp_path: Path) -> None
     assert after.pruned_date == DATE
 
 
-def test_the_committed_seed_lets_a_fresh_clone_run_unconfigured() -> None:
-    """`git add corpus` runs under `set -euo pipefail` in the commit step.
+def test_the_committed_window_loads_and_agrees_with_its_own_census() -> None:
+    """The corpus in the repository, read by the shipped reader.
 
-    A staged path that does not exist yet aborts that step and takes every
-    ledger staged beside it, so the window ships empty rather than absent.
+    It ships seeded rather than absent because `commit-and-push.sh` runs
+    `git add "$@"` under `set -euo pipefail`, so a staged path that does not exist
+    yet aborts the commit step and takes the day's ledgers with it. What is
+    asserted here is the stronger property: whatever the window holds, the census
+    beside it counts the same rows, so nothing can quietly drift.
     """
     seed = Path(corpus.__file__).resolve().parents[2] / corpus.CORPUS_ROOT_RELPATH
+    rows = corpus.read_rows(seed)
+    meta = corpus.read_meta(seed)
 
-    assert corpus.read_rows(seed) == []
-    assert corpus.read_meta(seed).rows == 0
-    assert corpus.read_meta(seed).harvested_date is None
-    assert FinetuneConfig().corpus_rows >= 1
+    assert meta.rows == len(rows)
+    assert sum(meta.verticals.values()) == len(rows)
+    assert sum(meta.models.values()) == len(rows)
+    assert len({row.url_key for row in rows}) == len(rows), "one article, one row"
+    assert len(rows) <= FinetuneConfig().corpus_rows
+    if rows:
+        dates = sorted(row.date for row in rows)
+        assert meta.first_date == dates[0]
+        assert meta.last_date == dates[-1]
