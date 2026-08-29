@@ -47,6 +47,18 @@ class ModelRef(Model):
         default=None,
         description="Recorded once measured. A weight that changes silently changes every output.",
     )
+    hf_base_repo: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "The safetensors repository a fine-tune trains against, when this entry "
+            "names a GGUF conversion of somebody else's weights. It sits here rather "
+            "than in `finetune` because the two strings describe the same model: held "
+            "apart, a model swap moves one and leaves the other, and a LoRA adapter "
+            "loads onto a mismatched base without raising. Optional - only an entry we "
+            "intend to fine-tune needs it."
+        ),
+    )
 
 
 class TierWeights(Model):
@@ -667,6 +679,122 @@ class LoggingConfig(Model):
     level: LogLevel = LogLevel.INFO
 
 
+class FinetuneConfig(Model):
+    """The training corpus and the schedules that maintain it.
+
+    Nothing here runs on the runner. Training needs a GPU and the runner has
+    none (section 0a), so these knobs size a file CI commits and a notebook
+    somewhere else reads. The two model fields name a KEY in `models` rather
+    than a model, because `models.summarize` has already moved once and a knob
+    that spells a model name is stale the day the config moves.
+
+    The prune knobs live here and not in `retention`. That block is about
+    published-site images and its own `site_budget_mb`; putting corpus history
+    under the same name would file two unrelated retention policies together.
+    """
+
+    teacher: Slug = Field(
+        default="summarize",
+        description="A key in `models`. The model whose outputs a session fine-tunes.",
+    )
+    student: Slug = Field(
+        default="route",
+        description="A key in `models`. The smaller model a distillation session trains.",
+    )
+    corpus_rows: int = Field(
+        default=2000,
+        ge=1,
+        description=(
+            "The window: how many rows `corpus/corpus.jsonl` holds. It costs storage and "
+            "git history only - 2.9 KB compressed per row, measured 2026-08-27 over 2,459 "
+            "scored rows and the 114 published items of that day - and it buys a bigger "
+            "pool to sample a diverse session from."
+        ),
+    )
+    train_rows: int = Field(
+        default=1000,
+        ge=1,
+        description=(
+            "The sample: how many rows one session draws from the window. A CEILING, not "
+            "a demand - a session takes the lesser of this and what is left once the "
+            "holdout is removed, and prints both numbers. It costs GPU hours rather than "
+            "storage: estimated 1.8 h for 1000 rows over 2 epochs on a free T4, and no "
+            "training job has run here yet, so that is an estimate (Rule #10)."
+        ),
+    )
+    min_rows: int = Field(
+        default=500,
+        ge=1,
+        description="Below this the corpus trains nothing, and a repair refuses to cut further.",
+    )
+    harvest_every_days: int = Field(
+        default=7,
+        ge=1,
+        description=(
+            "How often the digest run harvests. A number and not a cron line: standard "
+            "5-field cron has no every-N-days field, and `on.schedule` is parsed before "
+            "any step runs, so no value in config can ever reach it. The step wakes with "
+            "the daily run, reads `harvested_at` from the committed meta file and decides "
+            "for itself, which also means a missed day self-corrects on the next wake."
+        ),
+    )
+    prune_every_days: int = Field(
+        default=30,
+        ge=1,
+        description=(
+            "How often `prune.yml` fires. Each firing costs one force-push of `main` - "
+            "the single exception CLAUDE.md section 8 carries, and the reason it carries "
+            "one is that git history is append-only, so deleting a corpus row does not "
+            "delete its bytes."
+        ),
+    )
+    prune_keep_days: int = Field(
+        default=60,
+        ge=1,
+        description=(
+            "Where the squash boundary sits. Retention is this number, full stop, and it "
+            "is not a multiple of anything. At 30 and 60 the history holds 60 to 90 days "
+            "of commits - 9 to 13 weekly harvests, 25 MB to 38 MB, flat forever. Two whole "
+            "datasets survive any squash for free, because the boundary commit holds a "
+            "complete copy of the corpus and so does the tip."
+        ),
+    )
+    holdout_days: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "The trailing days held out of training, by date and never at random. "
+            "Production always runs on tomorrow's news; a random split puts the same "
+            "story from three feeds on both sides and reports memorisation as success."
+        ),
+    )
+    reference_rows: int = Field(
+        default=300,
+        ge=1,
+        description="How many ideal summaries the hand-authored reference set aims to hold.",
+    )
+    epochs: int = Field(default=2, ge=1)
+    sequence_length: int = Field(
+        default=4096,
+        ge=1,
+        description=(
+            "Measured worst case, rounded up to a power of two: the longest article seen "
+            "is 1,923 words at the committed cap (about 2,500 tokens), the system prompt "
+            "is 3,787 bytes (about 950), and the output budget is 900 - about 4,350. 8192 "
+            "would waste free-tier memory quadratically in attention for headroom nothing "
+            "uses."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _a_session_cannot_draw_more_than_the_window_holds(self) -> Self:
+        if self.train_rows > self.corpus_rows:
+            raise ValueError("finetune.train_rows cannot exceed finetune.corpus_rows")
+        if self.min_rows > self.corpus_rows:
+            raise ValueError("finetune.min_rows cannot exceed finetune.corpus_rows")
+        return self
+
+
 class VisualsConfig(Model):
     """Routing and rendering knobs. "Nothing" is the common answer, by design.
 
@@ -1077,6 +1205,28 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-29T18:00",
+            change=(
+                "The finetune block added, and models.<role>.hf_base_repo added as an "
+                "optional field."
+            ),
+            why=(
+                "The training corpus needs its sizes and its two schedules in config "
+                "before anything writes a row (Rule #6), and the window and the sample "
+                "are two knobs rather than one because they price differently: the "
+                "window costs 2.9 KB of compressed history per row and the sample costs "
+                "GPU hours. The prune is two knobs for the same reason - how often it "
+                "fires and how far back it keeps are independent, and 'prune quarterly' "
+                "means neither one on its own. hf_base_repo sits on the model entry and "
+                "not here because training reads the safetensors repository while the "
+                "pipeline reads the GGUF one: held in two blocks, a model swap moves one "
+                "string and leaves the other, and a LoRA adapter loads onto a mismatched "
+                "base without raising, so the damage arrives as a quality drop nobody can "
+                "attribute. Both additive with defaults, so an older config still "
+                "validates and no read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T16:00",
             change=(
@@ -1738,6 +1888,7 @@ class AppConfig(Contract):
     assist: AssistConfig = Field(default_factory=AssistConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
+    finetune: FinetuneConfig = Field(default_factory=FinetuneConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
 
     @model_validator(mode="after")
@@ -1767,4 +1918,19 @@ class AppConfig(Contract):
                 "extract.min_source_words must equal summarize.bands[0].target_words_min "
                 "divided by evaluation.brief_compression_ceiling"
             )
+        return self
+
+    @model_validator(mode="after")
+    def _finetune_names_models_that_exist(self) -> Self:
+        """A role that names no model is a training session that downloads nothing.
+
+        Checked here because `FinetuneConfig` cannot see `models` and a typo
+        would otherwise surface on a GPU somebody is paying for, hours later.
+        """
+        roles = set(ModelsConfig.model_fields) - {"inference"}
+        for field in ("teacher", "student"):
+            named = getattr(self.finetune, field)
+            if named not in roles:
+                spelled = ", ".join(sorted(roles))
+                raise ValueError(f"finetune.{field} must name one of models: {spelled}")
         return self
