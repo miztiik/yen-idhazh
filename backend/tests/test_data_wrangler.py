@@ -160,13 +160,20 @@ def test_a_training_row_and_a_holdout_row_are_never_the_same_row(window: Path) -
 
 
 def test_split_defaults_to_the_configured_holdout_days(window: Path) -> None:
-    """A knob with no reader is not a knob (Rule #6)."""
-    config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    assert config.finetune.holdout_days > 3
+    """A knob with no reader is not a knob (Rule #6).
+
+    Asked two ways and compared, so this holds for any value the knob takes. An
+    earlier version asserted the value itself was above 3, which made a config
+    change fail a test about plumbing.
+    """
+    days = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).finetune.holdout_days
 
     assert run(window, "split") == 0
+    by_default = corpus.read_holdout(window)
 
-    assert len(corpus.read_holdout(window)) == 6, "the window is shorter than the holdout"
+    assert run(window, "split", "--holdout-days", str(days)) == 0
+
+    assert corpus.read_holdout(window) == by_default
 
 
 # --- verify ----------------------------------------------------------------

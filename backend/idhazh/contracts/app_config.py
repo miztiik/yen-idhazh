@@ -802,7 +802,9 @@ class FinetuneConfig(Model):
         description=(
             "The trailing days held out of training, by date and never at random. "
             "Production always runs on tomorrow's news; a random split puts the same "
-            "story from three feeds on both sides and reports memorisation as success."
+            "story from three feeds on both sides and reports memorisation as success. "
+            "It has to be shorter than the window has existed, or the split holds out "
+            "every row and leaves nothing to train on."
         ),
     )
     reference_rows: int = Field(
@@ -827,14 +829,15 @@ class FinetuneConfig(Model):
     )
     epochs: int = Field(default=2, ge=1)
     sequence_length: int = Field(
-        default=4096,
+        default=8192,
         ge=1,
         description=(
-            "Measured worst case, rounded up to a power of two: the longest article seen "
-            "is 1,923 words at the committed cap (about 2,500 tokens), the system prompt "
-            "is 3,787 bytes (about 950), and the output budget is 900 - about 4,350. 8192 "
-            "would waste free-tier memory quadratically in attention for headroom nothing "
-            "uses."
+            "Measured worst case, rounded up to a power of two: the system prompt is 920 "
+            "tokens, a user turn carrying an article at extract.truncation_cap_tokens "
+            "(5,000) measures 5,335 with its fence and instructions, and the output "
+            "budget is 900 - so 7,155. 7168 clears that by 13 tokens, which is not a "
+            "margin. A row longer than this is truncated in training with no error, "
+            "which teaches the model to stop mid-summary."
         ),
     )
 
@@ -1315,6 +1318,28 @@ class AppConfig(Contract):
                 "quiet days: every run since 2026-08-25 has hit its ceiling, so each "
                 "old item displaced a fresher one. Additive with a default, so an "
                 "older config still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-29T23:30",
+            change=(
+                "finetune.sequence_length default raised from 4096 to 8192, and "
+                "finetune.holdout_days now states it must be shorter than the window "
+                "has existed."
+            ),
+            why=(
+                "Both were sized before the truncation cap moved, and running the "
+                "pre-flight gates on 2026-08-29 showed both were wrong. 4096 was "
+                "derived from a 1,923-word article; extract.truncation_cap_tokens is "
+                "now 5,000 tokens, so the worst case is 920 + 5,335 + 900 = 7,155 and "
+                "15 of 1,308 corpus rows already exceed 4096. Those rows would be "
+                "truncated in training with no error, which teaches the model to stop "
+                "mid-summary. The old text argued 8192 was headroom nothing uses; the "
+                "measurement says it is the first power of two with a real margin, "
+                "because 7168 clears the worst case by 13 tokens. Separately, "
+                "holdout_days 14 over a window that had existed 7 days held out all "
+                "1,308 rows and left nothing to train on, and split said so and exited "
+                "0 anyway."
             ),
         ),
         ChangelogEntry(
