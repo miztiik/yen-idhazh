@@ -166,6 +166,17 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-28",
+            change="The embedded ModelRef gained an optional hf_base_repo.",
+            why=(
+                "A manifest embeds the whole model entry, so a field added there lands "
+                "here whether or not this document wanted it - the same way the optional "
+                "revision did on 2026-08-26. Nothing a run writes changes and no manifest "
+                "needs migrating; the emitted schema gained one optional property, and a "
+                "stale schema fails the drift gate."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-27T11:00",
             change="site_bytes and site_files now say which tree they measure.",
             why=(

@@ -32,6 +32,20 @@
           "title": "File",
           "type": "string"
         },
+        "hf_base_repo": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The safetensors repository a fine-tune trains against, when this entry names a GGUF conversion of somebody else's weights. It sits here rather than in `finetune` because the two strings describe the same model: held apart, a model swap moves one and leaves the other, and a LoRA adapter loads onto a mismatched base without raising. Optional - only an entry we intend to fine-tune needs it.",
+          "title": "Hf Base Repo"
+        },
         "id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Id",
@@ -347,6 +361,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The embedded ModelRef gained an optional hf_base_repo.",
+      "version": "2026-08-28",
+      "why": "A manifest embeds the whole model entry, so a field added there lands here whether or not this document wanted it - the same way the optional revision did on 2026-08-26. Nothing a run writes changes and no manifest needs migrating; the emitted schema gained one optional property, and a stale schema fails the drift gate."
+    },
+    {
       "change": "site_bytes and site_files now say which tree they measure.",
       "version": "2026-08-27T11:00",
       "why": "They always held the committed payload tree, and this document said they measured the ceiling. Measured 2026-08-27, that tree was 7,027,075 bytes while the published site was 128,064,853 - eighteen times larger. A field that reads as the site cap and holds a tree eighteen times smaller is how the alarm came to watch the wrong thing. No value changed and no payload needs migrating; only the description did."
@@ -403,7 +422,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-27T11:00",
+      "default": "2026-08-28",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -415,5 +434,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-27T11:00"
+  "version": "2026-08-28"
 }

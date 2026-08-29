@@ -1,6 +1,6 @@
 # Agent Guardrails
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 This is the rules-only digest every persona must honour. It restates `CLAUDE.md` constraints in one place so an agent can scan the constraints quickly and so other docs (design-rationale sections, agent files, code reviews) can link to specific rules. The authoritative source remains [`CLAUDE.md`](../../CLAUDE.md); if this doc and `CLAUDE.md` disagree, `CLAUDE.md` wins and this digest gets updated.
 
@@ -80,7 +80,7 @@ A persona's own worldview shapes what it says, never how plainly it says it.
 - **Account systems** (login, signup, email collection, server-backed sync).
 - **Push notifications.** The reader decides when to read.
 - **Runtime telemetry / analytics SDKs / third-party runtime scripts.**
-- **Republishing article bodies.** Publish the link and our own summary.
+- **Republishing article bodies to a reader.** Publish the link and our own summary. `corpus/` is the one exception: it holds source text as training samples, and nothing renders it, links to it, or serves it.
 - **Paywalled or login-walled sources.** If `robots.txt` or a paywall says no, the answer is no.
 - **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement.
 - **Training on the runner, GPU runners, and models that do not fit the runner.** Training elsewhere is allowed; the runner only opens finished weights. A fine-tuned model is an ordinary candidate and enters through the same qualification as any other.
@@ -93,6 +93,8 @@ A user's finish/ship/merge instruction authorizes the reversible git workflow: i
 Stop only when the next action would discard or overwrite unrelated work, rewrite published history, broadly mutate the working tree, or when ownership is ambiguous after inspection.
 
 Avoid stash, hard reset, clean, broad restore, add-all, force push, and amending pushed commits in autonomous flow.
+
+One exception, and only one: `.github/workflows/prune.yml` squashes commits older than `finetune.prune_keep_days` and force-pushes `main` on a schedule. Nothing else may force-push and no person may. It collapses every path in that commit range, not only `corpus/`, so `git blame` and `git bisect` reach back `prune_keep_days` and no further (`CLAUDE.md` section 8).
 
 Commit messages describe the change. **No AI co-author / attribution tags.**
 
