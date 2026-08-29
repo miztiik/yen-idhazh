@@ -46,6 +46,7 @@ from idhazh.contracts.sources import Sources
 from idhazh.contracts.taxonomy import Taxonomy
 from idhazh.contracts.watchlist import Watchlist
 from idhazh.fingerprint import text_digest
+from idhazh.publish_telemetry import PUBLIC_COLUMNS
 
 BY_STEM: dict[str, type[Contract]] = {c.__schema_stem__: c for c in CONTRACTS}
 CONFIG_FILES: dict[str, type[Contract]] = {
@@ -410,6 +411,61 @@ def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None
     declared = re.search(r"const COLUMNS = \[(.*?)\];", source, re.DOTALL)
     assert declared is not None, "build-canary.mjs no longer declares a COLUMNS array"
     assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == ItemHealthRow.csv_columns()
+
+
+def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None:
+    """The browser's copy of the projection header, held against the writer.
+
+    `frontend/src/lib/charts/series.ts` restates `PUBLIC_COLUMNS` because it is
+    TypeScript and the writer is Python, and its header check reads a prefix on
+    purpose - a browser holding a cached bundle keeps working when a column is
+    appended. So this test allows an append and refuses an insert, a rename or a
+    reorder at any position the browser reads, and refuses a name the writer
+    never writes. Nothing else ties the two lists together.
+    """
+    source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "charts" / "series.ts")
+    declared = re.search(
+        r"export const TELEMETRY_COLUMNS = \[(.*?)\] as const;", source, re.DOTALL
+    )
+    assert declared is not None, "series.ts no longer declares a TELEMETRY_COLUMNS array"
+    names = tuple(re.findall(r"'([^']+)'", declared.group(1)))
+    assert names, "TELEMETRY_COLUMNS matched but held no column names"
+    assert names == PUBLIC_COLUMNS[: len(names)], (
+        "series.ts and publish_telemetry.py disagree about the telemetry header: "
+        f"the console reads {list(names)}, the writer writes "
+        f"{list(PUBLIC_COLUMNS[: len(names)])} in those positions"
+    )
+
+
+def test_the_console_fallback_bands_match_the_committed_ladder() -> None:
+    """The console's fallback length ladder, held against the file it stands in for.
+
+    `summarizeConfig()` in `frontend/src/lib/server/config.ts` returns
+    `SUMMARIZE_DEFAULTS` when `config/idhazh.json` cannot be read, and those
+    bands draw the compression plot's target zone and set its y axis. A stale
+    copy draws a wrong chart and says nothing, so the copy is pinned here.
+    """
+    committed: list[dict[str, int]] = json.loads(read_text(CONFIG_DIR / "idhazh.json"))[
+        "summarize"
+    ]["bands"]
+    source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    declared = re.search(
+        r"const SUMMARIZE_DEFAULTS: SummarizeConfig = \{\s*bands: \[(.*?)\]\s*\};",
+        source,
+        re.DOTALL,
+    )
+    assert declared is not None, "config.ts no longer declares a SUMMARIZE_DEFAULTS ladder"
+    fallback = [
+        {name: int(value) for name, value in re.findall(r"(\w+): (\d+)", band)}
+        for band in re.findall(r"\{([^{}]*)\}", declared.group(1))
+    ]
+    assert fallback, "SUMMARIZE_DEFAULTS matched but held no bands"
+    keys = ("min_source_words", "target_words_min", "target_words_max")
+    expected = [{key: band[key] for key in keys} for band in committed]
+    assert fallback == expected, (
+        "config.ts and config/idhazh.json disagree about the summary bands: "
+        f"the console falls back to {fallback}, the committed ladder is {expected}"
+    )
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:
