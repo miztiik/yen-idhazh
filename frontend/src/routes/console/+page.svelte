@@ -35,7 +35,7 @@
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import Chart from '$lib/charts/Chart.svelte';
-	import { chartFunnel } from '$lib/charts/chart-funnel';
+	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
 		failureMix,
 		publishedTrend,
@@ -836,16 +836,18 @@
 			if the median day spends more than 6 router minutes per published chart, or puts a chart
 			on fewer than 5% of the items it published.
 		</p>
-		{#if data.funnelSvg}
-			<div class="panel mt-4" data-funnel="chart">
+		{#if data.flowSvg}
+			<div class="panel mt-4" data-flow="chart">
 				<Chart
-					svg={data.funnelSvg}
-					option={chartFunnel(data.charts).option}
+					svg={data.flowSvg}
+					option={chartFlow(data.charts).option}
 					width={data.console.chart_width}
-					height={260}
-					label="Where items go between the router reaching one and a chart being published, across the window"
+					height={FLOW_HEIGHT}
+					label="Where items go between the router reaching one and a chart being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 				/>
 			</div>
+		{:else if data.flowNote}
+			<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
 		{/if}
 		<div class="console-table mt-3" data-charts="table">
 			<table class="w-full text-[0.8125rem]">
