@@ -92,6 +92,11 @@ gitignored and leaves the runner as a one-day artifact, so a scheduled workflow
 of its own would check out a fresh tree, find an empty directory and harvest
 nothing - silently, every week, until somebody went looking.
 
+The body can be obtained a second way, from the address rather than from the
+artifact, and that is what `refill` below does. It is not an option for the
+scheduled step: it costs a network round trip per item, and it returns whatever
+the page serves now rather than what the scorer read.
+
 It is still a stage that runs alone with a file in and a file out
 (`CLAUDE.md` section 4):
 
@@ -172,11 +177,11 @@ not change.
 
 ## Looking at the corpus
 
-`backend/utilities/data_wrangler.py` has five verbs and no sixth. Routine data
+`backend/utilities/data_wrangler.py` has six verbs and no seventh. Routine data
 movement is deliberately not among them: the harvest and the roll run on a
 schedule where a failure has an alarm on it, and a local utility has none.
-`backfill` is not routine - it is a replay a person runs deliberately, through
-the scheduled harvest's own function.
+`backfill` and `refill` are not routine - they are replays a person runs
+deliberately, through the scheduled harvest's own function.
 
 ```bash
 python backend/utilities/data_wrangler.py stats
@@ -184,15 +189,24 @@ python backend/utilities/data_wrangler.py split --holdout-days 14
 python backend/utilities/data_wrangler.py verify
 python backend/utilities/data_wrangler.py verify --tokens
 python backend/utilities/data_wrangler.py backfill --items-dir <dir>
+python backend/utilities/data_wrangler.py refill --limit 200
 python backend/utilities/data_wrangler.py remove --url-key <sha256> --yes
 ```
 
-- **`backfill`** is what stops a corpus starting empty and filling at one run a
-  week. Give it a directory holding a finished run's item payloads and it runs
-  the same harvest the schedule runs - same function, same bytes, and a test
-  asserts a backfilled row equals a harvested one. Nothing is re-fetched: the
-  premise is the exact text the scorer read, and re-fetching the address would
-  return a different article.
+`backfill` and `refill` both exist to stop a corpus starting empty and filling at
+one run a week. They differ in where the article body comes from, and that is the
+only way they differ:
+
+| | `backfill` | `refill` |
+| --- | --- | --- |
+| body comes from | a downloaded `items-*` artifact | re-fetching the source address |
+| reaches back | as far as artifact retention (7 days) | every day the repository remembers |
+| body is | the exact text the scorer read | whatever the page serves today |
+| network | none | one round trip per item |
+
+- **`backfill`** replays a finished run's item payloads through the same harvest
+  the schedule runs - same function, same bytes, and a test asserts a backfilled
+  row equals a harvested one.
 
   ```bash
   gh run download <run-id> --repo miztiik/yen-idhazh --pattern 'items-*' --dir /tmp/items
@@ -206,9 +220,66 @@ python backend/utilities/data_wrangler.py remove --url-key <sha256> --yes
   **How far back it reaches is set by `items-*` artifact retention, which is
   seven days.** Measured 2026-08-29: one run's four shards are 555,842 bytes, so
   a week of five runs a day is 18.6 MB against the 500 MB Rule #2 allows.
-  `evidence-*` lives fourteen days but carries neither `source_form` nor `brief`
-  nor the key points, so a row rebuilt from it would carry a guessed length band
-  - which is the failure this corpus exists to prevent.
+- **`refill`** reaches everything older than that, because the committed ledger
+  and the committed digest hold between them every half of a training row except
+  the article body - and the body has an address. `state/scores.csv` names the
+  canonical URL, the model and the fingerprint; the day payload under
+  `frontend/public/digest/` holds the title, the summary and the key points.
+
+  ```bash
+  python backend/utilities/data_wrangler.py refill --limit 0    # the plan, no network
+  python backend/utilities/data_wrangler.py refill --limit 200  # then do 200 of them
+  ```
+
+  With no `--limit` it queues however many rows the window still has room for.
+  `--limit 0` fetches nothing and prints the plan, which is how to read what a
+  session would cost before spending it.
+
+  **Three checks are what make re-fetching safe**, and none of them is a
+  guess:
+
+  1. **The join is proved, not assumed.** `output_digest` is taken over exactly
+     the title, the summary and the key points, so a published item is paired
+     with a ledger row only when it recomputes to the value that row recorded. A
+     later run that re-summarized the same article is dropped rather than
+     mismatched. Measured 2026-08-29 over the 2,791 committed ledger rows: 89 of
+     them are exactly this case.
+  2. **Nothing about the page is reconstructed.** The body goes through the same
+     extractor a run uses, so `brief`, the source form and the length band are
+     computed from the bytes that came back. This is what a rebuild from an
+     expired `evidence-*` artifact could not do: `EvidenceItem` carries no
+     `brief`, and reconstructing it from the two recoverable terms disagrees with
+     the recorded value on 3 of 229 items (measured 2026-08-29) - a guessed
+     length band, which is the failure this corpus exists to prevent.
+  3. **Every counterweight is measured again** against the body that came back,
+     never read off the ledger. An article edited past its summary now fails the
+     same gate a live run applies, so it is dropped instead of taught.
+
+  An address that has moved, gone behind a paywall or started refusing robots is
+  dropped and counted by failure code. Re-running picks up whatever is still
+  missing, so a long fill can be done in chunks, and the window is committed
+  every 25 items so an interruption costs at most the last few fetches rather
+  than the whole run.
+
+  **What one full fill cost, measured 2026-08-29** on the 2,791-row committed
+  ledger, at 1.36 s per address:
+
+  | | |
+  | --- | --- |
+  | queued after the four skip rules | 1,768 |
+  | bodies re-fetched | 1,729 (97.8 percent) |
+  | dropped, page gone or paywalled | 39 |
+  | dropped by re-measurement against the new body | 43 |
+  | rows before / after | 166 / 1,852 |
+  | wall clock | 26 minutes |
+
+  The 43 are the safety argument paying for itself: pairs the original run
+  passed, whose article no longer supports the published summary.
+
+  **Size, measured on the same 1,852 rows.** 19.2 MB raw, 10,851 bytes a row;
+  4.3 MB once git compresses it, 2,444 bytes a row, a 4.4x ratio. The compressed
+  figure is the one that matters, because it is what each commit that rewrites
+  the window adds to history, and it is what `finetune.prune_every_days` bounds.
 - **`stats`** prints the row count against the window, the date range, the word
   and target spreads, the counts per vertical and per model, how many rows a
   session would really draw, and a warning when the live prompt no longer matches
@@ -224,9 +295,9 @@ python backend/utilities/data_wrangler.py remove --url-key <sha256> --yes
   and the file re-serializing to the bytes it already holds.
 - **`verify --tokens`** additionally measures tokens per row against
   `finetune.sequence_length`, using the tokenizer named by
-  `models.<role>.hf_base_repo`. **It is the one command here that reaches the
-  network**, which is why it is a flag on an operator tool and not a test
-  (Rule #7).
+  `models.<role>.hf_base_repo`. With `refill` it is one of the **two commands
+  here that reach the network**, which is why both are operator tools and not
+  tests (Rule #7).
 - **`remove`** prints what it would delete and stops. `--yes` does it, and it
   refuses either way to take the window below `finetune.min_rows`, saying how far
   below it would land.
