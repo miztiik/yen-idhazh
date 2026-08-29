@@ -91,14 +91,16 @@ jobs:
 
       # The vectors ride inside the day payloads, and /archive/ inlines every
       # committed day to feed the on-device search - so this job is the one that
-      # can push that page past its configured ceiling. Proving the site still
-      # fits BEFORE the commit is the difference between a dispatch that does
-      # nothing and a dispatch that breaks main (Rule #2).
-      - name: Build the site and hold it to its weight ceilings
+      # can push that page past its configured ceiling or write a payload the
+      # build rejects. Those are two different severities and they sit on
+      # opposite sides of the commit below.
+      #
+      # A build failure means the payload is invalid, so those days must not
+      # publish. The build runs BEFORE the commit and stops them. The weight
+      # ratchet runs after. See ../../docs/architecture/publishing/layout.md.
+      - name: Build the site
         working-directory: frontend
-        run: |
-          npm run build
-          npm run bundle-gate
+        run: npm run build
 
       # The tree the deploy uploads, measured against the 1 GB Pages cap. It only
       # exists after the build above, which is why this is its own step.
@@ -115,3 +117,11 @@ jobs:
         run: |
           set -euo pipefail
           bash .github/scripts/commit-and-push.sh frontend/public/digest frontend/public/assist/index
+
+      # The other severity. A page over the weight recorded for it is a page
+      # that still reads correctly, so the repaired days publish first and this
+      # then fails the job. Raising the ceiling is one line in
+      # config/idhazh.json, and it belongs in the commit that earned the bytes.
+      - name: Bundle gate - encoder, first-load weight, page ceilings
+        working-directory: frontend
+        run: npm run bundle-gate

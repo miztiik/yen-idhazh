@@ -1187,29 +1187,54 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
-def test_assemble_holds_the_site_to_its_weight_before_it_pushes() -> None:
-    """A day rides inside `frontend/public`, and `/archive/` inlines every
-    committed day for the on-device search, so the assemble job is the one that
-    can push a page past its ceiling or a payload the build rejects. It builds
-    the site and runs the bundle gate before the commit that publishes it - the
-    same guard `backfill.yml` runs.
+#: Every job that builds the site and then commits what it built, named with the
+#: step that publishes. Both jobs write a day payload the build can reject, so
+#: both carry the same two-severity order.
+PUBLISHING_SITE_JOBS: Final = (
+    ("digest.yml", "assemble", "Commit the day"),
+    ("backfill.yml", "backfill", "Commit the repaired days"),
+)
+
+
+@pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
+def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
+    filename: str, job_name: str, commit_step: str
+) -> None:
+    """Two severities, and only one of them may cost a reader the day.
+
+    `npm run build` prerenders every route, so a payload that fails its contract
+    fails here instead of in a reader's browser. That day is broken and must not
+    publish, so the build runs before the commit.
+
+    `npm run bundle-gate` compares each page against a weight we recorded
+    ourselves. A page over it still reads correctly - what grew is the document,
+    not the meaning - and stopping the publish for that throws away the day and
+    the two to three hours that built it. So it runs after the commit, and stays
+    fatal: the job goes red until somebody re-measures the ceiling.
     """
-    steps = _steps(_load_workflows()["digest.yml"], "assemble")
+    steps = _steps(_load_workflows()[filename], job_name)
     names = [step.get("name") for step in steps]
 
+    built = next(
+        index for index, step in enumerate(steps) if "npm run build" in str(step.get("run", ""))
+    )
     gate = next(
         index
         for index, step in enumerate(steps)
         if "npm run bundle-gate" in str(step.get("run", ""))
     )
-    before_gate = steps[:gate]
+    commit = names.index(commit_step)
+
+    before_build = steps[:built]
     assert any(
-        str(step.get("uses", "")).startswith("actions/setup-node@") for step in before_gate
-    ), "node must be set up before the gate"
+        str(step.get("uses", "")).startswith("actions/setup-node@") for step in before_build
+    ), "node must be set up before the site is built"
     assert any(
-        "npm ci" in str(step.get("run", "")) for step in before_gate
+        "npm ci" in str(step.get("run", "")) for step in before_build
     ), "the site must be installed before it is built"
-    assert gate < names.index("Commit the day"), "the site is gated before the day is pushed"
+    assert built < commit, "a payload the build rejects must never reach a reader"
+    assert commit < gate, "a page over its recorded weight loses the ceiling, not the day"
+    assert "continue-on-error" not in steps[gate], "the ratchet publishes the day; it still fails"
 
 
 #: Every job that builds the site, and so every job that can grow it past the cap.
