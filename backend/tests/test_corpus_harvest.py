@@ -7,17 +7,26 @@ than from a copy of it.
 
 from __future__ import annotations
 
+import json
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    REFILL_BODY,
+    REFILL_PUBLISHED,
+    read_text,
+    refetched,
+    refill_recorded,
+)
 
 from idhazh import corpus, summarize
 from idhazh.contracts.app_config import AppConfig, FinetuneConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.contracts.summary import Summary
+from idhazh.contracts.summary import Summary, SummaryStatus
 
 DATE = "2026-08-28"
 
@@ -299,6 +308,181 @@ def test_a_backfilled_row_is_the_same_bytes_as_a_harvested_row(
     assert [corpus.to_line(row) for row in from_disk] == [
         corpus.to_line(row) for row in in_memory
     ]
+
+
+# --- Rebuilding a row from its address -------------------------------------
+
+
+def test_a_refetched_body_earns_its_own_band_rather_than_the_recorded_one(
+    app: AppConfig,
+) -> None:
+    """The reason a refill is allowed to exist at all.
+
+    A row rebuilt from an expired artifact would have to guess the length band,
+    because `brief` and the pre-cap word count are not recoverable from anything
+    committed. Re-fetching does not guess: the extractor computes them from the
+    body that came back. A long page and a short one therefore get different
+    system turns from the same ledger row, which is what this asserts.
+    """
+    long_article, long_text = refetched(REFILL_BODY, app)
+    short_article, short_text = refetched(" ".join(REFILL_BODY.split()[:40]), app)
+    recorded = refill_recorded(long_article, REFILL_PUBLISHED)
+
+    long_row = corpus.rescored(
+        long_article, long_text, recorded=recorded, published=REFILL_PUBLISHED
+    )
+    short_row = corpus.rescored(
+        short_article, short_text, recorded=recorded, published=REFILL_PUBLISHED
+    )
+
+    assert short_article.brief and not long_article.brief
+    long_system = summarize.system_prompt(
+        app.summarize,
+        source_words=long_row.article.band_source_words,
+        brief=long_row.article.brief,
+    )
+    short_system = summarize.system_prompt(
+        app.summarize,
+        source_words=short_row.article.band_source_words,
+        brief=short_row.article.brief,
+    )
+    assert long_system != short_system
+
+
+def test_a_refilled_row_carries_the_published_words_as_its_target(app: AppConfig) -> None:
+    """The assistant turn is what the digest published, through the decoder's rail."""
+    article, full_text = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+
+    rows = corpus.harvest_rows(
+        [corpus.rescored(article, full_text, recorded=recorded, published=REFILL_PUBLISHED)],
+        date=DATE,
+        prompt_config=app.summarize,
+        evaluation=app.evaluation,
+    )
+
+    assert len(rows) == 1
+    target = json.loads(rows[0].messages[2].content)
+    assert target["title"] == REFILL_PUBLISHED.title
+    assert target["summary"] == REFILL_PUBLISHED.summary
+    assert target["key_points"] == list(REFILL_PUBLISHED.key_points)
+    assert rows[0].messages[1].content == summarize.user_turn(article)
+
+
+def test_a_refilled_row_is_the_same_bytes_as_a_harvested_row(app: AppConfig) -> None:
+    """Both paths hand `harvest_rows` a `Scored`, so both must spell one row alike.
+
+    This fails the day `rescored` puts a field somewhere the live pipeline does
+    not - a title into the summary slot, key points in a different order - which
+    no metric would catch and which would teach the model the wrong shape.
+    """
+    article, full_text = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    rebuilt = corpus.rescored(
+        article, full_text, recorded=recorded, published=REFILL_PUBLISHED
+    )
+    live = corpus.Scored(
+        article=article,
+        summary=Summary(
+            version=Summary.schema_version(),
+            item_id=recorded.item_id,
+            url_key=recorded.url_key,
+            title=REFILL_PUBLISHED.title,
+            summary=REFILL_PUBLISHED.summary,
+            key_points=list(REFILL_PUBLISHED.key_points),
+            pipeline_fingerprint=recorded.pipeline_fingerprint,
+            output_digest=recorded.output_digest,
+            model_id=recorded.model_id,
+            attempt=recorded.attempt,
+            source_truncated=article.truncated,
+            generated_at=recorded.scored_at,
+            status=SummaryStatus.OK,
+        ),
+        row=rebuilt.row,
+    )
+
+    harvested = corpus.harvest_rows(
+        [live], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
+    )
+    refilled = corpus.harvest_rows(
+        [rebuilt], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
+    )
+
+    assert harvested and refilled
+    assert corpus.to_line(refilled[0]) == corpus.to_line(harvested[0])
+
+
+def test_the_counterweights_are_measured_against_the_body_that_came_back(
+    app: AppConfig,
+) -> None:
+    """A page edited past its summary loses the row, whatever the ledger recorded.
+
+    This is the whole safety argument for re-fetching. The recorded row says the
+    pair was fine, because it was fine against a body this process never saw. If
+    `rescored` trusted it, an article that has since been rewritten would still
+    be taught with a summary it no longer supports.
+    """
+    unrelated = (
+        "The city transport board approved a new tram alignment along the eastern "
+        "quays yesterday, after a consultation that drew 800 responses. Work is "
+        "expected to begin in autumn and to last four years. The board said fares "
+        "would not rise to pay for it, and that two ferry routes would keep "
+        "running throughout construction. A cycle lane will be rebuilt alongside "
+        "the tracks, and 60 trees are to be planted where the depot once stood."
+    )
+    article, full_text = refetched(unrelated, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    assert corpus.keeps_its_counterweights(recorded, evaluation=app.evaluation)
+
+    rebuilt = corpus.rescored(
+        article, full_text, recorded=recorded, published=REFILL_PUBLISHED
+    )
+
+    assert rebuilt.row is not None
+    assert rebuilt.row.coverage < recorded.coverage
+    assert not corpus.keeps_its_counterweights(rebuilt.row, evaluation=app.evaluation)
+    assert not corpus.harvest_rows(
+        [rebuilt], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
+    )
+
+
+def test_a_determinism_violation_is_carried_across_the_rebuild(app: AppConfig) -> None:
+    """It is a property of two decodes, not of the text, so a re-fetch cannot clear it.
+
+    Recomputing it as False would silently un-fail an item the run had caught.
+    """
+    article, full_text = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED, determinism_violation=True)
+
+    rebuilt = corpus.rescored(
+        article, full_text, recorded=recorded, published=REFILL_PUBLISHED
+    )
+
+    assert rebuilt.row is not None
+    assert rebuilt.row.determinism_violation is True
+    assert not corpus.harvest_rows(
+        [rebuilt], date=DATE, prompt_config=app.summarize, evaluation=app.evaluation
+    )
+
+
+def test_the_join_accepts_the_output_the_row_actually_scored(app: AppConfig) -> None:
+    article, _ = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+
+    assert corpus.published_is_the_scored_one(REFILL_PUBLISHED, recorded=recorded)
+
+
+def test_the_join_refuses_a_summary_a_later_run_rewrote(app: AppConfig) -> None:
+    """Two runs summarize one article, and only one of them is this row's output.
+
+    Without this check a re-run's wording would be paired with the earlier run's
+    measurements, and the corpus would teach a summary nobody published.
+    """
+    article, _ = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    rewritten = REFILL_PUBLISHED._replace(summary=REFILL_PUBLISHED.summary + " It was updated.")
+
+    assert not corpus.published_is_the_scored_one(rewritten, recorded=recorded)
 
 
 # --- The roll --------------------------------------------------------------

@@ -1,19 +1,39 @@
-"""The operator's four verbs, run against a real corpus in a temp directory.
+"""The operator's six verbs, run against a real corpus in a temp directory.
 
-No mocks and no network (Rule #7). `verify --tokens` is the one path that
-reaches the network, and the test for it is that it cannot run without the flag.
+No mocks and no network (Rule #7). `refill` and `verify --tokens` are the two
+paths that reach the network: `refill` takes its fetcher as an argument, so a
+test drives it with real captured bytes, and the test for `verify --tokens` is
+that it cannot run without the flag.
 """
 
 from __future__ import annotations
 
+from collections import Counter
+from collections.abc import Callable, Sequence
 from pathlib import Path
 
 import pytest
-from conftest import CONFIG_DIR, read_text
+from conftest import (
+    CONFIG_DIR,
+    CONTRACT_FIXTURES_DIR,
+    REFILL_BODY,
+    REFILL_PUBLISHED,
+    read_text,
+    refetched,
+    refill_page,
+    refill_recorded,
+)
 
-from idhazh import corpus
+from idhazh import config, corpus
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.article import Article
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
+from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
+from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.corpus import Published
+from idhazh.evals import writer
+from idhazh.fetch import FetchResult
 from utilities import data_wrangler
 
 
@@ -281,16 +301,327 @@ def test_remove_says_so_when_no_row_holds_that_address(
     assert "no row holds url_key 999" in capsys.readouterr().out
 
 
+# --- refill ----------------------------------------------------------------
+
+
+@pytest.fixture
+def app() -> AppConfig:
+    return AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+
+
+def a_ledger(tmp_path: Path, rows: Sequence[EvalRow]) -> Path:
+    path = tmp_path / "scores.csv"
+    writer.append(path, rows)
+    return path
+
+
+def a_digest(tmp_path: Path, *, date: str, items: Sequence[DigestItem]) -> Path:
+    """One committed day payload, in the layout `published_days` globs for.
+
+    The run and vertical tallies are derived from the items rather than typed,
+    because `DigestDay` cross-checks all three and a hand-typed count only ever
+    disagrees.
+    """
+    verticals = Counter(item.vertical for item in items)
+    day = DigestDay(
+        version=DigestDay.schema_version(),
+        date=date,
+        generated_at=f"{date}T06:00:00Z",
+        partial=False,
+        items_planned=len(items),
+        items_failed=0,
+        runs=[DigestRunRef(n=1, at=f"{date}T06:00:00Z", items_added=len(items))],
+        verticals=[
+            DigestVerticalRef(id=name, display_name=name.title(), count=count)
+            for name, count in sorted(verticals.items())
+        ],
+        items=list(items),
+    )
+    root = tmp_path / "digest"
+    path = root / date[:4] / date[5:7] / date[8:10] / "digest.json"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(day.to_json(), encoding="utf-8", newline="")
+    return root
+
+
+def a_digest_item(article: Article, published: Published) -> DigestItem:
+    base = DigestDay.from_json(
+        read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json")
+    ).items[0]
+    return base.model_copy(
+        update={
+            "item_id": article.item_id,
+            "vertical": article.vertical,
+            "title": published.title,
+            "summary": published.summary,
+            "key_points": list(published.key_points),
+            "source_url": article.canonical_url,
+            "source_id": "grid-newsroom",
+            "source_form": article.source_form,
+            "introduced_by_run": 1,
+            "updated_by_run": None,
+            "visual": None,
+        }
+    )
+
+
+def serving(pages: dict[str, bytes | None]) -> Callable[[str], FetchResult]:
+    """Serve each address its bytes; a `None` is a page that is gone."""
+
+    def read_url(url: str) -> FetchResult:
+        body = pages.get(url)
+        if body is None:
+            return FetchResult(FetchOutcome.PERMANENT, status=404, detail="HTTP 404")
+        return FetchResult(FetchOutcome.OK, status=200, body=body)
+
+    return read_url
+
+
+def test_refill_rebuilds_a_row_from_the_address_the_ledger_recorded(
+    tmp_path: Path, app: AppConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The claim of the verb: a committed ledger row plus a live page is a row."""
+    article, _ = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    corpus_dir = tmp_path / "corpus"
+
+    code = data_wrangler.refill(
+        corpus_dir,
+        config.load(CONFIG_DIR),
+        ledger_path=a_ledger(tmp_path, [recorded]),
+        digest_root=a_digest(
+            tmp_path, date=recorded.date, items=[a_digest_item(article, REFILL_PUBLISHED)]
+        ),
+        limit=None,
+        read_url=serving({article.canonical_url: refill_page(REFILL_BODY)}),
+    )
+
+    rows = corpus.read_rows(corpus_dir)
+    assert code == 0
+    assert [row.url_key for row in rows] == [article.url_key]
+    assert rows[0].date == recorded.date
+    assert "bodies re-fetched          1 of 1" in capsys.readouterr().out
+
+
+def test_refill_reaches_no_address_it_already_holds_a_row_for(
+    tmp_path: Path, app: AppConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """Re-fetching what the window already has would spend a network round trip
+    to produce a row the roll would then deduplicate away."""
+    article, _ = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    corpus_dir = tmp_path / "corpus"
+    ledger_path = a_ledger(tmp_path, [recorded])
+    digest_root = a_digest(
+        tmp_path, date=recorded.date, items=[a_digest_item(article, REFILL_PUBLISHED)]
+    )
+    settings = config.load(CONFIG_DIR)
+    data_wrangler.refill(
+        corpus_dir,
+        settings,
+        ledger_path=ledger_path,
+        digest_root=digest_root,
+        limit=None,
+        read_url=serving({article.canonical_url: refill_page(REFILL_BODY)}),
+    )
+    capsys.readouterr()
+
+    def refuse(url: str) -> FetchResult:
+        raise AssertionError(f"refill re-fetched an address it already holds: {url}")
+
+    code = data_wrangler.refill(
+        corpus_dir,
+        settings,
+        ledger_path=ledger_path,
+        digest_root=digest_root,
+        limit=None,
+        read_url=refuse,
+    )
+
+    assert code == 0
+    assert "skipped already in the window" in capsys.readouterr().out
+    assert len(corpus.read_rows(corpus_dir)) == 1
+
+
+def test_refill_drops_an_address_that_no_longer_answers_and_keeps_the_rest(
+    tmp_path: Path, app: AppConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The open web loses pages. One 404 may not take the other rows down with it."""
+    gone_url = "https://grid.example.com/2026/08/removed"
+    alive, _ = refetched(REFILL_BODY, app)
+    gone, _ = refetched(REFILL_BODY, app, url=gone_url, item_id="energy-02")
+    rows = [
+        refill_recorded(alive, REFILL_PUBLISHED),
+        refill_recorded(gone, REFILL_PUBLISHED),
+    ]
+    corpus_dir = tmp_path / "corpus"
+
+    code = data_wrangler.refill(
+        corpus_dir,
+        config.load(CONFIG_DIR),
+        ledger_path=a_ledger(tmp_path, rows),
+        digest_root=a_digest(
+            tmp_path,
+            date=rows[0].date,
+            items=[
+                a_digest_item(alive, REFILL_PUBLISHED),
+                a_digest_item(gone, REFILL_PUBLISHED),
+            ],
+        ),
+        limit=None,
+        read_url=serving(
+            {alive.canonical_url: refill_page(REFILL_BODY), gone_url: None}
+        ),
+    )
+    printed = capsys.readouterr().out
+
+    assert code == 0
+    assert [row.url_key for row in corpus.read_rows(corpus_dir)] == [alive.url_key]
+    assert "bodies re-fetched          1 of 2" in printed
+    assert "no body" in printed
+
+
+def test_refill_will_not_pair_a_summary_a_later_run_rewrote(
+    tmp_path: Path, app: AppConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The published item must recompute to the digest the ledger row recorded."""
+    article, _ = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+    rewritten = REFILL_PUBLISHED._replace(summary=REFILL_PUBLISHED.summary + " Updated.")
+    corpus_dir = tmp_path / "corpus"
+
+    code = data_wrangler.refill(
+        corpus_dir,
+        config.load(CONFIG_DIR),
+        ledger_path=a_ledger(tmp_path, [recorded]),
+        digest_root=a_digest(
+            tmp_path, date=recorded.date, items=[a_digest_item(article, rewritten)]
+        ),
+        limit=None,
+        read_url=serving({article.canonical_url: refill_page(REFILL_BODY)}),
+    )
+
+    assert code == 0
+    assert corpus.read_rows(corpus_dir) == []
+    assert "published output is a different one" in capsys.readouterr().out
+
+
+def test_refill_will_not_reach_for_a_pair_the_run_itself_rejected(
+    tmp_path: Path, app: AppConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """A pair the counterweights already failed is dropped before the fetch.
+
+    The saved round trip is the smaller half. The larger half is that the only
+    way such a pair could pass on re-measurement is if the page moved under it,
+    and a row that needs the article to have changed is not one to teach.
+    """
+    article, _ = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED, unsupported_numbers=2)
+    corpus_dir = tmp_path / "corpus"
+
+    def refuse(url: str) -> FetchResult:
+        raise AssertionError(f"refill fetched a pair the run rejected: {url}")
+
+    code = data_wrangler.refill(
+        corpus_dir,
+        config.load(CONFIG_DIR),
+        ledger_path=a_ledger(tmp_path, [recorded]),
+        digest_root=a_digest(
+            tmp_path, date=recorded.date, items=[a_digest_item(article, REFILL_PUBLISHED)]
+        ),
+        limit=None,
+        read_url=refuse,
+    )
+
+    assert code == 0
+    assert corpus.read_rows(corpus_dir) == []
+    assert "the run that made it already rejected it" in capsys.readouterr().out
+
+
+def test_refill_at_a_limit_of_zero_touches_no_address(
+    tmp_path: Path, app: AppConfig, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """How an operator reads the plan before spending an hour of network on it."""
+    article, _ = refetched(REFILL_BODY, app)
+    recorded = refill_recorded(article, REFILL_PUBLISHED)
+
+    def refuse(url: str) -> FetchResult:
+        raise AssertionError(f"a limit of zero fetched {url}")
+
+    code = data_wrangler.refill(
+        tmp_path / "corpus",
+        config.load(CONFIG_DIR),
+        ledger_path=a_ledger(tmp_path, [recorded]),
+        digest_root=a_digest(
+            tmp_path, date=recorded.date, items=[a_digest_item(article, REFILL_PUBLISHED)]
+        ),
+        limit=0,
+        read_url=refuse,
+    )
+
+    assert code == 0
+    assert "rebuildable                1" in capsys.readouterr().out
+
+
+def test_refill_keeps_the_rows_it_had_already_rebuilt_when_it_is_interrupted(
+    tmp_path: Path, app: AppConfig, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A re-fetch of the whole ledger runs for tens of minutes. Stopping it, or
+    losing the network half way, may not throw away every fetch that succeeded.
+
+    CLAUDE.md section 1a: a re-run costs only the unfinished items. The window is
+    committed every `_COMMIT_EVERY` items through the same temp-file-plus-rename
+    write the scheduled harvest uses, so what is already rebuilt survives and the
+    next run skips it.
+    """
+    monkeypatch.setattr(data_wrangler, "_COMMIT_EVERY", 2)
+    built = [
+        refetched(
+            REFILL_BODY,
+            app,
+            url=f"https://grid.example.com/2026/08/item-{n}",
+            item_id=f"energy-{n:02d}",
+        )
+        for n in range(3)
+    ]
+    rows = [refill_recorded(article, REFILL_PUBLISHED) for article, _ in built]
+    reachable = {built[0][0].canonical_url, built[1][0].canonical_url}
+    corpus_dir = tmp_path / "corpus"
+
+    def read_url(url: str) -> FetchResult:
+        if url not in reachable:
+            raise KeyboardInterrupt("the operator stopped it")
+        return FetchResult(FetchOutcome.OK, status=200, body=refill_page(REFILL_BODY))
+
+    with pytest.raises(KeyboardInterrupt):
+        data_wrangler.refill(
+            corpus_dir,
+            config.load(CONFIG_DIR),
+            ledger_path=a_ledger(tmp_path, rows),
+            digest_root=a_digest(
+                tmp_path,
+                date=rows[0].date,
+                items=[a_digest_item(article, REFILL_PUBLISHED) for article, _ in built],
+            ),
+            limit=None,
+            read_url=read_url,
+        )
+
+    kept = {row.url_key for row in corpus.read_rows(corpus_dir)}
+    assert kept == {built[0][0].url_key, built[1][0].url_key}
+    assert corpus.read_meta(corpus_dir).rows == 2, "the census agrees with the rows"
+
+
 # --- shape -----------------------------------------------------------------
 
 
 def test_the_wrangler_owns_no_schedule_and_reimplements_no_roll() -> None:
     """A local utility has no alarm on it, so nothing recurring may live here.
 
-    `backfill` does call the harvest, and that is the point: a deliberate replay
-    a person runs once is not routine data movement. What it must never do is
-    grow its own copy of the roll or its own idea of when to run, because that is
-    the copy that drifts from the scheduled one.
+    `backfill` and `refill` do call the harvest, and that is the point: a
+    deliberate replay a person runs once is not routine data movement. What they
+    must never do is grow their own copy of the roll or their own idea of when to
+    run, because that is the copy that drifts from the scheduled one.
     """
     source = read_text(Path(data_wrangler.__file__))
 

@@ -32,6 +32,14 @@ non-ASCII, exactly as every other persisted payload here does, so the corpus
 diffs and round-trips under the same rule as the digest. The plan that asked for
 this preferred raw UTF-8 for its byte count; the difference survives gzip almost
 entirely, and one serialization convention is worth more than that.
+
+**A row can also be rebuilt from the address, once the artifact has expired.**
+`rescored` pairs the published summary with the body a re-fetch just returned,
+and measures every counterweight again against that body rather than trusting
+the numbers the ledger recorded against a body this process never saw. That is
+what makes the rebuild safe on a page that has been edited since: a summary the
+article no longer supports now fails the same gate a live run applies, so it is
+dropped instead of taught.
 """
 
 from __future__ import annotations
@@ -48,10 +56,11 @@ from pydantic import ValidationError
 from idhazh import assemble, summarize
 from idhazh.contracts.app_config import EvaluationConfig, FinetuneConfig, SummarizeConfig
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import compact_json, derive_text_digest
+from idhazh.contracts.base import compact_json, derive_output_digest, derive_text_digest
 from idhazh.contracts.corpus import ChatRole, ChatTurn, CorpusMeta, CorpusRow
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.summary import Summary, SummaryStatus
+from idhazh.evals import metrics
 
 LOG: Final = logging.getLogger(__name__)
 
@@ -215,6 +224,93 @@ def scored_from_items(items_dir: Path) -> list[Scored]:
             )
         )
     return found
+
+
+# --- Rebuilding one item from its address ----------------------------------
+
+
+class Published(NamedTuple):
+    """One item's assistant turn, as the committed digest holds it."""
+
+    title: str
+    summary: str
+    key_points: tuple[str, ...]
+
+
+def published_is_the_scored_one(published: Published, *, recorded: EvalRow) -> bool:
+    """Does this published item prove it is the output the ledger row scored?
+
+    `output_digest` is taken over exactly the title, the summary and the key
+    points, so recomputing it here is a real join check rather than a plausible
+    one. A digest payload and an eval row can share a `url_key` and still be two
+    different summaries of one article - a re-run makes that ordinary - and
+    pairing the wrong one with a re-fetched body would teach a summary nobody
+    ever published.
+    """
+    recomputed = derive_output_digest(
+        published.summary, list(published.key_points), title=published.title
+    )
+    return recomputed == recorded.output_digest
+
+
+def rescored(
+    article: Article, full_text: str, *, recorded: EvalRow, published: Published
+) -> Scored:
+    """One item measured again, against the body a re-fetch just returned.
+
+    Every counterweight is measured here rather than read off `recorded`, and
+    that is the entire reason this function exists. The recorded numbers scored
+    a body this process has not seen. A page edited since would keep a coverage
+    figure that waves through a summary its own article no longer supports, so
+    re-measuring is what lets `keeps_its_counterweights` judge the exact pair the
+    row is about to teach.
+
+    `determinism_violation` is the one measure carried across untouched. It is a
+    property of two decodes of one prompt rather than of the text, so a re-fetch
+    learns nothing new about it, and recomputing it as False would silently
+    un-fail an item the run had already caught.
+
+    The row it returns is a gate input and never a ledger row: `hhem` and its two
+    companions still describe the old body, because nothing here can rescore
+    faithfulness without the model. Writing this row to `state/scores.csv` would
+    put a stale faithfulness score under a fresh `source_digest`.
+    """
+    text = published.summary
+    row = EvalRow.model_validate(
+        {
+            **recorded.model_dump(mode="json"),
+            "coverage": metrics.lead_coverage(text, full_text),
+            "compression": metrics.compression(text, full_text),
+            "extractiveness": metrics.extractiveness(text, full_text),
+            "verbatim_run": metrics.verbatim_run(text, full_text),
+            "unsupported_numbers": metrics.unsupported_numbers(text, full_text),
+            "hedge_dropped": metrics.hedge_dropped(text, full_text),
+            "self_repetition": metrics.self_repetition(text),
+            "evidential_density": metrics.evidential_density(full_text),
+            "speculative_density": metrics.speculative_density(full_text),
+            "summary_word_count": metrics.word_count(text),
+            "truncation_flagged": article.truncated,
+            "source_word_count": article.source_word_count,
+            "source_seen_word_count": article.word_count,
+            "source_digest": derive_text_digest(article.text or ""),
+        }
+    )
+    summary = Summary(
+        version=Summary.schema_version(),
+        item_id=recorded.item_id,
+        url_key=recorded.url_key,
+        title=published.title,
+        summary=text,
+        key_points=list(published.key_points),
+        pipeline_fingerprint=recorded.pipeline_fingerprint,
+        output_digest=recorded.output_digest,
+        model_id=recorded.model_id,
+        attempt=recorded.attempt,
+        source_truncated=article.truncated,
+        generated_at=recorded.scored_at,
+        status=SummaryStatus.OK,
+    )
+    return Scored(article=article, summary=summary, row=row)
 
 
 def _target(
