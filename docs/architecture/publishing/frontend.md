@@ -61,6 +61,16 @@ Class strategy, not media query: a reader on a dark-defaulted phone who wants to
 
 **A theme is exactly one `[data-theme="x"]` block supplying the token names in `frontend/src/styles/tokens.css` and nothing else.** The mechanism ships; two themes ship. A third means re-picking three band colours, eight source swatches and a focus colour and carrying them forever for a reader nobody has met.
 
+The browser's own chrome follows the page. `app.html` ships two media-scoped `theme-color` tags, one per system preference, because an installed window reads those at launch before any script has run. A media query only knows what the system wants, so `apply()` in `$lib/theme` also writes one unconditional tag from the resolved `--color-bg`; an unconditional tag wins over both, which is what keeps a manually chosen light page from sitting under dark chrome.
+
+## Installability
+
+`frontend/static/manifest.webmanifest`, four PNG icons and the `theme-color` tags above. That is the whole feature, and the doctrine around it - including the ban on `Notification` and `PushManager`, and why there is no service worker - is in [../../concepts/ui-shell.md](../../concepts/ui-shell.md).
+
+The icons are generated once from two committed SVG sources, `app-icon.svg` and `app-icon-maskable.svg`, using `sharp` installed with `--no-save` and removed afterwards: the PNGs are the committed artefact, not the toolchain. The maskable variant is a second drawing rather than a crop, with the mark inside the central 80 percent, because a platform that crops the square icon takes the ends off the bars. Measured 2026-08-29: 48,788 B for the six files, of which 46,869 B is raster.
+
+Every path in the manifest is relative, which is what makes the project path a non-issue: `start_url` and `scope` are `.`, and each icon `src` starts `./`, so all of them resolve against the manifest's own URL. SvelteKit rewrites `%sveltekit.assets%` per page depth, so the root emits `./manifest.webmanifest` and a dated page emits `../manifest.webmanifest`, and both land on the same file.
+
 ## The confidence signal, and the argument about it
 
 This is where Reader and the owner disagreed, and it is worth recording properly.
