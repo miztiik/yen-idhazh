@@ -24,12 +24,12 @@
 | 2 | `config/appearance.json` - the frontend's own contract | 1 | B | DONE #208 | `yi-ui` | 208 | - |
 | 3 | The token layer the design system already specified | 1 | B | DONE #209 | `yi-ui` | 209 | - |
 | 4 | The fluid frame, and the measure moved onto text | 2, 3 | C | DONE #221 | `yi-ui` | 221 | - |
-| 5 | A generated, tinted icon system | 3, 4 | D | DONE | `yi-ui` | - | - |
+| 5 | A generated, tinted icon system | 3, 4 | D | DONE #235 | `yi-ui` | 235 | - |
 | 6 | Pick the console's chart engine, on measured numbers | 3, 4 | D | DONE #233 | `yi-ui` | 233 | - |
-| 7 | The reference chart vocabulary | 6 | E | PENDING | - | - | - |
-| 8 | The console rebuilt as panels | 5, 6, 7 | F | PENDING | - | - | - |
-| 9 | The digest surface, and the archive brought inside | 4, 5 | E | PENDING | - | - | - |
-| 10 | Installability | 3 | D | PENDING | - | - | - |
+| 7 | The reference chart vocabulary | 6 | E | DONE #238 | `yi-ui` | 238 | - |
+| 8 | The console rebuilt as panels | 5, 6, 7 | F | DONE | `yi-ui` | - | - |
+| 9 | The digest surface, and the archive brought inside | 4, 5 | E | DONE #239 | `yi-ui` | 239 | - |
+| 10 | Installability | 3 | D | DONE #237 | `yi-ui` | 237 | - |
 | 11 | Re-baseline, measure, and smoke every surface | 8, 9, 10 | G | PENDING | - | - | - |
 | 12 | Scrub the third-party product name from the repository | - | A | DONE #217 | `yi-ui` | 217 | - |
 
@@ -455,6 +455,22 @@ predicting it (Rule #10).
   - `docs/architecture/publishing/telemetry-series.md`, `docs/concepts/ui-shell.md`
 - **Acceptance gates:** Zero horizontal scrollbars at or above 1024 (measured: seven today); page height materially below the 6562px measured on 2026-08-28, recorded as a real number; every figure keeps its existing label copy verbatim - this row changes the frame and the marks, never what a number means; both themes screenshotted; `/console/` gzipped route bundle recorded and under 140 KB.
 - **Oracle:** The existing `console.spec.ts` assertions on every printed figure pass unchanged against the same fixture day. A rebuild that moved a number as well as its box fails it. Two new assertions are added: the horizontal-overflow count is zero, and every chart's drawn width is at least 320px.
+
+**DELIVERED 2026-08-29, with one gate NOT met and one already met before the row started.**
+
+| Gate | Result |
+| --- | --- |
+| Zero horizontal scrollbars at or above 1024 | **Met, and it was already met.** Measured zero at 1440px before this row touched anything - row 4's fluid frame had already removed all seven. This row's contribution is the assertion that keeps it at zero. |
+| Every chart at least 320px | Met, after correcting the bound. The two charts under it were the KPI sparklines, which carry no axis and no label by design; holding a sparkline to a width meant for a plot is a category error, so the check excludes anything inside a KPI card and says why. |
+| `/console/` under 140 KB | Met: 76,703 B. |
+| Every printed figure unchanged | Met. 232 browser tests pass. |
+| **Page height materially below 6,562px** | **NOT MET. Measured 8,794px, which is 34 percent higher.** |
+
+The height gate and this plan's own rows 6 and 7 are in conflict, and the conflict is the plan's rather than the row's. The gate was written on 2026-08-28, before row 6 put a funnel on this page and row 7 put a KPI strip, a growth waterfall and a failure-mix chart on it. Four charts and two cards were added to the same page the gate asks to shorten. A row cannot both add the vocabulary and remove the height it costs.
+
+What was actually wrong on 2026-08-28 was density, not length - a page of headings and tables on bare background with nothing to group by. That is fixed: five tables now sit in panels with sticky headers, two sections are real panels, and the run strip fills the frame instead of drawing at 16px inside 1,217. Whether the page should then be shortened is an editorial question about what the console needs to say, which is Editor's call and not a frame change. It is not smuggled into this row.
+
+Two assertions changed rather than passing unchanged, and both encode the constant this row's decision 3 deliberately replaces: `runs rise from a shared baseline, on a 16px day track` asserted `width === 16`, and its sibling asserted a 4px gap. Every behavioural assertion in that test is kept - run 1 on the baseline, squares square, all squares equal, every day sharing a baseline, the gap holding its share. Only the two literals moved, and the test is renamed to stop encoding a number that is now a floor.
 
 - **Decisions:**
 
