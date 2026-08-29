@@ -362,6 +362,9 @@ function numberCell(value: string): number | null {
 export function parseTelemetryCsv(text: string): TelemetryRow[] {
 	const rows = parseCsv(text);
 	const header = rows[0] ?? [];
+	// A prefix, not an equality, on purpose: a cached bundle must keep reading a
+	// shard that grew a column. `backend/tests/test_contracts.py` holds the
+	// prefix against the writer, so tightening this buys nothing and breaks that.
 	if (TELEMETRY_COLUMNS.some((name, index) => header[index] !== name)) {
 		throw new Error('telemetry projection header did not match the contract');
 	}

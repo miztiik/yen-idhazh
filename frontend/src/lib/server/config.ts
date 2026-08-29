@@ -145,9 +145,11 @@ const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70 };
 const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
-		{ min_source_words: 0, target_words_min: 50, target_words_max: 90 },
+		{ min_source_words: 0, target_words_min: 30, target_words_max: 45 },
+		{ min_source_words: 60, target_words_min: 50, target_words_max: 90 },
 		{ min_source_words: 700, target_words_min: 70, target_words_max: 150 },
-		{ min_source_words: 2000, target_words_min: 110, target_words_max: 200 }
+		{ min_source_words: 2000, target_words_min: 110, target_words_max: 200 },
+		{ min_source_words: 3000, target_words_min: 150, target_words_max: 230 }
 	]
 };
 const CONSOLE_DEFAULTS: ConsoleConfig = {
