@@ -112,6 +112,8 @@ export interface ChartConfig {
 	/** The width the SERVER draws at. The client re-measures once a script runs. */
 	width_px: number;
 	hover_readout: boolean;
+	/** The widest the readout strip under a plot may be, as a share of that plot. */
+	readout_max_share: number;
 	palette: 'categorical' | 'sequential';
 	tick_density: number;
 	sparkline_height_px: number;
@@ -192,6 +194,7 @@ const CHART_DEFAULTS: ChartConfig = {
 	height_px: 220,
 	width_px: 760,
 	hover_readout: true,
+	readout_max_share: 0.33,
 	palette: 'categorical',
 	tick_density: 6,
 	sparkline_height_px: 36,
