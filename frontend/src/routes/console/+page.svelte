@@ -15,10 +15,20 @@
 	 */
 	import { base } from '$app/paths';
 	import { axisLabels, CELL_PX, GAP_PX, type LabelAlign } from '$lib/charts/run-history';
-	import { grouped } from '$lib/charts/series';
+	import { datesIn, failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import StageTimings from '$lib/components/StageTimings.svelte';
+	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFunnel } from '$lib/charts/chart-funnel';
+	import {
+		failureMix,
+		publishedTrend,
+		routerCost,
+		runHealth,
+		ROUTER_MINUTES_TARGET,
+		siteGrowth,
+		sizeTrend
+	} from '$lib/charts/glance';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import type { Health, ModelDay } from './+page.server';
@@ -66,6 +76,25 @@
 
 	function mb(bytes: number): string {
 		return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	}
+
+	/** The card takes the hue of what it means. The ceiling is 1 GB (Rule #2), so
+	 * three quarters of it is a warning and nine tenths is a fault. */
+	const SITE_CEILING = 1024 * 1024 * 1024;
+	const sizeTone = $derived.by(() => {
+		const bytes = data.manifests[0]?.siteBytes ?? 0;
+		if (bytes >= SITE_CEILING * 0.9) return 'bad' as const;
+		if (bytes >= SITE_CEILING * 0.75) return 'warn' as const;
+		return 'neutral' as const;
+	});
+
+	/** The same window the server drew with. Both sides derive it from the rows
+	 * rather than passing it, so the hydrated chart cannot disagree with the one
+	 * already on the page. */
+	function failureSeriesFor(rows: TelemetryRow[]) {
+		const dates = datesIn(rows);
+		if (dates.length === 0) return [];
+		return failureSeries(rows, { start: dates[0], end: dates[dates.length - 1] });
 	}
 
 	/** A minute count, or a dash where there is no number to print.
@@ -206,6 +235,95 @@
 		{data.totalRows} scored {data.totalRows === 1 ? 'item' : 'items'} on record.
 		{data.itemHealthRows} item-health {data.itemHealthRows === 1 ? 'row' : 'rows'} on record.
 	</p>
+
+	<!-- Six questions, six shapes. A different chart per question is the point:
+	     one shape repeated is what made this page read as a single instrument. -->
+	<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">At a glance</h2>
+	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
+		<KpiCard
+			label="Charts published"
+			value={String(data.charts.reduce((sum, day) => sum + day.published, 0))}
+			note="over the days on record"
+			tone="info"
+			movement={data.glance.publishedMovement}
+			trendSvg={data.glance.publishedSvg}
+			trendOption={publishedTrend(data.charts).option}
+		/>
+		<KpiCard
+			label="Site size"
+			value={mb(data.manifests[0]?.siteBytes ?? 0)}
+			note="1 GB ceiling"
+			tone={sizeTone}
+			movement={data.glance.sizeMovement}
+			trendSvg={data.glance.sizeSvg}
+			trendOption={sizeTrend(data.manifests).option}
+		/>
+		{#if data.glance.healthSvg}
+			<figure class="panel" data-glance-chart="runs">
+				<figcaption class="text-[0.75rem] text-text-tertiary">Did the runs finish?</figcaption>
+				<Chart
+					svg={data.glance.healthSvg}
+					option={runHealth(data.manifests).option}
+					width={260}
+					height={200}
+					label="Share of planned items that finished, against those that failed"
+				/>
+			</figure>
+		{/if}
+		{#if data.glance.costSvg}
+			<figure class="panel" data-glance-chart="router-cost">
+				<figcaption class="text-[0.75rem] text-text-tertiary">
+					Router minutes per published chart, against the {ROUTER_MINUTES_TARGET} that retires the
+					arm.
+				</figcaption>
+				<Chart
+					svg={data.glance.costSvg}
+					option={routerCost(data.charts).option}
+					width={460}
+					height={40}
+					label="Median router minutes per published chart against its target"
+				/>
+			</figure>
+		{/if}
+	</div>
+
+	{#if data.glance.growthSvg}
+		<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">Where the site's size came from</h2>
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+			Megabytes added or removed each day, starting from the oldest day on record. The ceiling is a
+			rate problem, not a level problem, so what matters is which days added what.
+		</p>
+		<div class="panel mt-3" data-glance-chart="growth">
+			<Chart
+				svg={data.glance.growthSvg}
+				option={siteGrowth(data.manifests).option}
+				width={760}
+				height={220}
+				label="Megabytes added or removed each day"
+			/>
+		</div>
+	{/if}
+
+	{#if data.glance.mixSvg}
+		<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">What is failing, by stage</h2>
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+			Stacked, so the height of a column is the day's total and the bands are what made it up.
+			Grouped bars would answer how big each stage is and lose the total, and the total is half the
+			question. A quiet day and a clean day look different here, which they would not on a
+			percentage scale.
+		</p>
+		<div class="panel mt-3" data-glance-chart="failure-mix">
+			<Chart
+				svg={data.glance.mixSvg}
+				option={failureMix(
+					failureSeriesFor(data.telemetryRows)
+				).option}
+				width={760}
+				height={220}
+				label="Failures per day by stage"
+			/>
+		</div>
+	{/if}
 
 	<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">Run health</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
