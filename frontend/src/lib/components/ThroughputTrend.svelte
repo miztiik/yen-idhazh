@@ -17,7 +17,14 @@
 	 * published console 2026-08-25, zero-anchored, the read whisker occupied
 	 * 17.5% of the plot height and the middle-half box 3.7%.
 	 */
-	import { chartWidth, frame, linearAxis, observeWidth } from '$lib/charts/frame';
+	import {
+		chartWidth,
+		frame,
+		linearAxis,
+		observeWidth,
+		pointerReadout,
+		type ReadoutMark
+	} from '$lib/charts/frame';
 	import { axisLabels, type LabelAlign } from '$lib/charts/run-history';
 	import type { ThroughputDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
@@ -45,6 +52,7 @@
 	/** The width the chart occupies, once a browser has measured it. Null on the
 	 * server, where the knob is the width. */
 	let measured = $state<number | null>(null);
+	let selected = $state<number | null>(null);
 
 	const ordered = $derived([...days].sort((a, b) => a.date.localeCompare(b.date)));
 	const calendar = $derived(
@@ -133,6 +141,24 @@
 		const pct = ((now - before) / before) * 100;
 		return `${pct >= 0 ? 'up' : 'down'} ${Math.abs(pct).toFixed(0)}%`;
 	}
+
+	/** One mark per day that drew a candle, at the day's own column.
+	 *
+	 * Per day rather than per candle, because the two series of one day are the
+	 * same measurement of the same articles and a reader stepping right means
+	 * the next day. The sentences are `caption()` unchanged - the same words the
+	 * `<title>` carries, which is the point: a `<title>` never fired on touch,
+	 * so on a phone those sentences did not exist.
+	 */
+	const marks = $derived<ReadoutMark[]>(
+		calendar.flatMap((date, index) => {
+			const day = byDate.get(date);
+			if (day === undefined) return [];
+			return [{ x: x(index), lines: drawn.map((series) => caption(day, series.key)) }];
+		})
+	);
+
+	const readout = $derived(selected === null ? null : (marks[selected] ?? null));
 </script>
 
 <h3 class="mt-6 text-[0.9375rem] font-semibold text-text">Model tokens per second</h3>
@@ -145,16 +171,23 @@
 	>.
 </p>
 
-<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-throughput="chart">
+<div class="relative mt-4 rounded-md border border-rule bg-surface p-3" data-throughput="chart">
 	<!-- The measured element is this one, not the card: the card's padding and
 	     border are not part of the width the chart draws into. -->
 	<div use:observeWidth={(px) => (measured = px)}>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
-			class="w-full"
+			class="w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			height={box.height}
 			viewBox={`0 0 ${box.width} ${box.height}`}
 			role="img"
+			tabindex="0"
 			aria-label="Model tokens per second per day, oldest day on the left"
+			use:pointerReadout={{
+				marks,
+				width: box.width,
+				onSelect: (index) => (selected = index)
+			}}
 		>
 			{#if drawn.length > 0}
 				<line
@@ -245,6 +278,20 @@
 		</svg>
 	</div>
 
+	{#if readout}
+		<!-- Pinned to the top of the plot, never to the pointer. It takes no
+		     pointer events, so it can sit over the candles without blocking them. -->
+		<div
+			class="pointer-events-none absolute inset-x-3 top-3 rounded-sm border border-rule bg-surface/95 px-2 py-1 text-[0.75rem] leading-snug text-text-tertiary"
+			data-readout="throughput"
+			aria-live="polite"
+		>
+			{#each readout.lines as line, index (index)}
+				<span class="block">{line}</span>
+			{/each}
+		</div>
+	{/if}
+
 	{#if newest}
 		<ul class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
 			{#each drawn as series (series.key)}
@@ -284,4 +331,7 @@
 			{/if}
 		</p>
 	{/if}
+	<p class="mt-1 text-[0.75rem] text-text-tertiary" data-readout-hint="throughput">
+		Keyboard: Left and Right step through the days. Escape closes.
+	</p>
 </div>

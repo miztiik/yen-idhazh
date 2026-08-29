@@ -1,3 +1,4 @@
+import { dayMonth } from '../format';
 import { daysInWindow, type TimeWindow } from './viewport';
 
 export const TELEMETRY_COLUMNS = [
@@ -32,8 +33,85 @@ export interface CompressionPoint {
 	date: string;
 	item_id: string;
 	source_words: number;
+	/** What the model was given, after the cut. Absent where it is the article's
+	 * own length, which is 2,517 of the 2,539 plotted rows measured 2026-08-29 -
+	 * the console page inlines every point, so a number saying "nothing was cut"
+	 * two and a half thousand times is real weight for no fact. */
+	source_seen_words?: number;
 	summary_words: number;
 	truncation_flagged: boolean;
+}
+
+/** What the model was given. An article nobody cut was given in full. */
+export function seenWords(point: CompressionPoint): number {
+	return point.source_seen_words ?? point.source_words;
+}
+
+/** One day's rows that the plot could not place, and how many.
+ *
+ * Counted per date rather than listed per row: the sentence needs a number for
+ * whatever window is open, and a date with a count carries that in a dozen
+ * bytes where one entry per row carried eleven bytes each.
+ */
+export interface UnplottedDay {
+	date: string;
+	n: number;
+}
+
+/** Where the cut fell, and over which days it was the cut in force. */
+export interface CapLine {
+	words: number;
+	/** Oldest and newest day in view that was cut at this length. */
+	first: string;
+	last: string;
+}
+
+/** Where the cut falls, read off the points that were cut.
+ *
+ * One entry per distinct post-cap length among the cut points in view, oldest
+ * first. Derived from the rows and never from `extract.truncation_cap_tokens`:
+ * a thirty-day window can hold two settings, so a line drawn from the setting
+ * is a claim about a config file rather than about the articles on the plot.
+ * The direction that matters is the other one - a config-derived line draws
+ * when nothing in view was cut at all, and this one cannot.
+ */
+export function capsInView(points: readonly CompressionPoint[]): CapLine[] {
+	const spans = new Map<number, { first: string; last: string }>();
+	for (const point of points) {
+		const seen = seenWords(point);
+		if (!point.truncation_flagged || seen <= 0) continue;
+		const span = spans.get(seen);
+		if (span === undefined) {
+			spans.set(seen, { first: point.date, last: point.date });
+			continue;
+		}
+		if (point.date < span.first) span.first = point.date;
+		if (point.date > span.last) span.last = point.date;
+	}
+	return [...spans.entries()]
+		.map(([words, span]) => ({ words, first: span.first, last: span.last }))
+		.sort((a, b) => a.first.localeCompare(b.first) || a.words - b.words);
+}
+
+/** What one cap line says about itself.
+ *
+ * A lone cap needs no date at all - it is the cut, over the whole window. Where
+ * there are several the labels read as a handover: the oldest names the last
+ * day it applied, and each later one names the first day it did.
+ */
+export function capLabel(caps: readonly CapLine[], index: number): string {
+	const cap = caps[index];
+	const words = `cut at ${grouped(cap.words)} words`;
+	if (caps.length === 1) return words;
+	return index === 0
+		? `${words} (to ${dayMonth(cap.last)})`
+		: `${words} (from ${dayMonth(cap.first)})`;
+}
+
+/** Thousands separated by hand, because `toLocaleString` reads the machine's
+ * locale and two builds have to agree. */
+export function grouped(value: number): string {
+	return String(value).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
 }
 
 export interface SummaryBand {

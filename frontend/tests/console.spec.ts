@@ -1,6 +1,12 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import {
+	capLabel,
+	capsInView,
+	grouped,
+	type CompressionPoint
+} from '../src/lib/charts/series';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
@@ -143,6 +149,39 @@ function runCount(): number {
 function scoredItems(): number {
 	const raw = readFileSync(join(CANARY, 'state', 'scores.csv'), 'utf8');
 	return raw.trim().split('\n').length - 1;
+}
+
+/** Every canary score row, read the way the page reads it. */
+function scoreRows(): Record<string, string>[] {
+	return readCsv(join(CANARY, 'state', 'scores.csv')).rows;
+}
+
+function words(row: Record<string, string>, column: string): number {
+	return Number(row[column] ?? 0) || 0;
+}
+
+/** The rows the compression plot can place: both lengths written down. */
+function plottedRows(): Record<string, string>[] {
+	return scoreRows().filter(
+		(row) => words(row, 'source_word_count') > 0 && words(row, 'summary_word_count') > 0
+	);
+}
+
+/** The rows that recorded no article length before the cut, so they have no x. */
+function noLengthRows(): Record<string, string>[] {
+	return scoreRows().filter((row) => words(row, 'source_word_count') <= 0);
+}
+
+/** The cut points the plot may mark: flagged, and stamped with the meaning the
+ * flag has now. The same gate the day's count in the table reads, because a
+ * plot claiming per item what the table refuses per day is one page telling two
+ * stories about one column. */
+function cutRows(): Record<string, string>[] {
+	return plottedRows().filter(
+		(row) =>
+			(row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM &&
+			(row.truncation_flagged === 'True' || row.truncation_flagged === 'true')
+	);
 }
 
 /** How many days a telemetry viewport window covers, ends included. */
@@ -803,7 +842,7 @@ test('the compression view draws the data once', async ({ page }) => {
 	}
 });
 
-test('the compression view draws every scored item, and marks the truncated ones', async ({
+test('the compression view draws every article it can place, and marks only a cut the ledger still means', async ({
 	page
 }) => {
 	await page.goto('/console/');
@@ -817,24 +856,229 @@ test('the compression view draws every scored item, and marks the truncated ones
 	const dots = await chart.locator('svg circle').count();
 	const diamonds = await chart.locator('svg rect').count();
 	expect(dots).toBeGreaterThan(0);
-	expect(diamonds, 'no truncated item, so the diamond is undrawn').toBeGreaterThan(0);
-	// Every scored row reaches the plot. A filter that dropped one would still
-	// leave a chart that looks right.
-	expect(dots + diamonds).toBe(scoredItems());
+	// Every row the plot can place reaches it, and no row it cannot does. A
+	// filter that dropped one either way would still leave a chart that looks
+	// right.
+	expect(dots + diamonds).toBe(plottedRows().length);
+	expect(plottedRows().length, 'the fixture places every row, so the count below is free').toBeLessThan(
+		scoredItems()
+	);
+
+	// The gate this row exists for. The plot used to read `truncation_flagged`
+	// straight off the row while the day's count in the table read it only over
+	// the rows stamped with its current meaning, so one page made two claims
+	// about one column. The fixture holds flagged rows either way, which is what
+	// makes the number below evidence rather than an absence.
+	const flagged = plottedRows().filter((row) => row.truncation_flagged === 'True').length;
+	expect(flagged, 'the fixture holds no flagged row, so the gate cannot be seen to fire').toBe(2);
+	expect(diamonds, 'a diamond is drawn for a cut the row still means, and for nothing else').toBe(
+		cutRows().length
+	);
 
 	await expect(chart.locator('[data-band-zone]')).toHaveCount(1);
 
 	// A log axis labelled at one decade is a linear axis with an odd label on
-	// it. The y ticks and the two axis titles carry their own attributes, so
-	// what is left is the decades.
+	// it. The y ticks, the cap labels and the two axis titles carry their own
+	// attributes, so what is left is the decades.
 	const decades = await chart
-		.locator('svg text:not([data-tick="y"]):not([data-axis])')
+		.locator('svg text:not([data-tick="y"]):not([data-axis]):not([data-cap-label])')
 		.evaluateAll((nodes) =>
 			nodes
 				.map((node) => (node.textContent ?? '').trim())
 				.filter((text) => /^10*$/.test(text))
 		);
 	expect(new Set(decades).size).toBeGreaterThan(1);
+});
+
+test('the cap line comes from the cut points in view, and a window with none draws none', () => {
+	// A fixture window built here rather than read off the canary: the canary is
+	// one day, and the fact under test is what happens when a window straddles
+	// two cap settings. A thirty-day window can, which is the whole reason the
+	// line is read off the rows instead of off `extract.truncation_cap_tokens`.
+	const point = (
+		date: string,
+		id: string,
+		full: number,
+		seen: number,
+		cut: boolean
+	): CompressionPoint => ({
+		date,
+		item_id: id,
+		source_words: full,
+		source_seen_words: seen,
+		summary_words: 120,
+		truncation_flagged: cut
+	});
+
+	const two = capsInView([
+		point('2026-08-26', 'a', 4120, 1923, true),
+		point('2026-08-27', 'b', 5200, 1923, true),
+		point('2026-08-28', 'c', 9000, 3846, true),
+		point('2026-08-28', 'd', 812, 812, false)
+	]);
+	// One line per distinct post-cap length, oldest first, and never one per
+	// cut article - four cut rows at two settings are two lines.
+	expect(two.map((cap) => cap.words)).toEqual([1923, 3846]);
+	// Each label names its own value and its own end of the handover.
+	expect(capLabel(two, 0)).toBe('cut at 1,923 words (to 27 Aug)');
+	expect(capLabel(two, 1)).toBe('cut at 3,846 words (from 28 Aug)');
+
+	// One cap over the whole window needs no date. It is the cut, throughout.
+	const one = capsInView([point('2026-08-28', 'c', 9000, 3846, true)]);
+	expect(one.map((cap) => cap.words)).toEqual([3846]);
+	expect(capLabel(one, 0)).toBe('cut at 3,846 words');
+
+	// The half a config-derived line fails. Nothing in view was cut, so there is
+	// no cut to draw - a line read off the knob draws one anyway and claims a cut
+	// the day never made.
+	expect(capsInView([point('2026-08-28', 'd', 812, 812, false)])).toEqual([]);
+	// A cut row with no recorded post-cap length has no x to sit at either.
+	expect(capsInView([point('2026-08-28', 'e', 4120, 0, true)])).toEqual([]);
+});
+
+test('a dashed line is drawn for every cut length the window holds, and for no other', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	const chart = page.locator('[data-compression]');
+	const caps = [...new Set(cutRows().map((row) => words(row, 'source_seen_word_count')))]
+		.filter((value) => value > 0)
+		.sort((a, b) => a - b);
+
+	await expect(
+		chart.locator('[data-cap-line]'),
+		'one dashed line per distinct cut length in view, and never one more'
+	).toHaveCount(caps.length);
+	// A line drawn from the knob would stand here whatever the rows held.
+	await expect(chart.locator('svg line[stroke-dasharray="3 3"]')).toHaveCount(caps.length);
+
+	for (const value of caps) {
+		await expect(chart.locator(`[data-cap-line="${value}"]`)).toHaveCount(1);
+		await expect(chart.locator(`[data-cap-label="${value}"]`)).toContainText(grouped(value));
+	}
+});
+
+test('the plot says how many articles it could not place, and the count is the rows', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// The canary scores one day, so every unplaced row is inside the window the
+	// page opens on. A fixture that grew a second scored day would fail here
+	// rather than quietly compare a window against a corpus.
+	expect(new Set(scoreRows().map((row) => row.date)).size).toBe(1);
+	const dropped = noLengthRows().length;
+	expect(dropped, 'every fixture row records a length, so the sentence proves nothing').toBe(2);
+
+	await expect(page.locator('[data-compression-note="not-plotted"]')).toHaveText(
+		`${dropped} articles in this window recorded no length before the cut, so they are not plotted.`
+	);
+});
+
+test('a window with no unplaced article does not print that sentence at all', async ({ page }) => {
+	await page.goto('/console/');
+
+	const sentence = page.locator('[data-compression-note="not-plotted"]');
+	await expect(sentence, 'the opening window drops rows, so the absence below is a change').toHaveCount(
+		1
+	);
+
+	// Reached the way a reader reaches it: by panning off the day that has rows.
+	const viewport = page.locator('[data-viewport-control]');
+	await viewport.focus();
+	for (let index = 0; index < 8; index += 1) {
+		await page.keyboard.press('ArrowLeft');
+	}
+
+	await expect(sentence).toHaveCount(0);
+});
+
+test('a mark reads out on the keyboard, and the readout closes on Escape', async ({ page }) => {
+	await page.goto('/console/');
+
+	const readout = page.locator('[data-readout="compression"]');
+	await expect(readout).toHaveCount(0);
+
+	// Focus reaches the series, not the points. A tab stop per point would be a
+	// two-and-a-half-thousand-stop tab order.
+	const plot = page.locator('[data-compression] svg');
+	await expect(plot).toHaveAttribute('tabindex', '0');
+	await plot.focus();
+	await expect(readout).toHaveCount(1);
+
+	const first = (await readout.innerText()).trim();
+	const viewport = page.locator('[data-viewport-control]');
+	const before = await viewport.getAttribute('data-window-start');
+	await page.keyboard.press('ArrowRight');
+	await expect(readout).not.toHaveText(first);
+	// The scatter sits inside the viewport control, which pans on the same two
+	// arrows. One step through the marks must not also move the window under
+	// them - it did, and the readout ended up pointing at a mark that had gone.
+	await expect(viewport, 'stepping a mark also panned the window').toHaveAttribute(
+		'data-window-start',
+		before ?? ''
+	);
+	// The numbers are in type, in the reader's words, and never a column name.
+	await expect(readout).toContainText(/\d+ \w+ - /);
+	await expect(readout).toContainText(
+		/Article [\d,]+ words(, cut to [\d,]+)?\. Summary [\d,]+ words\./
+	);
+
+	await page.keyboard.press('Escape');
+	await expect(readout).toHaveCount(0);
+
+	// And the hint that says so, under the chart it belongs to.
+	await expect(page.locator('[data-readout-hint="compression"]')).toHaveText(
+		'Keyboard: Left and Right step through the days. Escape closes.'
+	);
+});
+
+test('the candle reads out the sentence its title already carried', async ({ page }) => {
+	await page.goto('/console/');
+
+	const readout = page.locator('[data-readout="throughput"]');
+	await expect(readout).toHaveCount(0);
+
+	const plot = page.locator('[data-throughput="chart"] svg');
+	await plot.focus();
+	await expect(readout).toHaveCount(1);
+
+	// Decision: reuse `caption()` verbatim. The readout and the `<title>` are the
+	// same words, so there is one sentence about a day and not two.
+	const title = await page
+		.locator('[data-candle="read"][data-date="2026-08-19"] title')
+		.textContent();
+	await expect(readout).toContainText((title ?? '').trim());
+
+	await expect(page.locator('[data-readout-hint="throughput"]')).toHaveText(
+		'Keyboard: Left and Right step through the days. Escape closes.'
+	);
+});
+
+test.describe('under a thumb', () => {
+	test.use({ hasTouch: true });
+
+	test('a tap reads out, and lifting the thumb does not blank it', async ({ page }) => {
+		await page.goto('/console/');
+
+		const plot = page.locator('[data-compression] svg');
+		// A tap lands in the viewport, not in the document, and this chart is a long
+		// way down the console. Tapping an unscrolled box taps whatever is on screen
+		// at that y, which is not this chart.
+		await plot.scrollIntoViewIfNeeded();
+		const box = await plot.boundingBox();
+		expect(box, 'the plot has no box, so the tap below would land nowhere').not.toBeNull();
+		const at = box as { x: number; y: number; width: number; height: number };
+
+		// An SVG `<title>` needs a hover, so on a phone the numbers in it did not
+		// exist. This is the whole reason the readout is not a `<title>`.
+		await page.touchscreen.tap(at.x + at.width * 0.6, at.y + at.height * 0.5);
+
+		const readout = page.locator('[data-readout="compression"]');
+		await expect(readout, 'a tap must leave the numbers on screen after the lift').toHaveCount(1);
+		await expect(readout).toContainText('Article');
+	});
 });
 
 test('a window holding no scored item says so rather than drawing an empty plot', async ({
