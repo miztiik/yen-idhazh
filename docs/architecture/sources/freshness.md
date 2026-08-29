@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -59,6 +59,12 @@ The shard is monthly and the lookback is `seen_window_days` (90). An address old
 A feed that stamps tomorrow on today's article takes the top slot every single run, forever. `max_future_hours` (6.0) is the tolerance: a publish date more than six hours ahead of now is discarded, and the item falls back to first-sighting like any undated one.
 
 Six hours, not zero. Clock skew between a publisher and the runner is real and small; an embargo stamp is real and large. Six hours separates them without needing to know which is which.
+
+### A date the payload cannot spell
+
+`0001-01-01` is what several content systems send for a date nobody set, and `feedparser` reads it as an ordinary year 1. The year is padded where the stamp is written, rather than left to `strftime`, which pads a year below 1000 on Windows and leaves it short on Linux. On 2026-08-29 one such entry left discovery as `1-01-01T00:00:00Z`; ranking reads only a four-digit year, so one entry of 6,220 stopped the whole day before a single article was read (run 33259315735).
+
+The placeholder then reads as two thousand years old, so the age gate refuses it and the vertical counts it in `too_old`. That is the answer a back catalogue gets, and the plan says which gate refused it. It is not the answer an undated article gets, which is first sighting. Treating an implausible year as no date at all is the better answer, and it needs a floor - see the rejected alternatives.
 
 ## Publishing twice is prevented by a record, not by a window
 
@@ -323,6 +329,7 @@ and guessing it is what this refusal is about.
 | Treating an undated article as brand new every run | It would win the top slot on every run forever. First sighting is the fix, and it costs one append-only row. |
 | A `published` boolean on the seen row | Turns an append into a read-modify-write over the whole history, and two runs racing on it lose rows. |
 | Rejecting any future date outright | Clock skew between a publisher and the runner is normal and small. A zero tolerance would drop real articles for being three minutes early. |
+| Treating a placeholder date as no date at all | The better answer, and it needs a number nobody has measured: "implausible year" is a floor, and a floor guessed here would silently drop or admit real articles. The crash is fixed without one, and the age gate already refuses the placeholder and says so in `too_old`. |
 | Keeping rank position as the item id | Run 2 of a day renumbers every story, and anything that moved one place publishes twice. |
 | Writing the published ledger at plan time | A run that dies mid-way would leave behind a claim it published something it did not, and the article would never be publishable again. |
 | A per-run reading budget at the planning step | Refused 2026-08-25 by Carmack and Fowler. The bound already exists one stage later and is a clock; the artifact loss it answered already carries `if: always()`; its value came from a measurement taken before `diagram` was switched off; and it deletes about 436 items from a 731-item day. See the design rationale above. |
