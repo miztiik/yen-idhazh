@@ -123,7 +123,10 @@
 		{/if}
 	</div>
 
-	<div class="auto-grid mt-4" style="--auto-grid-min: 320px" data-failure-panels>
+	<!-- 380, not 320: the minimum is the TRACK, and each track spends padding and
+	     a border before the chart inside it gets any. Measured 2026-08-29 at
+	     1440px, a 320px minimum drew the plot at 298. -->
+	<div class="auto-grid mt-4" style="--auto-grid-min: 380px" data-failure-panels>
 		{#each series as entry (entry.stage)}
 			<div class="rounded-md border border-rule bg-surface p-3">
 				<div>

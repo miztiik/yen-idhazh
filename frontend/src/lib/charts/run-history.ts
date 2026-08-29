@@ -20,10 +20,52 @@ export interface AxisLabel {
 	align: LabelAlign;
 }
 
-/** One day, and the gap after it. Fixed: the strip is a time axis, so two days
- * apart must measure twice one day apart whatever the labels say. */
+/** One day, and the gap after it, when nothing has measured the strip yet.
+ *
+ * The ratio is what matters and is fixed: the strip is a time axis, so two days
+ * apart must measure twice one day apart whatever the labels say. The SIZE is
+ * not fixed - see `cellFor`. Sixteen and four were chosen when the page was
+ * 624px wide, and a strip drawn at 16px per day inside a 1500px frame leaves
+ * most of the frame empty.
+ */
 export const CELL_PX = 16;
 export const GAP_PX = 4;
+
+/** The strip grows into room it is given and never shrinks below the pair it
+ * has always used. Shrinking would let a wide window silently change what a
+ * phone does - the strip there scrolls and opens on the newest run, and that is
+ * a behaviour, not a side effect of the cell being 16. */
+const CELL_MIN = CELL_PX;
+const CELL_MAX = 34;
+
+/** The gap holds its share of the column at every size, so the rhythm of the
+ * strip does not change as it grows. Measured off the original pair. */
+const GAP_SHARE = GAP_PX / CELL_PX;
+
+export interface StripMetrics {
+	cell: number;
+	gap: number;
+	/** What the strip will actually occupy, so a caller can centre or pad it. */
+	width: number;
+}
+
+/** How wide a day column should be, given the room the strip has.
+ *
+ * Null width means nothing has measured yet - the server, or the first frame -
+ * and the fixed pair is used, so the prerendered strip is never zero-width.
+ */
+export function cellFor(available: number | null, days: number): StripMetrics {
+	if (available === null || available <= 0 || days <= 0) {
+		return { cell: CELL_PX, gap: GAP_PX, width: days * (CELL_PX + GAP_PX) };
+	}
+	// Solve for the cell that fills the room, then clamp. Growing past CELL_MAX
+	// would make a fortnight of runs look like a row of tiles rather than a
+	// sequence, which is the thing the strip exists to show.
+	const raw = available / (days * (1 + GAP_SHARE));
+	const cell = Math.max(CELL_MIN, Math.min(CELL_MAX, Math.floor(raw)));
+	const gap = Math.max(2, Math.round(cell * GAP_SHARE));
+	return { cell, gap, width: days * (cell + gap) };
+}
 
 /** A label a week apart, because a week is the cadence an operator counts in. */
 const WEEK = 7;

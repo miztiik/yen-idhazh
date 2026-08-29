@@ -338,7 +338,7 @@ test('every recorded run gets a square, and nothing else does', async ({ page })
 	}
 });
 
-test('runs rise from a shared baseline, on a 16px day track', async ({ page }) => {
+test('runs rise from a shared baseline, on a square day track', async ({ page }) => {
 	await page.goto('/console/');
 
 	const stack = await page.locator(`[data-day="${DAY}"] [data-health]`).evaluateAll(TO_BOX);
@@ -349,12 +349,21 @@ test('runs rise from a shared baseline, on a 16px day track', async ({ page }) =
 	const lowest = Math.max(...stack.map((box) => box.y));
 	expect(stack[0].y).toBe(lowest);
 
+	// The track grows into the room the frame gives it and never shrinks below
+	// the 16 it has always used, so the size is a floor rather than a constant.
+	// What must hold at every size: a square is square, and every square on the
+	// strip is the same size, or the strip stops being a time axis.
 	for (const box of stack) {
-		expect(box.width).toBe(16);
-		expect(box.height).toBe(16);
+		expect(box.width).toBeGreaterThanOrEqual(16);
+		expect(box.height).toBe(box.width);
+		expect(box.width).toBe(stack[0].width);
 	}
+	// The gap holds its share of the column at every size, so two days apart
+	// still measures twice one day apart. Rounded to a whole pixel by the layout,
+	// so the check is the share within a pixel rather than an exact value.
 	for (let index = 1; index < stack.length; index += 1) {
-		expect(stack[index - 1].y - stack[index].bottom).toBeCloseTo(4, 1);
+		const measured = stack[index - 1].y - stack[index].bottom;
+		expect(Math.abs(measured - stack[0].width / 4)).toBeLessThanOrEqual(1);
 	}
 
 	// Every day's run 1 sits on the same line, or the strip is a scatter.
@@ -367,7 +376,10 @@ test('runs rise from a shared baseline, on a 16px day track', async ({ page }) =
 
 	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
 	for (let index = 1; index < columns.length; index += 1) {
-		expect(columns[index].x - columns[index - 1].right).toBeCloseTo(4, 1);
+		// The same share, between columns as within one. Two days apart measures
+		// twice one day apart at whatever size the strip was given.
+		const measured = columns[index].x - columns[index - 1].right;
+		expect(Math.abs(measured - columns[0].width / 4)).toBeLessThanOrEqual(1);
 	}
 });
 
