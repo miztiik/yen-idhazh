@@ -61,6 +61,8 @@ PUBLIC_ROOT: Final = Path("frontend/public/digest")
 INDEX_ROOT: Final = Path("frontend/public/assist/index")
 _UNTITLED: Final = "Untitled item"
 _ABSTRACT_NOTE: Final = "This is a summary of the paper's abstract. The full paper is a PDF."
+_SHARE_NOTE: Final = "We could only read the first {share} percent of this page."
+#: The same fact with the scale dropped, for a page whose length before the cut is unknown.
 _TRUNCATED_NOTE: Final = "We could only read the first part of this page."
 
 
@@ -147,12 +149,38 @@ def to_digest_item(
     )
 
 
+def read_share(article: Article) -> int | None:
+    """How much of the page our summary was drawn from, as a whole percent.
+
+    None where the length before the cut is unknown, or where the share rounds
+    to all of it or none of it. A cut page that says "the first 100 percent" is
+    worse than one that states no scale at all.
+    """
+    total = article.source_word_count
+    if total is None or total <= 0:
+        return None
+    percent = round(100 * article.word_count / total)
+    return percent if 1 <= percent <= 99 else None
+
+
 def reader_note(article: Article) -> str | None:
+    """Every source limit that would surprise the reader, in one paragraph.
+
+    An abstract that was also cut carries both facts. Returning on the first
+    one is the exact shape of a silent cut.
+
+    The cut sentence names its scale, because one word cannot cover a page we
+    read almost all of and a page we read a fifth of. Measured over the 22 cut
+    items in `state/scores.csv` on 2026-08-29, the loss ran from 1.3 percent
+    (25 words of 1,948) to 77.2 percent (6,519 of 8,442).
+    """
+    notes: list[str] = []
     if article.source_form is SourceForm.ABSTRACT:
-        return _ABSTRACT_NOTE
+        notes.append(_ABSTRACT_NOTE)
     if article.truncated:
-        return _TRUNCATED_NOTE
-    return None
+        share = read_share(article)
+        notes.append(_TRUNCATED_NOTE if share is None else _SHARE_NOTE.format(share=share))
+    return " ".join(notes) or None
 
 
 def to_digest_visual(route: Route | None) -> DigestVisual | None:
