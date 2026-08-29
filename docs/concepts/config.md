@@ -106,8 +106,9 @@ Eight items is not a distribution.
 Every `min_source_words` in this file - `extract.min_source_words` and each
 `summarize.bands[].min_source_words` - counts the **source body**, before
 `extract.truncation_cap_tokens` cuts it. One name, one meaning. Reading the top
-band off the post-cap count is what left it empty until 2026-08-26, because that
-count stops at `int(2500 / 1.3) = 1923` words and the band starts at 2000
+band off the post-cap count is what left it empty until 2026-08-26, because at
+the cap of 2500 committed then that count stopped at `int(2500 / 1.3) = 1923`
+words and the band starts at 2000
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
 
 `evaluation.qualification_pool_multiple` sizes how wide a qualification shard
