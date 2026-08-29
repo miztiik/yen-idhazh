@@ -28,7 +28,7 @@ ledger remembers rather than waited for. The 500-row floor is cleared.
 
 | Done | Not done |
 | --- | --- |
-| The shape of one training example, frozen as a contract | The 300 ideal summaries a person has to write by hand |
+| The shape of one training example, frozen as a contract | The 500 ideal summaries a person has to write by hand |
 | Every size and schedule as a setting, not a number in code | The notebook that actually trains |
 | The step that collects examples during the daily run | Uploading the trained weights |
 | The job that trims old history | Judging whether the trained model is better |
@@ -107,11 +107,15 @@ whose prompt is a guess is the one thing this module exists to make impossible.
    on 2026-08-29: 1,852 rows, floor cleared, no waiting. `backfill` remains the
    better tool for the last seven days, because it needs no network and its body
    is the exact text the scorer read.
-2. **Write the reference summaries (row 5).** This is a person's job and it is
-   the biggest single cost in the plan - roughly 12 hours, an estimate rather
-   than a measurement, and it can be done in slices of 100. **Nothing after this
-   can start without it.** With gate 1 cleared this is now the only large task
-   standing between here and a training session.
+2. ~~**Write the reference summaries (row 5).**~~ **Done on 2026-08-29: 544
+   summaries, against a 500-row target.** The queue was raised to 600 first,
+   because 9.3 percent of what the pipeline publishes is not a story and cannot
+   carry a hand-written target - slideshows, rates tables, deals and links
+   roundups, live blogs, multi-story newsletters, vendor buyer's guides, and a
+   handful of pages extraction had already damaged. 56 were turned away and the
+   buffer absorbed all of them. The 12 hours was an estimate; the work ran as 43
+   parallel authoring passes over 600 articles, each of 10 rows, every row
+   checked by `reference_set.py check` before it counted.
 3. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
    and free Colab or paid. All three have defaults, so silence is an answer.
 4. **Then the training rows (6 to 9), which need a GPU that is not ours.**
@@ -122,16 +126,44 @@ whose prompt is a guess is the one thing this module exists to make impossible.
 
 | # | Gate | State on 2026-08-29 |
 | --- | --- | --- |
-| 1 | The window holds at least `min_rows` (500) | **CLEARED. 1,852 rows**, by one `refill` pass |
+| 1 | The window holds at least `min_rows` (500) | **CLEARED. 1,308 rows.** `refill` built 1,852; the 544 that became reference rows were then dropped, because one article gets one target |
 | 2 | A holdout exists, split by date | Not run. `data_wrangler.py split`, one command, offline |
 | 3 | Rows fit `finetune.sequence_length` | Not measured. `verify --tokens`, one command, reaches the network |
-| 4 | The reference set exists | **Not started. This is the blocker** |
+| 4 | The reference set exists | **CLEARED. 544 rows**, against a 500-row target. Train 434, test 110, no `url_key` on both sides |
 | 5 | `models.<role>.hf_base_repo` names a repository that really exists | **Unverified.** `Qwen/Qwen3.5-9B` is an expectation, not a fact |
 | 6 | The notebook exists | Not written |
 | 7 | Inputs 3, 4 and 6 answered | Defaults stand |
 
-Gates 2, 3 and 5 are minutes of work each and none needs a GPU. Gate 4 is the
-twelve hours, and it is now the only thing left that is measured in hours.
+Gates 2, 3 and 5 are minutes of work each and none needs a GPU. Gate 6 is a few
+kilobytes of instructions. **Nothing left before a training session is measured
+in hours** - the twelve-hour task was gate 4 and it is done.
+
+### What the reference set cost, measured rather than estimated
+
+| | |
+| --- | --- |
+| Queued | 600 |
+| Answered and valid | 544 |
+| Turned away | 56, a 9.3 percent refusal rate |
+| Bands 0 to 4 | 34 / 217 / 213 / 53 / 27 |
+| Verticals | ai 145, india 105, business-economy 100, energy 99, world 95 |
+| Train / test | 434 / 110 |
+| Articles that attempted an injection | **0 of 600** |
+
+**The refusal rate is why `reference_rows` and the queue length are two
+numbers.** `finetune.reference_rows` is 500 usable rows; the queue is the pool
+that feeds it. They are only the same number in a world where every published
+item is a story, and 56 of these 600 were a gallery, a rates table, a deals
+roundup, a links post, a live blog, a multi-story newsletter, a vendor guide, or
+a page extraction had already broken. A hand-written target for any of them
+teaches the model to summarize an index.
+
+**Zero injection attempts is a measurement, not an absence of looking.** Every
+authoring pass was asked to report one. What turned up instead: a model-release
+post quoting `AGENTS.md` prompt blocks, a tutorial with a system prompt inside a
+YAML sample, a robot-navigation post whose subject is prompts written for a
+reader's own coding agent, and a great deal of ordinary marketing. All of it was
+read as data (Rule #11).
 
 ### What from after the training can be pulled forward into the repository
 
@@ -196,7 +228,7 @@ The plan runs in three phases. **A is everything that must exist before a GPU is
 | **A** prep | 2 | Corpus contract and config | Fix the shape of one training row. Five columns. Every size in `config/`. | repo | none |
 | **A** prep | 3 | Harvest and roll, committed by CI | Build the due rows, roll the window, commit, push. Plus the monthly prune. | CI, every `harvest_every_days` | **none, ever** |
 | **A** prep | 4 | `data_wrangler.py` | Inspect, split the holdout, repair. Never touches the roll. | machine | on demand |
-| **A** prep | 5 | Reference set | About 300 ideal summaries, authored once, committed as fixtures. | machine | **~12 h, once. Estimate** |
+| **A** prep | 5 | Reference set | 500 ideal summaries, authored once, committed as fixtures. | machine | **Done 2026-08-29. 544 written, 600 queued, 43 parallel passes** |
 | **B** train | 6 | Train, merge, quantise | Notebook on Colab, then merge and quantise locally with llama.cpp. | **Colab**, then machine | one session + ~20 min |
 | **B** train | 7 | Publish the weights | Upload to a Hugging Face repo we own; record repo, revision, SHA-256. | **Hugging Face** | ~10 min |
 | **C** decide | 8 | Judge and decide | Two independent scorers, the eleven gates, a blind read. | repo + CI | one read |
@@ -374,7 +406,7 @@ corpus/                        committed, and NOT gitignored
   holdout.txt                  one url_key per line. Never trained on
 
 tests/fixtures/reference/      committed, hand-authored, never rolled
-  reference.jsonl              the ~300 ideal summaries
+  reference.jsonl              the 544 ideal summaries
 ```
 
 **On the location, which you were right to question.** `backend/var/` is gitignored - `.gitignore` reserves it for reproducible run output, and a corpus is not that. `corpus/` at the repo root is not in `.gitignore` and never should be. Verified against `.gitignore` on 2026-08-28.
@@ -454,7 +486,7 @@ The notebook concatenates the two at training time, and the loader knows which f
 | Name | What it is | Size | Where |
 | --- | --- | --- | --- |
 | **Golden set** (`golden_set_size: 20`) | Articles a candidate model is validated on during qualification. Already in config, already means this | 20 | `config/idhazh.json` |
-| **Reference set** (`reference_rows`) | Ideal summaries written by hand. Mostly training targets; a slice held back as test references | ~300 | `tests/fixtures/reference/` |
+| **Reference set** (`reference_rows`) | Ideal summaries written by hand. Mostly training targets; a slice held back as test references | 500 asked, **544 written** | `tests/fixtures/reference/` |
 | **Holdout** | Rows never trained on. Derived from `date` and `url_key`, never authored | trailing `holdout_days` | `corpus/holdout.txt` |
 
 ---
@@ -871,7 +903,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
 | 5 | **`train_rows` could exceed the corpus.** `min_rows` 500 and `train_rows` 1000 are both satisfiable by a 600-row corpus, and nothing said what happens | Medium | Row 2 decision 9. It is a ceiling, and both numbers get printed |
 | 6 | **The token-identity oracle needed the network.** Tokenizing needs a tokenizer; Rule #7 forbids a test that fetches one, and committing a ~10 MB tokenizer into a 39 MB repo is worse | Medium | Row 3 decision 12, row 4 decision 8. It is a local `verify --tokens` |
 | 7 | The plan had no phase C. It ended at "decide", leaving the config swap, the qualify run, the fingerprint slug and the measurements record unowned | Medium | Section 2 phases, new row 10 |
-| 8 | Row 5's human cost was written as "once" | Medium | Row 5 decisions 9 and 10. ~12 h, estimate, and it can be built in slices |
+| 8 | Row 5's human cost was written as "once" | ~~Medium~~ **Settled** | It was "once", and it cost less than the 12-hour estimate: 43 parallel authoring passes over a queue the harness had already checked. The estimate assumed one person working in series |
 | 9 | The holdout and the roll interact, and it happens to be safe | Low - confirmed sound | Row 4 decision 7, with the test that keeps it true |
 | 10 | Row 6b existed in section 2 and nowhere else | Low | Folded into row 6 |
 | 11 | `config/idhazh.json` already has a `retention` block, about published-site images | Low | 3.7. The prune knobs go in `finetune`, not there |
