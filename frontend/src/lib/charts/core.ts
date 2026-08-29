@@ -14,12 +14,27 @@
  */
 
 import * as echarts from 'echarts/core';
-import { FunnelChart } from 'echarts/charts';
-import { TooltipComponent } from 'echarts/components';
+import { BarChart, FunnelChart, LineChart, PieChart } from 'echarts/charts';
+import {
+	GridComponent,
+	LegendComponent,
+	MarkLineComponent,
+	TooltipComponent
+} from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 
 // SVG, never canvas: the server renders to a string at build time, and an SVG
 // carries a custom-property reference, so CSS keeps owning colour.
-echarts.use([FunnelChart, TooltipComponent, SVGRenderer]);
+echarts.use([
+	BarChart,
+	FunnelChart,
+	LineChart,
+	PieChart,
+	GridComponent,
+	LegendComponent,
+	MarkLineComponent,
+	TooltipComponent,
+	SVGRenderer
+]);
 
 export { echarts };
