@@ -128,6 +128,37 @@ is a tool run rather than a grep
 ([../../how-to/troubleshoot-one-url.md](../../how-to/troubleshoot-one-url.md)
 shows how much canonicalisation sits between a pasted URL and its key).
 
+## A failure that cannot change today is remembered too
+
+The published ledger stops a repeat of a **success**. It cannot stop a repeat of
+a **failure**, because a failure is never published - so every later run of the
+same day planned the same paywall again and got the same paywall.
+
+Measured over 2026-08-24 to 2026-08-29: **233 addresses were attempted more than
+once inside one day, 231 of them never succeeded on any attempt, and 403 repeat
+attempts bought 2 items.** On a five-run day, runs 2 to 5 each spent 8 to 41 of
+their 160 slots re-reading a locked door.
+
+So the planning step now reads today's rows of `state/item-health/<YYYY-MM>.csv`
+and drops any address that failed today with a code in
+`collect.settled_failure_codes`. The `work` job commits that ledger the moment an
+item settles, so the next run of the day sees it.
+
+**The list is the codes that will not change before tomorrow**, and that is the
+whole rule: a robots refusal, a 404, a paywall, a page with no prose. Absent from
+the list, and therefore retried, are `http_rate_limited`, `network_error`,
+`http_server_error`, `model_unreachable` and `context_exceeded` - a rate limit
+answers differently at 18:20 than it did at 02:20, and a run that treated it as
+final would throw away an article for being briefly unlucky.
+
+The window is the day, not the address's lifetime. A metered paywall resets, a
+site is redesigned, a 404 becomes a 200. Tomorrow asks again.
+
+The two sets are kept apart in `rank.plan_vertical` rather than merged into one
+drop list. They are different facts - one says we already gave this to a reader,
+the other says we tried today and could not - and an operator reading
+`considered` has to be able to tell which one cost a slot.
+
 ## An item's name comes from its address
 
 `item_id` is `<vertical>-<ten digits>`, derived from the URL key and nothing else.
@@ -136,11 +167,31 @@ It used to be the rank position. That broke the moment a day had more than one r
 
 A collision - two addresses landing on the same ten digits - is rare and is a contract failure that stops the run, so the second one steps forward until it finds a free number. Resolved in address order, so the answer depends on the pool and never on the ranking.
 
-## Supply decides the size of the day, not a cap
+## What sizes a run
 
 There is no daily item cap and no per-vertical cap. What a day publishes is what survives the score and `max_per_source` (2), which stops one prolific outlet filling a vertical.
 
-`run.safety_ceiling_per_run` (160) exists and is not a cap. It is a crash guard: if a feed change or a canonicalisation bug ever produces thousands of candidates, the run stops rather than spending six hours discovering it. A normal day is nowhere near it - the largest ever planned is 149 items. If a run ever hits it, the answer is to find the bug, not to raise the number. What sets the number is the worst case the `work` and `route` jobs both have to finish, not an editorial view of how long a day should be ([../../concepts/config.md](../../concepts/config.md)).
+**`run.safety_ceiling_per_run` (160) is what sizes a run, and saying otherwise
+was wrong.** This page used to call it a crash guard that a normal day was
+nowhere near, and quoted 149 as the largest day ever planned. Both statements
+were false by 2026-08-25 and stayed here: `items_planned` has been **exactly the
+ceiling on every run since**, first at 200 and now at 160
+([../../reference/measurements.md](../../reference/measurements.md)). Supply
+overtook the guard, and a guard sitting inside the working range is a cap.
+
+It is now a cap on purpose. Owner decision, 2026-08-29: the number stays at 160
+rather than rising, and the gain comes from spending those 160 slots on articles
+that can actually be read - the source sweep in
+[discovery.md](discovery.md) and the same-day failure memory above. Raising it
+is a separate question with a separate risk, because `run.shard_timeout_minutes`
+kills a worker that overruns and **a killed worker uploads nothing**, so the run
+loses every item it held. Nobody has measured a run at the new yield yet, so
+nobody may set that number yet (Rule #10).
+
+What still bounds the number from above is the worst case the `work` and `route`
+jobs both have to finish ([../../concepts/config.md](../../concepts/config.md)).
+What it is *for* has changed, and this paragraph is the record of that change
+rather than a quiet re-derivation.
 
 ## Design rationale
 
