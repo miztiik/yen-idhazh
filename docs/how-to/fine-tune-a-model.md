@@ -302,6 +302,51 @@ only way they differ:
   refuses either way to take the window below `finetune.min_rows`, saying how far
   below it would land.
 
+## The reference set
+
+`finetune.reference_rows` ideal summaries, written by a person in their editor
+with whatever expert model they have, committed as fixtures under
+`tests/fixtures/reference/`. They are primarily **training targets**: a corpus
+made only of our own accepted output can copy our own model's habits, including
+its mistakes, and the hand-written rows are what that is corrected against.
+`finetune.reference_test_rows` of them are held back and read line by line by a
+person, because a test reference nobody read is not a reference.
+
+`backend/utilities/reference_set.py` has two verbs and writes no summaries:
+
+```bash
+python backend/utilities/reference_set.py queue          # sample the articles
+python backend/utilities/reference_set.py check          # refuse what a run would refuse
+python backend/utilities/reference_set.py check --write  # emit reference.jsonl
+```
+
+- **`queue`** samples articles out of the committed corpus, stratified on the two
+  things the prompt branches on - the word-count band and the source form - plus
+  vertical, the one diversity column that is fully populated. It is deterministic
+  and it extends rather than replaces, so running it again after the corpus rolls
+  tops the queue up instead of discarding an afternoon of authoring. The test
+  slice is a proportional share of every stratum, not the tail: measured
+  2026-08-29 over 500 rows, the 100 held back span all five bands (10, 36, 37,
+  12, 5) and all five verticals.
+- **`check`** holds each answer to the two rails production uses - the shape the
+  constrained decoder is allowed to emit, and the word range the row's own system
+  turn asked for - then refuses a `url_key` on both sides of the train/test line,
+  and refuses an article the training window also holds.
+
+**The queue never carries the system prompt.** It carries the band, and `check`
+re-renders the prompt from it when it builds the row. That is the same
+identity-by-construction rule the corpus follows: a copy of the prompt on 500
+lines is 1.9 MB and can outlive a prompt edit, where a band cannot.
+
+**One article gets one target.** The reference set and the training window must
+share no `url_key`. Left overlapping, the notebook concatenates both files and
+trains one article twice against two different answers - ours and the better one.
+`check` fails on the overlap and prints the `data_wrangler.py remove` command
+that resolves it.
+
+The authoring session has its own brief:
+[`TODO/20260829-reference-set-handover.md`](../../TODO/20260829-reference-set-handover.md).
+
 ## The knobs
 
 All in the `finetune` block of `config/idhazh.json`.
@@ -317,7 +362,8 @@ All in the `finetune` block of `config/idhazh.json`.
 | `prune_every_days` | 30 | one force-push each time it fires |
 | `prune_keep_days` | 60 | storage, and how far `git blame` reaches |
 | `holdout_days` | 14 | rows that never train |
-| `reference_rows` | 300 | human hours, once |
+| `reference_rows` | 500 | human hours, once. About 2 min a drafted row |
+| `reference_test_rows` | 100 | human hours, once. About 5 min a read row |
 | `epochs` | 2 | GPU hours |
 | `sequence_length` | 4096 | free-tier memory, quadratically in attention |
 

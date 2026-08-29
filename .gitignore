@@ -63,3 +63,7 @@ frontend/vite.config.ts.timestamp-*.mjs
 frontend/static/digest/
 frontend/static/telemetry/
 frontend/static/index/
+
+# Scaffolding for the reference-set authoring pass: a second copy of queue.jsonl,
+# split so parallel authors never write one file. Regenerable, never committed.
+tests/fixtures/reference/parts/
