@@ -20,6 +20,9 @@ oldest ones so the file stays a fixed size, and commits it. Once a month a
 second job deletes the old history so the repository does not grow forever.
 There is also a small tool for looking at the collected data and repairing it.
 
+**The corpus is no longer empty. It holds 166 real training rows**, backfilled
+on 2026-08-29 from two finished runs rather than waited for.
+
 **Nothing trains a model yet, and nothing has changed what a reader sees.**
 
 | Done | Not done |
@@ -28,12 +31,45 @@ There is also a small tool for looking at the collected data and repairing it.
 | Every size and schedule as a setting, not a number in code | The notebook that actually trains |
 | The step that collects examples during the daily run | Uploading the trained weights |
 | The job that trims old history | Judging whether the trained model is better |
-| The tool for inspecting and repairing the data | Switching production over to it |
+| The tool for inspecting, repairing and **backfilling** the data | Switching production over to it |
+
+### Why the corpus was filling at six months to the window, and what fixed it
+
+The scheduled harvest can only see the run it is part of, and it fires every
+`harvest_every_days`. That is **one run a week, about 85 rows** - measured
+2026-08-29 over runs `33179908136` (85 rows) and `33227285523` (81 more). At that
+rate a 2000-row window takes about **24 weeks** to fill, and `min_rows` is not
+reached for six.
+
+Two changes, both landed:
+
+1. **`data_wrangler.py backfill`** replays a finished run's `items-*` artifact
+   through the same harvest the schedule runs. Same function, same bytes - a
+   backfilled row and a harvested row are indistinguishable, and a test asserts
+   it. Nothing is re-fetched, so the premise is still the exact text the scorer
+   read.
+2. **`items-*` artifact retention went from 1 day to 7.** That was the real
+   limit: at one day a backfill reaches two runs, at seven it reaches about
+   thirty-five - more than the whole window. Measured 2026-08-29, one run's four
+   shards are 555,842 bytes, so a week of them is 18.6 MB against the 500 MB
+   Rule #2 allows: 3.7 percent of the budget, for the only copy of the article
+   text that exists anywhere.
+
+**So the window can be filled in one sitting a week from now, instead of in six
+months.** Today's backfill could only reach the two runs whose artifacts had not
+yet expired under the old one-day rule.
+
+**Why not rebuild rows from the `evidence-*` artifacts instead**, which already
+live 14 days? Because `EvidenceItem` carries the premise but neither
+`source_form` nor `brief` nor the key points. A row rebuilt from it would carry a
+system prompt that is a guess at which length band production used - and a corpus
+whose prompt is a guess is the one thing this module exists to make impossible.
 
 ### What has to happen next, in order
 
-1. **Wait and watch.** The collector fires on its own about a week from now.
-   Nothing to do; check afterwards that `corpus/corpus.jsonl` gained rows.
+1. **In about a week, run one backfill.** `gh run download` each run of the past
+   seven days, then `backfill --items-dir`. That should clear `min_rows` and can
+   approach the full window. Nothing left to build.
 2. **Write the reference summaries (row 5).** This is a person's job and it is
    the biggest single cost in the plan - roughly 12 hours, an estimate rather
    than a measurement, and it can be done in slices of 100. **Nothing after this
@@ -43,6 +79,39 @@ There is also a small tool for looking at the collected data and repairing it.
 4. **Then the training rows (6 to 9), which need a GPU that is not ours.**
 5. **Row 10 is the only one that changes what a reader receives, and it needs
    your explicit approval** (Level 5).
+
+### Everything that must be true before a Colab session is worth starting
+
+| # | Gate | State on 2026-08-29 |
+| --- | --- | --- |
+| 1 | The window holds at least `min_rows` (500) | **166.** One backfill in a week clears it |
+| 2 | A holdout exists, split by date | Not run. `data_wrangler.py split`, one command |
+| 3 | Rows fit `finetune.sequence_length` | Not measured. `verify --tokens`, one command |
+| 4 | The reference set exists | **Not started. This is the blocker** |
+| 5 | `models.<role>.hf_base_repo` names a repository that really exists | **Unverified.** `Qwen/Qwen3.5-9B` is an expectation, not a fact |
+| 6 | The notebook exists | Not written |
+| 7 | Inputs 3, 4 and 6 answered | Defaults stand |
+
+Gates 2, 3 and 5 are minutes of work each and none needs a GPU. Gate 4 is the
+twelve hours. Gate 1 is a week of waiting that is now one command.
+
+### What from after the training can be pulled forward into the repository
+
+Most of phase C does not need a trained model to exist. It needs **two models to
+compare**, and the incumbent can play both parts until there is a second one.
+
+| Row | Piece | Why it can be built now |
+| --- | --- | --- |
+| 8 | The second scorer, `evals/alignscore.py` | `evals/hhem.py` already defines `Scorer` as a `Protocol` with one method, so a second scorer is one class and one config entry. It never sees a tuned model |
+| 8 | `utilities/compare_models.py` | Two model ids in, a table out. Exercised incumbent-against-incumbent, where the answer must be "no difference" - which is a real test of the harness |
+| 8 | The injection-shaped training rows (decision 8) | Hand-authored text, a different canary family from the one the gate runs. Nothing about them waits on training |
+| 7 | The four-line-config-swap oracle | "A clean checkout runs the new model with no code change" is testable today against the current config, as a contract test |
+| 10 | The reused-slug guard | A test that a `model_id` in `state/fingerprints.csv` is never reused. It keeps the before-and-after attributable, and it is worth having before the swap rather than after |
+| 6 | The notebook itself | A few kilobytes of instructions. Only *running* it needs a GPU; authoring and reviewing it does not |
+| 5 | The reference-set harness | Validate a hand-written row through `draft_model`, assert train and test share no `url_key`, print the stratification. Building it first turns twelve unstructured hours into filling a checked queue |
+
+The only thing that genuinely cannot move is the training itself, and the judging
+that needs its output.
 
 ### One thing to know about the cost you accepted
 
