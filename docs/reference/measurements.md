@@ -3514,12 +3514,20 @@ reply as the server assembled them rather than as we estimated them.
 | 13 | `route`: `items_prefiltered`, `items_asked`, `unrouted` | 18 unrouted is the median of the runs on record. A longer body yields more quantities, so **prefiltered should fall and unrouted should rise**. It costs charts, not clock - the stage self-stops at `run.route_budget_minutes` of 40 | **not yet measured** |
 | 14 | `hhem` against `hhem_full` on items that would have been cut at the old cap | `hhem_delta` runs -0.1235 to +0.0381 over the 24 cut items on record. **This row is an observation, not a gate.** Nothing measured says a longer read produces a better summary | **not yet measured** |
 
-**Row 7 is the one that catches a mistake in this change.** Rows 1 to 5 all move
-by design, so a surprise there is a matter of degree. The output length is
-supposed to be untouched, and if it moved, the band selection read the post-cap
-count somewhere - which is the exact defect
+**Row 7 is the one that catches a mistake in this change, and the fifth summary
+rung changed what a mistake looks like.** Rows 1 to 5 all move by design, so a
+surprise there is a matter of degree. The output length used to be the row that
+had to stay still, because a cap change alone cannot move the ask - the band
+comes from `band_source_words` and that count is pre-cap. Since 2026-08-29 the
+fifth rung moves it on purpose and by a stated amount: about +45 tokens, on
+at-cap items and on those alone.
+
+So the question this row asks is no longer "did it move" but **"did it move where
+the rung reaches"**. A rise of about 45 tokens on items at 3,000 words and up is
+the rung working. A rise on items **below** 3,000 words is the defect
 [the band's design rationale](../architecture/summarize/prompt.md) records being
-fixed on 2026-08-26.
+fixed on 2026-08-26 - the band selection reading the post-cap count somewhere -
+and that is what this row still exists to catch.
 
 **Row 14 is the row this change does not get to claim.** The cap buys more
 article read, and that is all it is measured to buy. Whether the summary is
@@ -3557,7 +3565,7 @@ page carries that estimate inside it.
 ### What the cap change does not do
 
 **It does not re-summarize the archive.** The cap is a field of `PipelineInputs`
-(`backend/idhazh/fingerprint.py`), so moving it re-stamps the pipeline
+(`backend/idhazh/contracts/fingerprint.py`), so moving it re-stamps the pipeline
 fingerprint. That does not reach the published corpus, because
 `rank.plan_vertical` drops every `url_key` in `already_published` and that gate
 reads `state/published.csv` alone - it never consults a fingerprint.
@@ -3605,6 +3613,34 @@ commits the day, so a page-weight failure stops the publish rather than breaking
 digest, `METRICS_VERSION`, `evaluation.chunk_words`,
 `evaluation.chunk_overlap_words`, the chunk anchor, the two band floors and
 `evaluation.lead_coverage_min`. The truncation cap is not among them.
+
+### The order to check it in
+
+Eight steps, and the order matters: steps 2 and 3 can disqualify the run, and
+running them last means filling fourteen rows off a run that proved nothing. The
+queries are the ones already on this page; nothing below needs deriving.
+
+| # | Step | Pass condition | If it does not pass |
+| --- | --- | --- | --- |
+| 1 | Find the first scheduled `digest.yml` run on `main` at cap 5000. Take its run id and the month file its rows landed in | a run id and a `state/item-health/<YYYY-MM>.csv` | the cap has not run yet; stop |
+| 2 | Prove the run exercised the change: `read past the old cap` is 1 or more | at least one row with `source_words` above 1923 | **the run is not evidence.** Wait for the next one. Every figure below would be a cap-2500 figure |
+| 3 | Prove the run is comparable: `items_planned` is 160, exactly four `work` jobs, every one concluded `success` | all three | the clock means nothing; wait for a run that meets all four conditions of [Trigger A](#trigger-a---the-shard-clock) |
+| 4 | **Trigger B.** Count `code = context_exceeded` in the month file for that run | 0 | **revert.** One row is the finding; take [the rollback action](#the-rollback-action) |
+| 5 | **Trigger A.** Read the slowest `work` job's wall-clock from the jobs API | at or under 110 minutes | one run over is inside the host lottery. Record it and watch the next two - **revert on two of three** |
+| 6 | Fill rows 1 to 14 of [the sheet](#the-rows), replacing `not yet measured` with the value and the date | fourteen values | a row you cannot fill names its instrument in the table; say which one was missing rather than leaving the row reading `not yet measured` |
+| 7 | Read row 9 against the context bound | `n_tokens_max` at or under 7,800 | **the cap comes down to 4000 and `n_ctx` does not move.** This is ESCALATE trigger 4 |
+| 8 | Read row 7 against the fifth rung, not against zero | a rise near +45 tokens, on items at 3,000 words and up | a rise on items **below** 3,000 words is the 2026-08-26 band defect, not the rung |
+
+**Steps 4 and 5 are the two that can revert the change, and they fail in
+opposite ways.** Trigger B is one row and one run - it needs no repeat, because
+at cap 2500 that row was impossible by arithmetic. Trigger A is a clock in a
+lottery that moved a shard 1.37x within one run, so it needs two of three.
+
+**When every step passes, say so on this page.** Replace the sheet's opening
+sentence - the one that says no value is measured yet - with the run id and the
+date, and strike the `truncation_cap_tokens` half of the
+[Still unmeasured](#still-unmeasured) row in the same commit. A sheet that stays
+blank after its run has happened reads as a run that never happened.
 
 ## Eight work shards
 

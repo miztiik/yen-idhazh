@@ -75,10 +75,14 @@ written inline in a workflow `run:` body is held by the contract tests in
 `backend/tests/test_workflows.py`
 ([../reference/github-actions.md](../reference/github-actions.md#the-linter-reads-scripts-and-the-test-reads-the-rest)).
 
-**`ruff format` is not a gate.** `ruff format --check .` reports 14 files it
-would rewrite (2026-08-24), all of them pre-existing. Running it across the repo
-produces a large diff that has nothing to do with your change. Format only the
-files you author, or leave formatting alone.
+**`ruff format` is not a gate.** `ruff format --check .` reports dozens of files
+it would rewrite - 14 on 2026-08-24 and 38 on 2026-08-29 - all of them
+pre-existing. That count is deliberately written as a magnitude rather than a
+figure: it tracks how much Python the repository holds, so an exact number here
+is wrong within days and the fact worth carrying is that the diff is large and
+none of it is yours. Running it across the repo produces a large diff that has
+nothing to do with your change. Format only the files you author, or leave
+formatting alone.
 
 ## The frontend gates
 
