@@ -116,15 +116,17 @@ whose prompt is a guess is the one thing this module exists to make impossible.
    buffer absorbed all of them. The 12 hours was an estimate; the work ran as 43
    parallel authoring passes over 600 articles, each of 10 rows, every row
    checked by `reference_set.py check` before it counted.
-3. **Answer two questions the gates just raised: `holdout_days` and
-   `sequence_length`.** Both are one config value, both are measured below, and
-   nothing after this can start until they are set. Unlike inputs 3, 4 and 6,
-   silence is **not** an answer here - today's values make the training set
-   empty and truncate 15 rows.
-4. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
+3. ~~**Answer two questions the gates just raised: `holdout_days` and
+   `sequence_length`.**~~ **Both answered on 2026-08-29: 2 and 8192.** Neither
+   was work; both were one config value that had gone stale under a change made
+   in another subsystem.
+4. **Write the notebook (gate 6).** The only gate left, and the only piece of
+   phase B nothing else is waiting on. A few kilobytes of instructions; only
+   *running* it needs a GPU.
+5. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
    and free Colab or paid. All three have defaults, so silence is an answer.
-5. **Then the training rows (6 to 9), which need a GPU that is not ours.**
-6. **Row 10 is the only one that changes what a reader receives, and it needs
+6. **Then the training rows (6 to 9), which need a GPU that is not ours.**
+7. **Row 10 is the only one that changes what a reader receives, and it needs
    your explicit approval** (Level 5).
 
 ### Everything that must be true before a Colab session is worth starting
@@ -132,16 +134,19 @@ whose prompt is a guess is the one thing this module exists to make impossible.
 | # | Gate | State on 2026-08-29 |
 | --- | --- | --- |
 | 1 | The window holds at least `min_rows` (500) | **CLEARED. 1,308 rows.** `refill` built 1,852; the 544 that became reference rows were then dropped, because one article gets one target |
-| 2 | A holdout exists, split by date | **RUN, AND IT FAILED.** `holdout_days` 14 over a 7-day window holds out all 1,308 rows and leaves nothing to train on. Needs a number, not a command |
-| 3 | Rows fit `finetune.sequence_length` | **MEASURED, AND IT FAILED.** 15 of 1,308 rows are longer than 4,096 tokens; the longest is 6,575 and would be silently truncated |
+| 2 | A holdout exists, split by date | **CLEARED.** `holdout_days` set to 2: 125 rows held out over 2026-08-28 and 2026-08-29, 1,183 left to train on |
+| 3 | Rows fit `finetune.sequence_length` | **CLEARED.** `sequence_length` set to 8192: 0 of 1,308 rows over it, against 15 at the old 4096 |
 | 4 | The reference set exists | **CLEARED. 544 rows**, against a 500-row target. Train 434, test 110, no `url_key` on both sides |
 | 5 | `models.<role>.hf_base_repo` names a repository that really exists | **CLEARED.** `Qwen/Qwen3.5-9B` is real: 12,507,912 downloads, last changed 2026-03-02. `Qwen/Qwen3-4B` is real too, 4,961,204 downloads |
 | 6 | The notebook exists | Not written. A few kilobytes of instructions; only *running* it needs a GPU |
 | 7 | Inputs 3, 4 and 6 answered | Defaults stand |
 
-**Both open gates are a config value, not work.** Neither needs a GPU, a
-network call or an hour. Both were expected to be a formality and neither was,
-which is the argument for running a gate rather than reasoning about it.
+**Every gate but the notebook is now green.** Both failures were a config value
+rather than work, and both were expected to be a formality. That is the argument
+for running a gate rather than reasoning about it: two knobs had quietly gone
+stale under a change made somewhere else, and no test could see it because
+neither value is wrong on its own - each was wrong only against a number in
+another subsystem.
 
 ### Gate 2 - `holdout_days` is longer than the corpus has existed
 
@@ -169,10 +174,12 @@ Measured 2026-08-29 over the 1,308 committed rows. Days are uneven - 61, 337,
 | 7 | 1,308 | 0 | no |
 | 14 (today) | 1,308 | 0 | no |
 
-**Recommendation: 2.** It holds out 125 rows, which is enough to measure
-something, and leaves 1,183 - the draw fills with room to spare. 1 makes the
-holdout too thin to say anything. 3 clears the ceiling by 15 rows, which is
-inside the noise of one day's publishing.
+**Set to 2 on 2026-08-29** (owner decision). It holds out 125 rows, which is
+enough to measure something, and leaves 1,183 - the draw fills with room to
+spare. 1 makes the holdout too thin to say anything. 3 clears the ceiling by 15
+rows, which is inside the noise of one day's publishing. `split` now reports
+`held out 125 of 1308 rows over 2 of 7 days`, trailing 2026-08-28 to
+2026-08-29.
 
 **14 was not wrong when it was written; it assumed a mature window.** The
 question this raises and does not answer: a fixed day count over a window that
@@ -196,24 +203,35 @@ measured with the `Qwen/Qwen3.5-9B` tokenizer on 2026-08-29.
 | 7,168 | 0 | 0.00% |
 | **8,192** | **0** | **0.00%** |
 
-**This is the truncation cap arriving here.** The cap is 5,000 words. At the
-measured 1.387 tokens an article word, plus the 951-token system prompt and
-about 250 tokens of target, a capped article is **about 8,100 tokens**. 4,096
-never could have held one; it was set before the cap moved.
+**This is the truncation cap arriving here.** `extract.truncation_cap_tokens` is
+**5,000 tokens** - a token count, not a word count - so the worst case is a sum
+of three measured parts, not an estimate:
 
-**Recommendation: 8,192, not 7,168.** 7,168 clears today's corpus and 8,192
-clears the *structural* worst case. The difference matters because no article
-has hit the 5,000-word cap yet - the longest ever measured was 2,772 words - so
-today's 6,575-token maximum is not the maximum this corpus will hold. Choosing
-off the measurement rather than the derivation buys a gate that fails again in a
-few weeks.
+| Part | Tokens |
+| --- | ---: |
+| System turn | 920, the largest of the three lengths in the corpus (918, 919, 920) |
+| User turn with the article at the cap | 5,335, measured on the one row that is at the cap |
+| `models.inference.max_output_tokens` | 900 |
+| **Worst case** | **7,155** |
 
-**What it costs is a GPU question, and it lands on input 6.** Doubling the
-sequence length roughly doubles attention memory per sample on a free T4. If
-8,192 will not fit, the honest fallback is to drop the 15 rows rather than
-truncate them: a truncated training target teaches the model to stop
-mid-summary, which is the one failure the reference set exists to prevent. 15
-rows is 1.15 percent of the corpus and costs nothing measurable.
+4,096 never could have held that. The old value was derived from a 1,923-word
+article, which was the cap before it moved.
+
+**Set to 8,192 on 2026-08-29** (owner decision). 7,168 also clears 7,155 - by 13
+tokens, which is not a margin, and any wording added to the system prompt eats
+it. 8,192 leaves 1,037. The old field text argued that 8,192 "would waste
+free-tier memory quadratically in attention for headroom nothing uses"; the
+measurement says the headroom is used, because 15 rows were already over 4,096
+and one article is already at the cap. `verify --tokens` now reads `over
+sequence_length 0 of 1308 at 8192`.
+
+**Truncating was never one of the three options, and it is what today's config
+did.** A row longer than `sequence_length` is cut during training with no error
+and no log line, so the model learns to stop mid-summary - the one failure the
+reference set exists to prevent. The three real options were: raise the length
+(taken), drop the 15 rows (1.15 percent of the corpus, and the fallback if 8,192
+will not fit a free T4), or accept the silent truncation. The third is what was
+happening.
 
 
 ### What the reference set cost, measured rather than estimated
