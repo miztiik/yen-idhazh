@@ -30,7 +30,7 @@ from conftest import (
 )
 from pydantic import ValidationError
 
-from idhazh import cli, config
+from idhazh import cli, config, extract
 from idhazh.contracts.app_config import (
     EvaluationConfig,
     InferenceConfig,
@@ -497,8 +497,45 @@ def test_a_short_article_and_a_long_one_are_asked_for_different_lengths() -> Non
 def test_every_article_length_lands_in_a_band() -> None:
     """Selection is total, which is why the first band is pinned at zero."""
     ask = SummarizeConfig()
-    for words in (0, 1, 249, 250, 699, 700, 1999, 2000, 100_000):
+    for words in (0, 1, 249, 250, 699, 700, 1999, 2000, 2999, 3000, 100_000):
         assert ask.band_for(words) in ask.bands
+
+
+def test_no_rung_floor_ever_sits_above_the_cut_point() -> None:
+    """The top rung is the last rung there may be.
+
+    `extract.truncation_cap_tokens` decides how many words the model is handed.
+    A floor above that number asks for a summary of words nobody gave it, and a
+    model closes that gap by elaborating the opening - which reads as
+    completeness and is the worst thing this pipeline can publish.
+
+    Both sides are read from `config/`, never from a literal: the cap moved from
+    2500 to 5000 on 2026-08-29 and it will move again, and a pinned number here
+    would keep passing while the relationship it guards inverted (Rule #6).
+    """
+    app = config.load().app
+    cut_point_words = int(app.extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)
+    highest_floor = max(band.min_source_words for band in app.summarize.bands)
+    assert highest_floor < cut_point_words, (
+        f"the top rung starts at {highest_floor} words and the model is handed "
+        f"{cut_point_words}, so that rung asks for a summary of text it never saw"
+    )
+
+
+def test_a_long_read_is_asked_for_more_than_a_long_feature() -> None:
+    """The fifth rung, and the reason it was added.
+
+    At the cap of 5000 the model is handed 3,846 words. Before this rung a
+    2,000-word article and a 3,846-word article - both read whole - got the
+    identical ask, so one was compressed 10 to 1 and the other 19 to 1.
+    """
+    ask = SummarizeConfig()
+    long_feature = ask.band_for(2000)
+    investigation = ask.band_for(3000)
+    assert investigation is not long_feature
+    assert investigation.target_words_min > long_feature.target_words_min
+    assert investigation.target_words_max > long_feature.target_words_max
+    assert ask.band_for(2999) is long_feature
 
 
 def test_the_band_chosen_is_the_longest_one_the_article_reaches() -> None:
