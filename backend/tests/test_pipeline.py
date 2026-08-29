@@ -1281,6 +1281,81 @@ def test_truncated_items_publish_the_partial_read_sentence() -> None:
     assert item.reader_note == "We could only read the first part of this page."
 
 
+def cut_article(*, read: int, total: int | None, abstract: bool = False) -> Article:
+    """One article cut at `read` words out of `total` before the cap."""
+    return article().model_copy(
+        update={
+            "truncated": True,
+            "truncated_at_tokens": 2500,
+            "word_count": read,
+            "source_word_count": total,
+            "source_form": SourceForm.ABSTRACT if abstract else SourceForm.ARTICLE,
+        }
+    )
+
+
+def test_the_cut_sentence_names_how_much_of_the_page_we_read() -> None:
+    """One word cannot cover both ends of the real range, so the note carries a number.
+
+    Both pairs are measured rows of `state/scores.csv` on 2026-08-29, the
+    smallest and the largest of the 22 genuinely cut items: 1,923 words of
+    1,948 is a 1.3 percent loss, and 1,923 of 8,442 is a 77.2 percent loss.
+    Today both print the same sentence, which is the defect.
+    """
+    barely = assemble.reader_note(cut_article(read=1923, total=1948))
+    mostly = assemble.reader_note(cut_article(read=1923, total=8442))
+
+    assert barely == "We could only read the first 99 percent of this page."
+    assert mostly == "We could only read the first 23 percent of this page."
+    assert barely != mostly
+
+
+def test_an_abstract_that_was_also_cut_carries_both_facts() -> None:
+    """Returning on the first branch is the exact shape of a silent cut.
+
+    Nothing in extract exempts an abstract from the cap: `truncate_to_tokens`
+    runs on every body. It has never fired on one - the longest body the single
+    abstract feed produced across 28 rows of `state/item-health/2026-08.csv` on
+    2026-08-29 was 330 words against a 1,923-word cut point - so this is latent,
+    not live. Latent is not a reason to leave it standing.
+    """
+    note = assemble.reader_note(cut_article(read=1320, total=5280, abstract=True))
+
+    assert note == (
+        "This is a summary of the paper's abstract. The full paper is a PDF. "
+        "We could only read the first 25 percent of this page."
+    )
+
+
+def test_a_cut_page_of_unknown_length_states_no_scale() -> None:
+    """A payload written before `source_word_count` existed cannot name a share.
+
+    142 of the 2,683 rows in `state/scores.csv` carry no pre-cap length on
+    2026-08-29. The note degrades to the sentence it already shipped rather
+    than inventing a number or dropping the fact.
+    """
+    assert (
+        assemble.reader_note(cut_article(read=1320, total=None))
+        == "We could only read the first part of this page."
+    )
+
+
+def test_the_note_never_claims_we_read_the_first_100_percent() -> None:
+    """A scale that rounds to all of it says the opposite of what happened."""
+    assert (
+        assemble.reader_note(cut_article(read=748, total=748))
+        == "We could only read the first part of this page."
+    )
+    assert (
+        assemble.reader_note(cut_article(read=1996, total=2000))
+        == "We could only read the first part of this page."
+    )
+
+
+def test_an_uncut_article_of_full_length_says_nothing() -> None:
+    assert assemble.reader_note(article()) is None
+
+
 def test_a_day_publishes_even_when_items_failed() -> None:
     """A run that publishes nothing on a bad day is a run whose bad days are invisible."""
     day = assemble.build_day(
