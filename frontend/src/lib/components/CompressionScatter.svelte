@@ -199,7 +199,7 @@
 </script>
 
 <section class="mt-8">
-	<h2 class="text-[1.0625rem] font-semibold text-text">Compression</h2>
+	<h2 class="text-[1.0625rem] font-semibold text-text">Article length against summary length</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		Article length uses a log x axis, so a 100-word note and a 10,000-word feature both fit. A
 		diamond is an article that ran past the cap, so the machine read the start and stopped there.
