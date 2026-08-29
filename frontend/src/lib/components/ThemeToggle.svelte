@@ -1,13 +1,17 @@
 <script lang="ts">
 	import { apply, storedChoice, watchSystem } from '$lib/theme';
 	import type { ThemeChoice } from '$lib/theme';
+	import Icon from '$lib/icons/Icon.svelte';
+	import type { IconId } from '$lib/icons/generated';
 	import { onMount } from 'svelte';
 
 	let choice = $state<ThemeChoice>('system');
-	const OPTIONS: { value: ThemeChoice; label: string }[] = [
-		{ value: 'system', label: 'Auto' },
-		{ value: 'light', label: 'Light' },
-		{ value: 'dark', label: 'Dark' }
+	// Auto gets no mark on purpose: it means "whatever the system says", and a sun
+	// or a moon beside it would be a claim about which one that is.
+	const OPTIONS: { value: ThemeChoice; label: string; icon: IconId | null }[] = [
+		{ value: 'system', label: 'Auto', icon: null },
+		{ value: 'light', label: 'Light', icon: 'theme-light' },
+		{ value: 'dark', label: 'Dark', icon: 'theme-dark' }
 	];
 
 	onMount(() => {

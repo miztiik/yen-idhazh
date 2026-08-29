@@ -144,7 +144,23 @@ sentence, and a state a reader cannot act on is worth neither.
 
 ## Icons
 
-Icons are **vector glyphs referenced by id** from a generated manifest, never inline SVG, never a hardcoded path, never a raster image. The manifest is a persisted surface with its own schema ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)). Keep the set tiny: an external-link mark, a confidence mark, and whatever the dashboard genuinely needs. An icon that needs a caption is a label wearing a costume.
+Icons are **vector glyphs referenced by id** from a generated manifest, never inline SVG, never a hardcoded path, never a raster image. The manifest is a persisted surface with its own schema ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)). An icon that needs a caption is a label wearing a costume.
+
+**Colour arrives by semantic tint, not by multi-colour artwork.** A glyph is monochrome and inherits `currentColor`, so the thing it sits in decides the hue: a confidence mark takes the band's colour, a topic pill takes the pill's. One set serves both themes, and a new status arrives with a slot already waiting instead of a second artwork file. Multi-colour artwork cannot be re-tinted, so a dark theme would need a second set drawn by hand.
+
+**Where a mark goes, and where it does not.** Chrome, controls, the console and the topic pills. Not beside a headline: a topic is a classification the pipeline actually made and may carry a mark, but "what kind of story is this" is an assertion no stage ever produced, and an icon that asserts it is inventing a fact on the page.
+
+**The set is closed and it is checked in both directions.** `frontend/tests/icons.spec.ts` fails on an icon nothing draws and on a reference to an id that does not exist, so a set cannot rot silently either way. The first of those is not theoretical: the set was cut from 29 glyphs to 15 on the day it landed, because the lens and event taxonomies exist in `config/taxonomy.json` and no surface renders them. Those thirteen marks wait for a surface rather than shipping against one that might arrive.
+
+Source is [Lucide](https://lucide.dev) under the ISC licence; only the icons in use are committed, as unmodified source SVG, and the sprite module is generated from them. Provenance and the add procedure are in `frontend/src/lib/icons/PROVENANCE.md`.
+
+### Design rationale
+
+**Icons ship, and the earlier refusal was wrong (owner, 2026-08-29).** The rule used to say "keep the set tiny: an external-link mark, a confidence mark", which in practice produced two inline SVGs and no system at all - the exact state the icon rule was written to prevent. What was right in the old line was the refusal to put a decorative mark beside a headline, and that survives above as a narrower rule.
+
+**Measured cost, 2026-08-29 on this tree.** Fifteen glyphs, 2,128 B of marks, and the generated module reaches every route because a component names an icon by id and a lookup on a dynamic key cannot be tree-shaken: `/` +1,897 B, `/404` +1,771 B, `/<date>/` +1,900 B, `/archive/` +1,833 B, `/console/` +1,404 B, `/evals/` +1,775 B gzipped. `/evals/` also crossed its prerendered-HTML ceiling by 185 B and the ceiling moved from 2,730 to 2,979.
+
+**The rejected alternative was an inline sprite.** It costs no JavaScript at all, which is better, and puts roughly 700 B of gzipped markup into every prerendered document, which is worse where it lands: `/404` had 37 B of headroom under a ceiling whose whole purpose is keeping the error page tiny. The bytes go where there is room for them. If the JS cost ever matters more than the 404's ceiling, this is the trade to revisit, and the numbers to revisit it with are here.
 
 ## Charts are static first, enhanced only when interaction earns it
 

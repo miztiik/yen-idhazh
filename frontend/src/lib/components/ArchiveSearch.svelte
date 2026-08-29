@@ -32,6 +32,7 @@
 	 * and this control reports itself unavailable; the archive above it is
 	 * unchanged, and so is every digest assertion on the page.
 	 */
+	import Icon from '$lib/icons/Icon.svelte';
 	import { onMount } from 'svelte';
 	import {
 		cachedEncoder,
@@ -254,8 +255,9 @@
 				/>
 				<button
 					type="submit"
-					class="rounded-[--radius-md] border border-rule px-3 py-2 hover:text-ink"
+					class="inline-flex items-center gap-1.5 rounded-[--radius-md] border border-rule px-3 py-2 hover:text-ink"
 				>
+					<Icon id="search" size={14} />
 					Search
 				</button>
 			</form>
