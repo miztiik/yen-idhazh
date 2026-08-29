@@ -132,6 +132,7 @@
     "ceilings_bytes": {
       "/404": 1127,
       "/archive/": 7553,
+      "/console/": 301580,
       "/evals/": 2475
     }
   },
