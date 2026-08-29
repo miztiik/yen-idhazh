@@ -85,6 +85,20 @@
     "truncation_cap_tokens": 5000,
     "user_agent": "yen-idhazh/1.0 (+https://github.com/miztiik/yen-idhazh)"
   },
+  "finetune": {
+    "corpus_rows": 2000,
+    "epochs": 2,
+    "harvest_every_days": 7,
+    "holdout_days": 14,
+    "min_rows": 500,
+    "prune_every_days": 30,
+    "prune_keep_days": 60,
+    "reference_rows": 300,
+    "sequence_length": 4096,
+    "student": "route",
+    "teacher": "summarize",
+    "train_rows": 1000
+  },
   "logging": {
     "level": "INFO"
   },
@@ -113,6 +127,7 @@
     },
     "route": {
       "file": "Qwen3-4B-Q4_K_M.gguf",
+      "hf_base_repo": "Qwen/Qwen3-4B",
       "id": "qwen3-4b-q4-k-m",
       "quantisation": "Q4_K_M",
       "repo": "Qwen/Qwen3-4B-GGUF",
@@ -121,6 +136,7 @@
     },
     "summarize": {
       "file": "Qwen3.5-9B-Q4_K_M.gguf",
+      "hf_base_repo": "Qwen/Qwen3.5-9B",
       "id": "qwen3-5-9b-q4-k-m",
       "quantisation": "Q4_K_M",
       "repo": "unsloth/Qwen3.5-9B-GGUF",
@@ -201,7 +217,7 @@
     "theme_default": "system",
     "visual_side": "above"
   },
-  "version": "2026-08-27T12:00",
+  "version": "2026-08-29T18:00",
   "visuals": {
     "canvas_width": 800,
     "enabled_kinds": [

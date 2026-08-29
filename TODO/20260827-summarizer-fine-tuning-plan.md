@@ -1,12 +1,63 @@
 # Fine-tune the digest models - Plan
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 **Level**: 3, except rows 8 and 9, which are Level 5 if they end in adoption.
 
 Execute per docs/how-to/execute-a-plan.md: one worktree-isolated worker per row, AUTO-merge on green gates, parallel N = 2. AUTHOR-AND-STOP until the owner authorizes a row.
 
 **No step in this plan asks a human to download, upload or copy anything on a schedule.** The one recurring human action is running a notebook, because training is not allowed on the runner.
+
+---
+
+## Section 0 - Where this plan stands, in plain words
+
+**Half of it is built. The half that is built is the half a machine can do on its own.**
+
+The pipeline now keeps the good article-and-summary pairs it used to throw away.
+Every seventh daily run adds that day's accepted pairs to a file, drops the
+oldest ones so the file stays a fixed size, and commits it. Once a month a
+second job deletes the old history so the repository does not grow forever.
+There is also a small tool for looking at the collected data and repairing it.
+
+**Nothing trains a model yet, and nothing has changed what a reader sees.**
+
+| Done | Not done |
+| --- | --- |
+| The shape of one training example, frozen as a contract | The 300 ideal summaries a person has to write by hand |
+| Every size and schedule as a setting, not a number in code | The notebook that actually trains |
+| The step that collects examples during the daily run | Uploading the trained weights |
+| The job that trims old history | Judging whether the trained model is better |
+| The tool for inspecting and repairing the data | Switching production over to it |
+
+### What has to happen next, in order
+
+1. **Wait and watch.** The collector fires on its own about a week from now.
+   Nothing to do; check afterwards that `corpus/corpus.jsonl` gained rows.
+2. **Write the reference summaries (row 5).** This is a person's job and it is
+   the biggest single cost in the plan - roughly 12 hours, an estimate rather
+   than a measurement, and it can be done in slices of 100. **Nothing after this
+   can start without it.**
+3. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
+   and free Colab or paid. All three have defaults, so silence is an answer.
+4. **Then the training rows (6 to 9), which need a GPU that is not ours.**
+5. **Row 10 is the only one that changes what a reader receives, and it needs
+   your explicit approval** (Level 5).
+
+### One thing to know about the cost you accepted
+
+The corpus holds article text, and it is committed to a public repository. You
+chose that over a private second repository on 2026-08-28, so:
+
+- Anyone can read those article bodies.
+- Once a month, a job rewrites this repository's history and force-pushes.
+  It bounds the corpus, but a squash boundary is per commit rather than per
+  folder, so it also collapses the history of `backend/`, `docs/` and `state/`.
+  After it runs, `git blame` and `git bisect` reach back about two to three
+  months and no further, and older commit links stop working.
+
+Both are written into `CLAUDE.md` sections 0a and 8, next to the rules they
+amend.
 
 ---
 
@@ -18,8 +69,8 @@ Seven answers. Each row names what it unblocks.
 
 | # | Question | Options | Default if you say nothing | Unblocks |
 | --- | --- | --- | --- | --- |
-| 1 | **Which repo holds the committed corpus?** It holds article text, so it is the one real trade here. | (a) This repo, under `corpus/`. (b) A second **private** repo, pushed by CI with a deploy key. | **(b) private repo.** Not a convenience, and the pruning argument is the smaller half of it: **this repo is public, and section 0a forbids republishing article bodies.** Option (a) needs that non-goal amended, not just section 8. See 3.7a | rows 2, 3 |
-| 2 | **Window size, and training sample size.** Two separate numbers. | window 1000 / 2000 / 4000, sample 500 / 1000 | **window 2000, sample 1000.** A bigger pool costs storage only and buys a more diverse sample. See 3.6 | rows 2, 3 |
+| 1 | **Which repo holds the committed corpus?** It holds article text, so it is the one real trade here. | (a) This repo, under `corpus/`. (b) A second **private** repo, pushed by CI with a deploy key. | **ANSWERED 2026-08-28: (a), this repo, under `corpus/`, with the prune force-pushing `main`.** Taken against the recommendation, which was (b). Both amendments landed in the same commit as the code: section 0a now names the published surface and carves out `corpus/`, and section 8 carries one scheduled force-push exception. The cost is written on both pages rather than implied - this repo is public, and a squash boundary is per-commit, so the prune collapses `backend/`, `docs/` and `state/` history too. See 3.7a | rows 2, 3 |
+| 2 | **Window size, and training sample size.** Two separate numbers. | window 1000 / 2000 / 4000, sample 500 / 1000 | **ANSWERED 2026-08-28: window 2000, sample 1000.** The defaults. A bigger pool costs storage only and buys a more diverse sample. See 3.6 | rows 2, 3 |
 | 3 | **Teacher model.** | Whatever `models.summarize` points at the day the notebook runs | **Read it from config.** No model name is hardcoded in this plan | row 6 |
 | 4 | **Student model for row 9.** | Qwen3-4B (already `models.route`) / Qwen3-1.7B / decide after row 8 | **Qwen3-4B.** The only candidate with a measured decode rate on our hardware | row 9 |
 | 5 | **Which run does the harvest pin to?** | The first run of the due day / the last successful run before the job wakes | **The last successful run.** A failed run harvests nothing. The cadence itself is `harvest_every_days`, default 7, section 4 | row 3 |
@@ -666,16 +717,37 @@ A separate plan, not this one. Level 3: it touches `backend/idhazh/route.py`, `b
 
 | Phase | # | Row | Depends on | Status |
 | --- | --- | --- | --- | --- |
-| A | 1 | Narrow the fine-tuning non-goal | - | IN REVIEW (`docs/narrow-the-fine-tuning-non-goal`) |
-| A | 2 | Corpus contract and config | 1 | PENDING - needs inputs 1, 2 |
-| A | 3 | Harvest and roll in the digest run, plus the prune | 2 | PENDING - needs inputs 1, 5. **Input 7 ANSWERED 2026-08-28** |
-| A | 4 | `data_wrangler.py` | 3 | PENDING |
+| A | 1 | Narrow the fine-tuning non-goal | - | **DONE** - merged; `CLAUDE.md` and `guardrails.md` both carry the narrowed clause |
+| A | 2 | Corpus contract and config | 1 | **DONE 2026-08-28** - `CorpusRow` and `CorpusMeta`, the `finetune` block, `hf_base_repo` on the `models` entry |
+| A | 3 | Harvest and roll in the digest run, plus the prune | 2 | **DONE 2026-08-28** - `idhazh harvest`, the roll, `prune.yml`, and the two `CLAUDE.md` amendments input 1(a) required |
+| A | 4 | `data_wrangler.py` | 3 | **DONE 2026-08-28** - `stats`, `split`, `verify`, `remove` |
 | A | 5 | Reference set | 3 | PENDING - ~12 h of human time, estimate |
 | B | 6 | Train the adapter, merge, quantise | 4, 5 | PENDING - needs inputs 3, 6 |
 | B | 7 | Publish the weights | 6 | PENDING |
 | C | 8 | Judge and decide | 7 | PENDING |
 | B+C | 9 | Distil into the student | 8 | PENDING - needs input 4, and row 8's verdict for decision 6 |
 | C | 10 | Adopt, or do not | 8 (and 9 for the student) | PENDING - **ESCALATE, Level 5** |
+
+### What rows 2-4 built differently from the plan text, and why
+
+Four deviations, each found by reading the code rather than the plan.
+
+| # | Plan said | Built instead | Why |
+| --- | --- | --- | --- |
+| 1 | The harvest reads `EvidenceItem.premise`, and `EvidenceItem` gains three optional fields (`source_form`, `word_count`, `brief`) so the length band can be rebuilt | The harvest reads `backend/var/run/<date>/items/*.article.json`. `EvidenceItem` is untouched | `Article` already carries all three fields and more, and it is in the `items-*` artifact `assemble` already downloads - the evidence artifact is not. So no schema moved, no migration was owed, and row 3 decision 6's own rule against a second copy is honoured more strictly, not less |
+| 2 | The oracle is a token diff between a rebuilt row and `build_request`, run locally as `verify --tokens` because tokenizing needs the network | The row's first two turns ARE `summarize.system_prompt(...)` and `summarize.user_turn(...)`, the functions `build_request` itself calls. A test asserts equality against `build_request(...)["messages"]` | Identity by construction beats identity by comparison, and it runs offline in CI (Rule #7). `verify --tokens` still exists and now answers a question nothing else could: do these rows fit `finetune.sequence_length`? |
+| 3 | A separate commit step for the corpus, carrying no `REGENERATE_COMMAND` | `corpus` is staged by the existing "Commit the day" step, and deliberately left out of `REFRESH_PATHS` | Same guarantee, one fewer push. The window is never rebuilt on a race; it is replayed onto the new base, which is the branch of the script the plan wanted |
+| 4 | `ensure_ascii=False`, for the byte count | `compact_json`, which is `ensure_ascii=True` | It is the serialization every other persisted payload here uses, so the corpus diffs and round-trips under one rule. The byte difference survives gzip almost entirely |
+
+Two things the plan did not name and the code needed:
+
+- **`corpus/` ships seeded** - an empty `corpus.jsonl`, a zero census, an empty
+  `holdout.txt`. `commit-and-push.sh` runs `git add "$@"` under `set -euo
+  pipefail`, so a staged path that does not exist yet aborts the whole commit
+  step and takes the day's ledgers with it.
+- **`CorpusMeta` is a second contract**, not a loose JSON file. It is committed,
+  it crosses a process boundary, and `prune.yml` reads it - which is what makes a
+  shape a payload under Rule #3.
 
 ---
 

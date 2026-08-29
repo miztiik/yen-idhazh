@@ -503,6 +503,97 @@
       "title": "ExtractConfig",
       "type": "object"
     },
+    "FinetuneConfig": {
+      "additionalProperties": false,
+      "description": "The training corpus and the schedules that maintain it.\n\nNothing here runs on the runner. Training needs a GPU and the runner has\nnone (section 0a), so these knobs size a file CI commits and a notebook\nsomewhere else reads. The two model fields name a KEY in `models` rather\nthan a model, because `models.summarize` has already moved once and a knob\nthat spells a model name is stale the day the config moves.\n\nThe prune knobs live here and not in `retention`. That block is about\npublished-site images and its own `site_budget_mb`; putting corpus history\nunder the same name would file two unrelated retention policies together.",
+      "properties": {
+        "corpus_rows": {
+          "default": 2000,
+          "description": "The window: how many rows `corpus/corpus.jsonl` holds. It costs storage and git history only - 2.9 KB compressed per row, measured 2026-08-27 over 2,459 scored rows and the 114 published items of that day - and it buys a bigger pool to sample a diverse session from.",
+          "minimum": 1,
+          "title": "Corpus Rows",
+          "type": "integer"
+        },
+        "epochs": {
+          "default": 2,
+          "minimum": 1,
+          "title": "Epochs",
+          "type": "integer"
+        },
+        "harvest_every_days": {
+          "default": 7,
+          "description": "How often the digest run harvests. A number and not a cron line: standard 5-field cron has no every-N-days field, and `on.schedule` is parsed before any step runs, so no value in config can ever reach it. The step wakes with the daily run, reads `harvested_at` from the committed meta file and decides for itself, which also means a missed day self-corrects on the next wake.",
+          "minimum": 1,
+          "title": "Harvest Every Days",
+          "type": "integer"
+        },
+        "holdout_days": {
+          "default": 14,
+          "description": "The trailing days held out of training, by date and never at random. Production always runs on tomorrow's news; a random split puts the same story from three feeds on both sides and reports memorisation as success.",
+          "minimum": 1,
+          "title": "Holdout Days",
+          "type": "integer"
+        },
+        "min_rows": {
+          "default": 500,
+          "description": "Below this the corpus trains nothing, and a repair refuses to cut further.",
+          "minimum": 1,
+          "title": "Min Rows",
+          "type": "integer"
+        },
+        "prune_every_days": {
+          "default": 30,
+          "description": "How often `prune.yml` fires. Each firing costs one force-push of `main` - the single exception CLAUDE.md section 8 carries, and the reason it carries one is that git history is append-only, so deleting a corpus row does not delete its bytes.",
+          "minimum": 1,
+          "title": "Prune Every Days",
+          "type": "integer"
+        },
+        "prune_keep_days": {
+          "default": 60,
+          "description": "Where the squash boundary sits. Retention is this number, full stop, and it is not a multiple of anything. At 30 and 60 the history holds 60 to 90 days of commits - 9 to 13 weekly harvests, 25 MB to 38 MB, flat forever. Two whole datasets survive any squash for free, because the boundary commit holds a complete copy of the corpus and so does the tip.",
+          "minimum": 1,
+          "title": "Prune Keep Days",
+          "type": "integer"
+        },
+        "reference_rows": {
+          "default": 300,
+          "description": "How many ideal summaries the hand-authored reference set aims to hold.",
+          "minimum": 1,
+          "title": "Reference Rows",
+          "type": "integer"
+        },
+        "sequence_length": {
+          "default": 4096,
+          "description": "Measured worst case, rounded up to a power of two: the longest article seen is 1,923 words at the committed cap (about 2,500 tokens), the system prompt is 3,787 bytes (about 950), and the output budget is 900 - about 4,350. 8192 would waste free-tier memory quadratically in attention for headroom nothing uses.",
+          "minimum": 1,
+          "title": "Sequence Length",
+          "type": "integer"
+        },
+        "student": {
+          "default": "route",
+          "description": "A key in `models`. The smaller model a distillation session trains.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Student",
+          "type": "string"
+        },
+        "teacher": {
+          "default": "summarize",
+          "description": "A key in `models`. The model whose outputs a session fine-tunes.",
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Teacher",
+          "type": "string"
+        },
+        "train_rows": {
+          "default": 1000,
+          "description": "The sample: how many rows one session draws from the window. A CEILING, not a demand - a session takes the lesser of this and what is left once the holdout is removed, and prints both numbers. It costs GPU hours rather than storage: estimated 1.8 h for 1000 rows over 2 epochs on a free T4, and no training job has run here yet, so that is an estimate (Rule #10).",
+          "minimum": 1,
+          "title": "Train Rows",
+          "type": "integer"
+        }
+      },
+      "title": "FinetuneConfig",
+      "type": "object"
+    },
     "InferenceConfig": {
       "additionalProperties": false,
       "description": "Decoding is pinned here so a change of output is a reviewable diff.",
@@ -731,6 +822,20 @@
           "minLength": 1,
           "title": "File",
           "type": "string"
+        },
+        "hf_base_repo": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The safetensors repository a fine-tune trains against, when this entry names a GGUF conversion of somebody else's weights. It sits here rather than in `finetune` because the two strings describe the same model: held apart, a model swap moves one and leaves the other, and a LoRA adapter loads onto a mismatched base without raising. Optional - only an entry we intend to fine-tune needs it.",
+          "title": "Hf Base Repo"
         },
         "id": {
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -1214,6 +1319,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The finetune block added, and models.<role>.hf_base_repo added as an optional field.",
+      "version": "2026-08-29T18:00",
+      "why": "The training corpus needs its sizes and its two schedules in config before anything writes a row (Rule #6), and the window and the sample are two knobs rather than one because they price differently: the window costs 2.9 KB of compressed history per row and the sample costs GPU hours. The prune is two knobs for the same reason - how often it fires and how far back it keeps are independent, and 'prune quarterly' means neither one on its own. hf_base_repo sits on the model entry and not here because training reads the safetensors repository while the pipeline reads the GGUF one: held in two blocks, a model swap moves one string and leaves the other, and a LoRA adapter loads onto a mismatched base without raising, so the damage arrives as a quality drop nobody can attribute. Both additive with defaults, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "summarize.bands gained a fifth rung at min_source_words 3000, asking 150 to 230 words. No existing rung moved.",
       "version": "2026-08-29T16:00",
       "why": "A 2,000-word article and a 3,846-word article were handed the identical ask, so one was compressed 10 to 1 and the other 19 to 1 for the same 150-word midpoint. 3,846 words is what extract.truncation_cap_tokens of 5000 lets through, so both are read whole and the difference is real text and not a guess about text. The floor is 3000 because that is the midpoint of the whole-read range, 2,923, rounded to a seam the ledger reports. Measured 2026-08-29 over the 445 rows of state/scores.csv that carry a trustworthy pre-cap length: 9 of them reach 3,000 words, which is 2.02 percent of items and 1 to 4 items a run over four runs of 107 to 117 items. This is the last rung there may be - a floor above the cut point would ask for words the model was never handed, and the model would fill the gap by elaborating the opening. 230 sits inside evaluation.summary_words_max of 250, so the gate did not move. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
@@ -1444,6 +1554,9 @@
     "extract": {
       "$ref": "#/$defs/ExtractConfig"
     },
+    "finetune": {
+      "$ref": "#/$defs/FinetuneConfig"
+    },
     "logging": {
       "$ref": "#/$defs/LoggingConfig"
     },
@@ -1466,7 +1579,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-29T16:00",
+      "default": "2026-08-29T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1480,5 +1593,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-29T16:00"
+  "version": "2026-08-29T18:00"
 }
