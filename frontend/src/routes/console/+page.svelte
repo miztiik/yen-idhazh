@@ -14,10 +14,11 @@
 	 * hand-written SVG, so the console still reads with JavaScript off.
 	 */
 	import { base } from '$app/paths';
-	import { axisLabels, CELL_PX, GAP_PX, type LabelAlign } from '$lib/charts/run-history';
+	import { axisLabels, cellFor, type LabelAlign } from '$lib/charts/run-history';
 	import { datesIn, failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
+	import Panel from '$lib/components/Panel.svelte';
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFunnel } from '$lib/charts/chart-funnel';
 	import {
@@ -72,6 +73,22 @@
 			node.scrollLeft = node.scrollWidth - node.clientWidth;
 		});
 		return () => cancelAnimationFrame(frame);
+	});
+
+	/** The room the strip actually has. Null until a browser measures it, which
+	 * is what keeps the prerendered strip drawing at the fixed pair rather than
+	 * at zero. */
+	let stripWidth = $state<number | null>(null);
+	const strip_ = $derived(cellFor(stripWidth, data.grid.length));
+
+	$effect(() => {
+		const node = strip;
+		if (!node || typeof ResizeObserver === 'undefined') return;
+		const observer = new ResizeObserver(([entry]) => {
+			stripWidth = Math.round(entry.contentRect.width);
+		});
+		observer.observe(node);
+		return () => observer.disconnect();
 	});
 
 	function mb(bytes: number): string {
@@ -238,7 +255,7 @@
 
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
-	<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">At a glance</h2>
+	<h2 class="console-h2">At a glance</h2>
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<KpiCard
 			label="Charts published"
@@ -288,12 +305,10 @@
 	</div>
 
 	{#if data.glance.growthSvg}
-		<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">Where the site's size came from</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			Megabytes added or removed each day, starting from the oldest day on record. The ceiling is a
-			rate problem, not a level problem, so what matters is which days added what.
-		</p>
-		<div class="panel mt-3" data-glance-chart="growth">
+		<Panel
+			title="Where the site's size came from"
+			note="Megabytes added or removed each day, starting from the oldest day on record. The ceiling is a rate problem, not a level problem, so what matters is which days added what."
+		>
 			<Chart
 				svg={data.glance.growthSvg}
 				option={siteGrowth(data.manifests).option}
@@ -301,31 +316,25 @@
 				height={220}
 				label="Megabytes added or removed each day"
 			/>
-		</div>
+		</Panel>
 	{/if}
 
 	{#if data.glance.mixSvg}
-		<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">What is failing, by stage</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			Stacked, so the height of a column is the day's total and the bands are what made it up.
-			Grouped bars would answer how big each stage is and lose the total, and the total is half the
-			question. A quiet day and a clean day look different here, which they would not on a
-			percentage scale.
-		</p>
-		<div class="panel mt-3" data-glance-chart="failure-mix">
+		<Panel
+			title="What is failing, by stage"
+			note="Stacked, so the height of a column is the day's total and the bands are what made it up. Grouped bars would answer how big each stage is and lose the total, and the total is half the question. A quiet day and a clean day look different here, which they would not on a percentage scale."
+		>
 			<Chart
 				svg={data.glance.mixSvg}
-				option={failureMix(
-					failureSeriesFor(data.telemetryRows)
-				).option}
+				option={failureMix(failureSeriesFor(data.telemetryRows)).option}
 				width={760}
 				height={220}
 				label="Failures per day by stage"
 			/>
-		</div>
+		</Panel>
 	{/if}
 
-	<h2 class="mt-8 text-[1.0625rem] font-semibold text-text">Run health</h2>
+	<h2 class="console-h2">Run health</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		One column per day, oldest to newest, one square per recorded run with run 1 at the bottom.
 		Skipped items are not counted against a run - an article we already published is skipped by
@@ -348,7 +357,7 @@
 		>
 			<div
 				class="grid w-max min-w-full items-end justify-end"
-				style="grid-template-columns: repeat({data.grid.length}, {CELL_PX}px); gap: {GAP_PX}px"
+				style="grid-template-columns: repeat({data.grid.length}, {strip_.cell}px); gap: {strip_.gap}px"
 				data-grid="days"
 			>
 				{#each data.grid as day, index (day.date)}
@@ -356,13 +365,13 @@
 					     upward, while the DOM keeps reading run 1 first. -->
 					<div
 						class="flex flex-col-reverse justify-start"
-						style="grid-row: 1; grid-column: {index + 1}; gap: {GAP_PX}px"
+						style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
 						data-day={day.date}
 					>
 						{#each day.squares as square (square.runId)}
 							<span
 								class="rounded-sm"
-								style="width: {CELL_PX}px; height: {CELL_PX}px; background: {COLOUR[
+								style="width: {strip_.cell}px; height: {strip_.cell}px; background: {COLOUR[
 									square.health
 								]}"
 								title={square.label}
@@ -407,7 +416,7 @@
 		bands={data.summarizeBands}
 	/>
 
-	<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Sources cut short most often</h2>
+	<h2 class="console-h2">Sources cut short most often</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		The last {data.sourceCuts.days} days. An article longer than the cap is read from the start and
 		stopped there, so the end never reaches the machine. Sorted by how many articles that cost each
@@ -425,7 +434,7 @@
 			No article was cut short in the last {data.sourceCuts.days} days.
 		</p>
 	{:else}
-		<div class="mt-3 overflow-x-auto" data-source-cuts="table">
+		<div class="console-table mt-3" data-source-cuts="table">
 			<table class="w-full text-[0.8125rem]">
 				<thead class="text-text-tertiary">
 					<tr class="border-b border-rule">
@@ -475,7 +484,7 @@
 		{/if}
 	{/if}
 
-	<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Feeds that failed</h2>
+	<h2 class="console-h2">Feeds that failed</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		Every feed's result is written down every run. A feed that answered with nothing counts as a
 		failure - an empty answer costs the digest the same articles a refused one does. A source
@@ -493,7 +502,7 @@
 			{data.feedRuns === 1 ? 'run' : 'runs'}.
 		</p>
 	{:else}
-		<div class="mt-3 overflow-x-auto" data-feeds="table">
+		<div class="console-table mt-3" data-feeds="table">
 			<table class="w-full text-[0.8125rem]">
 				<thead class="text-text-tertiary">
 					<tr class="border-b border-rule">
@@ -538,7 +547,7 @@
 		</p>
 	{:else}
 		<div data-model-section>
-			<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">What the model did</h2>
+			<h2 class="console-h2">What the model did</h2>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 				Every figure is that day's own articles, measured the day it ran. The articles change
 				every day, so a dip can be the news rather than the model. Fixed benchmark figures are
@@ -558,7 +567,7 @@
 			{/if}
 
 			{#if data.modelWork.length > 0}
-				<div class="mt-6 overflow-x-auto" data-model="table">
+				<div class="console-table mt-6" data-model="table">
 					<table class="w-full text-[0.8125rem]">
 						<thead class="text-text-tertiary">
 							<tr class="border-b border-rule">
@@ -615,13 +624,13 @@
 	{/if}
 
 	{#if data.manifests.length > 0}
-		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Runs and site size</h2>
+		<h2 class="console-h2">Runs and site size</h2>
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 			Run-level facts live in the manifest, never in an item row. Planned and failed are summed
 			across the day's runs; the site size is the last run's measurement, not their total. The
 			site has a 1 GB ceiling; this is the number that says how close it is.
 		</p>
-		<div class="mt-3 overflow-x-auto">
+		<div class="console-table mt-3">
 			<table class="w-full text-[0.8125rem]">
 				<thead class="text-text-tertiary">
 					<tr class="border-b border-rule">
@@ -650,7 +659,7 @@
 	{/if}
 
 	{#if data.charts.length > 0}
-		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Charts drawn for articles</h2>
+		<h2 class="console-h2">Charts drawn for articles</h2>
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 			What the router cost and what it published, one row per day, newest first. Reached is every
 			item the router looked at. Asked the model is the part it sent a request for: an item whose
@@ -673,7 +682,7 @@
 				/>
 			</div>
 		{/if}
-		<div class="mt-3 overflow-x-auto" data-charts="table">
+		<div class="console-table mt-3" data-charts="table">
 			<table class="w-full text-[0.8125rem]">
 				<thead class="text-text-tertiary">
 					<tr class="border-b border-rule">
@@ -709,3 +718,34 @@
 		</div>
 	{/if}
 </section>
+
+<style>
+/* The console is instrumentation, so it takes tint and elevation and no
+   display face, no gradient and no illustration. What it was missing was an
+   edge: headings and tables on bare background give the eye nothing to group
+   by, and every section ends up weighing the same as every other. */
+.console-h2 {
+margin-top: var(--space-8);
+font-size: var(--text-lg);
+font-weight: 600;
+color: var(--color-text);
+}
+
+.console-table {
+overflow-x: auto;
+padding: var(--space-4);
+border: 1px solid var(--color-rule);
+border-radius: var(--radius-lg);
+background: var(--color-surface);
+box-shadow: var(--shadow-sm);
+}
+
+/* The header row stays put while the body scrolls, which is what makes a
+   thirty-row table readable without a second glance at the top. */
+.console-table :global(thead th) {
+position: sticky;
+top: 0;
+z-index: 1;
+background: var(--color-surface);
+}
+</style>
