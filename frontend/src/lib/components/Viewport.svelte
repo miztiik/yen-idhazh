@@ -1,110 +1,68 @@
 <script lang="ts">
-	import { base } from '$app/paths';
 	import {
 		compressionView,
-		datesIn,
-		parseTelemetryCsv,
 		rowsInWindow,
 		type SummaryBand,
 		type TelemetryRow
 	} from '$lib/charts/series';
-	import {
-		defaultWindow,
-		monthsInWindow,
-		panWindow,
-		zoomWindow,
-		type TimeWindow,
-		type ViewportConfig
-	} from '$lib/charts/viewport';
+	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
 	import CompressionScatter from './CompressionScatter.svelte';
 	import FailureList from './FailureList.svelte';
 	import FailurePanels from './FailurePanels.svelte';
 
+	/** The item-telemetry surfaces, over the window the page is holding.
+	 *
+	 * The window is not owned here any more. It belongs to the page, because the
+	 * source table and the router-cost card read the same one, and a window owned
+	 * by the widget furthest down the page cannot be read by anything above it.
+	 */
 	let {
-		initialRows,
-		availableMonths,
-		today,
+		rows,
+		window: viewport,
 		config,
-		bands
+		bands,
+		onPan,
+		onStep
 	}: {
-		initialRows: TelemetryRow[];
-		availableMonths: string[];
-		today: string;
-		config: ViewportConfig & {
+		rows: TelemetryRow[];
+		window: TimeWindow;
+		config: {
+			pan_days: number;
 			chart_height: number;
 			chart_width: number;
 			min_attempts_for_rate: number;
 			failure_list_max: number;
 		};
 		bands: SummaryBand[];
+		/** Move the window by this many days, keeping its span. */
+		onPan: (days: number) => void;
+		/** Widen (`1`) or narrow (`-1`) to the next preset. */
+		onStep: (direction: 1 | -1) => void;
 	} = $props();
 
-	// svelte-ignore state_referenced_locally
-	let rows = $state<TelemetryRow[]>(initialRows);
-	// svelte-ignore state_referenced_locally
-	let loadedMonths = $state(datesIn(initialRows).map((date) => date.slice(0, 7)));
-	// svelte-ignore state_referenced_locally
-	let viewport = $state<TimeWindow>(defaultWindow(datesIn(initialRows), today, config));
 	let selectedCode = $state<string | null>(null);
 	const visibleRows = $derived(rowsInWindow(rows, viewport));
-	const available = $derived(new Set(availableMonths));
+	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
 	// The plot reads the rows on the page rather than a list of its own. A month
 	// the operator pans to is fetched once and both surfaces gain it together, so
 	// the scatter and the failure panels can never describe different days.
 	const compression = $derived(compressionView(rows));
 
-	function merge(next: TelemetryRow[]) {
-		const byKey = new Map(rows.map((row) => [`${row.run_id}-${row.item_id}`, row]));
-		for (const row of next) byKey.set(`${row.run_id}-${row.item_id}`, row);
-		rows = [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date));
-	}
-
-	async function loadVisibleMonths() {
-		for (const month of monthsInWindow(viewport)) {
-			if (loadedMonths.includes(month) || !available.has(month)) continue;
-			loadedMonths = [...loadedMonths, month];
-			try {
-				const response = await fetch(`${base}/telemetry/${month}.csv`);
-				if (!response.ok) {
-					console.warn(`telemetry ${month} unavailable; showing a gap`);
-					continue;
-				}
-				merge(parseTelemetryCsv(await response.text()));
-			} catch (error) {
-				console.warn(`telemetry ${month} could not be read; showing a gap`, error);
-			}
-		}
-	}
-
-	function pan(days: number) {
-		viewport = panWindow(viewport, days);
-		void loadVisibleMonths();
-	}
-
-	function zoom(factor: number) {
-		viewport = zoomWindow(viewport, factor, config);
-		void loadVisibleMonths();
-	}
-
 	function keydown(event: KeyboardEvent) {
 		if (event.key === 'ArrowLeft') {
 			event.preventDefault();
-			pan(-config.pan_days);
+			onPan(-config.pan_days);
 		} else if (event.key === 'ArrowRight') {
 			event.preventDefault();
-			pan(config.pan_days);
+			onPan(config.pan_days);
 		} else if (event.key === '+' || event.key === '=') {
 			event.preventDefault();
-			zoom(1 / config.zoom_factor);
+			onStep(-1);
 		} else if (event.key === '-' || event.key === '_') {
 			event.preventDefault();
-			zoom(config.zoom_factor);
+			onStep(1);
 		}
 	}
-
-	$effect(() => {
-		void loadVisibleMonths();
-	});
 </script>
 
 <section class="mt-10" data-viewport-section>
@@ -114,9 +72,11 @@
 		class="rounded-md border border-rule p-3 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 		role="region"
 		tabindex="0"
-		aria-label="Telemetry viewport. Use left and right arrows to pan. Use plus and minus to zoom."
+		aria-label="Item telemetry viewport, showing {windowDays} days. Use left and right arrows to pan. Use plus and minus to change the window."
 		onkeydown={keydown}
+		data-windowed="telemetry-viewport"
 		data-viewport-control
+		data-window-days={windowDays}
 		data-window-start={viewport.start}
 		data-window-end={viewport.end}
 	>
@@ -124,7 +84,7 @@
 			<div>
 				<h2 class="text-[1.0625rem] font-semibold text-text">Item telemetry viewport</h2>
 				<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-					{viewport.start} to {viewport.end}. {visibleRows.length}
+					{windowDays} days, {viewport.start} to {viewport.end}. {visibleRows.length}
 					{visibleRows.length === 1 ? ' row' : ' rows'} in view.
 				</p>
 			</div>
@@ -132,28 +92,14 @@
 				<button
 					type="button"
 					class="min-h-11 rounded-full border border-rule px-3 text-[0.8125rem]"
-					onclick={() => pan(-config.pan_days)}
+					onclick={() => onPan(-config.pan_days)}
 				>
 					Back
 				</button>
 				<button
 					type="button"
 					class="min-h-11 rounded-full border border-rule px-3 text-[0.8125rem]"
-					onclick={() => zoom(1 / config.zoom_factor)}
-				>
-					Zoom in
-				</button>
-				<button
-					type="button"
-					class="min-h-11 rounded-full border border-rule px-3 text-[0.8125rem]"
-					onclick={() => zoom(config.zoom_factor)}
-				>
-					Zoom out
-				</button>
-				<button
-					type="button"
-					class="min-h-11 rounded-full border border-rule px-3 text-[0.8125rem]"
-					onclick={() => pan(config.pan_days)}
+					onclick={() => onPan(config.pan_days)}
 				>
 					Forward
 				</button>
@@ -161,7 +107,8 @@
 		</div>
 
 		<p class="mt-3 text-[0.75rem] text-text-tertiary" data-viewport-hint>
-			Keyboard: Left and Right pan {config.pan_days} days. Plus and Minus zoom.
+			Keyboard: Left and Right pan {config.pan_days} days. Plus and Minus step the window through
+			the presets above.
 		</p>
 
 		<!-- Shape first, rows last. The list is the only child that can outgrow

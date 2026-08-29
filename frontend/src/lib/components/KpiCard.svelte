@@ -20,7 +20,9 @@
 		tone = 'neutral',
 		movement = null,
 		trendSvg = null,
-		trendOption = null
+		trendOption = null,
+		windowed = null,
+		windowDays = null
 	}: {
 		label: string;
 		/** Already formatted. The card never does arithmetic on a number. */
@@ -31,6 +33,10 @@
 		movement?: number | null;
 		trendSvg?: string | null;
 		trendOption?: EChartsOption | null;
+		/** Names the card as following the page's time window. Null where it does
+		 * not, which is most of them - only a rate has a span. */
+		windowed?: string | null;
+		windowDays?: number | null;
 	} = $props();
 
 	const arrow = $derived(movement === null ? '' : movement >= 0 ? 'up' : 'down');
@@ -39,7 +45,13 @@
 	);
 </script>
 
-<div class="kpi" data-kpi={label} data-tone={tone}>
+<div
+	class="kpi"
+	data-kpi={label}
+	data-tone={tone}
+	data-windowed={windowed}
+	data-window-days={windowDays}
+>
 	<p class="kpi-label">{label}</p>
 	<p class="kpi-value tabular-nums">{value}</p>
 	{#if trendSvg && trendOption}

@@ -2,6 +2,7 @@ export type TodayAnchor = 'right' | 'centre';
 
 export interface ViewportConfig {
 	default_window_days: number;
+	window_presets: number[];
 	today_anchor: TodayAnchor;
 	pan_days: number;
 	zoom_factor: number;
@@ -46,33 +47,58 @@ export function monthsInWindow(window: TimeWindow): string[] {
 	return months;
 }
 
+/** A window of exactly `days` days, anchored where the config asks.
+ *
+ * Exactly, even when the ledger holds fewer days than that. The window used to
+ * shrink to fit the rows it found, which was invisible while nothing on the page
+ * named the span - and a lie the moment a control does. A page whose control
+ * reads 90 while the charts draw 2 cannot be trusted about anything else, and
+ * empty calendar space is the honest answer to "there is nothing there".
+ */
+export function windowOfDays(
+	dates: string[],
+	today: string,
+	days: number,
+	anchor: TodayAnchor
+): TimeWindow {
+	const newest = [...dates].sort().at(-1) ?? today;
+	const end = anchor === 'right' ? newest : shift(newest, Math.floor((days - 1) / 2));
+	return { start: shift(end, -(days - 1)), end };
+}
+
 export function defaultWindow(dates: string[], today: string, config: ViewportConfig): TimeWindow {
-	const sorted = [...new Set(dates)].sort();
-	if (sorted.length > 0) {
-		const first = sorted[0];
-		const last = sorted.at(-1) as string;
-		if (daysBetween(first, last) <= config.default_window_days) return { start: first, end: last };
-		const end =
-			config.today_anchor === 'right'
-				? last
-				: shift(last, Math.floor((config.default_window_days - 1) / 2));
-		return { start: shift(end, -(config.default_window_days - 1)), end };
-	}
-	return { start: shift(today, -(config.default_window_days - 1)), end: today };
+	return windowOfDays(dates, today, config.default_window_days, config.today_anchor);
+}
+
+/** The next preset wider (`1`) or narrower (`-1`) than the span in force.
+ *
+ * At either end it answers with the end it is already at, so a key held down
+ * stops rather than wrapping round to the opposite window.
+ */
+export function stepPreset(days: number, presets: readonly number[], direction: 1 | -1): number {
+	const ordered = [...presets].sort((a, b) => a - b);
+	if (ordered.length === 0) return days;
+	if (direction === 1) return ordered.find((preset) => preset > days) ?? (ordered.at(-1) as number);
+	return [...ordered].reverse().find((preset) => preset < days) ?? ordered[0];
+}
+
+/** The month files a window needs that are on the server and not yet in hand.
+ *
+ * This is the price of widening, and the control prints its length before the
+ * operator pays it. A month that was never published is not a cost: asking for
+ * it would only produce a 404 and a gap the charts already draw.
+ */
+export function monthsToFetch(
+	window: TimeWindow,
+	available: readonly string[],
+	loaded: readonly string[]
+): string[] {
+	const published = new Set(available);
+	const held = new Set(loaded);
+	return monthsInWindow(window).filter((month) => published.has(month) && !held.has(month));
 }
 
 export function panWindow(window: TimeWindow, days: number): TimeWindow {
 	return { start: shift(window.start, days), end: shift(window.end, days) };
-}
-
-export function zoomWindow(window: TimeWindow, factor: number, config: ViewportConfig): TimeWindow {
-	const span = daysBetween(window.start, window.end);
-	const next = Math.max(
-		config.min_window_days,
-		Math.min(config.max_window_days, Math.round(span * factor))
-	);
-	const centre = toDay(window.start).getTime() + ((span - 1) * DAY_MS) / 2;
-	const start = new Date(centre - ((next - 1) * DAY_MS) / 2);
-	return { start: dayKey(start), end: shift(dayKey(start), next - 1) };
 }
 
