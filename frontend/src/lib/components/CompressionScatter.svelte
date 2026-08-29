@@ -367,7 +367,7 @@
 					font-size="11"
 					data-axis="x"
 				>
-					source words
+					Article length, words
 				</text>
 				<!-- Beside the axis it measures, not on the row below it. A y variable
 				     labelled on the x axis is why this chart read as unfinished. -->
@@ -380,7 +380,7 @@
 					font-size="10"
 					data-axis="y"
 				>
-					summary words
+					Summary length, words
 				</text>
 			</svg>
 		</div>

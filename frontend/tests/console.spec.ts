@@ -1308,7 +1308,7 @@ test('the compression chart draws in CSS pixels, and labels its own y axis', asy
 			.toBeLessThan(1);
 	}
 
-	// "summary words" used to be printed on the bottom row beside the x axis
+	// The y axis title used to be printed on the bottom row beside the x axis
 	// title, which is what made the chart read as unfinished rather than ugly.
 	const [title] = await page.locator('[data-compression] [data-axis="y"]').evaluateAll(TO_BOX);
 	const [across] = await page.locator('[data-compression] [data-axis="x"]').evaluateAll(TO_BOX);
@@ -1321,6 +1321,20 @@ test('the compression chart draws in CSS pixels, and labels its own y axis', asy
 	const ticks = await page.locator('[data-compression] [data-tick="y"]').evaluateAll(TO_BOX);
 	expect(ticks.length).toBeGreaterThan(1);
 	for (const tick of ticks) expect(tick.x).toBeGreaterThanOrEqual(title.right);
+});
+
+test('the compression axis titles say what the heading says', async ({ page }) => {
+	await page.goto('/console/');
+
+	const chart = page.locator('[data-compression]');
+	await expect(chart.locator('[data-axis="x"]')).toHaveText('Article length, words');
+	await expect(chart.locator('[data-axis="y"]')).toHaveText('Summary length, words');
+
+	// The axis used to read "source words", which is how the ledger spells the
+	// column, not how a reader says it. Nothing here may name a column again.
+	for (const text of await chart.locator('[data-axis]').allTextContents()) {
+		expect(text).not.toMatch(/source|_/i);
+	}
 });
 
 test('the reading path and the console carry no chart library', () => {
