@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -136,10 +136,12 @@ script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
 `gzip -9` size each named route's prerendered HTML may reach. A page that got
 lighter needs no permission, so there is no lower bound. A route is named when
 its growth has been priced: `/404` and `/evals/` move only when the source moves,
-and `/archive/` grows by one day link a published day. A day page weighs what the
-day published and `/console/` weighs what the ledger holds, so a fixed ceiling on
-either would cap the news instead of catching a regression; those are covered by
-the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in the
+`/archive/` grows by one day link a published day, and `/console/` grows by about
+60 gzipped bytes a published item. A day page and the home page weigh what the
+day published, so a fixed ceiling on either would cap the news instead of
+catching a regression - the only way under it is to publish fewer items, which
+[layout.md](../architecture/publishing/layout.md) forbids. Those two are covered
+by the marker count in `frontend/tests/payload-weight.spec.ts`, which runs in the
 browser suite. A route the config does not name is reported by the gate without
 failing it.
 
@@ -162,10 +164,20 @@ design: when the gate fires on an ordinary day about a year from now, the answer
 is to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
-**`/console/` is not capped, and that is deliberate.** It grows with the ledger
-its charts read, and nobody has measured what a day of ledger costs it, so there
-is no number to derive a ceiling from. Its growth belongs to the marker count
-above.
+**`/console/` is capped since 2026-08-29, and its headroom is days rather than a
+year.** Removing one real mature published day from every ledger it reads and
+rebuilding cost 43,745, 43,704 and 36,504 gzipped bytes over 731, 724 and 621
+scored items - about 60 bytes an item. So 301,580 is the heaviest of five builds
+plus three days of the heaviest of those plus the 64-byte noise floor, and it is
+meant to expire
+([../reference/measurements.md](../reference/measurements.md#the-console-ceiling-is-a-tripwire-and-it-is-priced-in-published-days)).
+
+**When `/console/` fires, do not raise it.** The page grows because the
+compression scatter inlines a point for every row the ledger has ever held. The
+answer is to window that seed and publish the older points through the telemetry
+projection, in one change - a windowed seed on its own empties the plot behind
+the window, which is a lie
+([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)).
 
 ## The browser suite
 
