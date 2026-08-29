@@ -543,6 +543,8 @@ def test_the_runtime_counters_columns_are_defined_once() -> None:
         "n_decode_total",
         "n_tokens_max",
         "n_busy_slots_per_decode",
+        "job_seconds",
+        "cpu_model",
     )
 
 
@@ -621,6 +623,78 @@ def test_a_shard_index_must_sit_inside_the_run_it_names() -> None:
                 "scraped_at": "2026-08-26T21:32:30Z",
             }
         )
+
+
+def test_the_shard_clock_is_measured_against_the_scrape_that_carries_it() -> None:
+    """The rollback trigger reads this cell, so it may not be a second opinion.
+
+    `job_seconds` and `scraped_at` describe the same instant from two ends. The
+    row works the difference out for itself rather than taking a caller's
+    arithmetic, so the two cells cannot end up saying different things about one
+    scrape.
+    """
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-26",
+        run_id="2026-08-26-5",
+        shard=0,
+        shards=4,
+        scraped_at="2026-08-26T21:32:30Z",
+        # 2026-08-26T20:00:00Z, an hour and 32.5 minutes before the scrape.
+        job_started_at=1787774400,
+        cpu_model="  AMD EPYC 7763 64-Core Processor  ",
+    )
+
+    assert row.job_seconds == 5550
+    assert row.cpu_model == "AMD EPYC 7763 64-Core Processor"
+    assert RuntimeCountersRow.from_csv_row(row.csv_row()) == row
+
+
+def test_a_shard_with_no_stamp_and_no_host_reports_absence_not_zero() -> None:
+    """A job whose stamp went missing and a job that took no time are not one fact.
+
+    The stamp comes from a workflow step, and a stage that runs anywhere else -
+    a developer machine, a re-run of one shard - has neither it nor
+    `/proc/cpuinfo`. Both cells stay empty there, and an empty cell reads back as
+    absent (`job_seconds is None`) rather than as `0`.
+    """
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-26",
+        run_id="2026-08-26-5",
+        shard=0,
+        shards=4,
+        scraped_at="2026-08-26T21:32:30Z",
+        cpu_model="",
+    )
+    cells = row.csv_row()
+
+    assert row.job_seconds is None
+    assert row.cpu_model is None
+    assert cells["job_seconds"] == ""
+    assert cells["cpu_model"] == ""
+    assert RuntimeCountersRow.from_csv_row(cells) == row
+
+
+def test_a_host_name_that_could_split_a_row_is_refused() -> None:
+    """`state/runtime-counters.csv` merges with the union driver, which is line-based.
+
+    Eight shards append to one branch, and the merge keeps lines rather than
+    parsing CSV. A cell holding a newline would be quoted correctly by the writer
+    and still split one row in two the first time two shards raced.
+    """
+    for hostile in ("AMD EPYC\n7763", "AMD EPYC\r7763"):
+        with pytest.raises(ValueError, match="cpu_model"):
+            RuntimeCountersRow.model_validate(
+                {
+                    "date": "2026-08-26",
+                    "run_id": "2026-08-26-5",
+                    "shard": 0,
+                    "shards": 4,
+                    "scraped_at": "2026-08-26T21:32:30Z",
+                    "cpu_model": hostile,
+                }
+            )
 
 
 # --- Invariants the shape exists to carry ----------------------------------

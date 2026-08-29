@@ -1,0 +1,18 @@
+{
+  "cpu_model": "AMD EPYC 7763 64-Core Processor",
+  "date": "2026-08-29",
+  "job_seconds": 5236,
+  "n_busy_slots_per_decode": 1.0,
+  "n_decode_total": 7249,
+  "n_tokens_max": 4644,
+  "prompt_seconds_total": 3043.8,
+  "prompt_tokens_cached_total": 21224,
+  "prompt_tokens_total": 30140,
+  "run_id": "2026-08-29-1",
+  "scraped_at": "2026-08-29T03:07:30Z",
+  "shard": 1,
+  "shards": 4,
+  "tokens_predicted_seconds_total": 1267.41,
+  "tokens_predicted_total": 7174,
+  "version": "2026-08-29"
+}

@@ -3272,9 +3272,11 @@ reading of that run.
 
 **Hardware.** GitHub-hosted `ubuntu-latest`, 4 vCPU, 16 GB, no GPU.
 `Qwen3.5-9B-Q4_K_M.gguf` summarizing through `llama-server`,
-`Qwen3-4B-Q4_K_M.gguf` routing, llama.cpp `b10598`. Which CPU model a job draws
-is not recorded anywhere a later run can read, so it stays a covariate this
-comparison cannot hold ([Still unmeasured](#still-unmeasured)).
+`Qwen3-4B-Q4_K_M.gguf` routing, llama.cpp `b10598`. From 2026-08-29 each `work`
+job records the processor it drew in its own `state/runtime-counters.csv` row,
+so the covariate this comparison used to be unable to hold is now readable per
+shard. The `route` job still has no such row
+([Still unmeasured](#still-unmeasured)).
 
 **Date.** The date of the first scheduled run at cap 5000, filled in when that
 run happens.
@@ -3286,8 +3288,35 @@ run cannot hand a worker more. That is the same load
 carried, which is what makes its 85.6 minutes a like-for-like baseline rather
 than a number off a differently shaped day.
 
-**The query, for every wall-clock figure.** Job records live in the GitHub API
-and nowhere in this repository. Find the runs, then read one run's jobs:
+**The query, for every wall-clock figure.** Each `work` job now files its own
+clock, so the first read is a committed file. `state/runtime-counters.csv` holds
+one row per shard per run, and `job_seconds` is that shard job's clock:
+
+```python
+import csv
+
+rows = [r for r in csv.DictReader(open("state/runtime-counters.csv", encoding="utf-8"))
+        if r["run_id"] == "<the run>"]
+clocked = [r for r in rows if r["job_seconds"]]
+
+print("shards:", len(rows), "clocked:", len(clocked))
+for row in sorted(clocked, key=lambda r: -int(r["job_seconds"])):
+    print(row["shard"], "%.1f min" % (int(row["job_seconds"]) / 60), row["cpu_model"])
+```
+
+**`job_seconds` is a floor on the job's wall-clock, not the whole of it.** It
+starts at the job's first step and stops at the counters scrape, so the ledger
+push, the two log summaries and the artifact uploads that follow are outside it.
+By how much is **not yet measured** - the first run at cap 5000 records both
+numbers and settles it (row 1 of
+[What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record)).
+Until then: a `job_seconds` over 110 minutes has fired
+[Trigger A](#trigger-a---the-shard-clock) on its own, and one inside a couple of
+minutes below 110 is read against the API before it is called a pass.
+
+**The API is still the authority, and it is now the second read.** Job records
+live outside this repository and drop with the run, which is the whole reason
+the clock became a committed cell. Find the runs, then read one run's jobs:
 
 ```
 gh run list --repo miztiik/yen-idhazh --workflow digest.yml --branch main \
@@ -3304,7 +3333,8 @@ gh api "repos/miztiik/yen-idhazh/actions/runs/<id>/jobs?per_page=100" \
 
 Wall-clock is `completed_at - started_at` for the job, so no queue time is
 inside any figure. A four-worker run holds seven jobs, so one page returns them
-all.
+all. Every figure on this page taken before 2026-08-29 came from this query and
+from nothing else.
 
 **The query, for every ledger figure.** `state/item-health/<YYYY-MM>.csv` is one
 row per planned item per run. Save this and run it with `python`, naming the
@@ -3365,8 +3395,8 @@ conditions, or the run is not evidence and the count does not advance:
 | Condition | Read from | Why it is there |
 | --- | --- | --- |
 | `items_planned` is 160 | `runs[].items_planned` in `frontend/public/digest/<Y>/<M>/<D>/run.json` | A smaller day hands a worker fewer than 40 items, so its clock is short for a reason that is not the cap. |
-| exactly four `work` jobs | the jobs query above | An eight-shard dispatch carries 20 items a worker and halves the clock on its own ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). |
-| every `work` job concluded `success` | the jobs query above | A job that was cancelled, or that hit its bound, has a clock that means nothing. |
+| exactly four `work` jobs | `shards` in `state/runtime-counters.csv`, one row per shard | An eight-shard dispatch carries 20 items a worker and halves the clock on its own ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). |
+| every `work` job concluded `success` | the jobs query above | A job that was cancelled, or that hit its bound, has a clock that means nothing. The counters row is written under `always()`, so it exists either way and cannot answer this. |
 | `read past the old cap` is 1 or more | the ledger query above | A run that read nothing longer than 1,923 words never exercised the new cap, so its clock is a cap-2500 clock. |
 
 **That last table is the whole reason this trigger is checkable.** Without it a
@@ -3424,21 +3454,45 @@ reads `state/published.csv` and never consults a fingerprint, and
 else
 ([What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record)).
 
-### The defect Trigger A depends on, recorded rather than fixed
+### The instrument Trigger A reads
 
-**No committed artifact carries a `work` job's wall-clock, so Trigger A is a
-person making an API call by hand.** The run manifest at
-`frontend/public/digest/<Y>/<M>/<D>/run.json` carries the whole run's
-`started_at` and `completed_at` and `runner: ubuntu-latest`, which is a label
-rather than a machine, and a run rather than a job.
-`state/runtime-counters.csv` holds one row per shard and counts tokens, not
-seconds of job wall-clock. So the only instrument this trigger reads lives
-outside the repository, on an API whose job records age out with the run.
+**Every `work` job files its own clock and its own host, in the row it already
+wrote for the tokens it read.** `state/runtime-counters.csv` is one row per shard
+per run, and from 2026-08-29 it carries two more cells:
 
-Fixing that is not this change's job. It is written here so it is not discovered
-during an incident, and it is the same gap
-[Still unmeasured](#still-unmeasured) already records for the CPU model a job
-drew: the run manifest is where a per-job fact would have to land.
+| Cell | Holds | Empty means |
+| --- | --- | --- |
+| `job_seconds` | seconds from the shard job's first step to the counters scrape | no stamp reached the step - a re-run of one shard, or a stage run by hand. Never zero seconds. |
+| `cpu_model` | the host's `/proc/cpuinfo` `model name` line | the host published no such line |
+
+**How to read it.** The query is in
+[How the figures here are taken](#how-the-figures-here-are-taken) above. Sort a
+run's rows by `job_seconds` and the slowest worker is the first one; that is the
+number [Trigger A](#trigger-a---the-shard-clock) compares against 110 minutes.
+Read `cpu_model` in the same row, because this page has measured a 3.1x swing in
+prompt-reading throughput between hosts, so two clocks on two different parts
+are not a comparison (Rule #10).
+
+**It is a floor, and by how much is not yet measured.** The scrape happens before
+the ledger push, the two log summaries and the artifact uploads, so `job_seconds`
+under-reports what the jobs API calls the job. The first run at cap 5000 records
+both numbers, which settles the gap for every run after it.
+
+**Where the clock comes from.** The `work` job's first step - ahead of the
+checkout - writes an epoch second and the CPU model to the job environment, and
+the counters step passes both to `python -m idhazh counters`. First, so the
+number covers the cache restore and the weight load: those are the largest fixed
+cost in the job, and a clock that starts after them is not the job's clock.
+
+**Why this row and not the run manifest.** The manifest is one row per run and a
+run draws up to eight hosts, so a per-job fact would have to become a
+variable-length list keyed by shard - which is what this ledger already is. The
+manifest is also written by `assemble`, hours later and in another job, and it is
+a published payload a reader's browser fetches rather than measurement evidence
+under `state/` ([../architecture/contracts/schemas.md](../architecture/contracts/schemas.md)).
+That reasoning does not reach the `route` job, which runs no shards and files no
+counters row, so which processor a `route` job drew is still unrecorded
+([Still unmeasured](#still-unmeasured)).
 
 ## What the first run at cap 5000 must record
 
@@ -3462,9 +3516,12 @@ argument put Trigger A and Trigger B on the page before the cap moved.
 
 Three instruments, and each row below names which one it needs.
 
-**Job wall-clock** comes from the GitHub API, using the two queries in
-[the section above](#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it).
-Nothing in this repository carries a `work` job's clock.
+**Job wall-clock** comes from `state/runtime-counters.csv`, whose `job_seconds`
+cell is the shard job's own clock up to the counters scrape, and from the jobs
+API for the part after it. Both queries are in
+[the section above](#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
+and what the committed cell leaves out is in
+[The instrument Trigger A reads](#the-instrument-trigger-a-reads).
 
 **Per-item figures** come from `state/item-health/<YYYY-MM>.csv`, one row per
 planned item per run. `source_words` is the post-cap count and cannot exceed
@@ -3493,14 +3550,16 @@ print("output tokens at cap, median:",
 **Server-side totals** come from `state/runtime-counters.csv`, one row per shard.
 `n_tokens_max` is the widest complete request the server saw, and it is the only
 instrument that answers the context-fit question, because it counts prompt plus
-reply as the server assembled them rather than as we estimated them.
+reply as the server assembled them rather than as we estimated them. The same
+row carries `job_seconds` and `cpu_model`, which is why rows 1 and 2 below now
+read a committed file instead of an API.
 
 ### The rows
 
 | # | What to record | Against what | Reading |
 | --- | --- | --- | --- |
-| 1 | Slowest `work` job, minutes | 85.6 min measured 2026-08-27, and `run.shard_timeout_minutes` of 150 | **not yet measured** |
-| 2 | Fixed cost per worker: the part of a worker's clock that is not model time (cache restore, weight load, warmup) | no prior on record; this run establishes it | **not yet measured** |
+| 1 | Slowest `work` job, minutes, from `job_seconds` and from the jobs API. **Record both**: the gap between them is what the committed cell leaves out, and no run has measured it yet | 85.6 min measured 2026-08-27, and `run.shard_timeout_minutes` of 150 | **not yet measured** |
+| 2 | Fixed cost per worker: the part of a worker's clock that is not model time (cache restore, weight load, warmup). `job_seconds` minus the server's own `prompt_seconds_total` plus `tokens_predicted_seconds_total`, in the same row | no prior on record; this run establishes it | **not yet measured** |
 | 3 | Items at the new cap, per run and per shard | 7.8 a run at the old cap (155 rows at exactly 1,923 words over 20 runs, `state/item-health/2026-08.csv`, counted 2026-08-29) | **not yet measured** |
 | 4 | Extra input tokens actually read, against the run before it | the projection of 10,300 to 11,000 a run | **not yet measured** |
 | 5 | Read rate, uncached, tok/s | 12.05 tok/s, the rate the projection used | **not yet measured** |
@@ -4040,9 +4099,13 @@ carries `runner: ubuntu-latest`, which is the label and not the part.
 `state/fingerprints.csv` does carry a CPU model, but it is the `work` job's, it
 is appended only when the pipeline fingerprint changes - two rows in this
 project's history - and it exists to pin reproducibility rather than to measure
-throughput. The console reads neither. So the swing above can be observed and
-cannot yet be attributed. A CPU model on the run manifest is what would change
-that, and it has not been built.
+throughput. The console reads neither. **The `work` job stopped having this
+problem on 2026-08-29**, when every shard began filing its own `cpu_model` in
+`state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)),
+and that fix does not reach here: `route` runs no shards and writes no counters
+row. So the swing above can be observed and cannot yet be attributed. A
+committed row at `route` grain is what would change that, and it has not been
+built.
 
 ## Which way the grader's length bias runs
 
@@ -4184,7 +4247,7 @@ to justify a design decision.
 | **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
 | **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
 | **What makes a route host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine `route` runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)). Exactly one `route` run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. Then: **two `route` runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
-| **Which CPU a `route` or `work` job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven `route` runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. The run manifest carries only `runner: ubuntu-latest`, and `state/fingerprints.csv` appends a CPU model for the `work` job alone and only when the fingerprint changes, two rows ever. Put the CPU model on the run manifest and a swing becomes attributable from committed data rather than from a job log that ages out.
+| **Which CPU a `route` job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven `route` runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). `route` runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give `route` a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29.** It moved from 2500 to 5000 in `config/idhazh.json`, so it is no longer an unswept knob but a live change under observation, and the first scheduled run measures it directly against [What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record). |
