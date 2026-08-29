@@ -618,6 +618,24 @@ Get-Content <path> | Select-Object -Skip 274 -First 3
 
 A hit you cannot reproduce with `Select-String` or `Get-Content` is not there.
 
+**The editor's replace tool deletes whatever the old text held and the new text
+drops, and reports success.** It is a literal swap, so a line that sits inside
+the matched block and is missing from the replacement is gone with no warning
+and no diff to read. On 2026-08-29 a worker matched a block of workflow YAML to
+change two steps, omitted an `actions/setup-python` step that happened to sit
+between them, and the tool reported a clean edit. Nothing failed until the job
+ran. The block was long enough that the omission was invisible in the call.
+
+The cheap catch is one command after every structural edit, before the gates:
+
+```powershell
+git diff --stat -- <path>
+```
+
+A line count that moved by more than the change you meant is the whole signal.
+Prefer a match tight enough to hold only the lines you are changing; a wide
+match to "give the tool context" is the thing that makes this possible.
+
 ## Hugging Face
 
 **The `ETag` on a weights download is not the SHA-256, and it looks exactly
@@ -661,6 +679,27 @@ means reification finished. Every tool then runs through `node`
 `node_modules/<pkg>/<entry>.js` directly, which needs nothing from `npm`. Do not
 conclude the environment is broken, and do not re-run `npm ci` - a second one
 contends with the first.
+
+**The inverse also happens: `npm ci` exits 0 and the bins are not resolvable
+yet.** Observed 2026-08-29 under parallel load, with `NPMCICODE=0` recorded and
+`Test-Path frontend\node_modules\.bin` returning true. The script launched
+immediately after died with `'svelte-kit' is not recognized`, and `npm run
+check`, `npm run build` and `npm run bundle-gate` all returned 1 in one round -
+which reads exactly like a broken lockfile. The identical script passed all
+three a minute later. The `.cmd` shims are on disk before a new process can
+resolve them. Gate on the specific shim, and never diagnose a toolchain from the
+first run after an install:
+
+```powershell
+Test-Path frontend\node_modules\.bin\svelte-kit.cmd
+```
+
+**`npm ci` can also exit 0 with one package only partly extracted.** The same
+day, `aria-query/lib/index.js` was missing from an install that reported success
+and surfaced twenty minutes later as `MODULE_NOT_FOUND` inside `vite build`,
+reading exactly like a code fault. A second `npm ci` fixed it. Suspect the
+install before the source whenever a missing module belongs to a transitive
+dependency nothing in the change touched.
 
 ## Running the gates
 
@@ -878,6 +917,33 @@ the variable protects the shell you remember to set it in and nothing else.
 
 - **One line only.** Multi-line commands are mangled before they reach the
   shell. There is no working heredoc.
+- **A mangled here-string leaves the variable holding the PREVIOUS script.** The
+  line above says the heredoc does not work; what it does next is the trap. In a
+  persistent shell `$s = @'...'@` failing leaves `$s` at whatever the last script
+  put there, so `Set-Content new.ps1 -Value $s` writes an old script under a new
+  name and runs it successfully, doing the wrong thing. Observed 2026-08-29,
+  found only because the launcher printed a `PWD=` line from the previous run.
+  Write launcher scripts with the editor's file tool, never from a here-string.
+- **A command that IDLES is killed at 16 to 45 seconds, exit 1, no output.**
+  `Start-Sleep`, `Wait-Process -Timeout` and any `while` loop that sleeps between
+  probes all return instantly with an empty result. A loop that PRINTS something
+  every second or two survives longer, and is still cut eventually. Reported
+  independently by four agents on 2026-08-29. The trigger is idleness rather than
+  duration, which is why a long `pytest` streaming dots outlives a short sleep.
+  The only pattern that holds: a `Start-Process pwsh -WindowStyle Hidden` child
+  writing a sentinel file, polled by many separate short calls.
+- **A killed redirect leaves the output file present and EMPTY.** `mypy > file
+  2>&1` cut at the idle limit exits 1 with a zero-byte file, so `Test-Path` says
+  true and `Get-Content` says nothing - which reads exactly like a gate that
+  passed silently. Always write `$LASTEXITCODE` into a separately-named `-DONE`
+  sentinel and read the sentinel; never infer a pass from an empty log. For the
+  same reason, do not chain two long redirects in one call (`ruff > a; mypy > b`
+  returned no output and neither file existed afterwards). One long child a call.
+- **A killed command is indeterminate in both directions.** The same kill left
+  `gh pr create` having done nothing at all, and left `git push -u` having pushed
+  the branch and skipped only the `--set-upstream`. Neither the exit code nor the
+  empty output separates the two. Ask the server: `git ls-remote --heads origin
+  <branch>` and `gh pr list --state all --head <branch>`.
 - **`Select-String` matches case-insensitively unless you say otherwise**, so a
   search for a constant finds the helper that replaced it. Hunting a merge
   failure on 2026-08-27, `Select-String -Pattern 'INDEX_ROOT'` reported five
