@@ -1,5 +1,11 @@
-import type { RateSpread, StageTiming, StageTimingDay, ThroughputDay } from '$lib/charts/series';
-import { CUT_FLAG_MEANS_A_CUT_FROM, modelByDate, modelWork } from '$lib/server/model-work';
+import type {
+	CompressionPoint,
+	RateSpread,
+	StageTiming,
+	StageTimingDay,
+	ThroughputDay
+} from '$lib/charts/series';
+import { modelByDate, modelWork, placeRow } from '$lib/server/model-work';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
@@ -18,15 +24,6 @@ import {
 export const prerender = true;
 
 type TimingStats = StageTimingDay;
-
-interface CompressionPoint {
-	date: string;
-	item_id: string;
-	source_words: number;
-	source_seen_words?: number;
-	summary_words: number;
-	truncation_flagged: boolean;
-}
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
@@ -211,48 +208,6 @@ function publicTelemetry(row: Record<string, string>) {
 		code: row.code ?? '',
 		source_words: measured(row, 'source_words'),
 		summary_words: measured(row, 'summary_words')
-	};
-}
-
-/** Where one score row sits on the compression plot, or why it sits nowhere.
- *
- * One decision, three outcomes, because the plot and the sentence under it read
- * the same answer. Counting the unplaced rows anywhere else would let the two
- * disagree about the same row on the same day.
- */
-type Placed =
-	| { kind: 'point'; point: CompressionPoint }
-	| { kind: 'no-length'; date: string }
-	| { kind: 'no-summary' };
-
-function placeRow(row: Record<string, string>): Placed {
-	const sourceWords = Number(row.source_word_count ?? 0) || 0;
-	// Null, empty or zero all mean the same thing: the article's length before
-	// the cut was never recorded, so there is no x to draw this row at.
-	if (sourceWords <= 0) return { kind: 'no-length', date: row.date ?? '' };
-	const summaryWords = Number(row.summary_word_count ?? 0) || 0;
-	if (summaryWords <= 0) return { kind: 'no-summary' };
-	const seenWords = Number(row.source_seen_word_count ?? 0) || 0;
-	return {
-		kind: 'point',
-		point: {
-			date: row.date ?? '',
-			item_id: row.item_id ?? '',
-			source_words: sourceWords,
-			// Carried only where the model saw something other than the whole
-			// article. The page inlines every point, so a number repeating "nothing
-			// was cut" on 2,517 of 2,539 rows is weight for no fact.
-			...(seenWords === sourceWords ? {} : { source_seen_words: seenWords }),
-			summary_words: summaryWords,
-			// Read through the row's own stamp, exactly as the day's count is. A
-			// row stamped before the boundary holds the gap between two
-			// faithfulness scores in this column, which is a different fact about
-			// a different thing - drawing a diamond on it would make the plot
-			// claim per item what the table refuses to claim per day.
-			truncation_flagged:
-				(row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM &&
-				(row.truncation_flagged === 'True' || row.truncation_flagged === 'true')
-		}
 	};
 }
 

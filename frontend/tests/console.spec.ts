@@ -9,7 +9,7 @@ import {
 } from '../src/lib/charts/series';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
-import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
+import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork, placeRow } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 
 /**
@@ -1696,4 +1696,57 @@ test('the cut flag is counted only over rows that carry the meaning it has now',
 	// counts every row the day holds.
 	const mixed = modelWork([row(before, 'True'), row(after, 'False')], [])[0];
 	expect(mixed.kind === 'day' && mixed.day.summaries).toBe(2);
+});
+
+test('a diamond is placed only on a row whose flag still means a cut', () => {
+	// The same boundary the day's count reads, asserted on the function that
+	// places one mark. It lived in the route module until this branch, where no
+	// pure test could reach it - and once every canary row moved to the new side
+	// of the stamp, a page with the gate and a page without it drew the same two
+	// diamonds. The browser could not tell them apart; these two rows can.
+	const row = (version: string, flagged: string) => ({
+		date: '2026-08-28',
+		item_id: 'ai-01',
+		version,
+		source_word_count: '4200',
+		source_seen_word_count: '1923',
+		summary_word_count: '205',
+		truncation_flagged: flagged
+	});
+
+	const marked = (cells: Record<string, string>): boolean => {
+		const placed = placeRow(cells);
+		if (placed.kind !== 'point') throw new Error('the fixture row is placeable');
+		return placed.point.truncation_flagged;
+	};
+
+	// Same flag, one row either side of the stamp. Delete the gate and the first
+	// of these returns true, which is the assertion that bites.
+	expect(marked(row('2026-08-27T20:30', 'True'))).toBe(false);
+	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'True'))).toBe(true);
+
+	// And it is the flag being read, not the stamp: a new row that was not cut
+	// gets no diamond either, so this cannot pass by always returning the stamp.
+	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'False'))).toBe(false);
+
+	// The other two outcomes are the same decision, so they are asserted here
+	// rather than counted a second time somewhere else.
+	expect(placeRow({ date: '2026-08-28', summary_word_count: '205' })).toEqual({
+		kind: 'no-length',
+		date: '2026-08-28'
+	});
+	expect(placeRow({ date: '2026-08-28', source_word_count: '4200' }).kind).toBe('no-summary');
+
+	// An article nobody cut carries no second length. The page inlines every
+	// point, so a cell repeating "nothing was cut" is weight for no fact.
+	const whole = placeRow({
+		date: '2026-08-28',
+		item_id: 'ai-02',
+		version: CUT_FLAG_MEANS_A_CUT_FROM,
+		source_word_count: '880',
+		source_seen_word_count: '880',
+		summary_word_count: '96',
+		truncation_flagged: 'False'
+	});
+	expect(whole.kind === 'point' && 'source_seen_words' in whole.point).toBe(false);
 });

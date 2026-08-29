@@ -12,9 +12,12 @@
  * no answer to the question the column asks now; printing any of the three as
  * zero would say the model did nothing.
  *
- * Imports nothing: the browser suite loads this module in plain Node, where no
- * Vite alias resolves, and it reads the same ledgers the page reads.
+ * Imports nothing at runtime: the browser suite loads this module in plain
+ * Node, where no Vite alias resolves, and it reads the same ledgers the page
+ * reads. The one import below is a type, so it is erased before Node sees it.
  */
+
+import type { CompressionPoint } from '../charts/series';
 
 /** The ledger stamp from which `truncation_flagged` means extract cut the body.
  *
@@ -192,6 +195,53 @@ export function modelWork(
 	return withSwaps(
 		dates.map((date) => day(date, scored.get(date) ?? [], worked.get(date) ?? []))
 	);
+}
+
+/** Where one score row sits on the compression plot, or why it sits nowhere.
+ *
+ * One decision, three outcomes, because the plot and the sentence under it read
+ * the same answer. Counting the unplaced rows anywhere else would let the two
+ * disagree about the same row on the same day.
+ */
+export type Placed =
+	| { kind: 'point'; point: CompressionPoint }
+	| { kind: 'no-length'; date: string }
+	| { kind: 'no-summary' };
+
+/** Lives here rather than in the route module so a pure test can drive it.
+ *
+ * It reads `CUT_FLAG_MEANS_A_CUT_FROM`, and a SvelteKit route module cannot be
+ * loaded outside a build - which left the boundary it reads with no test that
+ * could tell a page with the gate from a page without it.
+ */
+export function placeRow(row: Record<string, string>): Placed {
+	const sourceWords = Number(row.source_word_count ?? 0) || 0;
+	// Null, empty or zero all mean the same thing: the article's length before
+	// the cut was never recorded, so there is no x to draw this row at.
+	if (sourceWords <= 0) return { kind: 'no-length', date: row.date ?? '' };
+	const summaryWords = Number(row.summary_word_count ?? 0) || 0;
+	if (summaryWords <= 0) return { kind: 'no-summary' };
+	const seenWords = Number(row.source_seen_word_count ?? 0) || 0;
+	return {
+		kind: 'point',
+		point: {
+			date: row.date ?? '',
+			item_id: row.item_id ?? '',
+			source_words: sourceWords,
+			// Carried only where the model saw something other than the whole
+			// article. The page inlines every point, so a number repeating "nothing
+			// was cut" on 2,517 of 2,539 rows is weight for no fact.
+			...(seenWords === sourceWords ? {} : { source_seen_words: seenWords }),
+			summary_words: summaryWords,
+			// Read through the row's own stamp, exactly as the day's count is. A
+			// row stamped before the boundary holds the gap between two
+			// faithfulness scores in this column, which is a different fact about
+			// a different thing - drawing a diamond on it would make the plot
+			// claim per item what the table refuses to claim per day.
+			truncation_flagged:
+				(row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM && flag(row.truncation_flagged)
+		}
+	};
 }
 
 /** The model id each date's score rows name, for the days that name one.
