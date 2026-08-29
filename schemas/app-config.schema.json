@@ -165,7 +165,7 @@
         },
         "default_window_days": {
           "default": 30,
-          "description": "Initial time span for the console charts. A viewport, not a deletion.",
+          "description": "Initial time span for the console charts. A viewport, not a deletion. Thirty rather than fourteen because the page states its own retirement rules over fourteen days, so a window equal to the rule shows the rule with no margin either side of it.",
           "minimum": 1,
           "title": "Default Window Days",
           "type": "integer"
@@ -207,6 +207,15 @@
           "$ref": "#/$defs/TodayAnchor",
           "default": "right",
           "description": "Where today sits in the initial viewport when enough history exists."
+        },
+        "window_presets": {
+          "description": "The day counts the console's window control offers, ascending and distinct. A short list rather than a slider: every value is a distinct fetch cost, because a wider window pulls more month files, and most values in between are indistinguishable on the page. `default_window_days` must be one of them, or the console would open on a window its own control cannot name.",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "title": "Window Presets",
+          "type": "array"
         },
         "zoom_factor": {
           "default": 1.5,
@@ -1326,6 +1335,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.window_presets added, and console.default_window_days must now be one of its members.",
+      "version": "2026-08-29T22:00",
+      "why": "The console had no way to say how many days it was showing, so every section picked its own span and one of them hard-coded seven days in the frontend. One control now sets one window for the whole page, and a control needs a list of the spans it offers. Four presets rather than a free number: a wider window fetches more month files, so every value is a distinct transfer cost and most of the values between these four cannot be told apart on the page. Additive with a default, so an older config still validates - the committed 30 is a member of the default list (section 11)."
+    },
+    {
       "change": "finetune.reference_rows raised from 300 to 500, and finetune.reference_test_rows added.",
       "version": "2026-08-29T20:00",
       "why": "Owner decision, 2026-08-29. The size of the set and the size of its read-by-a-person slice were one number, which hid the only cost that matters: a row drafted with an expert model is about two minutes and a row read line by line is about five, so the split is what decides the hours. At 500 and 100 that is roughly 13 hours of drafting and 8 of reading, against the 12 the plan estimated for 300. Additive with a default, so an older config still validates (section 11)."
@@ -1591,7 +1605,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-29T20:00",
+      "default": "2026-08-29T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1605,5 +1619,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-29T20:00"
+  "version": "2026-08-29T22:00"
 }

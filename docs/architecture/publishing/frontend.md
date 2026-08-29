@@ -517,14 +517,62 @@ cell is one fewer item timed, never a zero.
 
 The viewport is a 30-day default window, not a retention policy. The window size
 and where today sits are `console.default_window_days` and
-`console.today_anchor`. When less history exists, the first view fits the rows
-that exist instead of drawing empty calendar space. Arrow keys pan, and `+` /
-`-` zoom, from a labelled focusable control with a visible focus ring; the
-buttons beside it do the same thing with a pointer. **Every console chart is
-hand-written SVG rendered on the server**, so the page is complete before any
-script runs and stays complete if none does. If a telemetry month is absent or
-cannot be parsed, that month is a gap in the charts. It is not interpolated, and
-it never white-screens the console.
+`console.today_anchor`. Arrow keys pan, and `+` / `-` step the window to the
+next preset, from a labelled focusable control with a visible focus ring; the
+buttons beside it pan with a pointer. **Every console chart is hand-written SVG
+rendered on the server**, so the page is complete before any script runs and
+stays complete if none does. If a telemetry month is absent or cannot be parsed,
+that month is a gap in the charts. It is not interpolated, and it never
+white-screens the console.
+
+### One window governs the page
+
+The window belongs to the page, not to the viewport, and one control at the top
+of the console sets it. It is a set of radio buttons carrying
+`console.window_presets` - four spans, all four on the page at once, so the cost
+of the wide one is readable without opening a menu. A slider was rejected for
+the same reason: every span is a different number of month files to fetch, and
+the spans between these four cannot be told apart once drawn.
+
+Three rules keep the control honest and all three are in the contract, so a bad
+config fails the build rather than the page:
+
+- `default_window_days` is a member of `window_presets`, or the page opens on a
+  window with every button unchecked.
+- The presets are ascending and distinct.
+- Every preset sits between `min_window_days` and `max_window_days`.
+
+A window of N days is exactly N days, even when the ledger holds fewer. It used
+to shrink to fit the rows it found, which was invisible while nothing on the
+page named the span and a lie the moment a control does - a page reading 90 days
+while the charts draw 2 cannot be trusted about anything else. Empty calendar
+space is the honest answer to "there is nothing there".
+
+**Widening fetches, and the control prices it first.** A preset that reaches
+into months not already in hand carries a `+2 months` label, and picking it
+re-uses the same month-fetch path a pan uses rather than reloading the page, so
+rows already paid for stay. The control shows a busy state while the files are
+in the air. Narrowing costs nothing.
+
+**The choice is kept in `localStorage` and read on mount, never during
+prerender.** First paint is therefore always the window the server drew, so the
+prerendered document and the control cannot disagree while the page hydrates.
+
+Three surfaces do not simply follow the span, and each says so on the page:
+
+| Surface | What it does | Why |
+| --- | --- | --- |
+| `Feeds that failed` | Counts every run on record | A windowed count would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. |
+| `Site size` | Absolute number always; only the movement is windowed | The size is a level and the operator wants today's whatever span he is reading. Only the movement is a rate, and a rate has to say what it is over. |
+| `Router minutes per chart` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
+
+`Sources cut short most often` used to hard-code seven days. It follows the
+control now, and the section prints its own denominator, which at seven days
+runs as low as six articles. Its table is aggregated once per preset at build
+time - four tables of ten rows costs less than one fetch, and it keeps the
+section working with no script at all. It follows the window's *length* rather
+than where a pan leaves it, and the section says so: the days it reads always
+end on the newest day the ledger holds.
 
 **The prerendered seed carries that same window, and no more.** The server used
 to concatenate every committed month and inline all of it, so the console

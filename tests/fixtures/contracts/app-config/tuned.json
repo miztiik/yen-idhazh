@@ -36,6 +36,12 @@
     "min_window_days": 7,
     "pan_days": 3,
     "today_anchor": "centre",
+    "window_presets": [
+      7,
+      21,
+      60,
+      180
+    ],
     "zoom_factor": 2.0
   },
   "drift": {

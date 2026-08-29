@@ -289,6 +289,7 @@ assume this bound already fits it
 The console knobs are:
 
 - `console.default_window_days`
+- `console.window_presets`
 - `console.today_anchor`
 - `console.pan_days`
 - `console.zoom_factor`
@@ -301,6 +302,21 @@ The console knobs are:
 The 30-day setting is a viewport. It never deletes rows. `failure_list_max` is
 the same idea one level down: the failed-item list shows a page at a time and
 offers the rest, so the charts above it stay reachable.
+
+`window_presets` is the list of spans the console's window control offers, and
+one control sets the span for every section that follows it. Four presets rather
+than a free number, because a wider window fetches a month file per month it
+reaches back into - so every value is a distinct transfer cost, and the values
+between these four cannot be told apart on the page. `default_window_days` must
+be one of them, or the page would open on a window its own control cannot name,
+and every preset must sit between `min_window_days` and `max_window_days`. All
+three rules are in the contract, so a config that breaks one fails the build
+rather than the page.
+
+`zoom_factor` has had no reader since the presets landed: the `+` and `-` keys
+step to the next preset instead of scaling the span, because a free span is the
+thing the presets exist to prevent. The knob is still in the contract, and
+retiring it is a removal with a read-side migration behind it (section 11).
 
 ## Reader surface
 
