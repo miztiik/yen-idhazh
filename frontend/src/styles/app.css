@@ -1,5 +1,10 @@
 @import 'tailwindcss';
 @import './tokens.css';
+/* Generated from config/appearance.json at build time. It carries the frame
+   tokens, which have to be right on the first painted frame - so they are in
+   CSS rather than injected from the layout, which cost 397 to 700 gzipped
+   bytes of JavaScript on every route to do the same job. */
+@import './frame.generated.css';
 
 /* Class strategy, not media: a reader on a dark-defaulted phone who wants to
    read in bed needs a way to say so. */
@@ -110,13 +115,28 @@ body {
 	max-width: var(--frame-reading);
 }
 
-.frame-console {
+/* An instrument has tables and charts where a digest has sentences, so it is
+   allowed the screen it is on - measured 2026-08-28, the console rendered a
+   ten-column table at 627px with 582px empty beside it.
+
+   The page declares what it is and CSS reads it from the frame. Deriving this
+   from the route in the layout instead cost 649 to 953 gzipped bytes of
+   JavaScript on EVERY route, including two that render nothing, to answer a
+   question the markup already knows. Unsupported `:has()` falls back to the
+   reading frame, which is narrower but correct. */
+.frame:has([data-surface='operator']) {
 	max-width: var(--frame-console);
 }
 
-/* The reading measure, applied where prose actually is. */
+/* The reading measure, applied where prose actually is.
+
+   `overflow-wrap` because the text comes off the open web: one unbroken token -
+   a URL, a chemical name, a German compound - is wider than the measure and
+   pushes a scrollbar under the whole column. Breaking the word is the lesser
+   harm, and it is the only thing on this page allowed to break one. */
 .measure {
 	max-width: var(--measure);
+	overflow-wrap: break-word;
 }
 
 /* A grid splits on the width it HAS, never on the width of the window. Asking

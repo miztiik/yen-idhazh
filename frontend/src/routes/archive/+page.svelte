@@ -197,7 +197,12 @@
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-story-scope>
 				Showing {listed.length} of {reachable}, newest first.
 			</p>
-			<ul class="mt-3" data-story-list="rows">
+			<!-- The one list on the site that goes multi-column. It is a scan
+			     surface - a reader here is finding the one they remember, not
+			     reading the day in order - so "find it fast" outranks the ranked
+			     order the digest has to protect. It splits on the width it HAS,
+			     never on the viewport's. -->
+			<ul class="auto-grid mt-3" style="--auto-grid-min: 22rem" data-story-list="rows">
 				{#each listed as entry (`${entry.date}-${entry.item_id}`)}
 					<li class="border-b border-rule py-3" data-story-date={entry.date}>
 						<a

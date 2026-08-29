@@ -301,25 +301,3 @@ export function iconsConfig(): IconsConfig {
 export function motionConfig(): MotionConfig {
 	return { ...MOTION_DEFAULTS, ...(appearance().motion ?? {}) };
 }
-
-/** The custom properties the frame and the motion budget resolve to.
- *
- * Emitted into the document head at build time rather than fetched, because a
- * frame width that arrives after first paint is a visible reflow on every page
- * load. `tokens.css` declares the same names with the same defaults, so a page
- * built without this block still renders correctly - this only overrides.
- */
-export function frameStyle(): string {
-	const frame = frameConfig();
-	const motion = motionConfig();
-	const declarations: string[] = [
-		`--frame-reading:${frame.reading_max_px}px`,
-		`--frame-console:${frame.console_max_px}px`,
-		`--measure:${frame.measure_ch}ch`,
-		`--gutter-min:${frame.gutter_min_px}px`,
-		`--gutter-max:${frame.gutter_max_px}px`,
-		`--dur-fast:${motion.enabled ? motion.duration_fast_ms : 0}ms`,
-		`--dur-base:${motion.enabled ? motion.duration_base_ms : 0}ms`
-	];
-	return declarations.join(';');
-}
