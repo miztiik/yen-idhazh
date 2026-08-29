@@ -20,8 +20,9 @@ oldest ones so the file stays a fixed size, and commits it. Once a month a
 second job deletes the old history so the repository does not grow forever.
 There is also a small tool for looking at the collected data and repairing it.
 
-**The corpus is no longer empty. It holds 166 real training rows**, backfilled
-on 2026-08-29 from two finished runs rather than waited for.
+**The corpus is no longer empty. It holds 1,852 real training rows** against a
+2000-row window, rebuilt on 2026-08-29 from the source addresses the committed
+ledger remembers rather than waited for. The 500-row floor is cleared.
 
 **Nothing trains a model yet, and nothing has changed what a reader sees.**
 
@@ -31,7 +32,7 @@ on 2026-08-29 from two finished runs rather than waited for.
 | Every size and schedule as a setting, not a number in code | The notebook that actually trains |
 | The step that collects examples during the daily run | Uploading the trained weights |
 | The job that trims old history | Judging whether the trained model is better |
-| The tool for inspecting, repairing and **backfilling** the data | Switching production over to it |
+| The tool for inspecting, repairing, **backfilling** and **refilling** the data | Switching production over to it |
 
 ### Why the corpus fills so slowly, and what fixed it
 
@@ -58,6 +59,16 @@ Together that is one run in twenty to thirty-five. At the measured keep rate of
 72 percent (229 items read, 166 rows kept, 2026-08-29) a weekly harvest of a
 busy day's single run is about 107 rows, so a 2000-row window takes something
 like **four to five months**.
+
+**What fixed it: `refill`, added 2026-08-29.** The schedule was never going to be
+the way this file fills. `backfill` reaches seven days, as far as the `items-*`
+artifact lives. `refill` reaches every day the repository still remembers,
+because `state/scores.csv` names the canonical address of every item ever scored
+and the committed day payload holds the published summary - between them, every
+half of a row except the body, and the body has an address. One pass took the
+window from 166 rows to 1,852 in 26 minutes. Details and the three checks that
+make re-fetching safe are in
+[`docs/how-to/fine-tune-a-model.md`](../docs/how-to/fine-tune-a-model.md).
 
 **An earlier draft of this section said "about 85 rows a week" and derived six
 months from it. That number was measured on 2026-08-28 and 2026-08-29 - the only
@@ -91,15 +102,16 @@ whose prompt is a guess is the one thing this module exists to make impossible.
 
 ### What has to happen next, in order
 
-1. **After the next few digest runs, run one backfill.** `gh run download` each
-   run, then `backfill --items-dir`. Runs from 2026-08-29T06:33Z onward keep
-   their artifacts seven days; older runs are already gone. Re-running a run
-   already in the window costs nothing - the roll deduplicates by `url_key`,
-   confirmed 2026-08-29 (166 rows before, 166 after).
+1. ~~**After the next few digest runs, run one backfill.**~~ **Done, and by a
+   different route.** `refill` rebuilt the window from the ledger's own addresses
+   on 2026-08-29: 1,852 rows, floor cleared, no waiting. `backfill` remains the
+   better tool for the last seven days, because it needs no network and its body
+   is the exact text the scorer read.
 2. **Write the reference summaries (row 5).** This is a person's job and it is
    the biggest single cost in the plan - roughly 12 hours, an estimate rather
    than a measurement, and it can be done in slices of 100. **Nothing after this
-   can start without it.**
+   can start without it.** With gate 1 cleared this is now the only large task
+   standing between here and a training session.
 3. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
    and free Colab or paid. All three have defaults, so silence is an answer.
 4. **Then the training rows (6 to 9), which need a GPU that is not ours.**
@@ -110,16 +122,16 @@ whose prompt is a guess is the one thing this module exists to make impossible.
 
 | # | Gate | State on 2026-08-29 |
 | --- | --- | --- |
-| 1 | The window holds at least `min_rows` (500) | **166.** One backfill in a week clears it |
-| 2 | A holdout exists, split by date | Not run. `data_wrangler.py split`, one command |
-| 3 | Rows fit `finetune.sequence_length` | Not measured. `verify --tokens`, one command |
+| 1 | The window holds at least `min_rows` (500) | **CLEARED. 1,852 rows**, by one `refill` pass |
+| 2 | A holdout exists, split by date | Not run. `data_wrangler.py split`, one command, offline |
+| 3 | Rows fit `finetune.sequence_length` | Not measured. `verify --tokens`, one command, reaches the network |
 | 4 | The reference set exists | **Not started. This is the blocker** |
 | 5 | `models.<role>.hf_base_repo` names a repository that really exists | **Unverified.** `Qwen/Qwen3.5-9B` is an expectation, not a fact |
 | 6 | The notebook exists | Not written |
 | 7 | Inputs 3, 4 and 6 answered | Defaults stand |
 
 Gates 2, 3 and 5 are minutes of work each and none needs a GPU. Gate 4 is the
-twelve hours. Gate 1 is a week of waiting that is now one command.
+twelve hours, and it is now the only thing left that is measured in hours.
 
 ### What from after the training can be pulled forward into the repository
 
