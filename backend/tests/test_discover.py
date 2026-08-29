@@ -218,6 +218,20 @@ def test_a_salience_feed_only_votes() -> None:
     assert "https://blog.example-lab.org/2026/08/model-release" in voted
 
 
+def test_a_vote_is_for_the_article_and_never_for_the_discussion_page() -> None:
+    """An aggregator serves both, and only one of them is ever in our pool.
+
+    `hnrss.org` offers a `?link=article` form whose `link` element is the
+    Hacker News item instead of the story. Reading that form, or reading
+    `comments`, would cast every vote for an address no feed can ever offer -
+    and the vote would fail silently, because a vote for a URL we do not hold
+    is indistinguishable from no vote at all.
+    """
+    voted = salience_urls(body("front-page.xml"))
+    assert "https://trade.example-press.net/2026/08/model-release-reaction" in voted
+    assert not [url for url in voted if "aggregator.example.org" in url]
+
+
 def offered(url: str) -> Candidate:
     canonical = canonicalise(url)
     return Candidate(

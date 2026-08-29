@@ -156,6 +156,24 @@ The weight is also the reversible half of retirement. Drop a source to 0.5, watc
 
 The consequence worth stating plainly: **a link aggregator is a vote, not a source.** It contributes rank to a URL already in the pool. It never discovers, because a site with no subject taxonomy cannot be asked for a subject.
 
+### The vote is thin, and the number is here so nobody re-litigates it from intuition
+
+Measured 2026-08-30. Over two real plans (`2026-08-29-1` and `2026-08-29-2`, from their committed plan artifacts) the front-page vote fired on **0 of 160 and 1 of 160 planned items**.
+
+The cause is not a bug, and three things were ruled out before that was believed:
+
+- The feed is correct. `hnrss.org/frontpage` puts the **article** in `link` and its own discussion page in `comments` - 0 of 20 entries pointed at `news.ycombinator.com`. `salience_urls` reads `link`, which is right.
+- Canonicalisation is correct. A feed URL carrying `?utm_source=rss` and the aggregator's clean copy of the same address canonicalise to one string.
+- Widening the sample barely helps. `hnrss.org/best` carries 30 entries against 20 and churns more slowly, and still only **1 of 30** sat on a host we have a feed for.
+
+The cause is that **an aggregator and a news digest do not read the same internet.** The front page was 19 distinct hosts, of which 1 was ours: the rest were personal blogs, GitHub, Bluesky and one-off domains. Only 3 of 20 were on a host we have *ever* published from.
+
+So the vote is kept because it costs one request and occasionally lands, `hn-best` is added because it doubles the sample for a second request, and neither is expected to move a day much. **If the vote still fires on under 1 percent of planned items after a week of both feeds, retire them both** - a bonus nothing earns is a moving part that has to be read and maintained for nothing.
+
+Raising `front_page_bonus` is not the answer and would be the wrong instrument. A story on an aggregator's front page *and* in our pool is by definition well carried, and `reach` already scores it.
+
+`backend/tests/test_discover.py::test_a_vote_is_for_the_article_and_never_for_the_discussion_page` pins the half that is easy to break: `hnrss.org` also offers a `?link=article` form whose `link` is the discussion page, and reading that would cast every vote for an address no feed can offer. It would fail silently, because a vote for a URL we do not hold looks exactly like no vote.
+
 ## One address per story
 
 Deduplication is the whole point of collecting from many feeds, and it only works if the same article arriving three ways produces one address. Canonicalisation is therefore a load-bearing step, not tidying:
@@ -272,6 +290,27 @@ global and Africa desks, VoxDev, The New Humanitarian, Mongabay.
 both verify today and both were retired on 2026-08-21 with the rest of the `ai`
 curation. This sweep did not review that decision, so it does not reverse it.
 
+**One feed was added on 2026-08-30: `fastcompany-tech`**, trade press on the
+`ai` desk, taking it to 41 feeds against a floor of 35. It goes to `ai` because
+that is where every general-technology outlet already sits - `bbc-tech`,
+`wired-ai`, `techcrunch-ai`, `ars-technica-ai` and `zdnet-ai` are all filed
+there. There is no separate technology desk and this one feed is not a reason to
+open one.
+
+Probed 2026-08-30 from a developer machine, which is evidence about a developer
+machine and not about the runner: `https://www.fastcompany.com/technology/rss`
+answered 200 with 20 entries, every one carrying a date. `/feed` answers 403 and
+is the wrong address. `robots.txt` allows us - the `*` group is `Allow: /` with
+`Disallow: /rest`, and the feed is not under `/rest`.
+
+**One thing about that source is a standing decision, not a settled one.** Its
+`robots.txt` carries an explicit "AI Training Bots (BLOCKED)" group naming
+GPTBot, ChatGPT, Bard, Jasper and others. We are none of those user agents and
+the fetch is allowed, but `corpus/` commits article text as training samples
+(CLAUDE.md section 0a), so the publisher's stated intent and one of our uses
+point in opposite directions. Recorded here rather than resolved: the owner
+takes that call, and if it goes the other way the fix is one `retired_on`.
+
 ### The forty, and why each one went
 
 A tombstone carries a date and not a reason, so the reasons are here. Probed
@@ -291,7 +330,6 @@ A tombstone carries a date and not a reason, so the reasons are here. Probed
 | Rate-limits every article request | `venturebeat-ai` |
 
 ### The per-feed cap is what picks the day
-
 With 160 slots and `max_per_source` at 2, a run needs about 80 feeds to fill
 itself. Measured over six runs, **73 to 78 of the roughly 85 working feeds sat
 exactly on the cap**, and the fifteen largest contributors each published
