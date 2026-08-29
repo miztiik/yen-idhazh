@@ -322,9 +322,9 @@ failed harmlessly for a month.
 `RankedList`, `TargetBar` and `Sparkline` in
 [../../frontend/src/lib/components/](../../frontend/src/lib/components/) are the
 shape that answers it. Their arithmetic is in
-[../../frontend/src/lib/charts/rank.ts](../../frontend/src/lib/charts/rank.ts)
-and `targetbar.ts`, not in the markup, so the number a list prints and the bar it
-draws come from one place.
+[../../frontend/src/lib/charts/rank.ts](../../frontend/src/lib/charts/rank.ts),
+`targetbar.ts` and `sparkline.ts`, not in the markup, so the number a list
+prints and the bar it draws come from one place.
 
 Six rules hold them:
 
