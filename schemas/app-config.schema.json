@@ -808,13 +808,13 @@
     },
     "PageWeightConfig": {
       "additionalProperties": false,
-      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when its HTML either does not grow with the\npublished corpus, or grows by a bounded amount a person can price for a\nyear. `/404` and `/evals/` render no day and no ledger, so their weight is a\nfunction of source alone and their ceiling is the heaviest build plus the\n64-byte noise floor. `/archive/` grows, but only by one day link a day since\nit stopped inlining the day payloads, so its ceiling carries a year of that\ngrowth as measured headroom. `/console/` grows with the ledger its charts\nread and nobody has priced that growth, so it stays uncapped; the marker\ncount in `frontend/tests/payload-weight.spec.ts` covers it, and a route the\nconfig does not name is reported by the gate without failing it.",
+      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when somebody has priced its growth in\npublished days. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone and their ceiling is the heaviest build\nplus the 64-byte noise floor. `/archive/` grows, but only by one day link a\nday since it stopped inlining the day payloads, so its ceiling carries a year\nof that growth as measured headroom. `/console/` grows far faster - about 60\ngzipped bytes a published item, so 36,504 to 43,745 bytes a mature day\nmeasured 2026-08-29 - so its ceiling carries three days rather than a year\nand expires by design. What a page that renders a day cannot have is a fixed\nceiling at all: the only way under one is to publish fewer items, which is\ncapping the news rather than catching a regression, so `/` and `/<date>/` are\ncounted and reported and never failed.",
       "properties": {
         "ceilings_bytes": {
           "additionalProperties": {
             "type": "integer"
           },
-          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed. A route earns a ceiling when its growth is priced: /404 and /evals/ grow only when the source does, and /archive/ grows by one day link a day, so its ceiling carries a measured year of that. /console/ grows with the ledger and stays uncapped until somebody measures it.",
+          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed. A route earns a ceiling when its growth is priced: /404 and /evals/ grow only when the source does, /archive/ grows by one day link a day so its ceiling carries a measured year of that, and /console/ grows with the ledger its charts read so its ceiling carries a measured three days and is meant to expire. A page that renders a day is never capped, because the only way under such a ceiling is to publish less.",
           "title": "Ceilings Bytes",
           "type": "object"
         }
@@ -1214,6 +1214,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "page_weight.ceilings_bytes gained /console/ in config/idhazh.json, and the description here stopped saying that route is unpriced. No field moved.",
+      "version": "2026-08-29T14:00",
+      "why": "The description said /console/ 'stays uncapped until somebody measures it', and this is that measurement. The page costs about 60 gzipped bytes a published item: removing one real mature day from every ledger the console reads and rebuilding cost 43,745, 43,704 and 36,504 bytes over 731, 724 and 621 scored items, measured 2026-08-29 on an Intel Core i7-1265U, Windows, node 24.12.0. So the headroom is three days of the heaviest of those, not the year /archive/ carries, and the number is meant to expire (Rule #10)."
+    },
+    {
       "change": "evaluation.truncation_gap_max removed.",
       "version": "2026-08-29T09:00",
       "why": "Its one caller stopped reading it in this commit, so the knob and its last reader go together and there is never a state where the number exists and nothing consults it. It set truncation_flagged from the gap between the two faithfulness scores, and that flag now carries Article.truncated - whether extract cut the body - because that is what its name says and what its one consumer prints. Retuning it was the alternative and it is not available: score_over_chunks takes the best of overlapping windows, a cut article's last window is not a window of the whole article, and the two window sets are not nested, so the gap can come out positive on an article that was never cut. Measured 2026-08-28 over all 2,683 committed rows of state/scores.csv, the gap on the 22 genuinely cut rows runs -0.1235 to +0.0381 against this knob's 0.100 default - no value in that range separates a cut from chunk-boundary noise (Rule #10). BREAKING: EvaluationConfig forbids unknown keys, so a config file that still names this key fails to load with a message naming it. The read-side migration is the deletion of the key from config/idhazh.json in this same commit (section 11); a fork carrying its own config deletes one line. hhem, hhem_full and hhem_delta all stay - they answer what the cut cost, which is a different question."
@@ -1456,7 +1461,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-29T09:00",
+      "default": "2026-08-29T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1470,5 +1475,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-29T09:00"
+  "version": "2026-08-29T14:00"
 }

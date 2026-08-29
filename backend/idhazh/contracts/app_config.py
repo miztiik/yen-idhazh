@@ -892,16 +892,18 @@ class PageWeightConfig(Model):
     committed config is the single source, and this model owns only the shape
     and the validation (Rule #6).
 
-    A route is worth a fixed ceiling when its HTML either does not grow with the
-    published corpus, or grows by a bounded amount a person can price for a
-    year. `/404` and `/evals/` render no day and no ledger, so their weight is a
-    function of source alone and their ceiling is the heaviest build plus the
-    64-byte noise floor. `/archive/` grows, but only by one day link a day since
-    it stopped inlining the day payloads, so its ceiling carries a year of that
-    growth as measured headroom. `/console/` grows with the ledger its charts
-    read and nobody has priced that growth, so it stays uncapped; the marker
-    count in `frontend/tests/payload-weight.spec.ts` covers it, and a route the
-    config does not name is reported by the gate without failing it.
+    A route is worth a fixed ceiling when somebody has priced its growth in
+    published days. `/404` and `/evals/` render no day and no ledger, so their
+    weight is a function of source alone and their ceiling is the heaviest build
+    plus the 64-byte noise floor. `/archive/` grows, but only by one day link a
+    day since it stopped inlining the day payloads, so its ceiling carries a year
+    of that growth as measured headroom. `/console/` grows far faster - about 60
+    gzipped bytes a published item, so 36,504 to 43,745 bytes a mature day
+    measured 2026-08-29 - so its ceiling carries three days rather than a year
+    and expires by design. What a page that renders a day cannot have is a fixed
+    ceiling at all: the only way under one is to publish fewer items, which is
+    capping the news rather than catching a regression, so `/` and `/<date>/` are
+    counted and reported and never failed.
     """
 
     ceilings_bytes: dict[str, int] = Field(
@@ -913,9 +915,11 @@ class PageWeightConfig(Model):
             "they could drift from the file the gate enforces (Rule #6). A route the "
             "object does not name is measured and reported by the gate but not failed. "
             "A route earns a ceiling when its growth is priced: /404 and /evals/ grow "
-            "only when the source does, and /archive/ grows by one day link a day, so "
-            "its ceiling carries a measured year of that. /console/ grows with the "
-            "ledger and stays uncapped until somebody measures it."
+            "only when the source does, /archive/ grows by one day link a day so its "
+            "ceiling carries a measured year of that, and /console/ grows with the "
+            "ledger its charts read so its ceiling carries a measured three days and is "
+            "meant to expire. A page that renders a day is never capped, because the "
+            "only way under such a ceiling is to publish less."
         ),
     )
 
@@ -1067,6 +1071,24 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-29T14:00",
+            change=(
+                "page_weight.ceilings_bytes gained /console/ in config/idhazh.json, and "
+                "the description here stopped saying that route is unpriced. No field "
+                "moved."
+            ),
+            why=(
+                "The description said /console/ 'stays uncapped until somebody measures "
+                "it', and this is that measurement. The page costs about 60 gzipped "
+                "bytes a published item: removing one real mature day from every ledger "
+                "the console reads and rebuilding cost 43,745, 43,704 and 36,504 bytes "
+                "over 731, 724 and 621 scored items, measured 2026-08-29 on an Intel "
+                "Core i7-1265U, Windows, node 24.12.0. So the headroom is three days of "
+                "the heaviest of those, not the year /archive/ carries, and the number "
+                "is meant to expire (Rule #10)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T09:00",
             change="evaluation.truncation_gap_max removed.",

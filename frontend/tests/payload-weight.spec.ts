@@ -20,9 +20,11 @@ import { join, relative, resolve, sep } from 'node:path';
  * What a count of markers cannot see, `scripts/bundle-gate.mjs` bounds: it holds
  * the routes named in `config/idhazh.json` under a gzip ceiling. `/archive/`
  * joined them on 2026-08-27, at a ceiling 237 times under the weight it used to
- * carry. `/console/` is not among them - it grows with the ledger its charts
- * read and nobody has priced that growth, so this marker count is the only gate
- * it answers to.
+ * carry, and `/console/` on 2026-08-29, at a ceiling carrying three published
+ * days rather than a year because it grows about 60 gzipped bytes a published
+ * item. So this count and that ceiling now both answer for `/console/`, and they
+ * answer different questions: the count says no day payload is on the page, the
+ * ceiling says the page has not grown past what somebody priced.
  *
  * `/archive/` was excluded from the rule below until 2026-08-27, because it
  * inlined every committed day so on-device search could read the vectors
