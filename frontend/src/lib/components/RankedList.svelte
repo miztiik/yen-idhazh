@@ -145,18 +145,25 @@
 		color: var(--color-text-tertiary);
 	}
 
+	/* One column set for the whole list, borrowed by every row. A row that sized
+	   its own columns gave a two-digit value a narrower track than a one-digit
+	   one - measured 587.34px against 591.86px - so two bars of the same fraction
+	   came out different lengths. The fractions were right and the picture lied. */
 	.ranked-rows {
+		display: grid;
+		grid-template-columns: minmax(9rem, 1.1fr) auto minmax(0, 2fr) auto;
+		column-gap: var(--space-4);
 		margin: 0;
 		padding: 0;
 		list-style: none;
 	}
 
 	.ranked-row {
+		grid-column: 1 / -1;
 		display: grid;
-		grid-template-columns: minmax(9rem, 1.1fr) auto minmax(0, 2fr) auto;
+		grid-template-columns: subgrid;
 		grid-template-areas: 'name value track trend' 'context value track trend';
 		align-items: center;
-		column-gap: var(--space-4);
 		padding-block: var(--space-2);
 		border-block-end: 1px solid var(--color-rule);
 	}
@@ -272,8 +279,11 @@
 	   half-window crushes the bar the row exists to show. Below that the bar
 	   takes the full width instead of a sliver of it. */
 	@media (max-width: 48rem) {
-		.ranked-row {
+		.ranked-rows {
 			grid-template-columns: minmax(0, 1fr) auto;
+		}
+
+		.ranked-row {
 			grid-template-areas: 'name value' 'context value' 'track track' 'trend trend';
 			row-gap: var(--space-1);
 		}

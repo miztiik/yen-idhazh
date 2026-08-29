@@ -320,9 +320,11 @@ test.describe('the ranked list, rendered', () => {
 			[...document.querySelectorAll('[data-ranked-row]')].map((row) => {
 				const track = row.querySelector('[data-ranked-cell="track"]') as HTMLElement;
 				const bar = row.querySelector('[data-ranked-cell="bar"]') as HTMLElement;
+				const trackPx = track.getBoundingClientRect().width;
 				return {
 					key: row.getAttribute('data-ranked-row') as string,
-					ratio: bar.getBoundingClientRect().width / track.getBoundingClientRect().width
+					trackPx,
+					ratio: bar.getBoundingClientRect().width / trackPx
 				};
 			})
 		);
@@ -333,6 +335,13 @@ test.describe('the ranked list, rendered', () => {
 			// Laid out, in pixels, against the divisor the page printed.
 			expect(Math.abs(row.ratio - value / divisor), `${row.key} is drawn to the wrong scale`).toBeLessThan(0.002);
 		}
+
+		// Every fraction can be right and the picture still wrong. A row that
+		// sized its own columns gave a two-digit value a narrower track than a
+		// one-digit one, so two bars of the same fraction came out different
+		// lengths and the list could not be read by eye.
+		const tracks = new Set(measured.map((m) => Math.round(m.trackPx * 100)));
+		expect(tracks.size, 'the rows do not share one track, so their bars are not comparable').toBe(1);
 	});
 
 	test('nothing recorded and nothing found say different things', async ({ page }) => {
