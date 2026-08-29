@@ -28,6 +28,7 @@ PUBLIC_COLUMNS: Final[tuple[str, ...]] = (
     "code",
     "source_words",
     "summary_words",
+    "source_words_before_cap",
 )
 
 FORBIDDEN_COLUMNS: Final[frozenset[str]] = frozenset({"canonical_url", "url_key", "detail"})

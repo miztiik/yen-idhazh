@@ -63,16 +63,28 @@ def test_the_fixture_covers_every_confidence_band() -> None:
 
 
 def test_a_truncated_item_is_drawn_and_an_untruncated_one_is_too() -> None:
-    """The plot marks the two differently, so a fixture needs both."""
-    flagged = [row for row in ROWS if row.truncation_flagged]
+    """The plot marks the two differently, so a fixture needs both.
+
+    Counted over the rows the plot can place, not over every row the day scored.
+    A flagged row with no length before the cut has no x, so it is a cut the
+    ledger records and not a diamond the plot draws. The day holds one of those,
+    and over `ROWS` this test would pass on a fixture whose every flagged row was
+    unplaceable - a plot drawing no diamond at all.
+    """
+    flagged = [row for row in PLOTTED if row.truncation_flagged]
     assert flagged, "no row draws a truncation diamond"
-    assert len(flagged) < len(ROWS), "every row draws a diamond, so no row draws a dot"
+    assert len(flagged) < len(PLOTTED), "every row draws a diamond, so no row draws a dot"
 
 
 def test_the_truncation_flag_follows_the_configured_rule() -> None:
-    """Set by the same comparison the scorer sets it by, never typed into the row."""
-    for row in ROWS:
-        assert row.truncation_flagged == (row.hhem_delta > EVALUATION.truncation_gap_max)
+    """The flag says extract cut the body, so the two length columns must agree.
+
+    This is the whole rule now. It used to be checked against a faithfulness gap
+    as well, and that second check was the defect: the gap is a score difference
+    and this column names a cut, so a row could satisfy one and contradict the
+    other. Over the committed ledger it did - the flag was true on exactly one
+    row, and that row read 748 words of a 748-word article.
+    """
     for row in PLOTTED:
         # A cut page is a page the model saw less of. The two columns are the
         # only record of how much less, and a row missing one of them says
@@ -91,6 +103,12 @@ def test_some_rows_record_no_article_length_and_still_score() -> None:
     unrecorded = [row for row in ROWS if row.source_word_count is None]
     assert len(unrecorded) == 2, "the plot has no unplaceable row to report"
     assert len(PLOTTED) == len(ROWS) - 2
+    # One either side of the cut. Cut and unplaceable together is the real
+    # historical state - a row written before the pre-cap length was persisted
+    # has no full length to recover - and it is the row the day's count holds
+    # while the plot drops it, so the two figures differ on purpose.
+    cut = [row for row in unrecorded if row.truncation_flagged]
+    assert len(cut) == 1, "no unplaceable row is cut, so the two figures cannot differ"
     for row in unrecorded:
         # It scored, it banded, and the model read something. Only the length
         # before the cut is missing.

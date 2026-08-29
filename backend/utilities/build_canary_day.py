@@ -100,8 +100,9 @@ DIAGRAM_SPEC = (
     "    n0 --> n1\n    n1 --> n2"
 )
 
-#: What the model was given on an item the scorer says was cut short. A real run
-#: derives this from the token cap; a fixture day states it.
+#: What the model was given on an item extract cut short, and so the length an
+#: item has to pass to count as cut. A real run derives this from the token cap;
+#: a fixture day states it.
 SEEN_WORD_CAP: Final = 2100
 
 #: The places `EvalRow` rounds `hhem_delta` to before it re-checks it on read.
@@ -187,21 +188,25 @@ SCORED: Final[tuple[_Measured, ...]] = (
         hhem=0.90, hhem_full=0.89, coverage=0.64, score_ms=410,
         hedge_dropped=True, full_length_known=False,
     ),
-    # Low on faithfulness, in the widest target zone. The second unrecorded
-    # length, so the count in that sentence is a number rather than a one that a
-    # test could pass by printing whatever it found.
+    # Low on faithfulness, in the widest target zone. Longer than SEEN_WORD_CAP,
+    # so it is also the shortest article the day records as cut - and it is the
+    # second row recording no length before that cut, so the count in the
+    # sentence under the plot is a number rather than a one a test could pass by
+    # printing whatever it found. Cut and unplaceable together is the real
+    # historical state: a row written before 2026-08-27 whose article was cut
+    # has no full length anywhere.
     _Measured(
         source_words=2450, summary_words=164,
         hhem=0.44, hhem_full=0.43, coverage=0.48, score_ms=520,
         full_length_known=False,
     ),
-    # Truncated: the gap between the two faithfulness scores is wider than the
-    # configured ceiling, so the plot draws a diamond rather than a dot.
+    # Cut: the article is longer than what the model was given, so the plot draws
+    # a diamond rather than a dot.
     _Measured(
         source_words=4200, summary_words=205,
         hhem=0.91, hhem_full=0.78, coverage=0.57, score_ms=610,
     ),
-    # Truncated, and low whatever the scorer thought: the summary asserts two
+    # Cut, and low whatever the scorer thought: the summary asserts two
     # figures the article never gave, and nothing else in the row may outvote
     # that.
     _Measured(
@@ -542,7 +547,10 @@ def _scorer_version(evaluation: EvaluationConfig) -> str:
 def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfig) -> EvalRow:
     """One ledger row, with every derivable column derived rather than typed."""
     delta = round(measured.hhem - measured.hhem_full, _DELTA_PLACES)
-    truncated = delta > evaluation.truncation_gap_max
+    # The cut is the fact and the flag follows it, the same direction the real
+    # extractor works in: an article longer than what the model was given is an
+    # article that was cut.
+    truncated = measured.source_words > SEEN_WORD_CAP
     seen_words = min(measured.source_words, SEEN_WORD_CAP) if truncated else measured.source_words
     return EvalRow(
         version=EvalRow.schema_version(),
