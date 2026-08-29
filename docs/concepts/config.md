@@ -114,6 +114,33 @@ The ladder gained a fifth rung at 3000 words on 2026-08-29, and no rung floor
 may ever sit above `int(truncation_cap_tokens / 1.3)` - the model is handed that
 many words and a rung above it would ask for a summary of text it never saw.
 
+**The published surface keeps a second copy of that ladder, and it has drifted.**
+`SUMMARIZE_DEFAULTS` in `frontend/src/lib/server/config.ts` is the value the
+console falls back to when `config/idhazh.json` cannot be read. Measured
+2026-08-29 it carries **three** rungs against the real five, and the first of
+them starts at 0 words asking for 50 to 90:
+
+| | `config/idhazh.json` | `SUMMARIZE_DEFAULTS` |
+| --- | --- | --- |
+| rungs | 5 | 3 |
+| first rung | 0 words -> 30-45 | 0 words -> 50-90 |
+| brief band | present | **absent** |
+| top rung | 3000 words -> 150-230 | 2000 words -> 110-200 |
+
+So under the fallback a 30-word note is asked for 50 to 90 words - more words
+than the article holds - and the two longest rungs collapse into one. It has
+never fired, because the file it guards against is committed and read at build
+time, which is exactly why the drift went unnoticed.
+
+**This is the drift the rejected-alternatives table below already forbids**, in
+the row that refuses copying config into the published directory because two
+copies of one file are free to drift with nothing gating them. The copy is in
+code rather than in a published file, so no gate caught it. Recorded here rather
+than repaired: whether a fallback ladder should exist at all is a decision about
+the loader, not a value to nudge, and a wrong default that fires only when
+config is unreadable is worse than no default at all. Nobody should meet this
+for the first time during an incident.
+
 `evaluation.qualification_pool_multiple` sizes how wide a qualification shard
 casts before it selects. It is a floor and not a cap: a shard whose slice has not
 yet offered every length tier keeps walking. Raising it buys fetch seconds and
