@@ -380,7 +380,7 @@ def test_a_cut_long_read_is_still_asked_for_a_long_read_summary() -> None:
     """The band follows the source body, not the words left after the cap.
 
     Before this, the post-cap count picked the band, so the longest tier could
-    never be reached: it sits at 2000 words and the cap allows 1923.
+    never be reached: it sits at 2000 words and the cap then allowed 1923.
     """
     ask = SummarizeConfig()
     top = ask.bands[-1]

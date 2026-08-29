@@ -3413,10 +3413,16 @@ trigger has not been checked.**
 line, and nothing else moves - not `n_ctx`, not `request_timeout_minutes`, not
 `run.shard_timeout_minutes`.
 
-The cap is a field of `PipelineFingerprint`
+The cap is a field of `PipelineInputs`
 (`backend/idhazh/contracts/fingerprint.py`), so the change and the rollback each
-re-stamp the pipeline fingerprint and every item is summarized again. That
-over-invalidation is by design. It costs a run, not correctness.
+re-stamp the pipeline fingerprint. **That does not re-summarize anything.**
+`rank.plan_vertical` drops every `url_key` in `already_published`, a gate that
+reads `state/published.csv` and never consults a fingerprint, and
+`fingerprint.classify` is not wired into `cli.py`. **Measured 2026-08-29 over `state/scores.csv`:** 6 distinct fingerprints across
+2,791 rows, and 6 of 2,781 distinct addresses ever scored under more than one -
+0.22 percent. The rollback costs the items of the run it lands on, and nothing
+else
+([What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record)).
 
 ### The defect Trigger A depends on, recorded rather than fixed
 
@@ -3433,6 +3439,172 @@ Fixing that is not this change's job. It is written here so it is not discovered
 during an incident, and it is the same gap
 [Still unmeasured](#still-unmeasured) already records for the CPU model a job
 drew: the run manifest is where a per-job fact would have to land.
+
+## What the first run at cap 5000 must record
+
+**Every value cell in the table below reads `not yet measured`, and none of them
+is a zero.** The cap moved from 2500 to 5000 in `config/idhazh.json` on
+2026-08-29. No scheduled `digest.yml` run has executed at the new cap yet, so
+this is a sheet waiting for its first run, not a result.
+
+The section above,
+[The first run at cap 5000](#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
+owns the two conditions that revert the change. This one owns what the run has to
+record either way. The two share four numbers - 85.6 minutes, the 150-minute
+bound, 1,923 words at the old cap and 3,846 at the new one, and the +3.6 and
++10.9 minute projections - and they agree on all four.
+
+**Why a blank sheet is committed before the run.** A measurement sheet written
+after the run it measures is a reading of that run, not a method. The same
+argument put Trigger A and Trigger B on the page before the cap moved.
+
+### What fills each row
+
+Three instruments, and each row below names which one it needs.
+
+**Job wall-clock** comes from the GitHub API, using the two queries in
+[the section above](#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it).
+Nothing in this repository carries a `work` job's clock.
+
+**Per-item figures** come from `state/item-health/<YYYY-MM>.csv`, one row per
+planned item per run. `source_words` is the post-cap count and cannot exceed
+`int(truncation_cap_tokens / 1.3)`, so **`source_words` above 1923 is the proof
+the new cap was read**:
+
+```python
+import csv, statistics
+
+rows = [r for r in csv.DictReader(open("state/item-health/2026-09.csv", encoding="utf-8"))
+        if r["run_id"] == "<the run>"]
+sized = [r for r in rows if r["source_words"]]
+at_cap = [r for r in sized if int(r["source_words"]) == 3846]
+
+print("read past the old cap:", len([r for r in sized if int(r["source_words"]) > 1923]))
+print("at the new cap:", len(at_cap))
+print("context_exceeded:", len([r for r in rows if r["code"] == "context_exceeded"]))
+
+read = sum(int(r["input_tokens"]) - int(r["cached_tokens"] or 0) for r in rows if r["prefill_ms"])
+secs = sum(int(r["prefill_ms"]) for r in rows if r["prefill_ms"]) / 1000
+print("read tok/s: %.2f" % (read / secs))
+print("output tokens at cap, median:",
+      statistics.median([int(r["output_tokens"]) for r in at_cap if r["output_tokens"]]))
+```
+
+**Server-side totals** come from `state/runtime-counters.csv`, one row per shard.
+`n_tokens_max` is the widest complete request the server saw, and it is the only
+instrument that answers the context-fit question, because it counts prompt plus
+reply as the server assembled them rather than as we estimated them.
+
+### The rows
+
+| # | What to record | Against what | Reading |
+| --- | --- | --- | --- |
+| 1 | Slowest `work` job, minutes | 85.6 min measured 2026-08-27, and `run.shard_timeout_minutes` of 150 | **not yet measured** |
+| 2 | Fixed cost per worker: the part of a worker's clock that is not model time (cache restore, weight load, warmup) | no prior on record; this run establishes it | **not yet measured** |
+| 3 | Items at the new cap, per run and per shard | 7.8 a run at the old cap (155 rows at exactly 1,923 words over 20 runs, `state/item-health/2026-08.csv`, counted 2026-08-29) | **not yet measured** |
+| 4 | Extra input tokens actually read, against the run before it | the projection of 10,300 to 11,000 a run | **not yet measured** |
+| 5 | Read rate, uncached, tok/s | 12.05 tok/s, the rate the projection used | **not yet measured** |
+| 6 | Decode rate on at-cap items, tok/s | 4.89 tok/s over 25 at-cap items on the configured model, counted 2026-08-29. **n=25 is one number, not a distribution** | **not yet measured** |
+| 7 | Output tokens on at-cap items, median. **This must not move** | 331 tokens over the same 25 items. The band comes from `band_source_words`, which is pre-cap, so a cap change cannot move the ask. A move here means something else changed | **not yet measured** |
+| 8 | Slowest single item, seconds | 449 s on record, against the 1,326 s bound (`models.inference.request_timeout_minutes` of 22.1) | **not yet measured** |
+| 9 | Widest complete request, prompt plus output tokens, from `n_tokens_max` | 3,775 + 900 measured, against `n_ctx` of 8,192. **Above 7,800 the cap comes down to 4000 and `n_ctx` does not move** | **not yet measured** |
+| 10 | Implied tokens per word on the widest item | 1.35 to 1.44 measured on this project's prose; 1.59 or worse is what it takes to overflow | **not yet measured** |
+| 11 | `context_exceeded` rows | 0 over 3,672 rows of `state/item-health/2026-08.csv`, counted 2026-08-29. Read it beside row 3 - a zero here means nothing if nothing was read past 1,923 words | **not yet measured** |
+| 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **not yet measured** |
+| 13 | `route`: `items_prefiltered`, `items_asked`, `unrouted` | 18 unrouted is the median of the runs on record. A longer body yields more quantities, so **prefiltered should fall and unrouted should rise**. It costs charts, not clock - the stage self-stops at `run.route_budget_minutes` of 40 | **not yet measured** |
+| 14 | `hhem` against `hhem_full` on items that would have been cut at the old cap | `hhem_delta` runs -0.1235 to +0.0381 over the 24 cut items on record. **This row is an observation, not a gate.** Nothing measured says a longer read produces a better summary | **not yet measured** |
+
+**Row 7 is the one that catches a mistake in this change.** Rows 1 to 5 all move
+by design, so a surprise there is a matter of degree. The output length is
+supposed to be untouched, and if it moved, the band selection read the post-cap
+count somewhere - which is the exact defect
+[the band's design rationale](../architecture/summarize/prompt.md) records being
+fixed on 2026-08-26.
+
+**Row 14 is the row this change does not get to claim.** The cap buys more
+article read, and that is all it is measured to buy. Whether the summary is
+better is a different measurement with a different instrument, and the instrument
+that would say has never returned a real number
+([Still unmeasured](#still-unmeasured)).
+
+### What was counted on 2026-08-29, before the cap moved
+
+These are measured, unlike the table above. They are the baseline the first run
+gets compared against, taken over the committed ledgers at commit `4f53690`.
+
+**Every count here is a snapshot.** The scheduled pipeline appends to these files
+several times a day, so a re-count tomorrow returns different totals. Two of
+these rows moved while this change was being written.
+
+| Quantity | Value | Source |
+| --- | ---: | --- |
+| Items whose body was cut, with both counts recorded | 24 | `state/scores.csv`, `source_word_count > source_seen_word_count` |
+| Extra words a cap of 5000 keeps, summed over them | 24,951 | `min(pre_cap, 3846) - 1923` |
+| Mean extra words per cut item | 1,039.6 | the same 24 items, which is 1,352 tokens at 1.3 |
+| Of those, read whole at cap 5000 | 19 of 24 | pre-cap length at or under 3,846 words |
+| Still cut at cap 5000, pre-cap words | 4,212; 4,444; 5,314; 8,207; 8,442 | reading all five whole needs a cap near 11,000 tokens, which does not fit `n_ctx` |
+| Items at the old cap, per run | 7.8 | 155 rows at exactly 1,923 words over 20 runs, `state/item-health/2026-08.csv` |
+| Extra input tokens a run, implied | about 10,500 | 7.8 items at 1,352 tokens, inside the 10,300 to 11,000 projection |
+| Scored items a run | 121.3 | 2,791 rows over 23 runs, `state/scores.csv` |
+| `context_exceeded` rows, all August | 0 | `state/item-health/2026-08.csv`, 3,672 rows |
+
+**1.3 tokens a word is a placement estimate and not a measurement.**
+`extract.TOKENS_PER_WORD` exists to put a cut point in the same place every time.
+The decoder enforces the real budget, and the measured range on this project's
+prose is 1.35 to 1.44. Every "tokens" figure derived from a word count on this
+page carries that estimate inside it.
+
+### What the cap change does not do
+
+**It does not re-summarize the archive.** The cap is a field of `PipelineInputs`
+(`backend/idhazh/fingerprint.py`), so moving it re-stamps the pipeline
+fingerprint. That does not reach the published corpus, because
+`rank.plan_vertical` drops every `url_key` in `already_published` and that gate
+reads `state/published.csv` alone - it never consults a fingerprint.
+`fingerprint.classify` and `SKIPPABLE` are not wired into `cli.py`.
+
+**Measured 2026-08-29 at commit `4f53690`:** `state/scores.csv` holds
+2,791 rows under **6 distinct pipeline fingerprints**, and **6 of its 2,781
+distinct `url_key` values have ever been scored under more than one** - 0.22
+percent. Six fingerprint changes have already happened, including the
+2026-08-27 summarizer swap, which is the largest one available. Together they
+added 6 re-scored rows, not 2,781.
+
+So the first run at the new cap appends what any run appends: 137 rows at the
+median, 149 at the most, over the 23 runs on record.
+
+**Measured by `npm run bundle-gate` on this checkout, 2026-08-29, three times.**
+The branch merged `origin/main` twice while the change was being written, so the
+builds are a paired measurement of what the ledger costs the page:
+
+| Build | What landed between | `/console/` prerendered HTML | Spare under the 301,580 ceiling |
+| --- | --- | ---: | ---: |
+| `e05ef99` | - | 170,732 B | 130,848 B |
+| `4f53690` | 55 scored rows, nothing else `/console/` renders | 171,471 B | 130,109 B |
+| `d782a9d` | the 2026-08-29 day published | 176,576 B | 125,004 B |
+
+**739 bytes for 55 rows is 13.4 gzipped bytes a scored item**, not the 60 the
+ceiling's headroom was sized with. A median run of 137 rows costs about **1,840
+bytes: 1.4 percent of the spare, and about 68 runs of margin** at the 125,004
+bytes left. **The cap change contributes none of those bytes**, because it adds
+no rows of its own.
+
+**Two observations, and neither is a rate.** Rows compress against their
+neighbours, so 55 similar rows appended to 2,736 are close to the cheapest 55
+that file will ever take. The 5,105 bytes the published day cost is one day, and
+that day was still publishing when it was measured. Re-measure before spending
+the margin either suggests.
+
+That margin is the reason this was checked before the cap moved rather than
+after. `digest.yml` runs `bundle-gate` in its `assemble` job **before** it
+commits the day, so a page-weight failure stops the publish rather than breaking
+`main`.
+
+**It does not move `scorer_version`.** That string is built by
+`evals.metrics.scorer_version` from the scorer id and revision, the weights
+digest, `METRICS_VERSION`, `evaluation.chunk_words`,
+`evaluation.chunk_overlap_words`, the chunk anchor, the two band floors and
+`evaluation.lead_coverage_min`. The truncation cap is not among them.
 
 ## Eight work shards
 
@@ -3979,7 +4151,7 @@ to justify a design decision.
 | **Which CPU a `route` or `work` job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven `route` runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. The run manifest carries only `runner: ubuntu-latest`, and `state/fingerprints.csv` appends a CPU model for the `work` job alone and only when the fingerprint changes, two rows ever. Put the CPU model on the run manifest and a swing becomes attributable from committed data rather than from a job log that ages out.
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
-| **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
+| **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29.** It moved from 2500 to 5000 in `config/idhazh.json`, so it is no longer an unswept knob but a live change under observation, and the first scheduled run measures it directly against [What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record). |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
