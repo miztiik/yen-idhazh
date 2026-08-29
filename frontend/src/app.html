@@ -5,6 +5,18 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="light dark" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<!-- Self-hosted, Latin subset, one variable file. Only the preload sits
+		     here: it has to be in the head to start the fetch early. The
+		     @font-face rule lives in app.css, because a rule inlined here is
+		     bytes in EVERY prerendered page rather than in one cached stylesheet.
+		     frontend/static/fonts/PROVENANCE.md holds the version and the hash. -->
+		<link
+			rel="preload"
+			href="%sveltekit.assets%/fonts/inter-latin-variable.woff2"
+			as="font"
+			type="font/woff2"
+			crossorigin
+		/>
 		<!-- The one inline script this site carries. It runs before first paint so a
 		     reader on a dark phone never gets a white flash. -->
 		<script>
