@@ -227,6 +227,114 @@ A vertical will be retired. A feed will die quietly when a site is redesigned. B
 - **Feed health is recorded, not configured.** Repeated failures rest a feed automatically, and nothing in a run ever edits `config/sources.json`. See [health.md](health.md).
 - **Soft retirement before hard.** Drop a source's weight, watch what changes, then retire it. Reversible in one field.
 
+## The 2026-08-29 sweep: 40 out, 43 in
+
+Between 2026-08-24 and 2026-08-29 the pipeline planned 3,832 articles and
+published 2,739. Of the 1,093 it lost, **83 percent came from 24 sources that
+had never once published anything**, and those 24 consumed **43 of every run's
+160 slots**. The full table is in
+[../../reference/measurements.md](../../reference/measurements.md).
+
+Forty feeds were retired and forty-three added. What the sweep changed, and what
+it taught:
+
+**A feed that fails is not the same as a feed that is wrong, and the difference
+is the runner's IP address.** Seven of the forty served a valid feed to a
+developer machine and HTTP 403 to the runner - `indianexpress.com` offered 200
+headlines to a laptop while every scheduled run recorded a refusal. They are
+retired because a source the runner cannot read is a source this project cannot
+use, not because the publisher is at fault. The tombstone says so.
+
+**Three of the forty were our own bug.** `anthropic-news`, `cohere-blog` and
+`stanford-hai` were configured with the address of a web page rather than a
+feed. Every read returned HTTP 200 and zero items, so [health.md](health.md)
+recorded a healthy feed and the pool gained nothing. **A feed read can succeed
+and still be worthless, and nothing here noticed for weeks.** None of the three
+publishes a feed at any address we could find, so all three are retired rather
+than corrected.
+
+**Every replacement was verified before it was written.** The feed parses, and
+one article behind it answered HTTP 200 with readable prose, fetched with the
+pipeline's own user agent on 2026-08-29. That check is weaker than it looks -
+see the IP paragraph above - so the honest statement is that a verified feed has
+cleared the failure this sweep was about, not that it will work on the runner.
+The instrument that settles it is the item-health ledger after a week, not the
+probe.
+
+**The additions are shaped by what the tier mix was missing, not only by what
+died.** 84 percent of published items came from trade press, 15 percent from
+institutions and 1.3 percent from independent writing. The 43 additions are 9
+institutions, 26 outlets and 8 independent writers, and they deliberately reach
+outside the US, UK and India - Rest of World, Global Voices, The Conversation's
+global and Africa desks, VoxDev, The New Humanitarian, Mongabay.
+
+**Two feeds were deliberately not re-added.** `the-register-ai` and `bair-blog`
+both verify today and both were retired on 2026-08-21 with the rest of the `ai`
+curation. This sweep did not review that decision, so it does not reverse it.
+
+### The forty, and why each one went
+
+A tombstone carries a date and not a reason, so the reasons are here. Probed
+2026-08-29 with the pipeline's own user agent, against the 2026-08-24 to
+2026-08-29 ledger window.
+
+| Reason | Feeds |
+| --- | --- |
+| Paywall on the article | `business-insider`, `nikkei-asia`, `foreign-policy`, `fortune`, `the-verge-ai`, `the-diplomat`, `semianalysis` |
+| `robots.txt` forbids the path, or cannot be read at all | `marketwatch`, `axios-business`, `cnbc-top`, `cbc-world`, `doe-news` |
+| The article answers 4xx, however the feed reads | `ft-companies`, `cbo-pubs`, `ndtv-top`, `economist-business`, `economist-finance`, `utility-dive`, `sec-press`, `sky-world`, `nyt-ai`, `nyt-world`, `openai-news`, `iaea-news` |
+| The feed itself answers HTTP 403 | `ftc-press`, `pib-india`, `bs-economy`, `business-standard` |
+| A valid feed for a developer machine, HTTP 403 for the runner | `indian-express`, `ie-india`, `ie-business`, `eia-press`, `reliefweb`, `import-ai` |
+| No feed at that address: it answers with a web page | `anthropic-news`, `cohere-blog`, `stanford-hai` |
+| Every article behind the feed is a PDF | `rbi-press` |
+| Resets the connection | `wapo-world` |
+| Rate-limits every article request | `venturebeat-ai` |
+
+### The per-feed cap is what picks the day
+
+With 160 slots and `max_per_source` at 2, a run needs about 80 feeds to fill
+itself. Measured over six runs, **73 to 78 of the roughly 85 working feeds sat
+exactly on the cap**, and the fifteen largest contributors each published
+exactly two per run for eleven runs running.
+
+So "a story three independent feeds carried is the day's story" describes the
+score, and the score has not been deciding much: the cap fills the list and the
+ranking only chooses which few feeds miss out. This is a supply result, not a
+ranking defect. The cap stops binding as soon as the pool of *working* feeds is
+comfortably larger than 80, which is what this sweep is for. Re-read the cap
+column in the measurements page after a week of the new list before changing any
+ranking code.
+
+### The feed floor counts feeds, not working feeds
+
+`rank.plan_vertical` compares `min_feeds` against the number of feeds
+**configured** as active in that vertical. It cannot count feeds that work,
+because it runs before anything is fetched.
+
+Measured 2026-08-29, every one of the five verticals was under its floor on the
+count that matters and every one of them passed the gate:
+
+| Vertical | Configured | Ever produced an item | `min_feeds` |
+| --- | --- | --- | --- |
+| `ai` | 38 | 28 | 35 |
+| `business-economy` | 22 | 12 | 21 |
+| `energy` | 24 | 20 | 21 |
+| `india` | 27 | 19 | 21 |
+| `world` | 27 | 19 | 21 |
+
+This is why the sweep replaced rather than only removed. Retiring 40 feeds
+without adding any would have taken `ai` to 28 configured against a floor of 35
+and `business-economy` to 12 against 21, and **a vertical under its floor plans
+nothing at all** - the two desks would have gone silent, which is 34 percent of
+the digest. The replacement list is sized to leave every vertical above its
+floor with room: `ai` 40, `business-economy` 25, `energy` 27, `india` 24,
+`world` 25.
+
+The floor was not lowered. Lowering it would trade a gate that reads the wrong
+number for a lower gate that reads the same wrong number. What would fix it is a
+floor read from the health ledger rather than from config, and that is a
+contract change nobody has costed - filed here rather than done.
+
 ## Design rationale
 
 **The affiliate-page control sits at collection, not at the score (2026-08-24).** The three `fool.com/the-ascent/` items are the case that separates "the summary is wrong" from "the item should not be here". Every instrument in the eval ledger compares our summary to the article, and all of them passed. Moving the control to collection also costs nothing: a blocked address is never fetched, never summarized and never scored, which is the cheapest place a rejection can happen (Rule #2). Authority: owner, closing known defect 7.
@@ -241,7 +349,7 @@ The floor was then set at seven times each vertical's daily cap, which is where 
 
 State the sequence honestly - the live counts were measured first, then the rule was written, so the rule is fitted to what the source pool supports rather than derived from an independent finding. It is recorded here so a later reader can overturn it with a real measurement instead of re-deriving it.
 
-The floor still does its job. It is not a formality that always passes: `business-economy` clears twenty-one by one feed, and a single dead source puts it back under.
+The floor still does its job, but it has been doing it against the wrong number. It counts feeds configured as active, and until 2026-08-29 every vertical was under its floor on the count of feeds that had ever produced an item. See the section above; the gate was green and the source pool was not.
 
 Tiering the sources was the cheap half. Once a source carries a tier, ranking needs no model, no classifier and no judgement at run time: the arithmetic of "how authoritative" times "how widely carried" reproduces most of what an editor would pick, and it reproduces it identically on every re-run.
 
