@@ -150,15 +150,37 @@ Icons are **vector glyphs referenced by id** from a generated manifest, never in
 
 A chart on an item is rendered at build time from a specification and shipped as an asset ([digest.md](digest.md)). Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
-**There is no chart library, on any surface - and a scale library is not a
-chart library.** One chart library was carried for the console
-between 2026-08-23 and 2026-08-24 on the argument that the owner required pan
-and zoom. It was removed once that argument was checked: the pan and zoom are
-implemented by the viewport control, with a keydown handler and four buttons,
-and what the library actually drew was a second, smaller copy of a chart the
-hand-written SVG already drew better. A charting library that outweighs the data
-it draws has not earned its bytes, and a runtime dependency on a reading page is
-a runtime dependency for nothing.
+**No chart library on a reader's route. The operator surface is a separate
+question, and it is open.** A scale library is not a chart library and never was.
+
+The reading-route half of that is settled and is not about bytes on a graph: a
+chart on an item is rendered at build time and shipped as an asset, so a reader
+has nothing to run. A charting engine on a reading page is a runtime dependency
+for nothing.
+
+The console half was decided wrongly, twice, and both times on an argument that
+turned out not to be the real one. A chart library was carried for the console
+between 2026-08-23 and 2026-08-24 for pan and zoom, then removed because the
+viewport control already did that with a keydown handler and four buttons - a
+correct removal. On 2026-08-29 the same blanket ban was re-argued from a
+`/console/` weight of 66,550 B that was **four and a half times out of date**;
+the route was 301,580 B by then. The owner overruled it. What replaces it is not
+another blanket, in either direction: it is three conditions and a measurement,
+below.
+
+Any library adopted for the console must (1) render SVG, not canvas, so
+`tokens.css` stays the only place a colour is decided, (2) render server-side at
+build time, so the page is complete before any script runs, and (3) carry a
+measured gzipped cost recorded next to the decision. Measured 2026-08-29 on this
+tree with this bundler: a tree-shaken chart engine with bar, line, pie, scatter,
+tooltip and legend is **188.4 KB gzipped** and barely tree-shakes - its bar-only
+floor is 160.0 KB. The most-cited alternative is **270.1 KB** and does not
+tree-shake at all. A canvas-only library is 22.6 KB but fails condition (1) and
+(2). `d3-scale` and `d3-array`, which the surface already carries, are 20.5 KB
+together.
+
+Those numbers are what the decision is made against, and they belong to the
+console route alone - the reading routes never import any of it.
 
 What a chart may take from a library is the arithmetic. `d3-scale` and
 `d3-array` map a domain to pixels and choose the tick values; they own no
@@ -324,6 +346,36 @@ the repo's `script-src` allows `self` only. "Fix the units without the
 dependency" was rejected last, because `.nice()` and `ticks()` are exactly the
 part hand-rolling gets wrong. Authority: Jony and Carmack, 2026-08-25, owner
 accepted.
+
+**The blanket ban on a chart library was reversed for the operator surface on
+2026-08-29, and the reason it was wrong is worth more than the reversal.** It
+rested on three claims. The first was a byte count - "the `/console/` route is
+66,550 B" - which was **four and a half times out of date**; the route was
+301,580 B on the day the argument was made. The second was "a canvas cannot
+inherit a CSS custom property", which is true of canvas and false of the SVG
+renderers those libraries also ship, so it generalised from the worst case. The
+third, that the page would stop being complete before script runs, holds only
+for a library that cannot render server-side, and the leading one has an
+explicit build-time SVG mode.
+
+The paragraph above this one is still correct about a reading route and is not
+touched. What changed is that the two surfaces stopped sharing one answer.
+
+The measurements that now stand in place of the stale one were taken on
+2026-08-29 on this tree with this bundler, and are in the chart section above:
+188.4 KB gzipped for a tree-shaken engine with the chart types the console
+needs, 160.0 KB for its bar-only floor, 270.1 KB for the most-cited
+alternative, 22.6 KB for a canvas-only one that fails two of the three
+conditions, against 20.5 KB for the scale libraries already carried. A
+reader's route imports none of it.
+
+Two lessons are recorded because they are more transferable than the ruling.
+**A byte count is a measurement and goes stale like any other** - Rule #10 asks
+for the hardware and the date, and a design argument that leans on a number
+someone took months ago has not met it. And **an argument that generalises from
+the worst implementation of a thing is not an argument about the thing**.
+Authority: owner, 2026-08-29, overruling the 2026-08-25 ruling on the operator
+surface only.
 
 ## See also
 
