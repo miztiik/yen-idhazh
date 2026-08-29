@@ -39,6 +39,7 @@ This is the canonical writing rule. It binds every agent, every persona under `.
 - Keep answers short unless asked for depth.
 - **Say what a number means, next to the number.** `1.055x` is not an answer; "5.5 percent faster, and we needed 40 percent" is. This is the one clause of this section that can be checked mechanically, so it is the one that catches a drift the others cannot.
 - **A term from a subsystem is not a term for a user.** `aggregate decode`, `spread`, `prefill` and `pipeline_fingerprint` are correct in the doc that owns them and wrong in an answer, unless the answer defines them in the same sentence.
+- **A third-party product name is not a design vocabulary.** Name the artefact and the property - "a reliability scorecard", "a tinted status card", "a target marker on a bar" - never the vendor whose screenshot it came from. This binds a design doc, a plan-doc, a code comment, a commit message, a branch name and a filename equally. Naming the artefact is also the more useful sentence: it says what to look at, where the product name only said where somebody once saw it.
 - Use ASD-STE100.
 
 Everywhere else restates this section rather than inventing its own style rule (Rule #4): [`docs/agents/guardrails.md`](docs/agents/guardrails.md) carries it for the personas that run the bootstrap ritual, and [`AGENTS.md`](AGENTS.md) carries it for agent tools that read that file instead of this one.
