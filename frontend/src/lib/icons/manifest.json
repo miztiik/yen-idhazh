@@ -1,0 +1,22 @@
+{
+  "version": "2026-08-29",
+  "source": "lucide",
+  "licence": "ISC",
+  "icons": [
+    "archive",
+    "band-high",
+    "band-low",
+    "band-medium",
+    "console",
+    "external",
+    "read-aloud",
+    "search",
+    "theme-dark",
+    "theme-light",
+    "topic-ai",
+    "topic-business-economy",
+    "topic-energy",
+    "topic-india",
+    "topic-world"
+  ]
+}

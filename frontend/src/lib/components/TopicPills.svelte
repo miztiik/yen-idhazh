@@ -12,6 +12,8 @@
 	 */
 	import { base } from '$app/paths';
 	import { dayRoot, verticalHref } from '$lib/links';
+	import Icon from '$lib/icons/Icon.svelte';
+	import { ICONS, type IconId } from '$lib/icons/generated';
 	import type { DigestVerticalRef } from '$lib/payload/types';
 
 	let {
@@ -33,6 +35,13 @@
 	} = $props();
 
 	const root = $derived(dayRoot(base, datePrefix));
+
+	// A vertical is declared in config and can be added without an icon. A pill
+	// with no mark is fine; a pill that throws is not.
+	function mark(id: string): IconId | null {
+		const candidate = `topic-${id}`;
+		return candidate in ICONS ? (candidate as IconId) : null;
+	}
 </script>
 
 <nav
@@ -54,13 +63,16 @@
 		{#each verticals as vertical (vertical.id)}
 			<a
 				href={verticalHref(base, datePrefix, vertical.id)}
-				class="inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-3.5 text-[0.875rem] whitespace-nowrap transition-colors"
+				class="inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3.5 text-[0.875rem] whitespace-nowrap transition-colors"
 				class:border-accent={active === vertical.id}
 				class:text-accent={active === vertical.id}
 				class:border-rule={active !== vertical.id}
 				class:text-text-secondary={active !== vertical.id}
 				aria-current={active === vertical.id ? 'page' : undefined}
 			>
+				{#if mark(vertical.id)}
+					<Icon id={mark(vertical.id) as IconId} size={14} />
+				{/if}
 				{vertical.display_name}
 				{vertical.count}
 			</a>
