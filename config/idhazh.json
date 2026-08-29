@@ -130,10 +130,10 @@
   },
   "page_weight": {
     "ceilings_bytes": {
-      "/404": 1127,
+      "/404": 1371,
       "/archive/": 7553,
       "/console/": 301580,
-      "/evals/": 2475
+      "/evals/": 2730
     }
   },
   "retention": {
