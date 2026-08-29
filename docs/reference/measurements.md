@@ -2000,6 +2000,113 @@ measuring the two separately.
 `origin/main` build over the same payload, inside the spread over three builds
 of one tree, and stays under the 1,676,048 the backfill row set.
 
+#### The console ceiling is a tripwire, and it is priced in published days
+
+Hardware: Intel Core i7-1265U, Windows, node 24.12.0. Date: 2026-08-29. Method:
+`npm run build` then
+`gzipSync(readFileSync('build/console/index.html'), { level: 9 }).length`, which
+is the byte the gate itself takes.
+
+**The ceiling builds are at `795cd62`**, which is `origin/main` after the
+`work: 2026-08-29 shard 3` commit, because a ceiling is set from the tree it
+ships on. Nine published days, 2,711 scored rows.
+
+| Route | 1 | 2 | 3 | 4 | 5 | Spread | Ceiling committed |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 170,271 | **170,281** | 170,277 | 170,273 | 170,279 | 10 | **301,580** |
+
+The same five builds one commit earlier, at `7bab3d1` with 2,683 scored rows,
+read 169,356 / 169,367 / 169,355 / 169,359 / 169,353 - spread 14, heaviest
+169,367. That shard added 28 scored rows and moved the page 914 bytes, which is
+why this section was re-taken after the merge rather than before it. Row #5 of
+the truncation-cap plan recorded 169,375 on its own branch before the merge, 8
+bytes above the heaviest at `7bab3d1` and inside that spread, so the two agree.
+
+**A published day was priced by removing a real one.** Measured at `7bab3d1`; a
+rate over whole mature days is not moved by 28 more rows on a partial one. The
+obvious method - clone a mature day k times and scan k - reads 18 percent low
+here, because a clone is a near-copy of a block gzip already holds and a real day
+is not a near-copy of anything. So each arm below drops one real mature day from
+every ledger the
+console reads (`state/scores.csv`, `state/item-health/`, `state/feed-health/`,
+`frontend/public/telemetry/`, and the day's own directory under
+`frontend/public/digest/`) and rebuilds. The day dropped is never the newest or
+the oldest, so the 30-day telemetry window and the archive's span are the same in
+both arms and the day is the only difference.
+
+| Arm | `/console/` | Cost of that day | Scored items | Bytes an item |
+| --- | ---: | ---: | ---: | ---: |
+| every day (control) | 169,362 | - | - | - |
+| without 2026-08-24 | 125,617 | **43,745** | 731 | 59.8 |
+| without 2026-08-25 | 125,658 | 43,704 | 724 | 60.4 |
+| without 2026-08-26 | 132,858 | 36,504 | 621 | 58.8 |
+
+**The control is what makes the rest readable.** It builds the same source over a
+copy of the three trees reached through `DIGEST_ROOT`, `STATE_ROOT` and
+`TELEMETRY_ROOT`, and reads 169,362 against the five in-repo builds of the same
+commit, which spanned 169,353 to 169,367. The redirection is not a variable.
+
+**The rate is a cost per item, not a cost per day**, and that is the useful form:
+59.8, 60.4 and 58.8 gzipped bytes an item across three days that differ by 18
+percent in size. A day costs what it published. The three most recent committed
+days scored 621, 334 and 117 items, so the calendar runway is longer than the
+mature-day arithmetic says - which is why the ceiling is sized on the heaviest
+day measured and not on the mean (Rule #10, worst case).
+
+The arithmetic is then:
+
+```text
+  170,281  heaviest of five builds
++ 131,235  three mature published days at 43,745, the heaviest measured
++      64  the build noise floor already derived in bundle-baseline.json
+= 301,580
+```
+
+**Three days, because of what the headroom has to be smaller than.** The
+regression this ceiling exists to catch is a day payload inlined by a layout,
+measured 2026-08-26 at 313,300 gzipped bytes on this page (406.3 KB total, of
+which 93.0 KB was the chart). Three days of headroom is 131,235, so the
+regression is 2.4 times the slack. Seven days would be 306,215 - within 2 percent
+of the regression itself, which is a gate whose blind spot is the size of the
+thing it watches for. Three is the largest whole number of measured publishes
+that keeps that margin above 2x.
+
+**The synthetic scan, kept because it shows the shape.** Cloning 2026-08-25 into
+the empty first half of August and rebuilding gives a curve rather than a point,
+and it is what says the marginal day gets cheaper as the page grows. Its one-day
+figure is 35,666 against the 43,704 the same day really costs - 18 percent low -
+so the levels here must not be used to set a number.
+
+| Days added | `/console/` | Added | Bytes a day | `/archive/` |
+| ---: | ---: | ---: | ---: | ---: |
+| 0 | 169,362 | 0 | - | 3,075 |
+| 1 | 205,028 | 35,666 | 35,666 | 3,088 |
+| 3 | 266,088 | 96,726 | 32,242 | 3,115 |
+| 7 | 388,740 | 219,378 | 31,340 | 3,165 |
+| 14 | 603,196 | 433,834 | 30,988 | 3,265 |
+| 20 | 785,961 | 616,599 | 30,830 | 3,360 |
+
+**The `/archive/` column is the method's own check.** The same synthetic days move
+that page 14.25 bytes a day, and the paired removal of a real day moves it 22 -
+both inside the 12.21 to 18.00 bytes a day measured independently two days
+earlier, from a different tree and a different method. A synthetic day that
+behaved nothing like a real one would not land there.
+
+**Where the bytes are, and it is not all the scatter.** Growing one synthetic day
+in one tree at a time, against the same control: the eval and item-health ledgers
+cost 5,431, the published telemetry shard 16,179, and the day's own directory and
+the interactions between them the remaining 14,056. The telemetry seed is bounded
+- `telemetryRows` windows it to `console.default_window_days`, so that term stops
+once the window is full, about 22 published days from here. What never stops is
+the compression scatter, which inlines a point for every row the ledger has ever
+held and has no retention behind it.
+
+**Re-measure before trusting this, and re-measure late.** The scheduled pipeline
+rewrites a day's payload several times an hour; a rewrite on 2026-08-26 moved
+`/archive/` 102 KB, and the shard that landed while this section was being
+written moved `/console/` 914 bytes. The five builds the ceiling is set from were
+re-taken after the final fetch of `origin/main`, and that is the only defence.
+
 ### Days to the 1 GB Pages ceiling
 
 **This section divided by the wrong tree until 2026-08-27, and both of its

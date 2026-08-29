@@ -906,6 +906,80 @@ list, and the grep catches the three that are.
 
 Authority: Carmack, 2026-08-25.
 
+## The console ceiling is a tripwire, and what to do when it fires
+
+`/console/` has a page-weight ceiling of 301,580 bytes since 2026-08-29. That is
+77.1 percent above the heaviest build measured, which is three more mature
+published days of ordinary growth and no more. **It is meant to expire, and the
+answer when it does is not a bigger number.**
+
+The derivation has the same three terms `/archive/` has, and only the middle one
+is different:
+
+```text
+  170,281  heaviest of five builds of one tree
++ 131,235  three mature published days, measured at the heaviest of three
++      64  the build noise floor already derived in bundle-baseline.json
+= 301,580
+```
+
+**A published day was priced by removing a real one, not by cloning one.** Take
+every ledger the console reads - `state/scores.csv`, `state/item-health/`,
+`state/feed-health/`, the published telemetry shard and the day's own directory -
+drop one real mature day from all of them, and rebuild. Removing 2026-08-24,
+2026-08-25 and 2026-08-26 cost 43,745, 43,704 and 36,504 gzipped bytes over 731,
+724 and 621 scored items: **about 60 gzipped bytes a published item**, steady to
+within 3 percent across the three. Cloning a day instead reads 18 percent cheaper,
+because gzip sees a near-copy of a block it already holds and a real day is not a
+near-copy of anything ([../../reference/measurements.md](../../reference/measurements.md#the-console-ceiling-is-a-tripwire-and-it-is-priced-in-published-days)).
+
+**Three days, and not the year `/archive/` carries, because of what the headroom
+has to be smaller than.** The regression a page ceiling exists to catch on this
+route is a day payload inlined by a layout, which cost 313,300 gzipped bytes when
+it last happened. Three days of headroom is 131,235, so that regression is 2.4
+times the slack and the gate sees it land. A week of headroom would be 306,215,
+within 2 percent of the regression itself - a gate whose blind spot is the same
+size as the thing it watches for. The horizon is the largest whole number of
+measured ordinary publishes that keeps the margin above 2x, and that is three.
+
+**Why a ceiling here does not cap the news, when one on a day page would.** A day
+page and the home page render published items, so the only way under a ceiling on
+them is to publish fewer - and [layout.md](layout.md) forbids removing an item a
+run published, so the ceiling would be deciding how much news ships. `/console/`
+renders no published item. It is the operator's surface, and every figure on it
+is derived at build time from ledgers that stay committed and complete whatever
+the page shows. The way under its ceiling is to stop inlining points the page
+does not need at first paint, which changes what an operator sees before they pan
+and changes nothing about what was published or what a reader can read.
+
+### The response, written down before it is needed
+
+When the gate fires on `/console/`, **window the compression scatter's seed and
+publish the older points through the telemetry projection, as one change.** The
+page grows because `compression` inlines one point per row for every row the
+ledger has ever held, and the ledger has no retention. The telemetry seed on the
+same page already works this way - `telemetryRows` takes
+`console.default_window_days` and the month shards stay whole, so panning back
+still fetches the days the seed dropped.
+
+**The two halves are one change, and shipping half is worse than shipping
+neither.** Windowing the seed without putting the older points somewhere the
+browser can fetch them makes the scatter go empty when an operator pans back past
+the seed. An empty plot over a window the ledger has data for is not a smaller
+page, it is a page that says nothing happened on days when something did. The
+telemetry projection is where those points belong, because it is already the
+per-item, per-day, reader-safe shard the same page fetches when it pans.
+
+Two things that are not the answer. **Raising the number** spends the headroom
+somebody measured and buys days, which is the move that got the last `/archive/`
+ceiling deleted after it was raised twice in one day. **Thinning the plot** -
+sampling points, or dropping the oldest days from the ledger - changes what the
+chart is a measurement of, and a scatter that quietly stopped drawing some of its
+rows is worse than one that got heavy.
+
+Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case sizing,
+Carmack.
+
 ## Design rationale
 
 Prerendering everything is the decision the rest hangs off. It was chosen over a runtime fetch of `digest.json` because it collapses four problems into zero: the loading state stops existing, the request budget stops being a budget, a contract-invalid payload becomes a build failure instead of a reader-facing error, and the page keeps working with JavaScript off. The cost is one framework dependency and a build step that enumerates committed directories. Authority: Jony ([../../../.github/agents/jony.agent.md](../../../.github/agents/jony.agent.md)).
@@ -941,9 +1015,15 @@ the `/archive/` and `/console/` HTML ceilings, added to the script in #126,
 fired on ordinary publishes because those pages grow with the published corpus.
 The fix was not to split the script but to scope the HTML ceiling to the routes
 whose weight does not grow with data - `/404` and `/evals/` - and to report a
-data-driven route without failing it. So the two checks share a script and stay
-independent: the JavaScript ratchet reads `frontend/bundle-baseline.json`, the
-HTML ceilings read `config/idhazh.json`, and neither fails the other's build.
+data-driven route without failing it. Both of the deleted ceilings have since
+come back on a different footing: a route may grow with data and still be capped,
+as long as the growth is measured and the headroom is stated in published days.
+`/archive/` returned on 2026-08-27 with a year of headroom and `/console/` on
+2026-08-29 with three days. What has not come back is a ceiling on a page that
+renders a day, and that is the line the original fix was really drawing. So the
+two checks share a script and stay independent: the JavaScript ratchet reads
+`frontend/bundle-baseline.json`, the HTML ceilings read `config/idhazh.json`, and
+neither fails the other's build.
 Authority: Carmack (the original rejection), resolved by the page-weight change.
 
 Folding `/evals/` into `/console/` keeps one route answering "how is the
