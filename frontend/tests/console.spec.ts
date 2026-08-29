@@ -17,8 +17,7 @@ import {
 	CUT_FLAG_MEANS_A_CUT_FROM,
 	modelWork,
 	sourceCuts,
-	SOURCE_CUT_ROWS,
-	SOURCE_CUT_WINDOW_DAYS
+	SOURCE_CUT_ROWS
 } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 
@@ -512,6 +511,22 @@ test('a feed that answered with nothing is named, and a polite refusal is not', 
 	await expect(page.locator('[data-feed="canary-steady"]')).toHaveCount(0);
 	// Never asked, so it can neither pass nor fail.
 	await expect(page.locator('[data-feed="canary-quiet"]')).toHaveCount(0);
+});
+
+test('a feed that answered with nothing does not report its last result as ok', async ({ page }) => {
+	await page.goto('/console/');
+
+	// The ledger's own word for this read is `ok` - the fetch returned 200. Printed
+	// raw it sits on the same row as the failure count and contradicts it, which is
+	// how a dead feed reads as a healthy one.
+	const result = page.locator('[data-feed="canary-empty"] [data-feed-result]');
+	await expect(result).toHaveCount(1);
+	await expect(result).toContainText('answered with nothing');
+
+	// A feed that really did fail still reports the reason the ledger recorded.
+	await expect(page.locator('[data-feed="canary-gone"] [data-feed-result]')).not.toContainText(
+		'answered with nothing'
+	);
 });
 
 test('a feed past the quarantine count is marked rested', async ({ page }) => {
@@ -1354,8 +1369,9 @@ test('the reading path and the console carry no chart library', () => {
 		readFileSync(resolve(process.cwd(), 'package.json'), 'utf8')
 	) as { dependencies?: Record<string, string> };
 
-	// Rule #8: a dependency names a beneficiary feature. The pan and zoom this
-	// one was bought for are implemented in `Viewport.svelte`.
+	// Rule #8: a dependency names a beneficiary feature. The pan this one was
+	// bought for is implemented in `Viewport.svelte`, and the window it pans is
+	// set by the control on the page above it.
 	expect(Object.keys(manifest.dependencies ?? {})).toEqual([]);
 });
 
@@ -1378,7 +1394,9 @@ test('the evals entry point keeps a no-JS link to the console', () => {
 	expect(page).not.toContain('$lib/bands');
 });
 
-test('keyboard alone pans and zooms the telemetry viewport', async ({ page }) => {
+test('keyboard alone pans the viewport and steps its window through the presets', async ({
+	page
+}) => {
 	await page.goto('/console/');
 
 	const viewport = page.locator('[data-viewport-control]');
@@ -1400,10 +1418,21 @@ test('keyboard alone pans and zooms the telemetry viewport', async ({ page }) =>
 	const widerStart = await viewport.getAttribute('data-window-start');
 	const widerEnd = await viewport.getAttribute('data-window-end');
 	await page.keyboard.press('+');
-	const zoomedStart = await viewport.getAttribute('data-window-start');
-	const zoomedEnd = await viewport.getAttribute('data-window-end');
-	expect(span(zoomedStart, zoomedEnd)).toBeLessThan(span(widerStart, widerEnd));
+	const steppedStart = await viewport.getAttribute('data-window-start');
+	const steppedEnd = await viewport.getAttribute('data-window-end');
+	expect(span(steppedStart, steppedEnd)).toBeLessThan(span(widerStart, widerEnd));
 	expect(span(start, end)).toBeGreaterThan(0);
+
+	// Every span a key can reach is one the control can name. A key that landed
+	// between two presets would leave all four buttons unchecked, and the page
+	// with no way back to the window it is drawing.
+	const presets = (
+		JSON.parse(
+			readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+		) as { console?: { window_presets?: number[] } }
+	).console?.window_presets ?? [7, 14, 30, 90];
+	expect(presets).toContain(span(steppedStart, steppedEnd));
+	expect(presets).toContain(span(widerStart, widerEnd));
 });
 
 test('panning to a month with no rows leaves a visible gap', async ({ page }) => {
@@ -2087,9 +2116,11 @@ test('the plot reads the cut off two lengths, so no ledger stamp can change what
  * the value a second, independent reading of the ledger produces.
  *
  * The window ends on the newest day the ledger holds, so a fixture that grows a
- * day moves this with it instead of going stale.
+ * day moves this with it instead of going stale. Its length is the page's own -
+ * the section follows the window control, so a length chosen here would be
+ * asserting against a table nobody is looking at.
  */
-function sourceTable(): {
+function sourceTable(days: number): {
 	rows: { sourceId: string; cut: number; articles: number; share: string; longest: string }[];
 	moreSources: number;
 	moreCuts: number;
@@ -2101,7 +2132,7 @@ function sourceTable(): {
 		.flatMap((name) => readCsv(join(dir, name)).rows);
 	const newest = all.map((row) => row.date).sort().at(-1) as string;
 	const first = new Date(
-		new Date(`${newest}T00:00:00Z`).getTime() - (SOURCE_CUT_WINDOW_DAYS - 1) * 86_400_000
+		new Date(`${newest}T00:00:00Z`).getTime() - (days - 1) * 86_400_000
 	)
 		.toISOString()
 		.slice(0, 10);
@@ -2161,7 +2192,16 @@ function sourceTable(): {
 test('the source table names every source the cap cut, and no other', async ({ page }) => {
 	await page.goto('/console/');
 
-	const expected = sourceTable();
+	// The window is the page's own. The section follows the shared control, so a
+	// number picked here would be an oracle over a table nobody is shown.
+	// `console-window.spec.ts` drives the control and proves the contents move.
+	const days = Number(
+		await page.locator('[data-windowed="source-cuts"]').getAttribute('data-window-days')
+	);
+	expect(days, 'the section publishes no window, so the oracle below spans nothing').toBeGreaterThan(
+		0
+	);
+	const expected = sourceTable(days);
 	// The fixture has to hold more than the table prints, or the sort, the cap
 	// and the sentence under it are all asserted against nothing.
 	expect(expected.rows.length, 'the fixture cuts fewer sources than the table prints').toBe(
@@ -2177,7 +2217,6 @@ test('the source table names every source the cap cut, and no other', async ({ p
 	// outside the window.
 	expect(named).toEqual(expected.rows.map((source) => source.sourceId));
 	expect(named).not.toContain('no-length');
-	expect(named, 'a cut older than the window is still being counted').not.toContain('old-cut');
 
 	for (const source of expected.rows) {
 		const row = page.locator(`[data-source-cut="${source.sourceId}"]`);
@@ -2246,7 +2285,10 @@ test('a share nothing supports prints a dash, never a percentage', async ({ page
 test('what the cut cost is printed with the number of articles behind it', async ({ page }) => {
 	await page.goto('/console/');
 
-	const { losses } = sourceTable();
+	const days = Number(
+		await page.locator('[data-windowed="source-cuts"]').getAttribute('data-window-days')
+	);
+	const { losses } = sourceTable(days);
 	const median = losses[Math.floor(losses.length / 2)];
 	const max = losses[losses.length - 1];
 	// A median equal to its own maximum is one number printed twice. The fixture
@@ -2271,8 +2313,10 @@ test('a source whose lengths were never recorded is absent, and reads as unknown
 		source_words_before_cap: ''
 	});
 
+	// Seven days here is this test's own window, not the page's. The function
+	// takes the span it is given, and these rows all sit on one day.
 	const nothing = sourceCuts([migrated('a', 0), migrated('a', 1)], {
-		days: SOURCE_CUT_WINDOW_DAYS,
+		days: 7,
 		minAttempts: MIN_ATTEMPTS_FOR_RATE,
 		limit: SOURCE_CUT_ROWS
 	});
@@ -2298,7 +2342,7 @@ test('a source whose lengths were never recorded is absent, and reads as unknown
 				source_words_before_cap: '2612'
 			}
 		],
-		{ days: SOURCE_CUT_WINDOW_DAYS, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
+		{ days: 7, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
 	);
 	expect(some.measured).toBe(true);
 	expect(some.rows).toHaveLength(1);
@@ -2314,7 +2358,7 @@ test('a source whose lengths were never recorded is absent, and reads as unknown
 	expect(
 		sourceCuts(
 			[{ date: '2026-08-28', source_id: 'a', url_key: 'a-0', source_words: '', source_words_before_cap: '2612' }],
-			{ days: SOURCE_CUT_WINDOW_DAYS, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
+			{ days: 7, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
 		).rows
 	).toEqual([]);
 });

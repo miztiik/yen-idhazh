@@ -11,6 +11,7 @@
   "collect": {
     "blocked_url_markers": [],
     "front_page_bonus": 0.25,
+    "max_age_hours": 24.0,
     "max_future_hours": 6.0,
     "max_per_source": 2,
     "quarantine_after_failures": 3,
@@ -48,6 +49,12 @@
     "min_window_days": 7,
     "pan_days": 3,
     "today_anchor": "centre",
+    "window_presets": [
+      7,
+      21,
+      60,
+      180
+    ],
     "zoom_factor": 2.0
   },
   "drift": {

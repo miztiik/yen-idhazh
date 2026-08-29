@@ -170,14 +170,25 @@ class CollectConfig(Model):
         default=0.6,
         ge=0.0,
         description=(
-            "How much freshness may move a score. A bonus, never a filter: a strong "
-            "older item still outranks a weak new one, which a hard age cutoff cannot do."
+            "How much freshness may move a score, inside the window max_age_hours "
+            "allows. It orders what is already fresh enough to publish; it is "
+            "max_age_hours, not this, that decides what is too old to add at all."
         ),
     )
     recency_half_life_hours: float = Field(
         default=18.0,
         gt=0.0,
         description=("Hours for the recency bonus to halve. At 18 h a day-old item keeps a third."),
+    )
+    max_age_hours: float = Field(
+        default=24.0,
+        gt=0.0,
+        description=(
+            "How old a story may be and still be added. A hard gate, applied to the "
+            "date we believe rather than the date the feed claimed. An article we "
+            "could not date at all is not too old - first sight is its age, so it "
+            "gets the day we found it and no more."
+        ),
     )
     max_future_hours: float = Field(
         default=6.0,
@@ -948,7 +959,24 @@ class ConsoleConfig(Model):
     default_window_days: int = Field(
         default=30,
         ge=1,
-        description="Initial time span for the console charts. A viewport, not a deletion.",
+        description=(
+            "Initial time span for the console charts. A viewport, not a deletion. "
+            "Thirty rather than fourteen because the page states its own retirement "
+            "rules over fourteen days, so a window equal to the rule shows the rule "
+            "with no margin either side of it."
+        ),
+    )
+    window_presets: list[int] = Field(
+        default_factory=lambda: [7, 14, 30, 90],
+        min_length=2,
+        description=(
+            "The day counts the console's window control offers, ascending and "
+            "distinct. A short list rather than a slider: every value is a distinct "
+            "fetch cost, because a wider window pulls more month files, and most "
+            "values in between are indistinguishable on the page. "
+            "`default_window_days` must be one of them, or the console would open on "
+            "a window its own control cannot name."
+        ),
     )
     today_anchor: TodayAnchor = Field(
         default=TodayAnchor.RIGHT,
@@ -993,6 +1021,21 @@ class ConsoleConfig(Model):
             raise ValueError("console.min_window_days must not exceed default_window_days")
         if self.default_window_days > self.max_window_days:
             raise ValueError("console.default_window_days must not exceed max_window_days")
+        if self.window_presets != sorted(set(self.window_presets)):
+            raise ValueError("console.window_presets must be ascending and distinct")
+        if self.default_window_days not in self.window_presets:
+            raise ValueError("console.default_window_days must be one of console.window_presets")
+        # The presets are the only way the page sets its span, so these two bounds
+        # would have no reader at all if a preset could sit outside them.
+        outside = [
+            days
+            for days in self.window_presets
+            if days < self.min_window_days or days > self.max_window_days
+        ]
+        if outside:
+            raise ValueError(
+                "console.window_presets must lie between min_window_days and max_window_days"
+            )
         return self
 
 
@@ -1251,6 +1294,47 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30",
+            change=(
+                "Added collect.max_age_hours. collect.recency_weight's description now "
+                "says it orders inside that window rather than deciding admission."
+            ),
+            why=(
+                "Age was a bonus and never a gate, so nothing had a lower bound. "
+                "Measured 2026-08-30 over the 2,900 items published between 2026-08-22 "
+                "and 2026-08-29, aged at the moment their own run planned them: the "
+                "median is 5.5 hours and the 90th percentile is 35.7 days. The oldest "
+                "story the digest has published was 6,474 days old - a stock note from "
+                "December 2008 - and 826 items (28.5 percent) were over a day old when "
+                "they were added. They came from research-lab and institution feeds "
+                "that serve a whole back catalogue, and the tier weighting scores an "
+                "undated institution post at 1.0 against 0.64 for a three-day-old "
+                "trade-press story, so the archive won. The argument for keeping age "
+                "soft was that a cutoff wastes a slot on a quiet day. There are no "
+                "quiet days: every run since 2026-08-25 has hit its ceiling, so each "
+                "old item displaced a fresher one. Additive with a default, so an "
+                "older config still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-29T23:00",
+            change=(
+                "console.window_presets added, and console.default_window_days must "
+                "now be one of its members."
+            ),
+            why=(
+                "The console had no way to say how many days it was showing, so every "
+                "section picked its own span and one of them hard-coded seven days in "
+                "the frontend. One control now sets one window for the whole page, and "
+                "a control needs a list of the spans it offers. Four presets rather "
+                "than a free number: a wider window fetches more month files, so every "
+                "value is a distinct transfer cost and most of the values between "
+                "these four cannot be told apart on the page. Additive with a default, "
+                "so an older config still validates - the committed 30 is a member of "
+                "the default list (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T22:00",
             change="Added collect.settled_failure_codes.",

@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -25,7 +26,12 @@ from conftest import (
 from pydantic import ValidationError
 
 from idhazh.contracts import canonical_json, derive_url_key
-from idhazh.contracts.app_config import AppConfig, EvaluationConfig, PageWeightConfig
+from idhazh.contracts.app_config import (
+    AppConfig,
+    ConsoleConfig,
+    EvaluationConfig,
+    PageWeightConfig,
+)
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
@@ -43,7 +49,7 @@ from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
-from idhazh.contracts.taxonomy import Taxonomy
+from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.contracts.watchlist import Watchlist
 from idhazh.fingerprint import text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
@@ -227,6 +233,49 @@ def test_a_console_chart_may_not_be_narrower_than_its_own_labels() -> None:
         AppConfig.model_validate({"console": {"chart_width": 0}})
 
 
+def test_the_window_the_console_opens_on_is_one_the_control_can_name() -> None:
+    """A default outside the preset list opens the page on a window nothing selects.
+
+    The control is four radio buttons, so a span that is not one of them leaves
+    every button unchecked and the operator with no way back to what he is
+    looking at.
+    """
+    with pytest.raises(ValidationError, match="window_presets"):
+        ConsoleConfig(default_window_days=21)
+
+    tuned = ConsoleConfig(default_window_days=21, window_presets=[7, 21, 60])
+    assert tuned.default_window_days in tuned.window_presets
+
+
+def test_a_preset_list_that_is_out_of_order_or_out_of_bounds_is_refused() -> None:
+    """The presets are the only way the page sets its span.
+
+    So `min_window_days` and `max_window_days` have no other reader, and a
+    preset outside them would make both knobs decorative.
+    """
+    with pytest.raises(ValidationError, match="ascending and distinct"):
+        ConsoleConfig(window_presets=[30, 7, 90], default_window_days=30)
+    with pytest.raises(ValidationError, match="ascending and distinct"):
+        ConsoleConfig(window_presets=[7, 7, 30], default_window_days=30)
+    with pytest.raises(ValidationError, match="min_window_days and max_window_days"):
+        ConsoleConfig(window_presets=[3, 30], default_window_days=30)
+    with pytest.raises(ValidationError, match="min_window_days and max_window_days"):
+        ConsoleConfig(window_presets=[30, 400], default_window_days=30)
+
+
+def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> None:
+    """The same two-copies problem `chart_width` has, one field along.
+
+    The frontend keeps its own console defaults so a fresh clone renders with no
+    `config/`. If the two lists drift, the page draws a button for a window the
+    contract would refuse.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"window_presets:\s*\[([\d,\s]+)\]", reader)
+    assert mirrored is not None, "the frontend console defaults dropped window_presets"
+    assert [int(part) for part in mirrored.group(1).split(",")] == ConsoleConfig().window_presets
+
+
 def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
     """The one edit that would silence a gate instead of tightening it.
 
@@ -297,6 +346,34 @@ def test_every_configured_feed_names_a_declared_vertical() -> None:
     declared = {vertical.id for vertical in taxonomy.verticals}
     for feed in sources.known_feeds():
         assert feed.vertical in declared, f"feed {feed.id} names an undeclared vertical"
+
+
+def test_every_vertical_clears_its_own_feed_floor() -> None:
+    """A vertical under `min_feeds` plans nothing at all, so this is a live gate.
+
+    `rank.plan_vertical` returns an empty list for a vertical below its floor -
+    the desk does not thin out, it goes silent. Nothing else notices: the run
+    succeeds, the digest publishes, and one section is simply absent.
+
+    That was one edit away from happening on 2026-08-29. Retiring the 40 feeds
+    that had never published anything took `ai` to 28 against a floor of 35 and
+    `business-economy` to 12 against 21 - 34 percent of that day's items, gone
+    quietly. A throwaway assertion in a migration script caught it; nothing in
+    the repository would have. This is that assertion, kept.
+
+    It reads the committed config on purpose. The number that decides a run is
+    the one in `config/`, not a value a fixture chose.
+    """
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    sources = Sources.from_json(read_text(CONFIG_DIR / "sources.json"))
+    live = Counter(
+        feed.vertical for feed in sources.feeds if feed.status is LifecycleStatus.ACTIVE
+    )
+    for vertical in taxonomy.verticals:
+        assert live[vertical.id] >= vertical.min_feeds, (
+            f"{vertical.id} has {live[vertical.id]} active feeds against a floor of "
+            f"{vertical.min_feeds}, so it would publish nothing"
+        )
 
 
 def test_the_watchlist_stays_inside_its_configured_cap() -> None:

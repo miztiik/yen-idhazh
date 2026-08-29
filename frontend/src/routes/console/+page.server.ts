@@ -5,6 +5,7 @@ import type {
 	ThroughputDay
 } from '$lib/charts/series';
 import { datesIn, failureSeries } from '$lib/charts/series';
+import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import {
 	failureMix,
@@ -20,8 +21,7 @@ import {
 	modelWork,
 	sourceCuts,
 	wasCut,
-	SOURCE_CUT_ROWS,
-	SOURCE_CUT_WINDOW_DAYS
+	SOURCE_CUT_ROWS
 } from '$lib/server/model-work';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
@@ -65,7 +65,7 @@ export interface FeedTrouble {
 	feedId: string;
 	attempts: number;
 	failures: number;
-	lastOutcome: string;
+	lastResult: string;
 	lastDetail: string;
 	lastDate: string;
 	nearQuarantine: boolean;
@@ -298,6 +298,18 @@ function failing(row: FeedResult): boolean {
 	return FAILING_OUTCOMES.has(row.outcome);
 }
 
+/** What to print in the last-result cell.
+ *
+ * The ledger's own word for a feed that answered 200 with no entries is `ok`,
+ * because that is what the fetch did. Printing it puts `ok` on the same row as
+ * a count of fourteen failures, and the eye takes the word over the number.
+ * The row has to say which of the two it means.
+ */
+function resultLabel(row: FeedResult): string {
+	if (row.outcome === 'ok' && row.items === 0) return 'answered with nothing';
+	return row.outcome;
+}
+
 /** Every feed that failed at least once, worst first.
  *
  * A feed with a clean record is not listed. The operator came here to find what
@@ -315,12 +327,18 @@ function trouble(rows: FeedResult[], quarantineAfter: number): FeedTrouble[] {
 	for (const [feedId, group] of byFeed) {
 		const failures = group.filter(failing);
 		if (failures.length === 0) continue;
-		const newest = [...group].sort((a, b) => a.date.localeCompare(b.date)).at(-1) as FeedResult;
+		// Date alone does not order five runs of one day, and a stable sort then
+		// makes "last result" whichever row the shard happened to carry last. The
+		// run id breaks the tie, so the cell means the newest read and not an
+		// arbitrary one.
+		const newest = [...group]
+			.sort((a, b) => a.date.localeCompare(b.date) || a.runId.localeCompare(b.runId))
+			.at(-1) as FeedResult;
 		found.push({
 			feedId,
 			attempts: group.length,
 			failures: failures.length,
-			lastOutcome: newest.outcome,
+			lastResult: resultLabel(newest),
 			lastDetail: newest.detail,
 			lastDate: newest.date,
 			nearQuarantine: failures.length >= quarantineAfter
@@ -450,10 +468,21 @@ export async function load() {
 	);
 	const charts = chartDays(manifests, publishedCharts());
 	const flow = chartFlow(charts);
+	// The window the page opens on, drawn here so the prerendered card and the
+	// control above it cannot disagree at first paint. The browser recomputes the
+	// same two cards from the same rows when the operator moves the control.
+	const today = new Date().toISOString().slice(0, 10);
+	const seed = windowOfDays(
+		datesIn(publicRows),
+		today,
+		console.default_window_days,
+		console.today_anchor
+	);
+	const inSeed = (date: string) => date >= seed.start && date <= seed.end;
 	// Six questions, six shapes. Each is drawn here so the console is complete
 	// before any script runs; the client rebuilds the same option to hydrate.
 	const runsDonut = runHealth(manifests);
-	const cost = routerCost(charts);
+	const cost = routerCost(charts.filter((day) => inSeed(day.date)));
 	const growth = siteGrowth(manifests);
 	const mixDates = datesIn(publicRows);
 	const mix =
@@ -466,7 +495,10 @@ export async function load() {
 					})
 				);
 	const published = publishedTrend(charts);
-	const size = sizeTrend(manifests);
+	const size = sizeTrend(
+		manifests.filter((run) => inSeed(run.date)),
+		console.default_window_days
+	);
 	const draw = async (
 		chart: { option: import('echarts').EChartsOption; empty: boolean },
 		width: number,
@@ -495,8 +527,11 @@ export async function load() {
 			mixSvg: await draw(mix, 760, 220),
 			publishedSvg: await draw(published, 220, 34),
 			publishedMovement: published.empty ? null : published.movement,
-			sizeSvg: await draw(size, 220, 34),
-			sizeMovement: size.empty ? null : size.movement
+			// No `sizeMovement` beside it: the size card recomputes its own movement
+			// from the manifests on the page, because the window can move and this
+			// number cannot. The drawn seed still crosses, as the shape a reader
+			// with no script keeps.
+			sizeSvg: await draw(size, 220, 34)
 		},
 		// Drawn here, so the shape is on the page before any script runs and stays
 		// there if none ever does. Colour leaves as a custom-property reference, so
@@ -519,18 +554,24 @@ export async function load() {
 		feedsChecked: new Set(results.map((row) => row.feedId)).size,
 		feedRuns: new Set(results.map((row) => row.runId)).size,
 		// Ten rows and the two sentences under them, aggregated here rather than in
-		// the browser. Seven days of the committed ledger is thousands of rows and
-		// this page inlines whatever it is given, so the ten rows cross and the rows
-		// they were made from do not.
-		sourceCuts: sourceCuts(itemRows, {
-			days: SOURCE_CUT_WINDOW_DAYS,
-			minAttempts: console.min_attempts_for_rate,
-			limit: SOURCE_CUT_ROWS
-		}),
+		// the browser. A window of the ledger is thousands of rows and this page
+		// inlines whatever it is given, so the ten rows cross and the rows they were
+		// made from do not.
+		//
+		// One table per preset, because the section follows the page's window and the
+		// browser has no ledger to re-aggregate. Four tables of ten rows is cheaper
+		// than one fetch, and it keeps the section working with no script at all.
+		sourceCutsByWindow: console.window_presets.map((days) =>
+			sourceCuts(itemRows, {
+				days,
+				minAttempts: console.min_attempts_for_rate,
+				limit: SOURCE_CUT_ROWS
+			})
+		),
 		telemetryRows: publicRows,
 		telemetryMonths: telemetryMonths(),
 		console,
 		summarizeBands: summarize.bands,
-		today: new Date().toISOString().slice(0, 10)
+		today
 	};
 }

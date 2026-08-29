@@ -11,6 +11,7 @@ and `feedparser` parses a string with no network of its own.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import replace
 from pathlib import Path
@@ -20,7 +21,7 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import config
 from idhazh.contracts.app_config import CollectConfig
-from idhazh.contracts.base import derive_url_key
+from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
@@ -34,7 +35,7 @@ from idhazh.discover import (
     salience_urls,
     split_blocked,
 )
-from idhazh.rank import ITEM_ID_DIGITS, merge, plan_vertical, score, tier_weight
+from idhazh.rank import ITEM_ID_DIGITS, appeared_at, merge, plan_vertical, score, tier_weight
 from idhazh.tag import tags
 
 FEEDS = FIXTURES_DIR / "feeds"
@@ -158,6 +159,48 @@ def test_a_feed_carries_its_own_tier_and_vertical() -> None:
 def test_a_published_date_becomes_a_utc_timestamp() -> None:
     first = candidates_from_feed(LAB, body("lab-blog.xml"))[0]
     assert first.published_at == "2026-08-21T06:00:00Z"
+
+
+def test_an_unpadded_year_is_a_stamp_nothing_downstream_can_read() -> None:
+    """Why the year is padded here rather than left to `strftime`.
+
+    One entry spelling its unset date as year 1 stopped the whole day at
+    ranking (run 33259315735, 2026-08-29), before a single article was read.
+    """
+    with pytest.raises(ValueError, match="does not match format"):
+        appeared_at(
+            "1-01-01T00:00:00Z",
+            first_seen_at=None,
+            now=NOW,
+            max_future_hours=CollectConfig().max_future_hours,
+        )
+
+
+def test_a_placeholder_date_still_leaves_a_stamp_the_run_can_read() -> None:
+    """A feed that spells "no date set" as `0001-01-01` cannot stop the day.
+
+    This bites on the runner rather than here: Linux leaves a year below 1000
+    short and Windows pads it, so the pre-fix spelling was already correct on a
+    developer machine. A local pass is not evidence.
+    """
+    found = candidates_from_feed(LAB, body("placeholder-dated.xml"))
+    placeholder, ordinary = found
+    assert placeholder.published_at == "0001-01-01T00:00:00Z", "four digits, on every platform"
+    assert ordinary.published_at == "2026-08-21T06:00:00Z", "the rest of the feed is ordinary"
+    for candidate in found:
+        assert candidate.published_at is not None
+        assert re.match(TIMESTAMP_PATTERN, candidate.published_at), (
+            "a candidate carries the spelling the payload contract pins"
+        )
+        assert (
+            appeared_at(
+                candidate.published_at,
+                first_seen_at=None,
+                now=NOW,
+                max_future_hours=CollectConfig().max_future_hours,
+            )
+            == candidate.published_at
+        )
 
 
 def test_a_feed_title_is_sanitized_on_arrival() -> None:
@@ -422,10 +465,14 @@ def test_a_weighted_down_feed_scores_below_a_full_one_of_the_same_tier() -> None
 
 
 def test_a_vertical_takes_everything_its_feeds_offered() -> None:
-    """Supply sets the size. There is no per-vertical cap left to reach."""
+    """Supply sets the size. There is no per-vertical cap left to reach.
+
+    Everything it considered and did not refuse for age. The two counts have to
+    add up exactly, or a slot went missing somewhere nothing recorded.
+    """
     config = CollectConfig(max_per_source=50)
     summary, items = plan_vertical(AI, all_candidates(), config=config, live_feeds=3, now=NOW)
-    assert len(items) == summary.considered
+    assert len(items) == summary.considered - summary.too_old
     assert summary.planned == len(items)
 
 

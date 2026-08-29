@@ -14,8 +14,23 @@
 	 * hand-written SVG, so the console still reads with JavaScript off.
 	 */
 	import { base } from '$app/paths';
+	import { onMount } from 'svelte';
 	import { axisLabels, cellFor, type LabelAlign } from '$lib/charts/run-history';
-	import { datesIn, failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
+	import {
+		datesIn,
+		failureSeries,
+		grouped,
+		parseTelemetryCsv,
+		type TelemetryRow
+	} from '$lib/charts/series';
+	import {
+		defaultWindow,
+		monthsToFetch,
+		panWindow,
+		stepPreset,
+		windowOfDays,
+		type TimeWindow
+	} from '$lib/charts/viewport';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -27,14 +42,118 @@
 		routerCost,
 		runHealth,
 		ROUTER_MINUTES_TARGET,
+		RULE_WINDOW_DAYS,
 		siteGrowth,
 		sizeTrend
 	} from '$lib/charts/glance';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
+	import WindowControl from '$lib/components/WindowControl.svelte';
 	import type { Health, ModelDay } from './+page.server';
 
 	let { data } = $props();
+
+	/** Where the operator's choice of window is kept between visits. */
+	const WINDOW_KEY = 'idhazh:console-window';
+
+	const presets = $derived(data.console.window_presets);
+
+	// svelte-ignore state_referenced_locally
+	let windowDays = $state(data.console.default_window_days);
+	// svelte-ignore state_referenced_locally
+	let rows = $state<TelemetryRow[]>(data.telemetryRows);
+	// svelte-ignore state_referenced_locally
+	let loadedMonths = $state([...new Set(datesIn(data.telemetryRows).map((d) => d.slice(0, 7)))]);
+	// svelte-ignore state_referenced_locally
+	let viewport = $state<TimeWindow>(defaultWindow(datesIn(data.telemetryRows), data.today, data.console));
+	/** How many month files are in the air. A count, not a flag: a pan can start
+	 * a second fetch while the first is still running, and a flag would clear the
+	 * busy state on the first one to finish. */
+	let inFlight = $state(0);
+	/** False until a browser has run this page. The control cannot do anything
+	 * before that, so it says so rather than pretending. */
+	let ready = $state(false);
+
+	const fetching = $derived(inFlight > 0);
+
+	/** The choice is read on mount and never during prerender, so first paint is
+	 * always the window the server drew and the control always agrees with it. */
+	onMount(() => {
+		ready = true;
+		if (typeof localStorage === 'undefined') return;
+		const stored = Number(localStorage.getItem(WINDOW_KEY));
+		if (presets.includes(stored) && stored !== windowDays) show(stored);
+	});
+
+	function merge(next: TelemetryRow[]) {
+		const byKey = new Map(rows.map((row) => [`${row.run_id}-${row.item_id}`, row]));
+		for (const row of next) byKey.set(`${row.run_id}-${row.item_id}`, row);
+		rows = [...byKey.values()].sort((a, b) => a.date.localeCompare(b.date));
+	}
+
+	/** Fetch the month files the window reaches into and does not already hold.
+	 *
+	 * Widening re-uses this path rather than reloading the page: the rows already
+	 * paid for stay in hand, and only the months past them cost anything.
+	 */
+	async function loadVisibleMonths() {
+		const wanted = monthsToFetch(viewport, data.telemetryMonths, loadedMonths);
+		if (wanted.length === 0) return;
+		loadedMonths = [...loadedMonths, ...wanted];
+		inFlight += wanted.length;
+		for (const month of wanted) {
+			try {
+				const response = await fetch(`${base}/telemetry/${month}.csv`);
+				if (response.ok) merge(parseTelemetryCsv(await response.text()));
+				else console.warn(`telemetry ${month} unavailable; showing a gap`);
+			} catch (error) {
+				console.warn(`telemetry ${month} could not be read; showing a gap`, error);
+			}
+			inFlight -= 1;
+		}
+	}
+
+	/** Set the span every windowed section reads.
+	 *
+	 * The window re-anchors on the newest day rather than keeping where a pan
+	 * left it, because "the last 30 days" is the question the preset asks.
+	 */
+	function show(days: number, remember = true) {
+		windowDays = days;
+		viewport = windowOfDays(datesIn(rows), data.today, days, data.console.today_anchor);
+		if (remember && typeof localStorage !== 'undefined') {
+			localStorage.setItem(WINDOW_KEY, String(days));
+		}
+		void loadVisibleMonths();
+	}
+
+	function pan(days: number) {
+		viewport = panWindow(viewport, days);
+		void loadVisibleMonths();
+	}
+
+	/** The month files a preset would fetch, counted before it is picked. */
+	function monthsFor(days: number): number {
+		return monthsToFetch(
+			windowOfDays(datesIn(rows), data.today, days, data.console.today_anchor),
+			data.telemetryMonths,
+			loadedMonths
+		).length;
+	}
+
+	const inWindow = $derived(
+		(date: string) => date >= viewport.start && date <= viewport.end
+	);
+	/** The source table for the window in force. One was built per preset at
+	 * build time, so changing the window costs no fetch and no ledger read. */
+	const cuts = $derived(
+		data.sourceCutsByWindow.find((table) => table.days === windowDays) ??
+			data.sourceCutsByWindow[0]
+	);
+	const windowedCost = $derived(routerCost(data.charts.filter((day) => inWindow(day.date))));
+	const windowedSize = $derived(
+		sizeTrend(data.manifests.filter((run) => inWindow(run.date)), windowDays)
+	);
 
 	let strip = $state<HTMLDivElement | null>(null);
 
@@ -253,6 +372,17 @@
 		{data.itemHealthRows} item-health {data.itemHealthRows === 1 ? 'row' : 'rows'} on record.
 	</p>
 
+	<!-- The window sits above everything it governs, so it is read before the
+	     first chart rather than found underneath one. -->
+	<WindowControl
+		days={windowDays}
+		{presets}
+		{monthsFor}
+		busy={fetching}
+		{ready}
+		onChange={show}
+	/>
+
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
@@ -266,15 +396,22 @@
 			trendSvg={data.glance.publishedSvg}
 			trendOption={publishedTrend(data.charts).option}
 		/>
-		<KpiCard
-			label="Site size"
-			value={mb(data.manifests[0]?.siteBytes ?? 0)}
-			note="1 GB ceiling"
-			tone={sizeTone}
-			movement={data.glance.sizeMovement}
-			trendSvg={data.glance.sizeSvg}
-			trendOption={sizeTrend(data.manifests).option}
-		/>
+		<!-- Half windowed, on purpose. The size is a level and the operator wants
+		     today's, whatever span he is looking at; only the movement under it is
+		     a rate, and a rate has to say what it is over. -->
+		{#key windowDays}
+			<KpiCard
+				label="Site size"
+				value={mb(data.manifests[0]?.siteBytes ?? 0)}
+				note="1 GB ceiling. Latest run's size; movement over {windowDays} days."
+				tone={sizeTone}
+				windowed="site-size-movement"
+				{windowDays}
+				movement={windowedSize.empty ? null : windowedSize.movement}
+				trendSvg={windowedSize.empty ? null : data.glance.sizeSvg}
+				trendOption={windowedSize.empty ? null : windowedSize.option}
+			/>
+		{/key}
 		{#if data.glance.healthSvg}
 			<figure class="panel" data-glance-chart="runs">
 				<figcaption class="text-[0.75rem] text-text-tertiary">Did the runs finish?</figcaption>
@@ -288,18 +425,38 @@
 			</figure>
 		{/if}
 		{#if data.glance.costSvg}
-			<figure class="panel" data-glance-chart="router-cost">
+			<figure
+				class="panel"
+				data-glance-chart="router-cost"
+				data-windowed="router-cost"
+				data-window-days={windowDays}
+			>
 				<figcaption class="text-[0.75rem] text-text-tertiary">
 					Router minutes per published chart, against the {ROUTER_MINUTES_TARGET} that retires the
-					arm.
+					arm. Over {windowDays} days.
 				</figcaption>
-				<Chart
-					svg={data.glance.costSvg}
-					option={routerCost(data.charts).option}
-					width={460}
-					height={40}
-					label="Median router minutes per published chart against its target"
-				/>
+				{#if windowDays < RULE_WINDOW_DAYS}
+					<!-- A median of the wrong span is worse than no median: it is the
+					     same figure with a different meaning and nothing on the page to
+					     say which one is being read. -->
+					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-too-narrow="router-cost">
+						The rule reads {RULE_WINDOW_DAYS} days. Widen the window to see it.
+					</p>
+				{:else if windowedCost.empty}
+					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="router-cost">
+						No router time was written down in these {windowDays} days.
+					</p>
+				{:else}
+					{#key windowDays}
+						<Chart
+							svg={data.glance.costSvg}
+							option={windowedCost.option}
+							width={460}
+							height={40}
+							label="Median router minutes per published chart against its target, over {windowDays} days"
+						/>
+					{/key}
+				{/if}
 			</figure>
 		{/if}
 	</div>
@@ -409,87 +566,95 @@
 	{/if}
 
 	<Viewport
-		initialRows={data.telemetryRows}
-		availableMonths={data.telemetryMonths}
-		today={data.today}
+		{rows}
+		window={viewport}
 		config={data.console}
 		bands={data.summarizeBands}
+		onPan={pan}
+		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>
 
-	<h2 class="console-h2">Sources cut short most often</h2>
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		The last {data.sourceCuts.days} days. An article longer than the cap is read from the start and
-		stopped there, so the end never reaches the machine. Sorted by how many articles that cost each
-		source - not by the share, because a source with two articles and one cut would otherwise lead
-		the table. A source can carry several feeds, so this list and "Feeds that failed" below do not
-		name the same things.
-	</p>
+	<div data-windowed="source-cuts" data-window-days={cuts.days}>
+		<h2 class="console-h2">Sources cut short most often</h2>
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+			The last {cuts.days} days, {cuts.articles}
+			{cuts.articles === 1 ? 'article' : 'articles'} between them. An article longer than the cap
+			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
+			many articles that cost each source - not by the share, because a source with two articles and
+			one cut would otherwise lead the table. A source can carry several feeds, so this list and
+			"Feeds that failed" below do not name the same things. It follows the length of the window
+			above, not where a pan leaves it: the days it reads always end on the newest day the ledger
+			holds.
+		</p>
 
-	{#if !data.sourceCuts.measured}
-		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="unmeasured">
-			Nothing has recorded an article length yet. This fills as runs publish.
-		</p>
-	{:else if data.sourceCuts.rows.length === 0}
-		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="none">
-			No article was cut short in the last {data.sourceCuts.days} days.
-		</p>
-	{:else}
-		<div class="console-table mt-3" data-source-cuts="table">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule">
-						<th class="py-2 text-start font-normal">Source</th>
-						<th class="py-2 text-end font-normal">Cut short</th>
-						<th class="py-2 text-end font-normal">Articles</th>
-						<th class="py-2 text-end font-normal">Share cut</th>
-						<!-- A length ending where a count ends reads as one more count. The
-						     gap is what says this column measures something else. -->
-						<th class="py-2 ps-6 text-end font-normal">Longest article, words</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.sourceCuts.rows as source (source.sourceId)}
-						<tr class="border-b border-rule" data-source-cut={source.sourceId}>
-							<td class="py-2">{source.sourceId}</td>
-							<td class="py-2 text-end tabular-nums" data-source-cell="cut">{source.cut}</td>
-							<td class="py-2 text-end tabular-nums" data-source-cell="articles"
-								>{source.articles}</td
-							>
-							<td class="py-2 text-end tabular-nums" data-source-cell="share"
-								>{percent(source.sharePct)}</td
-							>
-							<td class="py-2 ps-6 text-end tabular-nums" data-source-cell="longest"
-								>{words(source.longestWords)}</td
-							>
+		{#if !cuts.measured}
+			<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="unmeasured">
+				Nothing has recorded an article length yet. This fills as runs publish.
+			</p>
+		{:else if cuts.rows.length === 0}
+			<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="none">
+				No article was cut short in the last {cuts.days} days.
+			</p>
+		{:else}
+			<div class="console-table mt-3" data-source-cuts="table">
+				<table class="w-full text-[0.8125rem]">
+					<thead class="text-text-tertiary">
+						<tr class="border-b border-rule">
+							<th class="py-2 text-start font-normal">Source</th>
+							<th class="py-2 text-end font-normal">Cut short</th>
+							<th class="py-2 text-end font-normal">Articles</th>
+							<th class="py-2 text-end font-normal">Share cut</th>
+							<!-- A length ending where a count ends reads as one more count. The
+							     gap is what says this column measures something else. -->
+							<th class="py-2 ps-6 text-end font-normal">Longest article, words</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+					</thead>
+					<tbody>
+						{#each cuts.rows as source (source.sourceId)}
+							<tr class="border-b border-rule" data-source-cut={source.sourceId}>
+								<td class="py-2">{source.sourceId}</td>
+								<td class="py-2 text-end tabular-nums" data-source-cell="cut">{source.cut}</td>
+								<td class="py-2 text-end tabular-nums" data-source-cell="articles"
+									>{source.articles}</td
+								>
+								<td class="py-2 text-end tabular-nums" data-source-cell="share"
+									>{percent(source.sharePct)}</td
+								>
+								<td class="py-2 ps-6 text-end tabular-nums" data-source-cell="longest"
+									>{words(source.longestWords)}</td
+								>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
 
-		{#if data.sourceCuts.moreSources > 0}
-			<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-source-cuts-more>
-				{data.sourceCuts.moreSources} more sources had {data.sourceCuts.moreCuts} cuts between them.
-			</p>
+			{#if cuts.moreSources > 0}
+				<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-source-cuts-more>
+					{cuts.moreSources} more sources had {cuts.moreCuts} cuts between them.
+				</p>
+			{/if}
+			{#if cuts.cost}
+				<!-- What the next move of the cap would buy. A count of cut articles says
+				     the cap fired; how much it removed says whether raising it is worth
+				     anything, and the n is what makes it a measurement. -->
+				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-cost>
+					{cuts.cost.n} articles were cut short. Half of them lost more than {grouped(
+						cuts.cost.median
+					)} words each, and the longest lost {grouped(cuts.cost.max)}.
+				</p>
+			{/if}
 		{/if}
-		{#if data.sourceCuts.cost}
-			<!-- What the next move of the cap would buy. A count of cut articles says
-			     the cap fired; how much it removed says whether raising it is worth
-			     anything, and the n is what makes it a measurement. -->
-			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-cost>
-				{data.sourceCuts.cost.n} articles were cut short. Half of them lost more than {grouped(
-					data.sourceCuts.cost.median
-				)} words each, and the longest lost {grouped(data.sourceCuts.cost.max)}.
-			</p>
-		{/if}
-	{/if}
+	</div>
 
 	<h2 class="console-h2">Feeds that failed</h2>
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-window-exempt="feeds">
 		Every feed's result is written down every run. A feed that answered with nothing counts as a
 		failure - an empty answer costs the digest the same articles a refused one does. A source
 		whose <code>robots.txt</code> says no does not: honouring it is the pipeline working. A feed
-		is rested after {data.quarantineAfter} failures.
+		is rested after {data.quarantineAfter} failures. This section does not follow the window
+		above: it counts every run on record, because that is what the pipeline counted when it
+		decided to rest a feed, and two numbers for one decision is worse than one long count.
 	</p>
 
 	{#if data.feedRuns === 0}
@@ -525,8 +690,8 @@
 							</td>
 							<td class="py-2 text-end tabular-nums">{feed.failures}</td>
 							<td class="py-2 text-end tabular-nums">{feed.attempts}</td>
-							<td class="py-2 ps-6 text-text-secondary">
-								{feed.lastOutcome}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
+							<td class="py-2 ps-6 text-text-secondary" data-feed-result>
+								{feed.lastResult}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
 							</td>
 						</tr>
 					{/each}
