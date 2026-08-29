@@ -167,6 +167,58 @@ counterweights in `backend/idhazh/evals/metrics.py`, and none of their
 definitions changed when the chunker did. Bumping it would assert a change that
 did not happen.
 
+### Slicing costs a long article 0.40 of its score, and the direction is now measured
+
+The window is a knob, and until 2026-08-29 nobody knew which way it pushed. Two
+biases ride on the number of windows and they pull opposite ways: the
+aggregation is a max, so more windows is more chances at a high draw, and no
+single window holds the evidence for a summary that draws on the article's
+opening and its closing, so every window is marked down for the half it cannot
+see. **The mark-down wins, and it is not close.**
+
+**Measured 2026-08-29** over the 117 (premise, summary) pairs the 2026-08-28
+production run scored, each pair scored twice and nothing else varied - once at
+today's `900/150/anchored` geometry, once at a 1,923-word window that holds every
+premise whole. Taken by `backend/utilities/grader_length_bias.py`; the figures,
+the hardware and the spread are in
+[../reference/measurements.md](../reference/measurements.md#which-way-the-graders-length-bias-runs).
+
+| Windows the article takes today | Items | Today's score minus the whole-article score |
+| --- | ---: | ---: |
+| 1 | 91 | **exactly 0.0000** |
+| 2 | 16 | **-0.2178** |
+| 3 | 10 | **-0.3986** |
+
+**A three-window article scores 0.40 lower than the same article read whole.**
+The bands start at 0.80 and 0.50, so 0.40 is wider than the entire medium band -
+the geometry alone can carry one item from high to low, and it does it to the
+longest articles only. The best-of-N effect is real and tiny: the largest
+positive difference anywhere is **+0.0353**, against a largest negative of
+**-0.8783**, so it is 25 times smaller than the thing it is fighting.
+
+**This is the Editor's warning, now a number rather than a worry.** A summary
+that draws on more of an article scores *lower* under this geometry while being
+a better summary. A score that drops when a summary improves is not a regression
+to chase.
+
+**The number that says the comparison is sound is the 0.0000.** An article short
+enough to be one window under both geometries is scored over the identical text
+twice, and the scorer is deterministic, so its difference must be exactly zero -
+91 of 91 were. Whitespace was ruled out separately: the chunker re-joins windows
+on single spaces while the whole-article pass reads the premise as it stands, and
+scoring 5 at-cap premises both ways moved the number by 0.000000 every time.
+
+**No default moves, and this measurement does not say one should.** It says the
+instrument moves with slicing; it does not say the whole-article reading is the
+truer one. That still needs the human labels this page has been waiting on -
+**0 of 60**. What has changed is that `evaluation.chunk_words` can no longer be
+called a neutral number nobody needs to look at.
+
+**What it does settle is the cost.** A single 1,923-word pass costs **less** than
+today's two or three 900-word passes, not more: 4.278 s against 4.815 s a pass on
+the hardware in the reference page. Whichever way the label queue eventually
+points, a one-slice window is affordable.
+
 ## Why faithfulness alone is not enough
 
 Faithfulness measures **consistency with the source, not informativeness**. Two failure modes score beautifully on it:
