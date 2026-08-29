@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -764,6 +764,86 @@ built on the same tree and the same machine.
 
 Authority: Jony, 2026-08-25; the three marks and the counts behind them, Jony
 and Fowler, 2026-08-27.
+
+## What the cap costs, and the four places the console says it
+
+The truncation cap is the one setting on this project that silently removes
+words a reader might have got. Five figures answer five different questions
+about it, and each one is on the surface that already owns its grain.
+
+| Figure | Where | Grain | Read from |
+| --- | --- | --- | --- |
+| `Article read only in part` | the model table | one day | `state/scores.csv` |
+| `Read only in part, as a percent` | the model table | one day | `state/scores.csv` |
+| `Time to write one`, second figure | the model table | one day | `state/item-health/` |
+| `Too long to send` | the model table | one day | `state/item-health/` |
+| `n read only in part` | the run square's own label | one run | `state/item-health/` |
+| `Sources cut short most often` | its own table | one source, 7 days | `state/item-health/` |
+
+**The run grain is a clause on a label and never a published figure.** Measured
+2026-08-29 over the 19 committed runs, the count is 1 to 12 articles of 160 to
+200 - 0.6 to 7.5 percent - and that swing is which articles the feeds carried
+that hour. Drawn as a number beside the others it would read as the cap moving
+when nothing about the cap moved. A run square is where run-level facts already
+live, so it goes there and stops.
+
+**The day grain divides by the rows its own flag answers for.**
+`truncation_flagged` changed meaning at `CUT_FLAG_MEANS_A_CUT_FROM`, so a day
+holding rows from both sides of that stamp has two populations in one column.
+The count already excluded the older rows; the share divides by the same subset,
+because a share whose numerator and denominator answer different questions is
+not a share. Both are null - a dash, never a zero - on a day made only of older
+rows.
+
+**The source table is aggregated on the server and ships ten rows.** Seven days
+of the committed ledger is a few thousand rows, and this page inlines whatever
+it is handed, so the browser never sees the rows the table was made from. The
+window ends on the newest day the ledger holds rather than on the build clock,
+so rebuilding an old tree prints what that tree said rather than an empty table.
+The 7 days and the 10 rows are constants in
+[frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)
+and not config knobs, because the table's own first sentence states the number -
+a knob there is a way to make the copy lie.
+
+**A cut is two cells of one row compared, and never a count against the cap.**
+`source_words_before_cap > source_words` is the whole test
+([../sources/item-health.md](../sources/item-health.md)). The alternative,
+`source_words == int(truncation_cap_tokens / 1.3)`, moves the day the cap moves,
+so a seven-day window spanning a cap change would mix two cut points - and it
+calls an article cut when its body happens to end on the boundary. The column
+is empty on every row a run wrote before 2026-08-28, and empty is not zero:
+reading it as zero would call every one of those articles cut.
+
+**Articles, not rows.** A run writes a row for every item it plans, so the same
+article carries several rows - 1.12 rows per address, measured 2026-08-25. The
+table counts addresses, and where two runs read the same article it keeps the
+run that read the most of it, so the two lengths compared always come off one
+row. The copy says "how many articles", and the count has to mean it.
+
+**What the cut cost is recorded here, not charted.** `hhem_full - hhem` over the
+articles the cap cut is what a lost tail costs in faithfulness. Measured
+2026-08-29 over all 2,683 committed score rows: **22 rows are cut**, and over
+those 22 the delta runs **-0.0381 to +0.1235, mean +0.0039, median 0.0000**. It
+is not on the page and will not be: it is a value between zero and one, which
+the console refuses ([../../concepts/design-system.md](../../concepts/design-system.md)),
+and at n=22 with a median of exactly zero it is not yet a result. The words are
+the part that is publishable, and the table prints them with the same n beside
+them: over those 22 articles the cut removed a median of 1,009 words and at
+most 6,519.
+
+Authority: Jony, 2026-08-29, over Fowler's ordering constraint that this ships
+before the cap moves - the first day at a new cap has to be measured by a
+console that can already see it, or Rule #10 defeats the change.
+
+**Three headings were renamed on the same day, and all three for one reason: a
+heading has to say what is under it.** `Compression` was a subsystem word that
+names neither axis of the chart it sat over, and that chart now also carries the
+cap line - it is `Article length against summary length`, which is the string
+the chart's own accessible name already used. `Charts` on a page of six charts
+reads as "the charts" rather than as the router's output, so it is `Charts drawn
+for articles`. `Runs` sat four headings below `Run health` and neither name said
+which was which; it is `Runs and site size`, which is what its columns are. No
+doc anchor and no test selector read any of the three.
 
 ## The bundle gate is a regression detector, not a performance budget
 

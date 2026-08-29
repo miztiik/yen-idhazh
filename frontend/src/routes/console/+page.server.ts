@@ -5,7 +5,15 @@ import type {
 	StageTimingDay,
 	ThroughputDay
 } from '$lib/charts/series';
-import { modelByDate, modelWork, placeRow } from '$lib/server/model-work';
+import {
+	modelByDate,
+	modelWork,
+	placeRow,
+	sourceCuts,
+	wasCut,
+	SOURCE_CUT_ROWS,
+	SOURCE_CUT_WINDOW_DAYS
+} from '$lib/server/model-work';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
@@ -30,7 +38,7 @@ export type Health = 'green' | 'amber' | 'red';
 
 // The page prints these; the derivation is server-only, so the shape crosses
 // as a type and the ledger reader never reaches a browser bundle.
-export type { ModelDay, ModelRow } from '$lib/server/model-work';
+export type { ModelDay, ModelRow, SourceCut, SourceCuts } from '$lib/server/model-work';
 
 export interface RunSquare {
 	runId: string;
@@ -230,13 +238,39 @@ function health(run: RunRecord, floorPct: number): Health {
 	return 'green';
 }
 
-function describe(date: string, run: RunRecord): string {
+/** What one run did, in the words the square carries for anyone without a mouse.
+ *
+ * The cut count rides here rather than on a figure of its own. Measured
+ * 2026-08-29 over 19 committed runs it is 1 to 12 articles of 160 to 200, and
+ * that swing is which articles the feeds carried that hour - so drawn as a
+ * published number it would read as the cap moving when nothing moved. A run is
+ * where run-level facts already live.
+ */
+function describe(date: string, run: RunRecord, readInPart: number): string {
 	const parts = [`${date} run ${run.n}`, `${run.succeeded} of ${run.planned} succeeded`];
 	if (run.failed > 0) parts.push(`${run.failed} failed`);
 	if (run.skipped > 0) parts.push(`${run.skipped} skipped`);
+	if (readInPart > 0) parts.push(`${readInPart} read only in part`);
 	if (run.sourceListStale) parts.push('source list was stale');
 	if (run.status !== 'completed') parts.push(run.status);
 	return parts.join(', ');
+}
+
+/** Articles each run read only the start of, keyed by the run that read them.
+ *
+ * Counted per address, not per row: a run writes one row per planned item, and
+ * the same article coming round on a later run is the same article.
+ */
+function cutsByRun(rows: Record<string, string>[]): Map<string, number> {
+	const seen = new Map<string, Set<string>>();
+	for (const row of rows) {
+		if (!wasCut(row)) continue;
+		const runId = row.run_id ?? '';
+		const found = seen.get(runId) ?? new Set<string>();
+		found.add(row.url_key ?? row.item_id ?? '');
+		seen.set(runId, found);
+	}
+	return new Map([...seen].map(([runId, keys]) => [runId, keys.size]));
 }
 
 /** The same rule as `FeedHealthRow.failing` in the contract.
@@ -381,6 +415,7 @@ export function load() {
 		.sort((a, b) => a.date.localeCompare(b.date));
 
 	const manifests = loadManifests();
+	const readInPartByRun = cutsByRun(itemRows);
 	// The strip is a time axis, so it reads oldest to newest. The Runs table under
 	// it still reads newest first, which is why this copies rather than reverses:
 	// an in-place reverse would silently turn that table upside down too.
@@ -390,7 +425,7 @@ export function load() {
 			runId: run.runId,
 			n: run.n,
 			health: health(run, floorPct),
-			label: describe(day.date, run)
+			label: describe(day.date, run, readInPartByRun.get(run.runId) ?? 0)
 		}))
 	}));
 
@@ -437,6 +472,15 @@ export function load() {
 		feeds: trouble(results, quarantineAfter),
 		feedsChecked: new Set(results.map((row) => row.feedId)).size,
 		feedRuns: new Set(results.map((row) => row.runId)).size,
+		// Ten rows and the two sentences under them, aggregated here rather than in
+		// the browser. Seven days of the committed ledger is thousands of rows and
+		// this page inlines whatever it is given, so the ten rows cross and the rows
+		// they were made from do not.
+		sourceCuts: sourceCuts(itemRows, {
+			days: SOURCE_CUT_WINDOW_DAYS,
+			minAttempts: console.min_attempts_for_rate,
+			limit: SOURCE_CUT_ROWS
+		}),
 		telemetryRows: publicRows,
 		telemetryMonths: telemetryMonths(),
 		console,
