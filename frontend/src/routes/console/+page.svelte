@@ -253,6 +253,7 @@
 		config={data.console}
 		compressionPoints={data.compression}
 		bands={data.summarizeBands}
+		unplotted={data.unplotted}
 	/>
 
 	<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Feeds that failed</h2>
