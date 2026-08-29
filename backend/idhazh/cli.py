@@ -1994,7 +1994,7 @@ def stage_counters(
 
 
 def stage_harvest(
-    plan: RunPlan,
+    date: str,
     *,
     settings: config.Settings,
     corpus_dir: Path,
@@ -2007,8 +2007,11 @@ def stage_harvest(
     gitignored and travels as a one-day artifact, so a scheduled job with a fresh
     checkout would find an empty directory and harvest nothing, silently, forever.
 
-    It is still a stage that runs alone with a file in and a file out (section 4).
-    What moved is the workflow it is invoked from, not the command.
+    It is still a stage that runs alone with a file in and a file out (section 4),
+    and it reads the items directory rather than the run plan - the directory is
+    the record of what was worked, so the plan is a second artifact that has to be
+    present and answers nothing the files do not. That is also what lets
+    `data_wrangler.py backfill` replay a finished run from its artifacts alone.
 
     The cadence lives in `finetune.harvest_every_days` and is decided here rather
     than in a cron line, because `on.schedule` is parsed before any step runs and
@@ -2018,33 +2021,21 @@ def stage_harvest(
     finetune = settings.app.finetune
     meta = corpus.read_meta(corpus_dir)
     if not force and not corpus.harvest_is_due(
-        meta, date=plan.date, every_days=finetune.harvest_every_days
+        meta, date=date, every_days=finetune.harvest_every_days
     ):
         LOG.info(
             "harvest not due date=%s last=%s every=%s rows=%s",
-            plan.date,
+            date,
             meta.harvested_date,
             finetune.harvest_every_days,
             meta.rows,
         )
         return 0
 
-    items_dir = _run_dir(plan.date) / "items"
-    scored: list[corpus.Scored] = []
-    for payload in _item_payloads(plan, items_dir, require_summary=True):
-        if payload.article is None or payload.summary is None:
-            continue
-        row = (
-            EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8"))
-            if payload.eval_path.exists()
-            else None
-        )
-        scored.append(corpus.Scored(payload.article, payload.summary, row))
-
     written = corpus.harvest(
         corpus_dir,
-        scored,
-        date=plan.date,
+        corpus.scored_from_items(_run_dir(date) / "items"),
+        date=date,
         finetune=finetune,
         prompt_config=settings.app.summarize,
         evaluation=settings.app.evaluation,
@@ -2767,7 +2758,7 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     if args.stage == "harvest":
         stage_harvest(
-            _load_plan(date),
+            date,
             settings=settings,
             corpus_dir=args.corpus_dir,
             force=args.force,

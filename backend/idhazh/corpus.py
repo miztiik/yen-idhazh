@@ -184,6 +184,39 @@ class Scored(NamedTuple):
     row: EvalRow | None
 
 
+def scored_from_items(items_dir: Path) -> list[Scored]:
+    """Every complete item under a run's items directory, in a stable order.
+
+    Recursive, because the same directory arrives in two shapes. A live run has
+    one flat directory; a downloaded artifact set arrives as one subdirectory per
+    shard, and both are the same run. `rglob` reads them identically, the way
+    `evals.evidence.index` already reads a downloaded evidence package.
+
+    The directory is the record of what was worked, so nothing here reads the run
+    plan. That is what lets a backfill replay a finished run from its artifacts
+    alone, months after the plan artifact expired.
+    """
+    found: list[Scored] = []
+    for path in sorted(items_dir.rglob("*.article.json")):
+        item_id = path.name.removesuffix(".article.json")
+        summary_path = path.with_name(f"{item_id}.summary.json")
+        if not summary_path.is_file():
+            continue
+        eval_path = path.with_name(f"{item_id}.eval.json")
+        found.append(
+            Scored(
+                article=Article.from_json(path.read_text(encoding="utf-8")),
+                summary=Summary.from_json(summary_path.read_text(encoding="utf-8")),
+                row=(
+                    EvalRow.from_json(eval_path.read_text(encoding="utf-8"))
+                    if eval_path.is_file()
+                    else None
+                ),
+            )
+        )
+    return found
+
+
 def _target(
     summary: Summary,
     *,
@@ -240,6 +273,11 @@ def harvest_rows(
 
     An item is dropped rather than degraded here, because a corpus is a set of
     examples and a bad example is worse than a missing one.
+
+    A row is dated by its own eval row rather than by the `date` argument, which
+    is only the fallback for an item that was never scored. That is what lets one
+    backfill replay several runs at once and still file every row under the day
+    it was really produced.
     """
     harvested: list[CorpusRow] = []
     for scored in items:
@@ -265,7 +303,7 @@ def harvest_rows(
                     ChatTurn(role=ChatRole.ASSISTANT, content=target),
                 ],
                 url_key=article.url_key,
-                date=date,
+                date=scored.row.date,
                 model_id=summary.model_id,
                 vertical=article.vertical,
             )
