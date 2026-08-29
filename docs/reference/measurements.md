@@ -4380,6 +4380,103 @@ and whichever engine wins owns the readout - so a fix to the current component
 would be written twice. Jony's ruling that a readout is pinned to the top of the
 plot and never to the pointer is not what is wrong here and stands.
 
+## What the design-system reset cost, and what a page uses of the screen (2026-08-29)
+
+Rule #10 had been applied to everything the runner touches and to nothing the
+reader sees, which is part of why the reset was needed. These are the numbers
+that did not exist.
+
+**Hardware and method.** One Windows machine, node 24, Chromium via Playwright,
+commit at the close of the twelve-row reset. First-load JS is the sum of `gzip -9`
+over each module in a route's `modulepreload` list, taken as the HEAVIEST of five
+builds of identical source rather than the mean - a mean fires on half of all
+builds. The spread across those five was 13 to 15 B per route, against a 64 B
+tolerance.
+
+### How much of the screen a page uses
+
+Measured before the reset and after, same pages, same browser.
+
+| Viewport | Before | After |
+| --- | --- | --- |
+| 1536 px | 40.6 percent | 83.3 percent |
+| 1209 px | 51.6 percent | 99.0 percent |
+| 1024 px | 60.9 percent | 98.8 percent |
+| 614 px | 91.5 percent | 98.0 percent |
+| 312 px | 83.3 percent | 96.2 percent |
+
+The measure holds at 68ch from 819px upward, so the line length a reader gets is
+unchanged - what moved is everything that is not prose. The single
+`max-w-2xl` at 672px on the layout was the whole cause, and it was the only
+`max-w-*` in the frontend.
+
+### First-load JS per route, at the close
+
+| Route | Bytes |
+| --- | --- |
+| `/` | 52,474 |
+| `/<date>/` | 51,707 |
+| `/<date>/<topic>/` | 51,801 |
+| `/archive/` | 53,109 |
+| `/console/` | 76,716 |
+| `/evals/` | 43,687 |
+| `/404` | 42,736 |
+
+The chart engine is NOT in any of these. It is a lazy chunk of 153,204 B
+gzipped, fetched only when a chart hydrates, and no page preloads it -
+`frontend/tests/charts.spec.ts` fails the build if one ever does. Importing the
+same package whole instead of registering only the chart types in use read
+345,959 B for the same one chart, so the registration list is worth 56 percent
+of that download.
+
+### The console frame
+
+| What | Before | After |
+| --- | --- | --- |
+| Containers that must scroll sideways at 1440px | 7 | 0 |
+| Narrowest chart | 164 px | 380 px |
+| Run-strip day column inside a 1,217px frame | 16 px | grows to 34 px |
+| Page height | 6,562 px | 8,794 px |
+
+The height went UP, and the reason is that the same plan added a funnel, a KPI
+strip, a growth waterfall and a failure-mix chart to that page. A row cannot
+both add the vocabulary and remove the height it costs. The seven scrollbars
+were gone before the console row started - the fluid frame removed them.
+
+### Days to the 1 GB Pages ceiling, re-derived
+
+Built site on 2026-08-29: **143,717,288 B**, 137.1 MB, leaving 886.9 MB.
+
+Per published day, route tree plus staged payload, over the nine days in the
+tree:
+
+| Date | Items | Bytes |
+| --- | --- | --- |
+| 2026-08-21 | 4 | 85,879 |
+| 2026-08-22 | 10 | 401,722 |
+| 2026-08-23 | 147 | 3,901,093 |
+| 2026-08-24 | 731 | 17,258,646 |
+| 2026-08-25 | 724 | 17,400,157 |
+| 2026-08-26 | 621 | 15,201,991 |
+| 2026-08-27 | 334 | 7,703,972 |
+| 2026-08-28 | 117 | 2,973,406 |
+| 2026-08-29 | 212 | 4,982,587 |
+
+**Bytes per day is the wrong unit and bytes per item is the right one.** Over
+the seven mature days (100 items or more) the day cost runs 2.97 MB to 17.4 MB,
+a factor of 5.9 - because the item count runs 117 to 731. Divide it out and the
+per-item cost is **24,378 B, spread 23,066 to 26,538**, a 14 percent range. The
+day rate is a function of the item ceiling, which is a knob in `config/`; the
+per-item cost is a property of the site.
+
+At the current mix the mean mature day is 9,917,407 B, which puts the cap at
+about **94 published days from 2026-08-29, near 2026-11-30**. That is later than
+the 2026-10-22 recorded on 2026-08-27, and the difference is not this plan
+making the site smaller - it is the two most recent days carrying 117 and 212
+items where the days behind them carried 731. **A cap date computed from a day
+rate moves when the item ceiling moves.** Anyone re-deriving it should divide
+the per-item cost by the ceiling in force rather than averaging whatever days
+happen to be on disk.
 ## Still unmeasured
 
 Each line names the measurement that would settle it. Nothing here may be cited
