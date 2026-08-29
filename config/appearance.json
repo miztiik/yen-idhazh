@@ -27,6 +27,12 @@
     "min_window_days": 7,
     "pan_days": 7,
     "today_anchor": "right",
+    "window_presets": [
+      7,
+      14,
+      30,
+      90
+    ],
     "zoom_factor": 1.5
   },
   "digest": {

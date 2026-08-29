@@ -344,6 +344,20 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-29T22:00",
+            change=(
+                "console.window_presets added, and console.default_window_days must "
+                "now be one of its members. The shape is `ConsoleConfig`, which this "
+                "document and `AppConfig` share, so both schemas moved together."
+            ),
+            why=(
+                "The console gained one time-window control that governs every "
+                "windowed section on it, and a control needs the list of spans it "
+                "offers. Additive with a default, so an appearance file written "
+                "before today still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-29",
             change=(
                 "New contract. `digest`, `console` and `assist` are the shapes "
