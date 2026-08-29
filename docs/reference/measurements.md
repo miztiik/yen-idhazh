@@ -3573,25 +3573,27 @@ added 6 re-scored rows, not 2,781.
 So the first run at the new cap appends what any run appends: 137 rows at the
 median, 149 at the most, over the 23 runs on record.
 
-**Measured by `npm run bundle-gate` on this checkout, 2026-08-29, twice.**
-Merging `origin/main` added 55 scored rows to `state/scores.csv` and changed
-nothing else `/console/` renders, so the two builds are a paired measurement of
-what a row costs:
+**Measured by `npm run bundle-gate` on this checkout, 2026-08-29, three times.**
+The branch merged `origin/main` twice while the change was being written, so the
+builds are a paired measurement of what the ledger costs the page:
 
-| Build | `/console/` prerendered HTML | Spare under the 301,580 ceiling |
-| --- | ---: | ---: |
-| at `e05ef99` | 170,732 B | 130,848 B |
-| at `4f53690`, 55 rows later | 171,471 B | 130,109 B |
+| Build | What landed between | `/console/` prerendered HTML | Spare under the 301,580 ceiling |
+| --- | --- | ---: | ---: |
+| `e05ef99` | - | 170,732 B | 130,848 B |
+| `4f53690` | 55 scored rows, nothing else `/console/` renders | 171,471 B | 130,109 B |
+| `d782a9d` | the 2026-08-29 day published | 176,576 B | 125,004 B |
 
 **739 bytes for 55 rows is 13.4 gzipped bytes a scored item**, not the 60 the
 ceiling's headroom was sized with. A median run of 137 rows costs about **1,840
-bytes: 1.4 percent of the spare, and about 70 runs of margin** - roughly two and
-a half weeks at the four runs a day the schedule takes. **The cap change
-contributes none of those bytes**, because it adds no rows of its own.
+bytes: 1.4 percent of the spare, and about 68 runs of margin** at the 125,004
+bytes left. **The cap change contributes none of those bytes**, because it adds
+no rows of its own.
 
-**That is one paired observation and not a rate.** Rows compress against their
+**Two observations, and neither is a rate.** Rows compress against their
 neighbours, so 55 similar rows appended to 2,736 are close to the cheapest 55
-that file will ever take. Re-measure before spending the margin it suggests.
+that file will ever take. The 5,105 bytes the published day cost is one day, and
+that day was still publishing when it was measured. Re-measure before spending
+the margin either suggests.
 
 That margin is the reason this was checked before the cap moved rather than
 after. `digest.yml` runs `bundle-gate` in its `assemble` job **before** it
