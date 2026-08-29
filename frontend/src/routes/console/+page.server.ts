@@ -6,7 +6,7 @@ import type {
 } from '$lib/charts/series';
 import { datesIn, failureSeries } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
-import { chartFunnel } from '$lib/charts/chart-funnel';
+import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import {
 	failureMix,
 	publishedTrend,
@@ -467,7 +467,7 @@ export async function load() {
 		publicTelemetry
 	);
 	const charts = chartDays(manifests, publishedCharts());
-	const funnel = chartFunnel(charts);
+	const flow = chartFlow(charts);
 	// The window the page opens on, drawn here so the prerendered card and the
 	// control above it cannot disagree at first paint. The browser recomputes the
 	// same two cards from the same rows when the operator moves the control.
@@ -536,12 +536,15 @@ export async function load() {
 		// Drawn here, so the shape is on the page before any script runs and stays
 		// there if none ever does. Colour leaves as a custom-property reference, so
 		// both themes work with no JavaScript at all.
-		funnelSvg: funnel.empty
+		flowSvg: flow.empty
 			? null
-			: await renderToSvg(funnel.option, {
+			: await renderToSvg(flow.option, {
 					width: consoleConfig().chart_width,
-					height: 260
+					height: FLOW_HEIGHT
 				}),
+		// Printed where the diagram would have been. A panel that is simply absent
+		// says nothing about which of the two nothings happened.
+		flowNote: flow.reason,
 		totalRows: rows.length,
 		itemHealthRows: itemRows.length,
 		grid,
