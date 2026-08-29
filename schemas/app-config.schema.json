@@ -80,6 +80,13 @@
           "title": "Front Page Bonus",
           "type": "number"
         },
+        "max_age_hours": {
+          "default": 24.0,
+          "description": "How old a story may be and still be added. A hard gate, applied to the date we believe rather than the date the feed claimed. An article we could not date at all is not too old - first sight is its age, so it gets the day we found it and no more.",
+          "exclusiveMinimum": 0.0,
+          "title": "Max Age Hours",
+          "type": "number"
+        },
         "max_future_hours": {
           "default": 6.0,
           "description": "A publish date further ahead than this is not believed and the item falls back to first sight. Feeds that stamp tomorrow would otherwise take the top slot every single day.",
@@ -109,7 +116,7 @@
         },
         "recency_weight": {
           "default": 0.6,
-          "description": "How much freshness may move a score. A bonus, never a filter: a strong older item still outranks a weak new one, which a hard age cutoff cannot do.",
+          "description": "How much freshness may move a score, inside the window max_age_hours allows. It orders what is already fresh enough to publish; it is max_age_hours, not this, that decides what is too old to add at all.",
           "minimum": 0.0,
           "title": "Recency Weight",
           "type": "number"
@@ -1384,6 +1391,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added collect.max_age_hours. collect.recency_weight's description now says it orders inside that window rather than deciding admission.",
+      "version": "2026-08-30",
+      "why": "Age was a bonus and never a gate, so nothing had a lower bound. Measured 2026-08-30 over the 2,900 items published between 2026-08-22 and 2026-08-29, aged at the moment their own run planned them: the median is 5.5 hours and the 90th percentile is 35.7 days. The oldest story the digest has published was 6,474 days old - a stock note from December 2008 - and 826 items (28.5 percent) were over a day old when they were added. They came from research-lab and institution feeds that serve a whole back catalogue, and the tier weighting scores an undated institution post at 1.0 against 0.64 for a three-day-old trade-press story, so the archive won. The argument for keeping age soft was that a cutoff wastes a slot on a quiet day. There are no quiet days: every run since 2026-08-25 has hit its ceiling, so each old item displaced a fresher one. Additive with a default, so an older config still validates (section 11)."
+    },
+    {
       "change": "console.window_presets added, and console.default_window_days must now be one of its members.",
       "version": "2026-08-29T23:00",
       "why": "The console had no way to say how many days it was showing, so every section picked its own span and one of them hard-coded seven days in the frontend. One control now sets one window for the whole page, and a control needs a list of the spans it offers. Four presets rather than a free number: a wider window fetches more month files, so every value is a distinct transfer cost and most of the values between these four cannot be told apart on the page. Additive with a default, so an older config still validates - the committed 30 is a member of the default list (section 11)."
@@ -1659,7 +1671,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-29T23:00",
+      "default": "2026-08-30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1673,5 +1685,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-29T23:00"
+  "version": "2026-08-30"
 }

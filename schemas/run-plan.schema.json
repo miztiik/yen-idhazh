@@ -159,6 +159,13 @@
           "minimum": 0,
           "title": "Planned",
           "type": "integer"
+        },
+        "too_old": {
+          "default": 0,
+          "description": "Of those considered, how many were past collect.max_age_hours. A desk whose feeds serve a back catalogue thins for this reason and no other, and a thin desk that cannot say why reads as a broken run.",
+          "minimum": 0,
+          "title": "Too Old",
+          "type": "integer"
         }
       },
       "required": [
@@ -175,6 +182,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added too_old to each vertical's plan summary.",
+      "version": "2026-08-30",
+      "why": "collect.max_age_hours now refuses a story older than a day, and the verticals do not lose the same amount. Measured 2026-08-30 over the 2,900 items published from 2026-08-22 to 2026-08-29: a one-day gate keeps 95.7 percent of world and 32.4 percent of ai, because the ai desk is largely fed by research-lab blogs that serve a back catalogue. Without this count a desk that halves overnight looks like a broken feed rather than a working gate. Additive with a default, so a plan an earlier run wrote still validates (section 11)."
+    },
     {
       "change": "Added source_form to each planned item.",
       "version": "2026-08-23T18:48",
@@ -246,7 +258,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2026-08-23T18:48",
+      "default": "2026-08-30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -266,5 +278,5 @@
   ],
   "title": "RunPlan",
   "type": "object",
-  "version": "2026-08-23T18:48"
+  "version": "2026-08-30"
 }
