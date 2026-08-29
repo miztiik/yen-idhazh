@@ -295,11 +295,12 @@ is in flight.
   - `frontend/src/lib/charts/engine.ts` (new: the adapter - reads the tokens, renders server-side, hydrates)
   - `frontend/src/lib/charts/theme.ts` (new: computed custom properties -> the engine's theme object)
   - `frontend/src/lib/components/` - one converted chart
+  - `frontend/src/lib/components/ThroughputTrend.svelte` - the caption that grows with the day
   - `frontend/bundle-baseline.json`
   - `frontend/tests/charts.spec.ts` (new)
   - `docs/concepts/design-system.md`
-- **Acceptance gates:** The console renders complete with JavaScript disabled; a pointer, a tap and an arrow key each produce a readout naming the series, the value and its unit **in words**; every colour resolves from `tokens.css` in both themes with no hardcoded hex in any chart option; the reading routes import none of it, asserted by the bundle gate's per-route module list; the measured `/console/` delta is recorded.
-- **Oracle:** Two halves that cannot both be satisfied by a stub. **(a)** The prerendered `/console/` HTML contains the chart's `<svg>` marks before any script runs - fetched with JavaScript off and asserted on the raw HTML, not the rendered DOM. **(b)** Every route other than `/console/` has zero engine modules in the bundle gate's per-route list, so a stray top-level import fails the build rather than quietly shipping 188 KB to a reader.
+- **Acceptance gates:** The console renders complete with JavaScript disabled; a pointer, a tap and an arrow key each produce a readout naming the series, the value and its unit **in words**; every colour resolves from `tokens.css` in both themes with no hardcoded hex in any chart option; the reading routes import none of it, asserted by the bundle gate's per-route module list; the measured `/console/` delta is recorded; and **no readout box covers more than a third of the plot it sits on**, the engine's own tooltip included, measured on the rendered element rather than on the string that fills it.
+- **Oracle:** Three halves, none of which a stub satisfies. **(a)** The prerendered `/console/` HTML contains the chart's `<svg>` marks before any script runs - fetched with JavaScript off and asserted on the raw HTML, not the rendered DOM. **(b)** Every route other than `/console/` has zero engine modules in the bundle gate's per-route list, so a stray top-level import fails the build rather than quietly shipping 188 KB to a reader. **(c)** A browser test opens the readout on the worst day the fixture holds - the day with the most runs, because that is the day the copy is longest - reads the readout element's own bounding box, and asserts its height is at most a third of `console.chart_height`. It asserts the box was found first, so it cannot pass by measuring nothing.
 
 **Measured 2026-08-29, this tree, this bundler, gzipped, esbuild bundle + gzip -9 - the numbers the CHOICE was made against:**
 
@@ -336,6 +337,27 @@ The first-load figure is the one that decides affordability, and it is 1,854 B,
 not 153 KB: the engine is a dynamic import fetched only when a chart hydrates.
 Roughly 257 KB and 3.7x, predicted above, were both wrong.
 
+**A readout may not cover the chart it explains, and one does.** Measured
+2026-08-29 and recorded in `docs/reference/measurements.md` under "How much of a
+plot a chart readout covers": `ThroughputTrend`'s readout box stands **88 to 121
+px over a 220 px plot, which is 40 to 55 percent of the chart it explains**.
+`CompressionScatter` draws the same box, from the same markup, in the same
+place, with two short lines - and covers about a quarter.
+
+That pair is what makes this a copy problem and not a placement problem.
+`ThroughputTrend`'s caption appends one clause per run of the day - 171
+characters at the median, 221 on the three days that ran five times - and
+nothing bounds how many times the pipeline runs in a day. So the limit goes on
+the rendered box, where it binds whatever draws it, and the run medians come out
+of the sentence.
+
+A third of a 220 px plot is 73 px, which is about three lines at the console's
+readout type size. The quarter `CompressionScatter` already measures clears it;
+the caption fails it even at its 88 px floor. **Whether dropping the run medians
+alone clears a third is not measured** - the two shares are, the effect of the
+cut is not, so this row takes that measurement and records it rather than
+predicting it (Rule #10).
+
 - **Decisions:**
 
   | # | Decision | Authority |
@@ -347,6 +369,9 @@ Roughly 257 KB and 3.7x, predicted above, were both wrong.
   | 5 | Hover, tap and keyboard readouts are the engine's for a chart the engine draws. **Corrected 2026-08-29 while building:** this row claimed the engine buys the readout. It does not - `frontend/src/lib/charts/frame.ts` already carries `pointerReadout`, covering mouse, pen, touch and keyboard with nearest-by-x hit testing, and two of the four existing charts were simply never wired to it. The engine earns its place on chart types the surface cannot draw today. Wiring the two unwired charts is Row #8's job and needs no dependency. | Susan, owner |
   | 6 | The earlier doctrine line about tooltips carrying critical information is narrowed rather than struck: a readout may not be the ONLY place a fact appears, and every value it shows is also derivable from the axis. | Jony |
   | 7 | **Existing hand-written charts are not ported.** Each has a browser-test suite bolted to its markup - `StageTimings.svelte` alone has about 15 assertions reading `data-decade-line`, `data-stage-mark` and `data-stage-zero`, two of which check geometry an engine does not emit. Porting buys the operator nothing they can see and risks losing reasoning those charts encode. The engine is how NEW charts are made; a hand-written one ports when it next needs real change. Strangler-fig, not big-bang. | Fowler, 2026-08-29 |
+  | 8 | **The readout limit is a height against a height, never a character count.** The box wraps at the card's width, so one sentence is a different number of lines in a different panel. One measured box height against the plot height binds the hand-written charts and the engine's own tooltip alike, and it does not have to be restated when the engine changes. | Fowler, Jony, 2026-08-29 |
+  | 9 | **Run medians leave the readout.** A caption that appends one clause per run has no bound, and how many times the pipeline ran is a property of the day rather than a choice anybody made. The readout names the day's own band and stops. A day's runs are already accounted for in `Runs and site size`, and a per-run number belongs beside them if it belongs anywhere. | Editor, Jony, 2026-08-29 |
+  | 10 | Jony's ruling that a readout is pinned to the top of the plot and never to the pointer **stands, unchanged**. It is not what is wrong here: the chart that passes and the chart that fails use the identical pinned box. | Jony, 2026-08-25 |
 
 - **Rejected alternatives:**
 
@@ -358,6 +383,9 @@ Roughly 257 KB and 3.7x, predicted above, were both wrong.
   | 4 | The engine on the reading routes too | A charting engine on a reading page is a runtime dependency for nothing: an item's chart is already a build-time asset. | Carmack, Jony |
   | 5 | A CDN copy of the engine | The HTTP cache is partitioned per site so the shared-cache argument is dead, and `script-src` is `self` only. | Carmack |
   | 6 | Porting `StageTimings` as the proving chart | Attempted and reverted the same day. It is the chart with no readout, so it looked like the best demonstration, until the test suite bolted to its hand-drawn markup made the cost clear. The funnel was built instead: new ground, no test rewritten, and it replaced a four-column table plus a 90-word paragraph with a shape. | Fowler, 2026-08-29 |
+  | 7 | A character budget on the caption string | It measures the wrong thing. 171 characters is four lines in one panel and six in another, because the box wraps at the card's width - and it says nothing at all about a readout an engine draws. | Fowler |
+  | 8 | Moving the readout to the pointer, or below the plot | The position is not the fault. `CompressionScatter` uses the identical pinned box and covers about a quarter, so moving a box that is too big only puts it over something else. | Jony |
+  | 9 | Keeping the run medians and setting them smaller | It buys one line and spends legibility on the surface a person reads closest. The medians are a table's work, not a readout's. | Susan |
 
 ---
 

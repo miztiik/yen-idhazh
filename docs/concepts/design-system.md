@@ -268,6 +268,30 @@ reads with, so the count is zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
 is already being printed.
 
+### An axis title and a column header take one form
+
+`Article length, words`. **Sentence case, a comma, the unit in lower case, and
+no full stop.** `Sources cut short most often` shipped `Longest article, words`
+first, and the compression chart's two axes followed it on 2026-08-29. Three
+labels naming a quantity and its unit the same way is a form, so it is written
+down here rather than copied a fourth time by eye.
+
+- **The quantity, then the unit.** `Summary length, words` - never `Summary
+  length (words)` and never `words`. A bracket reads as a footnote, and a label
+  a reader meets before any of the numbers is not a footnote.
+- **An axis title may not be a ledger column name.** `source words` is how the
+  file spells `source_word_count` and `source_words`. A term from a subsystem is
+  not a term for a user (`CLAUDE.md` section 0b), and this is the rule two
+  bullets above - no ledger column name on screen - applied to the label rather
+  than to the cell.
+- **It says what the heading says.** Until 2026-08-29 the compression chart
+  called one quantity `Article length` in its heading and `source words` on its
+  axis, on one screen. Two names for one thing makes a reader work out that they
+  are the same thing before they can read the chart.
+- **A label that needs no unit is just the noun.** `Runs`, `Failed`, `Cut
+  short`. The comma form is for a quantity whose number means nothing without
+  the unit, and adding one where none is needed is noise.
+
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
 
