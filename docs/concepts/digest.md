@@ -99,6 +99,8 @@ The note used to return on the first limit it found, so an item that was both an
 
 It has never fired. Nothing in extract exempts an abstract from the cap - the cut runs on every body - but the one feed that declares the abstract form produced 28 items across `state/item-health/2026-08.csv` on 2026-08-29 and the longest body among them was 330 words, against a cut point of 1,923. Being unreachable today is not a reason to keep a shape that drops a fact.
 
+So the fixture reaches it instead. The canary day the browser suite runs against publishes one item that is both an abstract and cut, and the suite reads the joined sentence back off the page as a single paragraph. Before that the pair had a unit test and nothing that rendered it: measured 2026-08-29 over every committed `frontend/public/digest/**/digest.json`, no published item carries an abstract note at all, so the two sentences a reader would meet were two sentences no browser had ever drawn. The share the fixture prints is 75 percent, which is 2,100 words read of 2,800 - a number, because a note that says "the first 100 percent" is worse than one that states no scale.
+
 ## See also
 
 - [../architecture/publishing/layout.md](../architecture/publishing/layout.md) - where these items are written, the dated routes a reader walks, and retention.

@@ -38,18 +38,21 @@ from idhazh.assemble import (
     build_embeddings,
     day_dir,
     month_of,
+    reader_note,
     rebuild_search_index,
     to_digest_visual,
     write_atomic,
 )
 from idhazh.contracts.app_config import EvaluationConfig, ModelRef
+from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.digest_day import DigestDay, DigestItem, DigestRunRef, DigestVerticalRef
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.route import Route, SpecFormat, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
-from idhazh.contracts.taxonomy import SourceKind
+from idhazh.contracts.sources import SourceForm
+from idhazh.contracts.taxonomy import SourceKind, SourceTier
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
@@ -104,6 +107,18 @@ DIAGRAM_SPEC = (
 #: item has to pass to count as cut. A real run derives this from the token cap;
 #: a fixture day states it.
 SEEN_WORD_CAP: Final = 2100
+
+#: Where that cut fell, in tokens. The article contract makes a cut name its own
+#: cap, and extract counts 1.3 tokens to a word.
+SEEN_TOKEN_CAP: Final = round(SEEN_WORD_CAP * 1.3)
+
+#: The one published item whose feed declares an abstract, and which the cap also
+#: cut. `assemble.reader_note` joins a sentence for each limit, and that pair had
+#: a unit test and nothing that rendered it: measured 2026-08-29 over every
+#: committed `frontend/public/digest/**/digest.json`, no published item carries
+#: an abstract note at all. So the two sentences a reader would meet were the two
+#: sentences no browser could read back.
+ABSTRACT_AT: Final = 6
 
 #: The places `EvalRow` rounds `hhem_delta` to before it re-checks it on read.
 _DELTA_PLACES: Final = 6
@@ -204,7 +219,8 @@ SCORED: Final[tuple[_Measured, ...]] = (
     # a diamond rather than a dot. It sits in the second-widest target zone,
     # which the ladder only gained a ceiling for when the fifth rung landed on
     # 2026-08-29 - before that this row was 4200 words and the zone above 2000
-    # ran to the edge of the plot.
+    # ran to the edge of the plot. It is also the day's abstract, so it is the
+    # one item whose note has to carry two source limits at once.
     _Measured(
         source_words=2800, summary_words=205,
         hhem=0.91, hhem_full=0.78, coverage=0.57, score_ms=610,
@@ -255,12 +271,54 @@ def verdict_for(measured: _Measured, evaluation: EvaluationConfig) -> score.Verd
     )
 
 
+def article_for(index: int, canary: dict[str, object], measured: _Measured) -> Article:
+    """The article behind one published item, as far as its reader note reads it.
+
+    It exists so `assemble.reader_note` composes the note. A canary builder that
+    spelled the sentence itself could drift from the sentence a reader gets while
+    the browser suite stayed green, which is the defect this fixture is for.
+
+    The lengths are the ledger's own, through the same two functions: the model
+    saw `seen_words`, and the length before the cut is recorded only where the
+    fixture says the day has one.
+    """
+    url = str(canary["source_url"])
+    cut = was_cut(measured)
+    return Article(
+        version=Article.schema_version(),
+        item_id=f"ai-{index + 1:02d}",
+        url_key=derive_url_key(url),
+        source_url=url,
+        canonical_url=url,
+        source_id="canary",
+        tier=SourceTier.INSTITUTION,
+        source_form=SourceForm.ABSTRACT if index == ABSTRACT_AT else SourceForm.ARTICLE,
+        vertical="ai",
+        rank_score=0.0,
+        title=str(canary["raw_title"]),
+        text=str(canary["raw_text"]),
+        word_count=seen_words(measured),
+        source_word_count=measured.source_words if measured.full_length_known else None,
+        truncated=cut,
+        truncated_at_tokens=SEEN_TOKEN_CAP if cut else None,
+        fetched_at=f"{DATE}T05:00:00Z",
+        status=ArticleStatus.OK,
+        extractor_version="canary",
+        sanitizer_version="canary",
+    )
+
+
 def to_item(
-    index: int, canary: dict[str, object], run_n: int, verdict: score.Verdict
+    index: int,
+    canary: dict[str, object],
+    measured: _Measured,
+    run_n: int,
+    verdict: score.Verdict,
 ) -> DigestItem:
     raw_text = str(canary["raw_text"])
+    source = article_for(index, canary, measured)
     return DigestItem(
-        item_id=f"ai-{index + 1:02d}",
+        item_id=source.item_id,
         vertical="ai",
         title=str(canary["raw_title"]),
         source_url=str(canary["source_url"]),
@@ -271,6 +329,9 @@ def to_item(
         key_points=[line for line in raw_text.splitlines() if line.strip()][:3] or ["-"],
         band=verdict.band,
         band_reason=verdict.reason,
+        source_form=source.source_form,
+        reader_note=reader_note(source),
+        truncated=source.truncated,
         introduced_by_run=run_n,
     )
 
@@ -316,7 +377,7 @@ def published_items(
     the browser gets.
     """
     return [
-        to_item(index, canary, 1, verdict_for(measured, evaluation))
+        to_item(index, canary, measured, 1, verdict_for(measured, evaluation))
         for index, (canary, measured) in enumerate(zip(canaries(directory), SCORED, strict=True))
     ]
 
