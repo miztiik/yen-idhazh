@@ -65,7 +65,7 @@ export interface FeedTrouble {
 	feedId: string;
 	attempts: number;
 	failures: number;
-	lastOutcome: string;
+	lastResult: string;
 	lastDetail: string;
 	lastDate: string;
 	nearQuarantine: boolean;
@@ -298,6 +298,18 @@ function failing(row: FeedResult): boolean {
 	return FAILING_OUTCOMES.has(row.outcome);
 }
 
+/** What to print in the last-result cell.
+ *
+ * The ledger's own word for a feed that answered 200 with no entries is `ok`,
+ * because that is what the fetch did. Printing it puts `ok` on the same row as
+ * a count of fourteen failures, and the eye takes the word over the number.
+ * The row has to say which of the two it means.
+ */
+function resultLabel(row: FeedResult): string {
+	if (row.outcome === 'ok' && row.items === 0) return 'answered with nothing';
+	return row.outcome;
+}
+
 /** Every feed that failed at least once, worst first.
  *
  * A feed with a clean record is not listed. The operator came here to find what
@@ -315,12 +327,18 @@ function trouble(rows: FeedResult[], quarantineAfter: number): FeedTrouble[] {
 	for (const [feedId, group] of byFeed) {
 		const failures = group.filter(failing);
 		if (failures.length === 0) continue;
-		const newest = [...group].sort((a, b) => a.date.localeCompare(b.date)).at(-1) as FeedResult;
+		// Date alone does not order five runs of one day, and a stable sort then
+		// makes "last result" whichever row the shard happened to carry last. The
+		// run id breaks the tie, so the cell means the newest read and not an
+		// arbitrary one.
+		const newest = [...group]
+			.sort((a, b) => a.date.localeCompare(b.date) || a.runId.localeCompare(b.runId))
+			.at(-1) as FeedResult;
 		found.push({
 			feedId,
 			attempts: group.length,
 			failures: failures.length,
-			lastOutcome: newest.outcome,
+			lastResult: resultLabel(newest),
 			lastDetail: newest.detail,
 			lastDate: newest.date,
 			nearQuarantine: failures.length >= quarantineAfter
