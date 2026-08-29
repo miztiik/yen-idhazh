@@ -311,6 +311,32 @@ def stage_plan(
         len(candidates),
         len(entity_terms),
     )
+    # A theme is read from the headline for the same reason, and only the lenses
+    # config gives a weight to are asked. One story takes the largest weight it
+    # earned: two themes in one headline is not twice the story.
+    lens_weights = settings.taxonomy.lens_weights()
+    lens_terms = settings.taxonomy.lens_terms()
+    lens_bonuses = {
+        candidate.url_key: bonus
+        for candidate in candidates
+        if (
+            bonus := max(
+                (
+                    lens_weights[name]
+                    for name in tag.tags(
+                        {name: lens_terms[name] for name in lens_weights}, candidate.title
+                    )
+                ),
+                default=0.0,
+            )
+        )
+    }
+    LOG.info(
+        "themes matched candidates=%s of %s lenses=%s",
+        len(lens_bonuses),
+        len(candidates),
+        sorted(lens_weights),
+    )
     verticals = []
     items: list[PlannedItem] = []
     for vertical in settings.taxonomy.verticals:
@@ -326,6 +352,7 @@ def stage_plan(
             settled_today=settled_today,
             watchlist_keys=watchlist_keys,
             front_page_keys=frozenset(front_page),
+            lens_bonuses=lens_bonuses,
         )
         verticals.append(summary)
         if cap is not None and len(planned) > cap:

@@ -369,7 +369,10 @@
         "china",
         "ai-roi",
         "markets",
-        "cyber"
+        "cyber",
+        "war",
+        "trade",
+        "chips"
       ],
       "title": "LensId",
       "type": "string"

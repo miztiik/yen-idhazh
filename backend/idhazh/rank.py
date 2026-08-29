@@ -165,14 +165,19 @@ def score(
     config: CollectConfig,
     watchlist_hit: bool,
     on_front_page: bool,
+    lens_bonus: float = 0.0,
     appeared: str | None,
     now: str,
 ) -> float:
-    """Authority times reach, plus the three bonuses.
+    """Authority times reach, plus the bonuses.
 
     Authority is the best-trusted source that carried the story, not the
     average: one institution saying it makes it true regardless of how many
     aggregators repeated it.
+
+    A lens bonus is the weight of one lens, never the sum of several. Two
+    themes in one headline is not twice the story, and summing would let a
+    keyword list outweigh the fact that three independent feeds carried it.
     """
     best = max(authority(candidate, config) for candidate in carried)
     reach = 1.0 + config.repetition_weight * (len(carried) - 1)
@@ -181,6 +186,7 @@ def score(
         total += config.watchlist_bonus
     if on_front_page:
         total += config.front_page_bonus
+    total += lens_bonus
     total += recency_bonus(appeared, now=now, config=config)
     return round(total, 6)
 
@@ -195,6 +201,7 @@ class Ranked:
     carried_by: int
     watchlist_hit: bool
     on_front_page: bool
+    lens_bonus: float = 0.0
 
 
 def _ordered(scored: list[Ranked]) -> list[Ranked]:
@@ -236,6 +243,7 @@ def plan_vertical(
     settled_today: frozenset[str] = frozenset(),
     watchlist_keys: frozenset[str] = frozenset(),
     front_page_keys: frozenset[str] = frozenset(),
+    lens_bonuses: Mapping[str, float] | None = None,
 ) -> tuple[VerticalPlan, list[PlannedItem]]:
     """Rank one vertical's candidates and take what its feeds actually offered.
 
@@ -258,10 +266,16 @@ def plan_vertical(
     `considered` still says what the feeds offered and `too_old` says how much
     of it was a back catalogue.
 
+    `lens_bonuses` is a theme's weight per address, matched on the headline
+    before this is called - the body has not been fetched yet. One story takes
+    the largest weight it earned and never the sum: two themes in one headline
+    is not twice the story.
+
     `published_at` on the planned item is the time we believe, not the time the
     feed claimed. A date rejected as impossible must not reach a reader either.
     """
     sightings = first_seen or {}
+    themes = lens_bonuses or {}
     dropped = already_published | settled_today
     grouped = {
         url_key: carried
@@ -294,6 +308,7 @@ def plan_vertical(
         if too_old(appeared, now=now, config=config):
             stale += 1
             continue
+        theme = themes.get(url_key, 0.0)
         scored.append(
             Ranked(
                 score=score(
@@ -301,6 +316,7 @@ def plan_vertical(
                     config=config,
                     watchlist_hit=watchlist_hit,
                     on_front_page=on_front_page,
+                    lens_bonus=theme,
                     appeared=appeared,
                     now=now,
                 ),
@@ -309,6 +325,7 @@ def plan_vertical(
                 carried_by=len(carried),
                 watchlist_hit=watchlist_hit,
                 on_front_page=on_front_page,
+                lens_bonus=theme,
             )
         )
 
