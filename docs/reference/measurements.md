@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -3729,6 +3729,133 @@ throughput. The console reads neither. So the swing above can be observed and
 cannot yet be attributed. A CPU model on the run manifest is what would change
 that, and it has not been built.
 
+## Which way the grader's length bias runs
+
+**Measured 2026-08-29** on an i7-1265U laptop (10 cores, 12 logical, 31.8 GB
+RAM, Windows 11, Python 3.14.2, torch 2.13.0 CPU, transformers 4.57.6), over the
+**117** (premise, summary) pairs the production run of 2026-08-28 actually
+scored - run `33179908136`, all four `evidence-*` artifacts. Taken by
+`backend/utilities/grader_length_bias.py`.
+
+**Each item is its own control.** The same premise and the same summary are
+scored twice and nothing else varies: once at today's `900/150/anchored`
+geometry, once at a 1,923-word window that holds every premise in the corpus
+whole. The obvious query - mean `hhem` above and below 900 words - cannot answer
+this, because long articles may simply be more summarizable and that confound is
+inseparable from the instrument.
+
+**A note on which half of this is a laptop figure.** The score differences are
+not: HHEM-2.1-Open runs deterministic on CPU, so the same two texts produce the
+same two numbers on any machine. The seconds are, and the rule at the top of this
+page applies to them.
+
+### The difference, by how many windows the article takes today
+
+| Windows today | Items | Mean (today - whole-article) | Lowest | Highest | Stdev |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 1 | 91 | **+0.0000** | +0.0000 | +0.0000 | 0.0000 |
+| 2 | 16 | **-0.2178** | -0.7769 | +0.0014 | 0.2720 |
+| 3 | 10 | **-0.3986** | -0.8783 | +0.0353 | 0.3526 |
+
+**Systematically negative, and it deepens with the window count: the mark-down
+for depth wins and best-of-N over-scoring loses.** A three-window article scores
+**0.40 lower** than the same article read whole, on the 0-to-1 scale whose high
+band starts at 0.80 and whose medium band starts at 0.50 - a drop wider than the
+whole medium band, applied only to the longest articles. The best-of-N effect is
+present and small: the largest positive difference in the corpus is **+0.0353**
+against a largest negative of **-0.8783**, so it is 25 times smaller than the
+effect it is fighting.
+
+**The 1-slice row is the control and it must read exactly zero.** An article
+short enough to be one window under both geometries is scored over the identical
+string twice, so a deterministic scorer cannot differ - 91 of 91 read
+`+0.0000` to four decimals. A non-zero there would mean the harness compared two
+different things and no other row could be read.
+
+### The split by whether the article was cut does not separate the two effects
+
+| Article | Items | Mean | Lowest | Highest | Stdev |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| was cut | 7 | -0.3104 | -0.7798 | +0.0353 | 0.2886 |
+| was not cut | 110 | -0.0482 | -0.8783 | +0.0014 | 0.1699 |
+
+**Read these two rows as slice counts wearing a different label.** A cut article
+sits on the 1,923-word cap, which is 3 windows, so all 7 cut rows are 3-window
+rows and their -0.3104 is what 3 windows cost rather than what a cut costs. The
+110 uncut rows include the 91 one-window zeros, which is most of why their mean
+is near zero. Separating the cut from the window count needs cut and uncut items
+at the same window count, and there are 7 and 3 of those - too few to say
+anything (Rule #10). The cut is what a bigger `extract.truncation_cap_tokens`
+would change, so this split has to be re-taken when the cap moves.
+
+Cut status is read as the arithmetic and not the flag: `source_word_count`
+minus `source_seen_word_count`, which is the cut and nothing else
+([../concepts/evaluation.md](../concepts/evaluation.md#the-two-source-word-counts-are-one-counter-before-and-after-the-cap)).
+`truncation_flagged` changed meaning on 2026-08-28 and is true on one row in the
+whole ledger, so splitting on it would split on something else.
+
+### Seconds a pass, at each window size
+
+| Geometry | Passes | Mean | Lowest | Highest | Stdev |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Today: 900/150 anchored, 1 to 3 windows | 117 | **4.815 s** | 0.230 s | 18.954 s | 4.802 |
+| One 1,923-word window | 117 | **4.278 s** | 0.250 s | 19.395 s | 4.297 |
+
+**A whole-article window is cheaper than today's slicing, by 11 percent, not
+dearer.** One 1,923-word forward pass costs less than the two or three 900-word
+passes it replaces, because attention has not yet reached the length where its
+quadratic term beats three lots of fixed per-call cost. **91 of the 117 items
+score the identical text in both columns**, so the whole of the gap comes from
+the 26 multi-window items and the figure understates the per-long-item saving.
+
+The stdev is nearly as large as the mean in both columns because premise length
+runs from 3 words to 1,923 in this corpus. It is the spread of the corpus, not
+noise in the clock.
+
+**HHEM has no working maximum input length, confirmed by observation.** The
+tokenizer prints `Token indices sequence length is longer than the specified
+maximum sequence length for this model (893 > 512)` and the model returns a
+score anyway, at 893 tokens for a 900-word window and roughly 2,500 for a
+1,923-word one. The 512 in the config is vestigial; `predict()` never passes
+`truncation=True`. This is what makes the wide arm of the comparison possible at
+all.
+
+### What this measurement does not say
+
+It says the instrument moves with slicing. It does **not** say the whole-article
+number is the truer one - that needs the human labels, and **0 of 60** are drawn
+(Rule #10). No default moved in the commit that recorded this:
+`evaluation.chunk_words` is still 900.
+
+**One corpus, one day, one run.** 117 items from 2026-08-28, of which only 26
+take more than one window. Re-take it on a second day before treating -0.3986 as
+the value rather than the direction.
+
+### How it was taken, and how to take it again
+
+The pairs are gitignored (`CLAUDE.md` section 0a - an article body is not ours to
+republish) and reach the tool as a workflow artifact with 14 days of life:
+
+```
+gh run download <digest-run-id> --pattern 'evidence-*' --dir <dir>
+python backend/utilities/grader_length_bias.py --evidence <dir>
+```
+
+The tool refuses an absent or empty package instead of printing zeros, because a
+report of `0.0` over no data is indistinguishable from a real zero and this
+project has published a figure that way once before (the 2,232 rows that never
+measured the truncation gap). Running it needs the `faithfulness` extra and about
+1 GB of model download; the scoring itself took 95 minutes for 234 passes on the
+laptop above.
+
+**One confound was ruled out rather than assumed.** `chunks()` re-joins a
+window's words on single spaces while the whole-article pass reads the premise as
+it stands, so the two arms differ in whitespace on multi-window items, and the
+1-slice control cannot see that. Scoring 5 at-cap premises raw and
+whitespace-collapsed moved the score by **0.000000** every time (n=5,
+2026-08-29), which is what SentencePiece collapsing whitespace predicts and is
+now observed rather than assumed.
+
 ## Still unmeasured
 
 Each line names the measurement that would settle it. Nothing here may be cited
@@ -3740,14 +3867,15 @@ to justify a design decision.
 | **Whether a day at eight work shards publishes** | **answered 2026-08-27: it does** | run `33114410534` published the 2026-08-27 day at `shards = 8`, with 25 charts over 25 distinct paths and 25 files in the tree ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). What remains is a decision about `run.max_parallel`, not a measurement. |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
-| **Faithfulness scoring seconds per item** | **unmeasured** | **a timed pass over 20 fixture pairs at the three premise lengths; it decides whether the scorer is a census or is sampled** |
+| **Faithfulness scoring seconds per item, on the runner** | **measured on a laptop 2026-08-29; no runner figure exists** | a pass costs 4.815 s at today's geometry and 4.278 s in one whole-article window, over 117 real pairs on an i7-1265U ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). A laptop measures the laptop, so the number that sizes a shard is still missing: time the same 117 pairs inside a `work` job on `ubuntu-latest` and read the seconds off the job log. |
 | **What makes a route host 21 s or 38 s an item** | **the CPU model is ruled out; nothing has replaced it, and two instruments are broken** | it is a 3.1x swing in prompt-eval throughput (20.2 to 62.9 tok/s) with the prompt size, the reply size and `n_slots` all ruled out, and decode moving the *other* way. The six runs that show the swing ran before anything logged a CPU and can never be attributed one. The nine `route` runs that do name a CPU rule the CPU model out rather than confirming it: seven drew the same AMD EPYC 9V74 and span 34.2 to 54.8 s an item, 1.60x on one CPU string, and the Intel Xeon run sits inside that band instead of at a third of it ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)). Exactly one `route` run carries both a CPU and a prefill rate. Two greps have to be fixed first - `system_info` has matched zero times in nine runs, and the log summary's `^(srv|slot) ` anchor cannot match a timestamped line, so no `prompt eval time` reaches a job log any more. Then: **two `route` runs with a prefill rate on each CPU model, at least one in the fast mode** - 1, 0 and 0 today, so five more at minimum, and the fast mode has not appeared in nine runs. |
 | **Which CPU a `route` or `work` job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven `route` runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. The run manifest carries only `runner: ubuntu-latest`, and `state/fingerprints.csv` appends a CPU model for the `work` job alone and only when the fingerprint changes, two rows ever. Put the CPU model on the run manifest and a swing becomes attributable from committed data rather than from a job log that ages out.
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
 | **`max_output_tokens` and `truncation_cap_tokens` as wall-clock levers** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. These two set how much text is prefilled and how much is decoded per item, which is the tail of a run rather than its median. Sweep them the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. |
 | A production day payload | fixture figure above | the first real pipeline run |
-| HHEM scoring seconds per item on CPU | unmeasured | lands with the eval harness |
+| HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
+| Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
 | A `work` job's true memory peak | **not readable; the instrument prints a placeholder** | every shard of run `32869125768` wrote `cgroup_memory_peak_bytes=unavailable`, because `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner. Read the job's own cgroup path out of `/proc/self/cgroup` and take `memory.peak` from there, or fall back to the lowest `MemAvailable` in `/proc/meminfo` over the job. The RSS sampler's 14.39 GiB high point is a resident set, not a demand ([Eight work shards](#eight-work-shards)). |
 | **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize()` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary arm alone against the configured 9B - five calls, no corpus freeze, no repeats. |
