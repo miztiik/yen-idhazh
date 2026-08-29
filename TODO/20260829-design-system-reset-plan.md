@@ -30,7 +30,7 @@
 | 8 | The console rebuilt as panels | 5, 6, 7 | F | DONE | `yi-ui` | - | - |
 | 9 | The digest surface, and the archive brought inside | 4, 5 | E | DONE #239 | `yi-ui` | 239 | - |
 | 10 | Installability | 3 | D | DONE #237 | `yi-ui` | 237 | - |
-| 11 | Re-baseline, measure, and smoke every surface | 8, 9, 10 | G | PENDING | - | - | - |
+| 11 | Re-baseline, measure, and smoke every surface | 8, 9, 10 | G | DONE | `yi-ui` | - | - |
 | 12 | Scrub the third-party product name from the repository | - | A | DONE #217 | `yi-ui` | 217 | - |
 
 Twelve rows. Row 12 was added on 2026-08-29 at owner instruction and jumped the
@@ -616,3 +616,77 @@ Two assertions changed rather than passing unchanged, and both encode the consta
 ---
 
 Execute autonomously per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md); AUTO every row; one worktree and one PR per row off `origin/main`; merge green-gated and one at a time; ESCALATE only on the four triggers in section 0.
+
+---
+
+## Closure - 2026-08-29
+
+Twelve rows, twelve merged. Every number below was measured on one Windows
+machine with node 24, Chromium via Playwright, at the commit that closed the
+plan. Full working is in
+[`docs/reference/measurements.md`](../docs/reference/measurements.md).
+
+### What the reader got
+
+| Viewport | Screen used, before | After |
+| --- | --- | --- |
+| 1536 px | 40.6 percent | 83.3 percent |
+| 1209 px | 51.6 percent | 99.0 percent |
+| 1024 px | 60.9 percent | 98.8 percent |
+| 614 px | 91.5 percent | 98.0 percent |
+| 312 px | 83.3 percent | 96.2 percent |
+
+The measure holds at 68ch from 819px up, so the line length is unchanged. One
+`max-w-2xl` at 672px was the entire cause, and it was the only `max-w-*` in the
+frontend.
+
+### What the operator got
+
+| What | Before | After |
+| --- | --- | --- |
+| Containers that must scroll sideways at 1440px | 7 | 0 |
+| Narrowest chart | 164 px | 380 px |
+| Run-strip day column inside a 1,217px frame | 16 px | up to 34 px |
+| Chart types available | 1 | 7 |
+
+### What it cost
+
+First-load JS, heaviest of five builds, spread 13 to 15 B: `/` 52,474,
+`/<date>/` 51,707, `/<date>/<topic>/` 51,801, `/archive/` 53,109, `/console/`
+76,716, `/evals/` 43,687, `/404` 42,736. The chart engine is in none of them -
+it is a 153,204 B lazy chunk on one operator route, and a test fails the build
+if any page preloads it.
+
+### Two gates not met, stated rather than buried
+
+**Row 8's page-height gate.** It asked for materially below 6,562px and the page
+measures 8,794. The gate was written before rows 6 and 7 put a funnel, a KPI
+strip, a growth waterfall and a failure-mix chart on that same page. The
+conflict is the plan's, not the row's, and no row can both add the vocabulary
+and remove the height it costs.
+
+**Row 5's icon set is 15 glyphs, not the 29 first extracted.** The lens and
+event taxonomies are declared in config and no surface renders either, so
+thirteen marks would have shipped against a page that might arrive. The
+bijection oracle refused them, which is what it is for.
+
+### What this plan taught, at its own expense
+
+**A bundler probe is not the artefact.** The 188.4 KB that justified adopting a
+chart engine was measured with a standalone esbuild script. The thing that
+shipped read 345,959 B until the imports were narrowed, and 153,204 B after.
+
+**Check whether the thing a dependency buys is already built.** The engine was
+argued for on the grounds that it buys a pointer readout. It does not -
+`frame.ts` already had one, and two of the four charts were simply never wired
+to it.
+
+**A byte count measured on one machine against a stale record is not a
+measurement.** "Every other route moved within toolchain noise" was wrong; CI,
+comparing main and the branch on the same runner, showed every route paying 72
+to 77 B.
+
+**A test that cannot fail is not a test.** The console panel selector was
+`data-panel`, which another component already carried, so it passed before a
+single panel existed. Both new oracles in this plan were deliberately made to
+fail once before being trusted.
