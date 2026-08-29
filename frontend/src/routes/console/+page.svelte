@@ -690,8 +690,8 @@
 							</td>
 							<td class="py-2 text-end tabular-nums">{feed.failures}</td>
 							<td class="py-2 text-end tabular-nums">{feed.attempts}</td>
-							<td class="py-2 ps-6 text-text-secondary">
-								{feed.lastOutcome}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
+							<td class="py-2 ps-6 text-text-secondary" data-feed-result>
+								{feed.lastResult}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
 							</td>
 						</tr>
 					{/each}
