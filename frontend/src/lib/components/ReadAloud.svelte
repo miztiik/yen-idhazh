@@ -5,6 +5,7 @@
 	 * nothing on the digest's critical path. If the browser has no voice the
 	 * control does not render - a button that does nothing is worse than none.
 	 */
+	import Icon from '$lib/icons/Icon.svelte';
 	import { onMount } from 'svelte';
 
 	let { title, summary }: { title: string; summary: string } = $props();
@@ -39,9 +40,10 @@
 	<button
 		type="button"
 		onclick={toggle}
-		class="inline-flex min-h-11 items-center gap-1 text-text-tertiary hover:text-accent"
+		class="inline-flex min-h-11 items-center gap-1.5 text-text-tertiary hover:text-accent"
 		aria-label={speaking ? 'Stop reading aloud' : 'Read this summary aloud'}
 	>
+		<Icon id="read-aloud" size={14} />
 		{speaking ? 'Stop' : 'Listen'}
 	</button>
 {/if}

@@ -5,6 +5,7 @@
 	 * and the commit that produced the site. They move independently, and a
 	 * single line claiming both would be wrong half the time.
 	 */
+	import Icon from '$lib/icons/Icon.svelte';
 	import { base } from '$app/paths';
 	import { clockUtc, longDate } from '$lib/format';
 
@@ -72,8 +73,12 @@
 	<p class="mt-1">{retention}</p>
 
 	<nav class="mt-4 flex flex-wrap gap-4" aria-label="Site">
-		<a href="{base}/archive/" class="text-accent hover:underline">Archive</a>
-		<a href="{base}/console/" class="text-accent hover:underline">Console</a>
+		<a href="{base}/archive/" class="inline-flex items-center gap-1.5 text-accent hover:underline">
+			<Icon id="archive" size={14} />Archive
+		</a>
+		<a href="{base}/console/" class="inline-flex items-center gap-1.5 text-accent hover:underline">
+			<Icon id="console" size={14} />Console
+		</a>
 		<a href={repoUrl} target="_blank" rel="noopener noreferrer" class="text-accent hover:underline">
 			Source code
 		</a>
