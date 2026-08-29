@@ -1,6 +1,11 @@
 import { dayMonth } from '../format';
 import { daysInWindow, type TimeWindow } from './viewport';
 
+/** The published projection's header, in `PUBLIC_COLUMNS` order.
+ *
+ * `backend/idhazh/publish_telemetry.py` owns the list. This is the reader's
+ * copy of it, and `parseTelemetryCsv` refuses a file whose header disagrees.
+ */
 export const TELEMETRY_COLUMNS = [
 	'date',
 	'run_id',
@@ -11,7 +16,8 @@ export const TELEMETRY_COLUMNS = [
 	'outcome',
 	'code',
 	'source_words',
-	'summary_words'
+	'summary_words',
+	'source_words_before_cap'
 ] as const;
 
 export type TelemetryColumn = (typeof TELEMETRY_COLUMNS)[number];
@@ -25,18 +31,24 @@ export interface TelemetryRow {
 	stage: string;
 	outcome: string;
 	code: string;
+	/** Words the model was given: the body after the cap cut it. */
 	source_words: number | null;
 	summary_words: number | null;
+	/** Words the body held before the cap. Null on every run before 2026-08-28,
+	 * and on any run the cap never fired for. */
+	source_words_before_cap: number | null;
 }
 
+/** One mark on the compression plot, derived in the browser from a telemetry
+ * row. Never inlined into the page and never persisted anywhere. */
 export interface CompressionPoint {
 	date: string;
 	item_id: string;
+	/** The article's own length, before anything cut it. */
 	source_words: number;
-	/** What the model was given, after the cut. Absent where it is the article's
-	 * own length, which is 2,517 of the 2,539 plotted rows measured 2026-08-29 -
-	 * the console page inlines every point, so a number saying "nothing was cut"
-	 * two and a half thousand times is real weight for no fact. */
+	/** What the model was given, after the cut. Absent where nothing was cut, so
+	 * the one field and `truncation_flagged` cannot end up disagreeing about
+	 * whether this article lost any text. */
 	source_seen_words?: number;
 	summary_words: number;
 	truncation_flagged: boolean;
@@ -56,6 +68,112 @@ export function seenWords(point: CompressionPoint): number {
 export interface UnplottedDay {
 	date: string;
 	n: number;
+}
+
+/** The rows this plot is about: an item that reached a reader.
+ *
+ * `backend/idhazh/telemetry.py` writes `publish` + `ok` for exactly two ends -
+ * an item with a summary, and an article the extractor kept but never asked the
+ * model about. The second has no summary length, so `placeRow` drops it. Every
+ * other row is a failure or an item the run threw away, and neither is an
+ * article whose summary anyone can measure.
+ */
+export function published(row: TelemetryRow): boolean {
+	return row.stage === 'publish' && row.outcome === 'ok';
+}
+
+/** Where one telemetry row sits on the compression plot, or why it sits nowhere.
+ *
+ * One decision, three outcomes, because the plot and the sentence under it read
+ * the same answer. Counting the unplaced rows anywhere else would let the two
+ * disagree about the same row on the same day.
+ */
+export type Placed =
+	| { kind: 'point'; point: CompressionPoint }
+	| { kind: 'no-length'; date: string }
+	| { kind: 'no-summary' };
+
+/** The article's own length: before the cap where a run wrote one down, and
+ * what survived where it did not.
+ *
+ * This is `Article.full_source_words()` on the reading side. An empty cell is
+ * not a zero - every run before 2026-08-28 left the pre-cap cell blank.
+ */
+export function articleWords(row: TelemetryRow): number {
+	return row.source_words_before_cap ?? row.source_words ?? 0;
+}
+
+/** Read the same way `Article.full_source_words()` reads it: the length before
+ * the cap where the run wrote one down, and the length that survived where it
+ * did not. So the cut is the comparison of two cells of one row and nothing
+ * else - no flag whose meaning has changed, and no test against the cap itself,
+ * which moves whenever the cap moves.
+ */
+export function placeRow(row: TelemetryRow): Placed {
+	const seen = row.source_words;
+	const before = row.source_words_before_cap;
+	const cut = before !== null && seen !== null && before > seen;
+	const sourceWords = articleWords(row);
+	if (sourceWords <= 0) return { kind: 'no-length', date: row.date };
+	const summaryWords = row.summary_words ?? 0;
+	if (summaryWords <= 0) return { kind: 'no-summary' };
+	return {
+		kind: 'point',
+		point: {
+			date: row.date,
+			item_id: row.item_id,
+			source_words: sourceWords,
+			// Carried only where the model saw something other than the whole
+			// article, so a number repeating "nothing was cut" never ships.
+			...(cut ? { source_seen_words: seen as number } : {}),
+			summary_words: summaryWords,
+			truncation_flagged: cut
+		}
+	};
+}
+
+/** The plot and the sentence under it, out of one pass over the rows.
+ *
+ * It takes the rows the viewport already holds. Those are seeded to the open
+ * window and grown by month fetch, so the plot costs the page nothing beyond
+ * the telemetry that was on it anyway - and it draws whatever the operator has
+ * panned to rather than whatever the build inlined.
+ *
+ * One mark per article per day, never one per row: a re-run writes a second row
+ * for an article an earlier run already published, and two marks for one
+ * article is the same measurement drawn twice. The run that read the most of it
+ * is the one kept, with both of its lengths, because a length before the cap
+ * from one run against a length after it from another measures nothing. It is
+ * the rule `sourceCuts` reads the same ledger by, so the plot and the source
+ * table cannot disagree about how many articles a day had.
+ */
+export function compressionView(rows: readonly TelemetryRow[]): {
+	points: CompressionPoint[];
+	unplotted: UnplottedDay[];
+} {
+	const perArticle = new Map<string, TelemetryRow>();
+	for (const row of rows) {
+		if (!published(row)) continue;
+		const key = `${row.date}-${row.item_id}`;
+		const held = perArticle.get(key);
+		if (held === undefined || articleWords(row) > articleWords(held)) perArticle.set(key, row);
+	}
+
+	const points: CompressionPoint[] = [];
+	const missing = new Map<string, number>();
+	for (const row of perArticle.values()) {
+		const placed = placeRow(row);
+		if (placed.kind === 'point') points.push(placed.point);
+		else if (placed.kind === 'no-length') {
+			missing.set(placed.date, (missing.get(placed.date) ?? 0) + 1);
+		}
+	}
+	return {
+		points: points.sort((a, b) => a.date.localeCompare(b.date)),
+		unplotted: [...missing.entries()]
+			.map(([date, n]) => ({ date, n }))
+			.sort((a, b) => a.date.localeCompare(b.date))
+	};
 }
 
 /** Where the cut fell, and over which days it was the cut in force. */
@@ -257,7 +375,8 @@ export function parseTelemetryCsv(text: string): TelemetryRow[] {
 		outcome: cells[6] ?? '',
 		code: cells[7] ?? '',
 		source_words: numberCell(cells[8] ?? ''),
-		summary_words: numberCell(cells[9] ?? '')
+		summary_words: numberCell(cells[9] ?? ''),
+		source_words_before_cap: numberCell(cells[10] ?? '')
 	}));
 }
 

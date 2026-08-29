@@ -1,13 +1,12 @@
 <script lang="ts">
 	import { base } from '$app/paths';
 	import {
+		compressionView,
 		datesIn,
 		parseTelemetryCsv,
 		rowsInWindow,
-		type CompressionPoint,
 		type SummaryBand,
-		type TelemetryRow,
-		type UnplottedDay
+		type TelemetryRow
 	} from '$lib/charts/series';
 	import {
 		defaultWindow,
@@ -26,9 +25,7 @@
 		availableMonths,
 		today,
 		config,
-		compressionPoints,
-		bands,
-		unplotted
+		bands
 	}: {
 		initialRows: TelemetryRow[];
 		availableMonths: string[];
@@ -39,9 +36,7 @@
 			min_attempts_for_rate: number;
 			failure_list_max: number;
 		};
-		compressionPoints: CompressionPoint[];
 		bands: SummaryBand[];
-		unplotted: UnplottedDay[];
 	} = $props();
 
 	// svelte-ignore state_referenced_locally
@@ -53,6 +48,10 @@
 	let selectedCode = $state<string | null>(null);
 	const visibleRows = $derived(rowsInWindow(rows, viewport));
 	const available = $derived(new Set(availableMonths));
+	// The plot reads the rows on the page rather than a list of its own. A month
+	// the operator pans to is fetched once and both surfaces gain it together, so
+	// the scatter and the failure panels can never describe different days.
+	const compression = $derived(compressionView(rows));
 
 	function merge(next: TelemetryRow[]) {
 		const byKey = new Map(rows.map((row) => [`${row.run_id}-${row.item_id}`, row]));
@@ -178,10 +177,10 @@
 				onSelect={(code) => (selectedCode = code)}
 			/>
 			<CompressionScatter
-				points={compressionPoints}
+				points={compression.points}
 				viewport={viewport}
 				{bands}
-				{unplotted}
+				unplotted={compression.unplotted}
 				height={config.chart_height}
 				width={config.chart_width}
 			/>
