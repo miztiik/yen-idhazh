@@ -231,10 +231,11 @@ def test_a_tier_that_falls_in_one_shard_survives_the_split() -> None:
     the second and third long read behind and no sibling could make them up.
     """
     shards = 3
-    counts = dict.fromkeys(range(BANDS), 0)
+    # Every tier but the top, sized from the ladder rather than listed, so a new
+    # rung gets a supply instead of leaving a hole the union then reports.
+    counts = dict.fromkeys(range(BANDS - 1), 6)
     counts[0] = 3
     counts[1] = 12
-    counts[2] = 6
     items, layout = a_plan(counts)
     # Every long read at a position the round-robin hands to shard 0.
     scarce = [planned(100 + n, BANDS - 1) for n in range(qualify.MIN_PER_BAND)]

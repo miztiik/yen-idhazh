@@ -151,7 +151,7 @@ class _Measured(NamedTuple):
 #: same way would leave every one of those states undrawn and so untested.
 #:
 #: Read down the source-word column: 38 to 6100 words is four decades of x axis
-#: and at least one mark under each of the four configured target zones. Read
+#: and at least one mark under each of the five configured target zones. Read
 #: down the faithfulness columns: all three confidence bands, and every reason
 #: an item can miss the top one. Two rows record no length before the cut, so
 #: the plot drops them and the sentence under it has a count to print.
@@ -201,9 +201,12 @@ SCORED: Final[tuple[_Measured, ...]] = (
         full_length_known=False,
     ),
     # Cut: the article is longer than what the model was given, so the plot draws
-    # a diamond rather than a dot.
+    # a diamond rather than a dot. It sits in the second-widest target zone,
+    # which the ladder only gained a ceiling for when the fifth rung landed on
+    # 2026-08-29 - before that this row was 4200 words and the zone above 2000
+    # ran to the edge of the plot.
     _Measured(
-        source_words=4200, summary_words=205,
+        source_words=2800, summary_words=205,
         hhem=0.91, hhem_full=0.78, coverage=0.57, score_ms=610,
     ),
     # Cut, and low whatever the scorer thought: the summary asserts two

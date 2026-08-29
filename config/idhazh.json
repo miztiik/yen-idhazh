@@ -171,6 +171,11 @@
         "min_source_words": 2000,
         "target_words_max": 200,
         "target_words_min": 110
+      },
+      {
+        "min_source_words": 3000,
+        "target_words_max": 230,
+        "target_words_min": 150
       }
     ],
     "key_points_max": 5,

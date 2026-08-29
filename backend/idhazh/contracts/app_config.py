@@ -352,19 +352,25 @@ class SummaryBand(Model):
 
 
 def _default_bands() -> list[SummaryBand]:
-    """Three sizes: the release note, the article, the long read.
+    """Five sizes: the note, the report, the feature, the long feature, the investigation.
 
     Starting points chosen from the shape of the sources we collect, not
     measurements - nothing here may be quoted as one (Rule #10). The first
     band begins at zero so every article lands in one, and the shortest ask sits
     above `evaluation.summary_words_min` so a summary that misses low by a few
     words is still publishable.
+
+    The last floor is the last one there may ever be. It stays below
+    `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so no rung
+    asks for a summary of words the model was never handed
+    (`docs/architecture/summarize/prompt.md`).
     """
     return [
         SummaryBand(min_source_words=0, target_words_min=30, target_words_max=45),
         SummaryBand(min_source_words=60, target_words_min=50, target_words_max=90),
         SummaryBand(min_source_words=700, target_words_min=70, target_words_max=150),
         SummaryBand(min_source_words=2000, target_words_min=110, target_words_max=200),
+        SummaryBand(min_source_words=3000, target_words_min=150, target_words_max=230),
     ]
 
 
@@ -1071,6 +1077,30 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-29T16:00",
+            change=(
+                "summarize.bands gained a fifth rung at min_source_words 3000, asking "
+                "150 to 230 words. No existing rung moved."
+            ),
+            why=(
+                "A 2,000-word article and a 3,846-word article were handed the identical "
+                "ask, so one was compressed 10 to 1 and the other 19 to 1 for the same "
+                "150-word midpoint. 3,846 words is what extract.truncation_cap_tokens of "
+                "5000 lets through, so both are read whole and the difference is real "
+                "text and not a guess about text. The floor is 3000 because that is the "
+                "midpoint of the whole-read range, 2,923, rounded to a seam the ledger "
+                "reports. Measured 2026-08-29 over the 445 rows of state/scores.csv that "
+                "carry a trustworthy pre-cap length: 9 of them reach 3,000 words, which "
+                "is 2.02 percent of items and 1 to 4 items a run over four runs of 107 "
+                "to 117 items. This is the last rung there may be - a floor above the "
+                "cut point would ask for words the model was never handed, and the "
+                "model would fill the gap by elaborating the opening. 230 sits inside "
+                "evaluation.summary_words_max of 250, so the gate did not move. "
+                "Additive with a default, so an older config still validates and no "
+                "read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T14:00",
             change=(
