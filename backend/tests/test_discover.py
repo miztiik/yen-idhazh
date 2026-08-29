@@ -422,10 +422,14 @@ def test_a_weighted_down_feed_scores_below_a_full_one_of_the_same_tier() -> None
 
 
 def test_a_vertical_takes_everything_its_feeds_offered() -> None:
-    """Supply sets the size. There is no per-vertical cap left to reach."""
+    """Supply sets the size. There is no per-vertical cap left to reach.
+
+    Everything it considered and did not refuse for age. The two counts have to
+    add up exactly, or a slot went missing somewhere nothing recorded.
+    """
     config = CollectConfig(max_per_source=50)
     summary, items = plan_vertical(AI, all_candidates(), config=config, live_feeds=3, now=NOW)
-    assert len(items) == summary.considered
+    assert len(items) == summary.considered - summary.too_old
     assert summary.planned == len(items)
 
 

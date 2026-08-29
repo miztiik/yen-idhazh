@@ -105,12 +105,22 @@ def appeared_at(
     return first_seen_at
 
 
-def recency_bonus(at: str | None, *, now: str, config: CollectConfig) -> float:
-    """A bonus that halves every `recency_half_life_hours`. Never a filter.
+def too_old(at: str | None, *, now: str, config: CollectConfig) -> bool:
+    """Past the age at which a story stops being news.
 
-    Nothing is dropped for age. A hard cutoff throws away a strong story to
-    keep a weak fresh one, and it has no answer at all for an article whose
-    feed gave no date.
+    A story we could not date at all is never too old: first sight is the only
+    age it has, so it gets the run that found it and ages out from there.
+    """
+    if at is None:
+        return False
+    return _hours(now, at) > config.max_age_hours
+
+
+def recency_bonus(at: str | None, *, now: str, config: CollectConfig) -> float:
+    """A bonus that halves every `recency_half_life_hours`. Orders, never admits.
+
+    `too_old` decides what may be added; this decides the order of what passed.
+    A day-old item at the edge of the window still scores below an hour-old one.
     """
     if at is None:
         return 0.0
@@ -244,6 +254,10 @@ def plan_vertical(
     different facts, and `considered` has to be able to say which one cost a
     slot.
 
+    A story past `max_age_hours` is dropped after it is counted, not before, so
+    `considered` still says what the feeds offered and `too_old` says how much
+    of it was a back catalogue.
+
     `published_at` on the planned item is the time we believe, not the time the
     feed claimed. A date rejected as impossible must not reach a reader either.
     """
@@ -266,6 +280,7 @@ def plan_vertical(
         return summary, []
 
     scored: list[Ranked] = []
+    stale = 0
     for url_key, carried in grouped.items():
         best = min(carried, key=lambda item: (-authority(item, config), item.source_id))
         watchlist_hit = url_key in watchlist_keys
@@ -276,6 +291,9 @@ def plan_vertical(
             now=now,
             max_future_hours=config.max_future_hours,
         )
+        if too_old(appeared, now=now, config=config):
+            stale += 1
+            continue
         scored.append(
             Ranked(
                 score=score(
@@ -315,4 +333,4 @@ def plan_vertical(
         )
         for item in taken
     ]
-    return summary.model_copy(update={"planned": len(items)}), items
+    return summary.model_copy(update={"planned": len(items), "too_old": stale}), items
