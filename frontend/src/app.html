@@ -5,6 +5,17 @@
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta name="color-scheme" content="light dark" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
+		<!-- Installable, and nothing more than that. A manifest is a static JSON
+		     file: no request, no account, no notification, no code running off the
+		     reader's device. Its own paths are relative, so it resolves under the
+		     Pages project path without being templated. -->
+		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
+		<link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon.png" />
+		<!-- The browser chrome matches the page before any script runs. The theme
+		     control overwrites this on a manual choice, because the media query
+		     only knows what the system wants. -->
+		<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6fb" />
+		<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0e14" />
 		<!-- Self-hosted, Latin subset, one variable file. Only the preload sits
 		     here: it has to be in the head to start the fetch early. The
 		     @font-face rule lives in app.css, because a rule inlined here is
