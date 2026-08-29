@@ -9,6 +9,14 @@ one scrape at job end is the whole shard, and there is nothing to subtract. A
 per-request scrape would add requests to the thing it measures and still report
 only the last one.
 
+**Two cells are about the job rather than the server.** `job_seconds` is the
+shard job's own clock and `cpu_model` is the processor it drew. They live here
+because one work job is one row, which is the grain both facts have; the run
+manifest is one row per run and a run draws up to eight hosts. The truncation
+cap reverts on the slowest work job's wall-clock, and before these two cells the
+only place that number existed was the GitHub jobs API, which drops a job record
+when the run ages out.
+
 **Why this exists.** Every timing on the item-health ledger is a field the
 summarize stage copied out of one model reply, and two documents publish rates
 derived from it - `docs/architecture/summarize/throughput.md` and the console.
@@ -40,9 +48,10 @@ import (`docs/architecture/contracts/schemas.md`).
 
 from __future__ import annotations
 
-from typing import Any, ClassVar, Final, Self
+from datetime import UTC, datetime
+from typing import Annotated, Any, ClassVar, Final, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, StringConstraints, model_validator
 
 from idhazh.contracts.base import (
     ChangelogEntry,
@@ -51,6 +60,16 @@ from idhazh.contracts.base import (
     RunId,
     Timestamp,
 )
+
+#: The one spelling a payload timestamp leaves the process in, as `strptime`
+#: reads it. `Timestamp` pins the same shape as a regex; this turns it back into
+#: an instant so the row's own clock can be measured against its own scrape.
+_SCRAPED_AT_FORMAT: Final = "%Y-%m-%dT%H:%M:%SZ"
+
+#: One line of printable ASCII. `state/runtime-counters.csv` is merged with the
+#: union driver, which works line by line, so a cell that could hold a newline
+#: could split one row across a merge.
+CpuModel = Annotated[str, StringConstraints(pattern=r"^[ -~]+$", max_length=120)]
 
 #: The Prometheus series each field is read from, on llama.cpp `b10598`. The
 #: names are the wire format and the field names are ours, so a llama.cpp rename
@@ -87,6 +106,25 @@ class RuntimeCountersRow(Contract):
 
     __schema_stem__: ClassVar[str] = "runtime-counters-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-29",
+            change=(
+                "Appended `job_seconds`, the shard job's own clock up to this scrape, "
+                "and `cpu_model`, the processor the host drew."
+            ),
+            why=(
+                "The truncation cap reverts when the slowest work job passes 110 "
+                "minutes on two of three scheduled runs, and no committed file carried "
+                "a job's clock - only the GitHub jobs API did, and it drops a job "
+                "record when the run ages out. A rollback rule that reads an instrument "
+                "outside the repository is checked by hand or not at all. The CPU model "
+                "lands in the same row because this project has measured a 3.1x swing "
+                "in read throughput between hosts, so a clock without the part it was "
+                "taken on cannot be compared with the next run's (Rule #10). Both are "
+                "one fact about one work job, which is exactly this row's grain; the "
+                "run manifest is one row per run and a run draws up to eight hosts."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-27",
             change=(
@@ -160,6 +198,25 @@ class RuntimeCountersRow(Contract):
         ),
     )
 
+    job_seconds: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Seconds from the shard job's first step to this scrape. It is a floor on "
+            "the wall-clock the GitHub jobs API reports and never a ceiling: the steps "
+            "after the scrape - the ledger push, two log summaries and the artifact "
+            "uploads - are outside it."
+        ),
+    )
+    cpu_model: CpuModel | None = Field(
+        default=None,
+        description=(
+            "The `model name` line of the host's /proc/cpuinfo. `ubuntu-latest` is the "
+            "label and this is the part, so a clock in this row can be read against "
+            "another run's."
+        ),
+    )
+
     @model_validator(mode="after")
     def _shard_fits_inside_the_run(self) -> Self:
         if self.shard >= self.shards:
@@ -184,10 +241,22 @@ class RuntimeCountersRow(Contract):
     def from_csv_row(cls, row: dict[str, str]) -> Self:
         """The inverse. An empty cell is an absent value, never a zero."""
         payload: dict[str, Any] = {name: row[name] for name in cls.model_fields}
-        for name in SERIES.values():
+        for name in cls._absent_when_blank():
             if payload[name] == "":
                 payload[name] = None
         return cls.model_validate(payload)
+
+    @classmethod
+    def _absent_when_blank(cls) -> tuple[str, ...]:
+        """Every optional cell, derived rather than listed a second time.
+
+        A field declared `default=None` is one this row can be missing. Reading
+        that off the model means a column added later cannot be forgotten here
+        and come back from the ledger as the string `""`.
+        """
+        return tuple(
+            name for name, field in cls.model_fields.items() if field.default is None
+        )
 
     @classmethod
     def from_metrics_text(
@@ -199,6 +268,8 @@ class RuntimeCountersRow(Contract):
         shard: int,
         shards: int,
         scraped_at: str,
+        job_started_at: int | None = None,
+        cpu_model: str | None = None,
     ) -> Self:
         """Read one row out of a `GET /metrics` body.
 
@@ -207,6 +278,12 @@ class RuntimeCountersRow(Contract):
         a later reader would average. A series that is present but unreadable
         raises: the workflow step tolerates its own failure, so a broken scrape
         costs this row and never the shard.
+
+        `job_started_at` is the epoch second the job's first step stamped, and
+        the clock is worked out here against `scraped_at` rather than by the
+        caller - so the two cells can never say different things about the same
+        instant. No stamp leaves the cell empty. Empty is not zero: a job whose
+        stamp went missing and a job that took no time are different facts.
         """
         values: dict[str, Any] = {}
         for line in text.splitlines():
@@ -225,9 +302,19 @@ class RuntimeCountersRow(Contract):
                 "shard": shard,
                 "shards": shards,
                 "scraped_at": scraped_at,
+                "job_seconds": _elapsed(scraped_at, job_started_at),
+                "cpu_model": (cpu_model or "").strip() or None,
                 **values,
             }
         )
+
+
+def _elapsed(scraped_at: str, job_started_at: int | None) -> int | None:
+    """Job start to scrape, in seconds. A stamp in the future fails `ge=0` loudly."""
+    if job_started_at is None:
+        return None
+    scraped = datetime.strptime(scraped_at, _SCRAPED_AT_FORMAT).replace(tzinfo=UTC)
+    return int(scraped.timestamp()) - job_started_at
 
 
 def _number(series: str, field: str, raw: str) -> float | int:

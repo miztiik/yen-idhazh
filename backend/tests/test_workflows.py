@@ -354,6 +354,12 @@ COUNTERS_COMMAND: Final = "python -m idhazh counters"
 # `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` forbids any
 # workflow step from spelling one.
 COUNTERS_FLAG: Final = "--counters-file"
+# The step that stamps the shard job's own clock and names the host it drew.
+# First in the job, so the clock covers the cache restore and the weight load as
+# well as the model time, and read at the counters step - which is the only step
+# that writes a committed row at shard grain.
+CLOCK_STEP: Final = "Stamp the shard clock and the host"
+CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL")
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
@@ -3037,15 +3043,20 @@ def test_the_servers_own_counters_outlive_the_job_that_read_them() -> None:
 
     assert COUNTERS_COMMAND in script, f"{where} must commit the snapshot, not only log it"
     assert f'--date "{SUBSTITUTED_DATE}"' in script
-    # This shard's own snapshot, and the file the same step just wrote. The
-    # step's line continuations are folded first, the way bash reads them.
-    assert shlex.split(script.replace("\\\n", " "))[-6:] == [
+    # This shard's own snapshot, the file the same step just wrote, and the two
+    # facts about the job rather than about the server. The step's line
+    # continuations are folded first, the way bash reads them.
+    assert shlex.split(script.replace("\\\n", " "))[-10:] == [
         "--shard",
         SUBSTITUTED_SHARD,
         "--shards",
         SUBSTITUTED_SHARDS,
         COUNTERS_FLAG,
         METRICS_FILE,
+        "--job-started-at",
+        "${JOB_STARTED_AT:-}",
+        "--cpu-model",
+        "${CPU_MODEL:-}",
     ]
     # A body that came back empty still writes a row. A shard whose server was
     # already gone and a shard that never ran are different facts, and pooling a
@@ -3053,6 +3064,52 @@ def test_the_servers_own_counters_outlive_the_job_that_read_them() -> None:
     # short-circuit before the command that files it.
     assert "exit 0" not in script, f"{where} must file a row even when the scrape came back empty"
     assert "state/runtime-counters.csv" in COMMIT_STAGED_PATHS["work"]
+
+
+def test_the_shard_clock_is_stamped_before_the_job_spends_anything() -> None:
+    """The Oracle for Trigger A: the rollback rule reads a committed file or nothing.
+
+    `extract.truncation_cap_tokens` reverts when the slowest `work` job passes
+    110 minutes on two of three scheduled runs. No committed artifact carried a
+    job's clock - only the GitHub jobs API did, and it drops a job record when
+    the run ages out, so checking the rule meant a person making an API call by
+    hand (`docs/reference/measurements.md`).
+
+    The stamp is the job's first step, ahead of the checkout, because the number
+    has to cover the cache restore and the weight load as well as the model time
+    - a clock that starts after the largest fixed cost in the job is not the
+    job's clock. The host rides along because this project has measured a 3.1x
+    read-throughput swing between processors, so a clock nobody can attribute to
+    a part cannot be read against the next run's (Rule #10).
+    """
+    workflow = _load_workflows()["digest.yml"]
+    steps = _steps(workflow, "work")
+    names = [step.get("name") for step in steps]
+
+    assert CLOCK_STEP in names, "the work job must stamp its own clock"
+    assert names.index(CLOCK_STEP) == 0, f"{CLOCK_STEP} must be the job's first step"
+    assert names.index(CLOCK_STEP) < names.index(COUNTERS_STEP)
+
+    script = _script(_step(workflow, "work", "name", CLOCK_STEP), f"digest.yml/work/{CLOCK_STEP}")
+    for variable in CLOCK_VARIABLES:
+        # Written to the job environment, which is the only channel a later step
+        # can read a value from without a file the checkout has not made yet.
+        assert f'echo "{variable}=' in script, f"{CLOCK_STEP} must export {variable}"
+    assert script.count('>> "$GITHUB_ENV"') == len(CLOCK_VARIABLES), (
+        f"{CLOCK_STEP} must write each value to the job environment"
+    )
+    assert "date -u +%s" in script, f"{CLOCK_STEP} must stamp UTC epoch seconds"
+    # A host with no `model name` line costs an empty cell, never the shard: the
+    # step runs under `set -euo pipefail`, where an unmatched grep would fail it.
+    assert "|| true" in script, f"{CLOCK_STEP} must tolerate a host with no model name line"
+
+    counters = _substitute(
+        _script(_step(workflow, "work", "name", COUNTERS_STEP), f"digest.yml/work/{COUNTERS_STEP}")
+    )
+    for variable in CLOCK_VARIABLES:
+        assert f"${{{variable}:-}}" in counters, (
+            f"{COUNTERS_STEP} must read {variable}, and must not break when it is unset"
+        )
 
 
 # --- The qualification arm (Row #10) ----------------------------------------

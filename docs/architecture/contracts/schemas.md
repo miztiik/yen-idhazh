@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -78,6 +78,8 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 ### A shard-grain fact is its own contract, not a field on the run manifest
 
 `RuntimeCountersRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a counter snapshot is one shard, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires in a day and is not uploaded at all when a job is cancelled, and a cancelled shard's counters are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
+
+**The grain argument earned two more cells on 2026-08-29.** `job_seconds` and `cpu_model` are facts about the `work` job rather than about its model server, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/measurements.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
 
 What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
 

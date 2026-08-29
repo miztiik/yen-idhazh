@@ -273,6 +273,26 @@ jobs:
       matrix:
         shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
     steps:
+      # First, before the checkout, so the number covers everything the job
+      # does: the cache restore, the weight load and the warmup as well as the
+      # model time. The truncation cap reverts when the slowest work job passes
+      # 110 minutes, and until this stamp existed the only place a job's clock
+      # lived was the GitHub jobs API - which drops a job record when the run
+      # ages out, so the rollback rule was a person making an API call by hand
+      # (docs/reference/measurements.md). The counters step subtracts this and
+      # files the difference beside the tokens the same shard read.
+      #
+      # The processor rides along for the same reason. `ubuntu-latest` names the
+      # image and not the part, this project has measured a 3.1x read-throughput
+      # swing between hosts, and a clock that cannot be read against the next
+      # run's clock is not a measurement (Rule #10). `|| true` because a host
+      # with no `model name` line must cost an empty cell, never the shard.
+      - name: Stamp the shard clock and the host
+        run: |
+          set -euo pipefail
+          echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+          echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)" >> "$GITHUB_ENV"
+
       - uses: actions/checkout@v6
 
       - uses: actions/setup-python@v7
@@ -570,11 +590,19 @@ jobs:
           # A row lands either way. A shard whose server was already gone and a
           # shard that never ran are different facts, and pooling a run has to be
           # able to see the shard that contributed nothing.
+          #
+          # The last two arguments are the job's own facts rather than the
+          # server's, so the row that says what this shard read also says how
+          # long it took and which processor read it. `:-` because a stamp that
+          # never ran must leave an empty cell, not send the word "unbound" to a
+          # contract that would refuse it.
           python -m idhazh counters \
             --date "${{ needs.plan.outputs.date }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
-            --counters-file llama-metrics.prom
+            --counters-file llama-metrics.prom \
+            --job-started-at "${JOB_STARTED_AT:-}" \
+            --cpu-model "${CPU_MODEL:-}"
 
       # The shape the plan job uses, for the reason written there, and the same
       # script - eight shards racing one branch is what its rebase loop and the
