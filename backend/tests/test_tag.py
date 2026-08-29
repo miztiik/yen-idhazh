@@ -76,8 +76,15 @@ def test_an_absent_document_earns_no_tag() -> None:
 
 
 def test_every_lens_and_event_carries_terms() -> None:
-    """An empty list is legal and silent, which is exactly how this shipped unwired."""
-    assert [lens.id for lens in TAXONOMY.lenses if not lens.keywords] == []
+    """An empty list is legal and silent, which is exactly how this shipped unwired.
+
+    Scoped to the lenses that still match. A tombstone keeps an id valid for the
+    days that published it and is dropped from `lens_terms`, so terms on one
+    would be dead weight that reads as live.
+    """
+    live = [lens for lens in TAXONOMY.lenses if lens.status is not LifecycleStatus.RETIRED]
+    assert live, "a taxonomy with no live lens tags nothing"
+    assert [lens.id for lens in live if not lens.keywords] == []
     assert [event.id for event in TAXONOMY.events if not event.keywords] == []
 
 
