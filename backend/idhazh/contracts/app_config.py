@@ -769,9 +769,24 @@ class FinetuneConfig(Model):
         ),
     )
     reference_rows: int = Field(
-        default=300,
+        default=500,
         ge=1,
-        description="How many ideal summaries the hand-authored reference set aims to hold.",
+        description=(
+            "How many ideal summaries the hand-authored reference set aims to hold. "
+            "The set is authored in slices and is usable before it is full, so this is "
+            "a target rather than a floor - nothing refuses to run below it."
+        ),
+    )
+    reference_test_rows: int = Field(
+        default=100,
+        ge=1,
+        description=(
+            "How many of `reference_rows` are held back as test references and read "
+            "line by line by a person. The rest are drafted with an expert model in an "
+            "editor. Two numbers because they carry two standards and two costs: a "
+            "drafted row is about two minutes, a read row about five, so this knob is "
+            "the one that decides how many hours the set takes."
+        ),
     )
     epochs: int = Field(default=2, ge=1)
     sequence_length: int = Field(
@@ -792,6 +807,11 @@ class FinetuneConfig(Model):
             raise ValueError("finetune.train_rows cannot exceed finetune.corpus_rows")
         if self.min_rows > self.corpus_rows:
             raise ValueError("finetune.min_rows cannot exceed finetune.corpus_rows")
+        if self.reference_test_rows >= self.reference_rows:
+            raise ValueError(
+                "finetune.reference_test_rows must leave rows to train on, "
+                "so it is less than finetune.reference_rows"
+            )
         return self
 
 
@@ -1205,6 +1225,22 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-29T20:00",
+            change=(
+                "finetune.reference_rows raised from 300 to 500, and "
+                "finetune.reference_test_rows added."
+            ),
+            why=(
+                "Owner decision, 2026-08-29. The size of the set and the size of its "
+                "read-by-a-person slice were one number, which hid the only cost that "
+                "matters: a row drafted with an expert model is about two minutes and a "
+                "row read line by line is about five, so the split is what decides the "
+                "hours. At 500 and 100 that is roughly 13 hours of drafting and 8 of "
+                "reading, against the 12 the plan estimated for 300. Additive with a "
+                "default, so an older config still validates (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T18:00",
             change=(

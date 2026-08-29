@@ -96,6 +96,7 @@
     "prune_every_days": 30,
     "prune_keep_days": 60,
     "reference_rows": 300,
+    "reference_test_rows": 100,
     "sequence_length": 4096,
     "student": "route",
     "teacher": "summarize",
