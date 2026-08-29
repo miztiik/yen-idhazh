@@ -17,6 +17,8 @@
 	import { axisLabels, CELL_PX, GAP_PX, type LabelAlign } from '$lib/charts/run-history';
 	import { grouped } from '$lib/charts/series';
 	import StageTimings from '$lib/components/StageTimings.svelte';
+	import Chart from '$lib/charts/Chart.svelte';
+	import { chartFunnel } from '$lib/charts/chart-funnel';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import type { Health, ModelDay } from './+page.server';
@@ -542,6 +544,17 @@
 			if the median day spends more than 6 router minutes per published chart, or puts a chart
 			on fewer than 5% of the items it published.
 		</p>
+		{#if data.funnelSvg}
+			<div class="panel mt-4" data-funnel="chart">
+				<Chart
+					svg={data.funnelSvg}
+					option={chartFunnel(data.charts).option}
+					width={data.console.chart_width}
+					height={260}
+					label="Where items go between the router reaching one and a chart being published, across the window"
+				/>
+			</div>
+		{/if}
 		<div class="mt-3 overflow-x-auto" data-charts="table">
 			<table class="w-full text-[0.8125rem]">
 				<thead class="text-text-tertiary">

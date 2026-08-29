@@ -4,6 +4,8 @@ import type {
 	StageTimingDay,
 	ThroughputDay
 } from '$lib/charts/series';
+import { chartFunnel } from '$lib/charts/chart-funnel';
+import { renderToSvg } from '$lib/server/chart-render';
 import {
 	modelByDate,
 	modelWork,
@@ -324,7 +326,7 @@ function trouble(rows: FeedResult[], quarantineAfter: number): FeedTrouble[] {
  * of it is derived at read time, which is what lets the page be a static file
  * and what stops today's code quietly restating yesterday's numbers.
  */
-export function load() {
+export async function load() {
 	const { rows } = evalRows();
 	const itemRows = itemHealthRows().rows;
 	const floorPct = runConfig().success_floor_pct;
@@ -437,6 +439,8 @@ export function load() {
 	const publicRows = telemetryRows(TELEMETRY_ROOT, console.default_window_days).rows.map(
 		publicTelemetry
 	);
+	const charts = chartDays(manifests, publishedCharts());
+	const funnel = chartFunnel(charts);
 	return {
 		timingDays,
 		throughputDays,
@@ -449,7 +453,16 @@ export function load() {
 		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/measurements.md`,
 		modelWork: modelWork(rows, itemRows),
 		manifests,
-		charts: chartDays(manifests, publishedCharts()),
+		charts,
+		// Drawn here, so the shape is on the page before any script runs and stays
+		// there if none ever does. Colour leaves as a custom-property reference, so
+		// both themes work with no JavaScript at all.
+		funnelSvg: funnel.empty
+			? null
+			: await renderToSvg(funnel.option, {
+					width: consoleConfig().chart_width,
+					height: 260
+				}),
 		totalRows: rows.length,
 		itemHealthRows: itemRows.length,
 		grid,

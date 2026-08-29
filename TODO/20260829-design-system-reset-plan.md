@@ -22,16 +22,16 @@
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Doctrine reset and the demand-side gate | - | A | DONE #205 | `yi-r1` | 205 | - |
 | 2 | `config/appearance.json` - the frontend's own contract | 1 | B | DONE #208 | `yi-ui` | 208 | - |
-| 3 | The token layer the design system already specified | 1 | B | IN-FLIGHT | `yi-ui` | 209 | - |
-| 4 | The fluid frame, and the measure moved onto text | 2, 3 | C | PENDING | - | - | - |
+| 3 | The token layer the design system already specified | 1 | B | DONE #209 | `yi-ui` | 209 | - |
+| 4 | The fluid frame, and the measure moved onto text | 2, 3 | C | DONE #221 | `yi-ui` | 221 | - |
 | 5 | A generated, tinted icon system | 3, 4 | D | PENDING | - | - | - |
-| 6 | The chart hover readout, and chart theming | 3, 4 | D | PENDING | - | - | - |
+| 6 | Pick the console's chart engine, on measured numbers | 3, 4 | D | IN-FLIGHT | `yi-ui` | - | - |
 | 7 | The reference chart vocabulary | 6 | E | PENDING | - | - | - |
 | 8 | The console rebuilt as panels | 5, 6, 7 | F | PENDING | - | - | - |
 | 9 | The digest surface, and the archive brought inside | 4, 5 | E | PENDING | - | - | - |
 | 10 | Installability | 3 | D | PENDING | - | - | - |
 | 11 | Re-baseline, measure, and smoke every surface | 8, 9, 10 | G | PENDING | - | - | - |
-| 12 | Scrub the third-party product name from the repository | - | A | IN-FLIGHT | `yi-ui` | - | - |
+| 12 | Scrub the third-party product name from the repository | - | A | DONE #217 | `yi-ui` | 217 | - |
 
 Twelve rows. Row 12 was added on 2026-08-29 at owner instruction and jumped the
 queue: it has no predecessor and blocks nothing, so it runs beside whatever else
@@ -285,38 +285,107 @@ is in flight.
 
 ---
 
-### Row #6 - The chart hover readout, and chart theming
+### Row #6 - Pick the console's chart engine, on measured numbers
 
-- **Scope:** One shared interaction layer that gives every chart a pointer and keyboard readout naming the exact value and its label, plus the theming pass that moves every chart onto the row-3 chart ramp.
+**REWRITTEN 2026-08-29.** The original row assumed a hand-written hover layer and rejected every drawing library. The owner overruled that, and the byte count the rejection rested on was four and a half times out of date. What follows is the replacement; the reversal itself is recorded in `docs/concepts/design-system.md`.
+
+- **Scope:** Choose the console's chart engine against the three conditions and the measured costs below, wire the theme adapter that keeps `tokens.css` the only place a colour is decided, and prove the pattern end-to-end on one real chart.
 - **Files touched:**
-  - `frontend/src/lib/charts/hover.ts` (new)
-  - `frontend/src/lib/charts/Readout.svelte` (new)
-  - `frontend/src/lib/charts/frame.ts`
-  - `frontend/src/lib/components/CompressionScatter.svelte`, `StageTimings.svelte`, `ThroughputTrend.svelte`, `FailurePanels.svelte`
-  - `frontend/src/routes/console/+page.svelte`
-  - `frontend/tests/hover.spec.ts` (new), `frontend/tests/frame.spec.ts`
+  - `frontend/package.json`, `frontend/package-lock.json`
+  - `frontend/src/lib/charts/engine.ts` (new: the adapter - reads the tokens, renders server-side, hydrates)
+  - `frontend/src/lib/charts/theme.ts` (new: computed custom properties -> the engine's theme object)
+  - `frontend/src/lib/components/` - one converted chart
+  - `frontend/src/lib/components/ThroughputTrend.svelte` - the caption that grows with the day
+  - `frontend/bundle-baseline.json`
+  - `frontend/tests/charts.spec.ts` (new)
   - `docs/concepts/design-system.md`
-- **Acceptance gates:** Every chart responds to pointer move with a readout naming the series, the value and its unit in words; every chart is keyboard-reachable and arrow keys step between points; the readout never fires a layout-triggering animation; the page still prerenders complete and the readout is additive after hydration; `prefers-reduced-motion` zeroes its transition.
-- **Oracle:** A Playwright test drives a synthetic pointer to a known data point on each chart and asserts the readout text equals the value computed from the same committed fixture the chart drew from. A readout that renders but reports the wrong point fails it. Charts are driven from inside the page per the integrated-browser constraint recorded in `docs/reference/agent-notes.md`.
+- **Acceptance gates:** The console renders complete with JavaScript disabled; a pointer, a tap and an arrow key each produce a readout naming the series, the value and its unit **in words**; every colour resolves from `tokens.css` in both themes with no hardcoded hex in any chart option; the reading routes import none of it, asserted by the bundle gate's per-route module list; the measured `/console/` delta is recorded; and **no readout box covers more than a third of the plot it sits on**, the engine's own tooltip included, measured on the rendered element rather than on the string that fills it.
+- **Oracle:** Three halves, none of which a stub satisfies. **(a)** The prerendered `/console/` HTML contains the chart's `<svg>` marks before any script runs - fetched with JavaScript off and asserted on the raw HTML, not the rendered DOM. **(b)** Every route other than `/console/` has zero engine modules in the bundle gate's per-route list, so a stray top-level import fails the build rather than quietly shipping 188 KB to a reader. **(c)** A browser test opens the readout on the worst day the fixture holds - the day with the most runs, because that is the day the copy is longest - reads the readout element's own bounding box, and asserts its height is at most a third of `console.chart_height`. It asserts the box was found first, so it cannot pass by measuring nothing.
+
+**Measured 2026-08-29, this tree, this bundler, gzipped, esbuild bundle + gzip -9 - the numbers the CHOICE was made against:**
+
+| Candidate | gzip | Tree-shakes | SVG | Server-render |
+| --- | --- | --- | --- | --- |
+| Engine A, bar + line + pie + scatter + tooltip + legend | **188.4 KB** | barely | yes | yes |
+| Engine A, bar only (its floor) | 160.0 KB | - | yes | yes |
+| Engine B, the most-cited alternative | **270.1 KB** | no | yes | weak |
+| Engine C, canvas-only | 22.6 KB | yes | **no** | **no** |
+| `d3-scale` + `d3-array`, carried today | 20.5 KB | yes | n/a | n/a |
+
+**Measured after it shipped, same day, from the files the build wrote - the numbers that are TRUE:**
+
+| What | gzip | raw |
+| --- | --- | --- |
+| Engine chunk, only the chart types in use registered | **153,204 B** | 451,227 B |
+| Same package imported whole | 345,959 B | 1,044,275 B |
+| `/console/` first-load JS, before | 69,622 B | - |
+| `/console/` first-load JS, after | **71,476 B** (+1,854, +2.7%) | - |
+| Every other route | within +/-64 B toolchain noise | - |
+
+About 40 B of the 1,854 is the toolchain, not the change: every unrelated route
+on this machine read 36 to 63 B above its record in the same build.
+
+The estimate and the artefact disagreed by 84 percent, in the direction that
+mattered. The probe measured a bundle nobody shipped; the build measured the
+file a browser downloads. **The correction that made the difference was
+registering the funnel, the tooltip and the SVG renderer instead of importing
+the package whole** - `frontend/src/lib/charts/core.ts` exists only to hold
+that list, so adding a chart type is a deliberate edit with a re-measurement
+beside it.
+
+The first-load figure is the one that decides affordability, and it is 1,854 B,
+not 153 KB: the engine is a dynamic import fetched only when a chart hydrates.
+Roughly 257 KB and 3.7x, predicted above, were both wrong.
+
+**A readout may not cover the chart it explains, and one does.** Measured
+2026-08-29 and recorded in `docs/reference/measurements.md` under "How much of a
+plot a chart readout covers": `ThroughputTrend`'s readout box stands **88 to 121
+px over a 220 px plot, which is 40 to 55 percent of the chart it explains**.
+`CompressionScatter` draws the same box, from the same markup, in the same
+place, with two short lines - and covers about a quarter.
+
+That pair is what makes this a copy problem and not a placement problem.
+`ThroughputTrend`'s caption appends one clause per run of the day - 171
+characters at the median, 221 on the three days that ran five times - and
+nothing bounds how many times the pipeline runs in a day. So the limit goes on
+the rendered box, where it binds whatever draws it, and the run medians come out
+of the sentence.
+
+A third of a 220 px plot is 73 px, which is about three lines at the console's
+readout type size. The quarter `CompressionScatter` already measures clears it;
+the caption fails it even at its 88 px floor. **Whether dropping the run medians
+alone clears a third is not measured** - the two shares are, the effect of the
+cut is not, so this row takes that measurement and records it rather than
+predicting it (Rule #10).
 
 - **Decisions:**
 
   | # | Decision | Authority |
   | --- | --- | --- |
-  | 1 | Hover readout ships on every chart. The requirement is the behaviour, and it is delivered in full. | owner, 2026-08-29 |
-  | 2 | The readout is a positioned element driven by a shared nearest-point lookup over the scales the chart already built, not a per-chart implementation. One layer, five call sites. | Fowler |
-  | 3 | The readout carries a word, not only a number, and never a ledger column name - `design-system.md`'s console-copy rules bind it exactly as they bind a table cell. | Editor |
-  | 4 | Keyboard parity is built in the same commit, not deferred. A readout only a mouse can reach is half a feature, and touch has no hover at all - so the same nearest-point lookup is bound to tap. | Susan, Reader |
-  | 5 | The earlier doctrine line "tooltips carrying critical information" is narrowed rather than struck: a readout may not be the ONLY place a fact appears, and every value it shows is also derivable from the axis. That keeps the real objection and drops the part that banned the feature. | Jony |
+  | 1 | A drawing library ships on the operator surface. The reading surface stays library-free; an item's chart is a build-time asset and a reader has nothing to run. | owner, 2026-08-29 |
+  | 2 | Three conditions bind any candidate: SVG not canvas, server-rendered at build time, and a measured gzipped cost recorded beside the decision. Engine C fails the first two at any size. | Carmack, Jony |
+  | 3 | The cost is charged to one route that one person opens. Rule #2's actual ceiling is the 1 GB published site, which 188 KB once does not move - the site was 128,064,853 B and grows about 16.6 MB a published day. | Carmack |
+  | 4 | The theme adapter reads the computed custom properties at mount and again on every theme change, so `tokens.css` stays the only place a colour is decided. A hardcoded hex in a chart option is a review failure, not a style preference. | Jony |
+  | 5 | Hover, tap and keyboard readouts are the engine's for a chart the engine draws. **Corrected 2026-08-29 while building:** this row claimed the engine buys the readout. It does not - `frontend/src/lib/charts/frame.ts` already carries `pointerReadout`, covering mouse, pen, touch and keyboard with nearest-by-x hit testing, and two of the four existing charts were simply never wired to it. The engine earns its place on chart types the surface cannot draw today. Wiring the two unwired charts is Row #8's job and needs no dependency. | Susan, owner |
+  | 6 | The earlier doctrine line about tooltips carrying critical information is narrowed rather than struck: a readout may not be the ONLY place a fact appears, and every value it shows is also derivable from the axis. | Jony |
+  | 7 | **Existing hand-written charts are not ported.** Each has a browser-test suite bolted to its markup - `StageTimings.svelte` alone has about 15 assertions reading `data-decade-line`, `data-stage-mark` and `data-stage-zero`, two of which check geometry an engine does not emit. Porting buys the operator nothing they can see and risks losing reasoning those charts encode. The engine is how NEW charts are made; a hand-written one ports when it next needs real change. Strangler-fig, not big-bang. | Fowler, 2026-08-29 |
+  | 8 | **The readout limit is a height against a height, never a character count.** The box wraps at the card's width, so one sentence is a different number of lines in a different panel. One measured box height against the plot height binds the hand-written charts and the engine's own tooltip alike, and it does not have to be restated when the engine changes. | Fowler, Jony, 2026-08-29 |
+  | 9 | **Run medians leave the readout.** A caption that appends one clause per run has no bound, and how many times the pipeline ran is a property of the day rather than a choice anybody made. The readout names the day's own band and stops. A day's runs are already accounted for in `Runs and site size`, and a per-run number belongs beside them if it belongs anywhere. | Editor, Jony, 2026-08-29 |
+  | 10 | Jony's ruling that a readout is pinned to the top of the plot and never to the pointer **stands, unchanged**. It is not what is wrong here: the chart that passes and the chart that fails use the identical pinned box. | Jony, 2026-08-25 |
 
 - **Rejected alternatives:**
 
   | # | Option | Why rejected | Authority |
   | --- | --- | --- | --- |
-  | 1 | A charting library that draws - echarts, chart.js, plot, uplot | 336, 67, 128 and ~45 KB gzipped respectively against a `/console/` route measured at 66,550 B total; a canvas cannot inherit a CSS custom property, so the token file stops being where a colour is decided; and the page stops being complete before script runs. The hover layer is roughly 200 lines and costs none of that. | Carmack, Jony |
-  | 2 | LayerCake or a Svelte SVG chart framework | The closest real alternative, and it loses on the same prerender argument plus a full rewrite of five working charts to buy an abstraction over scales `d3-scale` already provides. Reconsider if the chart count passes about fifteen. | Carmack |
-  | 3 | Per-chart tooltip implementations | Five inconsistent readouts and five places for the nearest-point maths to be wrong. | Fowler |
-  | 4 | Title attributes as the readout | Fires on a delay the reader did not ask for, cannot be styled, cannot be reached by keyboard, and does nothing at all on touch. | Susan |
+  | 1 | Keep the blanket ban and hand-roll a readout layer | The ban rested on a `/console/` weight of 66,550 B that was 4.5x stale, on "canvas cannot inherit a custom property" generalised to SVG engines that can, and on a prerender objection that does not hold for an engine with a build-time SVG mode. All three were wrong. | owner, over Carmack and Jony 2026-08-25 |
+  | 2 | Engine B | 270.1 KB gzipped and it does not tree-shake - worse than the option it was proposed as a fallback to, which is why it was measured rather than assumed. | Carmack |
+  | 3 | Engine C, canvas-only, at 22.6 KB | Cannot inherit a CSS custom property, so the token file stops being the source of a colour, and it cannot render at build time. Cheap and fails both conditions that matter. | Jony |
+  | 4 | The engine on the reading routes too | A charting engine on a reading page is a runtime dependency for nothing: an item's chart is already a build-time asset. | Carmack, Jony |
+  | 5 | A CDN copy of the engine | The HTTP cache is partitioned per site so the shared-cache argument is dead, and `script-src` is `self` only. | Carmack |
+  | 6 | Porting `StageTimings` as the proving chart | Attempted and reverted the same day. It is the chart with no readout, so it looked like the best demonstration, until the test suite bolted to its hand-drawn markup made the cost clear. The funnel was built instead: new ground, no test rewritten, and it replaced a four-column table plus a 90-word paragraph with a shape. | Fowler, 2026-08-29 |
+  | 7 | A character budget on the caption string | It measures the wrong thing. 171 characters is four lines in one panel and six in another, because the box wraps at the card's width - and it says nothing at all about a readout an engine draws. | Fowler |
+  | 8 | Moving the readout to the pointer, or below the plot | The position is not the fault. `CompressionScatter` uses the identical pinned box and covers about a quarter, so moving a box that is too big only puts it over something else. | Jony |
+  | 9 | Keeping the run medians and setting them smaller | It buys one line and spends legibility on the surface a person reads closest. The medians are a table's work, not a readout's. | Susan |
 
 ---
 
@@ -346,7 +415,7 @@ is in flight.
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | A different chart per question is the point. One chart type reused for six questions is what makes the current console read as a single grey instrument. | Susan, owner |
-  | 2 | Every chart type is a pure geometry function plus a thin Svelte view, so the geometry is testable without a browser and the view stays prerenderable. | Fowler |
+  | 2 | Each chart type is a specification the engine draws, plus the arithmetic that turns a payload into that specification. The arithmetic is a pure function and is tested without a browser; the drawing is not ours to test. Row 6's reversal is what makes this the shape - the original row had every geometry hand-written. | Fowler |
   | 3 | No chart type ships without a named question it answers and a page it appears on. A chart added because the vocabulary would look complete is a chart nobody reads. | Jony |
   | 4 | The existing candle charts stay. They answer a question - the spread within a day - that none of the new types answers, and `design-system.md` already records why a line is wrong there. | Jony |
 
