@@ -32,8 +32,14 @@ function sourceFiles(): string[] {
 	return out;
 }
 
-/** Every `id="..."` handed to an Icon, plus the `topic-` ids TopicPills builds
- * from a vertical id at runtime. */
+/** Every `id="..."` handed to an Icon, plus the ids a component holds in a
+ * typed map and passes dynamically.
+ *
+ * The literal scan is scoped to files that import `IconId`, because an id used
+ * dynamically has to be typed for the compiler to check it. Scanning every file
+ * instead reads any string that happens to look like an id - `'theme-color'` in
+ * the theme module was matched that way, and reported as an invented icon.
+ */
 function referenced(): Set<string> {
 	const used = new Set<string>();
 	for (const path of sourceFiles()) {
@@ -42,6 +48,7 @@ function referenced(): Set<string> {
 		for (const m of text.matchAll(/<Icon[^>]*\bid=(?:"([a-z0-9-]+)"|\{([^}]*)\})/g)) {
 			if (m[1]) used.add(m[1]);
 		}
+		if (!/\bIconId\b/.test(text)) continue;
 		for (const m of text.matchAll(/'(band-[a-z]+|topic-[a-z0-9-]+|theme-[a-z]+)'/g)) {
 			used.add(m[1]);
 		}

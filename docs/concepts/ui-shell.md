@@ -51,6 +51,15 @@ These are designed, not discovered:
 - Ask the reader for anything - no cookie banner, no signup, no notification permission, no rating widget. Every interruption is a reason to close the tab.
 - Recompute a score, re-rank items, or derive anything the pipeline already decided. The page renders; it does not think.
 - Hide a low-confidence item to make the page look better.
+- **Call `Notification` or `PushManager`. Ever.** The reader decides when to read (CLAUDE.md section 0a). This is written down rather than implied because installability makes the temptation concrete: an installed app is exactly the context in which "just a gentle daily reminder" starts to sound reasonable. It is not. `frontend/tests/manifest.spec.ts` greps the source and fails on either name.
+
+## Installable, and nothing more than that
+
+The site ships a web app manifest, an icon set and a `theme-color`, which is the whole of it. A manifest is a static JSON file: no request, no account, no code outliving the tab, nothing running off the reader's device. It sits inside Rule #1 for the same reason the font does.
+
+There is **no service worker**, and that is a separate decision rather than an oversight. A worker is the only code this project would ship that survives the tab closing, and a stale worker serving a stale bundle is the hardest bug class available to a static site. If one is ever added it arrives with its own kill-switch design.
+
+The manifest's own paths are relative - `start_url` and `scope` are `.`, and every icon `src` starts `./` - so they resolve against the manifest's URL and survive the project path without being templated. A manifest that validates at a domain root and 404s every icon under a project path is the standard failure, and the oracle resolves each path the way a browser would, from a deep route rather than only from the root.
 
 ## Base-path discipline
 
