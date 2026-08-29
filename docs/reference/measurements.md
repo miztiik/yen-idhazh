@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -15,6 +15,66 @@ Two rules govern this page:
   an order-of-magnitude check, not a runner figure. The runner has a different
   core topology, different memory bandwidth, and a shared host. Nothing here
   substitutes for `.github/workflows/measure.yml` running on `ubuntu-latest`.
+
+## How old the digest was publishing, 2026-08-30
+
+Source: the 2,900 items in the committed day payloads under
+`frontend/public/digest/` for 2026-08-22 to 2026-08-29. Each item's age is
+`runs[introduced_by_run].at - published_at`, so it is the age at the moment the
+run added it, not the age today. `published_at` on a committed item is the date
+the run believed, so a future stamp is already resolved to first sight. Every
+one of the 2,900 carried a date; none fell back.
+
+| statistic | age when added |
+| --- | --- |
+| minimum | -3.3 h (inside the 6 h forward tolerance) |
+| median | 5.5 h |
+| 90th percentile | 856.1 h (35.7 days) |
+| 99th percentile | 6,246.2 h (260.3 days) |
+| maximum | 155,383.6 h (6,474.3 days, 17.7 years) |
+
+The oldest is `et-default`, "Prabhudas Lilladher downgrades Infosys to reduce
+with Rs 1,246 target", dated 2008-12-05 and published in a 2026 digest.
+
+What each candidate window would have kept:
+
+| window | keeps | drops |
+| --- | --- | --- |
+| 24 h | 2,074 (71.5%) | 826 (28.5%) |
+| 48 h | 2,155 (74.3%) | 745 (25.7%) |
+| 72 h | 2,237 (77.1%) | 663 (22.9%) |
+| 7 days | 2,411 (83.1%) | 489 (16.9%) |
+
+The curve is almost flat between 24 h and 7 days: a week only buys back 337
+items over a day, because what sits past 24 hours is not two-day-old news, it is
+a back catalogue. That is the number that made 24 the shipped value - the
+wider windows pay a real freshness cost and recover almost nothing.
+
+At 24 hours the loss is concentrated:
+
+| desk | survives | loses |
+| --- | --- | --- |
+| `world` | 624 of 652 (95.7%) | 28 |
+| `india` | 647 of 680 (95.1%) | 33 |
+| `business-economy` | 242 of 318 (76.1%) | 76 |
+| `energy` | 310 of 476 (65.1%) | 166 |
+| `ai` | 251 of 774 (32.4%) | 523 |
+
+The ten feeds that lose the most are archive-style research and institution
+blogs: `mistral-news` (43 of 44), `google-research-blog` (42 of 47),
+`deepmind-blog` (41 of 43), `huggingface-blog` (39 of 44), `mit-news-ai`
+(36 of 39), `nist-news` (36 of 37), `nvidia-technical-blog` (33 of 47),
+`amazon-science` (25 of 27), `ai2-blog` (25 of 27), `simon-willison` (20 of 28).
+Ten of 104 sources lose every item they published.
+
+**What to re-read after a week of the gate.** Three numbers, in this order.
+First, whether a run still reaches `safety_ceiling_per_run` - if it stops
+binding, supply rather than the ceiling now sizes the day and the ceiling
+argument in [`freshness.md`](../architecture/sources/freshness.md) needs
+re-deriving. Second, `too_old` summed per vertical from the committed plans,
+against the shares above. Third, whether `ai` recovers as its news feeds are
+read more often, or stays near a third - if it stays, the AI feed list is the
+thing to fix and no threshold will do it.
 
 ## Inference throughput
 

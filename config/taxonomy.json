@@ -122,6 +122,29 @@
   ],
   "lenses": [
     {
+      "display_name": "Chips",
+      "id": "chips",
+      "keywords": [
+        "chips",
+        "semiconductor",
+        "semiconductors",
+        "chipmaker",
+        "chipmakers",
+        "chip maker",
+        "chipmaking",
+        "chip making",
+        "foundry",
+        "foundries",
+        "wafer",
+        "euv",
+        "lithography",
+        "chip plant",
+        "gpu",
+        "gpus"
+      ],
+      "weight": 0.3
+    },
+    {
       "display_name": "China",
       "id": "china",
       "keywords": [
@@ -129,51 +152,10 @@
         "chinese",
         "beijing",
         "shanghai",
-        "shenzhen"
+        "shenzhen",
+        "xi jinping"
       ],
-      "retired_on": null,
-      "status": "active"
-    },
-    {
-      "display_name": "Return on AI investment",
-      "id": "ai-roi",
-      "keywords": [
-        "ai spending",
-        "ai investment",
-        "ai roi",
-        "roi",
-        "return on investment",
-        "ai capex",
-        "monetise",
-        "monetize",
-        "ai revenue",
-        "payback",
-        "cost of inference",
-        "ai budget",
-        "ai costs"
-      ],
-      "retired_on": null,
-      "status": "active"
-    },
-    {
-      "display_name": "Markets",
-      "id": "markets",
-      "keywords": [
-        "stock market",
-        "share price",
-        "shares",
-        "equities",
-        "investors",
-        "nasdaq",
-        "s&p 500",
-        "bond yields",
-        "wall street",
-        "market cap",
-        "traders",
-        "shareholders"
-      ],
-      "retired_on": null,
-      "status": "active"
+      "weight": 0.0
     },
     {
       "display_name": "Cyber",
@@ -181,6 +163,7 @@
       "keywords": [
         "cyberattack",
         "cyber attack",
+        "cyberattacks",
         "cybersecurity",
         "cyber security",
         "ransomware",
@@ -188,15 +171,96 @@
         "malware",
         "phishing",
         "hackers",
+        "hacked",
         "zero-day",
-        "vulnerability",
-        "threat actor"
+        "security flaw",
+        "threat actor",
+        "spyware"
       ],
-      "retired_on": null,
-      "status": "active"
+      "weight": 0.0
+    },
+    {
+      "display_name": "Markets",
+      "id": "markets",
+      "keywords": [
+        "stock market",
+        "share price",
+        "shares fell",
+        "shares rose",
+        "shares jumped",
+        "shares slid",
+        "equities",
+        "investors",
+        "nasdaq",
+        "s&p 500",
+        "dow jones",
+        "ftse",
+        "sensex",
+        "nifty 50",
+        "bond yields",
+        "wall street",
+        "market cap",
+        "traders",
+        "shareholders"
+      ],
+      "weight": 0.0
+    },
+    {
+      "display_name": "Trade and tariffs",
+      "id": "trade",
+      "keywords": [
+        "tariff",
+        "tariffs",
+        "trade war",
+        "import duty",
+        "import duties",
+        "export control",
+        "export controls",
+        "export ban",
+        "export curbs",
+        "trade deal",
+        "trade talks",
+        "trade deficit",
+        "trade surplus",
+        "anti-dumping",
+        "trade sanctions",
+        "customs duty",
+        "wto"
+      ],
+      "weight": 0.3
+    },
+    {
+      "display_name": "War",
+      "id": "war",
+      "keywords": [
+        "at war",
+        "war in",
+        "war crimes",
+        "ceasefire",
+        "truce",
+        "invasion",
+        "troops",
+        "airstrike",
+        "air strike",
+        "missile strike",
+        "drone strike",
+        "military strike",
+        "shelling",
+        "peace talks",
+        "civilians killed"
+      ],
+      "weight": 0.0
+    },
+    {
+      "display_name": "Return on AI investment",
+      "id": "ai-roi",
+      "keywords": [],
+      "retired_on": "2026-08-30",
+      "status": "retired",
+      "weight": 0.0
     }
   ],
-  "version": "2026-08-22T11:00",
+  "version": "2026-08-30",
   "verticals": [
     {
       "display_name": "AI",

@@ -82,6 +82,13 @@
         "status": {
           "$ref": "#/$defs/LifecycleStatus",
           "default": "active"
+        },
+        "weight": {
+          "default": 0.0,
+          "description": "What this lens adds to a story's rank when one of its terms is in the headline. Zero means the lens only labels. A weighted lens must be an under-carried theme: the bonus is there to rescue a story one outlet has and nobody has repeated yet, and on an over-carried theme it only compounds a lead that repetition already gave.",
+          "minimum": 0.0,
+          "title": "Weight",
+          "type": "number"
         }
       },
       "required": [
@@ -97,7 +104,10 @@
         "china",
         "ai-roi",
         "markets",
-        "cyber"
+        "cyber",
+        "war",
+        "trade",
+        "chips"
       ],
       "title": "LensId",
       "type": "string"
@@ -164,6 +174,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added the war, trade and chips lenses, and LensDef.weight. ai-roi keeps its id and is retired in config.",
+      "version": "2026-08-30",
+      "why": "A lens could only label, so the vocabulary had no way to say a theme was worth publishing. Measured 2026-08-30 over the 2,900 published items on record, 2,683 of them - 92.5 percent - carried no lens at all, while war words appeared in 637 and tariff words in 75 with no id to hold them. weight is what a lens adds to a rank when one of its terms is in the headline, which is all a run has at plan time. Zero is the default and the answer for most lenses: a bonus rescues a story one outlet has and nobody has repeated, and on a theme every wire already carries it compounds a lead repetition gave. Additive with a default, so a taxonomy written before this still validates and scores nothing. Three new enum members widen a closed vocabulary, so an older payload still reads - no published lens id was removed or renamed, and ai-roi is tombstoned rather than deleted so days that carry it stay valid (section 11)."
+    },
+    {
       "change": "Added keywords to LensDef and EventDef.",
       "version": "2026-08-26",
       "why": "Both vocabularies shipped with no way to say what assigns a tag, so nothing ever did: 0 of 2,121 committed items carried a lens or an event. The rule cannot be derived from the id - measured, deriving it tags 88.2 percent of items because `ai` sits inside `said` - so it has to be written down. Additive with an empty default, so a taxonomy written before this still validates and simply assigns nothing."
@@ -196,7 +211,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-08-30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -216,5 +231,5 @@
   ],
   "title": "Taxonomy",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-08-30"
 }

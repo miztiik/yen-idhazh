@@ -102,6 +102,24 @@ A failed article keeps its empty lists. It has no text, it never reaches a reade
 
 **The tagger is deliberately not a fingerprint input.** A tag does not change a summary, so adding the vocabulary to the stamp would re-summarize every past item to produce identical words ([../contracts/determinism.md](../contracts/determinism.md) already warns that a new `PipelineInputs` field resets every fingerprint). A vocabulary edit therefore re-tags what runs next and leaves the past alone.
 
+### A lens can also score, and then two more rules apply
+
+From 2026-08-30 a lens carries a `weight`. Zero, the default, means it only labels. Above zero it adds to a story's rank at plan time, where the same match rule runs against the **headline alone** - the body has not been fetched yet. The label is unchanged: it is still matched on title plus body after summarizing, so **every scoring hit is also a label** and the reverse does not hold.
+
+Two rules govern which lens may carry a weight. Both were set by Editor on 2026-08-30 and both are about what a bonus is for.
+
+> **A weighted lens must be an under-carried theme, never an over-carried one.**
+
+A bonus exists to rescue a story one outlet has and nobody has repeated yet. `reach` already multiplies a story every wire carried, so a weight on a well-covered theme compounds a lead the story had anyway. That is why `trade` and `chips` carry 0.3 and `war`, `china` and `markets` carry zero despite being the three largest lenses: a tariff filing or a fab announcement breaks in one place, and a war does not.
+
+> **A keyword that is ambiguous in a headline does not ship in a scoring set.**
+
+A headline is eight to twelve words and the matcher has no surrounding context to disambiguate with. Bare `shares` was removed from `markets` for this - it is a verb in "OpenAI shares research" as often as a noun - and replaced with `share price` and four `shares <verb>` phrases. Bare `roi`, bare `vulnerability` and bare `nifty` went the same way. The rule binds every keyword, because one list serves both jobs.
+
+**One fact earns one bonus.** No lens keyword may repeat a watchlist alias. ASML, Nvidia, Intel, Samsung and Huawei are entities carrying `watchlist_bonus`; putting them in the `chips` keywords would pay twice for a single fact. The lens names the thing, the watchlist names the company.
+
+**A theme takes the largest weight it earned, never the sum.** Two themes in one headline is not twice the story, and summing would let a keyword list outweigh the fact that three independent feeds carried it. The shipped weight of 0.3 is deliberately half of what one more trade-press feed is worth (0.6), so a themed single-sourced story ranks below the same story two feeds carried. `backend/tests/test_discover.py::test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story` is what stops a later edit inverting that.
+
 ### Measured coverage
 
 Two corpora, because they answer different questions. Both measured 2026-08-26 on this checkout.
@@ -155,6 +173,24 @@ Multiplying rather than adding is what makes the weight mean something: a weight
 The weight is also the reversible half of retirement. Drop a source to 0.5, watch what changes, then retire it - one field, no payload touched.
 
 The consequence worth stating plainly: **a link aggregator is a vote, not a source.** It contributes rank to a URL already in the pool. It never discovers, because a site with no subject taxonomy cannot be asked for a subject.
+
+### The vote is thin, and the number is here so nobody re-litigates it from intuition
+
+Measured 2026-08-30. Over two real plans (`2026-08-29-1` and `2026-08-29-2`, from their committed plan artifacts) the front-page vote fired on **0 of 160 and 1 of 160 planned items**.
+
+The cause is not a bug, and three things were ruled out before that was believed:
+
+- The feed is correct. `hnrss.org/frontpage` puts the **article** in `link` and its own discussion page in `comments` - 0 of 20 entries pointed at `news.ycombinator.com`. `salience_urls` reads `link`, which is right.
+- Canonicalisation is correct. A feed URL carrying `?utm_source=rss` and the aggregator's clean copy of the same address canonicalise to one string.
+- Widening the sample barely helps. `hnrss.org/best` carries 30 entries against 20 and churns more slowly, and still only **1 of 30** sat on a host we have a feed for.
+
+The cause is that **an aggregator and a news digest do not read the same internet.** The front page was 19 distinct hosts, of which 1 was ours: the rest were personal blogs, GitHub, Bluesky and one-off domains. Only 3 of 20 were on a host we have *ever* published from.
+
+So the vote is kept because it costs one request and occasionally lands, `hn-best` is added because it doubles the sample for a second request, and neither is expected to move a day much. **If the vote still fires on under 1 percent of planned items after a week of both feeds, retire them both** - a bonus nothing earns is a moving part that has to be read and maintained for nothing.
+
+Raising `front_page_bonus` is not the answer and would be the wrong instrument. A story on an aggregator's front page *and* in our pool is by definition well carried, and `reach` already scores it.
+
+`backend/tests/test_discover.py::test_a_vote_is_for_the_article_and_never_for_the_discussion_page` pins the half that is easy to break: `hnrss.org` also offers a `?link=article` form whose `link` is the discussion page, and reading that would cast every vote for an address no feed can offer. It would fail silently, because a vote for a URL we do not hold looks exactly like no vote.
 
 ## One address per story
 
@@ -272,6 +308,27 @@ global and Africa desks, VoxDev, The New Humanitarian, Mongabay.
 both verify today and both were retired on 2026-08-21 with the rest of the `ai`
 curation. This sweep did not review that decision, so it does not reverse it.
 
+**One feed was added on 2026-08-30: `fastcompany-tech`**, trade press on the
+`ai` desk, taking it to 41 feeds against a floor of 35. It goes to `ai` because
+that is where every general-technology outlet already sits - `bbc-tech`,
+`wired-ai`, `techcrunch-ai`, `ars-technica-ai` and `zdnet-ai` are all filed
+there. There is no separate technology desk and this one feed is not a reason to
+open one.
+
+Probed 2026-08-30 from a developer machine, which is evidence about a developer
+machine and not about the runner: `https://www.fastcompany.com/technology/rss`
+answered 200 with 20 entries, every one carrying a date. `/feed` answers 403 and
+is the wrong address. `robots.txt` allows us - the `*` group is `Allow: /` with
+`Disallow: /rest`, and the feed is not under `/rest`.
+
+**One thing about that source is a standing decision, not a settled one.** Its
+`robots.txt` carries an explicit "AI Training Bots (BLOCKED)" group naming
+GPTBot, ChatGPT, Bard, Jasper and others. We are none of those user agents and
+the fetch is allowed, but `corpus/` commits article text as training samples
+(CLAUDE.md section 0a), so the publisher's stated intent and one of our uses
+point in opposite directions. Recorded here rather than resolved: the owner
+takes that call, and if it goes the other way the fix is one `retired_on`.
+
 ### The forty, and why each one went
 
 A tombstone carries a date and not a reason, so the reasons are here. Probed
@@ -291,7 +348,6 @@ A tombstone carries a date and not a reason, so the reasons are here. Probed
 | Rate-limits every article request | `venturebeat-ai` |
 
 ### The per-feed cap is what picks the day
-
 With 160 slots and `max_per_source` at 2, a run needs about 80 feeds to fill
 itself. Measured over six runs, **73 to 78 of the roughly 85 working feeds sat
 exactly on the cap**, and the fifteen largest contributors each published
@@ -334,6 +390,23 @@ The floor was not lowered. Lowering it would trade a gate that reads the wrong
 number for a lower gate that reads the same wrong number. What would fix it is a
 floor read from the health ledger rather than from config, and that is a
 contract change nobody has costed - filed here rather than done.
+
+**What was done is smaller and it is the part that was actually missing: the
+floor is now a merge gate.** `backend/tests/test_contracts.py::test_every_vertical_clears_its_own_feed_floor`
+reads the committed `config/sources.json` against the committed
+`config/taxonomy.json` and fails the build when any vertical's active feed count
+drops under `min_feeds`.
+
+Until 2026-08-29 nothing in this repository checked that. `rank.plan_vertical`
+enforces the floor at run time by planning nothing, which is silent by design -
+the run succeeds, the digest publishes, and one section is simply absent. The
+sweep above came one edit away from doing exactly that to two desks, and what
+caught it was a throwaway assertion in a migration script. This test is that
+assertion, kept. It says what a failing vertical would cost:
+`ai has 6 active feeds against a floor of 35, so it would publish nothing`.
+
+It does not make the floor read the right number. It makes the number it does
+read impossible to break by accident.
 
 ## Design rationale
 

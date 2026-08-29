@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A feed that spells "no date set" as a date.
+
+  `0001-01-01` is what several content systems emit for an unset publication
+  date, and `feedparser` reads it as an ordinary year 1. It is a real date to
+  every layer that handles it, so nothing rejects it on the way in.
+
+  It matters because a payload timestamp is written by one process and read by
+  another. `strftime` does not pad a year below 1000 on Linux, so this entry
+  left discovery as `1-01-01T00:00:00Z`, and `strptime` reads only a four-digit
+  year on every platform - which stopped the whole day at ranking, before a
+  single article had been read.
+
+  The second entry is ordinary, so a test can show the feed is otherwise fine
+  and that only the placeholder is at issue.
+-->
+<rss version="2.0">
+  <channel>
+    <title>Example Unset Dates</title>
+    <link>https://unset.example-press.net/</link>
+    <description>A feed whose publishing system left the date field empty.</description>
+    <item>
+      <title>Interconnection queue reform enters its second consultation</title>
+      <link>https://unset.example-press.net/2026/08/queue-reform</link>
+      <pubDate>0001-01-01T00:00:00Z</pubDate>
+    </item>
+    <item>
+      <title>Regional grid operator publishes its capacity outlook</title>
+      <link>https://unset.example-press.net/2026/08/capacity-outlook</link>
+      <pubDate>Fri, 21 Aug 2026 06:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

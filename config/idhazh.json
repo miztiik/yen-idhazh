@@ -13,6 +13,7 @@
       "fool.com/the-ascent/"
     ],
     "front_page_bonus": 0.4,
+    "max_age_hours": 24.0,
     "max_future_hours": 6.0,
     "max_per_source": 2,
     "quarantine_after_failures": 5,

@@ -170,14 +170,25 @@ class CollectConfig(Model):
         default=0.6,
         ge=0.0,
         description=(
-            "How much freshness may move a score. A bonus, never a filter: a strong "
-            "older item still outranks a weak new one, which a hard age cutoff cannot do."
+            "How much freshness may move a score, inside the window max_age_hours "
+            "allows. It orders what is already fresh enough to publish; it is "
+            "max_age_hours, not this, that decides what is too old to add at all."
         ),
     )
     recency_half_life_hours: float = Field(
         default=18.0,
         gt=0.0,
         description=("Hours for the recency bonus to halve. At 18 h a day-old item keeps a third."),
+    )
+    max_age_hours: float = Field(
+        default=24.0,
+        gt=0.0,
+        description=(
+            "How old a story may be and still be added. A hard gate, applied to the "
+            "date we believe rather than the date the feed claimed. An article we "
+            "could not date at all is not too old - first sight is its age, so it "
+            "gets the day we found it and no more."
+        ),
     )
     max_future_hours: float = Field(
         default=6.0,
@@ -1286,6 +1297,29 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30",
+            change=(
+                "Added collect.max_age_hours. collect.recency_weight's description now "
+                "says it orders inside that window rather than deciding admission."
+            ),
+            why=(
+                "Age was a bonus and never a gate, so nothing had a lower bound. "
+                "Measured 2026-08-30 over the 2,900 items published between 2026-08-22 "
+                "and 2026-08-29, aged at the moment their own run planned them: the "
+                "median is 5.5 hours and the 90th percentile is 35.7 days. The oldest "
+                "story the digest has published was 6,474 days old - a stock note from "
+                "December 2008 - and 826 items (28.5 percent) were over a day old when "
+                "they were added. They came from research-lab and institution feeds "
+                "that serve a whole back catalogue, and the tier weighting scores an "
+                "undated institution post at 1.0 against 0.64 for a three-day-old "
+                "trade-press story, so the archive won. The argument for keeping age "
+                "soft was that a cutoff wastes a slot on a quiet day. There are no "
+                "quiet days: every run since 2026-08-25 has hit its ceiling, so each "
+                "old item displaced a fresher one. Additive with a default, so an "
+                "older config still validates (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T23:30",
             change=(

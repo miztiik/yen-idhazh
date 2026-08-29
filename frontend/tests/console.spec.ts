@@ -513,6 +513,22 @@ test('a feed that answered with nothing is named, and a polite refusal is not', 
 	await expect(page.locator('[data-feed="canary-quiet"]')).toHaveCount(0);
 });
 
+test('a feed that answered with nothing does not report its last result as ok', async ({ page }) => {
+	await page.goto('/console/');
+
+	// The ledger's own word for this read is `ok` - the fetch returned 200. Printed
+	// raw it sits on the same row as the failure count and contradicts it, which is
+	// how a dead feed reads as a healthy one.
+	const result = page.locator('[data-feed="canary-empty"] [data-feed-result]');
+	await expect(result).toHaveCount(1);
+	await expect(result).toContainText('answered with nothing');
+
+	// A feed that really did fail still reports the reason the ledger recorded.
+	await expect(page.locator('[data-feed="canary-gone"] [data-feed-result]')).not.toContainText(
+		'answered with nothing'
+	);
+});
+
 test('a feed past the quarantine count is marked rested', async ({ page }) => {
 	await page.goto('/console/');
 

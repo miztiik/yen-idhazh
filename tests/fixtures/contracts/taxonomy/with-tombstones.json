@@ -48,32 +48,66 @@
   ],
   "lenses": [
     {
-      "display_name": "China",
-      "id": "china",
-      "keywords": [],
-      "retired_on": null,
-      "status": "active"
-    },
-    {
       "display_name": "Return on AI investment",
       "id": "ai-roi",
       "keywords": [],
       "retired_on": null,
-      "status": "active"
+      "status": "active",
+      "weight": 0.0
     },
     {
-      "display_name": "Markets",
-      "id": "markets",
+      "display_name": "China",
+      "id": "china",
       "keywords": [],
       "retired_on": null,
-      "status": "active"
+      "status": "active",
+      "weight": 0.0
+    },
+    {
+      "display_name": "Chips",
+      "id": "chips",
+      "keywords": [
+        "semiconductor"
+      ],
+      "retired_on": null,
+      "status": "active",
+      "weight": 0.3
     },
     {
       "display_name": "Cyber",
       "id": "cyber",
       "keywords": [],
       "retired_on": "2026-06-01",
-      "status": "retired"
+      "status": "retired",
+      "weight": 0.0
+    },
+    {
+      "display_name": "Markets",
+      "id": "markets",
+      "keywords": [],
+      "retired_on": null,
+      "status": "active",
+      "weight": 0.0
+    },
+    {
+      "display_name": "Trade and tariffs",
+      "id": "trade",
+      "keywords": [
+        "tariff"
+      ],
+      "retired_on": null,
+      "status": "active",
+      "weight": 0.3
+    },
+    {
+      "display_name": "War",
+      "id": "war",
+      "keywords": [
+        "ceasefire"
+      ],
+      "retired_on": null,
+      "status": "active",
+      "weight": 0.0
     }
   ],
   "version": "2026-08-21",

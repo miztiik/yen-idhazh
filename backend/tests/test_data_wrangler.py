@@ -162,11 +162,14 @@ def test_a_training_row_and_a_holdout_row_are_never_the_same_row(window: Path) -
 def test_split_defaults_to_the_configured_holdout_days(window: Path) -> None:
     """A knob with no reader is not a knob (Rule #6)."""
     config = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
-    assert config.finetune.holdout_days > 3
+    days = config.finetune.holdout_days
+    assert days < 3, "the fixture window is three days, so a wider holdout would prove nothing"
 
     assert run(window, "split") == 0
 
-    assert len(corpus.read_holdout(window)) == 6, "the window is shorter than the holdout"
+    rows = corpus.read_rows(window)
+    trailing = sorted({row.date for row in rows})[-days:]
+    assert corpus.read_holdout(window) == {row.url_key for row in rows if row.date in trailing}
 
 
 # --- verify ----------------------------------------------------------------
