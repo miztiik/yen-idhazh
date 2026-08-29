@@ -20,6 +20,18 @@
     "recency_weight": 0.6,
     "repetition_weight": 1.0,
     "seen_window_days": 90,
+    "settled_failure_codes": [
+      "robots_denied",
+      "robots_unreachable",
+      "blocked_address",
+      "http_client_error",
+      "paywalled",
+      "no_text",
+      "not_prose",
+      "boilerplate",
+      "too_short",
+      "unsupported_form"
+    ],
     "tier_weights": {
       "community": 0.3,
       "institution": 1.0,

@@ -74,7 +74,7 @@ Three, in the order they bite:
 
 Not compute. The order in which limits bite is: how many good articles a day the sources actually supply, then how many summaries a person will read, then artifact storage, then repository growth, and only far behind all of those, concurrency.
 
-Note what is *not* on that list: a number we chose. There is no daily item cap. Supply and the ranking decide how big a day is, and the only ceiling in the run config is a crash guard ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is a source-diversity question, not a capacity one and not a config edit.
+Note what is *not* on that list: an editorial number. There is no daily item cap chosen for how long a day should be. Supply, the score and `max_per_source` decide the shape of a day, and `run.safety_ceiling_per_run` bounds its size - a number that began as a crash guard, was overtaken by supply, and is now knowingly the cap ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is still a source-diversity question first: the ceiling only binds because 27 percent of every run was being spent on sources that could not be read.
 
 ## Design rationale
 

@@ -45,14 +45,14 @@ fact, and it lives here.
 from __future__ import annotations
 
 import csv
-from collections.abc import Iterable
+from collections.abc import Collection, Iterable
 from datetime import date as date_type
 from datetime import timedelta
 from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.feed_health import FeedHealthRow
-from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 
@@ -247,6 +247,31 @@ def load_published(state_dir: Path) -> dict[str, str]:
         if url_key not in published or on < published[url_key]:
             published[url_key] = on
     return published
+
+
+def load_settled_failures(state_dir: Path, date: str, *, codes: Collection[str]) -> set[str]:
+    """Addresses that failed today for a reason today cannot change.
+
+    The published ledger stops a repeat of a *success*. It cannot stop a repeat
+    of a failure, because a failure is never published - so every later run of
+    the same day planned the same paywall again and got the same paywall.
+    Measured over 2026-08-24 to 2026-08-29, 403 such repeats bought 2 items.
+
+    Only `date` is read, and only the codes the caller names. A rate limit or a
+    reset connection is a different answer at 18:20 than it was at 02:20, so
+    those codes are left out of the config list and their addresses come back.
+
+    An empty `codes` returns nothing, which is exactly the behaviour this
+    replaced - a run configured that way plans a failed address again.
+    """
+    if not codes:
+        return set()
+    wanted = set(codes)
+    return {
+        row["url_key"]
+        for row in _read_rows(item_health_path(state_dir, date))
+        if row["date"] == date and row["outcome"] != ItemOutcome.OK and row["code"] in wanted
+    }
 
 
 def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> int:
