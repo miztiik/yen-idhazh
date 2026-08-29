@@ -823,6 +823,105 @@ built on the same tree and the same machine.
 Authority: Jony, 2026-08-25; the three marks and the counts behind them, Jony
 and Fowler, 2026-08-27.
 
+## The chart arm is a flow, and every drop leaves it as a named branch
+
+`Charts drawn for articles` opens with one diagram of where items go between the
+router reaching one and a chart reaching a page. It is drawn left to right, the
+direction the page reads and the order the pipeline runs its stages in, and it
+totals the whole open window rather than one day - a single day's four numbers
+are already legible in the table under it, and "where do items go" is a question
+about the window.
+
+**It was a funnel until 2026-08-30, and a funnel could not answer the question
+it was on the page for.** A funnel draws a monotonic sequence as a taper, so it
+says how much is left at each step and nothing about where the rest went. The
+three drops here have three different causes and three different fixes: an item
+can be answered without the model being asked at all, the model can be asked and
+draw nothing, and a drafted chart can fail the checks that run after it. A taper
+shows all three as one slope. Every loss now leaves the flow as its own branch,
+labelled `Answered without a chart`, `The model drew nothing` and `Did not
+survive the checks`, and the branch is as wide as the number of items in it.
+
+**The widths conserve, and that is asserted rather than assumed.** What leaves a
+stage is what arrived at it: the branch that carries on plus the branch that was
+lost. `frontend/tests/charts.spec.ts` recomputes the four stage totals from the
+fixture and checks every node against them, so a layout that drew a plausible
+shape from the wrong numbers fails. A flow whose widths do not conserve is
+drawing a picture, not the data.
+
+**A branch of zero is not drawn.** A stage that lost nothing has no loss to
+show, and a zero-width branch with a label beside it reads as a loss too small
+to see rather than as no loss at all.
+
+**A window that gains items prints a sentence instead of a diagram.** The four
+counts are not guaranteed to fall: a chart published inside the window can have
+been drafted before the window opened, and the committed ledger holds exactly
+that - 2026-08-25 recorded 23 drafted and 27 published. Over a whole window the
+totals came back monotonic (2,121 reached, 1,425 asked, 144 drafted, 124
+published on 2026-08-30), but a narrower window need not, and the drop would be
+negative. The diagram steps aside and says which stage gained, because a
+negative branch cannot be drawn and a clamped one would be a lie about the
+count. The table below it still holds the numbers. Zero reached is the other
+empty state and keeps its own sentence, so the two nothings are never one blank
+panel.
+
+**Colour is the categorical ramp, and a loss keeps the hue of the stage it
+left.** Every fill comes from `PALETTE` through the sentinel bridge, so both
+themes resolve with no JavaScript at all; a loss branch is the same hue at 0.28
+opacity against the flow's 0.55. A second hue would say a loss is a different
+kind of thing, and it is the same items going a different way. Both opacities
+are low because a label to the right of a node sits over the links leaving it,
+which is unavoidable in a flow this shape - the label has to stay readable
+across them.
+
+**Every label sits outside its node, on two lines, carrying the count and the
+share of everything reached.** The narrowest node on the committed ledger is
+under three pixels tall, so a label inside it would be unreadable - the defect
+the funnel already had to fix once. Three measurements set the geometry, all
+taken in the browser on 2026-08-30:
+
+- **Two lines, not one.** `Answered without a chart  696  (33%)` ran 280px into
+  a 246px column pitch and printed over the next stage's label. Split, the
+  widest line is the name alone.
+- **The right margin is 170 pixels, not a share of the width.** A label does not
+  shrink with the frame, so a percentage leaves too little on a narrow screen -
+  the first arm reserved 30 percent and still clipped `Did not survive the
+  checks`, which measures 151px at 12px type.
+- **The node gap is 34 pixels, against the engine's default of 14.** `Published`
+  and `Did not survive the checks` are 13.8px and 2.2px tall over the committed
+  ledger, so at 14px their two-line labels shared nine pixels of one line. A
+  two-line label is 31px and the gap has to carry it.
+
+`depth` is set on every node rather than inferred, because an inferred layout
+justifies dead ends to the far edge - it would draw the first stage's loss
+beside the last stage's.
+
+**What it cost, measured 2026-08-30 on one Windows dev machine, node 24, after
+merging `origin/main`, with main's own source built on this same tree first and
+this branch second.** The lazy chart chunk went from 191,889 to 197,561 gzipped
+bytes, **5,672 bytes for the Sankey layout**, and registering `SankeyChart` in
+place of `FunnelChart` is the whole of it. Both arms read byte-identical on
+every build, so the spread is zero and the difference is the change. That leaves
+**2,439 bytes under the 200,000-byte line** the console plan draws, which is 1.2
+percent - the next chart type registered will cross it, and the answer then is
+to measure what the current set costs before adding to it. First-load JavaScript
+on `/console/` went from 76,727 to 77,343, **616 bytes**, which is the option
+builder growing; the engine is still a lazy chunk nothing preloads. The
+console's prerendered HTML went from 162,225 to 163,089 gzipped bytes, **864
+bytes** for three more nodes and seven two-line labels, and against the 301,580
+ceiling that leaves 138,491 spare - 0.29 percent of the ceiling spent.
+
+**The recorded chunk size was already wrong before this landed, and by more than
+this change costs.** `docs/concepts/design-system.md` carried 153,204 B from
+2026-08-29, when only the funnel, the tooltip and the SVG renderer were
+registered. The six figures added since brought bar, line, pie, grid, legend and
+mark-line with them and nobody re-measured, so the record sat 38,685 B - 25
+percent - under the truth. The number is corrected there in this commit, and the
+lesson is the one `core.ts` already states: the registration list is a file
+somebody has to edit, and re-measuring it is the reason it is.
+
+Authority: the shape, Jony, 2026-08-30; the chunk, Carmack, 2026-08-30.
+
 ## What the cap costs, and the four places the console says it
 
 The truncation cap is the one setting on this project that silently removes

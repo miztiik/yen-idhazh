@@ -1,11 +1,12 @@
 /** The client half of the chart engine.
  *
  * Imported dynamically by `Chart.svelte`, so the engine lands in its own chunk
- * and is fetched only when a chart hydrates. Measured 2026-08-29 on this tree
- * it is 153,204 B gzipped, and it costs the console route 1,869 B of first-load
- * JS - the component and the option builder, not the engine. Nothing downloads
- * it unless a chart comes alive, and no other route references it at all.
- * `charts.spec.ts` asserts both.
+ * and is fetched only when a chart hydrates. Measured 2026-08-30 on this tree
+ * it is 197,561 B gzipped, and it costs the console route none of that - the
+ * route's first load carries the component, the option builders and the token
+ * bridge, and nothing else. Nothing downloads the engine unless a chart comes
+ * alive, and no other route references it at all. `charts.spec.ts` asserts
+ * both.
  *
  * The build-time half is `$lib/server/chart-render`, where SvelteKit fails the
  * build if a client module imports it.

@@ -1,20 +1,20 @@
 /** The engine, cut down to the parts a chart on this site actually uses.
  *
  * Importing `echarts` whole pulls every chart type, every component and both
- * renderers: measured 2026-08-29 on this tree, 1,044,275 B raw and 345,959 B
- * gzipped for a page that draws one funnel. Registering only what is used cuts
- * that to 451,227 B raw and 153,204 B gzipped, a 56 percent saving, and it is
- * the difference between a lazy chunk worth having and one that is
- * indefensible on any route.
+ * renderers. Registering only what is used is the whole cost-control mechanism,
+ * and it is worth about half the download: measured 2026-08-29 on this tree,
+ * 1,044,275 B raw whole against 451,227 B for the registered set of the day.
  *
- * Adding a chart type means adding its import here, and the number in
- * `docs/concepts/design-system.md` is re-measured in the same commit. That is
- * the whole cost-control mechanism, so it is deliberately a file somebody has
- * to edit.
+ * Adding a chart type means adding its import here, and the chunk is
+ * re-measured in the same commit - `docs/concepts/design-system.md` holds the
+ * number. Measured 2026-08-30 on this tree, this list builds a lazy chunk of
+ * 585,481 B raw and 197,561 B gzipped, against a 200,000 B line the console
+ * plan draws. Two and a half kilobytes of room left is why this is deliberately
+ * a file somebody has to edit.
  */
 
 import * as echarts from 'echarts/core';
-import { BarChart, FunnelChart, LineChart, PieChart } from 'echarts/charts';
+import { BarChart, LineChart, PieChart, SankeyChart } from 'echarts/charts';
 import {
 	GridComponent,
 	LegendComponent,
@@ -27,9 +27,9 @@ import { SVGRenderer } from 'echarts/renderers';
 // carries a custom-property reference, so CSS keeps owning colour.
 echarts.use([
 	BarChart,
-	FunnelChart,
 	LineChart,
 	PieChart,
+	SankeyChart,
 	GridComponent,
 	LegendComponent,
 	MarkLineComponent,
