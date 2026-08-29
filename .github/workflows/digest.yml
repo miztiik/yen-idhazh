@@ -972,14 +972,16 @@ jobs:
       # The day just written rides inside frontend/public, and /archive/ inlines
       # every committed day for the on-device search - so this job is the one
       # that can push a page past its ceiling or a payload the build rejects.
-      # Proving the site builds and holds its weight BEFORE the commit is the
-      # difference between a run that publishes nothing and one that breaks main
-      # (Rule #2). It is the guard backfill.yml already runs.
-      - name: Build the site and hold it to its weight ceilings
+      # Those are two different severities and they now sit on opposite sides of
+      # the commit below.
+      #
+      # A build failure means the payload is invalid. Prerendering turns what
+      # would be a reader's runtime error into a failure here, and that day must
+      # not publish - so the build runs BEFORE the commit and stops it. The
+      # weight ratchet runs after. See ../../docs/architecture/publishing/layout.md.
+      - name: Build the site
         working-directory: frontend
-        run: |
-          npm run build
-          npm run bundle-gate
+        run: npm run build
 
       # The 1 GB Pages cap is measured HERE and nowhere else, because `build` is
       # the tree the deploy uploads and it does not exist until the step above
@@ -1036,3 +1038,19 @@ jobs:
         run: >-
           bash .github/scripts/commit-and-push.sh
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index state corpus
+
+      # The other severity, and the reason it is down here. A page heavier than
+      # the weight recorded for it in config/idhazh.json still reads correctly:
+      # what grew is the document, not the meaning. Losing the day for it also
+      # throws away the two to three hours that built it, to hold a number we
+      # wrote down ourselves. So the day publishes first.
+      #
+      # It stays fatal. The job goes red, main's next CI goes red with it, and
+      # somebody re-measures the ceiling - one line in config/idhazh.json.
+      #
+      # It reads the build made above, in both positions: nothing rebuilds the
+      # site after `Commit the day` rebuilds the day against origin's new tip.
+      # That is why the old order bought less than it read like.
+      - name: Bundle gate - encoder, first-load weight, page ceilings
+        working-directory: frontend
+        run: npm run bundle-gate

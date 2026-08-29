@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -286,6 +286,22 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 
 **The deploy is not gated.** `pages.yml` prints `du -sb build` and always did. Adding the check there would need a Python install on the deploy path for no new coverage: every byte that reaches `main` passes through the `assemble` job or through `ci.yml`, and both now measure it before the push rather than after.
 
+### The build stops a bad day; the weight ratchet does not (2026-08-29)
+
+`digest.yml`'s `assemble` job ran `npm run build` and `npm run bundle-gate` in one step, before the commit that publishes. Two failures with nothing in common were welded together, and only one of them is worth a day.
+
+**A build failure is the payload.** Every route is prerendered, so a payload that fails its contract fails the build instead of a reader's browser. That day is broken, it must not publish, and the build still runs before the commit. Nothing about that changed.
+
+**A weight failure is a number we wrote down ourselves.** `page_weight.ceilings_bytes` in `config/idhazh.json` says how heavy each named page's prerendered HTML may get. Past it the page still reads correctly - what grew is the document, not the meaning. The run that hit it lost the whole day and the two to three hours of runner time that produced it, and the reader lost a digest that was fine. So the gate moved after the commit, in `digest.yml` and in `backfill.yml` alike.
+
+**Leaving it before the commit was the alternative, and it was rejected on the trade rather than on the principle.** It does buy something real: `main` stays green, and the ceiling is discussed before any reader sees the heavy page. It buys that by spending a published day and a runner budget (Rule #2) on a page nobody would have complained about. A digest that never arrives is the larger failure.
+
+**It stays fatal, and that costs something.** The day publishes, then the job goes red - and `main`'s next CI run goes red with it, because `ci.yml`'s `site` job runs the same gate on every push. Stated plainly: a ceiling crossed on a Tuesday leaves `main` red until somebody looks at it. That is the price of the trade and it is not hidden. The fix is one line in `config/idhazh.json`, raised in the commit that earned the bytes and saying what they buy ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)). For `/console/` it is not to raise the number at all ([frontend.md](frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)). A warning was rejected for the same reason a green light on a broken alarm was: nobody reads it.
+
+**The old position was never the guarantee its comment claimed.** `Commit the day` retries a lost push by rebuilding the day against origin's new tip, and nothing rebuilds the site afterwards. So the gate reads the build made before the commit wherever the step sits, and a pass recorded before the push could describe a tree the retry had already replaced. Moving the step does not fix that. What it fixes is a stale measurement being the thing that costs a reader the day.
+
+**`site-weight` did not move.** The 1 GB Pages cap is the platform's limit, not our record of our own bytes, and past it the deploy fails whatever we do - so refusing to publish is the honest answer there and it still runs before the commit.
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -325,6 +341,8 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 | Deriving the site size from the payload tree with a calibrated multiplier | The ratio moved from 21x to 18x on one pull request. A multiplier nobody can re-measure per run is an unmeasured number justifying a design (Rule #10). |
 | Failing the build at the 800 MB alarm point | It stops publishing about two weeks before it has to. A reader loses a working site to a budget that still had room; the cap is where refusing the bytes is the honest answer. |
 | Measuring the site in the Pages deploy instead | The day is already committed by then, and undoing it is a revert. Gating before the push is what turns a broken site into a run that publishes nothing. |
+| Leaving the page-weight gate before the commit | It keeps `main` green by spending a finished day and the two to three hours that built it, on a page that reads correctly and that no reader would have complained about. See [The build stops a bad day; the weight ratchet does not](#the-build-stops-a-bad-day-the-weight-ratchet-does-not-2026-08-29). |
+| Making the page-weight gate a warning instead of moving it | A warning that fires on every heavy publish is a line in a log nobody opens, and the ceiling then drifts with no date on it. Red after the day is published is read; amber before it is not. |
 | A default value for `--site-tree` | A default is how the measurement came to name the wrong tree. The workflow names it, and a test reads it back off the deploy's own upload step. |
 | Reusing the render-failure state to mark a prune | One field carrying two different facts, which is the band-aid Rule #5 forbids. |
 | Deduplicating the state ledgers the way the eval ledger does | A state row is a fact about a run, not a measurement. A feed that answered twice answered twice, and collapsing the two rows turns a count of runs into a count of days - which is the number `discover.resting` reads to decide a quarantine. |
