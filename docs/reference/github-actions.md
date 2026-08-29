@@ -10,7 +10,7 @@ times are UTC.
 | File | Display name | Automatic trigger | Manual dispatch |
 | --- | --- | --- | --- |
 | `ci.yml` | `CI` | Pull request; push to `main` | yes |
-| `digest.yml` | `Content refresh` | `20 2,6,10,14,18 * * *` | yes |
+| `digest.yml` | `Content refresh` | `20 2 * * *`, `20 6 * * *`, `20 10 * * *`, `20 14 * * *`, `20 18 * * *` | yes |
 | `pages.yml` | `Pages publication` | Push to `main` when `frontend/**`, `config/idhazh.json`, or `state/**` changes; completed `Content refresh` run | yes |
 | `drift.yml` | `Drift review` | Sunday at 08:00 (`0 8 * * 0`) | yes |
 | `validate.yml` | `Model validation` | none | yes |
@@ -19,6 +19,76 @@ times are UTC.
 
 An ordinary pull request starts CI only. A merge or direct push to `main`
 starts CI, and starts Pages publication only when its path filter matches.
+
+## The schedule asks for five runs a day and gets fewer
+
+**This is the single most important thing on this page, because it is invisible
+in the run list.** GitHub places a scheduled workflow on a best-effort queue. On
+a free public repository it delays runs under load, and it **drops the slots it
+cannot place** - without creating a run, without a failure, and without a
+notification.
+
+Measured 2026-08-29 from `gh api
+repos/miztiik/yen-idhazh/actions/workflows/digest.yml/runs`, over every run
+created since 2026-08-26:
+
+| Day | Slots elapsed | Runs created | Runs that failed |
+| --- | --- | --- | --- |
+| 2026-08-26 | 5 | 5 | 0 |
+| 2026-08-27 | 5 | 2 | 0 |
+| 2026-08-28 | 5 | 1 | 0 |
+| 2026-08-29 (to 11:46 UTC) | 3 | 2 | 0 |
+
+**Nothing failed. Eight of the thirteen slots over the last three days were
+never created at all.** A thin digest day is a run that did not happen, not a
+run that broke, and until 2026-08-29 no artifact in this repository recorded the
+difference.
+
+Slot by slot, with the delay each one carried:
+
+| Slot | Started | Late by |
+| --- | --- | --- |
+| 2026-08-26, all five | 03:27, 07:11, 10:53, 15:54, 20:05 | 33 to 105 min |
+| 2026-08-27 02:20, 06:20, 14:20 | never | - |
+| 2026-08-27 10:20 | 12:50 | 2 h 30 |
+| 2026-08-27 18:20 | 23:48 | 5 h 28 |
+| 2026-08-28 02:20, 06:20, 10:20 | never | - |
+| 2026-08-28 14:20 | 14:23 | 3 min |
+| 2026-08-28 18:20 | **2026-08-29** 01:46 | 7 h 26 |
+| 2026-08-29 02:20 | never | - |
+| 2026-08-29 06:20 | 09:06 | 2 h 46 |
+
+**A slot delayed past midnight publishes to the wrong day.** The `plan` job dates
+a run with `date -u +%F`, so the 18:20 slot of 2026-08-28 started at 01:46 and
+filed its 108 items under 2026-08-29. That is why 2026-08-28 shows one run and
+2026-08-29 shows two. The rule "a run belongs to the UTC day it ran" is
+defensible and is not being changed here; what was missing is that anybody could
+see it happen.
+
+### What was done about it
+
+Two things, and neither of them makes GitHub reliable, because nothing in this
+repository can.
+
+**The cron is five one-slot lines rather than one five-hour line.** The schedule
+is identical. `github.event.schedule` hands a run the cron line that fired, and
+with a single `20 2,6,10,14,18 * * *` line that string is the whole expression -
+a run cannot tell which of the five slots it is, so it cannot say how late it
+started. Five lines make the slot nameable.
+
+**The `plan` job reports its own lateness.** It prints the slot and the delay on
+every scheduled run, and raises a workflow warning past 120 minutes. That
+threshold is **derived, not measured**: a scheduled run here normally starts 40
+to 70 minutes after its cron minute, so it is roughly twice the recorded normal.
+Nothing reads it to make a decision - it annotates the run summary and stops
+there.
+
+**What was not done.** No retry, no self-dispatch, no extra cron slots to absorb
+the losses. A workflow that re-fires itself on a schedule it cannot observe is a
+way to run two pipelines at once, and the `digest` concurrency group has already
+cancelled queued runs on this repository (2026-08-24 and 2026-08-25 carry six
+`cancelled` runs between them). The honest position is that the platform decides
+how many runs happen, and this page is where that is written down.
 
 ```mermaid
 flowchart LR
