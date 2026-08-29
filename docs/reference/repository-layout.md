@@ -1,6 +1,6 @@
 # Repository Layout
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 Every top-level directory, what it holds, who writes it, and whether a reader
 ever sees it. Read this before adding a directory, or when deciding where a new
@@ -30,7 +30,8 @@ question, and the four answers do not mix.
 | Path | Holds | Written by | Reaches a reader |
 | --- | --- | --- | --- |
 | `config/` | The tunable knobs: `idhazh.json`, `sources.json`, `taxonomy.json`, `watchlist.json` | a person | only the slice the site is handed |
-| `schemas/` | One generated JSON Schema per contract, twenty-two files | `python -m idhazh.contracts.export` | no |
+| `corpus/` | The rolling training window: source text as training samples, its census and its holdout | a run, in CI | **never** |
+| `schemas/` | One generated JSON Schema per contract, twenty-four files | `python -m idhazh.contracts.export` | no |
 | `backend/` | The build-time producer. Not a service, ever | a person | no |
 | `.github/scripts/` | A shell step two or more workflow jobs run | a person | no |
 | `state/` | The append-only ledgers one run leaves for the next | a run, in CI | **never** |
@@ -84,6 +85,23 @@ even though one is useless without the other. The run writes the evidence, the
 work job uploads it as an artifact with a deadline, and a fresh checkout has
 none of it - which is the intended cost. See
 [../how-to/label-the-faithfulness-queue.md](../how-to/label-the-faithfulness-queue.md).
+
+**`corpus/` holds that same article text, committed, and it is the one place in
+this repository that does.** `CLAUDE.md` section 0a permits it by name, on an
+owner decision taken 2026-08-28: what the non-goal protects is the published
+surface, and nothing renders the corpus, links to it, or serves it. Two
+consequences follow and neither is hidden. This repository is public, so those
+bytes are readable by anyone. And because git history is append-only, bounding
+the repository means rewriting history - which is what
+`.github/workflows/prune.yml` does, and why section 8 carries exactly one
+force-push exception. See
+[../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md).
+
+It is not under `state/`, because `state/` is append-only ledgers whose rows are
+independent and union-merge; a corpus is a fixed window that evicts, so the union
+of two rolls is a file holding rows the roll already threw out. It is not under
+`backend/var/`, because that is gitignored reproducible run output and a training
+window has to survive a fresh checkout.
 
 The Pages workflow uploads `frontend/build` and nothing else, so `state/` cannot
 reach a reader even by accident. The console reads it at build time and bakes

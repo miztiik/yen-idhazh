@@ -1,6 +1,6 @@
 # CLAUDE.md - yen-idhazh Engineering Contract
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 Non-negotiable contract for any human or AI agent working in this repo.
 
@@ -18,7 +18,7 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 - **Account systems** (login, signup, email collection, server-backed sync). The site is anonymous and read-only.
 - **Push notifications.** The reader decides when to read.
 - **Runtime telemetry / analytics SDKs / third-party scripts that fetch at runtime.** Static-first means no runtime calls home.
-- **Republishing article bodies.** The pipeline publishes a link and our own summary. Never the source text.
+- **Republishing article bodies to a reader.** The digest publishes a link and our own summary. A reader-facing page never carries the source text. `corpus/` is the one exception: it holds source text as training samples, and nothing renders it, links to it, or serves it. Owner decision, 2026-08-28.
 - **Paywalled or login-walled sources.** If `robots.txt` or a paywall says no, the answer is no.
 - **LLM-as-judge evaluation.** A judge that shares the failure modes of the thing judged is not a measurement.
 - **Training on the runner, GPU runners, and models that do not fit the runner.** See Rule #2. Training a model elsewhere is not a non-goal. The runner only ever opens finished weights and reads bytes, so where those weights were trained does not change what the runner has to do. A fine-tuned model is an ordinary candidate: one entry in `config/idhazh.json`, the same qualification, the same SHA-256.
@@ -27,6 +27,8 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 ### Design rationale
 
 **The fine-tuning clause was narrowed on 2026-08-27 to name what it was actually protecting.** It read "Fine-tuning, GPU runners, and models that do not fit the runner", which any reader took as a ban on using a fine-tuned model at all. That was never the hazard. The hazard is a build step the runner cannot execute: no GPU, 4 vCPU, and a job that stops at 6 hours. Training somewhere else costs the runner nothing, because the runner only opens a finished GGUF and reads bytes. The wide wording made an ordinary model swap look like a rule reversal, and a rule that fires on ordinary work stops being read.
+
+**The article-bodies clause was narrowed on 2026-08-28, and it cost something.** It read "Republishing article bodies", which forbade storing source text anywhere at all - `EvidenceItem` cites that clause as the reason it is gitignored. The thing worth protecting is what a reader is served, so the clause now names that and `corpus/` is carved out by name. The cost is real and is not hidden: this repository is public (Rule #2 says so, as the reason Actions minutes are free), so source text committed under `corpus/` is readable by anyone. The owner weighed that against a second private repository and took it, on 2026-08-28. What did not move: a source that forbids storage is still out of scope, and nothing under `corpus/` may reach a published page.
 
 ## 0b. Voice
 
@@ -114,6 +116,7 @@ In-memory `Path` objects for local I/O may stay platform-native. Rule applies at
 | `.github/scripts/`   | created    | A shell step two or more workflow jobs run. Written once so a test can execute it; never imported by `backend/`. |
 | `.github/workflows/` | created    | CI, the measurement harness, the daily pipeline, and the GitHub Pages deploy.                                |
 | `config/`            | planned    | Human-edited tunable knobs, schema-validated. Read by `backend/` and shipped to `frontend/` where a reader-facing surface needs one. |
+| `corpus/`            | planned    | The rolling training window: source text as training samples, plus its meta and holdout files. Committed, never rendered, never served to a reader (section 0a). Rewritten by `prune.yml` (section 8). |
 | `schemas/`           | planned    | Generated JSON Schema, one file per contract model. Never hand-edited (Rule #3, section 1a).             |
 | `backend/`           | partial    | The build-time producer (Python). `backend/idhazh/` is the package; `backend/idhazh/contracts/` holds the Pydantic models; `backend/utilities/` holds operator tooling; `backend/tests/` holds its tests. NOT a runtime server (Rule #1). |
 | `backend/bin/`       | gitignored | Local llama.cpp binaries - downloaded, not authored.                                                         |
@@ -182,6 +185,10 @@ Avoid (broad / lossy / history-rewriting):
 - `git push --force` / `git push --force-with-lease`
 - Amending pushed commits
 - Leaving a merged PR's remote branch undeleted or its `: gone]` local tracking branches unpruned.
+
+**One exception, and only one: `.github/workflows/prune.yml`.** It squashes commits older than `finetune.prune_keep_days` and force-pushes `main`, every `finetune.prune_every_days`. Nothing else in this repository may force-push, and no person may. The exception exists because the corpus commits article text (section 0a) and git history is append-only, so deleting a row does not delete its bytes - the only way to bound the repository is to rewrite the range those bytes are in.
+
+What it costs, stated rather than implied: a squash boundary is per-commit, not per-path, so the range it collapses carries `backend/`, `docs/` and `state/` as well as `corpus/`. `git blame` and `git bisect` reach back `prune_keep_days` to `prune_keep_days + prune_every_days` and no further, and a commit SHA older than that stops resolving. A clone taken before a prune has to be re-fetched. Owner decision, 2026-08-28, taken over the alternative of keeping the corpus on a branch nobody works from.
 
 Safe workflow: `git status --porcelain`, leave unrelated dirty files alone, stage only explicit paths, verify with `git diff --cached --name-only`, small reversible commits on a named branch, push, merge after gates pass.
 
