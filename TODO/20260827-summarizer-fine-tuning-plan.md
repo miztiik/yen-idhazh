@@ -33,13 +33,37 @@ on 2026-08-29 from two finished runs rather than waited for.
 | The job that trims old history | Judging whether the trained model is better |
 | The tool for inspecting, repairing and **backfilling** the data | Switching production over to it |
 
-### Why the corpus was filling at six months to the window, and what fixed it
+### Why the corpus fills so slowly, and what fixed it
 
-The scheduled harvest can only see the run it is part of, and it fires every
-`harvest_every_days`. That is **one run a week, about 85 rows** - measured
-2026-08-29 over runs `33179908136` (85 rows) and `33227285523` (81 more). At that
-rate a 2000-row window takes about **24 weeks** to fill, and `min_rows` is not
-reached for six.
+The scheduled harvest loses work twice over, and the two losses are independent.
+
+**It sees one run, and a busy day has five.** Measured 2026-08-29 over the whole
+committed eval ledger, counting unique `url_key` per run and per day:
+
+| day | runs | unique items | largest run | largest run as share of the day |
+| --- | --- | --- | --- | --- |
+| 2026-08-24 | 5 | 731 | 149 | **20.4%** |
+| 2026-08-25 | 5 | 724 | 146 | 20.2% |
+| 2026-08-26 | 5 | 621 | 141 | 22.7% |
+| 2026-08-27 | 3 | 334 | 114 | 34.1% |
+| 2026-08-28 | 1 | 117 | 117 | 100% |
+| 2026-08-29 | 1 | 108 | 108 | 100% |
+
+Runs never re-see each other's items - the sum of the runs equals the day's
+unique count, 1.00x - so on a five-run day one run really is a fifth of the work.
+
+**And it fires every `harvest_every_days`**, so it sees one day in seven.
+
+Together that is one run in twenty to thirty-five. At the measured keep rate of
+72 percent (229 items read, 166 rows kept, 2026-08-29) a weekly harvest of a
+busy day's single run is about 107 rows, so a 2000-row window takes something
+like **four to five months**.
+
+**An earlier draft of this section said "about 85 rows a week" and derived six
+months from it. That number was measured on 2026-08-28 and 2026-08-29 - the only
+two recent ONE-RUN days, where a run is the whole day.** It was the least
+representative pair in the set. The conclusion survives, the arithmetic did not,
+and the table above replaces it (Rule #10).
 
 Two changes, both landed:
 
@@ -48,16 +72,16 @@ Two changes, both landed:
    backfilled row and a harvested row are indistinguishable, and a test asserts
    it. Nothing is re-fetched, so the premise is still the exact text the scorer
    read.
-2. **`items-*` artifact retention went from 1 day to 7.** That was the real
-   limit: at one day a backfill reaches two runs, at seven it reaches about
-   thirty-five - more than the whole window. Measured 2026-08-29, one run's four
-   shards are 555,842 bytes, so a week of them is 18.6 MB against the 500 MB
-   Rule #2 allows: 3.7 percent of the budget, for the only copy of the article
-   text that exists anywhere.
+2. **`items-*` artifact retention went from 1 day to 7.** That is what bounds the
+   reach. Measured 2026-08-29, one run's four shards are 555,842 bytes, so five
+   runs a day for seven days is 18.6 MB against the 500 MB Rule #2 allows: 3.7
+   percent of the budget, for the only copy of the article text that exists.
 
-**So the window can be filled in one sitting a week from now, instead of in six
-months.** Today's backfill could only reach the two runs whose artifacts had not
-yet expired under the old one-day rule.
+**So the honest division of labour is: the backfill is the bulk loader, and the
+schedule is a trickle top-up.** An earlier draft presented the schedule as the
+way the corpus fills, which it is not and cannot be - five commits a day, each
+rewriting a 2000-row file, would be roughly 10 GB of history a year, and that is
+exactly what the weekly cadence exists to avoid.
 
 **Why not rebuild rows from the `evidence-*` artifacts instead**, which already
 live 14 days? Because `EvidenceItem` carries the premise but neither
@@ -67,9 +91,11 @@ whose prompt is a guess is the one thing this module exists to make impossible.
 
 ### What has to happen next, in order
 
-1. **In about a week, run one backfill.** `gh run download` each run of the past
-   seven days, then `backfill --items-dir`. That should clear `min_rows` and can
-   approach the full window. Nothing left to build.
+1. **After the next few digest runs, run one backfill.** `gh run download` each
+   run, then `backfill --items-dir`. Runs from 2026-08-29T06:33Z onward keep
+   their artifacts seven days; older runs are already gone. Re-running a run
+   already in the window costs nothing - the roll deduplicates by `url_key`,
+   confirmed 2026-08-29 (166 rows before, 166 after).
 2. **Write the reference summaries (row 5).** This is a person's job and it is
    the biggest single cost in the plan - roughly 12 hours, an estimate rather
    than a measurement, and it can be done in slices of 100. **Nothing after this
