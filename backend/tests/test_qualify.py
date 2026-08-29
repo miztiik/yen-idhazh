@@ -145,7 +145,9 @@ CANARY_NAMES = (
 def a_passing_corpus() -> list[CorpusItem]:
     """The registered definition, cleared with room: every tier covered, brief and
     over-cap items present, and enough scored items for the denominator gate."""
-    words_by_band = (10, 200, 1200, 3000)
+    # One length per rung, read off the ladder rather than typed, so a new rung
+    # gets a supply instead of leaving a hole `corpus_shortfalls` then reports.
+    words_by_band = tuple(band.min_source_words + 10 for band in SUMMARIZE.bands)
     items: list[CorpusItem] = []
     index = 0
     for words in words_by_band:

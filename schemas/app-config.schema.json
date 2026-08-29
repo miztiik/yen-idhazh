@@ -1214,6 +1214,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "summarize.bands gained a fifth rung at min_source_words 3000, asking 150 to 230 words. No existing rung moved.",
+      "version": "2026-08-29T16:00",
+      "why": "A 2,000-word article and a 3,846-word article were handed the identical ask, so one was compressed 10 to 1 and the other 19 to 1 for the same 150-word midpoint. 3,846 words is what extract.truncation_cap_tokens of 5000 lets through, so both are read whole and the difference is real text and not a guess about text. The floor is 3000 because that is the midpoint of the whole-read range, 2,923, rounded to a seam the ledger reports. Measured 2026-08-29 over the 445 rows of state/scores.csv that carry a trustworthy pre-cap length: 9 of them reach 3,000 words, which is 2.02 percent of items and 1 to 4 items a run over four runs of 107 to 117 items. This is the last rung there may be - a floor above the cut point would ask for words the model was never handed, and the model would fill the gap by elaborating the opening. 230 sits inside evaluation.summary_words_max of 250, so the gate did not move. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "page_weight.ceilings_bytes gained /console/ in config/idhazh.json, and the description here stopped saying that route is unpriced. No field moved.",
       "version": "2026-08-29T14:00",
       "why": "The description said /console/ 'stays uncapped until somebody measures it', and this is that measurement. The page costs about 60 gzipped bytes a published item: removing one real mature day from every ledger the console reads and rebuilding cost 43,745, 43,704 and 36,504 bytes over 731, 724 and 621 scored items, measured 2026-08-29 on an Intel Core i7-1265U, Windows, node 24.12.0. So the headroom is three days of the heaviest of those, not the year /archive/ carries, and the number is meant to expire (Rule #10)."
@@ -1461,7 +1466,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-29T14:00",
+      "default": "2026-08-29T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1475,5 +1480,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-29T14:00"
+  "version": "2026-08-29T16:00"
 }

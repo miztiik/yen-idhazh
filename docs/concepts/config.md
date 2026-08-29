@@ -108,8 +108,11 @@ Every `min_source_words` in this file - `extract.min_source_words` and each
 `extract.truncation_cap_tokens` cuts it. One name, one meaning. Reading the top
 band off the post-cap count is what left it empty until 2026-08-26, because at
 the cap of 2500 committed then that count stopped at `int(2500 / 1.3) = 1923`
-words and the band starts at 2000
+words and that band started at 2000
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+The ladder gained a fifth rung at 3000 words on 2026-08-29, and no rung floor
+may ever sit above `int(truncation_cap_tokens / 1.3)` - the model is handed that
+many words and a rung above it would ask for a summary of text it never saw.
 
 `evaluation.qualification_pool_multiple` sizes how wide a qualification shard
 casts before it selects. It is a floor and not a cap: a shard whose slice has not
