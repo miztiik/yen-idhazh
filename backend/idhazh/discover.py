@@ -87,12 +87,22 @@ def clean_title(raw: str | None) -> str | None:
 
 
 def _published_at(entry: Any) -> str | None:
+    """The feed's own date, spelled the one way every payload spells a timestamp.
+
+    The year is padded here rather than by `strftime`, which leaves a year below
+    1000 short on Linux: the `0001-01-01` placeholder that content systems emit
+    for an unset date left as `1-01-01T00:00:00Z`, and every reader of a
+    timestamp expects four digits.
+    """
     parsed = getattr(entry, "published_parsed", None) or getattr(entry, "updated_parsed", None)
     if not parsed:
         return None
     year, month, day, hour, minute, second = parsed[:6]
     stamp = datetime(year, month, day, hour, minute, second, tzinfo=UTC)
-    return stamp.strftime("%Y-%m-%dT%H:%M:%SZ")
+    return (
+        f"{stamp.year:04d}-{stamp.month:02d}-{stamp.day:02d}"
+        f"T{stamp.hour:02d}:{stamp.minute:02d}:{stamp.second:02d}Z"
+    )
 
 
 @dataclass(frozen=True, slots=True)
