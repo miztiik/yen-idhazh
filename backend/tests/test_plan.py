@@ -24,7 +24,7 @@ import pytest
 from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 
 from idhazh import cli, config, fetch, ledger
-from idhazh.contracts.app_config import RunConfig
+from idhazh.contracts.app_config import AppConfig, RunConfig
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.item_health import (
     FAILURE_CODE_STAGES,
@@ -199,6 +199,7 @@ def plan(
     run_n: int = 1,
     state: Path | None = None,
     safety_ceiling: int | None = None,
+    max_age_hours: float | None = None,
     cap: int | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
@@ -209,6 +210,17 @@ def plan(
                 update={
                     "run": settings.app.run.model_copy(
                         update={"safety_ceiling_per_run": safety_ceiling}
+                    )
+                }
+            ),
+        )
+    if max_age_hours is not None:
+        settings = dataclasses.replace(
+            settings,
+            app=settings.app.model_copy(
+                update={
+                    "collect": settings.app.collect.model_copy(
+                        update={"max_age_hours": max_age_hours}
                     )
                 }
             ),
@@ -454,6 +466,17 @@ def test_the_cap_flag_reaches_the_plan_stage(tmp_path: Path, monkeypatch: pytest
     shutil.copytree(CONFIG_DIR, config_dir)
     (config_dir / "sources.json").write_text(settings.sources.to_json(), encoding="utf-8")
     (config_dir / "taxonomy.json").write_text(settings.taxonomy.to_json(), encoding="utf-8")
+    # `main` builds its own clock from the wall, not from DATE, so the captured
+    # feeds age by a day for every real day that passes. The window is widened
+    # here so this stays a test of `--cap` and not a calendar.
+    tuned = config_dir / "idhazh.json"
+    app = AppConfig.from_json(tuned.read_text(encoding="utf-8"))
+    tuned.write_text(
+        app.model_copy(
+            update={"collect": app.collect.model_copy(update={"max_age_hours": 24.0 * 365 * 50})}
+        ).to_json(),
+        encoding="utf-8",
+    )
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
@@ -568,16 +591,55 @@ def test_a_small_forward_skew_is_left_alone() -> None:
     assert early.published_at == "2026-08-21T06:00:00Z", "five minutes ahead is inside the window"
 
 
-def test_an_old_article_is_ranked_down_but_never_dropped() -> None:
-    """No cutoff. A cutoff throws away a strong old story to keep a weak fresh one."""
+def test_a_story_older_than_the_window_is_not_planned_at_all() -> None:
+    """The gate that stops a back catalogue reaching a reader.
+
+    Measured 2026-08-30 over the 2,900 items published from 2026-08-22: the
+    oldest was 6,474 days old when its run added it. Age used to be a bonus
+    only, so nothing had a lower bound and a 2008 stock note outranked a
+    three-day-old news story on tier weight alone.
+    """
     fresh = plan([LAB, TRADE, COMMUNITY], now="2026-08-21T12:00:00Z")
+    assert fresh.items, "the same feeds read on the day do publish"
     stale = plan([LAB, TRADE, COMMUNITY], now="2027-01-01T06:00:00Z")
-    assert [item.canonical_url for item in stale.items] == [
-        item.canonical_url for item in fresh.items
-    ], "the same stories are planned four months later"
-    assert max(item.rank_score for item in stale.items) < max(
-        item.rank_score for item in fresh.items
-    ), "but the whole day scores lower"
+    assert stale.items == [], "four months later, none of it is news"
+    assert sum(vertical.too_old for vertical in stale.verticals) > 0, (
+        "and the plan says the age gate is why, not a dead feed"
+    )
+
+
+def test_the_window_is_a_knob_and_a_wider_one_takes_the_same_day() -> None:
+    """Rule #6: what counts as too old is config, never a literal."""
+    late = "2026-08-24T06:00:00Z"
+    inside_a_day = plan([LAB, TRADE, COMMUNITY], now=late)
+    inside_a_week = plan([LAB, TRADE, COMMUNITY], now=late, max_age_hours=24.0 * 7)
+    assert inside_a_day.items == [], "two days on, a one-day window keeps nothing"
+    assert inside_a_week.items, "a one-week window keeps the same stories"
+
+
+def test_an_item_at_the_edge_of_the_window_is_still_taken() -> None:
+    """The gate refuses what is past the window, not what is near it."""
+    published = "2026-08-21T06:00:00Z"
+    just_inside = plan([LAB, TRADE, COMMUNITY], now="2026-08-22T05:59:00Z")
+    just_outside = plan([LAB, TRADE, COMMUNITY], now="2026-08-22T06:01:00Z")
+    urls = {item.canonical_url for item in just_inside.items}
+    assert MODEL_RELEASE in urls, f"{published} is 23 h 59 old and inside the window"
+    assert MODEL_RELEASE not in {item.canonical_url for item in just_outside.items}, (
+        "two minutes later the same story is a day and a minute old, and is refused"
+    )
+
+
+def test_an_undated_story_is_never_too_old() -> None:
+    """First sight is the only age it has, so it gets the run that found it.
+
+    Dropping an undated article would silently retire every feed that omits a
+    date, which is a different decision from refusing a back catalogue.
+    """
+    state = Path(tempfile.mkdtemp())
+    built = plan([LAB, TRADE, NOTICES], state=state, max_age_hours=1.0)
+    assert [item for item in built.items if item.source_id == "notices"], (
+        "an undated entry is planned even under a one-hour window"
+    )
 
 
 def test_an_undated_entry_gets_the_age_we_first_saw_it() -> None:

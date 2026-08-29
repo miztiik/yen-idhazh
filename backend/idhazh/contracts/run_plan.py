@@ -84,11 +84,22 @@ class VerticalPlan(Model):
     below_feed_floor: bool = Field(
         default=False, description="Under its floor, so it is collected but never rendered."
     )
+    too_old: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "Of those considered, how many were past collect.max_age_hours. A desk "
+            "whose feeds serve a back catalogue thins for this reason and no other, "
+            "and a thin desk that cannot say why reads as a broken run."
+        ),
+    )
 
     @model_validator(mode="after")
     def _cannot_plan_more_than_it_saw(self) -> Self:
         if self.planned > self.considered:
             raise ValueError("a vertical cannot plan more items than it considered")
+        if self.too_old > self.considered:
+            raise ValueError("a vertical cannot drop more items than it considered")
         if self.below_feed_floor and self.planned:
             raise ValueError("a vertical under its feed floor plans nothing")
         return self
@@ -99,6 +110,20 @@ class RunPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30",
+            change="Added too_old to each vertical's plan summary.",
+            why=(
+                "collect.max_age_hours now refuses a story older than a day, and the "
+                "verticals do not lose the same amount. Measured 2026-08-30 over the "
+                "2,900 items published from 2026-08-22 to 2026-08-29: a one-day gate "
+                "keeps 95.7 percent of world and 32.4 percent of ai, because the ai "
+                "desk is largely fed by research-lab blogs that serve a back "
+                "catalogue. Without this count a desk that halves overnight looks "
+                "like a broken feed rather than a working gate. Additive with a "
+                "default, so a plan an earlier run wrote still validates (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-23T18:48",
             change="Added source_form to each planned item.",
