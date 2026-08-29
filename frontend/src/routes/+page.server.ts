@@ -1,4 +1,4 @@
-import { latestDate, loadDay } from '$lib/server/payload';
+import { latestDate, loadDay, publishedDates } from '$lib/server/payload';
 
 /** The home page reads the day it renders.
  *
@@ -8,5 +8,11 @@ import { latestDate, loadDay } from '$lib/server/payload';
 export function load() {
 	const latest = latestDate();
 	const day = latest ? loadDay(latest) : null;
-	return { day, today: day?.date ?? latest };
+	// A handful of recent days, so "what did I miss on Tuesday" is answered in
+	// place. Dates and counts only: the stories stay where they are, and this
+	// list grows per day rather than per story.
+	const recent = publishedDates()
+		.slice(0, 7)
+		.map((date) => ({ date, items: loadDay(date)?.items.length ?? 0 }));
+	return { day, today: day?.date ?? latest, recent };
 }
