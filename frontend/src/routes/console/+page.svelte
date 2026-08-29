@@ -1,9 +1,10 @@
 <script lang="ts">
 	/** The operator's page. Not a reader's.
 	 *
-	 * It answers six questions and refuses to answer any others: did the runs
+	 * It answers seven questions and refuses to answer any others: did the runs
 	 * work, which feeds are broken, how long each stage took, what the model did
-	 * to the day's own articles, how big the site is getting, and whether the
+	 * to the day's own articles, what the truncation cap is costing and which
+	 * sources it is costing it to, how big the site is getting, and whether the
 	 * chart arm earns its router minutes. Every count is read from the committed
 	 * ledger. The only arithmetic is one committed count divided by another, and
 	 * that is deliberate: a stored rate can disagree with the counts printed
@@ -14,6 +15,7 @@
 	 */
 	import { base } from '$app/paths';
 	import { axisLabels, CELL_PX, GAP_PX, type LabelAlign } from '$lib/charts/run-history';
+	import { grouped } from '$lib/charts/series';
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
@@ -87,6 +89,16 @@
 		return value === null ? '-' : `${value}%`;
 	}
 
+	/** A word count with its thousands grouped, or a dash where none was taken.
+	 *
+	 * Null is the state this exists for: a run before 2026-08-28 measured no
+	 * length at all, and printing that as `0` would say the source publishes
+	 * nothing - which is the opposite of what the column is asked.
+	 */
+	function words(value: number | null): string {
+		return value === null ? '-' : grouped(value);
+	}
+
 	/** Whole units, never a decimal, and never a zero that was really work.
 	 *
 	 * A measurement that rounds away prints `<1`. Rounded to `0` it would say the
@@ -126,6 +138,11 @@
 			line: 'The article was too long, so the machine read the start and stopped.'
 		},
 		{
+			key: 'part-pct',
+			label: 'Read only in part, as a percent',
+			line: "The same articles, against the day's own count, so a busy day and a quiet one compare."
+		},
+		{
 			key: 'copied',
 			label: 'Copied, not rewritten',
 			line: 'How much of a normal summary is lifted word for word.'
@@ -133,9 +150,14 @@
 		{
 			key: 'per-item',
 			label: 'Time to write one',
-			line: 'How long the machine takes on one article.'
+			line: 'How long the machine takes on one article. The second figure is the articles it read only the start of.'
 		},
 		{ key: 'minutes', label: 'Model minutes', line: '' },
+		{
+			key: 'too-long',
+			label: 'Too long to send',
+			line: 'The article and the instructions together did not fit, so the machine was never asked.'
+		},
 		{ key: 'failed', label: 'Failed', line: '' }
 	];
 
@@ -144,16 +166,27 @@
 	 * Built here rather than spelled out in the markup so a header and its column
 	 * cannot drift apart, which is the way a table starts lying.
 	 */
-	function cells(day: ModelDay): { key: string; text: string }[] {
+	function cells(day: ModelDay): { key: string; text: string; aside?: string }[] {
 		return [
 			{ key: 'summaries', text: count(day.summaries) },
 			{ key: 'not-sure', text: count(day.notSure) },
 			{ key: 'unsupported', text: count(day.unsupportedNumbers) },
 			{ key: 'hedge', text: count(day.hedgeDropped) },
 			{ key: 'part', text: count(day.readInPart) },
+			{ key: 'part-pct', text: percent(day.readInPartPct) },
 			{ key: 'copied', text: percent(day.copiedPct) },
-			{ key: 'per-item', text: whole(day.perItemMs, 1000) },
+			// The second figure is only carried where the day cut something, because
+			// a dash under every other day would be a column of absences pretending
+			// to be a split.
+			{
+				key: 'per-item',
+				text: whole(day.perItemMs, 1000),
+				...(day.perItemCutMs === null
+					? {}
+					: { aside: `${whole(day.perItemCutMs, 1000)} when cut short` })
+			},
 			{ key: 'minutes', text: whole(day.totalMs, 60_000) },
+			{ key: 'too-long', text: count(day.refusedForLength) },
 			{ key: 'failed', text: count(day.failed) }
 		];
 	}
@@ -255,6 +288,74 @@
 		bands={data.summarizeBands}
 		unplotted={data.unplotted}
 	/>
+
+	<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Sources cut short most often</h2>
+	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+		The last {data.sourceCuts.days} days. An article longer than the cap is read from the start and
+		stopped there, so the end never reaches the machine. Sorted by how many articles that cost each
+		source - not by the share, because a source with two articles and one cut would otherwise lead
+		the table. A source can carry several feeds, so this list and "Feeds that failed" below do not
+		name the same things.
+	</p>
+
+	{#if !data.sourceCuts.measured}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="unmeasured">
+			Nothing has recorded an article length yet. This fills as runs publish.
+		</p>
+	{:else if data.sourceCuts.rows.length === 0}
+		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="none">
+			No article was cut short in the last {data.sourceCuts.days} days.
+		</p>
+	{:else}
+		<div class="mt-3 overflow-x-auto" data-source-cuts="table">
+			<table class="w-full text-[0.8125rem]">
+				<thead class="text-text-tertiary">
+					<tr class="border-b border-rule">
+						<th class="py-2 text-start font-normal">Source</th>
+						<th class="py-2 text-end font-normal">Cut short</th>
+						<th class="py-2 text-end font-normal">Articles</th>
+						<th class="py-2 text-end font-normal">Share cut</th>
+						<!-- A length ending where a count ends reads as one more count. The
+						     gap is what says this column measures something else. -->
+						<th class="py-2 ps-6 text-end font-normal">Longest article, words</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each data.sourceCuts.rows as source (source.sourceId)}
+						<tr class="border-b border-rule" data-source-cut={source.sourceId}>
+							<td class="py-2">{source.sourceId}</td>
+							<td class="py-2 text-end tabular-nums" data-source-cell="cut">{source.cut}</td>
+							<td class="py-2 text-end tabular-nums" data-source-cell="articles"
+								>{source.articles}</td
+							>
+							<td class="py-2 text-end tabular-nums" data-source-cell="share"
+								>{percent(source.sharePct)}</td
+							>
+							<td class="py-2 ps-6 text-end tabular-nums" data-source-cell="longest"
+								>{words(source.longestWords)}</td
+							>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+
+		{#if data.sourceCuts.moreSources > 0}
+			<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-source-cuts-more>
+				{data.sourceCuts.moreSources} more sources had {data.sourceCuts.moreCuts} cuts between them.
+			</p>
+		{/if}
+		{#if data.sourceCuts.cost}
+			<!-- What the next move of the cap would buy. A count of cut articles says
+			     the cap fired; how much it removed says whether raising it is worth
+			     anything, and the n is what makes it a measurement. -->
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-cost>
+				{data.sourceCuts.cost.n} articles were cut short. Half of them lost more than {grouped(
+					data.sourceCuts.cost.median
+				)} words each, and the longest lost {grouped(data.sourceCuts.cost.max)}.
+			</p>
+		{/if}
+	{/if}
 
 	<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Feeds that failed</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
@@ -375,9 +476,15 @@
 									<tr class="border-b border-rule" data-model-day={row.day.date}>
 										<td class="py-2 pe-4">{row.day.date}</td>
 										{#each cells(row.day) as cell (cell.key)}
-											<td class="py-2 ps-4 text-end tabular-nums" data-model-cell={cell.key}
-												>{cell.text}</td
-											>
+											<td class="py-2 ps-4 text-end tabular-nums" data-model-cell={cell.key}>
+												{cell.text}
+												{#if cell.aside}
+													<span
+														class="mt-0.5 block text-[0.6875rem] text-text-tertiary"
+														data-model-aside={cell.key}>{cell.aside}</span
+													>
+												{/if}
+											</td>
 										{/each}
 									</tr>
 								{/if}
@@ -390,7 +497,7 @@
 	{/if}
 
 	{#if data.manifests.length > 0}
-		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Runs</h2>
+		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Runs and site size</h2>
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 			Run-level facts live in the manifest, never in an item row. Planned and failed are summed
 			across the day's runs; the site size is the last run's measurement, not their total. The
@@ -425,7 +532,7 @@
 	{/if}
 
 	{#if data.charts.length > 0}
-		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Charts</h2>
+		<h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Charts drawn for articles</h2>
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 			What the router cost and what it published, one row per day, newest first. Reached is every
 			item the router looked at. Asked the model is the part it sent a request for: an item whose

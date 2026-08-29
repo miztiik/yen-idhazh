@@ -9,7 +9,14 @@ import {
 } from '../src/lib/charts/series';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
-import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
+import {
+	CUT_FLAG_MEANS_A_CUT_FROM,
+	modelWork,
+	placeRow,
+	sourceCuts,
+	SOURCE_CUT_ROWS,
+	SOURCE_CUT_WINDOW_DAYS
+} from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 
 /**
@@ -61,6 +68,13 @@ const DEFAULT_WINDOW_DAYS = (
 		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
 	) as { console?: { default_window_days?: number } }
 ).console?.default_window_days ?? 30;
+
+/** The fewest articles a source needs before a share of them means anything. */
+const MIN_ATTEMPTS_FOR_RATE = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
+	) as { console?: { min_attempts_for_rate?: number } }
+).console?.min_attempts_for_rate ?? 5;
 
 /** A telemetry corpus deliberately longer than the window, for the seed tests.
  *
@@ -379,6 +393,44 @@ test('a square says what happened without a mouse', async ({ page }) => {
 	const first = page.locator(`[data-day="${DAY}"] [data-health]`).first();
 	await expect(first).toHaveAttribute('aria-label', new RegExp(`^${DAY} run 1,`));
 	await expect(first).toHaveAttribute('title', /succeeded/);
+});
+
+test('the run that read only the start of an article says so on its own square', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// Per run, and only here. Measured 2026-08-29 over 19 committed runs the
+	// count is 1 to 12 articles of 160 to 200 - which is the article mix on that
+	// run, so a published figure would read as the cap moving when nothing did.
+	const dir = join(CANARY, 'state', 'item-health');
+	const rows = readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.flatMap((name) => readCsv(join(dir, name)).rows)
+		.filter((row) => row.date === DAY);
+	const cutByRun = new Map<string, Set<string>>();
+	for (const row of rows) {
+		if (row.source_words_before_cap === '' || row.source_words === '') continue;
+		if (Number(row.source_words_before_cap) <= Number(row.source_words)) continue;
+		cutByRun.set(row.run_id, (cutByRun.get(row.run_id) ?? new Set()).add(row.url_key));
+	}
+	expect(cutByRun.size, 'no run on this day cut anything, so the clause is untested').toBe(1);
+
+	const labels = await page
+		.locator(`[data-day="${DAY}"] [data-health]`)
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('aria-label') ?? ''));
+	const carried = labels.filter((label) => label.includes('read only in part'));
+	expect(carried).toHaveLength(cutByRun.size);
+	for (const [runId, keys] of cutByRun) {
+		const n = Number(runId.split('-').at(-1));
+		expect(carried[0]).toContain(`run ${n},`);
+		expect(carried[0]).toContain(`${keys.size} read only in part`);
+	}
+
+	// And a run that cut nothing does not carry the clause at all. A `0 read
+	// only in part` on every other square is a sentence about nothing.
+	expect(labels.filter((label) => label.includes('0 read only in part'))).toEqual([]);
+	expect(labels.length).toBeGreaterThan(carried.length);
 });
 
 test('a feed that answered with nothing is named, and a polite refusal is not', async ({ page }) => {
@@ -729,7 +781,22 @@ test('the telemetry viewport renders the published projection', async ({ page })
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
 	await expect(page.locator('[data-compression]')).toBeVisible();
-	await expect(page.locator('[data-viewport-control]')).toContainText('11 rows in view');
+
+	// Counted off the projection the page reads, over the window the page says it
+	// is showing. It was `11 rows in view` until the fixture grew the rows the
+	// source table needs - and a count against a window this test picked itself
+	// would go stale the day the fixture moves out from under it.
+	const control = page.locator('[data-viewport-control]');
+	const first = (await control.getAttribute('data-window-start')) ?? '';
+	const last = (await control.getAttribute('data-window-end')) ?? '';
+	expect(first, 'the viewport publishes no window, so there is nothing to count over').not.toBe('');
+	const shard = join(CANARY, 'state', 'telemetry');
+	const inView = readdirSync(shard)
+		.filter((name) => name.endsWith('.csv'))
+		.flatMap((name) => readCsv(join(shard, name)).rows)
+		.filter((row) => row.date >= first && row.date <= last);
+	expect(inView.length, 'the window holds no row, so the count below is trivial').toBeGreaterThan(0);
+	await expect(control).toContainText(`${inView.length} rows in view`);
 });
 
 test('a failure panel prints its rate in type, not only in a tooltip', async ({ page }) => {
@@ -1447,20 +1514,43 @@ function modelCells(date: string): Record<string, string> {
 	// older row's cell held a faithfulness gap, so adding the two would print one
 	// number over two questions.
 	const cutKnown = scores.filter((row) => (row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM);
+	const readInPart = cutKnown.filter((row) => truthy(row.truncation_flagged)).length;
+	// The cut is the two lengths on one row, compared. Never the post-cap count
+	// against the cap, which moves the day the cap moves.
+	const cutTimes = health
+		.filter(
+			(row) =>
+				row.source_words_before_cap !== '' &&
+				row.source_words !== '' &&
+				Number(row.source_words_before_cap) > Number(row.source_words)
+		)
+		.map((row) => Number(row.summarize_ms))
+		.filter((ms) => ms > 0);
 
 	return {
 		summaries: scores.length === 0 ? '-' : String(scores.length),
 		'not-sure': tally((row) => row.band === 'low'),
 		unsupported: tally((row) => Number(row.unsupported_numbers) > 0),
 		hedge: tally((row) => truthy(row.hedge_dropped)),
-		part:
+		part: cutKnown.length === 0 ? '-' : String(readInPart),
+		// The share is over the rows the flag still answers for, so its top and its
+		// bottom are the same question.
+		'part-pct':
 			cutKnown.length === 0
 				? '-'
-				: String(cutKnown.filter((row) => truthy(row.truncation_flagged)).length),
+				: `${Math.round((readInPart / cutKnown.length) * 100)}%`,
 		copied: scores.length === 0 ? '-' : `${Math.round(middle(copied) * 100)}%`,
-		'per-item': times.length === 0 ? '-' : units(middle(times), 1000),
+		'per-item':
+			times.length === 0
+				? '-'
+				: units(middle(times), 1000) +
+					(cutTimes.length === 0 ? '' : ` ${units(middle(cutTimes), 1000)} when cut short`),
 		minutes:
 			times.length === 0 ? '-' : units(times.reduce((total, ms) => total + ms, 0), 60_000),
+		'too-long':
+			health.length === 0
+				? '-'
+				: String(health.filter((row) => row.code === 'context_exceeded').length),
 		failed:
 			health.length === 0
 				? '-'
@@ -1497,12 +1587,17 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 	expect(unscored, 'the fixture has no day with model work and no score row').toBeDefined();
 
 	const row = page.locator(`[data-model-day="${unscored}"]`);
-	for (const cell of ['summaries', 'not-sure', 'unsupported', 'hedge', 'part', 'copied']) {
+	for (const cell of ['summaries', 'not-sure', 'unsupported', 'hedge', 'part', 'part-pct', 'copied']) {
 		await expect(row.locator(`[data-model-cell="${cell}"]`)).toHaveText('-');
 	}
 	// Speed is measured by the runtime, not by the scorer, so it still prints.
 	await expect(row.locator('[data-model-cell="per-item"]')).not.toHaveText('-');
 	await expect(row.locator('[data-model-cell="minutes"]')).not.toHaveText('-');
+	// So is a refusal. Nothing was refused for length, and zero is the answer -
+	// at the committed cap no prompt can reach the window the machine reads with.
+	await expect(row.locator('[data-model-cell="too-long"]')).toHaveText('0');
+	// And that day cut nothing, so there is no second figure to split out.
+	await expect(row.locator('[data-model-aside="per-item"]')).toHaveCount(0);
 
 	// And the scored day is not all dashes, which is what stops the oracle above
 	// passing on a table that prints nothing.
@@ -1697,3 +1792,393 @@ test('the cut flag is counted only over rows that carry the meaning it has now',
 	const mixed = modelWork([row(before, 'True'), row(after, 'False')], [])[0];
 	expect(mixed.kind === 'day' && mixed.day.summaries).toBe(2);
 });
+
+test('the cut share divides by the rows its own flag answers for', () => {
+	const score = (version: string, flagged: string) => ({
+		date: '2026-08-28',
+		version,
+		model_id: 'one',
+		band: 'high',
+		truncation_flagged: flagged
+	});
+
+	const only = (rows: Record<string, string>[]) => {
+		const day = modelWork(rows, [])[0];
+		if (day.kind !== 'day') throw new Error('the fixture is one day');
+		return day.day;
+	};
+
+	// Four rows, one cut, and all four carry the flag's current meaning: 25
+	// percent. A share over the day's whole ledger would print the same here,
+	// which is why the row below is the one that separates them.
+	const clean = only([
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'True'),
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False')
+	]);
+	expect(clean.readInPart).toBe(1);
+	expect(clean.readInPartPct).toBe(25);
+
+	// The same four, plus four older rows the flag no longer answers for. The
+	// count is still 1 and the share is still 25 percent: dividing by eight
+	// would print 13, and that 13 is a fact about the migration rather than
+	// about the articles.
+	const mixed = only([
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'True'),
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
+		score(CUT_FLAG_MEANS_A_CUT_FROM, 'False'),
+		score('2026-08-27T20:30', 'True'),
+		score('2026-08-27T20:30', 'True'),
+		score('2026-08-27T20:30', 'False'),
+		score('2026-08-27T20:30', 'False')
+	]);
+	expect(mixed.summaries).toBe(8);
+	expect(mixed.readInPart).toBe(1);
+	expect(mixed.readInPartPct).toBe(25);
+
+	// A day with nothing the flag answers for holds no share either. Zero
+	// percent would say the cap took nothing, which those rows never measured.
+	expect(only([score('2026-08-27T20:30', 'True')]).readInPartPct).toBeNull();
+});
+
+test('the day splits its writing time by the articles it read only the start of', () => {
+	const health = (ms: string, before: string, after: string, code = '') => ({
+		date: '2026-08-28',
+		summarize_ms: ms,
+		outcome: 'ok',
+		code,
+		source_words: after,
+		source_words_before_cap: before
+	});
+
+	const only = (rows: Record<string, string>[]) => {
+		const day = modelWork([], rows)[0];
+		if (day.kind !== 'day') throw new Error('the fixture is one day');
+		return day.day;
+	};
+
+	// Two whole articles and two the cap cut. The day's median is over all four
+	// and the split is over the two, so a split that quietly reported the day
+	// again would print 1500 twice.
+	const split = only([
+		health('1000', '400', '400'),
+		health('1200', '', '380'),
+		health('4000', '2612', '1923'),
+		health('6000', '9000', '1923')
+	]);
+	expect(split.perItemMs).toBe(2600);
+	expect(split.perItemCutMs).toBe(5000);
+
+	// A day that cut nothing has no second figure. Zero would say the machine
+	// wrote those summaries for free.
+	expect(only([health('1000', '400', '400'), health('1200', '', '380')]).perItemCutMs).toBeNull();
+
+	// An empty cell is not a zero: a row that recorded no length before the cut
+	// is not an article cut from nothing to 380 words.
+	expect(only([health('1200', '', '380')]).perItemCutMs).toBeNull();
+
+	// Refused for length is a count of the day's own rows, and zero is a real
+	// answer. Null is kept for a day with no health row at all.
+	expect(
+		only([health('1000', '400', '400'), health('', '', '', 'context_exceeded')]).refusedForLength
+	).toBe(1);
+	expect(only([health('1000', '400', '400')]).refusedForLength).toBe(0);
+	const scoredOnly = modelWork([{ date: '2026-08-28', model_id: 'one', band: 'high' }], [])[0];
+	expect(scoredOnly.kind === 'day' && scoredOnly.day.refusedForLength).toBeNull();
+});
+
+test('a diamond is placed only on a row whose flag still means a cut', () => {
+	// The same boundary the day's count reads, asserted on the function that
+	// places one mark. It lived in the route module until this branch, where no
+	// pure test could reach it - and once every canary row moved to the new side
+	// of the stamp, a page with the gate and a page without it drew the same two
+	// diamonds. The browser could not tell them apart; these two rows can.
+	const row = (version: string, flagged: string) => ({
+		date: '2026-08-28',
+		item_id: 'ai-01',
+		version,
+		source_word_count: '4200',
+		source_seen_word_count: '1923',
+		summary_word_count: '205',
+		truncation_flagged: flagged
+	});
+
+	const marked = (cells: Record<string, string>): boolean => {
+		const placed = placeRow(cells);
+		if (placed.kind !== 'point') throw new Error('the fixture row is placeable');
+		return placed.point.truncation_flagged;
+	};
+
+	// Same flag, one row either side of the stamp. Delete the gate and the first
+	// of these returns true, which is the assertion that bites.
+	expect(marked(row('2026-08-27T20:30', 'True'))).toBe(false);
+	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'True'))).toBe(true);
+
+	// And it is the flag being read, not the stamp: a new row that was not cut
+	// gets no diamond either, so this cannot pass by always returning the stamp.
+	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'False'))).toBe(false);
+
+	// The other two outcomes are the same decision, so they are asserted here
+	// rather than counted a second time somewhere else.
+	expect(placeRow({ date: '2026-08-28', summary_word_count: '205' })).toEqual({
+		kind: 'no-length',
+		date: '2026-08-28'
+	});
+	expect(placeRow({ date: '2026-08-28', source_word_count: '4200' }).kind).toBe('no-summary');
+
+	// An article nobody cut carries no second length. The page inlines every
+	// point, so a cell repeating "nothing was cut" is weight for no fact.
+	const whole = placeRow({
+		date: '2026-08-28',
+		item_id: 'ai-02',
+		version: CUT_FLAG_MEANS_A_CUT_FROM,
+		source_word_count: '880',
+		source_seen_word_count: '880',
+		summary_word_count: '96',
+		truncation_flagged: 'False'
+	});
+	expect(whole.kind === 'point' && 'source_seen_words' in whole.point).toBe(false);
+	expect(marked(row(CUT_FLAG_MEANS_A_CUT_FROM, 'True'))).toBe(true);
+});
+
+/** What the canary's own item-health rows say the source table has to print.
+ *
+ * Recomputed here from the CSV rather than typed as constants, and deliberately
+ * not through the page's own module: the oracle is that a printed cell equals
+ * the value a second, independent reading of the ledger produces.
+ *
+ * The window ends on the newest day the ledger holds, so a fixture that grows a
+ * day moves this with it instead of going stale.
+ */
+function sourceTable(): {
+	rows: { sourceId: string; cut: number; articles: number; share: string; longest: string }[];
+	moreSources: number;
+	moreCuts: number;
+	losses: number[];
+} {
+	const dir = join(CANARY, 'state', 'item-health');
+	const all = readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.flatMap((name) => readCsv(join(dir, name)).rows);
+	const newest = all.map((row) => row.date).sort().at(-1) as string;
+	const first = new Date(
+		new Date(`${newest}T00:00:00Z`).getTime() - (SOURCE_CUT_WINDOW_DAYS - 1) * 86_400_000
+	)
+		.toISOString()
+		.slice(0, 10);
+
+	// One entry per article, not per row: a run writes a row for every item it
+	// plans, so counting rows counts a re-run twice.
+	const articles = new Map<string, { source: string; before: number | null; after: number | null }>();
+	for (const row of all) {
+		if (row.date < first || row.date > newest) continue;
+		const cell = (name: string) => (row[name] === '' ? null : Number(row[name]));
+		const key = `${row.source_id}/${row.url_key}`;
+		const held = articles.get(key);
+		const before = cell('source_words_before_cap');
+		if (held === undefined) {
+			articles.set(key, { source: row.source_id, before, after: cell('source_words') });
+		} else if (before !== null && (held.before === null || before > held.before)) {
+			held.before = before;
+			held.after = cell('source_words');
+		}
+	}
+
+	const bySource = new Map<string, { before: number | null; after: number | null }[]>();
+	for (const entry of articles.values()) {
+		bySource.set(entry.source, [...(bySource.get(entry.source) ?? []), entry]);
+	}
+
+	const losses: number[] = [];
+	const found = [];
+	for (const [sourceId, group] of bySource) {
+		const cut = group
+			.map((a) => (a.before !== null && a.after !== null && a.before > a.after ? a.before - a.after : null))
+			.filter((n): n is number => n !== null);
+		if (cut.length === 0) continue;
+		losses.push(...cut);
+		const lengths = group.map((a) => a.before).filter((n): n is number => n !== null);
+		found.push({
+			sourceId,
+			cut: cut.length,
+			articles: group.length,
+			share:
+				group.length < MIN_ATTEMPTS_FOR_RATE
+					? '-'
+					: `${Math.round((cut.length / group.length) * 100)}%`,
+			longest: lengths.length === 0 ? '-' : grouped(Math.max(...lengths))
+		});
+	}
+	found.sort((a, b) => b.cut - a.cut || a.sourceId.localeCompare(b.sourceId));
+	const rest = found.slice(SOURCE_CUT_ROWS);
+	return {
+		rows: found.slice(0, SOURCE_CUT_ROWS),
+		moreSources: rest.length,
+		moreCuts: rest.reduce((total, source) => total + source.cut, 0),
+		losses: losses.sort((a, b) => a - b)
+	};
+}
+
+test('the source table names every source the cap cut, and no other', async ({ page }) => {
+	await page.goto('/console/');
+
+	const expected = sourceTable();
+	// The fixture has to hold more than the table prints, or the sort, the cap
+	// and the sentence under it are all asserted against nothing.
+	expect(expected.rows.length, 'the fixture cuts fewer sources than the table prints').toBe(
+		SOURCE_CUT_ROWS
+	);
+	expect(expected.moreSources, 'the fixture never overflows, so the sentence is untested').toBeGreaterThan(0);
+
+	const named = await page
+		.locator('[data-source-cut]')
+		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-source-cut') ?? ''));
+	// One row per source with at least one cut article, worst first. A source
+	// that lost nothing is not here, and neither is one whose only cut fell
+	// outside the window.
+	expect(named).toEqual(expected.rows.map((source) => source.sourceId));
+	expect(named).not.toContain('no-length');
+	expect(named, 'a cut older than the window is still being counted').not.toContain('old-cut');
+
+	for (const source of expected.rows) {
+		const row = page.locator(`[data-source-cut="${source.sourceId}"]`);
+		await expect(row.locator('[data-source-cell="cut"]')).toHaveText(String(source.cut));
+		await expect(row.locator('[data-source-cell="articles"]')).toHaveText(String(source.articles));
+		await expect(row.locator('[data-source-cell="share"]')).toHaveText(source.share);
+		await expect(row.locator('[data-source-cell="longest"]')).toHaveText(source.longest);
+	}
+
+	await expect(page.locator('[data-source-cuts-more]')).toHaveText(
+		`${expected.moreSources} more sources had ${expected.moreCuts} cuts between them.`
+	);
+});
+
+test('the source table counts articles, not rows, and reads its lengths off the right cell', async ({
+	page
+}) => {
+	await page.goto('/console/');
+
+	// One of this source's articles was written by two runs. A row count says
+	// eight; the table's own sentence says articles, and it published seven.
+	const dir = join(CANARY, 'state', 'item-health');
+	const rows = readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.flatMap((name) => readCsv(join(dir, name)).rows)
+		.filter((row) => row.source_id === 'cut-a');
+	expect(rows.length, 'no article is written twice, so the count below proves nothing').toBe(8);
+	await expect(page.locator('[data-source-cut="cut-a"] [data-source-cell="articles"]')).toHaveText(
+		'7'
+	);
+
+	// Its longest article was never cut. A column that read the longest cut
+	// article would print 6,123 here.
+	await expect(page.locator('[data-source-cut="cut-a"] [data-source-cell="longest"]')).toHaveText(
+		'9,000'
+	);
+
+	// And this one's longest surviving body sits on a row that recorded no
+	// length before the cut. Reading `source_words` would print 30,000; the
+	// question is how long the article was, and that row never answered it.
+	await expect(page.locator('[data-source-cut="cut-b"] [data-source-cell="longest"]')).toHaveText(
+		'5,423'
+	);
+});
+
+test('a share nothing supports prints a dash, never a percentage', async ({ page }) => {
+	await page.goto('/console/');
+
+	// Four articles is under `console.min_attempts_for_rate`, so there is no
+	// share to print. The count and the denominator are still measurements and
+	// still print.
+	const thin = page.locator('[data-source-cut="cut-c"]');
+	await expect(thin, 'the fixture lost its thin source, so the dash is untested').toHaveCount(1);
+	await expect(thin.locator('[data-source-cell="articles"]')).toHaveText('4');
+	expect(4).toBeLessThan(MIN_ATTEMPTS_FOR_RATE);
+	await expect(thin.locator('[data-source-cell="share"]')).toHaveText('-');
+	await expect(thin.locator('[data-source-cell="cut"]')).toHaveText('4');
+
+	// And a source over the floor does print one, which is what stops this
+	// passing on a column of dashes.
+	await expect(
+		page.locator('[data-source-cut="cut-a"] [data-source-cell="share"]')
+	).toHaveText('86%');
+});
+
+test('what the cut cost is printed with the number of articles behind it', async ({ page }) => {
+	await page.goto('/console/');
+
+	const { losses } = sourceTable();
+	const median = losses[Math.floor(losses.length / 2)];
+	const max = losses[losses.length - 1];
+	// A median equal to its own maximum is one number printed twice. The fixture
+	// loses a different amount from every article so the two are two facts.
+	expect(median).toBeLessThan(max);
+
+	await expect(page.locator('[data-source-cuts-cost]')).toHaveText(
+		`${losses.length} articles were cut short. Half of them lost more than ${grouped(median)} words each, and the longest lost ${grouped(max)}.`
+	);
+});
+
+test('a source whose lengths were never recorded is absent, and reads as unknown', () => {
+	// The state the whole `-` rule exists for, driven straight at the reader
+	// because the table cannot reach it: a source is listed only because a row
+	// recorded a length before the cut, so a source with only empty cells and a
+	// source on the table are two different sets by construction.
+	const migrated = (source: string, index: number) => ({
+		date: '2026-08-28',
+		source_id: source,
+		url_key: `${source}-${index}`,
+		source_words: '5000',
+		source_words_before_cap: ''
+	});
+
+	const nothing = sourceCuts([migrated('a', 0), migrated('a', 1)], {
+		days: SOURCE_CUT_WINDOW_DAYS,
+		minAttempts: MIN_ATTEMPTS_FOR_RATE,
+		limit: SOURCE_CUT_ROWS
+	});
+	// Not listed with a zero. Zero cuts and no measurement are different facts,
+	// and the zero is the one nobody checks.
+	expect(nothing.rows).toEqual([]);
+	// And the page says which of the two it is: nothing recorded a length here,
+	// so the table is not empty - it cannot answer yet.
+	expect(nothing.measured).toBe(false);
+	expect(nothing.cost).toBeNull();
+
+	// One row of that source now records a length, and it was cut. The source
+	// arrives, and the longest article is the one length on record - never the
+	// 5,000-word body beside it that nobody measured before the cut.
+	const some = sourceCuts(
+		[
+			migrated('a', 0),
+			{
+				date: '2026-08-28',
+				source_id: 'a',
+				url_key: 'a-1',
+				source_words: '1923',
+				source_words_before_cap: '2612'
+			}
+		],
+		{ days: SOURCE_CUT_WINDOW_DAYS, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
+	);
+	expect(some.measured).toBe(true);
+	expect(some.rows).toHaveLength(1);
+	expect(some.rows[0].cut).toBe(1);
+	expect(some.rows[0].articles).toBe(2);
+	// Two articles is under the floor, so there is no share to print.
+	expect(some.rows[0].sharePct).toBeNull();
+	expect(some.rows[0].longestWords).toBe(2612);
+	expect(some.cost).toEqual({ n: 1, median: 689, max: 689 });
+
+	// Empty is not zero on the other cell either: a row with no surviving length
+	// is not an article cut to nothing.
+	expect(
+		sourceCuts(
+			[{ date: '2026-08-28', source_id: 'a', url_key: 'a-0', source_words: '', source_words_before_cap: '2612' }],
+			{ days: SOURCE_CUT_WINDOW_DAYS, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
+		).rows
+	).toEqual([]);
+});
+

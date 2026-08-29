@@ -1,5 +1,19 @@
-import type { RateSpread, StageTiming, StageTimingDay, ThroughputDay } from '$lib/charts/series';
-import { CUT_FLAG_MEANS_A_CUT_FROM, modelByDate, modelWork } from '$lib/server/model-work';
+import type {
+	CompressionPoint,
+	RateSpread,
+	StageTiming,
+	StageTimingDay,
+	ThroughputDay
+} from '$lib/charts/series';
+import {
+	modelByDate,
+	modelWork,
+	placeRow,
+	sourceCuts,
+	wasCut,
+	SOURCE_CUT_ROWS,
+	SOURCE_CUT_WINDOW_DAYS
+} from '$lib/server/model-work';
 import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
@@ -19,21 +33,12 @@ export const prerender = true;
 
 type TimingStats = StageTimingDay;
 
-interface CompressionPoint {
-	date: string;
-	item_id: string;
-	source_words: number;
-	source_seen_words?: number;
-	summary_words: number;
-	truncation_flagged: boolean;
-}
-
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
 
 // The page prints these; the derivation is server-only, so the shape crosses
 // as a type and the ledger reader never reaches a browser bundle.
-export type { ModelDay, ModelRow } from '$lib/server/model-work';
+export type { ModelDay, ModelRow, SourceCut, SourceCuts } from '$lib/server/model-work';
 
 export interface RunSquare {
 	runId: string;
@@ -214,48 +219,6 @@ function publicTelemetry(row: Record<string, string>) {
 	};
 }
 
-/** Where one score row sits on the compression plot, or why it sits nowhere.
- *
- * One decision, three outcomes, because the plot and the sentence under it read
- * the same answer. Counting the unplaced rows anywhere else would let the two
- * disagree about the same row on the same day.
- */
-type Placed =
-	| { kind: 'point'; point: CompressionPoint }
-	| { kind: 'no-length'; date: string }
-	| { kind: 'no-summary' };
-
-function placeRow(row: Record<string, string>): Placed {
-	const sourceWords = Number(row.source_word_count ?? 0) || 0;
-	// Null, empty or zero all mean the same thing: the article's length before
-	// the cut was never recorded, so there is no x to draw this row at.
-	if (sourceWords <= 0) return { kind: 'no-length', date: row.date ?? '' };
-	const summaryWords = Number(row.summary_word_count ?? 0) || 0;
-	if (summaryWords <= 0) return { kind: 'no-summary' };
-	const seenWords = Number(row.source_seen_word_count ?? 0) || 0;
-	return {
-		kind: 'point',
-		point: {
-			date: row.date ?? '',
-			item_id: row.item_id ?? '',
-			source_words: sourceWords,
-			// Carried only where the model saw something other than the whole
-			// article. The page inlines every point, so a number repeating "nothing
-			// was cut" on 2,517 of 2,539 rows is weight for no fact.
-			...(seenWords === sourceWords ? {} : { source_seen_words: seenWords }),
-			summary_words: summaryWords,
-			// Read through the row's own stamp, exactly as the day's count is. A
-			// row stamped before the boundary holds the gap between two
-			// faithfulness scores in this column, which is a different fact about
-			// a different thing - drawing a diamond on it would make the plot
-			// claim per item what the table refuses to claim per day.
-			truncation_flagged:
-				(row.version ?? '') >= CUT_FLAG_MEANS_A_CUT_FROM &&
-				(row.truncation_flagged === 'True' || row.truncation_flagged === 'true')
-		}
-	};
-}
-
 /** One square's colour, from what the run wrote down about itself.
  *
  * Skipped items are not failures. An article already published, or one a feed
@@ -275,13 +238,39 @@ function health(run: RunRecord, floorPct: number): Health {
 	return 'green';
 }
 
-function describe(date: string, run: RunRecord): string {
+/** What one run did, in the words the square carries for anyone without a mouse.
+ *
+ * The cut count rides here rather than on a figure of its own. Measured
+ * 2026-08-29 over 19 committed runs it is 1 to 12 articles of 160 to 200, and
+ * that swing is which articles the feeds carried that hour - so drawn as a
+ * published number it would read as the cap moving when nothing moved. A run is
+ * where run-level facts already live.
+ */
+function describe(date: string, run: RunRecord, readInPart: number): string {
 	const parts = [`${date} run ${run.n}`, `${run.succeeded} of ${run.planned} succeeded`];
 	if (run.failed > 0) parts.push(`${run.failed} failed`);
 	if (run.skipped > 0) parts.push(`${run.skipped} skipped`);
+	if (readInPart > 0) parts.push(`${readInPart} read only in part`);
 	if (run.sourceListStale) parts.push('source list was stale');
 	if (run.status !== 'completed') parts.push(run.status);
 	return parts.join(', ');
+}
+
+/** Articles each run read only the start of, keyed by the run that read them.
+ *
+ * Counted per address, not per row: a run writes one row per planned item, and
+ * the same article coming round on a later run is the same article.
+ */
+function cutsByRun(rows: Record<string, string>[]): Map<string, number> {
+	const seen = new Map<string, Set<string>>();
+	for (const row of rows) {
+		if (!wasCut(row)) continue;
+		const runId = row.run_id ?? '';
+		const found = seen.get(runId) ?? new Set<string>();
+		found.add(row.url_key ?? row.item_id ?? '');
+		seen.set(runId, found);
+	}
+	return new Map([...seen].map(([runId, keys]) => [runId, keys.size]));
 }
 
 /** The same rule as `FeedHealthRow.failing` in the contract.
@@ -426,6 +415,7 @@ export function load() {
 		.sort((a, b) => a.date.localeCompare(b.date));
 
 	const manifests = loadManifests();
+	const readInPartByRun = cutsByRun(itemRows);
 	// The strip is a time axis, so it reads oldest to newest. The Runs table under
 	// it still reads newest first, which is why this copies rather than reverses:
 	// an in-place reverse would silently turn that table upside down too.
@@ -435,7 +425,7 @@ export function load() {
 			runId: run.runId,
 			n: run.n,
 			health: health(run, floorPct),
-			label: describe(day.date, run)
+			label: describe(day.date, run, readInPartByRun.get(run.runId) ?? 0)
 		}))
 	}));
 
@@ -482,6 +472,15 @@ export function load() {
 		feeds: trouble(results, quarantineAfter),
 		feedsChecked: new Set(results.map((row) => row.feedId)).size,
 		feedRuns: new Set(results.map((row) => row.runId)).size,
+		// Ten rows and the two sentences under them, aggregated here rather than in
+		// the browser. Seven days of the committed ledger is thousands of rows and
+		// this page inlines whatever it is given, so the ten rows cross and the rows
+		// they were made from do not.
+		sourceCuts: sourceCuts(itemRows, {
+			days: SOURCE_CUT_WINDOW_DAYS,
+			minAttempts: console.min_attempts_for_rate,
+			limit: SOURCE_CUT_ROWS
+		}),
 		telemetryRows: publicRows,
 		telemetryMonths: telemetryMonths(),
 		console,
