@@ -335,6 +335,23 @@ number for a lower gate that reads the same wrong number. What would fix it is a
 floor read from the health ledger rather than from config, and that is a
 contract change nobody has costed - filed here rather than done.
 
+**What was done is smaller and it is the part that was actually missing: the
+floor is now a merge gate.** `backend/tests/test_contracts.py::test_every_vertical_clears_its_own_feed_floor`
+reads the committed `config/sources.json` against the committed
+`config/taxonomy.json` and fails the build when any vertical's active feed count
+drops under `min_feeds`.
+
+Until 2026-08-29 nothing in this repository checked that. `rank.plan_vertical`
+enforces the floor at run time by planning nothing, which is silent by design -
+the run succeeds, the digest publishes, and one section is simply absent. The
+sweep above came one edit away from doing exactly that to two desks, and what
+caught it was a throwaway assertion in a migration script. This test is that
+assertion, kept. It says what a failing vertical would cost:
+`ai has 6 active feeds against a floor of 35, so it would publish nothing`.
+
+It does not make the floor read the right number. It makes the number it does
+read impossible to break by accident.
+
 ## Design rationale
 
 **The affiliate-page control sits at collection, not at the score (2026-08-24).** The three `fool.com/the-ascent/` items are the case that separates "the summary is wrong" from "the item should not be here". Every instrument in the eval ledger compares our summary to the article, and all of them passed. Moving the control to collection also costs nothing: a blocked address is never fetched, never summarized and never scored, which is the cheapest place a rejection can happen (Rule #2). Authority: owner, closing known defect 7.
