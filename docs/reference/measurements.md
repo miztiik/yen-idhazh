@@ -2877,7 +2877,143 @@ columns. The stored `coverage` column cannot be recomputed honestly from that
 ledger alone, so this pass reports 0 computable re-bands rather than inventing a
 movement count.
 
-## CI and publish wall-clock
+## What every source yielded, 2026-08-24 to 2026-08-29
+
+**Measured 2026-08-29** over `state/item-health/2026-08.csv` at `origin/main`,
+which carries one row per planned article per run. 21 runs, 3,832 planned
+articles. Deterministic over a committed file; no spread.
+
+| Quantity | Value |
+| --- | --- |
+| Source ids that appeared at all | 122 |
+| Articles planned | 3,832 |
+| Articles published | 2,739 (**71.5 percent**) |
+| Articles lost | 1,093 (**28.5 percent**) |
+| **Sources that published nothing, not once** | **24** |
+| Failures owned by those 24 | 910, which is **83.3 percent of every failure** |
+| Slots they consumed per run | **43.3 of 160**, so 27 percent of a run bought nothing |
+
+The loss rate is steady across all six days, which is what makes it a property
+of the source list rather than a bad week.
+
+### Where the losses happen
+
+| Stage | Share of the 1,093 |
+| --- | --- |
+| Fetch: the page answers 4xx, a robots file forbids it, or the host resets | 60 percent |
+| Extract: a paywall, or no readable prose on the page | 38 percent |
+| Summarize | 2 percent |
+
+Two codes dominate: `http_client_error` (518) and `paywalled` (330). Neither is
+a defect in this repository.
+
+### What reaches a reader, by kind of source
+
+**Measured 2026-08-29** over the 1,284 items published between 2026-08-26 and
+2026-08-29.
+
+| Tier | Published | Share |
+| --- | --- | --- |
+| 1, the institution that IS the fact | 194 | 15.1 percent |
+| 2, trade press and news outlets | 1,073 | **83.6 percent** |
+| 3, community and independent writing | 17 | **1.3 percent** |
+
+94 of the 138 configured feeds contributed at least one item.
+
+### The per-feed cap decides the day, not the score
+
+**Measured 2026-08-29** over the six runs of 2026-08-27 to 2026-08-29.
+
+| Run | Slots | Distinct feeds drawn from | Feeds sitting on the 2-item cap |
+| --- | --- | --- | --- |
+| 2026-08-27-1 | 160 | 87 | 73 |
+| 2026-08-27-2 | 160 | 85 | 75 |
+| 2026-08-27-3 | 160 | 85 | 75 |
+| 2026-08-28-1 | 160 | 87 | 73 |
+| 2026-08-29-1 | 160 | 86 | 74 |
+| 2026-08-29-2 | 160 | 82 | 78 |
+
+**Between 73 and 78 of the roughly 85 working feeds hit `max_per_source` in
+every run.** The corroborating figure: the fifteen feeds that published most
+between 2026-08-26 and 2026-08-29 each published **exactly 22**, which is two
+per run across eleven runs.
+
+What this means, said plainly: with 160 slots and two allowed per feed, the list
+fills itself from about 80 feeds and the score only decides which handful of
+feeds miss out. "A story three independent sources carried is the day's story"
+is the stated design ([../architecture/sources/discovery.md](../architecture/sources/discovery.md))
+and it is not what is happening. **This is a source-supply result, not a ranking
+defect** - the cap stops binding as soon as the pool of working feeds is
+comfortably larger than 80.
+
+### A failed address is retried all day and fails again
+
+**Measured 2026-08-29** over the same ledger. The published ledger stops a
+repeat; a *failure* is not published, so the next run of the same day plans the
+same address again.
+
+| Quantity | Value |
+| --- | --- |
+| Addresses attempted more than once inside one day | 233 |
+| Of those, addresses that never succeeded on any attempt | 231 |
+| Repeat attempts that produced nothing | **401** |
+| Repeat attempts that produced something | **2** |
+
+Per run the waste is 8 to 41 slots, and it is zero on run 1 of a day by
+construction. 403 repeat attempts bought 2 items. Their failure codes are the
+ones that cannot change within a day: `http_client_error` (112), `paywalled`
+(59), `no_text` (21), `robots_denied` (11).
+
+### Probing the 40 non-producing sources
+
+**Measured 2026-08-29** on a developer machine (i7-1265U, Windows) by fetching
+each configured feed URL and one article behind it, with the pipeline's own user
+agent. n=1 per feed.
+
+| Finding | Feeds |
+| --- | --- |
+| Refused from a developer machine **and** from the runner: paywall, robots, or an outright block | 22 |
+| Returned a valid feed to a developer machine and 403 to the runner | 7 |
+| Answered with a web page and no feed at all - our configured URL is not a feed | 3 |
+| Judgement calls: PDF-only articles, connection resets, rate limiting | 8 |
+
+The seven in row two are the reason this table exists. `indianexpress.com`
+served **200 headlines** to a laptop while the runner recorded HTTP 403 on every
+attempt for weeks. A developer IP is not a runner IP, and this page has recorded
+that contrast in the opposite direction before (see the robots policy row
+above). A source that fails only on the runner is blocked by address, not
+broken.
+
+The three in row three are ours: `anthropic-news`, `cohere-blog` and
+`stanford-hai` were configured with the address of an HTML page. Every fetch
+returned HTTP 200 and zero items, so feed health recorded a read that succeeded
+and a pool that gained nothing. **A feed read can succeed and still be worthless,
+and no gate in this repository noticed for weeks.**
+
+### The feed floor counts configured feeds, not working ones
+
+**Measured 2026-08-29** by applying the retirement to `config/sources.json` and
+comparing each vertical against its `min_feeds` in `config/taxonomy.json`.
+
+| Vertical | Feeds configured | Feeds that ever produced an item | `min_feeds` |
+| --- | --- | --- | --- |
+| `ai` | 38 | **28** | 35 |
+| `business-economy` | 22 | **12** | 21 |
+| `energy` | 24 | **20** | 21 |
+| `india` | 27 | **19** | 21 |
+| `world` | 27 | **19** | 21 |
+
+`rank.plan_vertical` refuses to plan anything for a vertical below its floor, so
+a vertical that drops under it publishes nothing at all.
+
+**Every one of the five verticals is under its floor on the count that matters,
+and every one of them passes on the count the gate reads.** `ai` published 52
+items on 2026-08-29 from an effective 28 feeds against a floor of 35, so a floor
+that is meant to stop a thin desk reaching a reader has been passing a desk it
+would have failed. The gate is not wrong about the number it reads; it is
+reading a number that stopped describing the source pool.
+
+
 
 **Measured 2026-08-23** on GitHub-hosted `ubuntu-latest`. Single observed run
 per gate; values are rounded wall-clock durations. Spread is not available for
