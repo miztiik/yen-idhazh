@@ -1,0 +1,19 @@
+<!-- The app icon: the favicon's three-bar digest mark, in the brand gradient.
+     Full bleed with its own rounded corners, for the `any` purpose where the
+     platform draws the shape we give it. The maskable variant is a sibling
+     file, because a safe zone is a different drawing and not a crop. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <linearGradient id="brand" x1="0" y1="0" x2="1" y2="0.55">
+      <stop offset="0" stop-color="#4f6bff" />
+      <stop offset="0.48" stop-color="#7c5cff" />
+      <stop offset="1" stop-color="#c86dd7" />
+    </linearGradient>
+  </defs>
+  <rect width="512" height="512" rx="112" fill="url(#brand)" />
+  <g fill="#ffffff">
+    <rect x="128" y="152" width="256" height="38" rx="19" />
+    <rect x="128" y="237" width="256" height="38" rx="19" />
+    <rect x="128" y="322" width="144" height="38" rx="19" fill-opacity="0.72" />
+  </g>
+</svg>
