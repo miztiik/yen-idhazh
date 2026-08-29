@@ -72,6 +72,22 @@ the first few edits.
 
 `.tmp_*` is gitignored, so the patch file never lands in a commit.
 
+**A `git push -u` that the terminal kills can land the push and skip the `-u`.**
+On 2026-08-29 the tool cut the command with no output and exit 1, which reads
+like a failed push. The branch was on the remote at the right SHA, and only the
+upstream config had not been written - so `git rev-parse --abbrev-ref '@{u}'`
+still answered `origin/main` and a retry would have looked like a second push of
+the same commits. Read the remote before concluding anything:
+
+```powershell
+git ls-remote --heads origin <branch>
+```
+
+If it names your SHA the push is done; `git fetch origin <branch>` then
+`git branch --set-upstream-to=origin/<branch>` finishes the job. Setting the
+upstream before the fetch fails with `does not exist`, because the push wrote
+the remote branch and not the remote-tracking ref.
+
 **The venv tests the checkout it was installed from, not your worktree.**
 `pip install -e .` writes `_editable_impl_idhazh.pth` into
 `.venv/Lib/site-packages`, and that file holds the ABSOLUTE path of the checkout
