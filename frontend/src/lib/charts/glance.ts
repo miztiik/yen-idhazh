@@ -54,6 +54,15 @@ export function runHealth(manifests: readonly RunSummary[]) {
  */
 export const ROUTER_MINUTES_TARGET = 6;
 
+/** The span the retirement rule is stated over.
+ *
+ * A window narrower than this cannot show the rule, and a median taken over the
+ * wrong span is worse than no median: it is the same figure with a different
+ * meaning and nothing on the page to say which one you are reading. So the card
+ * prints the rule's own span and no number at all.
+ */
+export const RULE_WINDOW_DAYS = 14;
+
 export function routerCost(days: readonly GlanceDay[]) {
 	const timed = days.map((d) => d.minutesPerChart).filter((m): m is number => m !== null);
 	if (timed.length === 0) {
@@ -110,8 +119,13 @@ export function publishedTrend(days: readonly GlanceDay[]) {
 	return sparkline(ordered.map((d) => d.published));
 }
 
-/** Which way is the site's size going? Same shape, different question. */
-export function sizeTrend(manifests: readonly RunSummary[]) {
-	const ordered = [...manifests].sort((a, b) => a.date.localeCompare(b.date)).slice(-TREND_DAYS);
+/** Which way is the site's size going? Same shape, different question.
+ *
+ * The card's own number is the latest absolute measurement and never moves with
+ * the window. This is the other half of it: the movement and the line are over
+ * whatever span the page is showing, so `days` is passed rather than assumed.
+ */
+export function sizeTrend(manifests: readonly RunSummary[], days: number = TREND_DAYS) {
+	const ordered = [...manifests].sort((a, b) => a.date.localeCompare(b.date)).slice(-days);
 	return sparkline(ordered.map((m) => m.siteBytes));
 }

@@ -322,30 +322,23 @@ export interface SourceCuts {
 	measured: boolean;
 	cost: CutCost | null;
 	days: number;
+	/** Every article in the window, cut or not.
+	 *
+	 * The denominator. At a seven-day window it runs as low as six articles, and
+	 * a table of shares over six articles has to say so or it reads like a rate. */
+	articles: number;
 }
-
-/** How many days the source table asks its question over.
- *
- * Not a config knob, and deliberately so: the table's own first sentence states
- * the number, so a knob here is a way to make the page's copy lie. The sentence
- * is built from this constant for the same reason - one number, one place.
- *
- * Seven days is long enough that a source with one bad afternoon does not lead
- * the table, and short enough that the answer is about the feeds as they run
- * now.
- */
-export const SOURCE_CUT_WINDOW_DAYS = 7;
 
 /** How many sources the table names.
  *
  * Measured 2026-08-29 over the committed ledger: 46 sources lost an article in
- * the window and the worst seven hold 69 of 153 cuts, 45 percent. Past ten the
- * tail is sources with a single cut, and one cut in a week is not something an
- * operator does anything about.
+ * a seven-day window and the worst seven hold 69 of 153 cuts, 45 percent. Past
+ * ten the tail is sources with a single cut, and one cut in a week is not
+ * something an operator does anything about.
  */
 export const SOURCE_CUT_ROWS = 10;
 
-/** How much the cap is costing, by source, over the last few days.
+/** How much the cap is costing, by source, over the window the page is showing.
  *
  * Sorted by how many articles it cost each source, never by the share. Measured
  * 2026-08-29 over the committed ledger, the shares run 3 to 67 percent on
@@ -355,7 +348,9 @@ export const SOURCE_CUT_ROWS = 10;
  *
  * The window ends on the newest day the ledger holds rather than on the build
  * clock, so the table says the same thing on a rebuild of an old tree as it did
- * the day that tree was written.
+ * the day that tree was written. That is also why panning the telemetry
+ * viewport does not move this table: it follows the window's length, and the
+ * section says so.
  */
 export function sourceCuts(
 	health: Record<string, string>[],
@@ -435,11 +430,11 @@ export function sourceCuts(
 						median: sorted[Math.floor(sorted.length / 2)],
 						max: sorted[sorted.length - 1]
 					},
-		days: options.days
+		days: options.days,
+		articles: articles.size
 	};
 }
 
-/** The first day of a window of `days` ending on `end`, ends included. */
 function windowStart(end: string, days: number): string {
 	if (end === '') return '';
 	const at = new Date(`${end}T00:00:00Z`);

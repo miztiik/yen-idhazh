@@ -185,7 +185,7 @@
         },
         "default_window_days": {
           "default": 30,
-          "description": "Initial time span for the console charts. A viewport, not a deletion.",
+          "description": "Initial time span for the console charts. A viewport, not a deletion. Thirty rather than fourteen because the page states its own retirement rules over fourteen days, so a window equal to the rule shows the rule with no margin either side of it.",
           "minimum": 1,
           "title": "Default Window Days",
           "type": "integer"
@@ -227,6 +227,15 @@
           "$ref": "#/$defs/TodayAnchor",
           "default": "right",
           "description": "Where today sits in the initial viewport when enough history exists."
+        },
+        "window_presets": {
+          "description": "The day counts the console's window control offers, ascending and distinct. A short list rather than a slider: every value is a distinct fetch cost, because a wider window pulls more month files, and most values in between are indistinguishable on the page. `default_window_days` must be one of them, or the console would open on a window its own control cannot name.",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "title": "Window Presets",
+          "type": "array"
         },
         "zoom_factor": {
           "default": 1.5,
@@ -1375,6 +1384,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.window_presets added, and console.default_window_days must now be one of its members.",
+      "version": "2026-08-29T23:00",
+      "why": "The console had no way to say how many days it was showing, so every section picked its own span and one of them hard-coded seven days in the frontend. One control now sets one window for the whole page, and a control needs a list of the spans it offers. Four presets rather than a free number: a wider window fetches more month files, so every value is a distinct transfer cost and most of the values between these four cannot be told apart on the page. Additive with a default, so an older config still validates - the committed 30 is a member of the default list (section 11)."
+    },
+    {
       "change": "Added collect.settled_failure_codes.",
       "version": "2026-08-29T22:00",
       "why": "An address that failed was never recorded as published, so every later run of the same day planned it again. Measured over 2026-08-24 to 2026-08-29: 403 repeat attempts inside a day produced 2 items, and 231 of the 233 repeated addresses never succeeded on any attempt. The codes listed cannot change before tomorrow; the ones left out - a rate limit, a reset connection, an unreachable model - can, so they still retry. Additive with a default, so an older config still validates (section 11)."
@@ -1645,7 +1659,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-29T22:00",
+      "default": "2026-08-29T23:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1659,5 +1673,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-29T22:00"
+  "version": "2026-08-29T23:00"
 }
