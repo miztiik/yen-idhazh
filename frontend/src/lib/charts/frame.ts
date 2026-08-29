@@ -155,3 +155,124 @@ export function observeWidth(
 	report();
 	return { destroy: () => observer.disconnect() };
 }
+
+/** One mark a readout can land on: where it sits, and what it says. */
+export interface ReadoutMark {
+	/** The mark's x in the chart's own pixels. The hit rule is nearest by x. */
+	x: number;
+	/** The sentences to print, in order. The first is the label, the rest the
+	 * numbers. A chart that already builds a sentence passes that sentence. */
+	lines: string[];
+}
+
+export interface ReadoutOptions {
+	marks: ReadoutMark[];
+	/** The width the chart drew at, so a client x can be scaled into chart
+	 * pixels even in the frame before the resize observer has reported. */
+	width: number;
+	/** Which mark is selected now, or null for none. */
+	onSelect: (index: number | null) => void;
+}
+
+/** Report which mark the reader is pointing at, or has stepped to.
+ *
+ * A Svelte action, so a chart writes `use:pointerReadout={...}` and never reads
+ * the DOM itself. One `pointermove` and `pointerdown` stream covers mouse, pen
+ * and touch, which an SVG `<title>` never did: a `<title>` needs a hover, so on
+ * a phone the numbers in it did not exist. The `<title>` stays as the mark's
+ * accessible name, and nothing this action reports is needed to read the chart.
+ *
+ * The `<svg>` itself takes the focus, not its marks. A tab stop per point is a
+ * trap on a plot that draws two and a half thousand of them.
+ */
+export function pointerReadout(
+	node: SVGSVGElement,
+	options: ReadoutOptions
+): { update: (next: ReadoutOptions) => void; destroy: () => void } {
+	let current = options;
+	let at: number | null = null;
+
+	const select = (next: number | null) => {
+		if (next === at) return;
+		at = next;
+		current.onSelect(next);
+	};
+
+	/** Nearest mark by x, never by straight-line distance. Two articles of the
+	 * same length sit on top of each other, and a reader pointing at a column
+	 * means the column rather than whichever of them is nearer the pointer. */
+	const nearest = (clientX: number): number | null => {
+		if (current.marks.length === 0) return null;
+		const rect = node.getBoundingClientRect();
+		if (rect.width === 0) return null;
+		const x = ((clientX - rect.left) * current.width) / rect.width;
+		let best = 0;
+		let gap = Number.POSITIVE_INFINITY;
+		current.marks.forEach((mark, index) => {
+			const distance = Math.abs(mark.x - x);
+			if (distance < gap) {
+				gap = distance;
+				best = index;
+			}
+		});
+		return best;
+	};
+
+	const track = (event: PointerEvent) => select(nearest(event.clientX));
+
+	/** A touch ends the moment the thumb lifts, and a lift raises this event.
+	 * Clearing there would blank the readout before it could be read, so only a
+	 * mouse leaving the plot clears it. */
+	const leave = (event: PointerEvent) => {
+		if (event.pointerType === 'mouse') select(null);
+	};
+
+	const enter = () => {
+		if (at === null && current.marks.length > 0) select(0);
+	};
+
+	const away = () => select(null);
+
+	const step = (event: KeyboardEvent) => {
+		const last = current.marks.length - 1;
+		if (last < 0) return;
+		const from = at ?? 0;
+		if (event.key === 'ArrowLeft') select(Math.max(0, from - 1));
+		else if (event.key === 'ArrowRight') select(Math.min(last, from + 1));
+		else if (event.key === 'Home') select(0);
+		else if (event.key === 'End') select(last);
+		else if (event.key === 'Escape') select(null);
+		else return;
+		event.preventDefault();
+		// The chart consumed the key. The compression scatter sits inside the
+		// viewport control, which pans on the same two arrows - left unstopped,
+		// one step through the marks also moved the window under them and left
+		// the readout pointing at a mark that had gone.
+		event.stopPropagation();
+	};
+
+	node.addEventListener('pointermove', track);
+	node.addEventListener('pointerdown', track);
+	node.addEventListener('pointerleave', leave);
+	node.addEventListener('focusin', enter);
+	node.addEventListener('focusout', away);
+	node.addEventListener('keydown', step);
+
+	return {
+		update(next: ReadoutOptions) {
+			current = next;
+			// The window moved, so the mark this index named may be gone. Holding
+			// the index would print one article's numbers under another's mark.
+			if (at !== null && at > next.marks.length - 1) select(null);
+		},
+		destroy() {
+			node.removeEventListener('pointermove', track);
+			node.removeEventListener('pointerdown', track);
+			node.removeEventListener('pointerleave', leave);
+			node.removeEventListener('focusin', enter);
+			node.removeEventListener('focusout', away);
+			node.removeEventListener('keydown', step);
+		}
+	};
+}
+

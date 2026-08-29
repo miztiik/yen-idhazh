@@ -25,7 +25,7 @@ from pytest import MonkeyPatch
 from idhazh import assemble, cli, config, extract, ledger, telemetry
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.article import Article
-from idhazh.contracts.base import SHA256_PATTERN, derive_output_digest
+from idhazh.contracts.base import SHA256_PATTERN
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand, EvalRow
 from idhazh.contracts.feed_health import FetchOutcome
@@ -332,10 +332,15 @@ def test_the_truncation_gap_is_computed_not_asserted() -> None:
     assert not built.truncation_flagged
 
 
-def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
-    item = plan().items[0]
+def test_a_wide_gap_does_not_flag_an_article_nobody_cut() -> None:
+    """The test that would have caught the rule this column used to carry.
+
+    A 0.33 gap is three times the ceiling the old rule compared against, and the
+    fixture article was never cut. The flag reads the payload now, so the wide
+    gap has to leave it alone while both faithfulness columns keep the gap.
+    """
     built = to_eval_row(
-        item=item,
+        item=plan().items[0],
         article=article(),
         summary=summary(),
         full_text=FULL_TEXT,
@@ -348,44 +353,10 @@ def test_a_wide_gap_is_flagged_as_a_truncation_artifact() -> None:
         scorer_version="v",
         scored_at="2026-08-21T06:18:02Z",
     )
-    assert built.truncation_flagged
 
-
-def test_a_copied_brief_is_flagged_as_truncation_not_confidence() -> None:
-    copied = "alpha beta gamma delta epsilon zeta eta theta"
-    source = article().model_copy(update={"brief": True})
-    brief_summary = summary().model_copy(
-        update={
-            "summary": "alpha beta gamma delta epsilon",
-            "key_points": ["short copied point"],
-        }
-    )
-    brief_summary = brief_summary.model_copy(
-        update={
-            "output_digest": derive_output_digest(
-                brief_summary.summary, brief_summary.key_points, title=brief_summary.title
-            )
-        }
-    )
-
-    built = to_eval_row(
-        item=plan().items[0],
-        article=source,
-        summary=brief_summary,
-        full_text=copied,
-        premise=copied,
-        hhem=0.94,
-        hhem_full=0.93,
-        config=EvaluationConfig(),
-        date="2026-08-21",
-        run_id="2026-08-21-1",
-        scorer_version="v",
-        scored_at="2026-08-21T06:18:02Z",
-    )
-
-    assert built.band is ConfidenceBand.HIGH
-    assert built.verbatim_run > 0.5
-    assert built.truncation_flagged
+    assert not article().truncated
+    assert built.hhem_delta == pytest.approx(0.33)
+    assert not built.truncation_flagged
 
 
 def test_the_row_scores_the_article_and_not_only_the_summary() -> None:
@@ -714,7 +685,7 @@ def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
 
 
 def test_a_short_premise_is_one_chunk() -> None:
-    assert chunks("a b c", size=10) == ["a b c"]
+    assert chunks("a b c", size=10, overlap=2) == ["a b c"]
 
 
 def test_a_long_premise_is_windowed_with_overlap() -> None:
@@ -722,6 +693,51 @@ def test_a_long_premise_is_windowed_with_overlap() -> None:
     windows = chunks(text, size=300, overlap=50)
     assert len(windows) > 1
     assert windows[0].split()[-1] in windows[1].split()[:60], "windows overlap"
+
+
+def test_every_window_is_the_full_window_and_the_last_one_ends_on_the_last_word() -> None:
+    """The aggregation is a max, so a short window is a rival with less to work with.
+
+    Until 2026-08-28 the walk stepped past the end and the leftover became the
+    final window. That window was short on every premise longer than one window
+    - as little as one word, and 370 words on average against 900-word rivals -
+    so every long article was graded with at least one draw from a partial
+    premise. Counting the windows cannot see this: the count is the same either
+    way on most lengths. The window LENGTHS are what say it.
+    """
+    geometry = EvaluationConfig()
+    size, overlap = geometry.chunk_words, geometry.chunk_overlap_words
+
+    for length in range(size + 1, 4001):
+        words = [str(n) for n in range(length)]
+        windows = [window.split() for window in chunks(" ".join(words), size, overlap)]
+        short = [len(window) for window in windows if len(window) != size]
+        assert not short, f"premise of {length} words produced windows of {short} words"
+        assert windows[-1][-1] == words[-1], (
+            f"premise of {length} words: the last window stops at "
+            f"{windows[-1][-1]} rather than {words[-1]}"
+        )
+
+
+def test_anchoring_the_last_window_drops_a_window_on_a_long_article() -> None:
+    """Correctness is the reason; the saved scorer pass arrived with the bigger cap.
+
+    At the cap of 2500 committed until 2026-08-29, an article stopped at 1,923
+    words. There anchoring fixes the runt and changes no count - 3 windows
+    before, 3 after - so it bought correctness and no time. At 3,846 words, which
+    is what the cap of 5000 now allows, the unanchored walk needed 6 windows with
+    the last of them 96 words long, and anchoring covers the same text in 5. That
+    is 16.7 percent less scorer work, and the cap move is what turned it from a
+    number to quote later into a live saving.
+    """
+    geometry = EvaluationConfig()
+    size, overlap = geometry.chunk_words, geometry.chunk_overlap_words
+
+    at_cap = chunks(" ".join(str(n) for n in range(1923)), size, overlap)
+    doubled = chunks(" ".join(str(n) for n in range(3846)), size, overlap)
+
+    assert len(at_cap) == 3, "the old cap cost the same three passes it always did"
+    assert len(doubled) == 5, "six before anchoring, five after"
 
 
 def test_the_best_chunk_wins_not_the_average() -> None:
@@ -734,7 +750,9 @@ def test_the_best_chunk_wins_not_the_average() -> None:
             return next(scores)
 
     text = " ".join(str(n) for n in range(3000))
-    assert score_over_chunks(Recorded(), text, "claim") == pytest.approx(0.95)
+    assert score_over_chunks(
+        Recorded(), text, "claim", evaluation=EvaluationConfig()
+    ) == pytest.approx(0.95)
 
 
 def test_an_empty_premise_scores_zero_rather_than_raising() -> None:
@@ -742,7 +760,7 @@ def test_an_empty_premise_scores_zero_rather_than_raising() -> None:
         def score(self, premise: str, hypothesis: str) -> float:  # pragma: no cover
             raise AssertionError("must not be called")
 
-    assert score_over_chunks(Never(), "", "claim") == 0.0
+    assert score_over_chunks(Never(), "", "claim", evaluation=EvaluationConfig()) == 0.0
 
 
 class _Counting:
@@ -768,7 +786,13 @@ def test_an_untruncated_article_is_scored_once_and_not_twice() -> None:
     scorer = _Counting()
     whole = "The plant will close in March, the ministry said on Tuesday."
 
-    seen, full = dual_score(scorer, seen_text=whole, full_text=whole, summary="claim")
+    seen, full = dual_score(
+        scorer,
+        seen_text=whole,
+        full_text=whole,
+        summary="claim",
+        evaluation=EvaluationConfig(),
+    )
 
     assert scorer.premises == [whole], "one identical string, one pass"
     assert seen == full
@@ -780,7 +804,13 @@ def test_a_truncated_article_is_scored_against_both_texts() -> None:
     seen_text = "The plant will close in March."
     whole = f"{seen_text} The ministry named June as the original date."
 
-    seen, full = dual_score(scorer, seen_text=seen_text, full_text=whole, summary="claim")
+    seen, full = dual_score(
+        scorer,
+        seen_text=seen_text,
+        full_text=whole,
+        summary="claim",
+        evaluation=EvaluationConfig(),
+    )
 
     assert scorer.premises == [seen_text, whole], "two different strings, two passes"
     assert seen != full
@@ -1250,6 +1280,81 @@ def test_truncated_items_publish_the_partial_read_sentence() -> None:
     )
 
     assert item.reader_note == "We could only read the first part of this page."
+
+
+def cut_article(*, read: int, total: int | None, abstract: bool = False) -> Article:
+    """One article cut at `read` words out of `total` before the cap."""
+    return article().model_copy(
+        update={
+            "truncated": True,
+            "truncated_at_tokens": 2500,
+            "word_count": read,
+            "source_word_count": total,
+            "source_form": SourceForm.ABSTRACT if abstract else SourceForm.ARTICLE,
+        }
+    )
+
+
+def test_the_cut_sentence_names_how_much_of_the_page_we_read() -> None:
+    """One word cannot cover both ends of the real range, so the note carries a number.
+
+    Both pairs are measured rows of `state/scores.csv` on 2026-08-29, the
+    smallest and the largest of the 22 genuinely cut items: 1,923 words of
+    1,948 is a 1.3 percent loss, and 1,923 of 8,442 is a 77.2 percent loss.
+    Today both print the same sentence, which is the defect.
+    """
+    barely = assemble.reader_note(cut_article(read=1923, total=1948))
+    mostly = assemble.reader_note(cut_article(read=1923, total=8442))
+
+    assert barely == "We could only read the first 99 percent of this page."
+    assert mostly == "We could only read the first 23 percent of this page."
+    assert barely != mostly
+
+
+def test_an_abstract_that_was_also_cut_carries_both_facts() -> None:
+    """Returning on the first branch is the exact shape of a silent cut.
+
+    Nothing in extract exempts an abstract from the cap: `truncate_to_tokens`
+    runs on every body. It has never fired on one - the longest body the single
+    abstract feed produced across 28 rows of `state/item-health/2026-08.csv` on
+    2026-08-29 was 330 words against a 1,923-word cut point - so this is latent,
+    not live. Latent is not a reason to leave it standing.
+    """
+    note = assemble.reader_note(cut_article(read=1320, total=5280, abstract=True))
+
+    assert note == (
+        "This is a summary of the paper's abstract. The full paper is a PDF. "
+        "We could only read the first 25 percent of this page."
+    )
+
+
+def test_a_cut_page_of_unknown_length_states_no_scale() -> None:
+    """A payload written before `source_word_count` existed cannot name a share.
+
+    142 of the 2,683 rows in `state/scores.csv` carry no pre-cap length on
+    2026-08-29. The note degrades to the sentence it already shipped rather
+    than inventing a number or dropping the fact.
+    """
+    assert (
+        assemble.reader_note(cut_article(read=1320, total=None))
+        == "We could only read the first part of this page."
+    )
+
+
+def test_the_note_never_claims_we_read_the_first_100_percent() -> None:
+    """A scale that rounds to all of it says the opposite of what happened."""
+    assert (
+        assemble.reader_note(cut_article(read=748, total=748))
+        == "We could only read the first part of this page."
+    )
+    assert (
+        assemble.reader_note(cut_article(read=1996, total=2000))
+        == "We could only read the first part of this page."
+    )
+
+
+def test_an_uncut_article_of_full_length_says_nothing() -> None:
+    assert assemble.reader_note(article()) is None
 
 
 def test_a_day_publishes_even_when_items_failed() -> None:

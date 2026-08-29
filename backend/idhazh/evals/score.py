@@ -116,6 +116,12 @@ def to_eval_row(
     gap between the two faithfulness scores is the cost of truncation, and it is
     invisible unless both are measured.
 
+    `truncation_flagged` is `article.truncated` and nothing else. Extract is the
+    only stage that cuts a body, so it is the only stage that knows, and the flag
+    now carries that fact rather than inferring it from the gap. The gap stays,
+    under its own two columns: it answers what the cut cost, which is a different
+    question and needs a threshold nothing has measured yet.
+
     `premise` is the text the faithfulness scorer was handed as `seen_text` - the
     article after sanitizing and truncation - and it is digested, never stored.
     It is a parameter rather than something read back off `article` on purpose:
@@ -149,9 +155,6 @@ def to_eval_row(
     if source_words is None and not article.truncated:
         source_words = article.word_count
     delta = round(hhem - hhem_full, _DELTA_PLACES)
-    truncation_flagged = delta > config.truncation_gap_max or (
-        article.brief and verbatim > config.brief_compression_ceiling
-    )
 
     return EvalRow(
         version=EvalRow.schema_version(),
@@ -171,7 +174,7 @@ def to_eval_row(
         hhem=hhem,
         hhem_full=hhem_full,
         hhem_delta=delta,
-        truncation_flagged=truncation_flagged,
+        truncation_flagged=article.truncated,
         coverage=coverage,
         compression=metrics.compression(text, full_text),
         extractiveness=metrics.extractiveness(text, full_text),

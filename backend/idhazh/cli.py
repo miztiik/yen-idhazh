@@ -619,6 +619,7 @@ def stage_work(
             seen_text=seen,
             full_text=whole,
             summary=summary.summary or "",
+            evaluation=settings.app.evaluation,
         )
         score_ms = int((time.monotonic() - score_started) * 1000)
         row = score.to_eval_row(
@@ -1082,6 +1083,7 @@ def stage_validate(
             scorer,  # type: ignore[arg-type]
             text,
             summary.summary or "",
+            evaluation=settings.app.evaluation,
         )
         scores.append(hhem)
         LOG.info("validation scored %s/%s hhem=%.3f", index, len(plan.items), hhem)
@@ -1442,6 +1444,7 @@ def _score_item(
         seen_text=frozen.seen_text,
         full_text=frozen.full_text,
         summary=text,
+        evaluation=evaluation,
     )
     return ItemScore(
         item_id=frozen.row.item_id,

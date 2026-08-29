@@ -79,6 +79,7 @@ def test_publish_telemetry_drops_url_keys_urls_and_detail(tmp_path: Path) -> Non
             "code": "unknown",
             "source_words": "180",
             "summary_words": "65",
+            "source_words_before_cap": "",
         }
     ]
 
@@ -90,6 +91,31 @@ def test_publish_telemetry_can_seed_an_empty_month(tmp_path: Path) -> None:
 
     assert [path.name for path in written] == ["2026-08.csv"]
     assert written[0].read_text(encoding="utf-8") == ",".join(PUBLIC_COLUMNS) + "\n"
+
+
+def test_publish_telemetry_carries_both_word_counts(tmp_path: Path) -> None:
+    """The console needs the pre-cap count to say a body was cut.
+
+    It is a word count of our own extraction, the same class as `source_words`,
+    which the browser has always had. The three cells the browser never gets -
+    canonical_url, url_key and detail - are untouched by this column.
+    """
+    state = tmp_path / "state"
+    public = tmp_path / "frontend" / "public" / "telemetry"
+    _write_item_health(
+        state, [_row(source_words=1923, source_words_before_cap=2610), _row(item_id="ai-02")]
+    )
+
+    written = publish(state_root=state, public_root=public)
+
+    with written[0].open("r", encoding="utf-8", newline="") as handle:
+        reader = csv.DictReader(handle)
+        assert "source_words_before_cap" in (reader.fieldnames or [])
+        projected = list(reader)
+    assert not (FORBIDDEN_COLUMNS & set(projected[0]))
+    assert projected[0]["source_words_before_cap"] == "2610"
+    assert int(projected[0]["source_words_before_cap"]) > int(projected[0]["source_words"])
+    assert projected[1]["source_words_before_cap"] == ""
 
 
 def test_the_pipeline_never_writes_the_committed_telemetry_projection(tmp_path: Path) -> None:

@@ -258,8 +258,11 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     day payloads and now grows by one day link a day. The assertion below is on
     its size rather than on its presence: a ceiling at the megabyte the page used
     to weigh is a gate that never fires, so the number has to stay in the
-    thousands. `/console/` grows with the ledger its charts read and nobody has
-    priced that growth, so it is deliberately still absent.
+    thousands. `/console/` is capped since 2026-08-29 and its assertion has the
+    same shape for the same reason - the regression a page ceiling exists to
+    catch on this route is a day payload inlined by a layout, which cost 313,300
+    gzipped bytes when it last happened, so a ceiling more than that above the
+    page could never see it land again.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     ceilings = committed.page_weight.ceilings_bytes
@@ -271,7 +274,11 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
         "the archive ceiling is back above the weight of the payloads row #4 removed - "
         "a ceiling that high never fires again"
     )
-    assert "/console/" not in ceilings, "a route that grows with the ledger is not capped"
+    assert ceilings["/console/"] < 482_000, (
+        "the console ceiling is above the 170,281 the page measured plus the 313,300 a "
+        "day payload cost when a layout last inlined one - a ceiling that high cannot "
+        "catch the one regression this route has actually had"
+    )
 
 
 def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:
@@ -387,7 +394,22 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "input_tokens",
         "output_tokens",
         "cached_tokens",
+        "source_words_before_cap",
     )
+
+
+def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None:
+    """The canary's own copy of the header, held against the contract.
+
+    `frontend/scripts/build-canary.mjs` restates the column names because it is
+    JavaScript and the contract is Python. A name added to the row and not to
+    that array writes a canary `publish_telemetry` refuses, and until this test
+    existed the only thing that caught it was a frontend build in CI.
+    """
+    source = read_text(REPO_ROOT / "frontend" / "scripts" / "build-canary.mjs")
+    declared = re.search(r"const COLUMNS = \[(.*?)\];", source, re.DOTALL)
+    assert declared is not None, "build-canary.mjs no longer declares a COLUMNS array"
+    assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == ItemHealthRow.csv_columns()
 
 
 def test_recorded_item_health_codes_never_count_against_a_source() -> None:

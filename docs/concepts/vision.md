@@ -14,7 +14,7 @@ yen-idhazh is a daily **article digest that scores its own work**: a build-time 
 
 The digest is for **a general reader**, in the sense a newspaper is: no assumed background, no account, no reason to explain who it is for. The Reader persona is the median non-technical person, not an ML researcher and not the person who built the pipeline.
 
-The eval dashboard is for **the operator**. It is instrumentation, not a reading surface: it sits off the reading path, it earns no design budget, and its only obligation is to be correct.
+The eval dashboard is for **the operator**. It is instrumentation rather than a reading surface: it takes no ornament and spends no reader attention, but it owes the operator the same legibility the digest owes a reader. Being correct is where it starts.
 
 The two audiences are why the two surfaces are held to different standards, and it is worth being explicit about what does *not* follow from it. The evaluation is still the product in the sense of [principles.md](principles.md) principle 6 - it is what makes the digest worth a stranger's two minutes. What the split settles is who each surface is written for, not which one matters.
 
@@ -76,9 +76,14 @@ Not compute. The order in which limits bite is: how many good articles a day the
 
 Note what is *not* on that list: a number we chose. There is no daily item cap. Supply and the ranking decide how big a day is, and the only ceiling in the run config is a crash guard ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). Making the day bigger is a source-diversity question, not a capacity one and not a config edit.
 
+## Design rationale
+
+**"It earns no design budget" was struck from the operator paragraph on 2026-08-29.** The split between the two audiences is real and stays; what was wrong was turning a priority order into a permanent licence to under-build. The reader coming first does not make the operator's instrument exempt from being readable, and the sentence was doing that work: measured 2026-08-28, the console rendered a 10-column table at 627px, drew three charts at 164px each, carried seven horizontal scrollbars and ran to 6562px of page height, all inside a 672px column on a 1209px screen. Each of those passed review because the doctrine said the surface did not have to be good. The rejected alternative was leaving it and fixing the console anyway; the sentence would have been cited against the next such fix, exactly as it had been cited against this one. Authority: owner, 2026-08-29. The replacement wording, and the sufficiency checks that now bind every surface, are in [design-system.md](design-system.md).
+
 ## See also
 
 - [principles.md](principles.md) - the beliefs these constraints turn into daily practice.
+- [design-system.md](design-system.md) - the visual language, and the sufficiency checks every surface passes.
 - [pipeline-loop.md](pipeline-loop.md) - the stages a single article passes through.
 - [evaluation.md](evaluation.md) - how a summary is scored, and what each metric cannot see.
 - [digest.md](digest.md) - what a reader actually gets.

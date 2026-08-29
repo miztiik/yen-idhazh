@@ -1,12 +1,63 @@
 # Fine-tune the digest models - Plan
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 **Level**: 3, except rows 8 and 9, which are Level 5 if they end in adoption.
 
 Execute per docs/how-to/execute-a-plan.md: one worktree-isolated worker per row, AUTO-merge on green gates, parallel N = 2. AUTHOR-AND-STOP until the owner authorizes a row.
 
 **No step in this plan asks a human to download, upload or copy anything on a schedule.** The one recurring human action is running a notebook, because training is not allowed on the runner.
+
+---
+
+## Section 0 - Where this plan stands, in plain words
+
+**Half of it is built. The half that is built is the half a machine can do on its own.**
+
+The pipeline now keeps the good article-and-summary pairs it used to throw away.
+Every seventh daily run adds that day's accepted pairs to a file, drops the
+oldest ones so the file stays a fixed size, and commits it. Once a month a
+second job deletes the old history so the repository does not grow forever.
+There is also a small tool for looking at the collected data and repairing it.
+
+**Nothing trains a model yet, and nothing has changed what a reader sees.**
+
+| Done | Not done |
+| --- | --- |
+| The shape of one training example, frozen as a contract | The 300 ideal summaries a person has to write by hand |
+| Every size and schedule as a setting, not a number in code | The notebook that actually trains |
+| The step that collects examples during the daily run | Uploading the trained weights |
+| The job that trims old history | Judging whether the trained model is better |
+| The tool for inspecting and repairing the data | Switching production over to it |
+
+### What has to happen next, in order
+
+1. **Wait and watch.** The collector fires on its own about a week from now.
+   Nothing to do; check afterwards that `corpus/corpus.jsonl` gained rows.
+2. **Write the reference summaries (row 5).** This is a person's job and it is
+   the biggest single cost in the plan - roughly 12 hours, an estimate rather
+   than a measurement, and it can be done in slices of 100. **Nothing after this
+   can start without it.**
+3. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
+   and free Colab or paid. All three have defaults, so silence is an answer.
+4. **Then the training rows (6 to 9), which need a GPU that is not ours.**
+5. **Row 10 is the only one that changes what a reader receives, and it needs
+   your explicit approval** (Level 5).
+
+### One thing to know about the cost you accepted
+
+The corpus holds article text, and it is committed to a public repository. You
+chose that over a private second repository on 2026-08-28, so:
+
+- Anyone can read those article bodies.
+- Once a month, a job rewrites this repository's history and force-pushes.
+  It bounds the corpus, but a squash boundary is per commit rather than per
+  folder, so it also collapses the history of `backend/`, `docs/` and `state/`.
+  After it runs, `git blame` and `git bisect` reach back about two to three
+  months and no further, and older commit links stop working.
+
+Both are written into `CLAUDE.md` sections 0a and 8, next to the rules they
+amend.
 
 ---
 

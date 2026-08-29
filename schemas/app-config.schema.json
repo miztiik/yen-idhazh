@@ -269,6 +269,20 @@
           "title": "Brief Compression Ceiling",
           "type": "number"
         },
+        "chunk_overlap_words": {
+          "default": 150,
+          "description": "Words shared between one window and the next, so a claim that straddles a boundary is still whole somewhere. Must sit below `chunk_words`.",
+          "minimum": 0,
+          "title": "Chunk Overlap Words",
+          "type": "integer"
+        },
+        "chunk_words": {
+          "default": 900,
+          "description": "Words of article the faithfulness scorer reads in one window. Attention is quadratic in the premise, so a whole long article in one pass is the expensive shape. The default has never been calibrated (Rule #10): with no human labels there is nothing to tune it against, and a sweep would show only that the number moves. Moving it moves `scorer_version`, which restarts the run-day count in `evaluation.label_min_run_days`.",
+          "minimum": 1,
+          "title": "Chunk Words",
+          "type": "integer"
+        },
         "golden_set_size": {
           "default": 20,
           "minimum": 1,
@@ -339,14 +353,6 @@
           "minimum": 1,
           "title": "Summary Words Min",
           "type": "integer"
-        },
-        "truncation_gap_max": {
-          "default": 0.1,
-          "description": "Score gap that flags a truncation artifact rather than a hallucination.",
-          "maximum": 1.0,
-          "minimum": 0.0,
-          "title": "Truncation Gap Max",
-          "type": "number"
         },
         "validation_articles": {
           "default": 20,
@@ -907,13 +913,13 @@
     },
     "PageWeightConfig": {
       "additionalProperties": false,
-      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when its HTML either does not grow with the\npublished corpus, or grows by a bounded amount a person can price for a\nyear. `/404` and `/evals/` render no day and no ledger, so their weight is a\nfunction of source alone and their ceiling is the heaviest build plus the\n64-byte noise floor. `/archive/` grows, but only by one day link a day since\nit stopped inlining the day payloads, so its ceiling carries a year of that\ngrowth as measured headroom. `/console/` grows with the ledger its charts\nread and nobody has priced that growth, so it stays uncapped; the marker\ncount in `frontend/tests/payload-weight.spec.ts` covers it, and a route the\nconfig does not name is reported by the gate without failing it.",
+      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when somebody has priced its growth in\npublished days. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone and their ceiling is the heaviest build\nplus the 64-byte noise floor. `/archive/` grows, but only by one day link a\nday since it stopped inlining the day payloads, so its ceiling carries a year\nof that growth as measured headroom. `/console/` grows far faster - about 60\ngzipped bytes a published item, so 36,504 to 43,745 bytes a mature day\nmeasured 2026-08-29 - so its ceiling carries three days rather than a year\nand expires by design. What a page that renders a day cannot have is a fixed\nceiling at all: the only way under one is to publish fewer items, which is\ncapping the news rather than catching a regression, so `/` and `/<date>/` are\ncounted and reported and never failed.",
       "properties": {
         "ceilings_bytes": {
           "additionalProperties": {
             "type": "integer"
           },
-          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed. A route earns a ceiling when its growth is priced: /404 and /evals/ grow only when the source does, and /archive/ grows by one day link a day, so its ceiling carries a measured year of that. /console/ grows with the ledger and stays uncapped until somebody measures it.",
+          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed. A route earns a ceiling when its growth is priced: /404 and /evals/ grow only when the source does, /archive/ grows by one day link a day so its ceiling carries a measured year of that, and /console/ grows with the ledger its charts read so its ceiling carries a measured three days and is meant to expire. A page that renders a day is never capped, because the only way under such a ceiling is to publish less.",
           "title": "Ceilings Bytes",
           "type": "object"
         }
@@ -1314,8 +1320,28 @@
   "changelog": [
     {
       "change": "The finetune block added, and models.<role>.hf_base_repo added as an optional field.",
-      "version": "2026-08-28",
+      "version": "2026-08-29T18:00",
       "why": "The training corpus needs its sizes and its two schedules in config before anything writes a row (Rule #6), and the window and the sample are two knobs rather than one because they price differently: the window costs 2.9 KB of compressed history per row and the sample costs GPU hours. The prune is two knobs for the same reason - how often it fires and how far back it keeps are independent, and 'prune quarterly' means neither one on its own. hf_base_repo sits on the model entry and not here because training reads the safetensors repository while the pipeline reads the GGUF one: held in two blocks, a model swap moves one string and leaves the other, and a LoRA adapter loads onto a mismatched base without raising, so the damage arrives as a quality drop nobody can attribute. Both additive with defaults, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
+      "change": "summarize.bands gained a fifth rung at min_source_words 3000, asking 150 to 230 words. No existing rung moved.",
+      "version": "2026-08-29T16:00",
+      "why": "A 2,000-word article and a 3,846-word article were handed the identical ask, so one was compressed 10 to 1 and the other 19 to 1 for the same 150-word midpoint. 3,846 words is what extract.truncation_cap_tokens of 5000 lets through, so both are read whole and the difference is real text and not a guess about text. The floor is 3000 because that is the midpoint of the whole-read range, 2,923, rounded to a seam the ledger reports. Measured 2026-08-29 over the 445 rows of state/scores.csv that carry a trustworthy pre-cap length: 9 of them reach 3,000 words, which is 2.02 percent of items and 1 to 4 items a run over four runs of 107 to 117 items. This is the last rung there may be - a floor above the cut point would ask for words the model was never handed, and the model would fill the gap by elaborating the opening. 230 sits inside evaluation.summary_words_max of 250, so the gate did not move. Additive with a default, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
+      "change": "page_weight.ceilings_bytes gained /console/ in config/idhazh.json, and the description here stopped saying that route is unpriced. No field moved.",
+      "version": "2026-08-29T14:00",
+      "why": "The description said /console/ 'stays uncapped until somebody measures it', and this is that measurement. The page costs about 60 gzipped bytes a published item: removing one real mature day from every ledger the console reads and rebuilding cost 43,745, 43,704 and 36,504 bytes over 731, 724 and 621 scored items, measured 2026-08-29 on an Intel Core i7-1265U, Windows, node 24.12.0. So the headroom is three days of the heaviest of those, not the year /archive/ carries, and the number is meant to expire (Rule #10)."
+    },
+    {
+      "change": "evaluation.truncation_gap_max removed.",
+      "version": "2026-08-29T09:00",
+      "why": "Its one caller stopped reading it in this commit, so the knob and its last reader go together and there is never a state where the number exists and nothing consults it. It set truncation_flagged from the gap between the two faithfulness scores, and that flag now carries Article.truncated - whether extract cut the body - because that is what its name says and what its one consumer prints. Retuning it was the alternative and it is not available: score_over_chunks takes the best of overlapping windows, a cut article's last window is not a window of the whole article, and the two window sets are not nested, so the gap can come out positive on an article that was never cut. Measured 2026-08-28 over all 2,683 committed rows of state/scores.csv, the gap on the 22 genuinely cut rows runs -0.1235 to +0.0381 against this knob's 0.100 default - no value in that range separates a cut from chunk-boundary noise (Rule #10). BREAKING: EvaluationConfig forbids unknown keys, so a config file that still names this key fails to load with a message naming it. The read-side migration is the deletion of the key from config/idhazh.json in this same commit (section 11); a fork carrying its own config deletes one line. hhem, hhem_full and hhem_delta all stay - they answer what the cut cost, which is a different question."
+    },
+    {
+      "change": "evaluation.chunk_words added, defaulting to 900, and evaluation.chunk_overlap_words added, defaulting to 150. Both were constants in backend/idhazh/evals/hhem.py. EvaluationConfig now refuses an overlap at or above the window.",
+      "version": "2026-08-28",
+      "why": "The faithfulness scorer's window size decides what premise every score was measured over, so it is a tunable and belongs in config (Rule #6), and scorer_version now spells it as window=900/150/anchored so a ledger row records the geometry that produced it. Neither default moves today: with 0 of 60 human labels drawn there is no ground truth to tune against, and a sweep would show only that the number moves, not which value is right (Rule #10). The guard exists because the chunker steps chunk_words - chunk_overlap_words and clamps that step to one word, so an overlap at or above the window walks a long article one word at a time - a job that never finishes rather than one that fails. Additive; an older config still validates and gets both defaults."
     },
     {
       "change": "evaluation.label_min_stratum_rows added, defaulting to 20, and evaluation.label_min_run_days now counts run-days at one scorer version rather than at one (scorer_version, pipeline_fingerprint) pair.",
@@ -1553,7 +1579,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-28",
+      "default": "2026-08-29T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1567,5 +1593,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-28"
+  "version": "2026-08-29T18:00"
 }

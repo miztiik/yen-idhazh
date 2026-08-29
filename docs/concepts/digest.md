@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-29
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -22,7 +22,7 @@ An item is the unit a reader consumes. It carries, at minimum:
 | **The title** | Ours, not the source's. A headline is written to win a click; a digest line has to say what happened. The summarizer writes it from the article body rather than from the headline, under the same attribution and certainty rules as the summary, because it is the one line every reader sees. Where the rewrite misses, the item falls back to the source's headline rather than failing ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)). |
 | **The source link** | The reader's means of verification and their exit. It is a first-class element, not a footnote. Burying it is a dark pattern. |
 | **The summary** | Our own text, of a pinned shape. Never the article body - that is never committed and never served. |
-| **A source-limit sentence** | Shown only when the reader would otherwise be surprised. An abstract says: "This is a summary of the paper's abstract. The full paper is a PDF." A truncated read says: "We could only read the first part of this page." It is a sentence in the summary voice, never a badge or coloured pill. |
+| **A source-limit sentence** | Shown only when the reader would otherwise be surprised. An abstract says: "This is a summary of the paper's abstract. The full paper is a PDF." A cut read says: "We could only read the first N percent of this page." An item carries **every** limit that applies to it, so a cut abstract says both. It is a sentence in the summary voice, never a badge or coloured pill. |
 | **A confidence signal** | Where the item scored low, or where the source was truncated, the reader is told, in their words, before they find out by clicking through. |
 | **A visual, or deliberately none** | See below. |
 
@@ -66,6 +66,38 @@ That is a design target for the page, not a cap on the pipeline. Nothing limits 
 **A long day gets its hierarchy from its topics.** 586 items in one queue had no usable first screen - its opening items were whichever vertical id sorted first, which is an accident rather than an edit. The all-topics page now shows each topic's first few and links to the rest ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Nothing is removed, hidden or re-ranked; the published order survives inside every section. That is hierarchy doing the work the reader's budget always asked of it, and it is why truncating a long day was refused.
 
 The page must also render when its data file is absent or empty. That is a normal state, designed on purpose, not an error discovered as a white screen ([../../CLAUDE.md](../../CLAUDE.md) section 12).
+
+## Design rationale
+
+### The cut sentence carries the scale
+
+**The sentence is "We could only read the first N percent of this page.", where N is a whole number.**
+
+Until 2026-08-29 every cut item printed one sentence with no number in it: "We could only read the first part of this page." Measured over the 22 genuinely cut items in `state/scores.csv` on 2026-08-29, that one sentence covered a page we read 99 percent of (1,923 words of 1,948) and a page we read 23 percent of (1,923 of 8,442). Those are different situations and the reader could not tell them apart. Deciding whether to click through is the only thing the note is for, so a word that means both means nothing.
+
+Raising the cap does not remove the problem, it narrows it. At a 5,000-token cap only four of those 22 items are still cut, and they still lose between 9 and 54 percent.
+
+A percentage of what we read, rather than a count of words, because the reader cannot see the page's true length. "We read 1,923 words" tells them nothing on its own; "23 percent" ranks instantly against every other item on the page, with no arithmetic inside a two-minute budget.
+
+**Rejected wordings:**
+
+| Wording | Why not |
+| --- | --- |
+| "We could only read the first 1,923 words of this 8,442-word page." | Two four-digit numbers and a division. The reader has to do arithmetic to get the one fact they came for. |
+| "We could only read about half of this page." | A bucket is the same failure at a coarser grain: one phrase would still have to cover 9 percent lost and 30 percent lost. The boundaries would also be an invisible tunable. |
+| "The other 77 percent is at the link." | Leads with the article rather than with our own limit, and spends a second sentence pointing at a link that is already on the item. |
+| Rounding N to the nearest 5 or 10 to avoid false precision | A grain constant that buys nothing. A whole percent is already coarser than the word count it is derived from. |
+| Keeping the old sentence and letting the reader judge from the link | The reader cannot tell whether "the first part" is 91 percent or 46 percent, so they cannot decide whether the link is worth opening. |
+
+The noun stays "page", not "article", because the same sentence has to be true of a paper's landing page as of a news story, and because "the page" is what the reader is deciding whether to open.
+
+**Where the note states no scale.** The length before the cut is `Article.source_word_count`, and it is absent on any payload written before that field existed - 142 of the 2,683 rows in `state/scores.csv` on 2026-08-29. There the note falls back to the sentence it already shipped: "We could only read the first part of this page." The same fallback runs when the share rounds to all of it or none of it, because a cut page that claims "the first 100 percent" says the opposite of what happened. Degrade, do not fail ([../../CLAUDE.md](../../CLAUDE.md) section 1a): the note drops the number it cannot support, never the fact.
+
+### An item carries every limit, not the first one
+
+The note used to return on the first limit it found, so an item that was both an abstract and cut published only the abstract sentence and dropped the cut in silence. That is the failure this page polices hardest: a reader who is not told what is missing has been misled, however accurate the words are.
+
+It has never fired. Nothing in extract exempts an abstract from the cap - the cut runs on every body - but the one feed that declares the abstract form produced 28 items across `state/item-health/2026-08.csv` on 2026-08-29 and the longest body among them was 330 words, against a cut point of 1,923. Being unreachable today is not a reason to keep a shape that drops a fact.
 
 ## See also
 

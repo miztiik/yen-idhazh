@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -20,7 +20,7 @@ Knobs, by the surface they tune:
 - **Extraction** - the truncation cap, the retry budget, backoff, what counts as an oversized body, shape-signal thresholds, shape enforcement switches, and paywall fallback markers.
 - **Model** - which model reference and quantisation, the context size, thread count, and the sampling parameters that pin determinism.
 - **Summarize** - the length bands, title range, key-point range and quote cap.
-- **Evaluation** - the confidence band thresholds, the truncation-gap threshold, the brief compression ceiling, the copy reject ceiling, the word gate, and the spot-check sample size ([evaluation.md](evaluation.md)).
+- **Evaluation** - the confidence band thresholds, the brief compression ceiling, the copy reject ceiling, the word gate, the faithfulness window and its overlap, and the spot-check sample size ([evaluation.md](evaluation.md)).
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, and the published-site alarm point ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` is read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller.
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
@@ -30,7 +30,32 @@ Knobs, by the surface they tune:
 
 These are the *surfaces*, not a field list. The field-level truth is `schemas/app-config.schema.json`, generated from the model - read it there rather than restating it here, because a list copied into prose is a list that goes stale.
 
-The knobs are spread across four files rather than one, along the line of who edits them and how often: `config/idhazh.json` for behaviour, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+The knobs are spread across five files rather than one, along the line of who edits them and how often: `config/idhazh.json` for pipeline behaviour, `config/appearance.json` for everything the published surface is drawn from, and `config/taxonomy.json`, `config/sources.json` and `config/watchlist.json` for the source model ([../architecture/sources/discovery.md](../architecture/sources/discovery.md)). Curating a feed list and tuning a threshold are different activities with different review cadences, and putting them in one file means every feed addition touches the file that also holds the decoding parameters.
+
+## `config/appearance.json` - the published surface's own file
+
+Split off `config/idhazh.json` on 2026-08-29 on the same argument the source model was split on, one surface later: curating a reading surface and pinning a decode temperature have different review cadences, and one file meant every appearance edit touched the file that holds the sampler seed.
+
+Its blocks:
+
+| Block | What it tunes |
+| --- | --- |
+| `digest` | The day page. Formerly `idhazh.json`'s `ui` block, unchanged in shape. |
+| `console` | The operator viewport. Formerly `idhazh.json`'s `console` block. |
+| `assist` | On-device archive search. Formerly `idhazh.json`'s `assist` block. |
+| `frame` | The frame maximums, the reading measure, the gutter range, and the three breakpoints. |
+| `theme` | Whether gradients, elevation and the display face are drawn, and how strongly a panel takes a tint. |
+| `chart` | Drawn height and server-side width, whether a chart answers a pointer, the palette, tick density, and the sparkline and donut geometry. |
+| `icons` | Icon size, whether an icon takes the hue of what it means, and whether a topic carries a mark. |
+| `motion` | The two durations, and one switch. `prefers-reduced-motion` sits above the switch and is deliberately not configurable. |
+
+The contract is `backend/idhazh/contracts/appearance_config.py`, and it imports `UiConfig`, `ConsoleConfig` and `AssistConfig` from `app_config` rather than copying them: the file moved, the contract did not fork. `AppConfig` keeps the three moved blocks, and the frontend loader merges three layers - defaults, then the legacy block, then the new file - so a checkout that has not been migrated resolves to exactly what it resolved to before (`CLAUDE.md` section 11). The legacy block is a middle layer rather than a discarded one so a partly migrated file cannot snap a knob back to a default nobody chose.
+
+### Why a frame width is a knob, when a 2026-08-28 ruling said it should not be
+
+The objection was that a config able to set the frame to 300px would need a code change to still look right. That is true of an unvalidated number and false of a validated one. **`frame.reading_max_px` cannot be set below 960 or above 1600; `measure_ch` cannot leave 52 to 80; `breakpoints_px` must be exactly three ascending, distinct widths; and `console_max_px` may not be narrower than `reading_max_px`.** A validator refuses a document that breaks any of them, so no reachable value breaks the design. The contract is the answer to the objection rather than a refusal of the knob, and `backend/tests/test_appearance_config.py` asserts every bound in both directions.
+
+One cross-block rule is worth naming because it is the one that bites in production rather than in review: `chart.width_px` may not exceed `frame.console_max_px`. The server prerenders every chart at `width_px` because a prerendered chart has no element to measure, and the client re-measures once a script runs. Draw wider than the container can ever be and every first paint is wrong and then visibly snaps - on the one kind of site whose whole premise is that the page is finished before any script runs.
 
 Every knob ships a sane default. The only values with no default are the model references, because there is no honest default for "which weights" - a wrong guess would silently run the wrong model rather than failing. A reference names the repository, the file, and the `revision` those bytes were uploaded in; the revision is what makes the recorded `sha256` mean anything, because a download that named a branch would get whatever was uploaded last. No workflow keeps a copy of any of it: `digest.yml`, `measure.yml` and `validate.yml` each read `models.summarize` and `models.route` from here and republish them as job outputs, including into the weights cache key ([../reference/github-actions.md](../reference/github-actions.md)).
 
@@ -81,9 +106,40 @@ Eight items is not a distribution.
 Every `min_source_words` in this file - `extract.min_source_words` and each
 `summarize.bands[].min_source_words` - counts the **source body**, before
 `extract.truncation_cap_tokens` cuts it. One name, one meaning. Reading the top
-band off the post-cap count is what left it empty until 2026-08-26, because that
-count stops at `int(2500 / 1.3) = 1923` words and the band starts at 2000
+band off the post-cap count is what left it empty until 2026-08-26, because at
+the cap of 2500 committed then that count stopped at `int(2500 / 1.3) = 1923`
+words and that band started at 2000
 ([../architecture/summarize/prompt.md](../architecture/summarize/prompt.md)).
+The ladder gained a fifth rung at 3000 words on 2026-08-29, and no rung floor
+may ever sit above `int(truncation_cap_tokens / 1.3)` - the model is handed that
+many words and a rung above it would ask for a summary of text it never saw.
+
+**The published surface keeps a second copy of that ladder, and it has drifted.**
+`SUMMARIZE_DEFAULTS` in `frontend/src/lib/server/config.ts` is the value the
+console falls back to when `config/idhazh.json` cannot be read. Measured
+2026-08-29 it carries **three** rungs against the real five, and the first of
+them starts at 0 words asking for 50 to 90:
+
+| | `config/idhazh.json` | `SUMMARIZE_DEFAULTS` |
+| --- | --- | --- |
+| rungs | 5 | 3 |
+| first rung | 0 words -> 30-45 | 0 words -> 50-90 |
+| brief band | present | **absent** |
+| top rung | 3000 words -> 150-230 | 2000 words -> 110-200 |
+
+So under the fallback a 30-word note is asked for 50 to 90 words - more words
+than the article holds - and the two longest rungs collapse into one. It has
+never fired, because the file it guards against is committed and read at build
+time, which is exactly why the drift went unnoticed.
+
+**This is the drift the rejected-alternatives table below already forbids**, in
+the row that refuses copying config into the published directory because two
+copies of one file are free to drift with nothing gating them. The copy is in
+code rather than in a published file, so no gate caught it. Recorded here rather
+than repaired: whether a fallback ladder should exist at all is a decision about
+the loader, not a value to nudge, and a wrong default that fires only when
+config is unreadable is worse than no default at all. Nobody should meet this
+for the first time during an incident.
 
 `evaluation.qualification_pool_multiple` sizes how wide a qualification shard
 casts before it selects. It is a floor and not a cap: a shard whose slice has not

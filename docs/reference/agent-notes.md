@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -57,6 +57,18 @@ git diff --output=.tmp_mine.patch -- <only your paths>
 git worktree add <absolute path> -b <branch> origin/main
 git apply --3way .tmp_mine.patch
 ```
+
+**Branch first, before the first edit - not after the work is done.** A session
+on 2026-08-28/29 built a 35-file change entirely uncommitted in the shared
+checkout. Nothing was lost, but three things happened while it sat there: the
+owner committed to `main` underneath it, `origin/main` gained 22 commits touching
+94 files, and the index was reset by another process so a `git add` from earlier
+in the session had silently come undone. The recovery is cheap and worth
+knowing - `git switch -c <branch>` carries an uncommitted working tree onto a new
+branch, so committing there and then `git switch main` leaves the shared checkout
+clean - but the cost is that the merge is deferred to the worst possible moment,
+when the change is largest and the divergence widest. Commit to a branch inside
+the first few edits.
 
 `.tmp_*` is gitignored, so the patch file never lands in a commit.
 
@@ -570,6 +582,26 @@ answers about a different revision of the file you meant. The tell is a symbol
 you know exists reported as absent, or a line number tens of lines off. Read the
 file by absolute path instead, or search from a terminal in your own worktree.
 
+**It can also return a line of code that no longer exists anywhere.** That is a
+different failure from the one above: not the wrong revision of a file, but
+content that was deleted and is still being served from an index nobody
+refreshed. On 2026-08-29 `grep_search` reported
+`backend/tests/test_corpus.py:275: assert SummarizeConfig().bands[-1].min_source_words > CAP_WORDS`
+- an assertion a merged pull request had already removed. Line 275 of that file
+was blank. A worker read it as a live test contradicting the new ladder and
+nearly "fixed" a line that was not there.
+
+**The tell is that two search tools disagree**, and the one reading the bytes
+wins. `Select-String` found no such line, and `Select-String` was right. Before
+editing anything a workspace search pointed you at, confirm the line from the
+file:
+
+```powershell
+Get-Content <path> | Select-Object -Skip 274 -First 3
+```
+
+A hit you cannot reproduce with `Select-String` or `Get-Content` is not there.
+
 ## Hugging Face
 
 **The `ETag` on a weights download is not the SHA-256, and it looks exactly
@@ -652,6 +684,15 @@ contends with the first.
   then shows progress dots and an exit code and nothing else, which reads like
   a broken collection. Run `pytest` with no quiet flag. Before concluding that
   a missing summary means something is wrong, check `[tool.pytest.ini_options]`.
+
+  **The same `-qq` also changes what `--collect-only` prints, from node ids to
+  one count a file.** Measured 2026-08-29 on pytest 9.1.1:
+  `pytest --collect-only -q backend/tests/test_evals.py` answers
+  `backend/tests/test_evals.py: 57` and nothing else, while the same command
+  without the flag lists all 57 node ids. So grepping that output for the test
+  you just added finds nothing, and the natural reading - "my test was not
+  collected" - is wrong. Either drop your `-q` and grep the node ids, or prove
+  it by the count moving by one.
 - **A launch that reported nothing still launched.** `Start-Process -Wait`
   returned `Command produced no output` and exit 1 three times on 2026-08-26
   while starting the script every time, so three builds wrote `frontend/build`
@@ -868,6 +909,47 @@ the variable protects the shell you remember to set it in and nothing else.
   run.** Parallel agents share one shell, so a sibling's interrupt or an
   unfinished input line swallows yours. Re-issue the identical command before
   believing the result. An empty result is not a failed gate.
+- **It can also return another worktree's output, and that is worse than an
+  empty one.** An empty result announces itself; a plausible one does not.
+  Observed repeatedly on 2026-08-28 and 2026-08-29 with several agents running
+  at once - a `git grep`, a pytest tail, a `Get-Process` table - each result
+  well formed, each about a sibling's tree. Reasoning about which tree you got
+  does not work, because a correct answer about the wrong tree is
+  indistinguishable from a correct answer about yours. Tag every command and
+  discard anything that does not carry your tag:
+
+  ```powershell
+  Write-Host 'MYTAG-014'; Set-Location -LiteralPath '<abs>'; $PWD.Path; <command>
+  ```
+
+  Increment the number on every call. Refuse any result whose first line is not
+  the tag you just sent, and re-run rather than interpret it. Printing
+  `$PWD.Path` catches the same fault a second way.
+- **A queued command can execute long after you sent it, on top of live work.**
+  On 2026-08-29 a `Remove-Item -Recurse -Force .venv` ran about 25 minutes after
+  it was issued and deleted `site-packages` under a `pytest` that had started in
+  the meantime. The suite froze at a fixed percentage, `python -m pytest
+  --version` answered `No module named pytest`, and `import pydantic` still
+  worked - a half-deleted environment, which reads exactly like a broken
+  toolchain. Never queue a destructive command against a path a later command
+  needs. When a suite stalls, check that its interpreter still has its packages
+  before you start debugging tests.
+- **A foreground `pytest` can be killed mid-run**, with the tool reporting exit
+  code 1 and an empty output file - the same shape as a collection error.
+  `--collect-only` tells the two apart: a suite that collects cleanly and then
+  dies partway through was interrupted, not broken. Run long suites detached and
+  poll, which also survives the tool timing out:
+
+  ```powershell
+  Start-Process pwsh -WindowStyle Hidden -ArgumentList '-NoProfile','-File','<abs>.ps1'
+  ```
+
+  Have that script write its output to one file and its exit code to a
+  **second, differently named** sentinel, then poll for the sentinel. Names that
+  share a prefix defeat the poll: `Select-String` matches substrings, so a
+  pattern written for `PIP_EXIT` also fires on `ENSUREPIP_EXIT` and the run
+  reads as finished while it is still going. Anchor the pattern and pick names
+  that are not substrings of each other.
 - **Write every long gate to a uniquely named file and read the file back.**
   `... *> "$env:TEMP\yi_<row>_pytest.txt"`, then read that file. The terminal
   pane shows whoever spoke last, which may not be you.
@@ -922,6 +1004,38 @@ the variable protects the shell you remember to set it in and nothing else.
   page `[data-band]` matches both the `<article>` and the confidence chip inside
   it, so a height measured off the wrong one is silently wrong. Target
   `span[data-band]`.
+- **A zero-width rect does not only measure wrong - it makes correct code look
+  broken.** The entry above is about a number you read. This is about a number
+  the page reads: any guard that returns early on a zero or negative
+  `getBoundingClientRect().width` - a chart that will not draw without a frame,
+  a readout that will not place itself - takes that branch every time here. The
+  feature then does nothing at all, which reads as a bug in the feature rather
+  than a property of the host. Confirm it in the Playwright suite before
+  changing the guard.
+- **The host swallows a real `Escape` keypress**, so
+  `page.keyboard.press('Escape')` closes nothing and a dismiss handler reads as
+  unwired. Dispatch it inside the page, where it reaches the same listener a
+  reader's key does:
+
+  ```js
+  await page.evaluate(() =>
+    document.activeElement.dispatchEvent(
+      new KeyboardEvent('keydown', { key: 'Escape', bubbles: true })
+    )
+  );
+  ```
+
+- **Under load from parallel workers the integrated browser may refuse to
+  connect at all.** `open_browser_page` times out at 30 s and every following
+  `read_page` or `run_playwright_code` fails with
+  `browserType.connectOverCDP: Timeout 30000ms exceeded`, repeatedly - which
+  reads as a broken build rather than a busy host. Do not keep retrying. Drive
+  Chromium through Playwright yourself for the same evidence section 12 asks
+  for: console errors, any response at status 400 or above, `route.abort()` for
+  the degraded case, and element screenshots. That path also drives layout, so
+  every quirk above stops applying. Note a script written to `TEMP` resolves
+  modules from `TEMP`, so `require()` Playwright by its absolute path inside the
+  worktree's `node_modules` or it fails `MODULE_NOT_FOUND`.
 
 ## Serving a build to measure it
 

@@ -364,19 +364,25 @@ class SummaryBand(Model):
 
 
 def _default_bands() -> list[SummaryBand]:
-    """Three sizes: the release note, the article, the long read.
+    """Five sizes: the note, the report, the feature, the long feature, the investigation.
 
     Starting points chosen from the shape of the sources we collect, not
     measurements - nothing here may be quoted as one (Rule #10). The first
     band begins at zero so every article lands in one, and the shortest ask sits
     above `evaluation.summary_words_min` so a summary that misses low by a few
     words is still publishable.
+
+    The last floor is the last one there may ever be. It stays below
+    `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)`, so no rung
+    asks for a summary of words the model was never handed
+    (`docs/architecture/summarize/prompt.md`).
     """
     return [
         SummaryBand(min_source_words=0, target_words_min=30, target_words_max=45),
         SummaryBand(min_source_words=60, target_words_min=50, target_words_max=90),
         SummaryBand(min_source_words=700, target_words_min=70, target_words_max=150),
         SummaryBand(min_source_words=2000, target_words_min=110, target_words_max=200),
+        SummaryBand(min_source_words=3000, target_words_min=150, target_words_max=230),
     ]
 
 
@@ -468,6 +474,26 @@ class SummarizeConfig(Model):
 
 
 class EvaluationConfig(Model):
+    chunk_words: int = Field(
+        default=900,
+        ge=1,
+        description=(
+            "Words of article the faithfulness scorer reads in one window. Attention is "
+            "quadratic in the premise, so a whole long article in one pass is the "
+            "expensive shape. The default has never been calibrated (Rule #10): with no "
+            "human labels there is nothing to tune it against, and a sweep would show "
+            "only that the number moves. Moving it moves `scorer_version`, which restarts "
+            "the run-day count in `evaluation.label_min_run_days`."
+        ),
+    )
+    chunk_overlap_words: int = Field(
+        default=150,
+        ge=0,
+        description=(
+            "Words shared between one window and the next, so a claim that straddles a "
+            "boundary is still whole somewhere. Must sit below `chunk_words`."
+        ),
+    )
     band_high_min: float = Field(default=0.80, ge=0.0, le=1.0)
     band_medium_min: float = Field(default=0.50, ge=0.0, le=1.0)
     lead_coverage_min: float = Field(
@@ -478,12 +504,6 @@ class EvaluationConfig(Model):
             "Below this the summary missed the source lead. It caps a high band at "
             "medium rather than forcing low."
         ),
-    )
-    truncation_gap_max: float = Field(
-        default=0.10,
-        ge=0.0,
-        le=1.0,
-        description="Score gap that flags a truncation artifact rather than a hallucination.",
     )
     summary_words_min: int = Field(
         default=25,
@@ -604,6 +624,12 @@ class EvaluationConfig(Model):
             raise ValueError("band_medium_min must sit below band_high_min")
         if self.summary_words_min >= self.summary_words_max:
             raise ValueError("summary_words_min must sit below summary_words_max")
+        # The chunker steps `chunk_words - chunk_overlap_words`. An overlap at or
+        # above the window makes that step zero or negative, and the clamp that
+        # stops it looping walks a long article one word at a time - a job that
+        # never finishes rather than a job that fails.
+        if self.chunk_overlap_words >= self.chunk_words:
+            raise ValueError("chunk_overlap_words must sit below chunk_words")
         # The reject drops the item before it can be scored, so anything it catches
         # leaves the corpus the brief-copying gate reads. Set the two equal and the
         # gate has no band left to fail in - and it stops failing silently, which
@@ -1000,16 +1026,18 @@ class PageWeightConfig(Model):
     committed config is the single source, and this model owns only the shape
     and the validation (Rule #6).
 
-    A route is worth a fixed ceiling when its HTML either does not grow with the
-    published corpus, or grows by a bounded amount a person can price for a
-    year. `/404` and `/evals/` render no day and no ledger, so their weight is a
-    function of source alone and their ceiling is the heaviest build plus the
-    64-byte noise floor. `/archive/` grows, but only by one day link a day since
-    it stopped inlining the day payloads, so its ceiling carries a year of that
-    growth as measured headroom. `/console/` grows with the ledger its charts
-    read and nobody has priced that growth, so it stays uncapped; the marker
-    count in `frontend/tests/payload-weight.spec.ts` covers it, and a route the
-    config does not name is reported by the gate without failing it.
+    A route is worth a fixed ceiling when somebody has priced its growth in
+    published days. `/404` and `/evals/` render no day and no ledger, so their
+    weight is a function of source alone and their ceiling is the heaviest build
+    plus the 64-byte noise floor. `/archive/` grows, but only by one day link a
+    day since it stopped inlining the day payloads, so its ceiling carries a year
+    of that growth as measured headroom. `/console/` grows far faster - about 60
+    gzipped bytes a published item, so 36,504 to 43,745 bytes a mature day
+    measured 2026-08-29 - so its ceiling carries three days rather than a year
+    and expires by design. What a page that renders a day cannot have is a fixed
+    ceiling at all: the only way under one is to publish fewer items, which is
+    capping the news rather than catching a regression, so `/` and `/<date>/` are
+    counted and reported and never failed.
     """
 
     ceilings_bytes: dict[str, int] = Field(
@@ -1021,9 +1049,11 @@ class PageWeightConfig(Model):
             "they could drift from the file the gate enforces (Rule #6). A route the "
             "object does not name is measured and reported by the gate but not failed. "
             "A route earns a ceiling when its growth is priced: /404 and /evals/ grow "
-            "only when the source does, and /archive/ grows by one day link a day, so "
-            "its ceiling carries a measured year of that. /console/ grows with the "
-            "ledger and stays uncapped until somebody measures it."
+            "only when the source does, /archive/ grows by one day link a day so its "
+            "ceiling carries a measured year of that, and /console/ grows with the "
+            "ledger its charts read so its ceiling carries a measured three days and is "
+            "meant to expire. A page that renders a day is never capped, because the "
+            "only way under such a ceiling is to publish less."
         ),
     )
 
@@ -1176,7 +1206,7 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-08-28",
+            version="2026-08-29T18:00",
             change=(
                 "The finetune block added, and models.<role>.hf_base_repo added as an "
                 "optional field."
@@ -1195,6 +1225,96 @@ class AppConfig(Contract):
                 "base without raising, so the damage arrives as a quality drop nobody can "
                 "attribute. Both additive with defaults, so an older config still "
                 "validates and no read-side migration is needed (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-29T16:00",
+            change=(
+                "summarize.bands gained a fifth rung at min_source_words 3000, asking "
+                "150 to 230 words. No existing rung moved."
+            ),
+            why=(
+                "A 2,000-word article and a 3,846-word article were handed the identical "
+                "ask, so one was compressed 10 to 1 and the other 19 to 1 for the same "
+                "150-word midpoint. 3,846 words is what extract.truncation_cap_tokens of "
+                "5000 lets through, so both are read whole and the difference is real "
+                "text and not a guess about text. The floor is 3000 because that is the "
+                "midpoint of the whole-read range, 2,923, rounded to a seam the ledger "
+                "reports. Measured 2026-08-29 over the 445 rows of state/scores.csv that "
+                "carry a trustworthy pre-cap length: 9 of them reach 3,000 words, which "
+                "is 2.02 percent of items and 1 to 4 items a run over four runs of 107 "
+                "to 117 items. This is the last rung there may be - a floor above the "
+                "cut point would ask for words the model was never handed, and the "
+                "model would fill the gap by elaborating the opening. 230 sits inside "
+                "evaluation.summary_words_max of 250, so the gate did not move. "
+                "Additive with a default, so an older config still validates and no "
+                "read-side migration is needed (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-29T14:00",
+            change=(
+                "page_weight.ceilings_bytes gained /console/ in config/idhazh.json, and "
+                "the description here stopped saying that route is unpriced. No field "
+                "moved."
+            ),
+            why=(
+                "The description said /console/ 'stays uncapped until somebody measures "
+                "it', and this is that measurement. The page costs about 60 gzipped "
+                "bytes a published item: removing one real mature day from every ledger "
+                "the console reads and rebuilding cost 43,745, 43,704 and 36,504 bytes "
+                "over 731, 724 and 621 scored items, measured 2026-08-29 on an Intel "
+                "Core i7-1265U, Windows, node 24.12.0. So the headroom is three days of "
+                "the heaviest of those, not the year /archive/ carries, and the number "
+                "is meant to expire (Rule #10)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-29T09:00",
+            change="evaluation.truncation_gap_max removed.",
+            why=(
+                "Its one caller stopped reading it in this commit, so the knob and its "
+                "last reader go together and there is never a state where the number "
+                "exists and nothing consults it. It set truncation_flagged from the gap "
+                "between the two faithfulness scores, and that flag now carries "
+                "Article.truncated - whether extract cut the body - because that is what "
+                "its name says and what its one consumer prints. Retuning it was the "
+                "alternative and it is not available: score_over_chunks takes the best "
+                "of overlapping windows, a cut article's last window is not a window of "
+                "the whole article, and the two window sets are not nested, so the gap "
+                "can come out positive on an article that was never cut. Measured "
+                "2026-08-28 over all 2,683 committed rows of state/scores.csv, the gap "
+                "on the 22 genuinely cut rows runs -0.1235 to +0.0381 against this "
+                "knob's 0.100 default - no value in that range separates a cut from "
+                "chunk-boundary noise (Rule #10). "
+                "BREAKING: EvaluationConfig forbids unknown keys, so a config file that "
+                "still names this key fails to load with a message naming it. The "
+                "read-side migration is the deletion of the key from config/idhazh.json "
+                "in this same commit (section 11); a fork carrying its own config "
+                "deletes one line. hhem, hhem_full and hhem_delta all stay - they answer "
+                "what the cut cost, which is a different question."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-28",
+            change=(
+                "evaluation.chunk_words added, defaulting to 900, and "
+                "evaluation.chunk_overlap_words added, defaulting to 150. Both were "
+                "constants in backend/idhazh/evals/hhem.py. EvaluationConfig now refuses "
+                "an overlap at or above the window."
+            ),
+            why=(
+                "The faithfulness scorer's window size decides what premise every score "
+                "was measured over, so it is a tunable and belongs in config (Rule #6), "
+                "and scorer_version now spells it as window=900/150/anchored so a ledger "
+                "row records the geometry that produced it. Neither default moves today: "
+                "with 0 of 60 human labels drawn there is no ground truth to tune "
+                "against, and a sweep would show only that the number moves, not which "
+                "value is right (Rule #10). The guard exists because the chunker steps "
+                "chunk_words - chunk_overlap_words and clamps that step to one word, so "
+                "an overlap at or above the window walks a long article one word at a "
+                "time - a job that never finishes rather than one that fails. Additive; "
+                "an older config still validates and gets both defaults."
             ),
         ),
         ChangelogEntry(

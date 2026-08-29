@@ -39,6 +39,7 @@ The shapes, and where each one lives once written:
 | Model | Schema | Persisted as |
 | --- | --- | --- |
 | `AppConfig` | `app-config` | `config/idhazh.json` |
+| `AppearanceConfig` | `appearance-config` | `config/appearance.json` |
 | `Sources` | `sources` | `config/sources.json` |
 | `Taxonomy` | `taxonomy` | `config/taxonomy.json` |
 | `Watchlist` | `watchlist` | `config/watchlist.json` |

@@ -13,13 +13,17 @@ from __future__ import annotations
 import json
 
 import pytest
-from conftest import CONTRACT_FIXTURES_DIR, read_text
+from conftest import CONTRACT_FIXTURES_DIR, FIXTURES_DIR, read_text
+from pydantic import ValidationError
 
-from idhazh.contracts.app_config import EvaluationConfig
+from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig
 from idhazh.contracts.article import Article
+from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
-from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.feed_health import FetchOutcome
+from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.summary import Summary
+from idhazh.contracts.taxonomy import SourceTier
 from idhazh.evals.hhem import HHEM_REVISION, HhemScorer, is_pinned, weights_digest
 from idhazh.evals.metrics import (
     EVIDENTIAL_TERMS,
@@ -39,6 +43,8 @@ from idhazh.evals.metrics import (
     word_count,
 )
 from idhazh.evals.score import band, to_eval_row
+from idhazh.extract import to_article_with_source
+from idhazh.fetch import FetchResult
 
 ARTICLE = (
     "Example Grid ordered four small modular reactors from Northwind Atomics on Tuesday, "
@@ -490,6 +496,100 @@ def test_an_old_payload_that_was_never_cut_knows_its_own_length() -> None:
     assert row.source_word_count == row.source_seen_word_count == 1320
 
 
+# --- The flag that says extract cut the body ---------------------------------
+
+_PAGE = FIXTURES_DIR / "pages" / "article.html"
+_PAGE_URL = "https://newsroom.example-grid.com/2026/08/reactor-order"
+_PAGE_ITEM = PlannedItem(
+    item_id="energy-01",
+    url_key=derive_url_key(_PAGE_URL),
+    source_url=_PAGE_URL,
+    canonical_url=_PAGE_URL,
+    source_id="grid-newsroom",
+    tier=SourceTier.INSTITUTION,
+    vertical="energy",
+    title="Example Grid orders four small modular reactors",
+    rank_score=1.4,
+)
+
+
+def _really_extracted(cap_tokens: int) -> Article:
+    """The captured page through the real extractor, at the cap this arm asks for.
+
+    Never a hand-written payload. `truncated` typed into a fixture proves only
+    that the test agrees with itself, and the defect this column carried was
+    exactly a flag that read true about an article nobody had cut.
+    """
+    return to_article_with_source(
+        _PAGE_ITEM,
+        FetchResult(FetchOutcome.OK, status=200, body=_PAGE.read_bytes()),
+        config=ExtractConfig(truncation_cap_tokens=cap_tokens),
+        fetched_at="2026-08-21T06:03:11Z",
+    ).article
+
+
+def _row_for_page(article: Article, *, hhem: float, hhem_full: float) -> EvalRow:
+    return to_eval_row(
+        item=_PAGE_ITEM,
+        article=article,
+        summary=Summary.from_json(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json")),
+        full_text=article.text or "",
+        premise=article.text or "",
+        hhem=hhem,
+        hhem_full=hhem_full,
+        config=EvaluationConfig(),
+        date="2026-08-21",
+        run_id="2026-08-21-1",
+        scorer_version="hhem-2.1-open@aaaaaaaa;weights-bbbbbbbb;metrics-3;bands=0.80/0.50",
+        scored_at="2026-08-21T06:18:02Z",
+    )
+
+
+def test_a_page_the_extractor_cut_is_flagged_whatever_the_two_scores_did() -> None:
+    """A real cut, and no gap at all between the two faithfulness scores.
+
+    The rule this replaces needed a gap above 0.100 and this arm hands it 0.000,
+    so the assertion cannot pass on the old rule.
+    """
+    article = _really_extracted(cap_tokens=256)
+    row = _row_for_page(article, hhem=0.91, hhem_full=0.91)
+
+    assert article.source_word_count is not None
+    assert article.word_count < article.source_word_count, "the extractor really cut the body"
+    assert article.truncated
+    assert row.hhem_delta == 0.0
+    assert row.truncation_flagged is article.truncated
+    assert row.truncation_flagged
+
+
+def test_a_page_left_whole_is_not_flagged_whatever_the_two_scores_did() -> None:
+    """Nothing cut, and a gap three times the ceiling the old rule read.
+
+    This is the defect the column had, in one assertion: on the committed ledger
+    the flag was true on exactly one row, and that row read 748 words of a
+    748-word article.
+    """
+    article = _really_extracted(cap_tokens=ExtractConfig().truncation_cap_tokens)
+    row = _row_for_page(article, hhem=0.94, hhem_full=0.61)
+
+    assert article.word_count == article.source_word_count, "nothing was cut"
+    assert not article.truncated
+    assert row.hhem_delta == pytest.approx(0.33)
+    assert row.truncation_flagged is article.truncated
+    assert not row.truncation_flagged
+
+
+def test_the_counterweights_did_not_change_meaning() -> None:
+    """Nothing in `metrics.py` moved, so the constant that names it may not either.
+
+    `METRICS_VERSION` sits inside `scorer_version`, and a new scorer version
+    restarts the ten-run-day count `docs/concepts/evaluation.md` requires before
+    any threshold may move. `truncation_flagged` is not a `band()` input and no
+    derived column reads it, so every row written under `metrics-3` still says
+    exactly what it said.
+    """
+    assert METRICS_VERSION == "3"
+
 
 # --- Recorded, never flagged -------------------------------------------------
 
@@ -525,8 +625,48 @@ def test_scorer_version_spells_its_components() -> None:
     assert (
         version
         == f"hhem-2.1-open@a1b2c3d4;weights-9f8e7d6c;metrics-{METRICS_VERSION};"
-        "bands=0.80/0.50;lead=0.30"
+        "window=900/150/anchored;bands=0.80/0.50;lead=0.30"
     )
+
+
+def test_the_counterweights_version_did_not_move_for_the_window() -> None:
+    """`METRICS_VERSION` names the definitions in `metrics.py`, and none changed.
+
+    Moving it would assert a change to the counterweights that did not happen,
+    and it is the same string the ten-run-day label gate counts on. The window
+    geometry is recorded by its own field instead.
+    """
+    assert METRICS_VERSION == "3"
+
+
+def test_a_moved_window_moves_the_scorer_version() -> None:
+    """A different premise is a different measurement, so rows must not pool.
+
+    Both halves of the geometry count. The size decides how much article one
+    score saw; the overlap decides how many windows the max is taken over.
+    """
+    args = {
+        "scorer_id": "hhem-2.1-open",
+        "scorer_revision": "a1b2c3d4e5f6",
+        "weights_sha256": "9f8e7d6c" + "0" * 56,
+    }
+    assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
+        evaluation=EvaluationConfig(chunk_words=1800), **args
+    )
+    assert scorer_version(evaluation=EvaluationConfig(), **args) != scorer_version(
+        evaluation=EvaluationConfig(chunk_overlap_words=300), **args
+    )
+
+
+def test_an_overlap_at_or_above_the_window_is_refused() -> None:
+    """The chunker clamps the step to one word, so it walks rather than fails.
+
+    A 4,000-word article at a zero step is 3,101 scorer passes instead of six.
+    That is a job that never finishes, which is the worst way for a config typo
+    to show up.
+    """
+    with pytest.raises(ValidationError, match="chunk_overlap_words must sit below"):
+        EvaluationConfig(chunk_words=900, chunk_overlap_words=900)
 
 
 def test_a_moved_band_moves_the_scorer_version() -> None:

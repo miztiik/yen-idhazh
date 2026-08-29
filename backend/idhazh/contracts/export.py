@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Final
 
 from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.appearance_config import AppearanceConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.corpus import CorpusMeta, CorpusRow
@@ -37,6 +38,7 @@ from idhazh.contracts.watchlist import Watchlist
 
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
     AppConfig,
+    AppearanceConfig,
     Article,
     CorpusMeta,
     CorpusRow,

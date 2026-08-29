@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -108,6 +108,117 @@ that does not fit is refused, and the item records `context_exceeded` rather
 than a score nobody can read
 ([../architecture/sources/item-health.md](../architecture/sources/item-health.md)).
 
+### The window a score was measured over
+
+An article longer than one window is read in overlapping windows and the score
+is the **best** window, never the average. A claim is supported if any part of
+the article supports it, and a mean would drive the score down as the article
+got longer - which would manufacture a large truncation gap on exactly the
+longest articles and invert the flag that exists to catch it.
+
+The geometry is two knobs, `evaluation.chunk_words` (900) and
+`evaluation.chunk_overlap_words` (150). They were constants in code until
+2026-08-28.
+
+**Neither default moves today.** HHEM-2.1-Open has no maximum input length, so a
+wider window is mechanically allowed. What is missing is a reason to pick a
+number: **0 of 60 drawn rows carry a human label**, so nothing here can say
+whether a wider window scores more truthfully or just differently, and a sweep
+would show only that the number moves (Rule #10). Moving it is a measurement
+this project cannot yet take, not a tuning nobody got around to.
+
+**Every window is now the full window, the last one included.** Until 2026-08-28
+the walk stepped past the end of the article and the final window was whatever
+remained. That window was short on **every** premise longer than one window -
+3,100 of 3,100 lengths from 901 to 4,000 words, as little as one word and 370
+words on average against 900-word rivals. Because the aggregation is a max, a
+partial premise competed against full ones on every long article, and it could
+win: a stray window holding one supporting sentence and nothing to contradict it
+scores high on almost anything. The last window is now anchored to the end of the
+article, so it holds the same 900 words every other window does.
+
+Anchoring buys correctness now and time later. At today's cap of 1,923 words
+(`extract.truncation_cap_tokens` of 2500) an article takes 3 windows either way.
+At 3,846 words it takes 6 windows unanchored and 5 anchored, which is 16.7
+percent less scorer work on a full-length item - a saving that arrives when the
+cap does.
+
+**Anchoring does not restore `hhem_full >= hhem`.** The two window sets are still
+not nested: a cut article's last window is not a window of the whole article, so
+the two maxima are taken over different premises and the gap can still come out
+positive. Anchoring removes the runt as one cause of that. Only re-scoring the
+cut items says what is left.
+
+**What this reset cost, stated rather than implied.** `scorer_version` now spells
+the geometry as `window=900/150/anchored`, between the instrument's identity and
+the thresholds read off it. That is a new string, and the ten-run-day gate below
+counts run-days at **one** `scorer_version`, so the count goes back to **zero of
+ten**. Measured by `backend/utilities/label_queue.py` on 2026-08-28, immediately
+before the change: **3 run-days of 10** (2026-08-26, 2026-08-27, 2026-08-28) over
+567 eligible rows. Those 3 days are the price. It is a real cost and a small one:
+the gate has never once been met, the longest run at any one scorer is 3 days,
+and 0 of the 60 drawn rows is labellable, so nothing that was going to be decided
+this week is delayed. The alternative - leaving the geometry out of the string -
+is worse, because rows measured over a 900-word premise and rows measured over a
+runt would pool silently and nobody could tell them apart afterwards.
+
+`METRICS_VERSION` did **not** move, and stays at `3`. It names the deterministic
+counterweights in `backend/idhazh/evals/metrics.py`, and none of their
+definitions changed when the chunker did. Bumping it would assert a change that
+did not happen.
+
+### Slicing costs a long article 0.40 of its score, and the direction is now measured
+
+The window is a knob, and until 2026-08-29 nobody knew which way it pushed. Two
+biases ride on the number of windows and they pull opposite ways: the
+aggregation is a max, so more windows is more chances at a high draw, and no
+single window holds the evidence for a summary that draws on the article's
+opening and its closing, so every window is marked down for the half it cannot
+see. **The mark-down wins, and it is not close.**
+
+**Measured 2026-08-29** over the 117 (premise, summary) pairs the 2026-08-28
+production run scored, each pair scored twice and nothing else varied - once at
+today's `900/150/anchored` geometry, once at a 1,923-word window that holds every
+premise whole. Taken by `backend/utilities/grader_length_bias.py`; the figures,
+the hardware and the spread are in
+[../reference/measurements.md](../reference/measurements.md#which-way-the-graders-length-bias-runs).
+
+| Windows the article takes today | Items | Today's score minus the whole-article score |
+| --- | ---: | ---: |
+| 1 | 91 | **exactly 0.0000** |
+| 2 | 16 | **-0.2178** |
+| 3 | 10 | **-0.3986** |
+
+**A three-window article scores 0.40 lower than the same article read whole.**
+The bands start at 0.80 and 0.50, so 0.40 is wider than the entire medium band -
+the geometry alone can carry one item from high to low, and it does it to the
+longest articles only. The best-of-N effect is real and tiny: the largest
+positive difference anywhere is **+0.0353**, against a largest negative of
+**-0.8783**, so it is 25 times smaller than the thing it is fighting.
+
+**This is the Editor's warning, now a number rather than a worry.** A summary
+that draws on more of an article scores *lower* under this geometry while being
+a better summary. A score that drops when a summary improves is not a regression
+to chase.
+
+**The number that says the comparison is sound is the 0.0000.** An article short
+enough to be one window under both geometries is scored over the identical text
+twice, and the scorer is deterministic, so its difference must be exactly zero -
+91 of 91 were. Whitespace was ruled out separately: the chunker re-joins windows
+on single spaces while the whole-article pass reads the premise as it stands, and
+scoring 5 at-cap premises both ways moved the number by 0.000000 every time.
+
+**No default moves, and this measurement does not say one should.** It says the
+instrument moves with slicing; it does not say the whole-article reading is the
+truer one. That still needs the human labels this page has been waiting on -
+**0 of 60**. What has changed is that `evaluation.chunk_words` can no longer be
+called a neutral number nobody needs to look at.
+
+**What it does settle is the cost.** A single 1,923-word pass costs **less** than
+today's two or three 900-word passes, not more: 4.278 s against 4.815 s a pass on
+the hardware in the reference page. Whichever way the label queue eventually
+points, a one-slice window is affordable.
+
 ## Why faithfulness alone is not enough
 
 Faithfulness measures **consistency with the source, not informativeness**. Two failure modes score beautifully on it:
@@ -179,10 +290,70 @@ Each of these was specified one way, and the arithmetic says otherwise:
 - **A compression *band* is a length detector.** At a fixed output budget, the ratio is dominated by how long the article was. A band on it would flag every short article forever, for a reason that is never about the summary. The ratio is recorded as a diagnostic; the real failures - a headline, or a copy - are detected directly by absolute word bounds.
 - **Verbatim overlap must be contiguous.** Measured as a longest common *subsequence*, function words match in order in almost any document, which puts a floor under the score and makes it move with length instead of with copying. Contiguous n-grams and the longest unbroken run do not have that floor.
 
-For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` flags
-truncation. The default is 0.5. This is the arithmetic ceiling that makes a
-30-word ask possible at a 60-word source floor. It is not a confidence threshold.
-The confidence band stays on the faithfulness axis.
+For a brief item, `verbatim_run > evaluation.brief_compression_ceiling` is the
+copying gate the qualification run reads. The default is 0.5. This is the
+arithmetic ceiling that makes a 30-word ask possible at a 60-word source floor.
+It is not a confidence threshold. The confidence band stays on the faithfulness
+axis.
+
+Until 2026-08-29 that same comparison also set `truncation_flagged`. It no
+longer does. One column answers one question, and a brief the model copied is a
+fact `verbatim_run` and `extractiveness` already carry.
+
+## The cut flag says the article was cut
+
+`truncation_flagged` is `Article.truncated`: extract found the body longer than
+`extract.truncation_cap_tokens` allows and cut it. Nothing else. Extract is the
+only stage that cuts, so it is the only stage that knows, and the column carries
+that fact rather than inferring it.
+
+**It used to be inferred from the faithfulness gap, and the gap cannot answer
+the question.** The rule was `hhem - hhem_full > evaluation.truncation_gap_max`,
+defaulting to `0.1`. That reads as sound - a wide gap means the model saw less
+than the scorer did - and the chunker makes it false. The score is the best of
+overlapping windows, and a cut article's last window is **not** a window of the
+whole article, so the two maxima are taken over different premises. The window
+sets are not nested and the difference is not a cost.
+
+Measured 2026-08-28 over all 2,683 committed rows of `state/scores.csv`, which
+are exact counts over a committed file and so carry no spread:
+
+| What | Count |
+| --- | --- |
+| Rows genuinely cut - post-cap word count below pre-cap | **22** |
+| Of those, rows the old flag fired on | **0** |
+| Rows the old flag fired on, in the whole ledger | **1** |
+| Words that one row read, of an article that long | **748 of 748** |
+| Range of `hhem_delta` over the 22 cut rows | **-0.1235 to +0.0381** |
+
+The threshold it was tested against is `+0.1`, so no cut row could reach it, and
+the one row that did fire was never cut - it fired on the brief-copying clause
+above. A column that is right about 1 row in 2,683 and wrong about all 22 of the
+rows it exists for is not a threshold that needs retuning. Retuning was the
+rejected alternative: to catch the widest cut in the ledger the threshold would
+have to sit at or below `+0.038`, and at that level it fires on chunk-boundary
+noise on articles nobody cut.
+
+**`hhem`, `hhem_full` and `hhem_delta` all stay.** They answer what the cut
+cost, which is a different question from whether there was a cut, and n=22 is
+not a distribution to set a threshold from (Rule #10). The knob went with its
+last caller in the same commit, so there was never a state where the number
+existed and nothing read it.
+
+**A row stamped before `2026-08-29T09:00` is unknown, not false**, and the two
+sub-cases are not recoverable from the row. A row before `2026-08-27T20:30`
+holds two scores of one text, so its gap could not be non-zero. A row between
+the two stamps holds a real gap read by the wrong rule. The published console
+therefore counts the column only over rows stamped from `2026-08-28` and prints
+absence as absence
+([../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)).
+
+**`METRICS_VERSION` did not move.** Nothing in
+`backend/idhazh/evals/metrics.py` changed, `truncation_flagged` is not a
+`band()` input, and no derived column reads it - so every row written under
+`metrics-3` still says exactly what it said. Bumping it would restart the
+ten-run-day count below to record a change that did not happen to the
+counterweights.
 
 ## Two rules that are easy to break by accident
 
@@ -487,6 +658,11 @@ model-dependent series rather than appearing as ordinary drift in the old one.
 | Detect the loop at generation time and retry at a non-zero temperature | That turns the monitor into the selector, which is the first of the two rules above. It also changes what the digest publishes to fix a fault nobody has counted yet. | Andre |
 | Point `verbatim_run` at the summary instead of the source | It is the column that names copying from the article. Repurposing it would delete a measurement to buy a different one and would silently change what every historical row means. | Fowler |
 | Put the measurement on the item-health row | Item health records what a stage *did* with an item. This is a property of the words that came out, which is what the eval ledger is. | Fowler |
+| Retune `evaluation.truncation_gap_max` down instead of deleting it | Over the 22 cut rows the gap runs -0.1235 to +0.0381, so any cut inside that band fires on chunk-boundary noise rather than on truncation. There is no value that separates the two. | Fowler, corrected by measurement |
+| Keep `truncation_flagged` on the gap and add a second column for the cut | The column's name says "was it cut" and its one consumer prints exactly that sentence. Two columns would leave the wrong one wired to the page. | Fowler |
+| Add a "the cut cost us" flag now | It needs a threshold with a measured basis. Twenty-two rows is not one, and `hhem_delta` is already recorded for when there are enough. | Fowler |
+| Keep the brief-item verbatim clause on the same boolean | `verbatim_run` and `extractiveness` already carry that fact and the console already prints it as "Copied, not rewritten". One predicate per column. | Fowler |
+| Move `METRICS_VERSION` to be safe | It is folded into `scorer_version`, so it would restart the ten-run-day count for a column no threshold reads. Nothing in `metrics.py` changed. | Fowler |
 
 ## Why this is a census and not a sample
 

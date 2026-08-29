@@ -11,20 +11,41 @@
 	 * per configured band. It is one step outline now, so the node count no
 	 * longer follows the point count.
 	 */
-	import { chartWidth, frame, linearAxis, logAxis, MARGIN, observeWidth } from '$lib/charts/frame';
-	import { rowsInWindow, type CompressionPoint, type SummaryBand } from '$lib/charts/series';
+	import {
+		chartWidth,
+		frame,
+		linearAxis,
+		logAxis,
+		MARGIN,
+		observeWidth,
+		pointerReadout,
+		type ReadoutMark
+	} from '$lib/charts/frame';
+	import {
+		capLabel,
+		capsInView,
+		grouped,
+		rowsInWindow,
+		seenWords,
+		type CompressionPoint,
+		type SummaryBand,
+		type UnplottedDay
+	} from '$lib/charts/series';
+	import { dayMonth } from '$lib/format';
 	import type { TimeWindow } from '$lib/charts/viewport';
 
 	let {
 		points,
 		viewport,
 		bands,
+		unplotted,
 		height,
 		width
 	}: {
 		points: CompressionPoint[];
 		viewport: TimeWindow;
 		bands: SummaryBand[];
+		unplotted: UnplottedDay[];
 		height: number;
 		width: number;
 	} = $props();
@@ -46,6 +67,10 @@
 	const MINOR_STEPS = [2, 3, 4, 5, 6, 7, 8, 9];
 	/** The title sits at the outer edge of the margin it was given. */
 	const Y_TITLE_X = 8;
+	/** Past this the label would run off the right edge, so it flips inward. */
+	const LABEL_ROOM = 90;
+	/** Enough that two cap labels stack instead of sharing pixels at 10px. */
+	const LABEL_STEP = 12;
 
 	interface Segment {
 		x0: number;
@@ -54,6 +79,7 @@
 	}
 
 	let measured = $state<number | null>(null);
+	let selected = $state<number | null>(null);
 
 	const visible = $derived(rowsInWindow(points, viewport));
 	const box = $derived(frame(chartWidth(measured, width), height + AXIS_ROOM, PLOT_MARGIN));
@@ -98,6 +124,51 @@
 
 	const zone = $derived(zonePath(segments));
 
+	/** Where the cut falls, from the points that were cut and nothing else. */
+	const caps = $derived(capsInView(visible));
+
+	/** How many rows in this window the plot could not place, because the length
+	 * before the cut was never written down. Counted from the rows the server
+	 * dropped, so the sentence and the plot answer out of one decision. */
+	const notPlotted = $derived(
+		rowsInWindow(unplotted, viewport).reduce((total, day) => total + day.n, 0)
+	);
+
+	/** A cut point whose diamond sits on its own cap line rather than past it.
+	 *
+	 * Those rows were measured after the cut, so their recorded article length
+	 * is the length the model saw. Saying so is the only thing that stops the
+	 * plot reading as "the cut removed nothing".
+	 */
+	const measuredAfterCut = $derived(
+		visible.some((point) => point.truncation_flagged && seenWords(point) >= point.source_words)
+	);
+
+	/** One entry per drawn mark, in the order the day ran. The pointer takes the
+	 * nearest by x; the arrow keys walk this order, so a step moves forward in
+	 * time rather than to whatever is nearest on screen. */
+	const marks = $derived<ReadoutMark[]>(
+		visible.map((point) => ({
+			x: xAxis.scale(point.source_words),
+			lines: [
+				`${dayMonth(point.date)} - ${point.item_id}`,
+				point.truncation_flagged && seenWords(point) < point.source_words
+					? `Article ${grouped(point.source_words)} words, cut to ${grouped(
+							seenWords(point)
+						)}. Summary ${grouped(point.summary_words)} words.`
+					: `Article ${grouped(point.source_words)} words. Summary ${grouped(
+							point.summary_words
+						)} words.`
+			]
+		}))
+	);
+
+	const readout = $derived(selected === null ? null : (marks[selected] ?? null));
+
+	function capX(words: number): number {
+		return xAxis.scale(words);
+	}
+
 	function acrossPlot(sourceWords: number): number {
 		return Math.min(box.right, Math.max(box.left, xAxis.scale(sourceWords)));
 	}
@@ -128,19 +199,39 @@
 </script>
 
 <section class="mt-8">
-	<h2 class="text-[1.0625rem] font-semibold text-text">Compression</h2>
+	<h2 class="text-[1.0625rem] font-semibold text-text">Article length against summary length</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		Source words use a log x axis. Diamonds mark summaries that carried the truncation flag.
+		Article length uses a log x axis, so a 100-word note and a 10,000-word feature both fit. A
+		diamond is an article that ran past the cap, so the machine read the start and stopped there.
+		{#if measuredAfterCut}
+			<span data-compression-note="measured-after"
+				>Articles read before 28 August were measured after the cut, so their diamonds sit on the
+				line rather than past it.</span
+			>
+		{/if}
+		{#if notPlotted > 0}
+			<span data-compression-note="not-plotted"
+				>{notPlotted} articles in this window recorded no length before the cut, so they are not
+				plotted.</span
+			>
+		{/if}
 	</p>
-	<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-compression>
+	<div class="relative mt-4 rounded-md border border-rule bg-surface p-3" data-compression>
 		<div use:observeWidth={(next) => (measured = next)}>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
-				class="block max-w-full overflow-visible"
+				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
-				aria-label="Source words against summary words"
+				tabindex="0"
+				aria-label="Article length against summary length"
+				use:pointerReadout={{
+					marks,
+					width: box.width,
+					onSelect: (index) => (selected = index)
+				}}
 			>
 				<line
 					x1={box.left}
@@ -200,6 +291,34 @@
 					>
 						<title>The target summary length for each source size</title>
 					</path>
+					<!-- After the zone and before the points: a reference the marks sit
+					     against, never one drawn over them. Not `--band-low` - a red
+					     vertical says the cap is a failure, and the cap is a setting. -->
+					{#each caps as cap, index (cap.words)}
+						<line
+							x1={capX(cap.words)}
+							x2={capX(cap.words)}
+							y1={box.top}
+							y2={box.bottom}
+							stroke="var(--color-text-tertiary)"
+							stroke-opacity="0.7"
+							stroke-width="1"
+							stroke-dasharray="3 3"
+							data-cap-line={cap.words}
+						/>
+						<text
+							x={capX(cap.words) > box.right - LABEL_ROOM
+								? capX(cap.words) - 4
+								: capX(cap.words) + 4}
+							y={box.top + 9 + index * LABEL_STEP}
+							text-anchor={capX(cap.words) > box.right - LABEL_ROOM ? 'end' : 'start'}
+							fill="var(--color-text-tertiary)"
+							font-size="10"
+							data-cap-label={cap.words}
+						>
+							{capLabel(caps, index)}
+						</text>
+					{/each}
 					{#each visible as point (`${point.date}-${point.item_id}`)}
 						{#if point.truncation_flagged}
 							<rect
@@ -281,9 +400,26 @@
 				</text>
 			</svg>
 		</div>
+		{#if readout}
+			<!-- Pinned to the top of the plot, never to the pointer: a readout under
+			     a thumb is a readout nobody reads. It takes no pointer events, so it
+			     can sit over the plot without standing between the two. -->
+			<div
+				class="pointer-events-none absolute inset-x-3 top-3 rounded-sm border border-rule bg-surface/95 px-2 py-1 text-[0.75rem] leading-snug"
+				data-readout="compression"
+				aria-live="polite"
+			>
+				{#each readout.lines as line, index (index)}
+					<span class="block {index === 0 ? 'text-text-tertiary' : 'text-text'}">{line}</span>
+				{/each}
+			</div>
+		{/if}
 		<p class="mt-3 text-[0.75rem] text-text-tertiary">
-			Dot - one scored item. Diamond - the source was truncated. Shaded band - the target summary
-			length for that source size.
+			Dot - one article. Diamond - an article cut at the line. Dashed line - where the cut falls.
+			Shaded band - the summary length we aim for at that article length.
+		</p>
+		<p class="mt-1 text-[0.75rem] text-text-tertiary" data-readout-hint="compression">
+			Keyboard: Left and Right step through the days. Escape closes.
 		</p>
 	</div>
 </section>

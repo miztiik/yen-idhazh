@@ -1,16 +1,18 @@
 # Design System
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
-The surface is small on purpose: a digest page, an item, and an eval dashboard. There is no application here - no session, no navigation tree, no state to lose. Restraint is not a style choice on this project; it falls out of the architecture ([vision.md](vision.md)).
+The surface is small on purpose: a digest page, an item, and an eval dashboard. There is no application here - no session, no navigation tree, no state to lose ([vision.md](vision.md)).
+
+**The architecture fixes how much surface there is. It does not fix how good that surface is.** Scope-restraint is inherited and not up for debate. Craft-restraint is a choice, and every instance of it needs an argument on the day it is made.
 
 ## Typography is the interface
 
 This is a reading surface before it is anything else. Measure, leading, hierarchy and the space between items do more work here than any component will, and a digest that is hard to skim has failed before a single control is considered.
 
-- **A reading measure**, not a full-width line. Long lines are where a skim turns into work.
+- **A reading measure on the text, and a fluid frame around it.** Long lines are where a skim turns into work, so the summary, the title and the key points are held to a measure. **The measure is a property of a text element and never of the shell.** Put it on the shell and the whole application inherits a paragraph's width: measured 2026-08-28, one `max-w-2xl` on the root layout capped every page at 624px and left 912px of a 1536px screen empty, including a console with five tables and six charts in it.
 - **A hierarchy of exactly three levels** on an item - what it is, what it says, where it came from. A fourth level means something on the item has not earned its place.
 - **Two faces at most**: one for reading, one for data (tabular numerals on the dashboard, so columns line up).
 
@@ -48,6 +50,30 @@ Theming is override, not a second set of names: dark mode overrides the same tok
 A confidence band carries a **word** as well as a tint. A route kind carries a shape or a position as well as a colour. This is a clarity rule for all readers, and it is also what keeps the page legible in a screenshot, in dark mode, and on a bad screen.
 
 Accessibility *audit tooling* is a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a); labelled controls, semantic landmarks and visible focus are simply good building and are in scope.
+
+### Decorative colour and semantic colour are not the same rule
+
+The rule above binds **colour that encodes meaning**. Read as a general ban on colour it says something it never meant, and for eleven months that is how it was read: no gradient was proposed on this surface, ever, and the reason was a rule that does not apply to one.
+
+- **Semantic colour is doubly constrained.** A tint that tells a reader something carries a word or a shape as well, and it may never borrow the confidence ramp's three hues. This is the whole of the rule above.
+- **Decorative colour is unconstrained.** Chrome, identity, a panel tint, an empty state, the wordmark, a page background. It encodes nothing, so there is nothing for a second signal to duplicate.
+
+The line is drawn by the question "would a reader be wrong about a fact if this were grey?" A gradient on the site header fails that question, so it is decoration. A gradient running red at the bad end of a chart passes it, so it is semantic and is refused - a reader would read the hue as the verdict.
+
+## Sufficiency is a gate, not a taste
+
+A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.
+
+The checks, applied to any reader-facing surface:
+
+- **Does it use the screen it is on?** Measured 2026-08-28: the digest used 40.6 percent of a 1536px viewport and had two responsive breakpoints in the entire site, one of which changed padding.
+- **Does it separate figure from ground?** A page with one surface colour and no elevation is a page where nothing is in front of anything.
+- **Is there one thing the eye lands on first?** If everything is the same weight, the page has no order to read it in.
+- **Does it look like it was made this year?** Not a matter of fashion. A surface that looks abandoned is read as abandoned, and the judgement transfers to the summaries.
+
+A surface that fails one of these ships only with a `## Design rationale` entry saying why. `CLAUDE.md` section 9 carries the Definition-of-Done line; Susan ([../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md)) rules them.
+
+**And a veto costs something.** A ruling that removes must name what the reader loses. "Remove before adding" is a good instinct and a bad rule when it is free: a removal that states only what was removed is not a ruling and does not bind ([../agents/guardrails.md](../agents/guardrails.md)).
 
 ## Motion vocabulary
 
@@ -170,13 +196,76 @@ The label set for `What the model did`, with the sentence each one carries:
 | Numbers not in the article | The summary had a figure. The article did not. |
 | "Maybe" told as fact | The article said it might have happened. The summary said it did. |
 | Article read only in part | The article was too long, so the machine read the start and stopped. |
+| Read only in part, as a percent | The same articles, against the day's own count, so a busy day and a quiet one compare. |
 | Copied, not rewritten | How much of a normal summary is lifted word for word. |
-| Time to write one | How long the machine takes on one article. |
+| Time to write one | How long the machine takes on one article. The second figure is the articles it read only the start of. |
 | Model minutes | - |
+| Too long to send | The article and the instructions together did not fit, so the machine was never asked. |
 | Failed | - |
+
+Two of those carry a rule the others do not. **The share divides by the rows
+its own flag answers for**, never by the day: `truncation_flagged` changed
+meaning on 2026-08-28, so a day holding rows from both sides of that stamp would
+otherwise report a fact about the migration wearing a percent sign. And **`Time
+to write one` carries a second figure only where the day cut something** - a
+dash under every other day would be a column of absences pretending to be a
+split.
+
+**`Too long to send` is expected to read zero, and that is the point of it.** At
+a truncation cap of 2,500 tokens no prompt can reach the window the machine
+reads with, so the count is zero by arithmetic rather than by luck. It is on the
+page so that the day the cap moves, the number that says the move went too far
+is already being printed.
 
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
+
+## What the cap cost, by source
+
+`Sources cut short most often` is one table of ten rows, and it is the only
+place on the site that names a source next to a number about that source. It
+exists for one decision: **whether raising the truncation cap would actually
+reach a source's articles.**
+
+| Header | What it prints |
+| --- | --- |
+| `Source` | the source id, as the ledger spells it |
+| `Cut short` | articles this source lost text on |
+| `Articles` | articles it published in the window - the denominator |
+| `Share cut` | whole percent, or a dash under `console.min_attempts_for_rate` |
+| `Longest article, words` | the longest article it published, before the cut |
+
+Five rulings hold it, all Jony's, 2026-08-29:
+
+- **It sorts by count, never by rate.** Measured over the committed ledger the
+  shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
+  puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
+  seventeen that cost the digest its articles. The sort order is the ranking,
+  which is also why **no row is tinted**: the confidence ramp means good, watch
+  and bad about a summary, and a source at 55 percent is not broken, it publishes
+  long articles.
+- **Ten rows and no `Show more`.** The worst seven hold 69 of 153 cuts, 45
+  percent; past ten the tail is sources with a single cut in a week, and a
+  control that reveals rows nobody acts on does nothing.
+- **The longest article is the whole article, cut or not.** A column that read
+  the longest *cut* article would answer a question about the cap with a number
+  the cap produced.
+- **No ledger or config name reaches it.** Not `truncation_flagged`, not
+  `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
+- **The two empty states say different things.** `Nothing has recorded an
+  article length yet.` means the ledger cannot answer; `No article was cut short
+  in the last 7 days.` means it answered no. Reading the first as the second is
+  the same mistake as reading a null as a zero.
+
+Rejected here: the cut share on the run-health strip (a 16px square has no room
+for a number, and it answers "did it work" rather than "what did it read"); a
+histogram of article lengths (the engineer's chart - the scatter already shows
+that distribution along its x axis); a gauge, dial, donut or progress bar (six
+percent on a dial is one pixel of arc); a before-and-after of a cap change on
+this page (two caps over two different article sets is two measurements, not a
+trend, and that claim belongs in
+[../reference/measurements.md](../reference/measurements.md)); and a table
+component shared with `Feeds that failed` (an abstraction for two call sites).
 
 **Quality is a table, never a line.** A line invites a trend across days whose
 articles have nothing in common. The one thing on the page that draws a spread
@@ -190,6 +279,14 @@ a regression nobody measured. Those numbers stay in
 to them.
 
 ## Design rationale
+
+**Three sentences were struck on 2026-08-29, and the reason is one mechanism rather than three mistakes.** This page opened with "Restraint is not a style choice on this project; it falls out of the architecture", [ui-shell.md](ui-shell.md) and [vision.md](vision.md) said the operator surfaces "earn no design budget", and the reading measure was written as a property of the shell. All three are defensible sentences and all three are the same error: an architectural constraint restated as a design value. Rule #1 constrains what may *execute* at read time and says nothing about what may be *drawn* - a gradient, an elevation scale and a self-hosted face are bytes in a committed stylesheet that cost a reader nothing at read time and the runner nothing at build time. But a constraint stated as a value stops needing a justification, so every additive proposal had to argue against the project's own doctrine while every subtractive one was pre-approved.
+
+The measurements that settled it, taken in the integrated browser on 2026-08-28: 40.6 percent of a 1536px viewport used; the content column fixed at 624px from 1024px upward; **two** responsive breakpoints in the whole of `frontend/src`, one of which changes padding and the other of which divides an already-capped column into three 164px charts; seven horizontal scrollbars on the console while 582px of screen sat empty beside them. The rejected alternative was softening the three sentences rather than striking them, and it was rejected because a softened absolute is still read as an absolute. Authority: owner, 2026-08-29, over Jony's prior ruling.
+
+**The token list on this page specified a shadow scale and a space scale that were never built.** That is not a doctrine change and it is worth naming separately: the doctrine was right and the implementation stopped short, which is the quieter half of the same failure.
+
+**Sufficiency became a gate because the review roster was six vetoes and no demand.** Jony removes, Fowler deletes, Carmack refuses on budget, Reader and Editor report. Nothing asked whether the result was good enough to be worth a stranger's attention, and a system of pure vetoes converges on the minimum that passes every veto. The rejected alternative was giving Jony the demand mandate as well; one head holding both "remove before adding" and "this is not enough" resolves to the veto every time, which is the observed outcome. Susan was added at a distinct altitude instead, and a veto now has to name what the reader loses. Authority: owner and Fowler, 2026-08-29.
 
 Driving the look from fields the payload already carries - route kind, band, truncation - rather than from per-item styling decisions is what keeps the surface one component instead of many, and it means a new route kind or band arrives with a slot already waiting for it. The rejected alternative, bespoke treatment per item type, produces a page that must be edited every time the pipeline learns something new. Authority: Jony.
 
@@ -213,6 +310,8 @@ accepted.
 ## See also
 
 - [ui-shell.md](ui-shell.md) - the chrome that consumes these tokens.
+- [../../.github/agents/susan.agent.md](../../.github/agents/susan.agent.md) - who rules the sufficiency checks, and why the roster needed a demand side.
+- [../agents/guardrails.md](../agents/guardrails.md) - the authority table, and the rule that a veto must name what the reader loses.
 - [digest.md](digest.md) - the item shape this vocabulary dresses.
 - [evaluation.md](evaluation.md) - where the confidence bands come from.
 - [principles.md](principles.md) - the beliefs behind the restraint.

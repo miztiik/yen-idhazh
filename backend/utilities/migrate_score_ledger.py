@@ -47,11 +47,12 @@ from idhazh.evals.writer import ledger_path
 FIXED_FROM: Final = "2026-08-27"
 
 #: The post-cap word ceiling every eligible row was written under:
-#: `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)` at the only
-#: cap this repository has ever committed, 2500 tokens. It is history rather
-#: than a knob, so it is spelled here and not read from `config/` - lowering the
-#: cap tomorrow must not change what yesterday's rows meant. The committed
-#: ledger agrees: no row exceeds it and 142 sit exactly on it.
+#: `int(extract.truncation_cap_tokens / extract.TOKENS_PER_WORD)` at a cap of
+#: 2500 tokens, which is what every eligible row ran at. The cap became 5000 on
+#: 2026-08-29 and this number did not follow it: it is history rather than a
+#: knob, so it is spelled here and not read from `config/` - moving the cap
+#: tomorrow must not change what yesterday's rows meant. The committed ledger
+#: agrees: no eligible row exceeds it and 142 sit exactly on it.
 SEEN_WORD_CAP: Final = 1923
 
 #: The one cell this rewrite is allowed to move. Every other cell, on every row,

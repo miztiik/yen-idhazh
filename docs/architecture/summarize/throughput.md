@@ -1,6 +1,6 @@
 # Model throughput and why it drifts inside a run
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 What the two model rates mean, why the slow half of a run is slow, and what a
 change in either number is allowed to prove.
@@ -9,6 +9,19 @@ The rates are recorded per item on the item-health ledger and drawn on the
 console. The columns and how a rate is derived from them are owned by
 [`../sources/item-health.md`](../sources/item-health.md); this page owns the
 behaviour.
+
+**Every figure on this page was taken at `extract.truncation_cap_tokens` = 2500,
+which reads at most 1,923 words of an article.** The cap is a throughput lever,
+so a rate taken at another cap is not comparable item for item with anything
+here. **The configured cap moved to 5000 on 2026-08-29**, so every rate on this
+page is a cap-2500 rate and the first scheduled run after that date is the first
+one taken at the new cap. The two conditions that revert the move are in
+[The first run at cap 5000](../../reference/measurements.md#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
+and what that run has to record is in
+[What the first run at cap 5000 must record](../../reference/measurements.md#what-the-first-run-at-cap-5000-must-record).
+**Read is the end that moves.** A longer article is more prompt to take in;
+write does not move at all, because the summary length asked for comes from
+`article.band_source_words`, which is the count from before the cap cut it.
 
 ## Two rates, not one
 

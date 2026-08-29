@@ -21,7 +21,7 @@ That means the shell's job is small and worth stating plainly: **load a payload,
 
 Four surfaces is the whole site, and only two of them are for a reader. A fifth needs an argument.
 
-The two operator surfaces are held to a different standard on purpose: they are instrumentation, they sit off the reading path, they earn no design budget, and their only obligation is to be correct ([vision.md](vision.md)).
+The two operator surfaces are held to a different standard on purpose. They sit off the reading path, so they spend no reader attention and take no ornament: no display face, no gradient, no illustration. What they owe instead is **legibility** - a figure the operator can read at a glance, a table that fits the screen it is on, and a page that can be scanned in one pass. Correctness is the floor, not the ceiling. An instrument that is right and unreadable has not done its job ([vision.md](vision.md)).
 
 ## What the shell provides, once
 
@@ -46,7 +46,7 @@ These are designed, not discovered:
 
 ## What the shell must never do
 
-- Fetch anything cross-origin: no CDN font, no analytics snippet, no third-party widget (Rule #1).
+- Run anything off the reader's device, report a reader's behaviour anywhere, or load a third-party script that phones home (Rule #1). A static asset is judged on bytes, licence and privacy behaviour, never on hostname - and this project self-hosts its font because the request is the larger cost, not because the origin is forbidden.
 - Show a spinner. There is no network in the loop; if something is slow, the payload is too big and that is a build-time problem.
 - Ask the reader for anything - no cookie banner, no signup, no notification permission, no rating widget. Every interruption is a reason to close the tab.
 - Recompute a score, re-rank items, or derive anything the pipeline already decided. The page renders; it does not think.
@@ -57,6 +57,10 @@ These are designed, not discovered:
 The site is served from a project path on GitHub Pages, not from a domain root. Every internal link, asset reference and payload path must resolve under that prefix, and a link that works in development and 404s in production is the standard way this breaks. The deployment runbook is [../how-to/ship-to-github-pages.md](../how-to/ship-to-github-pages.md).
 
 ## Design rationale
+
+**"They earn no design budget" was struck on 2026-08-29, and it is the sentence that produced the console.** It conflated a design budget with an ornament budget. The console does not need a gradient; it needs a table that fits the screen, charts that are not 164px wide, and a page that is not 6562px tall - and those are not decoration, they are whether the instrument can be read at all. Measured 2026-08-28 at a 1209px viewport: a 10-column table rendered at 627px and seven elements with horizontal scrollbars, while 582px of screen sat empty beside them. The sentence also contradicted [design-system.md](design-system.md)'s own console-copy section, which spends a large budget on nine labels and five numbering rules - so the page both granted and refused the budget, and the refusal won in practice because it was shorter and sounded like a principle. The rejected alternative was softening it; a softened absolute is still read as an absolute. Authority: owner, 2026-08-29.
+
+**The cross-origin bullet was corrected in the same commit and is an independent fix.** It read "Fetch anything cross-origin: no CDN font, no analytics snippet, no third-party widget", which contradicts `CLAUDE.md` Rule #1 as amended 2026-08-23 - the rule draws its line at a *service*, not at an origin, and explicitly permits a third-party static asset judged on bytes, licence and privacy behaviour. Rule #4 makes the contract win, so this doc was simply stale and was a trap for the next agent reading it. What did not change: this project still self-hosts its font, because the HTTP cache is partitioned per site so the shared-cache argument is dead, and `script-src` and `default-src` are `self` only.
 
 Putting payload loading and validation in exactly one place, rather than in each page, is what makes the four states above a shared implementation rather than three inconsistent ones - and it is the reason a malformed payload degrades instead of white-screening. The rejected alternative, per-page fetching, produces a site where the empty state is correct on the page someone remembered to test. Authority: Fowler (contract shape), Jony (what the states look like).
 

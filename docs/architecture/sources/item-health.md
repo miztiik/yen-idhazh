@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -15,7 +15,7 @@ whole day's census afterwards.
 
 The row carries:
 
-`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens`
+`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap`
 
 The file is append-only and never pruned. The 30-day window is a read-side
 parameter. Monthly shards follow `state/seen/` and `state/feed-health/`.
@@ -44,7 +44,7 @@ endings, `utf-8`, no quoting beyond what `csv` needs.
 `from_csv_row()` reads `""` back as `None`. There is no sentinel number and no
 `NULL` literal, because both of those get averaged by accident one day.
 
-The 24 columns, in file order:
+The 25 columns, in file order:
 
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
@@ -72,6 +72,7 @@ The 24 columns, in file order:
 | `input_tokens` | int | when the runtime reports it | prompt tokens, cached ones included |
 | `output_tokens` | int | when the runtime reports it | tokens written |
 | `cached_tokens` | int | when the runtime reports it | prompt tokens reused instead of read |
+| `source_words_before_cap` | int | once extract ran, from 2026-08-28 | how long the body was before the cap cut it |
 
 **The row is a census, not an error log.** Successes and failures share one file
 because a rate needs its denominator beside its numerator.
@@ -94,6 +95,37 @@ worker reached.
 
 **Nothing under `state/` is served.** The console reads a narrow projection of
 this file - see [Scaling](#scaling) - and a reader gets figures, never the file.
+
+## Two word counters, and the one thing they say together
+
+`source_words_before_cap` is how long the extracted body was. `source_words` is
+how long it still was after `extract.truncation_cap_tokens` cut it. Both come
+from the same `Article`, at the same moment, off the same string: `extract`
+reads the page once, counts the whole body into `Article.source_word_count`,
+truncates, and counts what is left into `Article.word_count`.
+
+So the test for a cut is the comparison and nothing else:
+
+```text
+cut  <=>  source_words_before_cap > source_words
+by   =    source_words_before_cap - source_words
+```
+
+The alternative was `source_words == int(truncation_cap_tokens / 1.3)`. That
+number moves whenever the cap moves, so a window spanning a cap change mixes
+two cut points and any value written down goes wrong silently. It also calls an
+article cut when its body happens to end on the boundary. A comparison between
+two cells on one row has neither failure.
+
+The pre-cap **text** is not kept, here or anywhere. This is a count, and a count
+of our own extraction - the same class of cell as `source_words`, which is why
+the published projection carries it too
+([../publishing/telemetry-series.md](../publishing/telemetry-series.md)).
+
+The cell is empty on every row a run wrote before 2026-08-28, and empty again on
+any row whose article payload predates `Article.source_word_count` (2026-08-26).
+Empty means the run never measured it. Nothing recomputes it later, because the
+body it would have to count is gone.
 
 ## Stages and outcomes
 
