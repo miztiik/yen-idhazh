@@ -189,14 +189,23 @@ Any library adopted for the console must (1) render SVG, not canvas, so
 build time, so the page is complete before any script runs, and (3) carry a
 measured gzipped cost recorded next to the decision.
 
-Measured 2026-08-29 on this tree with this bundler, after the engine shipped -
-these are the built artefacts, not a bundler probe. Registering only the chart
-types in use, the engine is a lazy chunk of **153,204 B gzipped** (451,227 B
-raw). Importing the same package whole instead pulls **345,959 B gzipped**
-(1,044,275 B raw) for the same one chart, so the registration file is worth 56
-percent of the download and is the reason it is a file somebody has to edit.
+Measured 2026-08-30 on this tree with this bundler - these are the built
+artefacts, not a bundler probe. Registering only the chart types in use, the
+engine is a lazy chunk of **197,561 B gzipped** (585,481 B raw). Importing the
+same package whole instead pulled **345,959 B gzipped** (1,044,275 B raw) when
+that arm was last built on 2026-08-29, so the registration file is worth about
+half the download and is the reason it is a file somebody has to edit.
 `d3-scale` and `d3-array`, which the surface already carries, are 20.5 KB
 together.
+
+**That record went 25 percent stale in one day, and the way it happened is the
+warning.** It read 153,204 B (451,227 B raw) from 2026-08-29, when the
+registration list held the funnel, the tooltip and the SVG renderer. The
+six-shape vocabulary added bar, line, pie, grid, legend and mark-line hours
+later and nobody re-measured, so the number sat 38,685 B under the truth until
+the Sankey row rebuilt it on 2026-08-30. Adding a chart type means editing
+`frontend/src/lib/charts/core.ts`, and the whole point of it being a file
+somebody has to edit is that they measure it in the same commit.
 
 The number that decides whether this is affordable is not the chunk. It is what
 opening the console costs, and that moved **1,854 B**, from 69,622 to 71,476 -
@@ -413,10 +422,12 @@ The paragraph above this one is still correct about a reading route and is not
 touched. What changed is that the two surfaces stopped sharing one answer.
 
 The measurements that now stand in place of the stale one were taken on
-2026-08-29 on this tree with this bundler, and are in the chart section above:
-153,204 B gzipped for the engine as a lazy chunk carrying only the chart types
-in use, against 345,959 B for the same package imported whole, and 1,854 B for
-what opening the console actually costs. A reader's route imports none of it.
+2026-08-29 on this tree with this bundler, and the current ones are in the chart
+section above: 153,204 B gzipped for the engine as a lazy chunk carrying only
+the chart types in use, against 345,959 B for the same package imported whole,
+and 1,854 B for what opening the console actually costs. A reader's route
+imports none of it. The chunk figure has since been re-measured twice - see the
+chart section for what it reads today and why it moved.
 
 Three lessons are recorded because they are more transferable than the ruling.
 **A byte count is a measurement and goes stale like any other** - Rule #10 asks
