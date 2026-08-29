@@ -42,11 +42,10 @@ uncut. The column list, and why the count travels instead of the text, is
 read - so it asserts that the first `n` published columns are the `n` names it
 knows, and says nothing about anything after them.
 
-Today those two numbers differ. `TELEMETRY_COLUMNS` carries **10** names and the
-published shard carries **11**: `source_words_before_cap` sits at the end,
-unchecked and unread. That parses correctly and nothing client-side wants the
-column, so it is not a defect today. It is the reason **append at the end is a
-rule rather than tidiness**:
+Both lists carry the same 11 names since 2026-08-29, so the check covers the
+whole header today. It is written for the day it does not, and that day is
+normal rather than exceptional: **append at the end is a rule rather than
+tidiness**.
 
 - **Appending** a column keeps every earlier position where the reader expects
   it, so an old browser build reads a new shard and ignores the new cell.
@@ -55,12 +54,27 @@ rule rather than tidiness**:
   which is correct.
 - **Removing** one does the same, one position earlier.
 
+**Nothing in the frontend can see the writer, so a contract test holds the two
+lists together.**
+`backend/tests/test_contracts.py::test_the_console_reads_a_prefix_of_the_published_telemetry_columns`
+pulls `TELEMETRY_COLUMNS` out of `series.ts` with a regex and asserts it is a
+prefix of `PUBLIC_COLUMNS`. It passes an append on the writer's side, fails an
+insert, a rename or a reorder at any position the browser reads, and fails a
+frontend name the writer never writes. It fails first when the regex stops
+matching, because a guard that quietly finds nothing is worse than no guard.
+The two lists had already drifted once with nothing to notice: from 2026-08-28
+to 2026-08-29 the shard carried `source_words_before_cap` and the reader did
+not. **Do not tighten the check to an equality.** Equality is what the test
+deliberately does not assert - it would break every cached bundle on the next
+append, which is the one case the prefix exists for.
+
 **The sharp edge is the round trip, not the parse.** `telemetryCsv()`
-re-serializes from `TELEMETRY_COLUMNS` as well, so anything the parser ignored
+re-serializes from `TELEMETRY_COLUMNS` as well, so a column the parser ignored
 is dropped rather than carried through. Any code that reads a shard and writes
-one back silently narrows it from 11 columns to 10. Whoever adds column twelve
-adds it to `TELEMETRY_COLUMNS` and to `TelemetryRow` in the same commit, or the
-client keeps reading a projection it cannot see the end of.
+one back narrows it to the names the reader knows. The test permits a
+writer-only append, so it cannot catch that; whoever adds column twelve adds it
+to `TELEMETRY_COLUMNS` and to `TelemetryRow` in the same commit, or the client
+keeps reading a projection it cannot see the end of.
 
 ## What the model did - read at build time, never published
 
