@@ -1,6 +1,6 @@
 """Look at the training corpus, split its holdout, repair it, and fill it.
 
-Five verbs and no sixth. Routine data movement is not here: the harvest and the
+Six verbs and no seventh. Routine data movement is not here: the harvest and the
 roll run in CI on a schedule, where a failure has an alarm on it, and a local
 utility has none. What this owns is the work a person does deliberately, before
 or after a training session.
@@ -10,34 +10,58 @@ or after a training session.
     python backend/utilities/data_wrangler.py verify
     python backend/utilities/data_wrangler.py verify --tokens
     python backend/utilities/data_wrangler.py backfill --items-dir <dir>
+    python backend/utilities/data_wrangler.py refill --limit 200
     python backend/utilities/data_wrangler.py remove --url-key <sha256>
 
-`backfill` is the one that means a corpus does not have to start empty and fill
-at one day a week. It replays a finished run's `items-*` artifact through the
-same harvest the schedule runs, so a backfilled row and a harvested row are the
-same bytes.
+`backfill` and `refill` are the two that mean a corpus does not have to start
+empty and fill at one run a week. They differ in where the article body comes
+from, and that is the only way they differ:
 
-`verify --tokens` is the one subcommand that reaches the network, and it is here
-rather than in a test for that reason (Rule #7). It downloads the tokenizer named
-by `models.<role>.hf_base_repo` and answers the question a session needs before
-it spends an hour and a half: do these rows fit `finetune.sequence_length`?
+- `backfill` replays a finished run's `items-*` artifact. The body is the exact
+  text the scorer read, so a backfilled row and a harvested row are the same
+  bytes. It reaches only as far back as the artifact retention.
+- `refill` re-fetches the source address the ledger recorded. It reaches every
+  day the repository still remembers, at the cost of a network round trip per
+  item and of dropping whatever the open web no longer serves.
+
+`refill` and `verify --tokens` are the two subcommands that reach the network,
+and they are here rather than in a test for that reason (Rule #7). `verify
+--tokens` downloads the tokenizer named by `models.<role>.hf_base_repo` and
+answers the question a session needs before it spends an hour and a half: do
+these rows fit `finetune.sequence_length`?
 """
 
 from __future__ import annotations
 
 import argparse
+import csv
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
-from typing import Final
+from typing import Final, NamedTuple
 
-from idhazh import config, corpus, summarize
-from idhazh.contracts.base import derive_text_digest
-from idhazh.contracts.corpus import CorpusRow
+from idhazh import assemble, cli, config, corpus, extract, summarize, tag
+from idhazh.contracts.article import ArticleStatus
+from idhazh.contracts.base import derive_text_digest, derive_url_key
+from idhazh.contracts.corpus import CorpusMeta, CorpusRow
+from idhazh.contracts.digest_day import DigestDay
+from idhazh.contracts.eval_row import EvalRow
+from idhazh.contracts.run_plan import PlannedItem
+from idhazh.contracts.sources import SourceForm
+from idhazh.contracts.taxonomy import SourceTier
+from idhazh.evals import writer
+from idhazh.ledger import STATE_DIRNAME
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
 #: What a table is padded to. A number nobody can line up is a number nobody reads.
 _WIDTH: Final = 26
+#: How often a long re-fetch commits what it has rebuilt, and says so. The window
+#: is rewritten whole each time, so this trades disk against work lost to a
+#: interruption. Measured 2026-08-29: a fetch is 1.36 s and the rewrite of a
+#: 2000-row window is far under that, so 25 costs well below one percent and
+#: bounds the loss at about 30 seconds.
+_COMMIT_EVERY: Final = 25
 
 
 def _quantile(values: Sequence[int], fraction: float) -> int:
@@ -295,6 +319,248 @@ def _newest_date(scored: Sequence[corpus.Scored]) -> str:
     return dates[-1] if dates else "1970-01-01"
 
 
+# --- refill ----------------------------------------------------------------
+
+
+class _Entry(NamedTuple):
+    """What one committed digest item contributes to a rebuild."""
+
+    published: corpus.Published
+    source_id: str
+    source_form: SourceForm
+    published_at: str | None
+
+
+class _Rebuildable(NamedTuple):
+    """One item the ledger and the committed digest agree on, ready to re-fetch."""
+
+    recorded: EvalRow
+    entry: _Entry
+
+
+def _ledger_rows(path: Path) -> list[EvalRow]:
+    """Every scored row the committed ledger holds.
+
+    An empty CSV cell is dropped rather than passed as an empty string, so an
+    optional column that was blank when the row was written reads back as the
+    default it was written with instead of failing validation.
+    """
+    with path.open(encoding="utf-8", newline="") as handle:
+        return [
+            EvalRow.model_validate({key: value for key, value in raw.items() if value != ""})
+            for raw in csv.DictReader(handle)
+        ]
+
+
+def _digest_items(digest_root: Path) -> dict[str, _Entry]:
+    """The assistant turn for every published item, keyed by `item_id`.
+
+    An item with no title or no summary contributes nothing a row could teach,
+    so it never enters the map and is counted as unjoinable rather than as a
+    fetch that failed.
+    """
+    found: dict[str, _Entry] = {}
+    for path in cli.published_days(digest_root):
+        day = DigestDay.from_json(path.read_text(encoding="utf-8"))
+        for item in day.items:
+            if not item.title or not item.summary:
+                continue
+            found[item.item_id] = _Entry(
+                published=corpus.Published(
+                    title=item.title,
+                    summary=item.summary,
+                    key_points=tuple(item.key_points),
+                ),
+                source_id=item.source_id,
+                source_form=item.source_form,
+                published_at=item.published_at,
+            )
+    return found
+
+
+def _planned(candidate: _Rebuildable, *, tiers: dict[str, SourceTier]) -> PlannedItem:
+    """The plan entry the extractor needs, rebuilt from what the run recorded.
+
+    `rank_score` is zero because ranking already chose this item once and cannot
+    reach the prompt - `summarize.user_turn` reads the source form, the title and
+    the body, and nothing else. The tier is looked up so the payload is
+    well-formed, and falls back to the weakest tier for a source that has since
+    been retired out of `config/sources.json`.
+
+    `canonical_url` is the ledger's `source_url` because that column IS the
+    canonical address: `evals.score.to_eval_row` writes `item.canonical_url`
+    into it. The caller has already checked that it still derives the row's
+    `url_key`, which is the identity `extract` refuses to proceed without.
+    """
+    row, entry = candidate
+    return PlannedItem(
+        item_id=row.item_id,
+        url_key=row.url_key,
+        source_url=row.source_url,
+        canonical_url=row.source_url,
+        source_id=entry.source_id,
+        tier=tiers.get(entry.source_id, SourceTier.COMMUNITY),
+        source_form=entry.source_form,
+        vertical=row.vertical,
+        title=row.title,
+        published_at=entry.published_at,
+        rank_score=0.0,
+    )
+
+
+def _commit(
+    corpus_dir: Path, batch: Sequence[corpus.Scored], *, settings: config.Settings
+) -> CorpusMeta:
+    """Fold one batch of rebuilt rows into the window, through the shipped harvest.
+
+    Called every `_COMMIT_EVERY` items rather than once at the end, because a
+    re-fetch of the whole ledger runs for tens of minutes and holding it all in
+    memory means an interruption throws every fetch away. `corpus.write` is
+    temp-file-plus-rename, so a batch either lands whole or not at all, and the
+    roll deduplicates by `url_key` - which is what lets the next run skip what
+    this one already committed (`CLAUDE.md` section 1a).
+    """
+    return corpus.harvest(
+        corpus_dir,
+        batch,
+        date=_newest_date(batch),
+        finetune=settings.app.finetune,
+        prompt_config=settings.app.summarize,
+        evaluation=settings.app.evaluation,
+    )
+
+
+def refill(
+    corpus_dir: Path,
+    settings: config.Settings,
+    *,
+    ledger_path: Path,
+    digest_root: Path,
+    limit: int | None,
+    read_url: cli.Fetcher | None = None,
+) -> int:
+    """Rebuild rows from the source address, for runs whose artifacts have expired.
+
+    `backfill` can only reach a run whose `items-*` artifact still exists, which
+    is the last few days. This reaches every day the repository still remembers,
+    because the committed ledger and the committed digest hold between them every
+    half of a training row except the article body - and the body has an address.
+
+    Nothing is assumed about the page that answers. The body is re-extracted
+    through the extractor a run uses, so `brief`, the source form and the length
+    band are computed rather than guessed, and `corpus.rescored` measures every
+    counterweight again against that body. An article edited past its summary
+    fails the same gate a live run applies; an article that has moved, gone
+    behind a paywall or started refusing robots is dropped and counted.
+
+    The join is checked and not assumed. `output_digest` covers exactly the
+    title, the summary and the key points, so a digest entry is paired with a
+    ledger row only when it recomputes to the value that row recorded.
+
+    A pair the run itself rejected is dropped before the fetch, on both counts
+    that matter. It saves the round trip, and it is the more correct answer: the
+    only way such a pair could pass on re-measurement is if the page changed
+    under it, and a row that needs the article to have moved is not a row worth
+    teaching.
+    """
+    if not ledger_path.is_file():
+        print(f"{ledger_path.as_posix()} is not a file")
+        return 1
+    if not digest_root.is_dir():
+        print(f"{digest_root.as_posix()} is not a directory")
+        return 1
+
+    finetune = settings.app.finetune
+    held = corpus.read_rows(corpus_dir)
+    before = len(held)
+    have = {row.url_key for row in held}
+    entries = _digest_items(digest_root)
+    recorded = _ledger_rows(ledger_path)
+
+    candidates: list[_Rebuildable] = []
+    claimed: set[str] = set()
+    counts: Counter[str] = Counter()
+    for row in sorted(recorded, key=lambda item: item.date, reverse=True):
+        if row.url_key in have or row.url_key in claimed:
+            counts["already in the window"] += 1
+            continue
+        entry = entries.get(row.item_id)
+        if entry is None:
+            counts["no published item"] += 1
+            continue
+        if not corpus.published_is_the_scored_one(entry.published, recorded=row):
+            counts["published output is a different one"] += 1
+            continue
+        if not corpus.keeps_its_counterweights(row, evaluation=settings.app.evaluation):
+            counts["the run that made it already rejected it"] += 1
+            continue
+        if derive_url_key(row.source_url) != row.url_key:
+            counts["address no longer proves its identity"] += 1
+            continue
+        claimed.add(row.url_key)
+        candidates.append(_Rebuildable(recorded=row, entry=entry))
+
+    room = max(0, finetune.corpus_rows - before)
+    wanted = room if limit is None else min(limit, room)
+    queued = candidates[:wanted]
+
+    print(f"{'ledger rows':<{_WIDTH}} {len(recorded)}")
+    print(f"{'rows before':<{_WIDTH}} {before}")
+    for reason, count in sorted(counts.items(), key=lambda pair: (-pair[1], pair[0])):
+        print(f"  skipped {reason:<38} {count:>5}")
+    print(f"{'rebuildable':<{_WIDTH}} {len(candidates)}")
+    print(f"{'queued to re-fetch':<{_WIDTH}} {len(queued)} (window has room for {room})")
+    if not queued:
+        return 0
+
+    read = read_url or cli.live_fetcher(settings)
+    tiers = {feed.id: feed.tier for feed in settings.sources.feeds}
+    meta = corpus.read_meta(corpus_dir)
+    pending: list[corpus.Scored] = []
+    rebuilt = 0
+    dropped: Counter[str] = Counter()
+    for index, candidate in enumerate(queued, start=1):
+        item = _planned(candidate, tiers=tiers)
+        article, full_text = extract.to_article_with_source(
+            item,
+            read(item.canonical_url),
+            config=settings.app.extract,
+            fetched_at=assemble.utc_now(),
+        )
+        if article.status is not ArticleStatus.OK:
+            code = article.failure_code.value if article.failure_code else article.status.value
+            dropped[code] += 1
+        else:
+            article = tag.tagged(
+                article, taxonomy=settings.taxonomy, watchlist=settings.watchlist
+            )
+            pending.append(
+                corpus.rescored(
+                    article,
+                    full_text,
+                    recorded=candidate.recorded,
+                    published=candidate.entry.published,
+                )
+            )
+        if index % _COMMIT_EVERY == 0 or index == len(queued):
+            rebuilt += len(pending)
+            if pending:
+                meta = _commit(corpus_dir, pending, settings=settings)
+                pending = []
+            print(f"  ... {index}/{len(queued)} fetched, {meta.rows} rows committed")
+
+    print(f"{'bodies re-fetched':<{_WIDTH}} {rebuilt} of {len(queued)}")
+    for reason, count in sorted(dropped.items(), key=lambda pair: (-pair[1], pair[0])):
+        print(f"  no body {reason:<38} {count:>5}")
+    print(f"{'rows now':<{_WIDTH}} {meta.rows} of a {finetune.corpus_rows}-row window")
+    print(f"{'days covered':<{_WIDTH}} {meta.first_date or '-'} to {meta.last_date or '-'}")
+    for name, count in sorted(meta.verticals.items(), key=lambda pair: (-pair[1], pair[0])):
+        print(f"  vertical {name:<20} {count:>5}")
+    if meta.rows < finetune.min_rows:
+        print(f"still {finetune.min_rows - meta.rows} short of finetune.min_rows")
+    return 0
+
+
 def remove(
     corpus_dir: Path, settings: config.Settings, *, url_keys: Sequence[str], yes: bool
 ) -> int:
@@ -377,6 +643,28 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="A directory holding <item>.article.json and friends, at any nesting.",
     )
 
+    refilled = verbs.add_parser(
+        "refill", help="Re-fetch source addresses the ledger remembers. Reaches the network."
+    )
+    refilled.add_argument(
+        "--ledger",
+        type=Path,
+        default=writer.ledger_path(REPO_ROOT / STATE_DIRNAME),
+        help="The committed eval ledger. It names every address ever scored.",
+    )
+    refilled.add_argument(
+        "--digest-root",
+        type=Path,
+        default=REPO_ROOT / assemble.PUBLIC_ROOT,
+        help="The committed day payloads. They hold the published summaries.",
+    )
+    refilled.add_argument(
+        "--limit",
+        type=int,
+        default=None,
+        help="How many addresses to re-fetch. Defaults to whatever the window has room for.",
+    )
+
     dropped = verbs.add_parser("remove", help="Drop named rows. Prints first, asks second.")
     dropped.add_argument("--url-key", action="append", default=[], required=True)
     dropped.add_argument("--yes", action="store_true", help="Actually do it.")
@@ -392,6 +680,14 @@ def main(argv: Sequence[str] | None = None) -> int:
         return verify(args.corpus_dir, settings, tokens=args.tokens)
     if args.verb == "backfill":
         return backfill(args.corpus_dir, settings, items_dir=args.items_dir)
+    if args.verb == "refill":
+        return refill(
+            args.corpus_dir,
+            settings,
+            ledger_path=args.ledger,
+            digest_root=args.digest_root,
+            limit=args.limit,
+        )
     return remove(args.corpus_dir, settings, url_keys=args.url_key, yes=args.yes)
 
 
