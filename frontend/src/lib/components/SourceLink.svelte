@@ -5,6 +5,8 @@
 	 * dwell: a wrong guess there silently hides something unread, and the reader
 	 * cannot tell it happened.
 	 */
+	import Icon from '$lib/icons/Icon.svelte';
+
 	let {
 		url,
 		label = 'Read the original',
@@ -20,19 +22,5 @@
 	class="inline-flex min-h-11 items-center gap-1 text-accent hover:underline"
 >
 	{label}
-	<svg
-		width="12"
-		height="12"
-		viewBox="0 0 16 16"
-		fill="none"
-		stroke="currentColor"
-		stroke-width="1.6"
-		stroke-linecap="round"
-		stroke-linejoin="round"
-		aria-hidden="true"
-	>
-		<path d="M6 3h7v7" />
-		<path d="M13 3 6.5 9.5" />
-		<path d="M11 10.5V13H3V5h2.5" />
-	</svg>
+	<Icon id="external" size={13} />
 </a>

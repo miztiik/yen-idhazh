@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
-    "build": "node scripts/build-frame-css.mjs && node scripts/copy-visuals.mjs && vite build",
+    "build:icons": "node scripts/build-icons.mjs",
+    "build": "node scripts/build-icons.mjs && node scripts/build-frame-css.mjs && node scripts/copy-visuals.mjs && vite build",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "bundle-gate": "node scripts/bundle-gate.mjs",
