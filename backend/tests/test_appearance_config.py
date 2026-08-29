@@ -117,6 +117,21 @@ def test_a_sparkline_can_never_be_taller_than_a_chart() -> None:
     assert ChartConfig(sparkline_height_px=96, height_px=120).height_px == 120
 
 
+def test_a_readout_may_not_be_wider_than_the_plot_or_zero_wide() -> None:
+    """A readout at 0 is a strip nobody can read; one over 1 is not a share.
+
+    The strip sits below the plot, so no value here can cover a mark. The bound
+    is against the other failure: a readout as wide as the chart it explains,
+    which is what the floating box it replaced was - 40 to 55 percent of a
+    220px plot, measured 2026-08-29.
+    """
+    for refused in (0.0, -0.1, 1.01, 2.0):
+        with pytest.raises(ValidationError):
+            ChartConfig(readout_max_share=refused)
+    assert ChartConfig(readout_max_share=1.0).readout_max_share == 1.0
+    assert ChartConfig().readout_max_share == 0.33
+
+
 def test_fast_motion_is_faster_than_base_motion() -> None:
     with pytest.raises(ValidationError, match="duration_fast_ms"):
         MotionConfig(duration_fast_ms=400, duration_base_ms=100)
@@ -170,7 +185,7 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
 def test_the_schema_is_generated_and_stamped() -> None:
     schema = AppearanceConfig.json_schema()
     assert schema["$id"] == "appearance-config.schema.json"
-    assert schema["version"] == "2026-08-29T22:00"
-    assert schema["changelog"][0]["version"] == "2026-08-29T22:00"
+    assert schema["version"] == "2026-08-30"
+    assert schema["changelog"][0]["version"] == "2026-08-30"
     for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
         assert block in schema["properties"], f"{block} missing from the generated schema"

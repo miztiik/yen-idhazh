@@ -23,7 +23,7 @@ import {
 	wasCut,
 	SOURCE_CUT_ROWS
 } from '$lib/server/model-work';
-import { collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import { chartConfig, collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
 	feedResults,
@@ -571,6 +571,9 @@ export async function load() {
 		telemetryRows: publicRows,
 		telemetryMonths: telemetryMonths(),
 		console,
+		// How a chart labels its axis and how wide its readout may be. Two knobs an
+		// operator moves without editing a component.
+		chart: chartConfig(),
 		summarizeBands: summarize.bands,
 		today
 	};

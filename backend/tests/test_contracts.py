@@ -32,6 +32,7 @@ from idhazh.contracts.app_config import (
     EvaluationConfig,
     PageWeightConfig,
 )
+from idhazh.contracts.appearance_config import ChartConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
@@ -274,6 +275,19 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
     mirrored = re.search(r"window_presets:\s*\[([\d,\s]+)\]", reader)
     assert mirrored is not None, "the frontend console defaults dropped window_presets"
     assert [int(part) for part in mirrored.group(1).split(",")] == ConsoleConfig().window_presets
+
+
+def test_the_readout_cap_is_a_knob_the_frontend_agrees_with() -> None:
+    """The same two-copies problem again, in the chart block.
+
+    The cap is applied in the browser, off the frontend's own copy. Let the two
+    drift and the browser test asserts one number while the contract bounds a
+    different one, which is a gate that passes for the wrong reason.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"readout_max_share:\s*([\d.]+)", reader)
+    assert mirrored is not None, "the frontend chart defaults dropped readout_max_share"
+    assert float(mirrored.group(1)) == ChartConfig().readout_max_share
 
 
 def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
