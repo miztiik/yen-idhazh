@@ -10,6 +10,7 @@ from __future__ import annotations
 import ast
 import json
 import re
+from collections import Counter
 from pathlib import Path
 from typing import Any
 
@@ -48,7 +49,7 @@ from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
-from idhazh.contracts.taxonomy import Taxonomy
+from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.contracts.watchlist import Watchlist
 from idhazh.fingerprint import text_digest
 from idhazh.publish_telemetry import PUBLIC_COLUMNS
@@ -345,6 +346,34 @@ def test_every_configured_feed_names_a_declared_vertical() -> None:
     declared = {vertical.id for vertical in taxonomy.verticals}
     for feed in sources.known_feeds():
         assert feed.vertical in declared, f"feed {feed.id} names an undeclared vertical"
+
+
+def test_every_vertical_clears_its_own_feed_floor() -> None:
+    """A vertical under `min_feeds` plans nothing at all, so this is a live gate.
+
+    `rank.plan_vertical` returns an empty list for a vertical below its floor -
+    the desk does not thin out, it goes silent. Nothing else notices: the run
+    succeeds, the digest publishes, and one section is simply absent.
+
+    That was one edit away from happening on 2026-08-29. Retiring the 40 feeds
+    that had never published anything took `ai` to 28 against a floor of 35 and
+    `business-economy` to 12 against 21 - 34 percent of that day's items, gone
+    quietly. A throwaway assertion in a migration script caught it; nothing in
+    the repository would have. This is that assertion, kept.
+
+    It reads the committed config on purpose. The number that decides a run is
+    the one in `config/`, not a value a fixture chose.
+    """
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    sources = Sources.from_json(read_text(CONFIG_DIR / "sources.json"))
+    live = Counter(
+        feed.vertical for feed in sources.feeds if feed.status is LifecycleStatus.ACTIVE
+    )
+    for vertical in taxonomy.verticals:
+        assert live[vertical.id] >= vertical.min_feeds, (
+            f"{vertical.id} has {live[vertical.id]} active feeds against a floor of "
+            f"{vertical.min_feeds}, so it would publish nothing"
+        )
 
 
 def test_the_watchlist_stays_inside_its_configured_cap() -> None:
