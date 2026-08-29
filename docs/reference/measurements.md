@@ -3656,16 +3656,38 @@ bytes: 1.4 percent of the spare, and about 68 runs of margin** at the 125,004
 bytes left. **The cap change contributes none of those bytes**, because it adds
 no rows of its own.
 
-**Two observations, and neither is a rate.** Rows compress against their
-neighbours, so 55 similar rows appended to 2,736 are close to the cheapest 55
-that file will ever take. The 5,105 bytes the published day cost is one day, and
-that day was still publishing when it was measured. Re-measure before spending
-the margin either suggests.
+**68 runs was 24 to 27 days, and the days are the number that decided it.**
+Counted 2026-08-29 over `state/scores.csv`: 2,791 rows across 23 runs on 8
+dates, so the pipeline runs 2.88 times a day and scores 349 items a day at the
+mean. At 13.4 bytes a row that is 4,675 bytes a day and 27 days of margin; at
+the median run of 137 rows it is 5,287 bytes a day and 24. The measured cost
+being 4.5x below the sizing did not buy an open-ended margin - **it bought about
+a month**, because the page inlined one point per scored row and nothing removed
+one.
+
+**That countdown ended on 2026-08-29.** The compression scatter now reads the
+published telemetry shards instead of the whole score ledger, so `/console/`
+carries one window of item telemetry rather than every row ever scored. The same
+paired-build method read the prerendered page at **175,892 B before and 148,800
+B after, -27,092 B**. The page now grows with `console.default_window_days` and
+the day's item count, and stops growing once the window fills.
+
+**Two rates, and they answer different questions.** 13.4 bytes is what the NEXT
+55 rows cost - the marginal figure, and the right one for a countdown. Removing
+the whole 2,647-point array measured **10.2 bytes a point** - the average over
+an array that compresses against itself. Neither is wrong and neither substitutes
+for the other. Rows compress against their neighbours, so 55 similar rows
+appended to 2,736 are close to the cheapest 55 that file will ever take, and the
+5,105 bytes the published day cost is one day that was still publishing when it
+was measured.
 
 That margin is the reason this was checked before the cap moved rather than
-after. `digest.yml` runs `bundle-gate` in its `assemble` job **before** it
-commits the day, so a page-weight failure stops the publish rather than breaking
-`main`.
+after. Until 2026-08-29 `digest.yml` ran `bundle-gate` in its `assemble` job
+before it committed the day, so a page-weight failure stopped the publish. It
+runs after the commit now: the build still gates the publish, because a payload
+the site cannot build must not ship, but the weight ratchet no longer costs a
+reader the day
+([layout.md](../architecture/publishing/layout.md) records why).
 
 **It does not move `scorer_version`.** That string is built by
 `evals.metrics.scorer_version` from the scorer id and revision, the weights
@@ -4233,6 +4255,69 @@ it stands, so the two arms differ in whitespace on multi-window items, and the
 whitespace-collapsed moved the score by **0.000000** every time (n=5,
 2026-08-29), which is what SentencePiece collapsing whitespace predicts and is
 now observed rather than assumed.
+
+## What rewriting the published truncation notes would buy
+
+**22 sentences of 154, so the archive keeps the sentence it shipped.** The cut
+note gained a scale on 2026-08-29 - `We could only read the first 36 percent of
+this page.` in place of `We could only read the first part of this page.` -
+and `assemble` writes it once, when the day is built. Nothing re-assembles a
+published day, so every item published before that date still carries the older
+sentence.
+
+Counted 2026-08-29 over every `frontend/public/digest/**/digest.json`:
+
+| Quantity | Value |
+| --- | ---: |
+| Published items carrying the old sentence | 154 entries, **153 distinct item ids**, over 8 days |
+| Published items carrying the new sentence | 2 |
+| Of the 153, joined to a row of `state/scores.csv` | 153 |
+| Of those, a share that could be recomputed | **22** |
+
+**The 22 is the whole decision.** A share needs the length before the cut, and
+`source_word_count` only became that number on rows stamped `2026-08-27T20:30`
+or later - before that it was the post-cap count read through a second counter,
+which [evaluation.md](../concepts/evaluation.md) records. By ledger stamp the 153
+split 2 / 128 / 1 / 22 across `2026-08-21T03:00`, `2026-08-23`, `2026-08-26` and
+`2026-08-27T20:30`. **Re-running `assemble` over the other 131 would regenerate
+the sentence they already carry**, because `read_share` returns `None` without a
+pre-cap length and the note degrades to exactly the old string.
+
+So a backfill rewrites 8 committed days to change 14 percent of the notes it
+touches. That is not worth a payload rewrite, and the count is here so the next
+person does not re-derive it to reach the same answer.
+
+## How much of a plot a chart readout covers
+
+**40 to 55 percent on `ThroughputTrend`, and about a quarter on
+`CompressionScatter`, from the same treatment.** Both draw the readout as
+`absolute inset-x-3 top-3` over a plot of `console.chart_height`, which
+`config/appearance.json` sets to 220 px. The difference is the copy, not the
+position.
+
+Measured 2026-08-29 over the committed `state/scores.csv`. `ThroughputTrend`'s
+`caption()` appends one median per run of the day, and the day's run count is
+what drives the length:
+
+| Quantity | Value |
+| --- | ---: |
+| Caption characters, median over the 8 days | **171** |
+| Caption characters, longest day | **221** (three days, five runs each) |
+| Captions stacked in the readout | 2, one per series |
+| Rendered lines at 12 px in the card's width | 4 to 6 |
+| Readout box height, including its padding and its 12 px offset | 88 to 121 px |
+| Share of a 220 px plot | **40 to 55 percent** |
+
+`CompressionScatter` prints two short lines through the same markup and covers
+about a quarter. **That pair is the finding**: a readout whose text grows one
+clause per run of the day has no bound, so a length rule belongs on the rendered
+box rather than on the sentence.
+
+It is recorded rather than patched. The console's chart engine is being decided
+in [the design-system reset plan](../../TODO/20260829-design-system-reset-plan.md),
+and whichever engine wins owns the readout - so a fix to the current component
+would be written twice. Jony's ruling that a readout is pinned to the top of the
+plot and never to the pointer is not what is wrong here and stands.
 
 ## Still unmeasured
 
