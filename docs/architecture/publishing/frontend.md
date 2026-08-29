@@ -952,33 +952,105 @@ the page shows. The way under its ceiling is to stop inlining points the page
 does not need at first paint, which changes what an operator sees before they pan
 and changes nothing about what was published or what a reader can read.
 
-### The response, written down before it is needed
+### The response, taken on 2026-08-29 before the gate fired
 
-When the gate fires on `/console/`, **window the compression scatter's seed and
-publish the older points through the telemetry projection, as one change.** The
-page grows because `compression` inlines one point per row for every row the
-ledger has ever held, and the ledger has no retention. The telemetry seed on the
-same page already works this way - `telemetryRows` takes
-`console.default_window_days` and the month shards stay whole, so panning back
-still fetches the days the seed dropped.
+**The compression scatter reads the published telemetry projection, and the
+score ledger no longer reaches the page at all.** Both halves shipped together,
+which was always the only way either of them worked.
 
-**The two halves are one change, and shipping half is worse than shipping
-neither.** Windowing the seed without putting the older points somewhere the
-browser can fetch them makes the scatter go empty when an operator pans back past
-the seed. An empty plot over a window the ledger has data for is not a smaller
-page, it is a page that says nothing happened on days when something did. The
-telemetry projection is where those points belong, because it is already the
-per-item, per-day, reader-safe shard the same page fetches when it pans.
+The page used to build one point per row of `state/scores.csv` on the server and
+inline every one of them into the prerendered HTML. That ledger held 2,791 rows
+on 2026-08-29, gains about 349 a day, and nothing trims it. The plot now folds
+the same telemetry rows the failure panels already use - seeded to
+`console.default_window_days` on the server, grown by month fetch in the browser
+- so **the scatter costs the page nothing beyond the telemetry it was carrying
+anyway**, and an operator who pans back gets the plot for those days at the same
+moment they get the panels.
 
-Two things that are not the answer. **Raising the number** spends the headroom
-somebody measured and buys days, which is the move that got the last `/archive/`
-ceiling deleted after it was raised twice in one day. **Thinning the plot** -
-sampling points, or dropping the oldest days from the ledger - changes what the
-chart is a measurement of, and a scatter that quietly stopped drawing some of its
-rows is worse than one that got heavy.
+`frontend/src/lib/charts/series.ts` owns the per-row decision now, as one
+function with three outcomes: a point, a row with no article length, a row with
+no summary. It used to sit in `frontend/src/lib/server/model-work.ts` and could
+only run at build time. **One decision, because the plot and the sentence under
+it read the same answer** - counting the unplaced rows anywhere else lets the two
+disagree about the same row on the same day.
 
-Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case sizing,
-Carmack.
+**One mark per article per day, never one per row.** The score ledger held one
+row a scored item; the projection holds one row per item per *run*, so a re-run
+writes a second row for an article the first run already published. The run that
+read the most of it is the one kept, with both of its lengths, because a length
+before the cap from one run against a length after it from another measures
+nothing. It is the rule `sourceCuts` already reads the same ledger by, so the
+plot and the source table cannot disagree about how many articles a day had. The
+canary carries an article two runs both wrote a row for, which is the fixture
+that catches this: without the fold, Svelte refuses the duplicate key and the
+whole console page fails to hydrate.
+
+**What the projection made simpler, and it is not a byte argument.** The score
+ledger has a `truncation_flagged` column that changed meaning on 2026-08-28, so
+the plot needed a stamp gate to know which question a row was answering. The
+projection carries the two lengths instead - `source_words_before_cap` above
+`source_words` is the cut, and it has meant that on every row ever written. There
+is no stamp to read and no second meaning to gate.
+
+The article's own length is `source_words_before_cap` where a run wrote one down
+and `source_words` where it did not, which is exactly `Article.full_source_words()`
+on the producing side. A run before 2026-08-28 wrote no pre-cap length, so its
+articles are drawn at the length that survived and carry no cut mark. That is the
+honest reading: the ledger holds no answer to what those articles were, and a
+mark on them would claim a cut nobody measured. It cost the page one sentence,
+which is gone with the state it described.
+
+**Measured 2026-08-29**, both arms built back to back on one tree, one machine
+and one Node, against the same committed ledger, so the figure is a difference
+rather than an absolute:
+
+| | before | after | difference |
+| --- | --- | --- | --- |
+| `/console/` prerendered HTML, gzip -9 | 175,892 B | 148,800 B | **-27,092 B, 15.4 percent of the page** |
+| `/console/` first-load JavaScript | 69,410 B | 69,622 B | +212 B, 0.3 percent of the route |
+| room left under the 301,580 B ceiling | 125,688 B | 152,780 B | +27,092 B |
+
+The decision moved into the browser bundle and cost 212 bytes there, which is
+128 times less than it took off the document. Two builds of the branch on this
+tree read 69,622 and 69,617, so the spread is 5 bytes against a tolerance of 64.
+
+**What the page grows with now, and what that is worth.** Not the ledger, and
+that is the whole point: a term with no bound became one with a bound. The seed
+is one window of item telemetry, so once the window is full a published day
+entering it pushes the oldest day out and the page stops moving with the
+calendar. Removing one mature published day from the projection and rebuilding
+cost 35,130, 34,922 and 29,765 gzipped bytes over days of 1,000, 1,000 and 872
+rows - **about 35 gzipped bytes an item-health row**, steady to within 3 percent
+across the three, or about 48 bytes a published article.
+
+Read that as a steady state rather than as a rate, because a rate is what it
+stopped being: the page settles at `console.default_window_days` times the rows a
+day writes, times 35 bytes. At the 160 rows a day the last two committed days
+wrote, thirty days is about 168,000 bytes of seed and the page sits comfortably
+under the ceiling. At the 1,000 rows a day of 2026-08-24 it would not, and **the
+knob to turn then is `console.default_window_days`, not the ceiling** - it is a
+number an operator can reason about, it shortens only what the page opens on, and
+panning back still fetches whole months.
+
+**The `/console/` ceiling was not moved, and lowering it now would be wrong.**
+The page is 148,800 bytes against a 301,580 ceiling, so the headroom is 152,780 -
+more than the three published days it was sized for. That is the gate working,
+not a number to re-derive. It watches for a day payload inlined by a layout,
+which cost 313,300 gzipped bytes the last time it happened, and a larger margin
+does not blind it to a regression twice its own size. The key is also asserted in
+ten files, including `backend/tests/test_contracts.py` and
+`tests/fixtures/contracts/app-config/tuned.json`, so moving it is a change of its
+own and not a footnote to this one.
+
+Two things that are still not the answer. **Raising the number** spends the
+headroom somebody measured and buys days, which is the move that got the last
+`/archive/` ceiling deleted after it was raised twice in one day. **Thinning the
+plot** - sampling points, or dropping the oldest days from the ledger - changes
+what the chart is a measurement of, and a scatter that quietly stopped drawing
+some of its rows is worse than one that got heavy.
+
+Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case
+sizing, Carmack.
 
 ## Design rationale
 
