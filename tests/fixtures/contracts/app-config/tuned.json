@@ -86,6 +86,20 @@
     "truncation_cap_tokens": 4000,
     "user_agent": "yen-idhazh-test/1.0 (+https://example.org/contact)"
   },
+  "finetune": {
+    "corpus_rows": 2000,
+    "epochs": 2,
+    "harvest_every_days": 7,
+    "holdout_days": 14,
+    "min_rows": 500,
+    "prune_every_days": 30,
+    "prune_keep_days": 60,
+    "reference_rows": 300,
+    "sequence_length": 4096,
+    "student": "route",
+    "teacher": "summarize",
+    "train_rows": 1000
+  },
   "logging": {
     "level": "DEBUG"
   },
@@ -114,6 +128,7 @@
     },
     "route": {
       "file": "Qwen3-4B-Q4_K_M.gguf",
+      "hf_base_repo": null,
       "id": "qwen3-4b-q4-k-m",
       "quantisation": "Q4_K_M",
       "repo": "Qwen/Qwen3-4B-GGUF",
@@ -122,6 +137,7 @@
     },
     "summarize": {
       "file": "Qwen3-8B-Q4_K_M.gguf",
+      "hf_base_repo": null,
       "id": "qwen3-8b-q4-k-m",
       "quantisation": "Q4_K_M",
       "repo": "Qwen/Qwen3-8B-GGUF",

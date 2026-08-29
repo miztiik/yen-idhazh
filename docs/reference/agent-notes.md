@@ -532,6 +532,34 @@ venv. Use the shared checkout's interpreter with `PYTHONPATH` set to your own
 worktree's `backend` - the same escape as the `.pth` trap above, and it needs
 the same `import idhazh` check before any result is worth reading.
 
+**`ModuleNotFoundError: No module named 'pydantic_core._pydantic_core'` in the
+shared `.venv` is an ABI mismatch, not a broken install.** Observed 2026-08-28:
+`.venv\Scripts\python.exe -V` said 3.14.2 while
+`.venv\Lib\site-packages\pydantic_core\` held `_pydantic_core.cp312-win_amd64.pyd`
+and 268 other cp312 binaries. The venv had been built against a 3.12 that was
+later removed from the machine, so the launcher now runs 3.14 against wheels
+compiled for 3.12. Nothing reinstalls or repairs it, because pip sees the
+distributions as already present. The one command that names it:
+
+```powershell
+Get-ChildItem .\.venv\Lib\site-packages -Recurse -Filter *.pyd |
+  Group-Object { ($_.Name -split '\.')[-2] } | Select-Object Name, Count
+```
+
+A count under `cp312-win_amd64` while `python -V` says anything else IS the
+diagnosis. Build a fresh venv rather than reinstalling into the broken one, and
+build it somewhere `git status` cannot see:
+
+```powershell
+py -3.14 -m venv "$env:TEMP\yi-venv314"
+& "$env:TEMP\yi-venv314\Scripts\python.exe" -m pip install -e ".[dev]" > "$env:TEMP\pip.txt" 2>&1
+```
+
+**Redirect that install to a file. Do not pipe it.** `pip install ... | Select-Object -Last 8`
+hangs exactly the way piped `pytest` does (recorded under "PowerShell" below), at
+low CPU, with the shell prompt never returning - and on a fresh venv it looks
+precisely like the resolver stall documented above it.
+
 ## The editor's own search tools
 
 **A workspace search reads the folder VS Code has open, not your worktree.**
@@ -802,6 +830,15 @@ the variable protects the shell you remember to set it in and nothing else.
   about an identifier.
 - **`Select-String` has no `-Recurse`.** Use
   `Get-ChildItem -Recurse | Select-String`, or the editor's own search.
+- **`-like` treats `?` as a wildcard, so `-like '??*'` matches everything.**
+  Filtering `git status --porcelain` for untracked files with
+  `Where-Object { $_ -like '??*' }` returns the modified files too, because `?`
+  means "any one character" and not a literal question mark. Observed
+  2026-08-28, where it made a staged file read as untracked inside a list that
+  was really the whole status. Ask git the question instead -
+  `git ls-files --others --exclude-standard` for untracked and
+  `git ls-files -- <path>` for tracked - or match with `.StartsWith('??')`,
+  which has no wildcard grammar at all.
 - **A relative path inside a `[System.IO.File]` call does not follow
   `Push-Location`.** .NET resolves against the process working directory, which
   `Push-Location` does not change. Pass an absolute path, or use

@@ -1,0 +1,198 @@
+name: Corpus prune
+
+# The one job in this repository that rewrites history, and the only force-push
+# CLAUDE.md section 8 allows.
+#
+# Why it has to exist: `corpus/` commits article text, and git history is
+# append-only - deleting a row from the window does not delete its bytes from the
+# repository. Left alone the history grows about 2.96 MB per harvest commit,
+# which is 154 MB a year at `finetune.harvest_every_days: 7`. The only way to
+# bound that is to rewrite the range those bytes are in.
+#
+# What it costs, said out loud rather than implied: a squash boundary is
+# per-commit and not per-path, so the range this collapses carries `backend/`,
+# `docs/` and `state/` as well as `corpus/`. After a prune `git blame` and
+# `git bisect` reach back `prune_keep_days`, a commit SHA older than the boundary
+# stops resolving, and a clone taken before the prune has to be re-fetched.
+# Owner decision, 2026-08-28.
+#
+# Wired to nothing. An earlier draft hung this off the harvest with `needs:`,
+# which puts a job that rewrites history inside the production digest pipeline -
+# a pipeline that runs for hours and must not be put at risk by a maintenance
+# task that fires twelve times a year.
+
+on:
+  schedule:
+    # Daily, and cheap on the 29 days out of 30 it does nothing: the due check
+    # below reads one committed file out of a shallow checkout and exits.
+    #
+    # The CADENCE is not here and cannot be. `on.schedule` is parsed before any
+    # step runs, so no value in `config/idhazh.json` can reach a cron line, and
+    # 5-field cron has no every-N-days field to write one with - `0 4 */30 * *`
+    # would fire on the 1st and 31st of a month and then again on the 1st.
+    # `finetune.prune_every_days` is the cadence; this cron is only the wake-up.
+    #
+    # 04:20 UTC sits between the 02:20 and 06:20 digest runs, so a prune that
+    # does fire is least likely to be racing a push.
+    - cron: '20 4 * * *'
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Prune now, even if finetune.prune_every_days says it is not due'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+# Never two of these at once, and never cancelled half way: this job rewrites a
+# branch, and a second copy racing the first would push two different histories.
+concurrency:
+  group: corpus-prune
+  cancel-in-progress: false
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      # Shallow, because 29 wakes out of 30 only read one committed file. The
+      # full history is fetched below, and only when there is something to do.
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      # Standard library only, so the cheap path needs no Python setup and no
+      # install. It READS two committed files and writes nothing; the stamp that
+      # closes the loop is written by the contract, further down.
+      - id: due
+        env:
+          FORCE: ${{ inputs.force }}
+        run: |
+          set -euo pipefail
+          python3 - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+          import os
+          from datetime import UTC, date, datetime, timedelta
+
+          finetune = json.load(open("config/idhazh.json", encoding="utf-8"))["finetune"]
+          every = finetune["prune_every_days"]
+          keep = finetune["prune_keep_days"]
+          for name, value in (("prune_every_days", every), ("prune_keep_days", keep)):
+              if type(value) is not int or value < 1:
+                  raise SystemExit(f"finetune.{name} must be a whole number of days, 1 or more")
+
+          today = datetime.now(tz=UTC).date()
+          try:
+              with open("corpus/corpus.meta.json", encoding="utf-8") as handle:
+                  last = json.load(handle).get("pruned_date")
+          except FileNotFoundError:
+              last = None
+          # Never pruned is always due. Without the stamp this check fires again
+          # tomorrow and every day after that, which is a force-push a day.
+          elapsed = None if last is None else (today - date.fromisoformat(last)).days
+          due = os.environ.get("FORCE") == "true" or elapsed is None or elapsed >= every
+          print(f"due={'true' if due else 'false'}")
+          print(f"keep_days={keep}")
+          print(f"today={today.isoformat()}")
+          print(f"boundary={(today - timedelta(days=keep)).isoformat()}")
+          print(f"last_prune={last or 'never'}")
+          PY
+
+      - name: Not due
+        if: steps.due.outputs.due != 'true'
+        run: |
+          echo "last prune: ${{ steps.due.outputs.last_prune }}"
+          echo "nothing to prune - fewer than finetune.prune_every_days have passed"
+
+      # Everything below only runs on the day the prune is due, which is why the
+      # full clone happens about twelve times a year rather than daily.
+      - uses: actions/checkout@v6
+        if: steps.due.outputs.due == 'true'
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-python@v7
+        if: steps.due.outputs.due == 'true'
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        if: steps.due.outputs.due == 'true'
+        run: pip install -e .
+
+      # The squash. `git checkout --orphan` at the boundary produces a root
+      # commit holding a COMPLETE copy of the tree, so no data is lost - only the
+      # deltas behind it are. That is also why no `keep_generations` knob is
+      # needed: the boundary holds one whole dataset and the tip holds another,
+      # so N and N-1 always survive.
+      - name: Squash everything older than the boundary
+        if: steps.due.outputs.due == 'true'
+        env:
+          BOUNDARY: ${{ steps.due.outputs.boundary }}
+          KEEP_DAYS: ${{ steps.due.outputs.keep_days }}
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          # The newest commit at or before the boundary. `--first-parent` so a
+          # merged branch's own commits cannot be picked as the boundary.
+          CUT=$(git rev-list --first-parent --before="${BOUNDARY}T00:00:00Z" -n 1 HEAD || true)
+          if [ -z "$CUT" ]; then
+            echo "no commit is older than ${BOUNDARY} - nothing to squash"
+            echo "SQUASHED=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          if [ "$CUT" = "$(git rev-parse HEAD)" ]; then
+            echo "the boundary is the tip, so squashing would collapse the whole branch" >&2
+            echo "SQUASHED=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+          echo "boundary ${BOUNDARY} resolves to $CUT"
+          BEHIND=$(git rev-list --count "$CUT")
+          if [ "$BEHIND" -le 1 ]; then
+            echo "only $BEHIND commit is behind the boundary - already pruned"
+            echo "SQUASHED=false" >> "$GITHUB_ENV"
+            exit 0
+          fi
+
+          git checkout --orphan pruned-root "$CUT"
+          git commit -m "corpus: squash history older than ${KEEP_DAYS} days"
+          ROOT=$(git rev-parse HEAD)
+          git checkout main
+          git rebase --onto "$ROOT" "$CUT" main
+          echo "SQUASHED=true" >> "$GITHUB_ENV"
+          echo "$BEHIND commits collapsed into $ROOT"
+
+      # Written whether or not the squash found anything, and that is the point:
+      # an unstamped run is due again tomorrow.
+      - name: Stamp the prune
+        if: steps.due.outputs.due == 'true'
+        env:
+          TODAY: ${{ steps.due.outputs.today }}
+        run: |
+          set -euo pipefail
+          python -m idhazh prune-stamp --date "$TODAY"
+          git add corpus
+          if git diff --cached --quiet; then
+            echo "the stamp did not move"
+          else
+            git commit -m "corpus: pruned ${TODAY}"
+          fi
+
+      # The one force-push in this repository. It is `--force` and not
+      # `--force-with-lease` because a lease compares against a ref this job
+      # fetched at checkout, and the rebase above has already rewritten every
+      # commit the lease would name.
+      - name: Push the rewritten history
+        if: steps.due.outputs.due == 'true'
+        run: |
+          set -euo pipefail
+          if [ "${SQUASHED:-false}" = "true" ]; then
+            git push --force origin main
+          else
+            git push origin main
+          fi

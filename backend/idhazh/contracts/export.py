@@ -14,6 +14,7 @@ from typing import Final
 from idhazh.contracts.app_config import AppConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
+from idhazh.contracts.corpus import CorpusMeta, CorpusRow
 from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.evidence import EvidenceItem
@@ -37,6 +38,8 @@ from idhazh.contracts.watchlist import Watchlist
 CONTRACTS: Final[tuple[type[Contract], ...]] = (
     AppConfig,
     Article,
+    CorpusMeta,
+    CorpusRow,
     DigestDay,
     EvalRow,
     EvidenceItem,

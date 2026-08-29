@@ -39,6 +39,7 @@ from pydantic import ValidationError
 from idhazh import (
     assemble,
     config,
+    corpus,
     discover,
     extract,
     fetch,
@@ -128,6 +129,7 @@ EVIDENCE_ROOT: Final = config.REPO_ROOT / evidence.EVIDENCE_ROOT_RELPATH
 #: The planted attacks, run live against a candidate before it is adopted.
 CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
+CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
@@ -1766,7 +1768,7 @@ def stage_qualify_decide(
         raise SystemExit("no qualification shard was written, so there is nothing to decide")
 
     evaluation = settings.app.evaluation
-    corpus, outcomes = qualify.gates(
+    frozen, outcomes = qualify.gates(
         shards,
         evaluation=evaluation,
         inference=settings.app.models.inference,
@@ -1780,7 +1782,7 @@ def stage_qualify_decide(
         ),
         required_canaries=len(sorted(CANARY_DIR.glob("*.json"))),
     )
-    shortfalls = qualify.corpus_shortfalls(corpus.items, summarize=settings.app.summarize)
+    shortfalls = qualify.corpus_shortfalls(frozen.items, summarize=settings.app.summarize)
     if shortfalls:
         # Not a gate. These describe the measuring stick, and a thin corpus is a
         # run to repeat rather than a model to reject.
@@ -1797,26 +1799,26 @@ def stage_qualify_decide(
         candidate=shards[0].candidate,
         scorer=shards[0].scorer,
         pipeline_fingerprint=shards[0].pipeline_fingerprint,
-        corpus_digest=corpus_digest(corpus.items),
-        corpus_items=len(corpus.items),
-        planned=corpus.planned,
-        repeats=corpus.repeats,
-        scored=len(corpus.scores),
+        corpus_digest=corpus_digest(frozen.items),
+        corpus_items=len(frozen.items),
+        planned=frozen.planned,
+        repeats=frozen.repeats,
+        scored=len(frozen.scores),
         gates=outcomes,
         diagnostics=[
-            *qualify.stratification(corpus.items, summarize=settings.app.summarize),
-            *qualify.diagnostics(corpus, evaluation=evaluation),
+            *qualify.stratification(frozen.items, summarize=settings.app.summarize),
+            *qualify.diagnostics(frozen, evaluation=evaluation),
         ],
         qualified=not failed,
         detail=(
             "; ".join(f"{o.gate.value} measured {o.measured} against {o.threshold}" for o in failed)
-            or f"every gate passed on {len(corpus.items)} frozen articles"
+            or f"every gate passed on {len(frozen.items)} frozen articles"
         ),
     )
     assemble.write_atomic(QUALIFICATION_ROOT / "report.json", report.to_json())
 
     mean_hhem = (
-        sum(score.hhem for score in corpus.scores) / len(corpus.scores) if corpus.scores else 0.0
+        sum(score.hhem for score in frozen.scores) / len(frozen.scores) if frozen.scores else 0.0
     )
     writer.append_validation(
         config.REPO_ROOT / golden.ledger_relpath(date),
@@ -1829,7 +1831,7 @@ def stage_qualify_decide(
                 leaderboard_hhem=None,
                 leaderboard_provenance=LeaderboardProvenance.NOT_REPORTED,
                 measured_hhem=mean_hhem,
-                articles=max(len(corpus.scores), 1),
+                articles=max(len(frozen.scores), 1),
                 measured_on=date,
                 commit_sha=report.commit_sha,
                 runner=runner,
@@ -1986,6 +1988,77 @@ def stage_counters(
         landed,
     )
     return row
+
+
+def stage_harvest(
+    plan: RunPlan,
+    *,
+    settings: config.Settings,
+    corpus_dir: Path,
+    force: bool = False,
+) -> int:
+    """Add this run's accepted pairs to the training window, and roll it.
+
+    A step in the digest run rather than a workflow of its own, because the only
+    place the article text exists is the machine that just read it: `items/` is
+    gitignored and travels as a one-day artifact, so a scheduled job with a fresh
+    checkout would find an empty directory and harvest nothing, silently, forever.
+
+    It is still a stage that runs alone with a file in and a file out (section 4).
+    What moved is the workflow it is invoked from, not the command.
+
+    The cadence lives in `finetune.harvest_every_days` and is decided here rather
+    than in a cron line, because `on.schedule` is parsed before any step runs and
+    no config value can reach it. Returns the row count the window now holds, and
+    zero when the harvest was not due.
+    """
+    finetune = settings.app.finetune
+    meta = corpus.read_meta(corpus_dir)
+    if not force and not corpus.harvest_is_due(
+        meta, date=plan.date, every_days=finetune.harvest_every_days
+    ):
+        LOG.info(
+            "harvest not due date=%s last=%s every=%s rows=%s",
+            plan.date,
+            meta.harvested_date,
+            finetune.harvest_every_days,
+            meta.rows,
+        )
+        return 0
+
+    items_dir = _run_dir(plan.date) / "items"
+    scored: list[corpus.Scored] = []
+    for payload in _item_payloads(plan, items_dir, require_summary=True):
+        if payload.article is None or payload.summary is None:
+            continue
+        row = (
+            EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8"))
+            if payload.eval_path.exists()
+            else None
+        )
+        scored.append(corpus.Scored(payload.article, payload.summary, row))
+
+    written = corpus.harvest(
+        corpus_dir,
+        scored,
+        date=plan.date,
+        finetune=finetune,
+        prompt_config=settings.app.summarize,
+        evaluation=settings.app.evaluation,
+    )
+    return written.rows
+
+
+def stage_prune_stamp(*, corpus_dir: Path, date: str) -> int:
+    """Record that `prune.yml` ran today, so tomorrow's check does not fire again.
+
+    Separate from the squash itself, which is git surgery and belongs in the
+    workflow. What this owns is the one piece of durable state that turns a
+    force-push a day into a force-push a month.
+    """
+    meta = corpus.stamp_prune(corpus_dir, date=date)
+    LOG.info("prune stamped date=%s rows=%s", meta.pruned_date, meta.rows)
+    return 0
 
 
 def stage_assemble(
@@ -2456,6 +2529,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             "counters",
             "route",
             "assemble",
+            "harvest",
+            "prune-stamp",
             "run",
             "validate",
             "decide",
@@ -2557,6 +2632,17 @@ def main(argv: Sequence[str] | None = None) -> int:
             "this came to measure the committed payloads instead of the site."
         ),
     )
+    parser.add_argument(
+        "--corpus-dir",
+        type=Path,
+        default=CORPUS_ROOT,
+        help="The training window `harvest` rolls. Never the reference set.",
+    )
+    parser.add_argument(
+        "--force",
+        action="store_true",
+        help="Harvest even when finetune.harvest_every_days says it is not due yet.",
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -2571,6 +2657,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         if args.site_tree is None:
             parser.error("site-weight needs --site-tree: the built bundle to measure")
         return stage_site_weight(args.site_tree, settings.app.retention)
+
+    if args.stage == "prune-stamp":
+        # Above the fetcher for the same reason: it rewrites one committed field.
+        return stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
 
     date = args.date or _today()
     # One fetcher for the whole invocation, so `idhazh run` reads each host's
@@ -2670,6 +2760,14 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage in ("assemble", "run"):
         stage_assemble(
             _load_plan(date), settings=settings, commit_sha=args.commit, runner=args.runner
+        )
+
+    if args.stage == "harvest":
+        stage_harvest(
+            _load_plan(date),
+            settings=settings,
+            corpus_dir=args.corpus_dir,
+            force=args.force,
         )
 
     return 0

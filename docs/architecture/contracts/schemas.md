@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -57,6 +57,8 @@ The shapes, and where each one lives once written:
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
 | `DigestDay` | `digest-day` | `.../<DD>/digest.json` and each `run-<N>.json` |
 | `SearchIndex` | `search-index` | `frontend/public/assist/index/<YYYY-MM>.json`, with its vectors in a sibling `.bin` |
+| `CorpusRow` | `corpus-row` | one line of `corpus/corpus.jsonl` |
+| `CorpusMeta` | `corpus-meta` | `corpus/corpus.meta.json` |
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
 
@@ -65,6 +67,12 @@ Everything under `state/` is a row contract rather than a file contract, because
 `.github/scripts/commit-and-push.sh` runs under `set -euo pipefail` and stages every path a job owns in one `git add "$@"`. A path that is not in the checkout makes that call fail, and `set -e` then abandons the whole commit step - so a ledger that only appears once its producer has succeeded lets a broken producer cost the job the *other* ledgers it was staging beside it. `state/runtime-counters.csv` therefore ships as a header-only file, and a test asserts the committed header equals `RuntimeCountersRow.csv_columns()`.
 
 That is not "pre-creating an empty module for later" (`CLAUDE.md` section 10). The file is the ledger, and its header is the contract's own column list; what is being avoided is a failure mode in the step that commits it.
+
+The training corpus ships the same way and for the same reason: `corpus/corpus.jsonl` is committed empty, `corpus/corpus.meta.json` holds a zero census, and `corpus/holdout.txt` is empty. A test asserts all three are tracked.
+
+### Two of these are contracts and are deliberately not migration surfaces
+
+`EvidenceItem` and the two corpus shapes carry a `version` like everything else and owe no read-side migration when they change (section 11). Nothing they were written into survives: the oldest `EvidenceItem` that can exist is a 14-day workflow artifact, and the corpus is a rolling window regenerable from the run's own payloads whose history is rewritten every `finetune.prune_every_days`. A shape change there owes a re-run or a re-harvest. They are contracts under Rule #3 all the same, because each crosses a process boundary and something on the far side has to be able to refuse a file it cannot trust.
 
 ### A shard-grain fact is its own contract, not a field on the run manifest
 

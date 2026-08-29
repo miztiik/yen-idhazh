@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-28
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -101,8 +101,46 @@ contract (Rule #6). What it is for, and why the control cannot live at the
 faithfulness score, is
 [../architecture/sources/discovery.md](../architecture/sources/discovery.md).
 
-## Runtime sweep surface
+## Training-corpus surface
 
+The `finetune` block sizes a file CI commits and two schedules that maintain it.
+Nothing in it runs a training step - the runner has no GPU (`CLAUDE.md` section
+0a) - and `teacher` and `student` name a **key in `models`**, never a model, so
+swapping the summarizer is still one block.
+
+Two pairs of knobs look like one knob each and are not:
+
+- **`corpus_rows` is the window; `train_rows` is the sample.** They price
+  differently. The window costs storage and git history, measured 2026-08-27 at
+  2.9 KB compressed per row. The sample costs wall-clock on somebody's GPU. So
+  window 2000 with sample 1000 is strictly better than window 1000 with sample
+  1000: the same training time, twice the pool to draw a diverse 1000 from.
+  `train_rows` is a ceiling rather than a demand, because a 600-row corpus
+  satisfies `min_rows: 500` and cannot satisfy `train_rows: 1000`, and a session
+  that silently trained on 600 while every note said 1000 produces a result
+  nobody can attribute.
+- **`prune_every_days` is how often the prune fires; `prune_keep_days` is how far
+  back it keeps.** "Prune quarterly" names neither on its own. The first costs one
+  force-push each time; the second costs storage, and it is also how far
+  `git blame` reaches afterwards.
+
+`harvest_every_days`, `prune_every_days` and `prune_keep_days` are the clearest
+case in this project of a knob that **cannot** be workflow syntax.
+`on.schedule` is parsed by GitHub Actions before any step runs, so no value in
+`config/` can reach a cron line at all - and 5-field cron has no every-N-days
+field to write one with. Each cadence is therefore a due-check in a step, reading
+durable state out of `corpus/corpus.meta.json`. The cron lines that remain are
+wake-ups, not schedules.
+
+`models.<role>.hf_base_repo` is optional and sits on the model entry rather than
+in `finetune`, because training reads the safetensors repository while the
+pipeline reads the GGUF one. Held in two blocks a model swap moves one string and
+leaves the other, and a LoRA adapter loads onto a mismatched base without
+raising.
+
+See [../how-to/fine-tune-a-model.md](../how-to/fine-tune-a-model.md).
+
+## Runtime sweep surface
 `models.inference` holds both the ordinary deterministic decode knobs and the
 flag-sweep knobs. The sweep surface is explicit so a measurement changes one
 thing at a time through config, not through workflow literals:
