@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-29
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -196,13 +196,76 @@ The label set for `What the model did`, with the sentence each one carries:
 | Numbers not in the article | The summary had a figure. The article did not. |
 | "Maybe" told as fact | The article said it might have happened. The summary said it did. |
 | Article read only in part | The article was too long, so the machine read the start and stopped. |
+| Read only in part, as a percent | The same articles, against the day's own count, so a busy day and a quiet one compare. |
 | Copied, not rewritten | How much of a normal summary is lifted word for word. |
-| Time to write one | How long the machine takes on one article. |
+| Time to write one | How long the machine takes on one article. The second figure is the articles it read only the start of. |
 | Model minutes | - |
+| Too long to send | The article and the instructions together did not fit, so the machine was never asked. |
 | Failed | - |
+
+Two of those carry a rule the others do not. **The share divides by the rows
+its own flag answers for**, never by the day: `truncation_flagged` changed
+meaning on 2026-08-28, so a day holding rows from both sides of that stamp would
+otherwise report a fact about the migration wearing a percent sign. And **`Time
+to write one` carries a second figure only where the day cut something** - a
+dash under every other day would be a column of absences pretending to be a
+split.
+
+**`Too long to send` is expected to read zero, and that is the point of it.** At
+a truncation cap of 2,500 tokens no prompt can reach the window the machine
+reads with, so the count is zero by arithmetic rather than by luck. It is on the
+page so that the day the cap moves, the number that says the move went too far
+is already being printed.
 
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
+
+## What the cap cost, by source
+
+`Sources cut short most often` is one table of ten rows, and it is the only
+place on the site that names a source next to a number about that source. It
+exists for one decision: **whether raising the truncation cap would actually
+reach a source's articles.**
+
+| Header | What it prints |
+| --- | --- |
+| `Source` | the source id, as the ledger spells it |
+| `Cut short` | articles this source lost text on |
+| `Articles` | articles it published in the window - the denominator |
+| `Share cut` | whole percent, or a dash under `console.min_attempts_for_rate` |
+| `Longest article, words` | the longest article it published, before the cut |
+
+Five rulings hold it, all Jony's, 2026-08-29:
+
+- **It sorts by count, never by rate.** Measured over the committed ledger the
+  shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
+  puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
+  seventeen that cost the digest its articles. The sort order is the ranking,
+  which is also why **no row is tinted**: the confidence ramp means good, watch
+  and bad about a summary, and a source at 55 percent is not broken, it publishes
+  long articles.
+- **Ten rows and no `Show more`.** The worst seven hold 69 of 153 cuts, 45
+  percent; past ten the tail is sources with a single cut in a week, and a
+  control that reveals rows nobody acts on does nothing.
+- **The longest article is the whole article, cut or not.** A column that read
+  the longest *cut* article would answer a question about the cap with a number
+  the cap produced.
+- **No ledger or config name reaches it.** Not `truncation_flagged`, not
+  `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
+- **The two empty states say different things.** `Nothing has recorded an
+  article length yet.` means the ledger cannot answer; `No article was cut short
+  in the last 7 days.` means it answered no. Reading the first as the second is
+  the same mistake as reading a null as a zero.
+
+Rejected here: the cut share on the run-health strip (a 16px square has no room
+for a number, and it answers "did it work" rather than "what did it read"); a
+histogram of article lengths (the engineer's chart - the scatter already shows
+that distribution along its x axis); a gauge, dial, donut or progress bar (six
+percent on a dial is one pixel of arc); a before-and-after of a cap change on
+this page (two caps over two different article sets is two measurements, not a
+trend, and that claim belongs in
+[../reference/measurements.md](../reference/measurements.md)); and a table
+component shared with `Feeds that failed` (an abstraction for two call sites).
 
 **Quality is a table, never a line.** A line invites a trend across days whose
 articles have nothing in common. The one thing on the page that draws a spread
