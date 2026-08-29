@@ -202,6 +202,20 @@ holds. Twelve of them are pure-function tests over `frontend/src/lib/charts/`,
 run in Node by the same runner. There is no separate frontend unit-test runner,
 so a pure module proves itself here.
 
+**A component with no call site proves itself here too.** A shared component
+lands before the sections that render it, so the build tree-shakes it away and
+no page exercises it. Compile it inside the spec instead: `preprocess` with
+`vitePreprocess()`, then `compile(source, { generate: 'server' })`, write the
+module under `frontend/test-results/`, `import()` it, and hand `render()` from
+`svelte/server` the props. Feed that body and the `css.code` from the same
+compile to `page.setContent` - the scope hashes match, because both came from
+one compile - and the geometry can be measured with `getBoundingClientRect` in a
+real browser. One constraint makes it work: the component must import nothing at
+runtime, because a compiled module written outside its own directory cannot
+resolve a relative `.ts` import. Everything it draws arrives as a prop. The
+alternative is a route that exists only to host a test, and that route ships to
+a reader.
+
 **A skip condition must never read a locator count.** Written as
 `test.skip((await panels.count()) === 0, ...)`, a test turns itself off the
 moment the attribute it counts is renamed: nothing matches, the count is zero,

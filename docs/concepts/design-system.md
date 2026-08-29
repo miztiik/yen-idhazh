@@ -311,6 +311,60 @@ down here rather than copied a fourth time by eye.
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
 
+## Ranked by magnitude, in one shape
+
+The operator asks the same question of most of this page: which one is worst.
+Five of the console's six tables answered a different one. They sorted by date,
+so the source that cost the digest the most articles sat wherever it happened to
+fall, and the feed one run away from being rested sorted below a feed that has
+failed harmlessly for a month.
+
+`RankedList`, `TargetBar` and `Sparkline` in
+[../../frontend/src/lib/components/](../../frontend/src/lib/components/) are the
+shape that answers it. Their arithmetic is in
+[../../frontend/src/lib/charts/rank.ts](../../frontend/src/lib/charts/rank.ts),
+`targetbar.ts` and `sparkline.ts`, not in the markup, so the number a list
+prints and the bar it draws come from one place.
+
+Six rules hold them:
+
+- **Ranked by magnitude, never by date.** A date sort is a log. It is the right
+  shape for exactly one thing on this page - the item list behind a selected
+  cause - and the wrong shape for every ranking above it.
+- **The list prints its own divisor**, as a sentence: `A full bar is 38 cuts.` A
+  bar scaled to a hidden maximum can be read for order and cannot be read for
+  size, and nothing on the screen tells the reader which of the two they are
+  looking at.
+- **Capped, with the tail in a sentence.** `2 more sources had 11 cuts between
+  them.` The sum is printed only where adding the hidden magnitudes means
+  something: counts add, distances do not, and a list of distances says how many
+  rows are missing and nothing else.
+- **The two empty states say different things.** `Nothing has recorded an
+  article length yet.` means the ledger cannot answer. `No article was cut short
+  in the last 7 days.` means it answered no. Reading the first as the second is
+  the same mistake as reading a null as a zero.
+- **No row is tinted.** The order is the ranking. A word beside the name carries
+  a status where a row has one, because colour is one signal and never the only
+  one.
+- **A threshold is a marker on the track, never a subtraction the reader
+  performs.** `12 failures` means nothing until the count that rests a feed is
+  on the same track. `TargetBar` draws the track at the threshold's own scale,
+  the fill at the value, and a rule at the threshold. It takes the confidence
+  ramp only where the threshold is a health fact - quarantine is, and a policy
+  limit somebody chose is not, so tinting one would invent a verdict nobody
+  agreed to.
+
+The bars and the trend lines are markup, not charts. Seventy target bars in a
+feed table would be seventy chart instances, and four static bars in a list row
+do not need an engine, a canvas or a lazy chunk. Markup is also what still draws
+with JavaScript off. The engine keeps the chart types markup cannot draw, and
+`sparkline.ts` and `targetbar.ts` now export the shape both drawings read, so
+the two can never disagree about where a marker sits or what counts as near.
+
+A trend line takes one colour and never the trend ramp. A rising failure count
+and a rising published count are the same shape, and green on the first would be
+a verdict the page never measured.
+
 ## What the cap cost, by source
 
 `Sources cut short most often` is one table of ten rows, and it is the only
@@ -356,7 +410,9 @@ percent on a dial is one pixel of arc); a before-and-after of a cap change on
 this page (two caps over two different article sets is two measurements, not a
 trend, and that claim belongs in
 [../reference/measurements.md](../reference/measurements.md)); and a table
-component shared with `Feeds that failed` (an abstraction for two call sites).
+component shared with `Feeds that failed` (an abstraction for two call sites -
+reversed on 2026-08-29, when the count reached four; the shape is the ranked
+list above).
 
 **Quality is a table, never a line.** A line invites a trend across days whose
 articles have nothing in common. The one thing on the page that draws a spread
@@ -370,6 +426,51 @@ a regression nobody measured. Those numbers stay in
 to them.
 
 ## Design rationale
+
+**The refusal of a shared table component was reversed on 2026-08-29, and the
+reason it was right at the time is the reason it is wrong now.** It was refused
+as "an abstraction for two call sites", which is a good rule: a component built
+for two callers usually fits neither and has to be argued with by both. The
+count is four - the compression outliers, the failed feeds, the failure ledger
+ranked by cause, and the chart-arm's two thresholds - and one of those did not
+exist when the refusal was written. What the refusal protected against was a
+generic `Table`, and that is still refused: the console's problem was never
+table markup, it was that a table is the wrong shape for "which one is worst",
+and a generic table would make the wrong shape cheaper to produce. What landed
+instead is a shape with an opinion - one order, one divisor, one tail sentence,
+two empty states - which is the opposite kind of abstraction. Authority: Fowler
+([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md))
+on the reversal, Susan on the shape, 2026-08-29.
+
+**The geometry was pulled out of the two chart helpers rather than copied.**
+`sparkline.ts` and `targetbar.ts` already owned the rules - the track is the
+larger end plus 15 percent, the marker sits at `target / track`, inside 10
+percent of the target is a warning, a domain is the drawn extent and not zero -
+and each also built a chart option. A second copy of those rules for the markup
+bars would drift, and the drift shows as a marker in one panel and a verdict in
+another disagreeing about the same number with nothing on screen looking wrong.
+So each module now exports the shape, and both drawings read it. The rejected
+alternative was having the markup call the chart builder and throw the option
+away; it wastes nothing worth measuring, and it makes a component that draws no
+chart import a chart builder, which the next reader has to work out.
+
+**Measured on this tree at `f51d669`, 2026-08-29, Windows 11, node 24.** The
+three components add **0 bytes** to every route, because nothing renders them
+yet - the four call sites land in later rows. The number that will matter is the
+one the first call site pays, and it is recorded there. Width-based `@media`
+rules in `frontend/src`: **1 before this row and 2 after**, the existing one
+being a digest item at 1024px. There are no responsive utility prefixes anywhere
+in `frontend/src` - measured as 0 matches - so a rule written in a component's
+own stylesheet is the only responsive behaviour the surface has.
+
+Against the sufficiency checks: a ranked row is a four-column grid across the
+whole console frame rather than a table that stops where its longest cell
+stops; the bar sits on a sunken rail so a short bar is still visibly a bar
+against a ground; the longest bar is at the top at full width, which is the one
+thing the eye lands on; and a selectable row has a hover state, a visible focus
+ring and a pressed state. The one check it does not answer on its own is
+whether the page uses its screen - that is decided by the sections that render
+it, in later rows.
 
 **Three sentences were struck on 2026-08-29, and the reason is one mechanism rather than three mistakes.** This page opened with "Restraint is not a style choice on this project; it falls out of the architecture", [ui-shell.md](ui-shell.md) and [vision.md](vision.md) said the operator surfaces "earn no design budget", and the reading measure was written as a property of the shell. All three are defensible sentences and all three are the same error: an architectural constraint restated as a design value. Rule #1 constrains what may *execute* at read time and says nothing about what may be *drawn* - a gradient, an elevation scale and a self-hosted face are bytes in a committed stylesheet that cost a reader nothing at read time and the runner nothing at build time. But a constraint stated as a value stops needing a justification, so every additive proposal had to argue against the project's own doctrine while every subtractive one was pre-approved.
 
