@@ -307,6 +307,35 @@ tests, utilities and modules the change had nothing to do with. Run
 format pass has already happened, `git restore --` the specific unrelated paths
 rather than the tree.
 
+**`npm run bundle-gate` fails on a machine whose node is not the recorded one,
+on every route at once.** `frontend/bundle-baseline.json` names `node 22` and
+`ci.yml` installs 22. On node 24.12.0, measured 2026-08-29, `origin/main` itself
+read 81 to 87 B UNDER every one of the seven records - `/404`, `/archive/` and
+`/evals/`included, which no branch had touched. The tell is that the offset is
+uniform and in one direction across routes that share nothing but the entry
+chunk. It reads exactly like "my change grew every page", and it is not.
+
+Take a control before you re-record anything. Extract `origin/main` and build it
+with the same installed tree, which is two minutes rather than a second
+`npm ci`:
+
+```powershell
+git archive origin/main | tar -x -C $ctl
+New-Item -ItemType Junction -Path "$ctl\frontend\node_modules" -Target "<your worktree>\frontend\node_modules"
+```
+
+Then record **the previous record plus the measured difference**, never this
+machine's absolute reading - the record is on CI's scale, and an absolute number
+from a different node is not the number CI compares against. That is also how
+the committed records were built: the `why` strings read as a chain of
+increments, not as one machine's output. Expect the gate to stay red locally by
+the machine offset after you re-record, and say so rather than nudging the
+number until it passes.
+
+Remove the junction before deleting the control tree. `Remove-Item -Recurse` on
+a directory holding a junction is the one command here that could reach into
+your real `node_modules`.
+
 **A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
 Windows filenames are case-insensitive, so a gate script that writes
 `ruff check` output to `$out\ruff.txt` and then a sentinel to `$out\RUFF.txt`
