@@ -150,7 +150,7 @@
         },
         "default_window_days": {
           "default": 30,
-          "description": "Initial time span for the console charts. A viewport, not a deletion.",
+          "description": "Initial time span for the console charts. A viewport, not a deletion. Thirty rather than fourteen because the page states its own retirement rules over fourteen days, so a window equal to the rule shows the rule with no margin either side of it.",
           "minimum": 1,
           "title": "Default Window Days",
           "type": "integer"
@@ -192,6 +192,15 @@
           "$ref": "#/$defs/TodayAnchor",
           "default": "right",
           "description": "Where today sits in the initial viewport when enough history exists."
+        },
+        "window_presets": {
+          "description": "The day counts the console's window control offers, ascending and distinct. A short list rather than a slider: every value is a distinct fetch cost, because a wider window pulls more month files, and most values in between are indistinguishable on the page. `default_window_days` must be one of them, or the console would open on a window its own control cannot name.",
+          "items": {
+            "type": "integer"
+          },
+          "minItems": 2,
+          "title": "Window Presets",
+          "type": "array"
         },
         "zoom_factor": {
           "default": 1.5,
@@ -468,6 +477,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.window_presets added, and console.default_window_days must now be one of its members. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
+      "version": "2026-08-29T22:00",
+      "why": "The console gained one time-window control that governs every windowed section on it, and a control needs the list of spans it offers. Additive with a default, so an appearance file written before today still validates (section 11)."
+    },
+    {
       "change": "New contract. `digest`, `console` and `assist` are the shapes `AppConfig.ui`, `AppConfig.console` and `AppConfig.assist` already carried, now filed under their own document; `frame`, `theme`, `chart`, `icons` and `motion` are new.",
       "version": "2026-08-29",
       "why": "Curating a reading surface and pinning a decode temperature are different activities with different review cadences, and one file meant every appearance edit touched the file holding the sampler seed. The new blocks exist because the surface had no frame, no elevation, no gradient, no icon set and no chart interaction to tune - measured 2026-08-28 at 40.6 percent of a 1536px screen with two responsive breakpoints in the entire frontend. Additive and backwards-compatible: `AppConfig` keeps the three moved blocks and the frontend loader falls back to them, so a config an earlier run wrote still resolves."
@@ -503,7 +517,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-08-29",
+      "default": "2026-08-29T22:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -511,5 +525,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-08-29"
+  "version": "2026-08-29T22:00"
 }

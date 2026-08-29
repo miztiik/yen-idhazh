@@ -59,6 +59,9 @@ export interface SummarizeConfig {
 
 export interface ConsoleConfig {
 	default_window_days: number;
+	/** The spans the window control offers, ascending. `default_window_days` is
+	 * one of them - the contract refuses a config where it is not. */
+	window_presets: number[];
 	today_anchor: 'right' | 'centre';
 	pan_days: number;
 	zoom_factor: number;
@@ -154,6 +157,7 @@ const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 };
 const CONSOLE_DEFAULTS: ConsoleConfig = {
 	default_window_days: 30,
+	window_presets: [7, 14, 30, 90],
 	today_anchor: 'right',
 	pan_days: 7,
 	zoom_factor: 1.5,

@@ -170,7 +170,7 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
 def test_the_schema_is_generated_and_stamped() -> None:
     schema = AppearanceConfig.json_schema()
     assert schema["$id"] == "appearance-config.schema.json"
-    assert schema["version"] == "2026-08-29"
-    assert schema["changelog"][0]["version"] == "2026-08-29"
+    assert schema["version"] == "2026-08-29T22:00"
+    assert schema["changelog"][0]["version"] == "2026-08-29T22:00"
     for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
         assert block in schema["properties"], f"{block} missing from the generated schema"

@@ -307,6 +307,43 @@ tests, utilities and modules the change had nothing to do with. Run
 format pass has already happened, `git restore --` the specific unrelated paths
 rather than the tree.
 
+**`npm run bundle-gate` fails on a machine whose node is not the recorded one,
+on every route at once.** `frontend/bundle-baseline.json` names `node 22` and
+`ci.yml` installs 22. On node 24.12.0, measured 2026-08-29, `origin/main` itself
+read 81 to 87 B UNDER every one of the seven records - `/404`, `/archive/` and
+`/evals/` included, which no branch had touched. The tell is that the offset is
+uniform and in one direction across routes that share nothing but the entry
+chunk. It reads exactly like "my change grew every page", and it is not.
+
+Take a control before you conclude anything. Extract `origin/main` and build it
+with the same installed tree, which is two minutes rather than a second
+`npm ci`:
+
+```powershell
+git archive origin/main | tar -x -C $ctl
+New-Item -ItemType Junction -Path "$ctl\frontend\node_modules" -Target "<your worktree>\frontend\node_modules"
+```
+
+**But do not record the local difference either.** The same change measured 176 B
+a route on node 24 and 108 B a route on node 22, so a local delta added to the
+old record still misses by about 66 B - which is inside nothing, because the
+tolerance is 64. The number the gate compares against is CI's, so read it out of
+CI's own failing run and paste that:
+
+```powershell
+gh run view <runId> --repo <owner/repo> --log > out.txt
+Select-String -Path out.txt -Pattern 'fell to|grew to'
+```
+
+That costs one deliberately failing CI run per weight change, and it is the only
+reading that is on the gate's own scale. Expect the gate to stay red locally
+afterwards by the machine offset, and say so rather than nudging the number
+until it passes.
+
+Remove the junction before deleting the control tree. `Remove-Item -Recurse` on
+a directory holding a junction is the one command here that could reach into
+your real `node_modules`.
+
 **A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
 Windows filenames are case-insensitive, so a gate script that writes
 `ruff check` output to `$out\ruff.txt` and then a sentinel to `$out\RUFF.txt`
