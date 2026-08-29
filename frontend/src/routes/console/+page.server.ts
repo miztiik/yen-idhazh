@@ -4,7 +4,16 @@ import type {
 	StageTimingDay,
 	ThroughputDay
 } from '$lib/charts/series';
+import { datesIn, failureSeries } from '$lib/charts/series';
 import { chartFunnel } from '$lib/charts/chart-funnel';
+import {
+	failureMix,
+	publishedTrend,
+	routerCost,
+	runHealth,
+	siteGrowth,
+	sizeTrend
+} from '$lib/charts/glance';
 import { renderToSvg } from '$lib/server/chart-render';
 import {
 	modelByDate,
@@ -441,6 +450,28 @@ export async function load() {
 	);
 	const charts = chartDays(manifests, publishedCharts());
 	const funnel = chartFunnel(charts);
+	// Six questions, six shapes. Each is drawn here so the console is complete
+	// before any script runs; the client rebuilds the same option to hydrate.
+	const runsDonut = runHealth(manifests);
+	const cost = routerCost(charts);
+	const growth = siteGrowth(manifests);
+	const mixDates = datesIn(publicRows);
+	const mix =
+		mixDates.length === 0
+			? failureMix([])
+			: failureMix(
+					failureSeries(publicRows, {
+						start: mixDates[0],
+						end: mixDates[mixDates.length - 1]
+					})
+				);
+	const published = publishedTrend(charts);
+	const size = sizeTrend(manifests);
+	const draw = async (
+		chart: { option: import('echarts').EChartsOption; empty: boolean },
+		width: number,
+		height: number
+	) => (chart.empty ? null : await renderToSvg(chart.option, { width, height }));
 	return {
 		timingDays,
 		throughputDays,
@@ -454,6 +485,19 @@ export async function load() {
 		modelWork: modelWork(rows, itemRows),
 		manifests,
 		charts,
+		glance: {
+			healthSvg: await draw(runsDonut, 260, 200),
+			healthShare: runsDonut.empty ? null : runsDonut.share,
+			healthTotal: runsDonut.total,
+			costSvg: await draw(cost, 460, 40),
+			costBand: cost.empty ? null : cost.band,
+			growthSvg: await draw(growth, 760, 220),
+			mixSvg: await draw(mix, 760, 220),
+			publishedSvg: await draw(published, 220, 34),
+			publishedMovement: published.empty ? null : published.movement,
+			sizeSvg: await draw(size, 220, 34),
+			sizeMovement: size.empty ? null : size.movement
+		},
 		// Drawn here, so the shape is on the page before any script runs and stays
 		// there if none ever does. Colour leaves as a custom-property reference, so
 		// both themes work with no JavaScript at all.
