@@ -6,7 +6,7 @@
 	let { data, children } = $props();
 </script>
 
-<div class="mx-auto w-full max-w-2xl px-5 sm:px-6">
+<div class="frame">
 	<SiteHeader title={data.ui.site_title} tagline={data.ui.tagline} />
 	<main>
 		{@render children()}
