@@ -102,6 +102,24 @@ A failed article keeps its empty lists. It has no text, it never reaches a reade
 
 **The tagger is deliberately not a fingerprint input.** A tag does not change a summary, so adding the vocabulary to the stamp would re-summarize every past item to produce identical words ([../contracts/determinism.md](../contracts/determinism.md) already warns that a new `PipelineInputs` field resets every fingerprint). A vocabulary edit therefore re-tags what runs next and leaves the past alone.
 
+### A lens can also score, and then two more rules apply
+
+From 2026-08-30 a lens carries a `weight`. Zero, the default, means it only labels. Above zero it adds to a story's rank at plan time, where the same match rule runs against the **headline alone** - the body has not been fetched yet. The label is unchanged: it is still matched on title plus body after summarizing, so **every scoring hit is also a label** and the reverse does not hold.
+
+Two rules govern which lens may carry a weight. Both were set by Editor on 2026-08-30 and both are about what a bonus is for.
+
+> **A weighted lens must be an under-carried theme, never an over-carried one.**
+
+A bonus exists to rescue a story one outlet has and nobody has repeated yet. `reach` already multiplies a story every wire carried, so a weight on a well-covered theme compounds a lead the story had anyway. That is why `trade` and `chips` carry 0.3 and `war`, `china` and `markets` carry zero despite being the three largest lenses: a tariff filing or a fab announcement breaks in one place, and a war does not.
+
+> **A keyword that is ambiguous in a headline does not ship in a scoring set.**
+
+A headline is eight to twelve words and the matcher has no surrounding context to disambiguate with. Bare `shares` was removed from `markets` for this - it is a verb in "OpenAI shares research" as often as a noun - and replaced with `share price` and four `shares <verb>` phrases. Bare `roi`, bare `vulnerability` and bare `nifty` went the same way. The rule binds every keyword, because one list serves both jobs.
+
+**One fact earns one bonus.** No lens keyword may repeat a watchlist alias. ASML, Nvidia, Intel, Samsung and Huawei are entities carrying `watchlist_bonus`; putting them in the `chips` keywords would pay twice for a single fact. The lens names the thing, the watchlist names the company.
+
+**A theme takes the largest weight it earned, never the sum.** Two themes in one headline is not twice the story, and summing would let a keyword list outweigh the fact that three independent feeds carried it. The shipped weight of 0.3 is deliberately half of what one more trade-press feed is worth (0.6), so a themed single-sourced story ranks below the same story two feeds carried. `backend/tests/test_discover.py::test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story` is what stops a later edit inverting that.
+
 ### Measured coverage
 
 Two corpora, because they answer different questions. Both measured 2026-08-26 on this checkout.

@@ -82,7 +82,11 @@ def all_candidates() -> list[Candidate]:
 
 
 def rate(
-    carried: list[Candidate], *, watchlist_hit: bool = False, front_page: bool = False
+    carried: list[Candidate],
+    *,
+    watchlist_hit: bool = False,
+    front_page: bool = False,
+    lens_bonus: float = 0.0,
 ) -> float:
     """Score with the clock and the appearance time held still."""
     return score(
@@ -90,6 +94,7 @@ def rate(
         config=CollectConfig(),
         watchlist_hit=watchlist_hit,
         on_front_page=front_page,
+        lens_bonus=lens_bonus,
         appeared=None,
         now=NOW,
     )
@@ -421,6 +426,57 @@ def test_a_watchlist_hit_and_a_front_page_vote_both_lift_the_score() -> None:
     base = rate(carried)
     assert rate(carried, watchlist_hit=True) > base
     assert rate(carried, front_page=True) > base
+
+
+def test_a_theme_lifts_a_story_by_exactly_its_lens_weight() -> None:
+    """The bonus is the weight, not a multiplier and not a re-rank."""
+    carried = all_candidates()[:1]
+    assert rate(carried, lens_bonus=0.3) == pytest.approx(rate(carried) + 0.3)
+
+
+def test_a_theme_is_worth_less_than_a_second_feed_carrying_the_story() -> None:
+    """Corroboration is evidence; a theme is a preference. It must not outrank one.
+
+    A second independent feed is worth `repetition_weight` times the tier, which
+    for trade press is 0.6. The shipped lens weight is 0.3 - half a corroborating
+    feed - and this is the assertion that stops a later edit inverting that.
+    """
+    one = [candidate for candidate in all_candidates() if candidate.source_id == "trade-press"][:1]
+    two = [*one, *[c for c in all_candidates() if c.source_id == "community"][:1]]
+    assert rate(one, lens_bonus=0.3) < rate(two), (
+        "a themed single-sourced story must not beat the same story two feeds carried"
+    )
+
+
+def test_a_vertical_takes_the_theme_bonus_from_the_address_that_earned_it() -> None:
+    """`plan_vertical` reads the mapping the plan stage built off the headlines."""
+    candidates = all_candidates()
+    chosen = candidates[0].url_key
+    plain, _ = plan_vertical(AI, candidates, config=CollectConfig(), live_feeds=3, now=NOW)
+    _, lifted = plan_vertical(
+        AI,
+        candidates,
+        config=CollectConfig(),
+        live_feeds=3,
+        now=NOW,
+        lens_bonuses={chosen: 0.3},
+    )
+    _, flat = plan_vertical(AI, candidates, config=CollectConfig(), live_feeds=3, now=NOW)
+    scores = {item.url_key: item.rank_score for item in flat}
+    for item in lifted:
+        expected = scores[item.url_key] + (0.3 if item.url_key == chosen else 0.0)
+        assert item.rank_score == pytest.approx(expected)
+    assert plain.considered - plain.too_old == len(scores)
+
+
+def test_an_address_with_no_theme_is_unmoved() -> None:
+    """An empty mapping must leave the whole day byte-identical."""
+    candidates = all_candidates()
+    _, without = plan_vertical(AI, candidates, config=CollectConfig(), live_feeds=3, now=NOW)
+    _, empty = plan_vertical(
+        AI, candidates, config=CollectConfig(), live_feeds=3, now=NOW, lens_bonuses={}
+    )
+    assert [item.model_dump() for item in without] == [item.model_dump() for item in empty]
 
 
 def test_the_scoring_formula_is_exactly_its_four_terms() -> None:

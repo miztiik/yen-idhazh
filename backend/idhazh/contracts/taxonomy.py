@@ -59,6 +59,9 @@ class LensId(StrEnum):
     AI_ROI = "ai-roi"
     MARKETS = "markets"
     CYBER = "cyber"
+    WAR = "war"
+    TRADE = "trade"
+    CHIPS = "chips"
 
 
 class EventType(StrEnum):
@@ -127,6 +130,17 @@ class LensDef(Lifecycled):
             "An empty list means the lens is never assigned."
         ),
     )
+    weight: float = Field(
+        default=0.0,
+        ge=0.0,
+        description=(
+            "What this lens adds to a story's rank when one of its terms is in the "
+            "headline. Zero means the lens only labels. A weighted lens must be an "
+            "under-carried theme: the bonus is there to rescue a story one outlet has "
+            "and nobody has repeated yet, and on an over-carried theme it only "
+            "compounds a lead that repetition already gave."
+        ),
+    )
 
 
 class EventDef(Model):
@@ -143,6 +157,29 @@ class Taxonomy(Contract):
 
     __schema_stem__: ClassVar[str] = "taxonomy"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30",
+            change=(
+                "Added the war, trade and chips lenses, and LensDef.weight. "
+                "ai-roi keeps its id and is retired in config."
+            ),
+            why=(
+                "A lens could only label, so the vocabulary had no way to say a theme "
+                "was worth publishing. Measured 2026-08-30 over the 2,900 published "
+                "items on record, 2,683 of them - 92.5 percent - carried no lens at "
+                "all, while war words appeared in 637 and tariff words in 75 with no "
+                "id to hold them. weight is what a lens adds to a rank when one of its "
+                "terms is in the headline, which is all a run has at plan time. Zero is "
+                "the default and the answer for most lenses: a bonus rescues a story "
+                "one outlet has and nobody has repeated, and on a theme every wire "
+                "already carries it compounds a lead repetition gave. Additive with a "
+                "default, so a taxonomy written before this still validates and scores "
+                "nothing. Three new enum members widen a closed vocabulary, so an older "
+                "payload still reads - no published lens id was removed or renamed, and "
+                "ai-roi is tombstoned rather than deleted so days that carry it stay "
+                "valid (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26",
             change="Added keywords to LensDef and EventDef.",
@@ -199,6 +236,18 @@ class Taxonomy(Contract):
             lens.id: lens.keywords
             for lens in self.lenses
             if lens.status is not LifecycleStatus.RETIRED
+        }
+
+    def lens_weights(self) -> dict[LensId, float]:
+        """Only the lenses that score, so a caller cannot spend time on the others.
+
+        Every id here is also in `lens_terms`, so a scoring hit is always a label
+        too - the headline is inside the text the label reads.
+        """
+        return {
+            lens.id: lens.weight
+            for lens in self.lenses
+            if lens.status is not LifecycleStatus.RETIRED and lens.weight > 0.0
         }
 
     def event_terms(self) -> dict[EventType, list[str]]:
