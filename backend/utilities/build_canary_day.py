@@ -226,6 +226,20 @@ def canaries(directory: Path = CANARY_DIR) -> list[dict[str, object]]:
     return [json.loads(path.read_text(encoding="utf-8")) for path in paths]
 
 
+def was_cut(measured: _Measured) -> bool:
+    """An article longer than what the model was given is an article that was cut.
+
+    The same direction the real extractor works in, and one spelling of it, so
+    the digest page and the ledger row cannot disagree about the same item.
+    """
+    return measured.source_words > SEEN_WORD_CAP
+
+
+def seen_words(measured: _Measured) -> int:
+    """What the model was given: the whole body, or the cap where the body was longer."""
+    return min(measured.source_words, SEEN_WORD_CAP)
+
+
 def verdict_for(measured: _Measured, evaluation: EvaluationConfig) -> score.Verdict:
     """The band a reader sees and the reason under it, from the pipeline's own rule.
 
@@ -550,11 +564,6 @@ def _scorer_version(evaluation: EvaluationConfig) -> str:
 def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfig) -> EvalRow:
     """One ledger row, with every derivable column derived rather than typed."""
     delta = round(measured.hhem - measured.hhem_full, _DELTA_PLACES)
-    # The cut is the fact and the flag follows it, the same direction the real
-    # extractor works in: an article longer than what the model was given is an
-    # article that was cut.
-    truncated = measured.source_words > SEEN_WORD_CAP
-    seen_words = min(measured.source_words, SEEN_WORD_CAP) if truncated else measured.source_words
     return EvalRow(
         version=EvalRow.schema_version(),
         date=DATE,
@@ -571,7 +580,7 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         hhem=measured.hhem,
         hhem_full=measured.hhem_full,
         hhem_delta=delta,
-        truncation_flagged=truncated,
+        truncation_flagged=was_cut(measured),
         coverage=measured.coverage,
         # Summary words over source words, which is the whole of what
         # `metrics.compression` computes - done on the counts because a fixture
@@ -586,7 +595,7 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         extraction_suspect=False,
         band=item.band,
         source_word_count=measured.source_words if measured.full_length_known else None,
-        source_seen_word_count=seen_words,
+        source_seen_word_count=seen_words(measured),
         summary_word_count=measured.summary_words,
         pipeline_fingerprint=_fixture_digest("pipeline", DATE),
         output_digest=_fixture_digest("summary", item.item_id),
