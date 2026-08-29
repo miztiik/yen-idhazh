@@ -2397,9 +2397,9 @@ Two rates, because only one of them is a design input. The observed rate is what
 six committed days did. The structural ceiling is the cron in
 `.github/workflows/digest.yml` - `20 2,6,10,14,18 * * *`, **five slots a day** -
 times `run.safety_ceiling_per_run` in `config/idhazh.json`, currently **160**.
-The ceiling is a crash guard rather than an editorial cap
-([../architecture/sources/freshness.md](../architecture/sources/freshness.md)),
-so it bounds a month without describing one.
+Both halves of that product are optimistic: the ceiling is reached on every run
+(see the section above), and the cron is asked for five times a day and
+delivered fewer, so this bounds a month rather than describing one.
 
 A month is 30 days. A browse entry is the real thing, built from real committed
 items - item id, date, vertical, title - not an estimated field width.
