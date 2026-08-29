@@ -335,12 +335,13 @@ if (moved.length > 0) {
  * config/idhazh.json decides what is capped. A route it names is measured and
  * failed when it is over; a route it does not name is measured and printed
  * here, but never failed. A route earns a ceiling when somebody priced its
- * growth: /404 and /evals/ move only when the source moves, and /archive/ grows
- * by one day link a published day, so its number carries a measured year of
- * that. /console/ grows with the ledger its charts read and nobody has priced
- * it, so a fixed byte ceiling there would fail on an ordinary publish rather
- * than catch a regression - `tests/payload-weight.spec.ts` covers that class by
- * counting a marker instead.
+ * growth: /404 and /evals/ move only when the source moves, /archive/ grows by
+ * one day link a published day so its number carries a measured year of that,
+ * and /console/ grows by about 60 gzipped bytes a published item so its number
+ * carries a measured three days and is meant to expire. A page that renders a
+ * day is never capped, because the only way under such a ceiling is to publish
+ * fewer items - `tests/payload-weight.spec.ts` covers that class by counting a
+ * marker instead.
  */
 const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
 
@@ -394,10 +395,11 @@ for (const [name, { bytes }] of [...heaviestPage].sort()) {
 if (uncapped.length > 0) {
 	console.log(
 		`\nReported, not capped: ${uncapped.join(', ')}. config/idhazh.json names what\n` +
-			'is capped, and a route it leaves out grows with the published corpus or the\n' +
-			'ledger, where a fixed ceiling would fail on an ordinary publish rather than\n' +
-			'catch a regression. To cap one, add it under "page_weight": { "ceilings_bytes":\n' +
-			'{ ... } } in config/idhazh.json.'
+			'is capped, and a route it leaves out is one whose growth nobody has priced\n' +
+			'yet - a fixed ceiling before that measurement fires on an ordinary publish\n' +
+			'rather than catching a regression. Measure what a published day costs the\n' +
+			'page, then add it under "page_weight": { "ceilings_bytes": { ... } } in\n' +
+			'config/idhazh.json with that many days of headroom.'
 	);
 }
 
@@ -427,6 +429,17 @@ if (over.length > 0) {
 			'config/idhazh.json, in the commit that earned the bytes, and say in the message\n' +
 			'what they buy.'
 	);
+	if (over.some(({ name }) => name === '/console/')) {
+		console.error(
+			'\n/console/ is the third case and raising it is the wrong answer. Its ceiling\n' +
+				'carries three published days on purpose, and the page grows because the\n' +
+				'compression scatter inlines a point for every row the ledger has ever held.\n' +
+				'Window that seed the way the telemetry seed is already windowed, and publish\n' +
+				'the older points through the telemetry projection so panning back still\n' +
+				'reaches them - a windowed seed on its own empties the plot behind the window,\n' +
+				'which is a lie. See docs/architecture/publishing/frontend.md.'
+		);
+	}
 }
 
 if (failed) process.exit(1);
