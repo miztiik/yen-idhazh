@@ -3278,8 +3278,11 @@ so the covariate this comparison used to be unable to hold is now readable per
 shard. The `route` job still has no such row
 ([Still unmeasured](#still-unmeasured)).
 
-**Date.** The date of the first scheduled run at cap 5000, filled in when that
-run happens.
+**Date.** **2026-08-29.** The first scheduled run at cap 5000 is run
+`33244705103`, ledger run id `2026-08-29-2`, head commit `fa53634`, started
+2026-08-29T09:06:26Z. The cap landed on `main` at 04:28 UTC that morning, so
+run `2026-08-29-1` earlier the same day is the last run at cap 2500 and is the
+control every comparison below uses.
 
 **n.** One run, four `work` jobs, 160 items planned, 40 items a worker.
 `run.max_parallel` is 4 and `run.safety_ceiling_per_run` is 160, so a scheduled
@@ -3304,15 +3307,16 @@ for row in sorted(clocked, key=lambda r: -int(r["job_seconds"])):
     print(row["shard"], "%.1f min" % (int(row["job_seconds"]) / 60), row["cpu_model"])
 ```
 
-**`job_seconds` is a floor on the job's wall-clock, not the whole of it.** It
-starts at the job's first step and stops at the counters scrape, so the ledger
-push, the two log summaries and the artifact uploads that follow are outside it.
-By how much is **not yet measured** - the first run at cap 5000 records both
-numbers and settles it (row 1 of
-[What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record)).
-Until then: a `job_seconds` over 110 minutes has fired
-[Trigger A](#trigger-a---the-shard-clock) on its own, and one inside a couple of
-minutes below 110 is read against the API before it is called a pass.
+**`job_seconds` is a floor on the job's wall-clock, and the gap is 13 to 17
+seconds.** It starts at the job's first step and stops at the counters scrape,
+so the ledger push, the two log summaries and the artifact uploads that follow
+are outside it. Measured 2026-08-29 over all four shards of run `33244705103`,
+against the same jobs from the API: **13, 15, 15 and 17 seconds, which is 0.3 to
+0.6 percent of the shard's clock**. So the committed cell can be read as the
+job's clock without an API call - at 70 minutes the gap is a quarter of a
+minute. A `job_seconds` over 110 minutes has fired
+[Trigger A](#trigger-a---the-shard-clock) on its own, and the API remains the
+authority for anything closer than half a minute to the line.
 
 **The API is still the authority, and it is now the second read.** Job records
 live outside this repository and drop with the run, which is the whole reason
@@ -3473,10 +3477,12 @@ Read `cpu_model` in the same row, because this page has measured a 3.1x swing in
 prompt-reading throughput between hosts, so two clocks on two different parts
 are not a comparison (Rule #10).
 
-**It is a floor, and by how much is not yet measured.** The scrape happens before
+**It is a floor, and the gap is 13 to 17 seconds.** The scrape happens before
 the ledger push, the two log summaries and the artifact uploads, so `job_seconds`
-under-reports what the jobs API calls the job. The first run at cap 5000 records
-both numbers, which settles the gap for every run after it.
+under-reports what the jobs API calls the job. Measured over all four shards of
+run `33244705103` on 2026-08-29: 13, 15, 15 and 17 seconds, **0.3 to 0.6 percent
+of the shard's clock**. Nothing a run has to decide turns on a quarter of a
+minute, so the committed cell stands on its own.
 
 **Where the clock comes from.** The `work` job's first step - ahead of the
 checkout - writes an epoch second and the CPU model to the job environment, and
@@ -3496,10 +3502,28 @@ counters row, so which processor a `route` job drew is still unrecorded
 
 ## What the first run at cap 5000 must record
 
-**Every value cell in the table below reads `not yet measured`, and none of them
-is a zero.** The cap moved from 2500 to 5000 in `config/idhazh.json` on
-2026-08-29. No scheduled `digest.yml` run has executed at the new cap yet, so
-this is a sheet waiting for its first run, not a result.
+**Measured over run `33244705103`, 2026-08-29 - the first scheduled run at cap
+5000.** Ledger run id `2026-08-29-2`, head commit `fa53634`, four `work` jobs,
+160 items planned, all four jobs `success`. Every value cell below is a
+measurement taken from that run.
+
+**Both triggers passed and the cap stays at 5000.** `context_exceeded` is 0 of
+160 planned rows and the slowest worker took 70.4 minutes against the
+110-minute line - 39.6 minutes of room. The widest complete request the server
+saw was 4,925 tokens against the 7,800 that would bring the cap down to 4000,
+so the escalation in step 7 did not fire either.
+
+**What the run did not get to test.** Its longest article was 2,772 words, so
+**no item reached the new 3,846-word cap** and none reached the fifth summary
+rung's 3,000-word floor. Six items were read past the old 1,923-word ceiling and
+all six were read whole. Rows 6 and 7 ask about at-cap items and there were
+none, so they report what the run does say instead, and each says which
+question it could not answer.
+
+**The proof it ran at the new cap is committed, not inferred.** Every eval row
+of `2026-08-29-2` carries pipeline fingerprint `5e608717`; every row of
+`2026-08-29-1` earlier the same day carries `6a23e277`. The cap is a field of
+`PipelineInputs`, so the stamp moved because the cap moved.
 
 The section above,
 [The first run at cap 5000](#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
@@ -3558,20 +3582,43 @@ read a committed file instead of an API.
 
 | # | What to record | Against what | Reading |
 | --- | --- | --- | --- |
-| 1 | Slowest `work` job, minutes, from `job_seconds` and from the jobs API. **Record both**: the gap between them is what the committed cell leaves out, and no run has measured it yet | 85.6 min measured 2026-08-27, and `run.shard_timeout_minutes` of 150 | **not yet measured** |
-| 2 | Fixed cost per worker: the part of a worker's clock that is not model time (cache restore, weight load, warmup). `job_seconds` minus the server's own `prompt_seconds_total` plus `tokens_predicted_seconds_total`, in the same row | no prior on record; this run establishes it | **not yet measured** |
-| 3 | Items at the new cap, per run and per shard | 7.8 a run at the old cap (155 rows at exactly 1,923 words over 20 runs, `state/item-health/2026-08.csv`, counted 2026-08-29) | **not yet measured** |
-| 4 | Extra input tokens actually read, against the run before it | the projection of 10,300 to 11,000 a run | **not yet measured** |
-| 5 | Read rate, uncached, tok/s | 12.05 tok/s, the rate the projection used | **not yet measured** |
-| 6 | Decode rate on at-cap items, tok/s | 4.89 tok/s over 25 at-cap items on the configured model, counted 2026-08-29. **n=25 is one number, not a distribution** | **not yet measured** |
-| 7 | Output tokens on at-cap items, median. **This is now expected to rise** | 331 tokens over the same 25 items. A cap change alone cannot move the ask, because the band comes from `band_source_words` and that is pre-cap. The fifth summary rung, landed 2026-08-29, does move it: its floor is 3,000 words and every at-cap item is 3,846 words or more, so every one of them left the 110-200 ask for 150-230. Expect about **+45 tokens**, and read a move of that size as the new rung rather than as a fault | **not yet measured** |
-| 8 | Slowest single item, seconds | 449 s on record, against the 1,326 s bound (`models.inference.request_timeout_minutes` of 22.1) | **not yet measured** |
-| 9 | Widest complete request, prompt plus output tokens, from `n_tokens_max` | 3,775 + 900 measured, against `n_ctx` of 8,192. **Above 7,800 the cap comes down to 4000 and `n_ctx` does not move** | **not yet measured** |
-| 10 | Implied tokens per word on the widest item | 1.35 to 1.44 measured on this project's prose; 1.59 or worse is what it takes to overflow | **not yet measured** |
-| 11 | `context_exceeded` rows | 0 over 3,672 rows of `state/item-health/2026-08.csv`, counted 2026-08-29. Read it beside row 3 - a zero here means nothing if nothing was read past 1,923 words | **not yet measured** |
-| 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **not yet measured** |
-| 13 | `route`: `items_prefiltered`, `items_asked`, `unrouted` | 18 unrouted is the median of the runs on record. A longer body yields more quantities, so **prefiltered should fall and unrouted should rise**. It costs charts, not clock - the stage self-stops at `run.route_budget_minutes` of 40 | **not yet measured** |
-| 14 | `hhem` against `hhem_full` on items that would have been cut at the old cap | `hhem_delta` runs -0.1235 to +0.0381 over the 24 cut items on record. **This row is an observation, not a gate.** Nothing measured says a longer read produces a better summary | **not yet measured** |
+| 1 | Slowest `work` job, minutes, from `job_seconds` and from the jobs API. **Record both**: the gap between them is what the committed cell leaves out, and no run has measured it yet | 85.6 min measured 2026-08-27, and `run.shard_timeout_minutes` of 150 | **70.1 min** from `job_seconds` (4,208 s, shard 0) and **70.4 min** from the API (4,223 s). Over all four shards the gap is **13 to 17 s, which is 0.3 to 0.6 percent of the shard's clock**. 15.2 min faster than the 85.6 on record, and 79.6 min under the 150-minute bound |
+| 2 | Fixed cost per worker: the part of a worker's clock that is not model time (cache restore, weight load, warmup). `job_seconds` minus the server's own `prompt_seconds_total` plus `tokens_predicted_seconds_total`, in the same row | no prior on record; this run establishes it | **284, 346, 366 and 447 s - 4.7 to 7.5 minutes, 8.7 to 12.4 percent of the shard's clock.** The slowest shard carries the largest fixed cost as well as the largest model time, so the two do not trade off |
+| 3 | Items at the new cap, per run and per shard | 7.8 a run at the old cap (155 rows at exactly 1,923 words over 20 runs, `state/item-health/2026-08.csv`, counted 2026-08-29) | **0, on every shard.** The run's longest article was 2,772 words against a 3,846-word cap, so nothing reached it. **6 items were read past the old 1,923-word ceiling** and all six were read whole. Against 7.8 a run before: the cap stopped binding rather than binding higher up |
+| 4 | Extra input tokens actually read, against the run before it | the projection of 10,300 to 11,000 a run | **About 3,000 tokens, a quarter of the projection.** The 6 items past the old ceiling carry 2,172 words the old cap would have dropped - 362 an item - which is 2,824 tokens at the 1.3 placement estimate and 3,013 at the 1.387 rate row 10 measures. The projection assumed 7.8 items sitting on the cap and this run had none. Run totals were 119,516 uncached tokens against 118,812 the run before, and that difference is a different article mix, not the cap |
+| 5 | Read rate, uncached, tok/s | 12.05 tok/s, the rate the projection used | **16.19 tok/s** over the 104 items with a prefill clock, against 11.88 on run `2026-08-29-1` the same day. **This is not the cap making reading faster.** The two runs drew different hosts, and run 1 recorded no CPU model at all, so the covariate cannot be held (Rule #10) |
+| 6 | Decode rate on at-cap items, tok/s | 4.89 tok/s over 25 at-cap items on the configured model, counted 2026-08-29. **n=25 is one number, not a distribution** | **No at-cap item exists, so this row has nothing of its own to measure.** Over the 6 items read past the old ceiling it is **6.65 tok/s**, and over the whole run **6.35**, against 4.88 on run 1. The instrument is there and the population is not: it needs a run whose longest article is 3,846 words or more |
+| 7 | Output tokens on at-cap items, median. **This is now expected to rise** | 331 tokens over the same 25 items. A cap change alone cannot move the ask, because the band comes from `band_source_words` and that is pre-cap. The fifth summary rung, landed 2026-08-29, does move it: its floor is 3,000 words and every at-cap item is 3,846 words or more, so every one of them left the 110-200 ask for 150-230. Expect about **+45 tokens**, and read a move of that size as the new rung rather than as a fault | **The fifth rung never fired: no item reached 3,000 words**, so the +45 cannot be looked for. What the run does answer is the half that catches a mistake - median output on items **below** 3,000 words is **248 tokens over 104 items**, against **251.5 over 108** on run 1. It did not rise, so the 2026-08-26 band defect has not come back |
+| 8 | Slowest single item, seconds | 449 s on record, against the 1,326 s bound (`models.inference.request_timeout_minutes` of 22.1) | **337.3 s**, the slowest `summarize_ms` of the run - 25.4 percent of the bound. Run `2026-08-29-1` the same day held a 503.3 s item, so this run's tail is shorter than the cap-2500 run before it |
+| 9 | Widest complete request, prompt plus output tokens, from `n_tokens_max` | 3,775 + 900 measured, against `n_ctx` of 8,192. **Above 7,800 the cap comes down to 4000 and `n_ctx` does not move** | **4,925 tokens**, shard 2. The four shards read 3,122, 4,178, 4,570 and 4,925. **2,875 below the 7,800 line and 3,267 below the window** - step 7 did not fire and the cap stays at 5000 |
+| 10 | Implied tokens per word on the widest item | 1.35 to 1.44 measured on this project's prose; 1.59 or worse is what it takes to overflow | **1.387 tokens an article word over the run, and 1.352 on the widest item.** Regressing `input_tokens` on `source_words` over the 104 sized items gives a slope of 1.387 and a fixed prompt of 951 tokens, with a residual spread of 119 tokens. On the widest item - 2,772 words, 4,698 prompt tokens - the article's own share is 3,747 tokens. Both sit inside the measured band and well under the 1.59 that would overflow |
+| 11 | `context_exceeded` rows | 0 over 3,672 rows of `state/item-health/2026-08.csv`, counted 2026-08-29. Read it beside row 3 - a zero here means nothing if nothing was read past 1,923 words | **0 of 160 planned rows.** It is a measurement rather than an absence, because row 3 says 6 items were read past the old ceiling on this run |
+| 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **12.56, 12.64, 12.70 and 13.55 GiB** for `llama-server`, plus 1.43 to 1.98 GiB for the Python worker, over 167 to 260 samples a shard. Under the 14.39 on record and 2.45 GiB under the runner's 16 GB at the worst shard. `cgroup_memory_peak_bytes` printed `unavailable` on all four, so that instrument is still broken ([Still unmeasured](#still-unmeasured)) |
+| 13 | `route`: `items_prefiltered`, `items_asked`, `unrouted` | 18 unrouted is the median of the runs on record. A longer body yields more quantities, so **prefiltered should fall and unrouted should rise**. It costs charts, not clock - the stage self-stops at `run.route_budget_minutes` of 40 | **58 prefiltered, 46 asked, 0 unrouted** over the 104 items the stage decided, with 10 charts drafted and 8 kept. It spent 37.0 of its 40 minutes, so it just fit. **The prediction did not hold, and this run cannot test it**: prefiltered rose from 44.1 percent on run 1 (41 of 93) to 55.8 percent, and unrouted fell from a median of 18 to zero. Only 6 items got any extra text at all, so nothing here is attributable to the cap |
+| 14 | `hhem` against `hhem_full` on items that would have been cut at the old cap | `hhem_delta` runs -0.1235 to +0.0381 over the 24 cut items on record. **This row is an observation, not a gate.** Nothing measured says a longer read produces a better summary | **`hhem_delta` is 0.0000 on all 6.** That is the ledger being unable to answer rather than an answer: `cli.stage_work` passes `article.text` as both `seen_text` and `full_text`, so the two scores are one score and the column is structurally zero in production. The instrument that can answer is the offline re-score over committed evidence pairs ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)) |
+
+**The four shards named three different processors, and the slowest took 1.51
+times the fastest.** This is the first run where every worker recorded its host,
+so it is the first time the covariate can be read rather than assumed. One run,
+one plan of 160 items split four ways:
+
+| Shard | `job_seconds` | Model seconds | Processor |
+| ---: | ---: | ---: | --- |
+| 3 | 2,785 (46.4 min) | 2,439 | AMD EPYC 9V45 |
+| 2 | 3,086 (51.4 min) | 2,720 | AMD EPYC 9V45 |
+| 1 | 3,283 (54.7 min) | 2,999 | AMD EPYC 9V74 |
+| 0 | 4,208 (70.1 min) | 3,761 | AMD EPYC 7763 |
+
+**The spread is in the model seconds and not in the fixed cost** - model time
+runs 1.54x across the four while the clock runs 1.51x. And the processor does
+not explain all of it: the two shards on the identical `9V45` string are still
+1.11x apart. That is the shape
+[the `route` job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)
+already has, now measured on the stage that decides the run's wall-clock. What
+it means for [Trigger A](#trigger-a---the-shard-clock): the run waits for the
+last worker, so drawing a `7763` for one shard costs 24 minutes more than
+drawing two `9V45`s, and that is the host lottery rather than anything the cap
+did.
 
 **Row 7 is the one that catches a mistake in this change, and the fifth summary
 rung changed what a mistake looks like.** Rows 1 to 5 all move by design, so a
@@ -3588,11 +3635,25 @@ the rung working. A rise on items **below** 3,000 words is the defect
 fixed on 2026-08-26 - the band selection reading the post-cap count somewhere -
 and that is what this row still exists to catch.
 
+**The first run answered only half of it, and that is the useful half.** No
+article reached 3,000 words, so the rung never fired and the +45 could not be
+looked for. The half that catches a mistake did run: the median output on items
+below 3,000 words was 248 tokens against 251.5 on the run before, so the band
+selection is still reading the pre-cap count. **The rung's own effect stays
+unmeasured until a run draws an article of 3,000 words or more.** Six of the 24
+cut items on record are that long, so it is a matter of waiting rather than of
+changing anything.
+
 **Row 14 is the row this change does not get to claim.** The cap buys more
 article read, and that is all it is measured to buy. Whether the summary is
 better is a different measurement with a different instrument, and the instrument
 that would say has never returned a real number
 ([Still unmeasured](#still-unmeasured)).
+
+**The run also showed the ledger cannot answer row 14 at all.** `hhem_delta` is
+0.0000 on all six items the old cap would have cut, because production hands the
+same string to both scorers - so the column is structurally zero and reading it
+as "no difference" would be reading an instrument that is not connected.
 
 ### What was counted on 2026-08-29, before the cap moved
 
@@ -4335,7 +4396,7 @@ to justify a design decision.
 | **Which CPU a `route` job drew, run by run** | **recorded in a job log from 2026-08-27, and nowhere a later run can read** | the CPU model does not sort the per-item cost - seven `route` runs on one AMD EPYC 9V74 span 34.2 to 54.8 s, 1.60x on one CPU string ([The CPU model does not sort the route job's per-item cost](#the-cpu-model-does-not-sort-the-route-jobs-per-item-cost)) - so this is no longer a suspect to confirm but a covariate any later comparison has to hold. **The `work` job left this row on 2026-08-29**: every `work` shard now files its own `cpu_model` beside its own clock in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). `route` runs no shards and files no counters row, so it still has only `runner: ubuntu-latest` on the run manifest and a job log that ages out. Give `route` a committed row of its own, or put the CPU model on the run manifest, and a swing there becomes attributable from committed data. |
 | **What a sharded `route` job would cost** | **arithmetic only; no longer blocked** | four shards divide the stage but each pays the fixed cost. The collision-free asset path it was waiting for landed on 2026-08-27, so this is now an ordinary throughput question - and the stage spends its whole budget on 10 of 11 runs, so it is the largest lever left. Not citable until a real matrix run records what the extra cache restores and model loads cost against what the split saves. |
 | **Whether Qwen3.5 recurrent state preserves incumbent-style prefix reuse** | **unmeasured; Qwen3 incumbent reuse is proven above** | serve the configured model through a real ordered worker and read its LCP/recurrent-state log fields plus evaluated prompt tokens for item 1 and items 2..N; record band crossings separately |
-| **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29.** It moved from 2500 to 5000 in `config/idhazh.json`, so it is no longer an unswept knob but a live change under observation, and the first scheduled run measures it directly against [What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record). |
+| **`max_output_tokens` as a wall-clock lever** | **unswept** | the `runtime` job in `measure.yml` sweeps llama-server runtime flags only. This one sets how much is decoded per item, which is the tail of a run rather than its median. Sweep it the same way: one value at a time, 3 repeats, fixed shard, golden `output_digest` unchanged. **`truncation_cap_tokens` left this row on 2026-08-29 and is now measured**: run `33244705103` ran at cap 5000, both triggers passed, and the sheet is filled ([What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record)). |
 | A production day payload | fixture figure above | the first real pipeline run |
 | HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
