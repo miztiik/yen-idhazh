@@ -1,0 +1,97 @@
+{
+  "$defs": {
+    "ChatRole": {
+      "description": "The three turns of one supervised sample, in the order a trainer reads them.",
+      "enum": [
+        "system",
+        "user",
+        "assistant"
+      ],
+      "title": "ChatRole",
+      "type": "string"
+    },
+    "ChatTurn": {
+      "additionalProperties": false,
+      "description": "One turn. `content` is text and never a structure, because that is what a trainer reads.",
+      "properties": {
+        "content": {
+          "minLength": 1,
+          "title": "Content",
+          "type": "string"
+        },
+        "role": {
+          "$ref": "#/$defs/ChatRole"
+        }
+      },
+      "required": [
+        "role",
+        "content"
+      ],
+      "title": "ChatTurn",
+      "type": "object"
+    }
+  },
+  "$id": "corpus-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the three-turn exchange, plus url_key, date, model_id and vertical.",
+      "version": "2026-08-28",
+      "why": "The pipeline scores 600-730 articles a day and throws the pairs away. They are training data for the exact job we run, so the window that keeps them needs a shape before anything writes one (Rule #3). Five fields and no more: prompt_fingerprint is sha256 of messages[0], source_words is a word count of messages[1], and which file a row lives in already says whether a human wrote it - a stored copy of a derivable value is a second thing that can disagree with the first."
+    }
+  ],
+  "description": "One article's exchange, as one line of `corpus/corpus.jsonl`.",
+  "properties": {
+    "date": {
+      "description": "The run day. It drives the roll's eviction and the date-based holdout split.",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "messages": {
+      "description": "The training column, and the only one a trainer reads. System, user, assistant, in that order.",
+      "items": {
+        "$ref": "#/$defs/ChatTurn"
+      },
+      "maxItems": 3,
+      "minItems": 3,
+      "title": "Messages",
+      "type": "array"
+    },
+    "model_id": {
+      "description": "Which model wrote the assistant turn. A distilled corpus mixes rows from two teachers and nothing else on the row tells them apart.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "url_key": {
+      "description": "Deduplication, and what the holdout file is a set of.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-28",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "description": "The one diversity column a quota can act on. Measured 2026-08-27 over the 114 published items of that day: present on 114 of 114, where events reached 58 percent, entities 53 and lenses 34.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Vertical",
+      "type": "string"
+    }
+  },
+  "required": [
+    "messages",
+    "url_key",
+    "date",
+    "model_id",
+    "vertical"
+  ],
+  "title": "CorpusRow",
+  "type": "object",
+  "version": "2026-08-28"
+}

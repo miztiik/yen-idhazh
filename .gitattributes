@@ -29,6 +29,15 @@ config/*.json text eol=lf
 state/*.csv text eol=lf merge=union
 state/**/*.csv text eol=lf merge=union
 
+# The training window. Deliberately NOT `merge=union`: it is a rolling window
+# rather than an append-only ledger, so the union of two rolls is a file that
+# holds evicted rows again and exceeds `finetune.corpus_rows`. The harvest
+# records what its run saw, so a race is answered by replaying those rows onto
+# the new base.
+corpus/*.jsonl text eol=lf
+corpus/*.json text eol=lf
+corpus/*.txt text eol=lf
+
 # Test fixtures are byte-exact inputs. A golden summary, a canary payload, or a
 # captured page is compared against a fresh pipeline run, so any end-of-line
 # conversion would fail the comparison on whichever machine has the other

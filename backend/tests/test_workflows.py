@@ -39,6 +39,7 @@ EXPECTED_WORKFLOWS: Final = {
         "Pages publication",
         frozenset({"push", "workflow_run", "workflow_dispatch"}),
     ),
+    "prune.yml": ("Corpus prune", frozenset({"schedule", "workflow_dispatch"})),
     "validate.yml": ("Model validation", frozenset({"workflow_dispatch"})),
 }
 
@@ -74,6 +75,7 @@ DISPATCH_INPUT_SHAPES: Final[dict[tuple[str, str], str]] = {
     ("measure.yml", "runtime_threads_batch"): DISPATCH_READ_BY_NAME,
     ("measure.yml", "target"): DISPATCH_CHOICE,
     ("measure.yml", "threads"): "^[1-9][0-9]*$",
+    ("prune.yml", "force"): DISPATCH_BOOLEAN,
     ("validate.yml", "candidate_bytes"): "^[0-9]{1,15}$",
     ("validate.yml", "candidate_file"): DISPATCH_READ_BY_NAME,
     ("validate.yml", "candidate_id"): DISPATCH_READ_BY_NAME,
@@ -326,12 +328,23 @@ COMMIT_STAGED_PATHS: Final = {
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "state",
+        "corpus",
     ],
 }
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
 RECORD_COMMAND: Final = "python -m idhazh record"
+# The step that adds this run's accepted pairs to the training window. It runs
+# in assemble because that is where the article text still exists: `items/` is
+# gitignored and travels as a one-day artifact, so a workflow of its own would
+# check out a fresh tree and harvest nothing. It may not fail the publish.
+HARVEST_STEP: Final = "Harvest the training corpus"
+HARVEST_COMMAND: Final = "python -m idhazh harvest"
+# The seed a fresh checkout must already carry, because `commit-and-push.sh`
+# runs `git add "$@"` under `set -euo pipefail` - a staged path that does not
+# exist yet aborts the whole commit step and costs the ledgers staged beside it.
+CORPUS_SEED: Final = ("corpus/corpus.jsonl", "corpus/corpus.meta.json", "corpus/holdout.txt")
 # The third ledger the same commit step stages: what llama-server itself counted
 # for this shard. It has to sit between the other two, because the row it writes
 # is committed by the step after it.
@@ -958,6 +971,10 @@ def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path
     _git(tmp_path, env, "clone", str(origin), str(seed))
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
     _write(seed / "docs" / "unrelated.md", "seed\n")
+    # The corpus seed, exactly as a real checkout carries it. Without it
+    # `git add corpus` aborts the commit step and takes the day's ledgers with it.
+    for relative in CORPUS_SEED:
+        _write(seed / relative, read_text(REPO_ROOT / relative))
     _rebuild(seed, env, date, ["item-a", "item-b"])
     _git(seed, env, "add", ".gitattributes", "docs", *COMMIT_STAGED_PATHS["assemble"])
     _git(seed, env, "commit", "-m", f"digest: {date}")
@@ -1568,6 +1585,167 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
     )
 
 
+def test_the_harvest_runs_where_the_article_text_still_is() -> None:
+    """A corpus built anywhere else is a corpus of nothing.
+
+    `backend/var/run/<date>/items/` is gitignored and travels as a one-day
+    artifact, so a workflow of its own would check out a fresh tree and find an
+    empty directory - and it would report success while doing it. The step
+    therefore sits in the job that already downloaded that artifact, between the
+    publish that proves the day and the commit that pushes it.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    names = [step.get("name") for step in _steps(workflow, "assemble")]
+    step = _step(workflow, "assemble", "name", HARVEST_STEP)
+
+    assert HARVEST_COMMAND in _script(step, "assemble harvest step")
+    assert step.get("continue-on-error") == TOLERATED, (
+        "a corpus that will not build must never be what stops a reader getting the day"
+    )
+    assert (
+        names.index("Assemble and publish")
+        < names.index(HARVEST_STEP)
+        < names.index(COMMIT_STEPS["assemble"])
+    )
+
+
+def test_the_corpus_is_committed_but_never_rebuilt() -> None:
+    """The window records what a run saw. It is not derived from origin's tip.
+
+    So it is staged by the commit step and deliberately absent from the refresh
+    set: on a lost race the answer is to replay this run's rows onto the new
+    base, which is what the rebase already does, and never to run a producer
+    again over articles the new checkout cannot see.
+    """
+    staged, settings = _commit_call("assemble")
+
+    assert "corpus" in staged
+    assert "corpus" not in settings["REFRESH_PATHS"].split()
+    assert "corpus" not in settings["REGENERATE_COMMAND"].split()
+
+
+def test_every_path_the_day_stages_exists_in_a_fresh_checkout() -> None:
+    """`git add "$@"` runs under `set -euo pipefail`.
+
+    A staged path that only appears once its producer succeeded therefore aborts
+    the whole commit step, and takes every sibling ledger staged in the same call
+    with it. The seed is what makes the corpus path safe to name.
+    """
+    for relative in CORPUS_SEED:
+        assert (REPO_ROOT / relative).is_file(), f"{relative} must be committed, even when empty"
+    tracked = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", *CORPUS_SEED],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert tracked.returncode == 0, tracked.stderr.strip()
+
+
+def test_the_corpus_is_not_union_merged() -> None:
+    """A rolling window is not an append-only ledger.
+
+    Asked of git rather than of a pattern matcher written here. Unioning two
+    rolls produces a file that carries evicted rows again and sits above
+    `finetune.corpus_rows`, which is the one shape this file must never take.
+    """
+    answered = subprocess.run(
+        ["git", "check-attr", "merge", "--", *CORPUS_SEED],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+
+    assert answered == [f"{path}: merge: unspecified" for path in CORPUS_SEED]
+
+
+def test_only_the_scheduled_prune_may_force_push() -> None:
+    """The single exception in `CLAUDE.md` section 8, held closed-world.
+
+    Discovery is over every workflow body and every shipped script, so a second
+    force-push fails here whoever adds it and wherever they put it.
+    """
+    forcing: set[tuple[str, object]] = set()
+    for filename, workflow in _load_workflows().items():
+        for job_name in _mapping(workflow.get("jobs"), "jobs"):
+            for step in _steps(workflow, job_name):
+                script = step.get("run")
+                if isinstance(script, str) and re.search(r"push\s+(--force|-f)\b", script):
+                    forcing.add((filename, step.get("name")))
+    for path in sorted(SCRIPTS_DIR.glob("*.sh")):
+        assert not re.search(r"push\s+(--force|-f)\b", read_text(path)), (
+            f"{path.name} force-pushes, and only .github/workflows/prune.yml may"
+        )
+
+    assert forcing == {("prune.yml", "Push the rewritten history")}
+
+
+def test_the_prune_reads_both_its_numbers_from_config() -> None:
+    """The cadence is a config value, so it cannot be a cron line.
+
+    `on.schedule` is parsed before any step runs, so nothing in `config/` can
+    reach it, and 5-field cron has no every-N-days field to write one with. The
+    daily cron is the wake-up; this step is the schedule. Run against the real
+    committed config, so a renamed knob fails here.
+    """
+    workflow = _load_workflows()["prune.yml"]
+    step = _step(workflow, "prune", "id", "due")
+    outputs = _run_the_inline_program(_script(step, "prune due step"), REPO_ROOT)
+    finetune = json.loads(read_text(CONFIG_DIR / "idhazh.json"))["finetune"]
+
+    assert outputs["due"] in {"true", "false"}
+    assert outputs["keep_days"] == str(finetune["prune_keep_days"])
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", outputs["today"])
+    assert re.fullmatch(r"\d{4}-\d{2}-\d{2}", outputs["boundary"])
+    assert (
+        datetime.date.fromisoformat(outputs["today"])
+        - datetime.date.fromisoformat(outputs["boundary"])
+    ).days == finetune["prune_keep_days"]
+
+    schedule = _triggers(workflow)["schedule"]
+    assert isinstance(schedule, list) and len(schedule) == 1
+    cron = _mapping(cast(list[object], schedule)[0], "prune cron")["cron"]
+    assert isinstance(cron, str)
+    assert "*/" not in cron, (
+        "a step-value cron is not an every-N-days cadence: */30 fires on the 1st and 31st"
+    )
+
+
+def test_the_prune_only_clones_the_whole_history_when_it_is_due() -> None:
+    """29 wakes out of 30 read one committed file and stop.
+
+    The deep fetch, the Python setup, the install and the push are each gated on
+    the same output, so a repository nobody is pruning costs a shallow checkout a
+    day rather than a full clone a day.
+    """
+    workflow = _load_workflows()["prune.yml"]
+    steps = _steps(workflow, "prune")
+    depths = [
+        _mapping(step.get("with"), "checkout with").get("fetch-depth")
+        for step in steps
+        if isinstance(step.get("uses"), str)
+        and cast(str, step.get("uses")).startswith("actions/checkout@")
+    ]
+
+    assert depths == ["1", "0"], "a shallow read first, and the full history only when due"
+    gated = [
+        _normalize_condition(step["if"], "prune step condition")
+        for step in steps
+        if "if" in step
+    ]
+    assert gated.count("steps.due.outputs.due == 'true'") == len(gated) - 1
+    for step in steps:
+        if step.get("name") == "Push the rewritten history":
+            assert _normalize_condition(step["if"], "push condition") == (
+                "steps.due.outputs.due == 'true'"
+            )
+            break
+    else:
+        pytest.fail("the prune must have a push step")
+
+
 def test_the_plan_job_publishes_the_day_directory_it_decided() -> None:
     """The refresh set has to name two files inside the day, so the run says where it is."""
     workflow = _load_workflows()["digest.yml"]
@@ -1650,6 +1828,7 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     assert tolerant == {
         *(("work", name) for name in WORK_LEDGER_STEPS),
         ("assemble", "actions/download-artifact@v8"),
+        ("assemble", HARVEST_STEP),
     }
 
 
