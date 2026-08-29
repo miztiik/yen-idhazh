@@ -1954,7 +1954,13 @@ def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int
 
 
 def stage_counters(
-    plan: RunPlan, *, metrics_path: Path, shard: int = 0, shards: int = 1
+    plan: RunPlan,
+    *,
+    metrics_path: Path,
+    shard: int = 0,
+    shards: int = 1,
+    job_started_at: int | None = None,
+    cpu_model: str | None = None,
 ) -> RuntimeCountersRow:
     """Commit what this shard's model server counted, so the ledger can be checked.
 
@@ -1966,6 +1972,13 @@ def stage_counters(
 
     Both counters are cumulative for the server process and a shard runs one
     server for its whole job, so this one read covers the shard entirely.
+
+    The same row carries the job's own clock and the host it ran on. Neither is
+    the server's to report, so both arrive as arguments: `job_started_at` is the
+    epoch second the job's first step stamped, and `cpu_model` is the host's
+    `model name` line. A stage reads a file and writes a file, so it does not go
+    looking for `/proc/cpuinfo` itself - that file exists on the runner and on
+    no developer machine this project is written on.
 
     A missing or empty body still writes a row, with every counter null. A shard
     whose server was already gone and a shard that never ran are different facts,
@@ -1979,15 +1992,19 @@ def stage_counters(
         shard=shard,
         shards=shards,
         scraped_at=assemble.utc_now(),
+        job_started_at=job_started_at,
+        cpu_model=cpu_model,
     )
     landed = ledger.append_runtime_counters(STATE_ROOT, [row])
     LOG.info(
-        "counted shard=%s/%s run=%s read_tokens=%s read_seconds=%s rows=%s",
+        "counted shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s cpu=%s rows=%s",
         shard,
         shards,
         plan.run_id,
         row.prompt_tokens_total,
         row.prompt_seconds_total,
+        row.job_seconds,
+        row.cpu_model,
         landed,
     )
     return row
@@ -2617,6 +2634,24 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--job-started-at",
+        default="",
+        help=(
+            "Epoch seconds stamped by the first step of the shard job. The counters "
+            "row records the difference against its own scrape time. Empty means no "
+            "stamp, and the cell then stays empty rather than reading zero."
+        ),
+    )
+    parser.add_argument(
+        "--cpu-model",
+        default="",
+        help=(
+            "The host's /proc/cpuinfo `model name` line. `ubuntu-latest` names the "
+            "runner image, not the processor, and this project has measured a 3.1x "
+            "throughput swing between hosts."
+        ),
+    )
+    parser.add_argument(
         "--site-tree",
         type=Path,
         default=None,
@@ -2745,6 +2780,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             metrics_path=args.counters_file,
             shard=args.shard,
             shards=args.shards,
+            job_started_at=int(args.job_started_at) if args.job_started_at else None,
+            cpu_model=args.cpu_model,
         )
         return 0
 

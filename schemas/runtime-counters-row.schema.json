@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Appended `job_seconds`, the shard job's own clock up to this scrape, and `cpu_model`, the processor the host drew.",
+      "version": "2026-08-29",
+      "why": "The truncation cap reverts when the slowest work job passes 110 minutes on two of three scheduled runs, and no committed file carried a job's clock - only the GitHub jobs API did, and it drops a job record when the run ages out. A rollback rule that reads an instrument outside the repository is checked by hand or not at all. The CPU model lands in the same row because this project has measured a 3.1x swing in read throughput between hosts, so a clock without the part it was taken on cannot be compared with the next run's (Rule #10). Both are one fact about one work job, which is exactly this row's grain; the run manifest is one row per run and a run draws up to eight hosts."
+    },
+    {
       "change": "Initial shape: the shard, and the llamacpp: counters its server reported at job end.",
       "version": "2026-08-27",
       "why": "The item-health ledger's prefill and decode timings are copied out of the model's own replies, one request at a time, and two published surfaces quote rates derived from them. Nothing committed could check either, because the server's own counters were scraped into a job log that keeps them for two days. A number that cannot be reconciled cannot justify a design (Rule #10), so the second instrument is now a committed row."
@@ -11,11 +16,40 @@
   ],
   "description": "One `work` shard, one run, one row.",
   "properties": {
+    "cpu_model": {
+      "anyOf": [
+        {
+          "maxLength": 120,
+          "pattern": "^[ -~]+$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The `model name` line of the host's /proc/cpuinfo. `ubuntu-latest` is the label and this is the part, so a clock in this row can be read against another run's.",
+      "title": "Cpu Model"
+    },
     "date": {
       "description": "The digest day, the same one the item-health row files under.",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
       "title": "Date",
       "type": "string"
+    },
+    "job_seconds": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Seconds from the shard job's first step to this scrape. It is a floor on the wall-clock the GitHub jobs API reports and never a ceiling: the steps after the scrape - the ledger push, two log summaries and the artifact uploads - are outside it.",
+      "title": "Job Seconds"
     },
     "n_busy_slots_per_decode": {
       "anyOf": [
@@ -153,7 +187,7 @@
       "title": "Tokens Predicted Total"
     },
     "version": {
-      "default": "2026-08-27",
+      "default": "2026-08-29",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -168,5 +202,5 @@
   ],
   "title": "RuntimeCountersRow",
   "type": "object",
-  "version": "2026-08-27"
+  "version": "2026-08-29"
 }

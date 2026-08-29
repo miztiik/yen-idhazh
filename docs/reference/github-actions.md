@@ -135,6 +135,15 @@ hold a published rate to account. The committed row is what lets
 `backend/utilities/reconcile_prefill.py` check the item-health ledger's read rate
 against a second instrument (Rule #10).
 
+The same row carries two facts about the job rather than about its server: how
+long the shard took, and which processor it drew. The `work` job's first step -
+ahead of the checkout, so the clock covers the cache restore and the weight load
+- writes an epoch second and the `/proc/cpuinfo` `model name` line to
+`$GITHUB_ENV`, and the counters step passes both to `python -m idhazh counters`.
+The rollback rule for the truncation cap reads that clock, and until 2026-08-29
+the only place it existed was the jobs API, which drops a job record when the run
+ages out ([measurements.md](measurements.md#the-instrument-trigger-a-reads)).
+
 ### The three commit steps push through a rebase, and the one that can rebuild rebuilds
 
 The plan job, each work shard and the assemble job commit, then push in a loop of
