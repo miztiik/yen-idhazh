@@ -20,6 +20,20 @@ function latestFixtureDay(): string {
 	return (JSON.parse(raw) as { date: string }).date;
 }
 
+interface PublishedItem {
+	item_id: string;
+	source_form: string;
+	truncated: boolean;
+	reader_note: string | null;
+}
+
+/** Every item the canary day published, read off the payload the page renders. */
+function publishedItems(date: string): PublishedItem[] {
+	const [year, month, day] = date.split('-');
+	const raw = readFileSync(join(CANARY, year, month, day, 'digest.json'), 'utf8');
+	return (JSON.parse(raw) as { items: PublishedItem[] }).items;
+}
+
 function longDate(date: string): string {
 	const months = [
 		'January',
@@ -81,6 +95,47 @@ test('reader source limits are sentences in the page text', () => {
 	expect(footer).toContain(
 		'We skipped {facts.items_failed} stories today because we could not read enough of the page to'
 	);
+});
+
+/**
+ * Two source limits on one item, in one paragraph, in order.
+ *
+ * `reader_note` joins a sentence for each limit an item carries, and an item
+ * that is both an abstract and cut carries two. Until the canary day published
+ * one, that pair had a unit test and no page: measured 2026-08-29 over every
+ * committed digest payload, no published item carries an abstract note at all.
+ * The one sentence a reader would actually meet was the one nothing rendered.
+ *
+ * The item is found in the payload rather than named here, so the assertion
+ * follows the fixture instead of pinning a position in it. What is pinned is the
+ * sentence, because the sentence is the product.
+ */
+test('an item that is both an abstract and cut says both, in one paragraph', async ({ page }) => {
+	const date = latestFixtureDay();
+	const both = publishedItems(date).filter(
+		(entry) => entry.source_form === 'abstract' && entry.truncated
+	);
+
+	// An assertion rather than a skip. A skip reads as nothing in a long pass
+	// list, so a fixture that stopped carrying this item would switch the check
+	// off in silence.
+	expect(both, 'the canary day publishes no item that is both an abstract and cut').toHaveLength(
+		1
+	);
+	expect(both[0].reader_note).toBe(
+		"This is a summary of the paper's abstract. The full paper is a PDF. " +
+			'We could only read the first 75 percent of this page.'
+	);
+
+	await page.goto(`/${date}/`);
+
+	const article = page.locator(`article#${both[0].item_id}`);
+	await expect(article, 'the day page renders no article for that item').toHaveCount(1);
+	const note = article.locator('p').filter({ hasText: 'The full paper is a PDF.' });
+	await expect(note, 'the item renders no reader note').toHaveCount(1);
+	// One element holding both sentences. Split across two paragraphs, or either
+	// sentence alone, and this fails.
+	await expect(note).toHaveText(both[0].reader_note as string);
 });
 
 /**

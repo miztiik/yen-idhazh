@@ -21,6 +21,7 @@ from conftest import FIXTURES_DIR
 
 from idhazh import config
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
+from idhazh.contracts.sources import SourceForm
 from idhazh.evals import writer
 from utilities import build_canary_day
 
@@ -144,6 +145,35 @@ def test_a_summary_stays_inside_the_axis_the_chart_draws() -> None:
     """The y domain is zero to the longest summary, capped by the configured limit."""
     for row in ROWS:
         assert 0 < row.summary_word_count <= EVALUATION.summary_words_max
+
+
+def test_the_digest_and_the_ledger_agree_on_which_items_were_cut() -> None:
+    """One rule, two files. A reader is told what the console counts."""
+    assert [item.truncated for item in ITEMS] == [row.truncation_flagged for row in ROWS]
+    assert any(item.truncated for item in ITEMS), "no published item was cut"
+
+
+def test_one_published_item_is_both_an_abstract_and_cut() -> None:
+    """The note joins a sentence per limit, and nothing rendered the pair.
+
+    Nothing in extract exempts an abstract from the cap, so the two facts can
+    land on one real item. They never have: measured 2026-08-29 over every
+    committed `frontend/public/digest/**/digest.json`, no published item carries
+    an abstract note at all. Without this row the joined sentence has a unit test
+    and no page, so no browser can read back what a reader would meet.
+
+    Exactly one, because the browser suite addresses it and two would make the
+    assertion there depend on which one Playwright found first.
+    """
+    both = [item for item in ITEMS if item.source_form is SourceForm.ABSTRACT and item.truncated]
+
+    assert len(both) == 1, "no published item is both an abstract and cut"
+    # Composed by `assemble.reader_note`, never spelled in the builder. The share
+    # is 2,100 words of 2,800, which is the cap over this row's `source_words`.
+    assert both[0].reader_note == (
+        "This is a summary of the paper's abstract. The full paper is a PDF. "
+        "We could only read the first 75 percent of this page."
+    )
 
 
 def test_the_ledger_header_is_the_contract(tmp_path: Path) -> None:
