@@ -34,6 +34,7 @@
         {
           "model_ref": {
             "file": "Qwen3.5-9B-Q4_K_M.gguf",
+            "hf_base_repo": null,
             "id": "qwen3-5-9b-q4-k-m",
             "quantisation": "Q4_K_M",
             "repo": "unsloth/Qwen3.5-9B-GGUF",
@@ -89,7 +90,97 @@
           "published": 24
         }
       ]
+    },
+    {
+      "charts_drafted": 10,
+      "commit_sha": "fa536347991c510055aeeda67b1309cace3e196e",
+      "completed_at": "2026-08-29T10:58:46Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "878c1621c43e0cd1c35f350c44d962292fbb5d18748d6868861822d95f31b7bf"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "9d5cd6a5c08cf6d459b2d52799e8e7d698d8f94df1910ecb221061b144040c8d"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "aa20f5d87d7ea70198c3d6a71ff0f5e05e58b4f65295a82e5963e7667ada7047"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "def45f958dab41168aa4bf4ee5e9c85087c2d72270d26a50a32063aeda9d31a3"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 56,
+      "items_planned": 160,
+      "items_prefiltered": 58,
+      "items_routed": 104,
+      "items_skipped": 0,
+      "items_succeeded": 104,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3.5-9B-Q4_K_M.gguf",
+            "hf_base_repo": "Qwen/Qwen3.5-9B",
+            "id": "qwen3-5-9b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "unsloth/Qwen3.5-9B-GGUF",
+            "revision": "3885219b6810b007914f3a7950a8d1b469d598a5",
+            "sha256": "03b74727a860a56338e042c4420bb3f04b2fec5734175f4cb9fa853daf52b7e8"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 2,
+      "note": null,
+      "pipeline_fingerprints": [
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "5e60871742749500a1a8a90f863d6b3d1b0941abeff627e1e0ccd955de8b08dc"
+      ],
+      "route_ms": 2219924,
+      "run_id": "2026-08-29-2",
+      "runner": "ubuntu-latest",
+      "site_bytes": 9214545,
+      "site_files": 142,
+      "source_list_stale": false,
+      "started_at": "2026-08-29T09:06:50Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 31,
+          "published": 21
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 19,
+          "published": 12
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 26,
+          "published": 9
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 46,
+          "published": 31
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 38,
+          "published": 31
+        }
+      ]
     }
   ],
-  "version": "2026-08-27T11:00"
+  "version": "2026-08-28"
 }
