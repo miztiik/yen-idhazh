@@ -658,11 +658,26 @@ jobs:
           retention-days: 2
           if-no-files-found: ignore
 
+      # Seven days, not one. Route and assemble read this within the hour, so
+      # one day was enough for the run itself - but it is also the only copy of
+      # the article text a finished run leaves behind, and
+      # `data_wrangler.py backfill` replays it into the training corpus.
+      #
+      # At one day the scheduled harvest is the only way rows ever arrive, and it
+      # takes one run every `finetune.harvest_every_days` - about 85 rows a week
+      # measured over runs 33179908136 and 33227285523 on 2026-08-29, which is
+      # roughly six months to fill a 2000-row window. At seven days a single
+      # backfill reaches every run of the past week and fills it in one sitting.
+      #
+      # Measured 2026-08-29: one run's four shards are 555,842 bytes, so five
+      # runs a day held for seven days is 18.6 MB against the 500 MB of artifact
+      # storage Rule #2 allows - 3.7 percent of the budget, for the only copy of
+      # the text that exists.
       - uses: actions/upload-artifact@v7
         with:
           name: items-${{ matrix.shard }}
           path: backend/var/run/${{ needs.plan.outputs.date }}/items/
-          retention-days: 1
+          retention-days: 7
           if-no-files-found: ignore
 
       # The article and the summary each scored item was judged on, for the

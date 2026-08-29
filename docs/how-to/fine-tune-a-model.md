@@ -1,6 +1,6 @@
 # Fine-tune a summarizer
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-29
 
 How the training corpus is built, what maintains it, and what a person does with
 it. Training itself does not happen here: the runner has no GPU, 4 vCPU and a
@@ -172,18 +172,43 @@ not change.
 
 ## Looking at the corpus
 
-`backend/utilities/data_wrangler.py` has four verbs and no fifth. Routine data
+`backend/utilities/data_wrangler.py` has five verbs and no sixth. Routine data
 movement is deliberately not among them: the harvest and the roll run on a
 schedule where a failure has an alarm on it, and a local utility has none.
+`backfill` is not routine - it is a replay a person runs deliberately, through
+the scheduled harvest's own function.
 
 ```bash
 python backend/utilities/data_wrangler.py stats
 python backend/utilities/data_wrangler.py split --holdout-days 14
 python backend/utilities/data_wrangler.py verify
 python backend/utilities/data_wrangler.py verify --tokens
+python backend/utilities/data_wrangler.py backfill --items-dir <dir>
 python backend/utilities/data_wrangler.py remove --url-key <sha256> --yes
 ```
 
+- **`backfill`** is what stops a corpus starting empty and filling at one run a
+  week. Give it a directory holding a finished run's item payloads and it runs
+  the same harvest the schedule runs - same function, same bytes, and a test
+  asserts a backfilled row equals a harvested one. Nothing is re-fetched: the
+  premise is the exact text the scorer read, and re-fetching the address would
+  return a different article.
+
+  ```bash
+  gh run download <run-id> --repo miztiik/yen-idhazh --pattern 'items-*' --dir /tmp/items
+  python backend/utilities/data_wrangler.py backfill --items-dir /tmp/items
+  ```
+
+  Repeat per run; the roll deduplicates by `url_key`, so replaying the same run
+  twice is harmless. Rows are dated by their own eval row, so one session can
+  replay several days and each row still lands on the day it was produced.
+
+  **How far back it reaches is set by `items-*` artifact retention, which is
+  seven days.** Measured 2026-08-29: one run's four shards are 555,842 bytes, so
+  a week of five runs a day is 18.6 MB against the 500 MB Rule #2 allows.
+  `evidence-*` lives fourteen days but carries neither `source_form` nor `brief`
+  nor the key points, so a row rebuilt from it would carry a guessed length band
+  - which is the failure this corpus exists to prevent.
 - **`stats`** prints the row count against the window, the date range, the word
   and target spreads, the counts per vertical and per model, how many rows a
   session would really draw, and a warning when the live prompt no longer matches

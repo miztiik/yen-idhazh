@@ -284,17 +284,20 @@ def test_remove_says_so_when_no_row_holds_that_address(
 # --- shape -----------------------------------------------------------------
 
 
-def test_the_wrangler_never_rolls_and_never_harvests() -> None:
-    """Routine data movement belongs in a job with an alarm on it.
+def test_the_wrangler_owns_no_schedule_and_reimplements_no_roll() -> None:
+    """A local utility has no alarm on it, so nothing recurring may live here.
 
-    A local utility has no alarm, so a schedule that ran here would be a schedule
-    nobody notices stopping.
+    `backfill` does call the harvest, and that is the point: a deliberate replay
+    a person runs once is not routine data movement. What it must never do is
+    grow its own copy of the roll or its own idea of when to run, because that is
+    the copy that drifts from the scheduled one.
     """
     source = read_text(Path(data_wrangler.__file__))
 
-    assert "corpus.roll(" not in source
-    assert "corpus.harvest(" not in source
-    assert "harvest_rows(" not in source
+    assert "corpus.roll(" not in source, "the roll has one implementation"
+    assert "harvest_is_due" not in source, "the cadence belongs to the scheduled step"
+    assert "cron" not in source
+    assert "corpus.harvest(" in source, "backfill reuses the shipped harvest"
 
 
 def test_an_absent_corpus_is_reported_rather_than_crashing(

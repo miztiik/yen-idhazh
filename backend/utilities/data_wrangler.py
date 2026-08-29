@@ -1,6 +1,6 @@
-"""Look at the training corpus, split its holdout, and repair it.
+"""Look at the training corpus, split its holdout, repair it, and fill it.
 
-Four verbs and no fifth. Routine data movement is not here: the harvest and the
+Five verbs and no sixth. Routine data movement is not here: the harvest and the
 roll run in CI on a schedule, where a failure has an alarm on it, and a local
 utility has none. What this owns is the work a person does deliberately, before
 or after a training session.
@@ -9,7 +9,13 @@ or after a training session.
     python backend/utilities/data_wrangler.py split --holdout-days 14
     python backend/utilities/data_wrangler.py verify
     python backend/utilities/data_wrangler.py verify --tokens
+    python backend/utilities/data_wrangler.py backfill --items-dir <dir>
     python backend/utilities/data_wrangler.py remove --url-key <sha256>
+
+`backfill` is the one that means a corpus does not have to start empty and fill
+at one day a week. It replays a finished run's `items-*` artifact through the
+same harvest the schedule runs, so a backfilled row and a harvested row are the
+same bytes.
 
 `verify --tokens` is the one subcommand that reaches the network, and it is here
 rather than in a test for that reason (Rule #7). It downloads the tokenizer named
@@ -223,6 +229,72 @@ def _token_report(rows: Sequence[CorpusRow], settings: config.Settings) -> list[
     return []
 
 
+def backfill(corpus_dir: Path, settings: config.Settings, *, items_dir: Path) -> int:
+    """Replay a finished run's items artifact into the window, today.
+
+    The scheduled harvest only fires every `finetune.harvest_every_days`, and it
+    only ever sees the run it is part of - so a corpus starts empty and fills at
+    one day a week. This is the same harvest pointed at a directory somebody
+    downloaded, which is what turns "wait a week for the first rows" into "have
+    them now".
+
+    It reads the exact three payloads the live harvest reads and calls the exact
+    same function, so a backfilled row and a harvested row are the same bytes.
+    Nothing is re-fetched: the premise is the text the scorer really read, and
+    re-fetching the address would return a different article.
+
+    Get a directory with:
+
+        gh run download <run-id> --repo <owner/repo> --pattern 'items-*' --dir <dir>
+
+    `items-*` carries a 1-day retention, so this reaches the last day or two of
+    runs and no further. `evidence-*` lives 14 days but carries neither
+    `source_form` nor `brief` nor the key points, so a row rebuilt from it would
+    have a system prompt that is a guess - which is the one thing this corpus
+    exists to make impossible.
+    """
+    if not items_dir.is_dir():
+        print(f"{items_dir.as_posix()} is not a directory")
+        return 1
+
+    scored = corpus.scored_from_items(items_dir)
+    if not scored:
+        print(f"no complete items under {items_dir.as_posix()}")
+        return 1
+
+    before = len(corpus.read_rows(corpus_dir))
+    finetune = settings.app.finetune
+    meta = corpus.harvest(
+        corpus_dir,
+        scored,
+        date=_newest_date(scored),
+        finetune=finetune,
+        prompt_config=settings.app.summarize,
+        evaluation=settings.app.evaluation,
+    )
+    print(f"{'items read':<{_WIDTH}} {len(scored)}")
+    print(f"{'rows before':<{_WIDTH}} {before}")
+    print(f"{'rows now':<{_WIDTH}} {meta.rows} of a {finetune.corpus_rows}-row window")
+    print(f"{'days covered':<{_WIDTH}} {meta.first_date or '-'} to {meta.last_date or '-'}")
+    for name, count in sorted(meta.verticals.items(), key=lambda pair: (-pair[1], pair[0])):
+        print(f"  vertical {name:<20} {count:>5}")
+    if meta.rows < finetune.min_rows:
+        print(f"still {finetune.min_rows - meta.rows} short of finetune.min_rows")
+    return 0
+
+
+def _newest_date(scored: Sequence[corpus.Scored]) -> str:
+    """The fallback date for an item with no eval row.
+
+    Every row that survives the filter is dated by its own eval row, so this only
+    ever labels an item the filter is about to drop. It is the newest date in the
+    batch rather than today, so a replay of an old run cannot stamp old work with
+    the day somebody happened to run the replay.
+    """
+    dates = sorted(item.row.date for item in scored if item.row is not None)
+    return dates[-1] if dates else "1970-01-01"
+
+
 def remove(
     corpus_dir: Path, settings: config.Settings, *, url_keys: Sequence[str], yes: bool
 ) -> int:
@@ -295,6 +367,16 @@ def main(argv: Sequence[str] | None = None) -> int:
         help="Also measure tokens per row. Downloads the base model's tokenizer.",
     )
 
+    filled = verbs.add_parser(
+        "backfill", help="Replay a downloaded run's items artifact into the window."
+    )
+    filled.add_argument(
+        "--items-dir",
+        type=Path,
+        required=True,
+        help="A directory holding <item>.article.json and friends, at any nesting.",
+    )
+
     dropped = verbs.add_parser("remove", help="Drop named rows. Prints first, asks second.")
     dropped.add_argument("--url-key", action="append", default=[], required=True)
     dropped.add_argument("--yes", action="store_true", help="Actually do it.")
@@ -308,6 +390,8 @@ def main(argv: Sequence[str] | None = None) -> int:
         return split(args.corpus_dir, settings, holdout_days=args.holdout_days)
     if args.verb == "verify":
         return verify(args.corpus_dir, settings, tokens=args.tokens)
+    if args.verb == "backfill":
+        return backfill(args.corpus_dir, settings, items_dir=args.items_dir)
     return remove(args.corpus_dir, settings, url_keys=args.url_key, yes=args.yes)
 
 
