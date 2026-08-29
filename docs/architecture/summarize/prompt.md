@@ -63,8 +63,8 @@ fenced block still holds the visible text and nothing else, so a longer ask
 cannot reach words the model was not given.
 
 The rule also could not work. The post-cap count cannot pass
-`int(truncation_cap_tokens / TOKENS_PER_WORD)`, which at the committed cap of
-2500 is **1923 words** - below the top band's 2000. That band never fired once,
+`int(truncation_cap_tokens / TOKENS_PER_WORD)`, which at the cap of 2500
+committed then was **1923 words** - below the top band's 2000. That band never fired once,
 and its longer ask was dead configuration. Measured 2026-08-26 over 109 articles
 extracted live from that day's plan: the post-cap rule put 0 of them in the top
 band, and the source-body rule put 3 there.

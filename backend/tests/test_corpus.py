@@ -18,7 +18,7 @@ from collections.abc import Callable
 import pytest
 
 from idhazh import cli, config, extract
-from idhazh.contracts.app_config import ExtractConfig, SummarizeConfig
+from idhazh.contracts.app_config import ExtractConfig
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.qualification import CorpusItem
@@ -64,7 +64,10 @@ def words_for_band(index: int) -> int:
     if index + 1 < BANDS:
         midpoint = (floor + SUMMARIZE.bands[index + 1].min_source_words) // 2
         return max(floor + WORDS_PER_SENTENCE, midpoint)
-    return floor + 1200
+    # No band sits above the top tier, so it is placed past the truncation cap
+    # as well as past its own floor. `qualify.MIN_OVER_CAP` wants truncated
+    # items and this is the only tier that can supply one at any cap.
+    return max(floor, CAP_WORDS) + 1200
 
 
 def planned(index: int, band: int) -> PlannedItem:
@@ -115,13 +118,26 @@ def a_plan(band_counts: dict[int, int]) -> tuple[list[PlannedItem], dict[str, in
 def test_the_truncation_cap_sits_below_the_longest_band() -> None:
     """Why the shipped rule could never fill the top tier.
 
-    Nothing about the plan or the day: the post-cap count cannot pass this
+    Nothing about the plan or the day: the post-cap count could not pass this
     ceiling, so a band above it was unreachable by arithmetic.
+
+    Pinned to 2500, the cap committed when that defect shipped. The cap is 5000
+    from 2026-08-29 and the post-cap ceiling is 3846 words, above the top band,
+    so the live knob can no longer reproduce the fault this test records.
     """
-    assert CAP_WORDS < SUMMARIZE.bands[-1].min_source_words
+    shipped_cap_words = int(2500 / extract.TOKENS_PER_WORD)
+    assert shipped_cap_words < SUMMARIZE.bands[-1].min_source_words
 
 
 def test_a_long_read_lands_in_the_longest_band_even_though_it_was_cut() -> None:
+    """The band is read from the count taken before the cut.
+
+    The post-cap count no longer picks a different band. At cap 5000 the
+    post-cap ceiling is 3846 words, above the top band's floor, so a cut article
+    reaches the top tier on either count. What is still testable, and is the
+    whole claim, is that the two counts differ and that the band follows the one
+    from before the cut.
+    """
     words = words_for_band(BANDS - 1)
     article = extract.to_article(
         planned(1, BANDS - 1),
@@ -132,9 +148,9 @@ def test_a_long_read_lands_in_the_longest_band_even_though_it_was_cut() -> None:
     assert article.truncated
     assert article.word_count <= CAP_WORDS
     assert article.source_word_count is not None
+    assert article.source_word_count > article.word_count
     assert article.source_word_count >= SUMMARIZE.bands[-1].min_source_words
     assert qualify.band_index(article.band_source_words, SUMMARIZE) == BANDS - 1
-    assert qualify.band_index(article.word_count, SUMMARIZE) < BANDS - 1
 
 
 def test_a_payload_written_before_the_field_reads_its_post_cap_count() -> None:
@@ -270,6 +286,10 @@ def test_the_selection_does_not_move_when_the_pool_is_reordered() -> None:
 
 
 def test_the_pool_floor_is_read_from_config() -> None:
-    """Rule #6. The knob is the only number that sizes the walk."""
+    """Rule #6. The knob is the only number that sizes the walk.
+
+    The band-against-cap assertion that used to sit here moved to
+    `test_the_truncation_cap_sits_below_the_longest_band`, which owns that
+    history and pins the cap it was true at. It never belonged to the pool.
+    """
     assert SETTINGS.app.evaluation.qualification_pool_multiple >= 1
-    assert SummarizeConfig().bands[-1].min_source_words > CAP_WORDS
