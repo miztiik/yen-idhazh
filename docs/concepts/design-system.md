@@ -28,22 +28,40 @@ Because the payload already carries the route kind, the band and the truncation 
 
 ## Design tokens
 
-Every colour, space, radius, shadow, font, easing and duration is a CSS custom property in `:root`, named **by purpose**, not by value:
+Every colour, space, radius, shadow, font, easing and duration is a CSS custom property in [../../frontend/src/styles/tokens.css](../../frontend/src/styles/tokens.css), named **by purpose**, not by value:
 
-- **Fonts** - a reading face and a tabular data face.
-- **Space / radius / shadow** - a small named scale. The space scale does most of the work on a page that is mostly text.
-- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; and the **series ramp**, `--series-1` to `--series-4`, which is categorical and carries no verdict.
+- **Fonts** - a display face for headings, a reading face for body, and a tabular data face. The display face is self-hosted woff2, Latin subset, one variable file at 48,256 bytes; the body keeps the system stack, because that renders on the first frame at zero bytes and the body is what the reader came for.
+- **Space** - `--space-0` to `--space-9` on a 4px base. On a page that is mostly text this does more work than any component will.
+- **Type** - `--text-xs` to `--text-3xl`, each paired with its own `--leading-*`. A size without a leading is half a decision.
+- **Radius** - five steps. Panel language needs a bigger corner than a chip does.
+- **Elevation** - `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-panel`, plus `--color-surface-raised` and `--color-surface-sunken`. A page with one surface colour is a page where nothing is in front of anything.
+- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
+- **Tints** - `--tint-accent`, `--tint-info`, `--tint-good`, `--tint-warn`, `--tint-bad`, `--tint-neutral`. A panel takes the hue of what it means, at 7 to 9 percent in light and roughly double that in dark.
+- **Gradients** - `--gradient-brand`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
+- **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config.md](config.md)).
 - **Motion** - one ease and a short duration scale.
 
 **The two colour ramps may not be swapped for each other.** The confidence ramp
 is green, amber and red because those colours mean good, watch and bad. The
-series ramp exists so a chart can tell four stages apart, and it deliberately
-holds none of those three hues - a chart that borrowed the band tokens told a
-reader that the slowest stage was the failing one. `--source-swatch-*` is not
-the answer either: those are pale background tints for a monogram, not stroke
-colours, and at 1px on a white card they are not visible.
+chart ramp exists so a chart can tell up to eight series apart, and it
+deliberately holds none of those three hues - a chart that borrowed the band
+tokens told a reader that the slowest stage was the failing one.
+`--source-swatch-*` is not the answer either: those are pale background tints
+for a monogram, not stroke colours, and at 1px on a white card they are not
+visible. `--series-1` to `--series-4` survive as aliases of the first four chart
+stops so no existing chart changed colour when the ramp widened.
 
-Theming is override, not a second set of names: dark mode overrides the same token values. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and a contract test asserts every non-exempt token has a mirror.
+**The dark theme is designed, not derived.** A shadow on a dark ground reads as
+nothing, so elevation there is a raised surface colour plus a hairline; every
+tint is re-tuned rather than reused at the same alpha, because the same alpha
+over a dark ground is invisible.
+
+**A scale is not a colour, and does not live in a theme block.** Space, type,
+radius and motion are declared once in their own `:root` block outside both
+themes. A scale left inside a theme block reads as something a theme could
+change, and the next theme has to restate it or lose it.
+
+Theming is override, not a second set of names: dark mode overrides the same token values. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) asserts three things at once: every theme colour has a dark override, every non-exempt token has an `@theme inline` mirror, and nothing uses a token that is never declared.
 
 ## Colour is one signal, never the only one
 
