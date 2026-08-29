@@ -1,0 +1,11 @@
+/* Generated from config/appearance.json by scripts/build-frame-css.mjs.
+   Do not hand-edit: the build regenerates it and a diff fails the gate. */
+:root {
+	--frame-reading: 1280px;
+	--frame-console: 1600px;
+	--measure: 68ch;
+	--gutter-min: 16px;
+	--gutter-max: 32px;
+	--dur-fast: 120ms;
+	--dur-base: 200ms;
+}

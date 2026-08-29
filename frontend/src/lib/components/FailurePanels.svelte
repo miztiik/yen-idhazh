@@ -123,7 +123,7 @@
 		{/if}
 	</div>
 
-	<div class="mt-4 grid gap-4 sm:grid-cols-3" data-failure-panels>
+	<div class="auto-grid mt-4" style="--auto-grid-min: 320px" data-failure-panels>
 		{#each series as entry (entry.stage)}
 			<div class="rounded-md border border-rule bg-surface p-3">
 				<div>

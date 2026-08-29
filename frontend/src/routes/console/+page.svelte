@@ -197,7 +197,7 @@
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<section class="py-6">
+<section class="py-6" data-surface="operator">
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
 	<p class="mt-1 text-[0.9375rem] text-text-secondary">
 		What the pipeline cost and how well it did, per day, from the committed ledger.

@@ -39,47 +39,83 @@
 
 <article
 	id={item.item_id}
-	class="border-b border-rule py-7"
+	class="item border-b border-rule py-7"
 	data-band={item.band}
 	data-vertical={item.vertical}
 	data-truncated={item.truncated}
 	data-read={read}
 	data-visual={item.visual?.state ?? 'absent'}
 >
-	<!-- Under a topic heading the name would repeat the heading, and a bullet on
-	     its own is decoration. The line then earns its place only when it has
-	     the one thing left to say. -->
-	{#if showVertical || read}
-		<p
-			class="mb-1 flex items-center gap-2 text-[0.75rem] tracking-wide text-text-tertiary uppercase"
+	<div class="item-body">
+		<!-- Under a topic heading the name would repeat the heading, and a bullet on
+		     its own is decoration. The line then earns its place only when it has
+		     the one thing left to say. -->
+		{#if showVertical || read}
+			<p
+				class="mb-1 flex items-center gap-2 text-[0.75rem] tracking-wide text-text-tertiary uppercase"
+			>
+				<span
+					class="inline-block h-1.5 w-1.5 rounded-full border border-current"
+					class:bg-current={!read}
+					aria-hidden="true"
+				></span>
+				{#if showVertical}{verticalName}{/if}
+				{#if read}<span class="normal-case">Read</span>{/if}
+			</p>
+		{/if}
+
+		<svelte:element
+			this={`h${level}`}
+			class="measure mb-2 text-[1.375rem] leading-[1.25] tracking-[-0.011em]"
+			class:font-semibold={!read}
+			class:font-normal={read}
+			class:text-text={!read}
+			class:text-text-secondary={read}
 		>
-			<span
-				class="inline-block h-1.5 w-1.5 rounded-full border border-current"
-				class:bg-current={!read}
-				aria-hidden="true"
-			></span>
-			{#if showVertical}{verticalName}{/if}
-			{#if read}<span class="normal-case">Read</span>{/if}
-		</p>
-	{/if}
+			{item.title}
+		</svelte:element>
 
-	<svelte:element
-		this={`h${level}`}
-		class="mb-2 text-[1.375rem] leading-[1.25] tracking-[-0.011em]"
-		class:font-semibold={!read}
-		class:font-normal={read}
-		class:text-text={!read}
-		class:text-text-secondary={read}
-	>
-		{item.title}
-	</svelte:element>
+		<p class="measure text-[1.0625rem] leading-[1.6] text-text">{item.summary}</p>
+		{#if item.reader_note}
+			<p class="measure mt-2 text-[0.9375rem] leading-[1.55] text-text-secondary">
+				{item.reader_note}
+			</p>
+		{/if}
 
-	<p class="text-[1.0625rem] leading-[1.6] text-text">{item.summary}</p>
-	{#if item.reader_note}
-		<p class="mt-2 text-[0.9375rem] leading-[1.55] text-text-secondary">{item.reader_note}</p>
-	{/if}
+		<ItemVisual visual={item.visual} />
+	</div>
 
-	<ItemVisual visual={item.visual} />
-
-	<ItemMeta {item} {showMark} {day} {onRead} />
+	<div class="item-rail">
+		<ItemMeta {item} {showMark} {day} {onRead} />
+	</div>
 </article>
+
+<style>
+	/* The measure is on the TEXT, never on the shell. Below the side-rail
+	   breakpoint the item is one column and the rail simply follows the body,
+	   which is what a phone should do. */
+	.item {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr);
+		gap: var(--space-2);
+	}
+
+	/* At this width the meta line - source, date, confidence, read mark - stops
+	   interrupting the read and moves beside it. The value matches
+	   frame.breakpoints_px[1] in config/appearance.json; a media query cannot
+	   read a custom property, which is the one place this duplication is
+	   unavoidable. */
+	@media (min-width: 1024px) {
+		.item {
+			grid-template-columns: minmax(0, 1fr) 14rem;
+			gap: var(--space-6);
+			align-items: start;
+		}
+
+		.item-rail {
+			position: sticky;
+			top: var(--space-4);
+		}
+	}
+</style>
+
