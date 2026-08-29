@@ -150,15 +150,48 @@ Icons are **vector glyphs referenced by id** from a generated manifest, never in
 
 A chart on an item is rendered at build time from a specification and shipped as an asset ([digest.md](digest.md)). Every chart on the dashboard is hand-written markup over a committed CSV or the published telemetry projection.
 
-**There is no chart library, on any surface - and a scale library is not a
-chart library.** One chart library was carried for the console
-between 2026-08-23 and 2026-08-24 on the argument that the owner required pan
-and zoom. It was removed once that argument was checked: the pan and zoom are
-implemented by the viewport control, with a keydown handler and four buttons,
-and what the library actually drew was a second, smaller copy of a chart the
-hand-written SVG already drew better. A charting library that outweighs the data
-it draws has not earned its bytes, and a runtime dependency on a reading page is
-a runtime dependency for nothing.
+**No chart library on a reader's route. The operator surface is a separate
+question, and it is open.** A scale library is not a chart library and never was.
+
+The reading-route half of that is settled and is not about bytes on a graph: a
+chart on an item is rendered at build time and shipped as an asset, so a reader
+has nothing to run. A charting engine on a reading page is a runtime dependency
+for nothing.
+
+The console half was decided wrongly, twice, and both times on an argument that
+turned out not to be the real one. A chart library was carried for the console
+between 2026-08-23 and 2026-08-24 for pan and zoom, then removed because the
+viewport control already did that with a keydown handler and four buttons - a
+correct removal. On 2026-08-29 the same blanket ban was re-argued from a
+`/console/` weight of 66,550 B that was **four and a half times out of date**;
+the route was 301,580 B by then. The owner overruled it. What replaces it is not
+another blanket, in either direction: it is three conditions and a measurement,
+below.
+
+Any library adopted for the console must (1) render SVG, not canvas, so
+`tokens.css` stays the only place a colour is decided, (2) render server-side at
+build time, so the page is complete before any script runs, and (3) carry a
+measured gzipped cost recorded next to the decision.
+
+Measured 2026-08-29 on this tree with this bundler, after the engine shipped -
+these are the built artefacts, not a bundler probe. Registering only the chart
+types in use, the engine is a lazy chunk of **153,204 B gzipped** (451,227 B
+raw). Importing the same package whole instead pulls **345,959 B gzipped**
+(1,044,275 B raw) for the same one chart, so the registration file is worth 56
+percent of the download and is the reason it is a file somebody has to edit.
+`d3-scale` and `d3-array`, which the surface already carries, are 20.5 KB
+together.
+
+The number that decides whether this is affordable is not the chunk. It is what
+opening the console costs, and that moved **1,854 B**, from 69,622 to 71,476 -
+the component, the option builder and the token bridge. About 40 B of that is
+the toolchain rather than the change: every unrelated route on the same machine
+and the same node read 36 to 63 B above its record in the same build. The engine
+is fetched only when a chart hydrates, and no other route references it at all;
+`frontend/tests/charts.spec.ts` fails the build if a page ever preloads it.
+
+Those numbers belong to the console route alone - the reading routes never
+import any of it.
 
 What a chart may take from a library is the arithmetic. `d3-scale` and
 `d3-array` map a domain to pixels and choose the tick values; they own no
@@ -234,6 +267,30 @@ a truncation cap of 2,500 tokens no prompt can reach the window the machine
 reads with, so the count is zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
 is already being printed.
+
+### An axis title and a column header take one form
+
+`Article length, words`. **Sentence case, a comma, the unit in lower case, and
+no full stop.** `Sources cut short most often` shipped `Longest article, words`
+first, and the compression chart's two axes followed it on 2026-08-29. Three
+labels naming a quantity and its unit the same way is a form, so it is written
+down here rather than copied a fourth time by eye.
+
+- **The quantity, then the unit.** `Summary length, words` - never `Summary
+  length (words)` and never `words`. A bracket reads as a footnote, and a label
+  a reader meets before any of the numbers is not a footnote.
+- **An axis title may not be a ledger column name.** `source words` is how the
+  file spells `source_word_count` and `source_words`. A term from a subsystem is
+  not a term for a user (`CLAUDE.md` section 0b), and this is the rule two
+  bullets above - no ledger column name on screen - applied to the label rather
+  than to the cell.
+- **It says what the heading says.** Until 2026-08-29 the compression chart
+  called one quantity `Article length` in its heading and `source words` on its
+  axis, on one screen. Two names for one thing makes a reader work out that they
+  are the same thing before they can read the chart.
+- **A label that needs no unit is just the noun.** `Runs`, `Failed`, `Cut
+  short`. The comma form is for a quantity whose number means nothing without
+  the unit, and adding one where none is needed is noise.
 
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
@@ -324,6 +381,47 @@ the repo's `script-src` allows `self` only. "Fix the units without the
 dependency" was rejected last, because `.nice()` and `ticks()` are exactly the
 part hand-rolling gets wrong. Authority: Jony and Carmack, 2026-08-25, owner
 accepted.
+
+**The blanket ban on a chart library was reversed for the operator surface on
+2026-08-29, and the reason it was wrong is worth more than the reversal.** It
+rested on three claims. The first was a byte count - "the `/console/` route is
+66,550 B" - which was **four and a half times out of date**; the route was
+301,580 B on the day the argument was made. The second was "a canvas cannot
+inherit a CSS custom property", which is true of canvas and false of the SVG
+renderers those libraries also ship, so it generalised from the worst case. The
+third, that the page would stop being complete before script runs, holds only
+for a library that cannot render server-side, and the leading one has an
+explicit build-time SVG mode.
+
+The paragraph above this one is still correct about a reading route and is not
+touched. What changed is that the two surfaces stopped sharing one answer.
+
+The measurements that now stand in place of the stale one were taken on
+2026-08-29 on this tree with this bundler, and are in the chart section above:
+153,204 B gzipped for the engine as a lazy chunk carrying only the chart types
+in use, against 345,959 B for the same package imported whole, and 1,854 B for
+what opening the console actually costs. A reader's route imports none of it.
+
+Three lessons are recorded because they are more transferable than the ruling.
+**A byte count is a measurement and goes stale like any other** - Rule #10 asks
+for the hardware and the date, and a design argument that leans on a number
+someone took months ago has not met it. **An argument that generalises from
+the worst implementation of a thing is not an argument about the thing.** And
+the one this row taught at its own expense: **a bundler probe is not the
+artefact.** The 188.4 KB that justified this decision was measured with a
+standalone bundler script; the thing that shipped read 345,959 B until the
+imports were narrowed, and 153,204 B after. Measure the file the build wrote.
+
+A fourth, about the argument rather than the bytes: the case made for the
+engine here was that it buys a pointer readout. It does not - `frontend/src/lib/charts/frame.ts`
+already had one, covering mouse, pen, touch and keyboard, and two of the four
+charts were simply never wired to it. The engine earns its place on chart types
+the surface cannot draw today, which is a smaller claim than the one first
+made. **Check whether the thing a dependency is supposed to buy is already
+built** before pricing it.
+
+Authority: owner, 2026-08-29, overruling the 2026-08-25 ruling on the operator
+surface only.
 
 ## See also
 
