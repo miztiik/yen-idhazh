@@ -116,10 +116,15 @@ whose prompt is a guess is the one thing this module exists to make impossible.
    buffer absorbed all of them. The 12 hours was an estimate; the work ran as 43
    parallel authoring passes over 600 articles, each of 10 rows, every row
    checked by `reference_set.py check` before it counted.
-3. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
+3. **Answer two questions the gates just raised: `holdout_days` and
+   `sequence_length`.** Both are one config value, both are measured below, and
+   nothing after this can start until they are set. Unlike inputs 3, 4 and 6,
+   silence is **not** an answer here - today's values make the training set
+   empty and truncate 15 rows.
+4. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
    and free Colab or paid. All three have defaults, so silence is an answer.
-4. **Then the training rows (6 to 9), which need a GPU that is not ours.**
-5. **Row 10 is the only one that changes what a reader receives, and it needs
+5. **Then the training rows (6 to 9), which need a GPU that is not ours.**
+6. **Row 10 is the only one that changes what a reader receives, and it needs
    your explicit approval** (Level 5).
 
 ### Everything that must be true before a Colab session is worth starting
@@ -127,16 +132,89 @@ whose prompt is a guess is the one thing this module exists to make impossible.
 | # | Gate | State on 2026-08-29 |
 | --- | --- | --- |
 | 1 | The window holds at least `min_rows` (500) | **CLEARED. 1,308 rows.** `refill` built 1,852; the 544 that became reference rows were then dropped, because one article gets one target |
-| 2 | A holdout exists, split by date | Not run. `data_wrangler.py split`, one command, offline |
-| 3 | Rows fit `finetune.sequence_length` | Not measured. `verify --tokens`, one command, reaches the network |
+| 2 | A holdout exists, split by date | **RUN, AND IT FAILED.** `holdout_days` 14 over a 7-day window holds out all 1,308 rows and leaves nothing to train on. Needs a number, not a command |
+| 3 | Rows fit `finetune.sequence_length` | **MEASURED, AND IT FAILED.** 15 of 1,308 rows are longer than 4,096 tokens; the longest is 6,575 and would be silently truncated |
 | 4 | The reference set exists | **CLEARED. 544 rows**, against a 500-row target. Train 434, test 110, no `url_key` on both sides |
-| 5 | `models.<role>.hf_base_repo` names a repository that really exists | **Unverified.** `Qwen/Qwen3.5-9B` is an expectation, not a fact |
-| 6 | The notebook exists | Not written |
+| 5 | `models.<role>.hf_base_repo` names a repository that really exists | **CLEARED.** `Qwen/Qwen3.5-9B` is real: 12,507,912 downloads, last changed 2026-03-02. `Qwen/Qwen3-4B` is real too, 4,961,204 downloads |
+| 6 | The notebook exists | Not written. A few kilobytes of instructions; only *running* it needs a GPU |
 | 7 | Inputs 3, 4 and 6 answered | Defaults stand |
 
-Gates 2, 3 and 5 are minutes of work each and none needs a GPU. Gate 6 is a few
-kilobytes of instructions. **Nothing left before a training session is measured
-in hours** - the twelve-hour task was gate 4 and it is done.
+**Both open gates are a config value, not work.** Neither needs a GPU, a
+network call or an hour. Both were expected to be a formality and neither was,
+which is the argument for running a gate rather than reasoning about it.
+
+### Gate 2 - `holdout_days` is longer than the corpus has existed
+
+`split` holds out the trailing N days so the model is trained on the past and
+measured on the future. `finetune.holdout_days` is 14. The corpus spans **7
+days**, 2026-08-23 to 2026-08-29, because that is how long the pipeline has been
+harvesting into it. So the split holds out everything:
+
+```
+held out 1308 of 1308 rows over 7 of 7 days
+every row is held out - the window is shorter than finetune.holdout_days
+```
+
+Measured 2026-08-29 over the 1,308 committed rows. Days are uneven - 61, 337,
+330, 287, 168, 63, 62 - so each extra held-out day costs a different amount:
+
+| `holdout_days` | Held out | Left to train | Fills the 1,000-row `train_rows` draw? |
+| ---: | ---: | ---: | :--- |
+| 1 | 62 | 1,246 | yes |
+| **2** | **125** | **1,183** | **yes** |
+| 3 | 293 | 1,015 | yes, by 15 rows |
+| 4 | 580 | 728 | no |
+| 5 | 910 | 398 | no |
+| 6 | 1,247 | 61 | no |
+| 7 | 1,308 | 0 | no |
+| 14 (today) | 1,308 | 0 | no |
+
+**Recommendation: 2.** It holds out 125 rows, which is enough to measure
+something, and leaves 1,183 - the draw fills with room to spare. 1 makes the
+holdout too thin to say anything. 3 clears the ceiling by 15 rows, which is
+inside the noise of one day's publishing.
+
+**14 was not wrong when it was written; it assumed a mature window.** The
+question this raises and does not answer: a fixed day count over a window that
+grows means the holdout is 100 percent of the corpus today and 47 percent at 30
+days. Either the number is revisited as the window grows, or `split` learns to
+refuse a holdout that leaves less than `min_rows`. The tool already detects the
+condition and prints it - it just exits 0 anyway, which is the smaller defect
+sitting under the larger question.
+
+### Gate 3 - the truncation cap outgrew the training sequence length
+
+15 of 1,308 rows (**1.15 percent**) are longer than `finetune.sequence_length`
+(4,096). Tokens per row: min 1,104, median 1,978, p90 3,052, max 6,575, n=1,308,
+measured with the `Qwen/Qwen3.5-9B` tokenizer on 2026-08-29.
+
+| `sequence_length` | Rows over | Percent |
+| ---: | ---: | ---: |
+| 4,096 (today) | 15 | 1.15% |
+| 5,120 | 5 | 0.38% |
+| 6,144 | 1 | 0.08% |
+| 7,168 | 0 | 0.00% |
+| **8,192** | **0** | **0.00%** |
+
+**This is the truncation cap arriving here.** The cap is 5,000 words. At the
+measured 1.387 tokens an article word, plus the 951-token system prompt and
+about 250 tokens of target, a capped article is **about 8,100 tokens**. 4,096
+never could have held one; it was set before the cap moved.
+
+**Recommendation: 8,192, not 7,168.** 7,168 clears today's corpus and 8,192
+clears the *structural* worst case. The difference matters because no article
+has hit the 5,000-word cap yet - the longest ever measured was 2,772 words - so
+today's 6,575-token maximum is not the maximum this corpus will hold. Choosing
+off the measurement rather than the derivation buys a gate that fails again in a
+few weeks.
+
+**What it costs is a GPU question, and it lands on input 6.** Doubling the
+sequence length roughly doubles attention memory per sample on a free T4. If
+8,192 will not fit, the honest fallback is to drop the 15 rows rather than
+truncate them: a truncated training target teaches the model to stop
+mid-summary, which is the one failure the reference set exists to prevent. 15
+rows is 1.15 percent of the corpus and costs nothing measurable.
+
 
 ### What the reference set cost, measured rather than estimated
 
