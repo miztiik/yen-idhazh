@@ -18,6 +18,7 @@ from typing import ClassVar, Literal, Self
 from pydantic import Field, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
+from idhazh.contracts.item_health import FailureCode
 from idhazh.contracts.route import VisualKind
 
 
@@ -74,11 +75,14 @@ class RunConfig(Model):
         default=160,
         ge=1,
         description=(
-            "A crash guard, not an editorial choice. Supply and the ranking decide how "
-            "big a day is; this only stops a mis-parsed feed from publishing hundreds "
-            "of items in one run. A normal day never reaches it. It is also what sizes "
-            "the worst case a work shard and the route stage have to finish, so it is "
-            "bounded by the slower of those two."
+            "What sizes a run. It began as a crash guard against a mis-parsed feed and "
+            "supply overtook it: items_planned has been exactly this number on every run "
+            "since 2026-08-25, so it is the cap whatever it is called. Owner decision, "
+            "2026-08-29: it stays at 160, and a run gets better by spending those slots "
+            "on articles that can be read rather than by raising this. It is also what "
+            "sizes the worst case a work shard and the route stage have to finish, so "
+            "any new number is bounded by the slower of those two - and a worker killed "
+            "at run.shard_timeout_minutes uploads nothing."
         ),
     )
     shard_size: int = Field(
@@ -128,6 +132,28 @@ class RunConfig(Model):
 class CollectConfig(Model):
     quarantine_after_failures: int = Field(default=5, ge=1)
     watchlist_max_entities: int = Field(default=30, ge=1)
+    settled_failure_codes: tuple[FailureCode, ...] = Field(
+        default=(
+            FailureCode.ROBOTS_DENIED,
+            FailureCode.ROBOTS_UNREACHABLE,
+            FailureCode.BLOCKED_ADDRESS,
+            FailureCode.HTTP_CLIENT_ERROR,
+            FailureCode.PAYWALLED,
+            FailureCode.NO_TEXT,
+            FailureCode.NOT_PROSE,
+            FailureCode.BOILERPLATE,
+            FailureCode.TOO_SHORT,
+            FailureCode.UNSUPPORTED_FORM,
+        ),
+        description=(
+            "Failure codes that will not change before tomorrow. An address that failed "
+            "today with one of these is not planned again today. A paywall, a robots "
+            "rule and a 404 are the same answer at 02:20 and at 18:20; a rate limit, a "
+            "reset connection and an unreachable model are not, so they are absent and "
+            "a later run retries them. Empty means retry everything, which is what the "
+            "pipeline did before 2026-08-29."
+        ),
+    )
     max_per_source: int = Field(
         default=2,
         ge=1,
@@ -1258,7 +1284,7 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-08-29T22:00",
+            version="2026-08-29T23:00",
             change=(
                 "console.window_presets added, and console.default_window_days must "
                 "now be one of its members."
@@ -1273,6 +1299,20 @@ class AppConfig(Contract):
                 "these four cannot be told apart on the page. Additive with a default, "
                 "so an older config still validates - the committed 30 is a member of "
                 "the default list (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-29T22:00",
+            change="Added collect.settled_failure_codes.",
+            why=(
+                "An address that failed was never recorded as published, so every later "
+                "run of the same day planned it again. Measured over 2026-08-24 to "
+                "2026-08-29: 403 repeat attempts inside a day produced 2 items, and 231 "
+                "of the 233 repeated addresses never succeeded on any attempt. The codes "
+                "listed cannot change before tomorrow; the ones left out - a rate limit, "
+                "a reset connection, an unreachable model - can, so they still retry. "
+                "Additive with a default, so an older config still validates "
+                "(section 11)."
             ),
         ),
         ChangelogEntry(

@@ -26,7 +26,13 @@ from conftest import CONFIG_DIR, FIXTURES_DIR, read_text
 from idhazh import cli, config, fetch, ledger
 from idhazh.contracts.app_config import RunConfig
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.item_health import (
+    FAILURE_CODE_STAGES,
+    FailureCode,
+    ItemHealthRow,
+    ItemOutcome,
+)
+from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
@@ -634,6 +640,92 @@ def test_a_published_address_is_never_planned_again() -> None:
     assert again.verticals[0].considered == first.verticals[0].considered - 1, (
         "and it is not counted as considered either - it was settled, not weighed"
     )
+
+
+def _settled(item: PlannedItem, code: FailureCode, *, date: str = DATE) -> ItemHealthRow:
+    """One item-health row saying this address failed on `date` with `code`.
+
+    The stage comes from the code rather than from this function's opinion:
+    `ItemHealthRow` refuses a pair the contract does not allow, so naming a
+    stage here would be a second answer that could disagree with the first.
+    """
+    return ItemHealthRow(
+        version=ItemHealthRow.schema_version(),
+        date=date,
+        run_id=f"{date}-1",
+        item_id=item.item_id,
+        url_key=item.url_key,
+        canonical_url=item.canonical_url,
+        vertical=item.vertical,
+        source_id=item.source_id,
+        stage=sorted(FAILURE_CODE_STAGES[code])[0],
+        outcome=ItemOutcome.FAILED,
+        code=code,
+    )
+
+
+def test_an_address_that_failed_today_behind_a_paywall_is_not_planned_again_today() -> None:
+    """The published ledger cannot do this: a failure is never published.
+
+    Measured over 2026-08-24 to 2026-08-29, 403 same-day repeats of a settled
+    failure produced 2 items, and 231 of the 233 repeated addresses never
+    succeeded on any attempt. Run 2 was re-reading a locked door.
+    """
+    state = Path(tempfile.mkdtemp())
+    first = plan([LAB, TRADE, COMMUNITY], state=state)
+    blocked = first.items[0]
+    ledger.append_item_health(state, DATE, [_settled(blocked, FailureCode.PAYWALLED)])
+
+    again = plan([LAB, TRADE, COMMUNITY], state=state, run_n=2)
+
+    assert blocked.url_key not in {item.url_key for item in again.items}
+    assert again.verticals[0].considered == first.verticals[0].considered - 1
+
+
+def test_an_address_that_hit_a_rate_limit_today_is_planned_again_today() -> None:
+    """The other direction, so the rule cannot pass by dropping everything.
+
+    A paywall answers the same at 02:20 and at 18:20. A rate limit does not, so
+    `http_rate_limited` is deliberately absent from `collect.settled_failure_codes`
+    and the address comes back.
+    """
+    state = Path(tempfile.mkdtemp())
+    first = plan([LAB, TRADE, COMMUNITY], state=state)
+    throttled = first.items[0]
+    ledger.append_item_health(state, DATE, [_settled(throttled, FailureCode.HTTP_RATE_LIMITED)])
+
+    again = plan([LAB, TRADE, COMMUNITY], state=state, run_n=2)
+
+    assert throttled.url_key in {item.url_key for item in again.items}
+    assert again.verticals[0].considered == first.verticals[0].considered
+
+
+def test_yesterdays_paywall_does_not_bind_today() -> None:
+    """A day is the window. A metered paywall resets, and so does this."""
+    state = Path(tempfile.mkdtemp())
+    first = plan([LAB, TRADE, COMMUNITY], state=state)
+    blocked = first.items[0]
+    yesterday = "2026-08-20"
+    ledger.append_item_health(
+        state, yesterday, [_settled(blocked, FailureCode.PAYWALLED, date=yesterday)]
+    )
+
+    again = plan([LAB, TRADE, COMMUNITY], state=state, run_n=2)
+
+    assert blocked.url_key in {item.url_key for item in again.items}
+
+
+def test_an_empty_settled_code_list_plans_the_failure_again() -> None:
+    """The knob can be turned off, and off is what the pipeline did before."""
+    state = Path(tempfile.mkdtemp())
+    first = plan([LAB, TRADE, COMMUNITY], state=state)
+    blocked = first.items[0]
+    ledger.append_item_health(state, DATE, [_settled(blocked, FailureCode.PAYWALLED)])
+
+    assert ledger.load_settled_failures(state, DATE, codes=()) == set()
+    assert ledger.load_settled_failures(
+        state, DATE, codes=(FailureCode.PAYWALLED,)
+    ) == {blocked.url_key}
 
 
 def test_a_weighted_down_feed_ranks_below_a_full_one_of_the_same_tier() -> None:

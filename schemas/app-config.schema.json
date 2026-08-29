@@ -127,6 +127,26 @@
           "title": "Seen Window Days",
           "type": "integer"
         },
+        "settled_failure_codes": {
+          "default": [
+            "robots_denied",
+            "robots_unreachable",
+            "blocked_address",
+            "http_client_error",
+            "paywalled",
+            "no_text",
+            "not_prose",
+            "boilerplate",
+            "too_short",
+            "unsupported_form"
+          ],
+          "description": "Failure codes that will not change before tomorrow. An address that failed today with one of these is not planned again today. A paywall, a robots rule and a 404 are the same answer at 02:20 and at 18:20; a rate limit, a reset connection and an unreachable model are not, so they are absent and a later run retries them. Empty means retry everything, which is what the pipeline did before 2026-08-29.",
+          "items": {
+            "$ref": "#/$defs/FailureCode"
+          },
+          "title": "Settled Failure Codes",
+          "type": "array"
+        },
         "tier_weights": {
           "$ref": "#/$defs/TierWeights"
         },
@@ -511,6 +531,35 @@
       },
       "title": "ExtractConfig",
       "type": "object"
+    },
+    "FailureCode": {
+      "description": "Stable failure vocabulary for item-health rows.",
+      "enum": [
+        "not_attempted",
+        "robots_denied",
+        "robots_unreachable",
+        "blocked_address",
+        "http_client_error",
+        "http_rate_limited",
+        "http_server_error",
+        "network_error",
+        "no_text",
+        "too_short",
+        "not_prose",
+        "boilerplate",
+        "paywalled",
+        "unsupported_form",
+        "model_unreachable",
+        "context_exceeded",
+        "output_truncated",
+        "bad_shape",
+        "length_out_of_range",
+        "copied_source",
+        "leaked_address",
+        "unknown"
+      ],
+      "title": "FailureCode",
+      "type": "string"
     },
     "FinetuneConfig": {
       "additionalProperties": false,
@@ -996,7 +1045,7 @@
         },
         "safety_ceiling_per_run": {
           "default": 160,
-          "description": "A crash guard, not an editorial choice. Supply and the ranking decide how big a day is; this only stops a mis-parsed feed from publishing hundreds of items in one run. A normal day never reaches it. It is also what sizes the worst case a work shard and the route stage have to finish, so it is bounded by the slower of those two.",
+          "description": "What sizes a run. It began as a crash guard against a mis-parsed feed and supply overtook it: items_planned has been exactly this number on every run since 2026-08-25, so it is the cap whatever it is called. Owner decision, 2026-08-29: it stays at 160, and a run gets better by spending those slots on articles that can be read rather than by raising this. It is also what sizes the worst case a work shard and the route stage have to finish, so any new number is bounded by the slower of those two - and a worker killed at run.shard_timeout_minutes uploads nothing.",
           "minimum": 1,
           "title": "Safety Ceiling Per Run",
           "type": "integer"
@@ -1336,8 +1385,13 @@
   "changelog": [
     {
       "change": "console.window_presets added, and console.default_window_days must now be one of its members.",
-      "version": "2026-08-29T22:00",
+      "version": "2026-08-29T23:00",
       "why": "The console had no way to say how many days it was showing, so every section picked its own span and one of them hard-coded seven days in the frontend. One control now sets one window for the whole page, and a control needs a list of the spans it offers. Four presets rather than a free number: a wider window fetches more month files, so every value is a distinct transfer cost and most of the values between these four cannot be told apart on the page. Additive with a default, so an older config still validates - the committed 30 is a member of the default list (section 11)."
+    },
+    {
+      "change": "Added collect.settled_failure_codes.",
+      "version": "2026-08-29T22:00",
+      "why": "An address that failed was never recorded as published, so every later run of the same day planned it again. Measured over 2026-08-24 to 2026-08-29: 403 repeat attempts inside a day produced 2 items, and 231 of the 233 repeated addresses never succeeded on any attempt. The codes listed cannot change before tomorrow; the ones left out - a rate limit, a reset connection, an unreachable model - can, so they still retry. Additive with a default, so an older config still validates (section 11)."
     },
     {
       "change": "finetune.reference_rows raised from 300 to 500, and finetune.reference_test_rows added.",
@@ -1605,7 +1659,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-29T22:00",
+      "default": "2026-08-29T23:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1619,5 +1673,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-29T22:00"
+  "version": "2026-08-29T23:00"
 }
