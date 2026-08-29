@@ -223,6 +223,7 @@ def plan_vertical(
     now: str,
     first_seen: Mapping[str, str] | None = None,
     already_published: frozenset[str] = frozenset(),
+    settled_today: frozenset[str] = frozenset(),
     watchlist_keys: frozenset[str] = frozenset(),
     front_page_keys: frozenset[str] = frozenset(),
 ) -> tuple[VerticalPlan, list[PlannedItem]]:
@@ -236,14 +237,22 @@ def plan_vertical(
     counted. A freshness rule cannot do that job on its own: an article
     published at 23:00 is seven hours old at 06:00 the next morning.
 
+    An address that already failed today for a reason today cannot change is
+    dropped the same way. `already_published` cannot cover it, because a failure
+    is never published - so run 2 used to re-plan run 1's paywalls and get the
+    same paywalls. The two sets are kept apart rather than merged: they are
+    different facts, and `considered` has to be able to say which one cost a
+    slot.
+
     `published_at` on the planned item is the time we believe, not the time the
     feed claimed. A date rejected as impossible must not reach a reader either.
     """
     sightings = first_seen or {}
+    dropped = already_published | settled_today
     grouped = {
         url_key: carried
         for url_key, carried in merge(candidates).items()
-        if url_key not in already_published
+        if url_key not in dropped
     }
     below_floor = live_feeds < vertical.min_feeds
     summary = VerticalPlan(

@@ -216,15 +216,17 @@ def stage_plan(
 ) -> RunPlan:
     """Read every live feed, rank the pool, and write down what it saw. No model.
 
-    Three committed ledgers bound the day. The seen store gives an article whose
+    Four committed ledgers bound the day. The seen store gives an article whose
     feed carried no date a real age - first sight is the only honest one there
     is. The published store is what stops a repeat, which a freshness rule
     cannot do on its own: an article published at 23:00 is seven hours old at
-    06:00 the next morning. The health store records what every feed did, so a
-    source that has gone quiet can be quarantined from evidence instead of from
-    somebody's memory. Quarantine only ever holds a feed back for a few runs; it
-    never edits `config/sources.json`, because retiring a source is a person's
-    decision.
+    06:00 the next morning. The item-health store stops the *other* repeat: an
+    address that failed today behind a paywall or a 404 is not planned again
+    today, because that answer will not change before tomorrow. The feed-health
+    store records what every feed did, so a source that has gone quiet can be
+    quarantined from evidence instead of from somebody's memory. Quarantine only
+    ever holds a feed back for a few runs; it never edits `config/sources.json`,
+    because retiring a source is a person's decision.
 
     Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
     guard against a mis-parsed feed, not a reading budget.
@@ -286,6 +288,14 @@ def stage_plan(
     )
     ledger.append_health(state, date, health)
     already_published = frozenset(ledger.load_published(state))
+    settled_today = frozenset(
+        ledger.load_settled_failures(state, date, codes=collect.settled_failure_codes)
+    )
+    LOG.info(
+        "addresses this run will not plan published=%s settled_today=%s",
+        len(already_published),
+        len(settled_today),
+    )
 
     # The bonus is decided on the feed title, because that is all a plan has: the
     # page has not been fetched yet. An article whose body names an entity its
@@ -313,6 +323,7 @@ def stage_plan(
             now=generated_at,
             first_seen=first_seen,
             already_published=already_published,
+            settled_today=settled_today,
             watchlist_keys=watchlist_keys,
             front_page_keys=frozenset(front_page),
         )
@@ -417,15 +428,17 @@ def _first_sights(
 
 
 def _within_ceiling(items: list[PlannedItem], *, ceiling: int) -> list[PlannedItem]:
-    """The crash guard. Measured 2026-08-25, it fires on every run.
+    """What sizes a run. Measured 2026-08-25 and since, it fires on every one.
 
     It drops the lowest-scoring stories across every vertical rather than
     truncating the list, so a mis-parsed feed costs the weakest items and not
     whichever vertical happened to sort last.
 
-    Supply has overtaken it: every run since the ceiling moved to 200 has
-    planned exactly 200, so this is currently what decides the size of a run.
-    See `docs/architecture/sources/freshness.md`.
+    It was written as a crash guard and supply overtook it: `items_planned` has
+    equalled the ceiling on every run since, first at 200 and now at 160. It is
+    the cap whatever it is called, and
+    `docs/architecture/sources/freshness.md` says so rather than leaving the
+    name to imply otherwise.
     """
     if len(items) <= ceiling:
         return items

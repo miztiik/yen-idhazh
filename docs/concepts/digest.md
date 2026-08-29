@@ -61,7 +61,7 @@ Surfacing this without turning every item into a disclaimer is a typography and 
 
 About two minutes. Ten items a reader can skim beats forty they cannot.
 
-That is a design target for the page, not a cap on the pipeline. Nothing limits how many items a day may carry - supply and the ranking decide ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
+That is a design target for the page, not a cap on the pipeline. What a day carries is decided by supply, the score and `run.safety_ceiling_per_run` ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
 
 **A long day gets its hierarchy from its topics.** 586 items in one queue had no usable first screen - its opening items were whichever vertical id sorted first, which is an accident rather than an edit. The all-topics page now shows each topic's first few and links to the rest ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Nothing is removed, hidden or re-ranked; the published order survives inside every section. That is hierarchy doing the work the reader's budget always asked of it, and it is why truncating a long day was refused.
 
