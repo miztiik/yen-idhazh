@@ -301,7 +301,7 @@ is in flight.
 - **Acceptance gates:** The console renders complete with JavaScript disabled; a pointer, a tap and an arrow key each produce a readout naming the series, the value and its unit **in words**; every colour resolves from `tokens.css` in both themes with no hardcoded hex in any chart option; the reading routes import none of it, asserted by the bundle gate's per-route module list; the measured `/console/` delta is recorded.
 - **Oracle:** Two halves that cannot both be satisfied by a stub. **(a)** The prerendered `/console/` HTML contains the chart's `<svg>` marks before any script runs - fetched with JavaScript off and asserted on the raw HTML, not the rendered DOM. **(b)** Every route other than `/console/` has zero engine modules in the bundle gate's per-route list, so a stray top-level import fails the build rather than quietly shipping 188 KB to a reader.
 
-**Measured 2026-08-29, this tree, this bundler, gzipped, esbuild bundle + gzip -9:**
+**Measured 2026-08-29, this tree, this bundler, gzipped, esbuild bundle + gzip -9 - the numbers the CHOICE was made against:**
 
 | Candidate | gzip | Tree-shakes | SVG | Server-render |
 | --- | --- | --- | --- | --- |
@@ -311,7 +311,30 @@ is in flight.
 | Engine C, canvas-only | 22.6 KB | yes | **no** | **no** |
 | `d3-scale` + `d3-array`, carried today | 20.5 KB | yes | n/a | n/a |
 
-`/console/` first-load JS is 69,411 B today, so Engine A takes that route to roughly **257 KB** - about 3.7x. No reading route changes.
+**Measured after it shipped, same day, from the files the build wrote - the numbers that are TRUE:**
+
+| What | gzip | raw |
+| --- | --- | --- |
+| Engine chunk, only the chart types in use registered | **153,204 B** | 451,227 B |
+| Same package imported whole | 345,959 B | 1,044,275 B |
+| `/console/` first-load JS, before | 69,622 B | - |
+| `/console/` first-load JS, after | **71,476 B** (+1,854, +2.7%) | - |
+| Every other route | within +/-64 B toolchain noise | - |
+
+About 40 B of the 1,854 is the toolchain, not the change: every unrelated route
+on this machine read 36 to 63 B above its record in the same build.
+
+The estimate and the artefact disagreed by 84 percent, in the direction that
+mattered. The probe measured a bundle nobody shipped; the build measured the
+file a browser downloads. **The correction that made the difference was
+registering the funnel, the tooltip and the SVG renderer instead of importing
+the package whole** - `frontend/src/lib/charts/core.ts` exists only to hold
+that list, so adding a chart type is a deliberate edit with a re-measurement
+beside it.
+
+The first-load figure is the one that decides affordability, and it is 1,854 B,
+not 153 KB: the engine is a dynamic import fetched only when a chart hydrates.
+Roughly 257 KB and 3.7x, predicted above, were both wrong.
 
 - **Decisions:**
 
@@ -321,8 +344,9 @@ is in flight.
   | 2 | Three conditions bind any candidate: SVG not canvas, server-rendered at build time, and a measured gzipped cost recorded beside the decision. Engine C fails the first two at any size. | Carmack, Jony |
   | 3 | The cost is charged to one route that one person opens. Rule #2's actual ceiling is the 1 GB published site, which 188 KB once does not move - the site was 128,064,853 B and grows about 16.6 MB a published day. | Carmack |
   | 4 | The theme adapter reads the computed custom properties at mount and again on every theme change, so `tokens.css` stays the only place a colour is decided. A hardcoded hex in a chart option is a review failure, not a style preference. | Jony |
-  | 5 | Hover, tap and keyboard readouts are the engine's, not hand-rolled. That was the point of the reversal: hand-rolling them is what produced a surface the owner described as designed decades ago. | Susan, owner |
+  | 5 | Hover, tap and keyboard readouts are the engine's for a chart the engine draws. **Corrected 2026-08-29 while building:** this row claimed the engine buys the readout. It does not - `frontend/src/lib/charts/frame.ts` already carries `pointerReadout`, covering mouse, pen, touch and keyboard with nearest-by-x hit testing, and two of the four existing charts were simply never wired to it. The engine earns its place on chart types the surface cannot draw today. Wiring the two unwired charts is Row #8's job and needs no dependency. | Susan, owner |
   | 6 | The earlier doctrine line about tooltips carrying critical information is narrowed rather than struck: a readout may not be the ONLY place a fact appears, and every value it shows is also derivable from the axis. | Jony |
+  | 7 | **Existing hand-written charts are not ported.** Each has a browser-test suite bolted to its markup - `StageTimings.svelte` alone has about 15 assertions reading `data-decade-line`, `data-stage-mark` and `data-stage-zero`, two of which check geometry an engine does not emit. Porting buys the operator nothing they can see and risks losing reasoning those charts encode. The engine is how NEW charts are made; a hand-written one ports when it next needs real change. Strangler-fig, not big-bang. | Fowler, 2026-08-29 |
 
 - **Rejected alternatives:**
 
@@ -333,6 +357,7 @@ is in flight.
   | 3 | Engine C, canvas-only, at 22.6 KB | Cannot inherit a CSS custom property, so the token file stops being the source of a colour, and it cannot render at build time. Cheap and fails both conditions that matter. | Jony |
   | 4 | The engine on the reading routes too | A charting engine on a reading page is a runtime dependency for nothing: an item's chart is already a build-time asset. | Carmack, Jony |
   | 5 | A CDN copy of the engine | The HTTP cache is partitioned per site so the shared-cache argument is dead, and `script-src` is `self` only. | Carmack |
+  | 6 | Porting `StageTimings` as the proving chart | Attempted and reverted the same day. It is the chart with no readout, so it looked like the best demonstration, until the test suite bolted to its hand-drawn markup made the cost clear. The funnel was built instead: new ground, no test rewritten, and it replaced a four-column table plus a 90-word paragraph with a shape. | Fowler, 2026-08-29 |
 
 ---
 

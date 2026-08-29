@@ -171,16 +171,27 @@ below.
 Any library adopted for the console must (1) render SVG, not canvas, so
 `tokens.css` stays the only place a colour is decided, (2) render server-side at
 build time, so the page is complete before any script runs, and (3) carry a
-measured gzipped cost recorded next to the decision. Measured 2026-08-29 on this
-tree with this bundler: a tree-shaken chart engine with bar, line, pie, scatter,
-tooltip and legend is **188.4 KB gzipped** and barely tree-shakes - its bar-only
-floor is 160.0 KB. The most-cited alternative is **270.1 KB** and does not
-tree-shake at all. A canvas-only library is 22.6 KB but fails condition (1) and
-(2). `d3-scale` and `d3-array`, which the surface already carries, are 20.5 KB
+measured gzipped cost recorded next to the decision.
+
+Measured 2026-08-29 on this tree with this bundler, after the engine shipped -
+these are the built artefacts, not a bundler probe. Registering only the chart
+types in use, the engine is a lazy chunk of **153,204 B gzipped** (451,227 B
+raw). Importing the same package whole instead pulls **345,959 B gzipped**
+(1,044,275 B raw) for the same one chart, so the registration file is worth 56
+percent of the download and is the reason it is a file somebody has to edit.
+`d3-scale` and `d3-array`, which the surface already carries, are 20.5 KB
 together.
 
-Those numbers are what the decision is made against, and they belong to the
-console route alone - the reading routes never import any of it.
+The number that decides whether this is affordable is not the chunk. It is what
+opening the console costs, and that moved **1,854 B**, from 69,622 to 71,476 -
+the component, the option builder and the token bridge. About 40 B of that is
+the toolchain rather than the change: every unrelated route on the same machine
+and the same node read 36 to 63 B above its record in the same build. The engine
+is fetched only when a chart hydrates, and no other route references it at all;
+`frontend/tests/charts.spec.ts` fails the build if a page ever preloads it.
+
+Those numbers belong to the console route alone - the reading routes never
+import any of it.
 
 What a chart may take from a library is the arithmetic. `d3-scale` and
 `d3-array` map a domain to pixels and choose the tick values; they own no
@@ -363,17 +374,28 @@ touched. What changed is that the two surfaces stopped sharing one answer.
 
 The measurements that now stand in place of the stale one were taken on
 2026-08-29 on this tree with this bundler, and are in the chart section above:
-188.4 KB gzipped for a tree-shaken engine with the chart types the console
-needs, 160.0 KB for its bar-only floor, 270.1 KB for the most-cited
-alternative, 22.6 KB for a canvas-only one that fails two of the three
-conditions, against 20.5 KB for the scale libraries already carried. A
-reader's route imports none of it.
+153,204 B gzipped for the engine as a lazy chunk carrying only the chart types
+in use, against 345,959 B for the same package imported whole, and 1,854 B for
+what opening the console actually costs. A reader's route imports none of it.
 
-Two lessons are recorded because they are more transferable than the ruling.
+Three lessons are recorded because they are more transferable than the ruling.
 **A byte count is a measurement and goes stale like any other** - Rule #10 asks
 for the hardware and the date, and a design argument that leans on a number
-someone took months ago has not met it. And **an argument that generalises from
-the worst implementation of a thing is not an argument about the thing**.
+someone took months ago has not met it. **An argument that generalises from
+the worst implementation of a thing is not an argument about the thing.** And
+the one this row taught at its own expense: **a bundler probe is not the
+artefact.** The 188.4 KB that justified this decision was measured with a
+standalone bundler script; the thing that shipped read 345,959 B until the
+imports were narrowed, and 153,204 B after. Measure the file the build wrote.
+
+A fourth, about the argument rather than the bytes: the case made for the
+engine here was that it buys a pointer readout. It does not - `frontend/src/lib/charts/frame.ts`
+already had one, covering mouse, pen, touch and keyboard, and two of the four
+charts were simply never wired to it. The engine earns its place on chart types
+the surface cannot draw today, which is a smaller claim than the one first
+made. **Check whether the thing a dependency is supposed to buy is already
+built** before pricing it.
+
 Authority: owner, 2026-08-29, overruling the 2026-08-25 ruling on the operator
 surface only.
 
