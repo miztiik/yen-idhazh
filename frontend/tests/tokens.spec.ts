@@ -181,11 +181,24 @@ test.describe('the token layer', () => {
 	});
 
 	test('the measure is not on the shell', () => {
-		// The whole defect this row exists to prevent. `.frame` is the shell and
+		// The whole defect this plan exists to prevent. `.frame` is the shell and
 		// `.measure` is the text; a shell that carries the measure gives the
 		// application a paragraph's width.
-		const frame = APP.slice(APP.indexOf('.frame {'), APP.indexOf('.frame-console'));
+		const frame = APP.slice(APP.indexOf('.frame {'), APP.indexOf('.measure {'));
 		expect(frame).toContain('var(--frame-reading)');
 		expect(frame, 'the reading measure is on the shell again').not.toContain('var(--measure)');
+	});
+
+	test('the frame values are generated at build time, not injected at runtime', () => {
+		// Injecting them from the layout head was measured on 2026-08-29 at 397
+		// to 700 gzipped bytes of JavaScript on every route, including two that
+		// render nothing, to get one config value into CSS.
+		expect(APP).toContain("@import './frame.generated.css'");
+		const generated = readFileSync(join(FRONTEND, 'src', 'styles', 'frame.generated.css'), 'utf8');
+		for (const token of ['--frame-reading', '--frame-console', '--measure', '--gutter-min']) {
+			expect(generated, `${token} missing from the generated frame css`).toContain(token);
+		}
+		const layout = readFileSync(join(FRONTEND, 'src', 'routes', '+layout.svelte'), 'utf8');
+		expect(layout, 'the frame is being injected from the layout again').not.toContain('svelte:head');
 	});
 });
