@@ -22,7 +22,19 @@ on:
     # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
     # is the busiest minute on the platform; twenty past costs a reader nothing
     # and buys a run that starts closer to when it was asked for.
-    - cron: '20 2,6,10,14,18 * * *'
+    #
+    # Five lines rather than one `20 2,6,10,14,18 * * *`. The schedule is
+    # identical and `github.event.schedule` is not: with one line it returns the
+    # whole expression and a run cannot tell which of the five slots fired, so
+    # nothing could say how late it was. GitHub drops scheduled slots under load
+    # and 8 of 13 went missing between 2026-08-27 and 2026-08-29 without one
+    # failure to show for it (docs/reference/github-actions.md). Five lines are
+    # what let the run report that itself.
+    - cron: '20 2 * * *'
+    - cron: '20 6 * * *'
+    - cron: '20 10 * * *'
+    - cron: '20 14 * * *'
+    - cron: '20 18 * * *'
   workflow_dispatch:
     inputs:
       date:
@@ -184,11 +196,50 @@ jobs:
           print(f"shard_timeout_minutes={minutes}")
           PY
 
+      # GitHub queues a scheduled workflow by load and silently drops the slots
+      # it cannot place. Measured 2026-08-27 to 2026-08-29: 13 slots elapsed, 5
+      # produced a run, and every run that started succeeded. So a thin day is a
+      # run that never happened rather than a run that failed, and nothing in
+      # this repository said so - the run list showed five green runs and no
+      # trace of the eight that were never created.
+      #
+      # This step cannot make the platform reliable. It makes the loss visible
+      # in the one place a person already looks, and it is why the cron is five
+      # one-slot lines: `github.event.schedule` names the line that fired, so
+      # the run can say which slot it is and how late.
+      - name: Say which slot this is and how late it started
+        if: github.event_name == 'schedule'
+        env:
+          # Through `env`, not pasted into the script. A value read by name is a
+          # value, whatever it contains.
+          SLOT: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          SLOT_MINUTE=$(printf '%s' "$SLOT" | cut -d' ' -f1)
+          SLOT_HOUR=$(printf '%s' "$SLOT" | cut -d' ' -f2)
+          # A leading zero is octal to the shell, so every field is forced to
+          # base ten. `date -u +%H` writes 08 at eight in the morning.
+          ASKED=$(( 10#$SLOT_HOUR * 60 + 10#$SLOT_MINUTE ))
+          NOW=$(( 10#$(date -u +%H) * 60 + 10#$(date -u +%M) ))
+          LATE=$(( NOW - ASKED ))
+          # A slot placed after midnight is late by yesterday's clock, not early
+          # by today's. That case is the one worth catching: it is how the 18:20
+          # slot of 2026-08-28 became a run on 2026-08-29 and published to the
+          # wrong day.
+          [ "$LATE" -ge 0 ] || LATE=$(( LATE + 1440 ))
+          echo "slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC, started ${LATE} minutes late"
+          # 120 minutes is DERIVED, not measured: a scheduled run here normally
+          # starts 40-70 minutes after its cron minute, so this is roughly twice
+          # the recorded normal. It is a reporting threshold and nothing reads it
+          # to make a decision.
+          if [ "$LATE" -ge 120 ]; then
+            echo "::warning title=Late run::Slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC started ${LATE} minutes late. GitHub queues scheduled runs by load and drops slots it cannot place - see docs/reference/github-actions.md."
+          fi
+
       # No weights load here. The plan job is feed reads and arithmetic, and it
       # finishes in seconds - which is what makes fanning out afterwards cheap.
       - name: Plan the day
         run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
-
       # The day decides the fan-out, so this runs after the plan rather than
       # beside the date. `run.shard_size` is what one worker is sized to carry,
       # so a small day spends fewer jobs and restores the weights fewer times
