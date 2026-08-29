@@ -34,6 +34,34 @@ empty on every row written before that date, and empty is unknown rather than
 uncut. The column list, and why the count travels instead of the text, is
 [../sources/item-health.md](../sources/item-health.md).
 
+### A new column is appended at the end, and the reader checks a prefix
+
+**The browser's header check is a prefix match, not an equality.**
+`parseTelemetryCsv` in `frontend/src/lib/charts/series.ts` holds
+`TELEMETRY_COLUMNS`, and compares it position by position against the header it
+read - so it asserts that the first `n` published columns are the `n` names it
+knows, and says nothing about anything after them.
+
+Today those two numbers differ. `TELEMETRY_COLUMNS` carries **10** names and the
+published shard carries **11**: `source_words_before_cap` sits at the end,
+unchecked and unread. That parses correctly and nothing client-side wants the
+column, so it is not a defect today. It is the reason **append at the end is a
+rule rather than tidiness**:
+
+- **Appending** a column keeps every earlier position where the reader expects
+  it, so an old browser build reads a new shard and ignores the new cell.
+- **Inserting or reordering** shifts a position the prefix covers, and the check
+  throws `telemetry projection header did not match the contract` - loudly,
+  which is correct.
+- **Removing** one does the same, one position earlier.
+
+**The sharp edge is the round trip, not the parse.** `telemetryCsv()`
+re-serializes from `TELEMETRY_COLUMNS` as well, so anything the parser ignored
+is dropped rather than carried through. Any code that reads a shard and writes
+one back silently narrows it from 11 columns to 10. Whoever adds column twelve
+adds it to `TELEMETRY_COLUMNS` and to `TelemetryRow` in the same commit, or the
+client keeps reading a projection it cannot see the end of.
+
 ## What the model did - read at build time, never published
 
 The console's `What the model did` section is not drawn from the published
