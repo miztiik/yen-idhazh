@@ -135,6 +135,12 @@ class _Measured(NamedTuple):
     score_ms: int
     unsupported_numbers: int = 0
     hedge_dropped: bool = False
+    #: False where the article's length before the cut was never written down.
+    #: The row still scores and still counts on every table; it has no x on the
+    #: compression plot, so the plot drops it and says how many it dropped.
+    #: Measured over the committed ledger 2026-08-29: 142 of 2,683 rows are in
+    #: this state, which is 5.3 percent of them.
+    full_length_known: bool = True
 
 
 #: One measured item per published canary, in the digest's own order.
@@ -147,7 +153,8 @@ class _Measured(NamedTuple):
 #: Read down the source-word column: 38 to 6100 words is four decades of x axis
 #: and at least one mark under each of the four configured target zones. Read
 #: down the faithfulness columns: all three confidence bands, and every reason
-#: an item can miss the top one.
+#: an item can miss the top one. Two rows record no length before the cut, so
+#: the plot drops them and the sentence under it has a count to print.
 SCORED: Final[tuple[_Measured, ...]] = (
     # A release note. Under the shortest target zone, and left of the 100-word
     # floor the plot seeds its axis with - the one mark that can say whether the
@@ -173,17 +180,25 @@ SCORED: Final[tuple[_Measured, ...]] = (
         source_words=880, summary_words=96,
         hhem=0.88, hhem_full=0.87, coverage=0.22, score_ms=330,
     ),
-    # Faithful, but the article hedged and the summary asserted.
+    # Faithful, but the article hedged and the summary asserted. Its length
+    # before the cut was never recorded, so it scores and counts but is not on
+    # the plot - the state the sentence under the chart exists to declare.
     _Measured(
         source_words=1320, summary_words=118,
         hhem=0.90, hhem_full=0.89, coverage=0.64, score_ms=410,
-        hedge_dropped=True,
+        hedge_dropped=True, full_length_known=False,
     ),
     # Low on faithfulness, in the widest target zone. Longer than SEEN_WORD_CAP,
-    # so it is also the shortest article the day records as cut.
+    # so it is also the shortest article the day records as cut - and it is the
+    # second row recording no length before that cut, so the count in the
+    # sentence under the plot is a number rather than a one a test could pass by
+    # printing whatever it found. Cut and unplaceable together is the real
+    # historical state: a row written before 2026-08-27 whose article was cut
+    # has no full length anywhere.
     _Measured(
         source_words=2450, summary_words=164,
         hhem=0.44, hhem_full=0.43, coverage=0.48, score_ms=520,
+        full_length_known=False,
     ),
     # Cut: the article is longer than what the model was given, so the plot draws
     # a diamond rather than a dot.
@@ -567,7 +582,7 @@ def _eval_row(item: DigestItem, measured: _Measured, evaluation: EvaluationConfi
         speculative_density=_SPECULATIVE_DENSITY,
         extraction_suspect=False,
         band=item.band,
-        source_word_count=measured.source_words,
+        source_word_count=measured.source_words if measured.full_length_known else None,
         source_seen_word_count=seen_words,
         summary_word_count=measured.summary_words,
         pipeline_fingerprint=_fixture_digest("pipeline", DATE),
