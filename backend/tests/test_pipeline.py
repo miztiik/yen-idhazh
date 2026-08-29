@@ -720,14 +720,15 @@ def test_every_window_is_the_full_window_and_the_last_one_ends_on_the_last_word(
 
 
 def test_anchoring_the_last_window_drops_a_window_on_a_long_article() -> None:
-    """Correctness is the reason; the saved scorer pass arrives with a bigger cap.
+    """Correctness is the reason; the saved scorer pass arrived with the bigger cap.
 
-    Today `extract.truncation_cap_tokens` of 2500 caps an article at 1,923
+    At the cap of 2500 committed until 2026-08-29, an article stopped at 1,923
     words. There anchoring fixes the runt and changes no count - 3 windows
-    before, 3 after - so it buys correctness and no time. At 3,846 words, twice
-    that cap, the unanchored walk needed 6 windows with the last of them 96
-    words long, and anchoring covers the same text in 5. That is 16.7 percent
-    less scorer work, and it is the number to quote only once the cap moves.
+    before, 3 after - so it bought correctness and no time. At 3,846 words, which
+    is what the cap of 5000 now allows, the unanchored walk needed 6 windows with
+    the last of them 96 words long, and anchoring covers the same text in 5. That
+    is 16.7 percent less scorer work, and the cap move is what turned it from a
+    number to quote later into a live saving.
     """
     geometry = EvaluationConfig()
     size, overlap = geometry.chunk_words, geometry.chunk_overlap_words
@@ -735,7 +736,7 @@ def test_anchoring_the_last_window_drops_a_window_on_a_long_article() -> None:
     at_cap = chunks(" ".join(str(n) for n in range(1923)), size, overlap)
     doubled = chunks(" ".join(str(n) for n in range(3846)), size, overlap)
 
-    assert len(at_cap) == 3, "today's cap costs the same three passes it always did"
+    assert len(at_cap) == 3, "the old cap cost the same three passes it always did"
     assert len(doubled) == 5, "six before anchoring, five after"
 
 
