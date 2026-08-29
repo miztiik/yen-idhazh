@@ -39,6 +39,7 @@ Binds every persona and every answer an agent gives a user, plus docs, commit me
 - Keep answers short unless asked for depth.
 - Say what a number means, next to the number. `1.055x` is not an answer; "5.5 percent faster, and we needed 40 percent" is.
 - A term from a subsystem is not a term for a user. Define it in the same sentence or do not use it.
+- A third-party product name is not a design vocabulary. Name the artefact and the property, never the vendor whose screenshot it came from. Binds docs, plan-docs, code comments, commit messages, branch names and filenames.
 - Use ASD-STE100.
 
 A persona's own worldview shapes what it says, never how plainly it says it.

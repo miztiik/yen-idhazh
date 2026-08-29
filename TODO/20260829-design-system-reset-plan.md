@@ -1,4 +1,4 @@
-# The MSXi design reset - a published surface worth the reader's screen
+# The design system reset - a published surface worth the reader's screen
 
 **Last Updated**: 2026-08-29
 **Level**: 5 (core design doctrine + two persisted config contracts). Owner signed off the two doctrine strikes on 2026-08-29; no further pause is required inside this plan.
@@ -8,29 +8,34 @@
 | Field | Value |
 | --- | --- |
 | Why this plan exists | The published surface uses 40.6 percent of a 1536px screen, has no responsive layout system, no elevation, no gradient, no icon set and no interactive chart, because three doctrine sentences turned every design decision into a subtraction. |
-| Hard scope - in | Doctrine reset and a demand-side persona; a frontend-owned config contract; a full token layer (space, elevation, gradient, chart ramps, frame, measure, type); a fluid frame with the measure moved onto text; a generated tinted icon system; a shared chart hover-readout layer; the MSXi chart vocabulary; a rebuilt console; digest and archive polish; a web app manifest. |
+| Hard scope - in | Doctrine reset and a demand-side persona; a frontend-owned config contract; a full token layer (space, elevation, gradient, chart ramps, frame, measure, type); a fluid frame with the measure moved onto text; a generated tinted icon system; a shared chart hover-readout layer; the reference chart vocabulary; a rebuilt console; digest and archive polish; a web app manifest. |
 | Hard scope - out | Service worker (a separate decision, see row 11 rejected alternatives); accessibility audit tooling (section 0a); any runtime service; account systems; push; a chart library that draws (row 6 decision 3); backend pipeline logic; the frontend contract-generation gap named in row 2 decision 6. |
 | ESCALATE triggers | (1) A row needs a runtime service or a third-party script that phones home. (2) The published site is measured past 900 MB after any row. (3) A row cannot hold the `/console/` bundle route under 140 KB gzipped. (4) A persisted payload contract other than the two config contracts needs a field. |
 | Chosen strategy | Foundation first (doctrine -> config -> tokens -> frame), then parallel surface work, then one re-baseline row. Ruled by Fowler (contracts before logic, Rule #3) with Jony owning every visual decision and Susan owning every sufficiency call. |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3. Every row is its own worktree off `origin/main` and its own PR; another agent is active in the main checkout and in `yi-t02`, `yi-t03`, `yi-t04`. |
 
-**Gold standard for every visual ruling in this plan**: the MSXi Snap screenshots supplied by the owner on 2026-08-29, plus nuscio.com measured the same day. Rich panel language, tinted status cards, gradient chrome, per-purpose chart types, hover readout, colourful semantic icons, working dark theme.
+**Gold standard for every visual ruling in this plan**: the operator-dashboard reference screenshots supplied by the owner on 2026-08-29, plus nuscio.com measured the same day. Rich panel language, tinted status cards, gradient chrome, per-purpose chart types, hover readout, colourful semantic icons, working dark theme.
 
 ## 1 - Status Reckoner
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Doctrine reset and the demand-side gate | - | A | PENDING | - | - | - |
-| 2 | `config/appearance.json` - the frontend's own contract | 1 | B | PENDING | - | - | - |
-| 3 | The token layer the design system already specified | 1 | B | PENDING | - | - | - |
+| 1 | Doctrine reset and the demand-side gate | - | A | DONE #205 | `yi-r1` | 205 | - |
+| 2 | `config/appearance.json` - the frontend's own contract | 1 | B | DONE #208 | `yi-ui` | 208 | - |
+| 3 | The token layer the design system already specified | 1 | B | IN-FLIGHT | `yi-ui` | 209 | - |
 | 4 | The fluid frame, and the measure moved onto text | 2, 3 | C | PENDING | - | - | - |
 | 5 | A generated, tinted icon system | 3, 4 | D | PENDING | - | - | - |
 | 6 | The chart hover readout, and chart theming | 3, 4 | D | PENDING | - | - | - |
-| 7 | The MSXi chart vocabulary | 6 | E | PENDING | - | - | - |
+| 7 | The reference chart vocabulary | 6 | E | PENDING | - | - | - |
 | 8 | The console rebuilt as panels | 5, 6, 7 | F | PENDING | - | - | - |
 | 9 | The digest surface, and the archive brought inside | 4, 5 | E | PENDING | - | - | - |
 | 10 | Installability | 3 | D | PENDING | - | - | - |
 | 11 | Re-baseline, measure, and smoke every surface | 8, 9, 10 | G | PENDING | - | - | - |
+| 12 | Scrub the third-party product name from the repository | - | A | IN-FLIGHT | `yi-ui` | - | - |
+
+Twelve rows. Row 12 was added on 2026-08-29 at owner instruction and jumped the
+queue: it has no predecessor and blocks nothing, so it runs beside whatever else
+is in flight.
 
 ---
 
@@ -169,7 +174,7 @@
 | Elevation | `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-panel`; `--surface-raised`, `--surface-sunken` | Already specified. Dark theme uses a lighter surface plus a hairline rather than a heavier shadow, because a shadow on a dark ground reads as nothing. |
 | Frame | `--frame-reading`, `--frame-console`, `--measure`, `--gutter` | Fed from `config/appearance.json` at build time (row 2). |
 | Gradient | `--gradient-brand`, `--gradient-wash`, `--gradient-panel` | Chrome and identity only. D1 from row 1 is what makes these legal. |
-| Surface tint | `--tint-accent`, `--tint-info`, `--tint-warn`, `--tint-bad`, `--tint-good` at 5-9 percent alpha | The single cheapest richness move available; MSXi's KPI cards and nuscio's panels are both this and nothing more. |
+| Surface tint | `--tint-accent`, `--tint-info`, `--tint-warn`, `--tint-bad`, `--tint-good` at 5-9 percent alpha | The single cheapest richness move available; the reference dashboard's KPI cards and nuscio's panels are both this and nothing more. |
 | Chart | `--chart-1` through `--chart-8`, plus `--chart-grid`, `--chart-axis`, `--chart-marker`, `--chart-readout-bg` | Categorical, eight stops, and it holds no green, amber or red - the existing four-stop `--series-*` ramp is extended, not replaced, and the confidence ramp stays untouched. |
 | Type | `--font-display`, `--font-reading`, `--font-data`; `--text-xs` through `--text-3xl` with paired line heights | Display face for headings only. |
 | Radius | `--radius-lg`, `--radius-xl`, `--radius-full` added to the existing two | Panel language needs a bigger corner than 8px. |
@@ -181,7 +186,7 @@
   | 1 | The display face is self-hosted woff2, subset to Latin, headings only, `font-display: swap`, preloaded. The body keeps the system stack: it renders on the first frame at zero bytes and the body is what the reader came for. | Jony, Carmack |
   | 2 | Licence must be OFL or equivalent and the source and version are recorded in a `PROVENANCE.md` beside the bytes, matching what `frontend/static/assist/models/` already does. | Fowler |
   | 3 | Cost against Rule #2, measured before merge: the published site is 128,064,853 bytes and grows about 16.6 MB per published day, so a 60 KB font is about one third of one percent of a single day's growth and does not move the cap date. The row records the real number, not this estimate. | Carmack, Rule #10 |
-  | 4 | The dark theme is designed, not derived. Shadows are replaced by surface lift plus a hairline rule; tints are re-tuned per theme rather than reused at the same alpha. The MSXi dark screenshots are the reference. | Susan |
+  | 4 | The dark theme is designed, not derived. Shadows are replaced by surface lift plus a hairline rule; tints are re-tuned per theme rather than reused at the same alpha. The reference dashboard's dark screenshots are the model. | Susan |
   | 5 | `--series-1` through `--series-4` keep their current values inside `--chart-1` through `--chart-4`, so no existing chart changes colour in this row. | Jony |
 
 - **Rejected alternatives:**
@@ -264,7 +269,7 @@
   | # | Decision | Authority |
   | --- | --- | --- |
   | 1 | Colourful icons ship. The prior refusal is overruled. | owner, 2026-08-29 |
-  | 2 | Colour arrives by semantic tint, not by multi-colour artwork - the same mechanism MSXi uses, where a glyph is monochrome and the status decides the hue. One glyph set, eight tints, and a new status arrives with a slot already waiting. | Susan, Jony |
+  | 2 | Colour arrives by semantic tint, not by multi-colour artwork - the same mechanism the reference dashboard uses, where a glyph is monochrome and the status decides the hue. One glyph set, eight tints, and a new status arrives with a slot already waiting. | Susan, Jony |
   | 3 | Icons ship on chrome, controls, the console and the topic pills. They do NOT ship beside a headline: the topic is a classification the pipeline actually made and may carry a mark, but "what kind of story is this" is an assertion no stage ever produced. This is a narrower line than the earlier blanket refusal and it keeps the part that was right. | Editor, Jony |
   | 4 | Source set is Lucide (ISC licence, Rule #8). Only the icons in use are committed, as source SVG, and the sprite is generated from them. | Carmack |
   | 5 | The manifest is a persisted surface and therefore a Pydantic contract with a generated schema, matching `design-system.md`'s existing icon rule. | Fowler |
@@ -315,9 +320,9 @@
 
 ---
 
-### Row #7 - The MSXi chart vocabulary
+### Row #7 - The reference chart vocabulary
 
-- **Scope:** The chart types the console needs and does not have - a different chart for a different question, which is the property the MSXi reference actually demonstrates.
+- **Scope:** The chart types the console needs and does not have - a different chart for a different question, which is the property the reference dashboard actually demonstrates.
 - **Files touched:**
   - `frontend/src/lib/charts/` - `donut.ts`, `waterfall.ts`, `stacked.ts`, `sparkline.ts`, `targetbar.ts` (new)
   - `frontend/src/lib/components/` - `DonutGauge.svelte`, `TargetBar.svelte`, `WaterfallChart.svelte`, `StackedBars.svelte`, `Sparkline.svelte`, `KpiCard.svelte` (new)
@@ -329,12 +334,12 @@
 
 | Chart | The question it answers | Modelled on |
 | --- | --- | --- |
-| Donut gauge | one share against a whole, with the count beside it | MSXi reliability posture |
-| Target bar | a value against the target it should have hit, banded by distance | MSXi scorecard levers |
-| Waterfall | how a total was built from ordered contributions | MSXi MACC projection |
-| Stacked bars | composition over time | MSXi monthly consumption |
-| Sparkline | direction at a glance, inside a card | MSXi account cards |
-| KPI card | one number, its label, its movement, its tint | MSXi overview strip |
+| Donut gauge | one share against a whole, with the count beside it | reference: the reliability scorecard |
+| Target bar | a value against the target it should have hit, banded by distance | reference: the scorecard levers |
+| Waterfall | how a total was built from ordered contributions | reference: the commitment burndown |
+| Stacked bars | composition over time | reference: monthly consumption |
+| Sparkline | direction at a glance, inside a card | reference: the account cards |
+| KPI card | one number, its label, its movement, its tint | reference: the overview strip |
 
 - **Decisions:**
 
@@ -357,7 +362,7 @@
 
 ### Row #8 - The console rebuilt as panels
 
-- **Scope:** The operator surface rebuilt in the MSXi panel language - a KPI strip, tinted status cards, real panels with elevation, tables that fit the screen, and charts at a size a person can read.
+- **Scope:** The operator surface rebuilt in the reference panel language - a KPI strip, tinted status cards, real panels with elevation, tables that fit the screen, and charts at a size a person can read.
 - **Files touched:**
   - `frontend/src/routes/console/+page.svelte`, `+page.server.ts`
   - `frontend/src/lib/components/` - `Panel.svelte`, `StatusChip.svelte` (new); `FailureList.svelte`, `FailurePanels.svelte`, `StageTimings.svelte`, `ThroughputTrend.svelte`, `CompressionScatter.svelte`, `Viewport.svelte`
@@ -455,7 +460,7 @@
   - `frontend/tests/payload-weight.spec.ts`
   - `docs/reference/measurements.md`
   - `docs/architecture/publishing/layout.md` (the cap date, re-derived)
-  - `TODO/20260829-msxi-design-system-plan.md` (closure)
+  - `TODO/20260829-design-system-reset-plan.md` (closure)
 - **Acceptance gates:** Full `pytest`, `ruff`, `mypy --strict`, `npm run check`, `npm run build`, `npm run bundle-gate`, `npm run test:browser` all green; the contract drift gate clean; every new number carries hardware, date and spread (Rule #10); the published site measured against the 1 GB cap and the cap date restated.
 - **Oracle:** The bundle baseline is re-derived by building five times and taking the HEAVIEST per route, not the mean - a mean fires on half of all builds. The recorded per-day growth rate is measured from mature days only; the corpus holds days of 4, 10, 147, 731, 724 and 621 items and including the small ones halves the answer.
 
@@ -477,6 +482,37 @@
 
 ---
 
-## Execution stamp
+### Row #12 - Scrub the third-party product name from the repository
+
+- **Scope:** Remove every occurrence of the reference dashboard's product name from tracked files, filenames, pull-request metadata and commit messages, and write the naming rule that keeps it out.
+- **Files touched:**
+  - `TODO/20260829-design-system-reset-plan.md` (renamed from the slug that carried the name)
+  - `.github/agents/susan.agent.md`
+  - `docs/agents/guardrails.md`
+  - `CLAUDE.md` (section 0b)
+- **Acceptance gates:** `git grep -i` for the name over every tracked path returns nothing; no filename carries it; every open and merged pull-request title and body is edited; the replacement wording still names a real, checkable reference rather than going vague.
+- **Oracle:** A case-insensitive search over the full tracked tree AND over `git log --format=%B` for the working range returns zero hits. The search is case-insensitive on purpose: the name appeared in three casings across the repository, and a case-sensitive sweep would have reported clean while two of them survived.
+
+**The replacement vocabulary.** The reference is described by what it is, never by what it is called: "the operator-dashboard reference screenshots", "the reference dashboard", "the reference panel language", "the reference chart vocabulary". Each row that cited a specific screen now cites the artefact - a reliability scorecard, a commitment burndown, an overview strip - which is more useful to a reader than the product name was, because it says what to look at.
+
+- **Decisions:**
+
+  | # | Decision | Authority |
+  | --- | --- | --- |
+  | 1 | The name is removed everywhere, including from history. | owner, 2026-08-29 |
+  | 2 | The reference itself is NOT removed. A visual decision that cites nothing is unreviewable, and the screenshots are the standing gold standard for this plan. What changes is how the source is named. | Jony |
+  | 3 | A general naming rule lands with the scrub rather than a one-time cleanup, so the next agent does not reintroduce it: **a third-party product name is not a design vocabulary.** A design doc names the artefact and the property, never the vendor. | Fowler |
+  | 4 | The rewrite of merged commit messages is a force-push to `main` and is the ONLY exception to section 8 besides `prune.yml`. It is separated from the file scrub so the file scrub can land immediately and the rewrite can be timed against the other agent's in-flight worktrees. | Fowler, Carmack |
+
+- **Rejected alternatives:**
+
+  | # | Option | Why rejected | Authority |
+  | --- | --- | --- | --- |
+  | 1 | Replace the name with an initialism or a codename | A codename for a specific product is the same disclosure with an extra step, and it is worse to read. | owner |
+  | 2 | Drop the reference entirely and describe the target as "a modern dashboard" | Unreviewable. Every visual ruling in this plan cites a specific screen; "modern" cites nothing and cannot be checked. | Jony, Susan |
+  | 3 | Leave merged commit messages alone | The owner asked for history, and `git log` is as public as the working tree on a public repository. | owner |
+  | 4 | Rewrite history in the same commit as the file scrub | Couples a safe, instant change to one that force-pushes `main` while three sibling worktrees are checked out against it. | Carmack |
+
+---
 
 Execute autonomously per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md); AUTO every row; one worktree and one PR per row off `origin/main`; merge green-gated and one at a time; ESCALATE only on the four triggers in section 0.
