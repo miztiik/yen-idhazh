@@ -15,7 +15,7 @@
 	 */
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { axisLabels, cellFor, type LabelAlign } from '$lib/charts/run-history';
+	import { axisLabels, cellFor, denseCellFor, ROW_STRIP_PX, type LabelAlign } from '$lib/charts/run-history';
 	import {
 		datesIn,
 		failureSeries,
@@ -34,6 +34,8 @@
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import TargetBar from '$lib/components/TargetBar.svelte';
+	import { shortDate } from '$lib/format';
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
@@ -50,9 +52,10 @@
 		type SkylineBar
 	} from '$lib/charts/glance';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
+	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
-	import type { Health, ModelDay } from './+page.server';
+	import type { FeedDayOutcome, Health, ModelDay } from './+page.server';
 
 	let { data } = $props();
 
@@ -173,6 +176,30 @@
 	function barHeight(bar: SkylineBar): number {
 		return bar.published === 0 ? 0 : Math.max(1, bar.height * SKYLINE.height);
 	}
+
+	/** The days every feed strip is drawn over. One axis for the whole list, so
+	 * two feeds can be read against each other: a feed broken since Tuesday and a
+	 * feed flaky all month draw the same picture on two different axes. */
+	const stripDates = $derived(data.feedDates.filter(inWindow));
+	/** Fixed rather than measured. Twenty strips each watching their own width is
+	 * twenty observers, and the room a list row has is a layout decision the
+	 * server can make as well as the browser can. */
+	const stripCell = $derived(denseCellFor(ROW_STRIP_PX, stripDates.length));
+	const stripAxis = $derived(axisLabels(stripDates));
+	const strips = $derived(
+		new Map(
+			data.feeds.map((feed) => [feed.feedId, new Map(feed.days.map((day) => [day.date, day]))])
+		)
+	);
+
+	/** What a square means, in words. Colour is one signal and never the only
+	 * one, and the two that are not a verdict take no band colour at all. */
+	const FEED_KEY: { outcome: FeedDayOutcome; text: string }[] = [
+		{ outcome: 'answered', text: 'answered' },
+		{ outcome: 'failed', text: 'failed, or answered with nothing' },
+		{ outcome: 'refused', text: 'politely refused' },
+		{ outcome: 'resting', text: 'not asked - resting' }
+	];
 
 	let strip = $state<HTMLDivElement | null>(null);
 
@@ -350,16 +377,6 @@
 
 	function percent(value: number | null): string {
 		return value === null ? '-' : `${value}%`;
-	}
-
-	/** A word count with its thousands grouped, or a dash where none was taken.
-	 *
-	 * Null is the state this exists for: a run before 2026-08-28 measured no
-	 * length at all, and printing that as `0` would say the source publishes
-	 * nothing - which is the opposite of what the column is asked.
-	 */
-	function words(value: number | null): string {
-		return value === null ? '-' : grouped(value);
 	}
 
 	/** Whole units, never a decimal, and never a zero that was really work.
@@ -753,7 +770,20 @@
 
 	<div data-windowed="source-cuts" data-window-days={cuts.days}>
 		<h2 class="console-h2">Sources cut short most often</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+
+		{#if cuts.cost}
+			<!-- What the next move of the cap would buy, and the first line of the
+			     section rather than the last. A count of cut articles says the cap
+			     fired; how much it removed says whether raising it is worth
+			     anything, and the n is what makes it a measurement. -->
+			<p class="mt-2 text-[0.9375rem] text-text-secondary" data-source-cuts-cost>
+				{cuts.cost.n} articles were cut short. Half of them lost more than {grouped(
+					cuts.cost.median
+				)} words each, and the longest lost {grouped(cuts.cost.max)}.
+			</p>
+		{/if}
+
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-intro>
 			The last {cuts.days} days, {cuts.articles}
 			{cuts.articles === 1 ? 'article' : 'articles'} between them. An article longer than the cap
 			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
@@ -773,52 +803,17 @@
 				No article was cut short in the last {cuts.days} days.
 			</p>
 		{:else}
-			<div class="console-table mt-3" data-source-cuts="table">
-				<table class="w-full text-[0.8125rem]">
-					<thead class="text-text-tertiary">
-						<tr class="border-b border-rule">
-							<th class="py-2 text-start font-normal">Source</th>
-							<th class="py-2 text-end font-normal">Cut short</th>
-							<th class="py-2 text-end font-normal">Articles</th>
-							<th class="py-2 text-end font-normal">Share cut</th>
-							<!-- A length ending where a count ends reads as one more count. The
-							     gap is what says this column measures something else. -->
-							<th class="py-2 ps-6 text-end font-normal">Longest article, words</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each cuts.rows as source (source.sourceId)}
-							<tr class="border-b border-rule" data-source-cut={source.sourceId}>
-								<td class="py-2">{source.sourceId}</td>
-								<td class="py-2 text-end tabular-nums" data-source-cell="cut">{source.cut}</td>
-								<td class="py-2 text-end tabular-nums" data-source-cell="articles"
-									>{source.articles}</td
-								>
-								<td class="py-2 text-end tabular-nums" data-source-cell="share"
-									>{percent(source.sharePct)}</td
-								>
-								<td class="py-2 ps-6 text-end tabular-nums" data-source-cell="longest"
-									>{words(source.longestWords)}</td
-								>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+			<div class="mt-3">
+				<SourceCutRange
+					rows={cuts.rows}
+					caps={cuts.caps}
+					width={data.console.chart_width}
+				/>
 			</div>
 
 			{#if cuts.moreSources > 0}
 				<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-source-cuts-more>
 					{cuts.moreSources} more sources had {cuts.moreCuts} cuts between them.
-				</p>
-			{/if}
-			{#if cuts.cost}
-				<!-- What the next move of the cap would buy. A count of cut articles says
-				     the cap fired; how much it removed says whether raising it is worth
-				     anything, and the n is what makes it a measurement. -->
-				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-cost>
-					{cuts.cost.n} articles were cut short. Half of them lost more than {grouped(
-						cuts.cost.median
-					)} words each, and the longest lost {grouped(cuts.cost.max)}.
 				</p>
 			{/if}
 		{/if}
@@ -829,9 +824,11 @@
 		Every feed's result is written down every run. A feed that answered with nothing counts as a
 		failure - an empty answer costs the digest the same articles a refused one does. A source
 		whose <code>robots.txt</code> says no does not: honouring it is the pipeline working. A feed
-		is rested after {data.quarantineAfter} failures. This section does not follow the window
-		above: it counts every run on record, because that is what the pipeline counted when it
-		decided to rest a feed, and two numbers for one decision is worse than one long count.
+		is rested after {data.quarantineAfter} failures in a row, and the count beside each feed is
+		that run of failures - the number the pipeline itself rests on, not every failure it has ever
+		had. That count does not follow the window above, because a windowed recount would disagree
+		with the rest the pipeline actually performed, and two numbers for one decision is worse than
+		one long count. The strip of days beside it does follow the window.
 	</p>
 
 	{#if data.feedRuns === 0}
@@ -844,36 +841,101 @@
 			{data.feedRuns === 1 ? 'run' : 'runs'}.
 		</p>
 	{:else}
-		<div class="console-table mt-3" data-feeds="table">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule">
-						<th class="py-2 text-start font-normal">Feed</th>
-						<th class="py-2 text-end font-normal">Failed</th>
-						<th class="py-2 text-end font-normal">Asked</th>
-						<!-- A number ending at the same pixel a sentence begins reads as one
-						     word. The gap is what separates the count from the reason. -->
-						<th class="py-2 ps-6 text-start font-normal">Last result</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.feeds as feed (feed.feedId)}
-						<tr class="border-b border-rule" data-feed={feed.feedId}>
-							<td class="py-2">
-								{feed.feedId}
-								{#if feed.nearQuarantine}
-									<span class="ms-2 text-[0.6875rem] text-band-low" data-rested>rested</span>
-								{/if}
-							</td>
-							<td class="py-2 text-end tabular-nums">{feed.failures}</td>
-							<td class="py-2 text-end tabular-nums">{feed.attempts}</td>
-							<td class="py-2 ps-6 text-text-secondary" data-feed-result>
-								{feed.lastResult}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
-							</td>
-						</tr>
+		<div
+			class="console-table mt-3"
+			data-windowed="feed-outcomes"
+			data-window-days={windowDays}
+		>
+			<p class="feeds-note">
+				Nearest to a rest first, then by how much has gone wrong in total. Each strip is one
+				square a day, oldest to newest, over the last {windowDays} days.
+			</p>
+
+			<ol class="feed-rows" data-feeds="table">
+				{#each data.feeds as feed (feed.feedId)}
+					<!-- The streak and the track length are published because they are what
+					     the marker is drawn from. A check that re-reads the bar's own
+					     numbers off the page cannot be fooled by a bar drawn to the wrong
+					     scale, which is the failure worth catching here: nothing about it
+					     looks broken. -->
+					<li
+						class="feed-row"
+						data-feed={feed.feedId}
+						data-feed-resting={feed.resting ? 'yes' : null}
+						data-feed-streak={feed.streak}
+						data-feed-failures={feed.failures}
+						data-feed-track={feed.marks.track}
+					>
+						<p class="feed-name">
+							<span>{feed.feedId}</span>
+							{#if feed.resting}
+								<span class="feed-rested" data-rested>rested</span>
+							{/if}
+						</p>
+
+						<div class="feed-bar" data-feed-cell="bar">
+							<TargetBar
+								marks={feed.marks}
+								label="Failures in a row"
+								valueText={feed.streak === 1 ? '1 failure' : `${feed.streak} failures`}
+								targetText="rested at {data.quarantineAfter} in a row"
+								emptyNote="Nothing has asked this feed yet."
+								tone="health"
+							/>
+						</div>
+
+						{#if stripDates.length > 0}
+							<div
+								class="feed-strip"
+								data-feed-strip={feed.feedId}
+								style="grid-template-columns: repeat({stripDates.length}, {stripCell.cell}px); gap: {stripCell.gap}px"
+							>
+								{#each stripDates as date (date)}
+									{@const day = strips.get(feed.feedId)?.get(date) ?? null}
+									<span
+										class="feed-square"
+										style="block-size: {stripCell.cell}px"
+										data-feed-day={date}
+										data-feed-outcome={day ? day.outcome : 'none'}
+										title={day ? day.label : `${shortDate(date)}: nothing on record.`}
+										aria-label="{feed.feedId} on {day
+											? day.label
+											: `${shortDate(date)}: nothing on record.`}"
+										role="img"
+									></span>
+								{/each}
+							</div>
+						{/if}
+
+						<p class="feed-result" data-feed-result>
+							{feed.lastResult}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
+						</p>
+					</li>
+				{/each}
+			</ol>
+
+			{#if stripDates.length > 0}
+				<div
+					class="feed-axis"
+					style="inline-size: {stripCell.width}px; grid-template-columns: repeat({stripDates.length}, {stripCell.cell}px); gap: {stripCell.gap}px"
+				>
+					{#each stripAxis as label (label.column)}
+						<div class="feed-axis-slot" style="grid-column: {label.column}">
+							<span style={ANCHOR[label.align]} data-feed-axis={label.column}>{label.text}</span>
+						</div>
 					{/each}
-				</tbody>
-			</table>
+				</div>
+			{:else}
+				<p class="feeds-note" data-feed-strip-empty>
+					No run was recorded in these {windowDays} days, so there is no strip to draw.
+				</p>
+			{/if}
+
+			<ul class="feed-key">
+				{#each FEED_KEY as entry (entry.outcome)}
+					<li><span class="feed-square" data-feed-outcome={entry.outcome}></span>{entry.text}</li>
+				{/each}
+			</ul>
 		</div>
 	{/if}
 
@@ -1062,5 +1124,177 @@ position: sticky;
 top: 0;
 z-index: 1;
 background: var(--color-surface);
+}
+
+.feeds-note {
+margin: 0 0 var(--space-3);
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+/* One column set for the whole list, borrowed by every row, so a feed with a
+   two-digit count does not get a shorter bar than a feed with a one-digit one.
+   The same reason the ranked list does it. */
+.feed-rows {
+display: grid;
+grid-template-columns: minmax(8rem, 1fr) minmax(11rem, 1.4fr) auto;
+column-gap: var(--space-4);
+margin: 0;
+padding: 0;
+list-style: none;
+}
+
+.feed-row {
+grid-column: 1 / -1;
+display: grid;
+grid-template-columns: subgrid;
+grid-template-areas: 'name bar strip' 'result bar strip';
+align-items: center;
+padding-block: var(--space-2);
+border-block-end: 1px solid var(--color-rule);
+}
+
+.feed-row:last-child {
+border-block-end: 0;
+}
+
+.feed-name {
+grid-area: name;
+display: flex;
+align-items: center;
+gap: var(--space-2);
+margin: 0;
+font-size: var(--text-sm);
+line-height: var(--leading-sm);
+color: var(--color-text);
+overflow-wrap: anywhere;
+}
+
+/* The word, not the colour. A rested feed is the one thing on this list an
+   operator has to act on, so it is written out. */
+.feed-rested {
+padding-inline: var(--space-2);
+border-radius: var(--radius-full);
+background: var(--tint-bad);
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-secondary);
+white-space: nowrap;
+}
+
+/* The only human-readable cause on the page, and it is never traded for a
+   glyph. It keeps its own line rather than becoming a caption on the bar. */
+.feed-result {
+grid-area: result;
+margin: 0;
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-secondary);
+}
+
+.feed-bar {
+grid-area: bar;
+min-inline-size: 0;
+}
+
+.feed-strip,
+.feed-axis {
+display: grid;
+}
+
+.feed-strip {
+grid-area: strip;
+}
+
+.feed-square {
+display: block;
+border-radius: 2px;
+background: transparent;
+}
+
+/* Quarantine is a health fact and every square carries its own sentence as
+   well, so this is one of the two places a verdict ramp is the honest colour.
+   The FILL ramp, the same one the run strip above uses: a square this small is
+   a solid, not type, and the band tokens are weighted to be read as type. The
+   two states that are not a verdict take no verdict colour at all. */
+.feed-square[data-feed-outcome='answered'] {
+background: var(--fill-high);
+}
+
+.feed-square[data-feed-outcome='failed'] {
+background: var(--fill-low);
+}
+
+.feed-square[data-feed-outcome='refused'] {
+background: var(--tint-neutral);
+box-shadow: inset 0 0 0 1px var(--color-rule);
+}
+
+.feed-square[data-feed-outcome='resting'] {
+box-shadow: inset 0 0 0 1px var(--color-rule);
+}
+
+/* Flush with the strips above it: the strip column is the last one, so it ends
+   at the same edge the list does. */
+.feed-axis {
+margin-block-start: var(--space-2);
+margin-inline-start: auto;
+}
+
+.feed-axis-slot {
+position: relative;
+block-size: 1rem;
+}
+
+.feed-axis-slot span {
+position: absolute;
+top: 0;
+white-space: nowrap;
+font-size: 0.625rem;
+line-height: 1rem;
+font-variant-numeric: tabular-nums;
+color: var(--color-text-tertiary);
+}
+
+.feed-key {
+display: flex;
+flex-wrap: wrap;
+gap: var(--space-2) var(--space-5);
+margin: var(--space-4) 0 0;
+padding: 0;
+list-style: none;
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+.feed-key li {
+display: flex;
+align-items: center;
+gap: var(--space-2);
+}
+
+.feed-key .feed-square {
+inline-size: 12px;
+block-size: 12px;
+flex-shrink: 0;
+}
+
+/* The console frame is wide, and three columns on a laptop half-window crush
+   the bar the row exists to show. Below that everything stacks. */
+@media (max-width: 48rem) {
+.feed-rows {
+grid-template-columns: minmax(0, 1fr);
+}
+
+.feed-row {
+grid-template-areas: 'name' 'bar' 'strip' 'result';
+row-gap: var(--space-2);
+}
+
+.feed-axis {
+margin-inline-start: 0;
+}
 }
 </style>
