@@ -16,9 +16,9 @@ so a rate taken at another cap is not comparable item for item with anything
 here. **The configured cap moved to 5000 on 2026-08-29**, so every rate on this
 page is a cap-2500 rate and the first scheduled run after that date is the first
 one taken at the new cap. The two conditions that revert the move are in
-[The first run at cap 5000](../../reference/measurements.md#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
+[The first run at cap 5000](../../archive/measurements-2026-08.md#the-first-run-at-cap-5000-and-the-two-triggers-that-revert-it),
 and what that run has to record is in
-[What the first run at cap 5000 must record](../../reference/measurements.md#what-the-first-run-at-cap-5000-must-record).
+[What the first run at cap 5000 must record](../../archive/measurements-2026-08.md#what-the-first-run-at-cap-5000-must-record).
 **Read is the end that moves.** A longer article is more prompt to take in;
 write does not move at all, because the summary length asked for comes from
 `article.band_source_words`, which is the count from before the cap cut it.
@@ -49,7 +49,7 @@ our stopwatch around the HTTP request; `prefill_ms + decode_ms` is what the
 server said the same request cost. Over the 2,317 committed rows that carry all
 three the difference - transport, JSON and validation - has a median of **79 ms
 against a median call of 122,432 ms**, and **0 of the 2,317 are negative**
-([../../reference/measurements.md](../../reference/measurements.md#our-stopwatch-and-the-servers-own-clocks-agree-to-0066-percent)).
+([../../reference/measurements.md](../../archive/measurements-2026-08.md#our-stopwatch-and-the-servers-own-clocks-agree-to-0066-percent)).
 So a slow day is the model and not the client, and there is no unnamed third
 phase hiding inside `summarize_ms`.
 
@@ -154,7 +154,7 @@ Write is 36.8 percent of model time - 232.7 minutes read against 135.7 minutes
 write on run `32742672105`, 2026-08-24 - so 1.055x buys about 1.9 percent of a
 run's wall-clock. **A second in-flight request inside one worker is therefore not
 a throughput lever on this hardware, and that line of work is closed**
-([Parallel decode on 4 vCPU](../../reference/measurements.md#parallel-decode-on-4-vcpu)).
+([Parallel decode on 4 vCPU](../../archive/measurements-2026-08.md#parallel-decode-on-4-vcpu)).
 
 The lever that remains is the number of shards. Each shard is its own runner
 with its own 4 vCPU, so raising the shard count adds cores rather than dividing
@@ -164,7 +164,7 @@ run has now used it: the slowest worker fell from 113.1 minutes to 58.8, which
 is 1.92x, on a day whose total tokens were within 1 percent of the four-shard
 baseline's. It is not a paired measurement and it did not publish - the caveats
 and every other figure are under
-[Eight work shards](../../reference/measurements.md#eight-work-shards).
+[Eight work shards](../../archive/measurements-2026-08.md#eight-work-shards).
 
 ## What this means when reading the chart
 
