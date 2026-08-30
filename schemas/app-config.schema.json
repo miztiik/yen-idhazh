@@ -989,7 +989,7 @@
       "properties": {
         "evaluation_enabled": {
           "default": true,
-          "description": "Whether the faithfulness scorer runs. False writes no row to state/scores.csv, so for those days the eval dashboard and the console's score panels list nothing and each item bands from the model-free counterweights instead. The digest still publishes. `--no-faithfulness` is the same switch for one invocation and overrides this; no flag turns it back on.",
+          "description": "Whether the faithfulness scorer runs. False writes no row to state/scores.csv, so for those days the eval dashboard and the console's score panels list nothing and each item bands from the model-free counterweights instead. The digest still publishes. `--no-faithfulness` is the same switch for one invocation and overrides this; no flag turns it back on. It governs the daily pipeline's work stage only: `validate` and `qualify` are asked for by hand and each refuses outright without a scorer, so a standing switch cannot silence them into measuring nothing. Every run records the state of this switch on its run manifest.",
           "title": "Evaluation Enabled",
           "type": "boolean"
         },
@@ -1022,7 +1022,7 @@
         },
         "sample_rate": {
           "default": 1.0,
-          "description": "The fraction of RUNS whose scorer runs - never the fraction of items. A run scores every item or none, so a day's rows are never a partial sample of that day and a per-day rate stays honest. Below 1.0 most days write no eval row and the console's score panels thin to the sampled days. Not a switch: `evaluation_enabled` is the way to say off, and a rate of zero is refused so the two can never disagree about it.",
+          "description": "The fraction of RUNS whose scorer runs - never the fraction of items. A run scores every item or none, so a day's rows are never a partial sample of that day and a per-day rate stays honest. Below 1.0 most days write no eval row and the console's score panels thin to the sampled days. Not a switch: `evaluation_enabled` is the way to say off, and a rate of zero is refused so the two can never disagree about it. The draw is a digest of the run id, so it is reproducible from the committed manifest and blind to the run's content, and both the rate and the draw land on the run manifest whether or not the run was taken. A published rate is still computed from the item-health census, which is never sampled; the thinned ledger publishes distributions only.",
           "exclusiveMinimum": 0.0,
           "maximum": 1.0,
           "title": "Sample Rate",
@@ -1453,8 +1453,13 @@
   "changelog": [
     {
       "change": "observability.tracing_enabled added, defaulting to false.",
-      "version": "2026-08-30T16:00",
+      "version": "2026-08-30T18:00",
       "why": "A work shard can now build a span tree, which is the one thing the three ledgers cannot hold: a start instant, a parent, and a step too small to earn a column. The robots read nests inside the fetch, and the prompt render and the reply parse sit either side of the model call, so a slow item finally says which of the five it was slow in. It is the only switch in this block that is off unconfigured, because it is the only instrument nothing reads: no page renders a span, no gate consults one, and a trace is evidence where a ledger row is the record (CLAUDE.md section 1b). Off is also what keeps CI clean - a publish job that could fail on a third party's availability is a worse job."
+    },
+    {
+      "change": "observability.evaluation_enabled and observability.sample_rate now say which stage reads them and where the draw is recorded.",
+      "version": "2026-08-30T16:00",
+      "why": "Both fields described a behaviour that nothing performed: the block landed as config with no reader, so the scorer still took its decision from the command-line flag alone. Wiring them raised two questions the descriptions did not answer. A standing switch must not reach `validate` or `qualify`, because each refuses to run without a scorer and a config file would turn a deliberate measurement into an exit code. And a rate is unreadable a year later unless the run says which rate it ran under and whether it was drawn, so both now travel on the run manifest. No field was added, removed or retyped; only two descriptions changed, and every committed config still validates."
     },
     {
       "change": "The observability block added: evaluation_enabled, telemetry_publish, runtime_counters_scrape, sample_rate, keep_months and hard_delete_after_months.",
@@ -1750,7 +1755,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-30T16:00",
+      "default": "2026-08-30T18:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1764,5 +1769,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-30T16:00"
+  "version": "2026-08-30T18:00"
 }

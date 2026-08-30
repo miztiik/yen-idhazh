@@ -672,16 +672,72 @@ Scoring every changed item costs something, and the obvious economy is to score 
 
 **Sampling by source is the one axis guaranteed to bias the result.** The sources that are cleanest to work with - institutions publishing one column of semantic HTML, in plain declarative prose - are exactly the ones the pipeline finds easiest. Scoring only those measures the system where it cannot fail. Worse, it disarms specific instruments: dropped hedges essentially never occur in institutional prose, so that metric would report zero forever and read as a passing test. And extraction rot - the slow failure this whole page exists to catch - concentrates on the messy sources a clean-source sample never fetches. That is a smoke detector installed in the room that cannot catch fire.
 
-**The economics do not justify it.** The deterministic counterweights are string operations - a rounding error against the cost of generating the summary in the first place. Only the faithfulness model costs anything real, and rationing it is a decision that should follow a measurement rather than precede one. The rule: measure the faithfulness scorer's share of per-item wall-clock, and if it exceeds a stated share of the budget, sample *it* alone - stratified across source tiers, drawn within every day rather than on alternate days, selected deterministically, and never below the rate at which a month-over-month comparison stays valid. The counterweights are never sampled.
+**The economics do not justify it.** The deterministic counterweights are string operations - a rounding error against the cost of generating the summary in the first place. Only the faithfulness model costs anything real, and rationing it is a decision that should follow a measurement rather than precede one. The rule: measure the faithfulness scorer's share of per-item wall-clock, and if it exceeds a stated share of the budget, sample *it* alone, selected deterministically, and never below the rate at which a month-over-month comparison stays valid. The counterweights are never sampled. That rationing now exists, and it is drawn per run rather than within a day - see [The scorer is sampled by run, and nothing else is](#the-scorer-is-sampled-by-run-and-nothing-else-is) for why the earlier wording changed.
 
-**If a sample is ever taken, it is recorded on a written row, never as an absent
-one.** Production fingerprint skip is not wired, so a missing row today cannot
+**If a sample is ever taken, it is recorded and never left as an absence.**
+Production fingerprint skip is not wired, so a missing row today cannot
 prove that work was skipped. Any future skip or sample reason must be explicit.
 And any aggregate built on a sample states its denominator in the open: a count
 that describes part of the digest may never be displayed as though it described
-all of it.
+all of it. Where that record lives followed the unit being sampled: a per-item
+draw would have needed a column on every row, and the per-run draw needs one cell
+on the run.
 
 **One thing to do regardless:** the reader-facing confidence signal is driven by the counterweights, which are a census by construction and cost nothing. The faithfulness score is the operator-facing instrument that calibrates the bands. That split keeps a reader-facing promise off the most expensive metric in the system.
+
+### The scorer is sampled by run, and nothing else is
+
+The rule above said that if the faithfulness scorer ever had to be rationed it
+would be drawn *within* every day. The owner ruled otherwise on 2026-08-30, the
+coarser design is the safer one, and the earlier wording is corrected here rather
+than left to disagree with the code.
+
+**The unit is the run.** `observability.sample_rate` is the fraction of runs
+whose scorer runs - never the fraction of items, and never the fraction of
+shards. A run scores every item it summarized, or it scores none. A day with
+three of four shards scored has a wrong denominator for that day and nothing on
+any page could name it, so a whole-run decision is what keeps a day internally
+consistent: a per-day figure is a complete measurement of that day or it is
+absent.
+
+**The draw is a digest of the run id**
+([`../../backend/idhazh/evals/sampling.py`](../../backend/idhazh/evals/sampling.py)).
+The id is hashed, its first eight bytes are read as a position in `[0, 1)`, and
+the run is drawn when that position falls below the rate. Three things follow.
+It is reproducible from the committed manifest a year later with no state kept
+anywhere. It is blind to the run's content, so it cannot thin the ledger towards
+the days that happened to score well. And raising the rate only ever adds runs,
+so a series never develops a hole where it used to carry a reading.
+
+**The thinning happens at collection, not at display.** An unsampled run is never
+scored, so its rows do not exist. Nothing is filtered in a browser and no page
+has a second, hidden population behind it.
+
+**Every run records the rate and the draw, whichever way the draw went.**
+`RunRecord` carries `evaluation_enabled`, `evaluation_sample_rate`,
+`evaluation_sampled` and `scorer_version`
+([`../../backend/idhazh/contracts/run_manifest.py`](../../backend/idhazh/contracts/run_manifest.py)).
+Four facts, because an empty ledger has four causes and an absence looks
+identical for all of them: the switch was off, the run was not drawn, the weights
+would not load, or the run never reached the scorer. `scorer_version` is null
+exactly when no row was written. Without the rate on every run - not only on the
+runs where it bit - a reader cannot tell 800 rows of 1,000 from 800 rows of 800.
+
+**A published RATE comes from the item-health census and from nothing else.** The
+census is never sampled. It is the denominator under every rate on every page, so
+thinning it would not make a measurement cheaper, it would make every other
+measurement unreadable. The sampled ledger publishes distributions instead -
+medians, spreads, histograms - because a median survives a sample and a rate does
+not. **There is deliberately no scaling formula anywhere.** A formula is a thing
+somebody forgets to apply, and a rate quietly multiplied back up reads exactly
+like a rate that was measured.
+
+**Never sampled, each for its own reason:** the item-health census, because it is
+the denominator; `state/seen/` and `state/published.csv`, because they are what
+stops a repeat; `state/feed-health/`, because quarantine fires at
+`collect.quarantine_after_failures` consecutive failures and a missing row moves
+that count; and the canary suite, because a canary that runs sometimes is not a
+canary.
 
 ## Retrieval: does archive search find the right thing?
 

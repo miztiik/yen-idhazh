@@ -504,6 +504,10 @@ def build_manifest(
     note: str | None = None,
     item_health_rows: Sequence[ItemHealthRow] | None = None,
     routes: Sequence[Route] | None = None,
+    evaluation_enabled: bool | None = None,
+    evaluation_sample_rate: float | None = None,
+    evaluation_sampled: bool | None = None,
+    scorer_version: str | None = None,
 ) -> RunManifest:
     """What ran, against which model, at which commit - appended, never rewritten.
 
@@ -568,6 +572,10 @@ def build_manifest(
         determinism_violations=determinism_violations,
         site_bytes=site_bytes,
         site_files=site_files,
+        evaluation_enabled=evaluation_enabled,
+        evaluation_sample_rate=evaluation_sample_rate,
+        evaluation_sampled=evaluation_sampled,
+        scorer_version=scorer_version,
         config_digests=list(config_digests),
         note=note,
     )

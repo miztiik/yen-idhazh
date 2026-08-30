@@ -744,7 +744,10 @@ class ObservabilityConfig(Model):
             "score panels list nothing and each item bands from the model-free "
             "counterweights instead. The digest still publishes. `--no-faithfulness` "
             "is the same switch for one invocation and overrides this; no flag turns "
-            "it back on."
+            "it back on. It governs the daily pipeline's work stage only: `validate` "
+            "and `qualify` are asked for by hand and each refuses outright without a "
+            "scorer, so a standing switch cannot silence them into measuring nothing. "
+            "Every run records the state of this switch on its run manifest."
         ),
     )
     telemetry_publish: bool = Field(
@@ -779,7 +782,12 @@ class ObservabilityConfig(Model):
             "sample of that day and a per-day rate stays honest. Below 1.0 most days "
             "write no eval row and the console's score panels thin to the sampled "
             "days. Not a switch: `evaluation_enabled` is the way to say off, and a "
-            "rate of zero is refused so the two can never disagree about it."
+            "rate of zero is refused so the two can never disagree about it. The draw "
+            "is a digest of the run id, so it is reproducible from the committed "
+            "manifest and blind to the run's content, and both the rate and the draw "
+            "land on the run manifest whether or not the run was taken. A published "
+            "rate is still computed from the item-health census, which is never "
+            "sampled; the thinned ledger publishes distributions only."
         ),
     )
     tracing_enabled: bool = Field(
@@ -1417,7 +1425,7 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-08-30T16:00",
+            version="2026-08-30T18:00",
             change="observability.tracing_enabled added, defaulting to false.",
             why=(
                 "A work shard can now build a span tree, which is the one thing the "
@@ -1431,6 +1439,25 @@ class AppConfig(Contract):
                 "record (CLAUDE.md section 1b). Off is also what keeps CI clean - a "
                 "publish job that could fail on a third party's availability is a "
                 "worse job."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-30T16:00",
+            change=(
+                "observability.evaluation_enabled and observability.sample_rate now say "
+                "which stage reads them and where the draw is recorded."
+            ),
+            why=(
+                "Both fields described a behaviour that nothing performed: the block "
+                "landed as config with no reader, so the scorer still took its decision "
+                "from the command-line flag alone. Wiring them raised two questions the "
+                "descriptions did not answer. A standing switch must not reach `validate` "
+                "or `qualify`, because each refuses to run without a scorer and a "
+                "config file would turn a deliberate measurement into an exit code. And "
+                "a rate is unreadable a year later unless the run says which rate it ran "
+                "under and whether it was drawn, so both now travel on the run manifest. "
+                "No field was added, removed or retyped; only two descriptions changed, "
+                "and every committed config still validates."
             ),
         ),
         ChangelogEntry(
