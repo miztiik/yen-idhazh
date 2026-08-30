@@ -3,7 +3,7 @@
 **Last Updated**: 2026-08-30
 **Level**: 4 (structural, across `backend/utilities/`, `backend/tests/`, `pyproject.toml`, `frontend/` and `docs/`; no persisted contract moves)
 
-Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 2; honour the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 2; honour the ESCALATE triggers in section 0.
 
 ## 0 - Operating contract
 
@@ -41,7 +41,7 @@ Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): o
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | A machine-wide lock, so one heavy gate runs at a time | - | A | PENDING | - | - | - |
+| 1 | A machine-wide lock, so one heavy gate runs at a time | - | A | IN-FLIGHT | `yi-g01` | - | worker |
 | 2 | The backend suite uses the cores the box has | 1 | B | PENDING | - | - | - |
 | 3 | Two worktrees can never share one preview server | 1 | B | PENDING | - | - | - |
 | 4 | The most expensive test file pays for its setup once | 2 | C | PENDING | - | - | - |
