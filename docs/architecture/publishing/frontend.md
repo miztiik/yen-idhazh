@@ -1236,7 +1236,7 @@ when.
 **The waterfall drew the item ceiling and called it site growth.** Measured
 2026-08-30 over the ten committed manifests, a day's gain ran 0.04 MB to 2.82 MB
 while the day published 4 articles or 731. Divided by the articles, the same ten
-days sit between 2,478 and 4,542 bytes. The first series moves when the feeds
+days sit between 2,478 and 4,541 bytes. The first series moves when the feeds
 have a busy morning; the second moves when somebody changes what a payload
 carries, which is the only thing anybody can act on. So the chart is
 `What one more article costs`, in bytes of payload tree per published article,
@@ -1284,10 +1284,10 @@ Windows 11 10.0.26200, node v24.12.0, one build:
 
 | | Bytes | Files | Per published article | Runway to the 1 GB cap |
 | --- | --- | --- | --- | --- |
-| Committed payload tree | 10,067,711 | 161 | 2,478 to 4,542, median about 3,200 | about 2,000 published days |
-| Built bundle | 149,733,563 | 334 | 47,519 cumulative, about 21,000 marginal | 122 published days |
+| Committed payload tree | 10,414,335 | 170 | 2,478 to 4,541, median 3,261 | about 2,038 published days |
+| Built bundle | 152,249,115 | 343 | 46,933 cumulative, 25,752 marginal | 123 published days |
 
-The bundle is **14.87 times larger**, and it was eighteen times larger on
+The bundle is **14.62 times larger**, and it was eighteen times larger on
 2026-08-27 ([the run-manifest changelog](../../../backend/idhazh/contracts/run_manifest.py)),
 so the multiple itself is not stable. The card's sentence is therefore written
 caveat-first: it says the number is the committed payload tree and not the
@@ -1295,7 +1295,7 @@ published site, that the site is what the cap measures, and that
 `idhazh site-weight` prints the runway that binds - and only then that
 `160 articles a day would fill this tree to 1 GB in about N published days`. It
 never says "the site" has N days, because it does not know that. Measured
-2026-08-30 the card read 2,038 published days and `site-weight` read 122, which
+2026-08-30 the card read 2,038 published days and `site-weight` read 123, which
 is the size of the gap the wording exists to keep visible
 ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
 
@@ -1315,14 +1315,14 @@ could measure the tree the cap measures. It cannot, and that was found by
 measuring rather than by reading.** The row's stated basis was 24,378 bytes an
 article, spread 23,066 to 26,538, which is the built bundle's cumulative average
 from `idhazh site-weight`. The console reads run manifests, and the same
-arithmetic over those gives 2,478 to 4,542 bytes an article - a different tree,
+arithmetic over those gives 2,478 to 4,541 bytes an article - a different tree,
 roughly seven times smaller per article and thirteen times smaller in total.
 
 Three options were weighed:
 
 | # | Option | Outcome |
 | --- | --- | --- |
-| 1 | Print the runway from the payload tree against the cap and call it the site's | Rejected on the measurement. It reads about 2,000 published days where `site-weight` reads 122 - out by a factor of sixteen, and a fabricated date is worse than the level it replaced. |
+| 1 | Print the runway from the payload tree against the cap and call it the site's | Rejected on the measurement. It reads about 2,000 published days where `site-weight` reads 123 - out by a factor of sixteen, and a fabricated date is worse than the level it replaced. |
 | 2 | Add `built_site_bytes` to the run manifest | Rejected here, not on merit. It is a persisted-contract change, which is `CLAUDE.md` section 6 Level 5 and pauses work. It is the change that would make the console's runway exact, and it is recorded here so the next person does not have to rediscover it. |
 | 3 | Print the runway of the tree the console has, and name that tree inside the sentence | Taken. Every clause on the card is true and checkable, the direction of the error is stated, and the instrument that measures the other tree is named. |
 
@@ -1330,7 +1330,7 @@ A fourth was considered and dropped without a table row: a measured
 payload-to-site multiple held in `config/`. The two trees do not scale together
 - `frontend/static/assist/` is 45,328,441 bytes and does not grow with articles
 at all - so one multiplier is not just stale-prone, it is structurally wrong.
-The measured multiple was 14.87 on 2026-08-30 and eighteen three days earlier,
+The measured multiple was 14.62 on 2026-08-30 and eighteen three days earlier,
 which is the evidence.
 
 **The track reads about one percent full, and that is the honest picture.** It

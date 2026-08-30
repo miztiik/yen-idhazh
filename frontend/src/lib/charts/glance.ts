@@ -119,7 +119,7 @@ export interface SiteCost {
  * item ceiling wearing a size label: measured over the ten committed manifests
  * on 2026-08-30, a day's gain ran 0.04 MB to 2.82 MB purely because the day
  * published 4 articles or 731. Divided by the articles, the same ten days sit
- * between 2,478 and 4,542 bytes - which is a quantity a change to the payload
+ * between 2,478 and 4,541 bytes - which is a quantity a change to the payload
  * can actually move.
  *
  * The band is one standard deviation about the MEDIAN rather than about the
