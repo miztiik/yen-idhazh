@@ -147,6 +147,46 @@ class RunRecord(Model):
     site_files: int = Field(
         ge=0, description="Files under frontend/public/digest/ after this run."
     )
+
+    evaluation_enabled: bool | None = Field(
+        default=None,
+        description=(
+            "Whether observability.evaluation_enabled was on for this run. False is "
+            "deliberately off; true with no scorer_version is an instrument that failed "
+            "to load. Null on a manifest written before this was recorded - never "
+            "false, because absent and off are different facts."
+        ),
+    )
+    evaluation_sample_rate: float | None = Field(
+        default=None,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The fraction of runs the scorer was set to run on, recorded on EVERY run "
+            "whether or not this one was drawn. Without it a year-old ledger cannot "
+            "tell 800 rows of 1,000 from 800 rows of 800. Null on a manifest written "
+            "before this was recorded."
+        ),
+    )
+    evaluation_sampled: bool | None = Field(
+        default=None,
+        description=(
+            "Whether this run was drawn at that rate. False is the third reason a run "
+            "has no rows, beside switched off and failed to load, and none of the three "
+            "can be read off an absence. Always true at a rate of 1.0."
+        ),
+    )
+    scorer_version: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "The instrument that wrote this run's eval rows, as state/scores.csv spells "
+            "it. Null when no row was written, which is what separates a run that "
+            "measured nothing from one whose measurements are simply elsewhere. Null "
+            "too on a manifest written before this was recorded."
+        ),
+    )
+
     config_digests: list[ConfigDigest] = Field(default_factory=list)
     note: str | None = None
 
@@ -165,6 +205,26 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30T16:00",
+            change=(
+                "Added optional evaluation_enabled, evaluation_sample_rate, "
+                "evaluation_sampled and scorer_version to a run."
+            ),
+            why=(
+                "The faithfulness scorer is now sampled by run, so a day with no eval "
+                "rows has four possible causes - switched off in config, not drawn at "
+                "the rate, the weights would not load, or the run never reached the "
+                "scorer - and an absence in state/scores.csv looks the same for all "
+                "four. The rate lands here rather than on EvalRow because the unit "
+                "sampled is the run: every row of a run shares one rate, so one cell "
+                "per run says everything a per-row column would, and no persisted "
+                "ledger widens. All four are nullable and default to null, because an "
+                "older manifest does not know what it was configured to do and a "
+                "concrete default would invent the answer - the same rule the "
+                "observability block states as an empty cell is never a zero."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-28",
             change="The embedded ModelRef gained an optional hf_base_repo.",
