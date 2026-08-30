@@ -224,7 +224,8 @@ test('the scatter is gone, and nothing draws a point an article', async ({ page 
 	// a shaded band zone behind them.
 	await expect(page.locator('[data-band-distance] svg circle')).toHaveCount(0);
 	await expect(page.locator('[data-band-zone]')).toHaveCount(0);
-	await expect(page.locator('[data-cap-line]')).toHaveCount(0);
+	// Scoped, not page-wide: the source-cut range plot draws cap lines of its own.
+	await expect(page.locator('[data-band-distance] [data-cap-line]')).toHaveCount(0);
 });
 
 test('the bounds are printed as numbers, and they are the ones the prompt asks for', async ({
