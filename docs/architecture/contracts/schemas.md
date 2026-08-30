@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -269,6 +269,6 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
-- [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, one of these shapes.
+- [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, which is deliberately not one of these shapes.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger row.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3, section 1a, section 4, section 11.
