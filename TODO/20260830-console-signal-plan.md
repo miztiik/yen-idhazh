@@ -39,13 +39,13 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Shared time window: config presets, UI control, cost disclosure | - | A | PENDING | - | - | - |
-| 2 | Shared display primitives: RankedList, TargetBar, Sparkline | - | A | PENDING | - | - | - |
-| 3 | Funnel to Sankey, left to right, categorical colour | - | A | PENDING | - | - | - |
-| 4 | Time per item: per-day axis, point marks, hover values, non-occluding readout | 1 | B | PENDING | - | - | - |
-| 5 | Model tokens per second: per-day axis and the same readout contract | 1 | B | PENDING | - | - | - |
-| 6 | Run health: per-theme fill ramp, framed panel, bottom date labels, left-anchored strip | 1 | B | PENDING | - | - | - |
-| 7 | Failure rate reimagined: rate against volume, not three bare panels | 1 | B | PENDING | - | - | - |
+| 1 | Shared time window: config presets, UI control, cost disclosure | - | A | DONE #251 | removed | #251 | worker |
+| 2 | Shared display primitives: RankedList, TargetBar, Sparkline | - | A | DONE #249 | removed | #249 | worker |
+| 3 | Funnel to Sankey, left to right, categorical colour | - | A | DONE #250 | removed | #250 | worker |
+| 4 | Time per item: per-day axis, point marks, hover values, non-occluding readout | 1 | B | IN-FLIGHT | yi-c04 | #263 | worker |
+| 5 | Model tokens per second: per-day axis and the same readout contract | 1 | B | IN-FLIGHT | yi-c05 | - | worker |
+| 6 | Run health: per-theme fill ramp, framed panel, bottom date labels, left-anchored strip | 1 | B | IN-FLIGHT | yi-c06 | - | worker |
+| 7 | Failure rate reimagined: rate against volume, not three bare panels | 1 | B | IN-FLIGHT | yi-c07 | - | worker |
 | 8 | Published trend to a per-day skyline; delete the two on-record counts | 1 | B | PENDING | - | - | - |
 | 9 | Site size: bytes-per-item trend, and a ceiling card with a runway | 1 | B | PENDING | - | - | - |
 | 10 | Compression scatter to distance-from-band bars plus an outlier list | 1 | B | PENDING | - | - | - |
