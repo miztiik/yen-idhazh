@@ -1399,9 +1399,9 @@ the variable protects the shell you remember to set it in and nothing else.
   is part of that promise, and was not until 2026-08-30.** On Windows a name
   whose last handle is closing is "delete pending", and every create on it is
   refused with access denied rather than with "it already exists" - measured
-  that day, 20 of 50 rounds at 20 callers on one lock ended with a traceback out
-  of the create and a non-zero exit. A lost create is now a lost create,
-  whichever of the two the operating system says.
+  that day, 36 of 50 rounds at 20 callers on one lock had a caller die with a
+  traceback out of the create and a non-zero exit, 61 callers of 1,000. A lost
+  create is now a lost create, whichever of the two the operating system says.
 - **CI never takes it.** The tool reads the `CI` variable a GitHub runner sets
   and runs the command straight through, so a runner - one job alone on its own
   machine - behaves exactly as it did before. Any test that drives the tool must

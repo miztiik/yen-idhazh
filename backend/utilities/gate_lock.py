@@ -301,7 +301,7 @@ def _try_create(path: Path, holder: Holder) -> Holder | None:
             # Windows only, and it means contention rather than a broken
             # directory: a name whose last handle is closing is "delete
             # pending", and every create on it is refused until the entry really
-            # goes. Measured 2026-08-30, 2 of 15 rounds at 8 callers on one
+            # goes. Measured 2026-08-30, 36 of 50 rounds at 20 callers on one
             # lock: the old code let this out of `os.open` as a traceback and a
             # non-zero exit, which is the scheduling aid failing the gate it
             # exists to protect. A lost create is a lost create.

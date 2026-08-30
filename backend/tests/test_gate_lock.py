@@ -531,11 +531,11 @@ def test_a_create_the_system_refuses_is_a_lost_create_and_never_a_crash(
 
     A name whose last handle is closing is "delete pending", and every create on
     it is refused with access denied rather than with "it already exists".
-    Measured 2026-08-30 on Windows 11, 12 logical CPUs: 2 of 15 rounds at 8
-    callers on one lock ended with a traceback out of the create and a non-zero
-    exit - contention turned into a failed gate, which is the one thing this tool
-    may not do. A lost create is a lost create, whichever of the two the
-    operating system says.
+    Measured 2026-08-30 on Windows 11, 12 logical CPUs: 36 of 50 rounds at 20
+    callers on one lock had a caller die with a traceback out of the create and
+    a non-zero exit - contention turned into a failed gate, which is the one
+    thing this tool may not do. A lost create is a lost create, whichever of the
+    two the operating system says.
     """
     lock = tmp_path / "gate.lock"
     real_link = os.link
