@@ -1,6 +1,6 @@
 # How to execute a plan-doc (the orchestrator contract)
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-30
 
 The step-by-step MECHANICS for running a `TODO/<YYYYMMDD>-<slug>-plan.md` that [author-a-plan.md](author-a-plan.md) produced. Authoring writes the plan; this doc runs it. The autonomy POLICY (AUTO by default, when to ESCALATE) lives in [../agents/bootstrap.md](../agents/bootstrap.md); this doc is the HOW.
 
@@ -66,6 +66,14 @@ Drop the `AUTHOR-AND-STOP ...` clause once the user authorizes execution.
 ## Parallel fan-out
 
 Rows in the same `Parallel-group` are mutually independent and dispatched concurrently, up to `Parallel N` workers, each in its own worktree. A ready row dispatches as soon as its `Depends-on` entries are `DONE`; it does not wait for sibling checks, nor for a long publish or deploy gate on another PR. The orchestrator parallelizes the WORK but serializes the MERGE - one PR at a time, re-checking the next worker's branch against the advanced `main` before its merge - so a green worker never lands on a stale base.
+
+### The workers are parallel; the machine is not
+
+`Parallel N` bounds how many workers WRITE at once. It does not bound what they RUN. Each worker starts its own test suite, its own build and its own browser run the moment it is ready, and on one developer machine those all land on the same cores. Serialise the expensive gates instead - one heavy gate at a time across every worktree, through a lock the project's gate doc names - and leave `Parallel N` where it is, because the writing was never what saturates a box. A gate that finishes in seconds stays unwrapped; serialising a cheap gate only adds waiting.
+
+**A gate that fails only under fan-out is a false red.** A suite that times out while siblings hold the cores has measured the box, not the branch. The tell is that the failing test is byte-identical to the base branch and that the project's CI passed the same commit. Re-run it alone before diagnosing it, and never buy the pass with a raised timeout, an added retry or a relaxed assertion - that hides the contention, and the false red returns at the next fan-out.
+
+**A row that MEASURES runs alone.** Any figure a plan produces - wall clock, throughput, bytes, memory - is a claim about the machine as much as about the change, and a neighbour moves it. Give a measuring row a `Parallel-group` of its own, or hold its arms behind the same lock the gates take. Interleave the arms - base, head, base, head - rather than running one arm and then the other, because box load drifts over the minutes between them and an unpaired comparison then reports the drift. Record what else was running beside the number: CLAUDE.md Rule #10 asks for hardware, date and spread, and on a shared machine the load belongs there too.
 
 ## Escalation (when to pause for the user)
 
