@@ -939,6 +939,18 @@ def _git(repo: Path, env: dict[str, str], *args: str) -> str:
     return completed.stdout
 
 
+def _transient(_directory: str, names: list[str]) -> set[str]:
+    """Lock files git's own background maintenance leaves in a template.
+
+    A template is copied once per test and several xdist workers copy the same
+    one at the same time. git maintenance can create and delete
+    objects/maintenance.lock between copytree listing a directory and
+    reading it, which fails the copy with a file that was never part of the
+    template anyway.
+    """
+    return {name for name in names if name.endswith('.lock')}
+
+
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="ascii", newline="\n")
@@ -1017,7 +1029,7 @@ def _scripted_origin(
     if unbuilt:
         _seed_scripted_origin(root, staged_paths)
     origin = tmp_path / "origin.git"
-    shutil.copytree(root / "origin.git", origin)
+    shutil.copytree(root / "origin.git", origin, ignore=_transient)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -1103,7 +1115,7 @@ def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path
     if unbuilt:
         _seed_digest_origin(root, date)
     origin = tmp_path / "origin.git"
-    shutil.copytree(root / "origin.git", origin)
+    shutil.copytree(root / "origin.git", origin, ignore=_transient)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -1389,6 +1401,90 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
+#: A change, and whether the canary build and the browser suite have to pay for
+#: it. The last three are the trap the allow-list exists to avoid: a backend
+#: module the canary day is built through, and a fixture the attack text is read
+#: from, can all move a published page without touching `frontend/`.
+BROWSER_SCOPE_CASES: Final = (
+    ("frontend/src/routes/console/+page.svelte", True),
+    ("config/idhazh.json", True),
+    ("backend/idhazh/contracts/item_health.py", True),
+    ("backend/utilities/build_canary_day.py", True),
+    ("backend/idhazh/sanitize.py", True),
+    ("tests/fixtures/canaries/fake-system-delimiter.json", True),
+    ("docs/reference/measurements.md", False),
+    ("backend/tests/test_discover.py", False),
+    ("backend/idhazh/discover.py", False),
+    ("TODO/some-plan.md", False),
+)
+
+
+def _browser_scope(tmp_path: Path, changed: Sequence[str], event: str = "pull_request") -> str:
+    """Run the shipped filter over a real two-commit history and read its answer."""
+    env = _isolated_env(tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, env, "init", "--quiet", "--initial-branch=main")
+    _write(root / "seed.txt", "seed\n")
+    _git(root, env, "add", "seed.txt")
+    _git(root, env, "commit", "--quiet", "-m", "seed")
+    base = _git(root, env, "rev-parse", "HEAD").strip()
+    for name in changed:
+        _write(root / name, "changed\n")
+        _git(root, env, "add", name)
+    _git(root, env, "commit", "--quiet", "-m", "change")
+    head = _git(root, env, "rev-parse", "HEAD").strip()
+
+    shell = _bash()
+    assert shell is not None
+    completed = subprocess.run(
+        [shell, (SCRIPTS_DIR / "browser-suite-needed.sh").as_posix()],
+        cwd=root,
+        env={**env, "EVENT": event, "BASE": base, "HEAD": head},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout.strip()
+
+
+@requires_bash
+@pytest.mark.parametrize(("changed", "needed"), BROWSER_SCOPE_CASES)
+def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
+    changed: str, needed: bool, tmp_path: Path
+) -> None:
+    """The filter is executed, not read.
+
+    A copy of the pattern in this file would agree with itself forever while the
+    shipped script skipped a change that breaks a published page. So the test
+    builds a real two-commit history, runs the script the workflow runs, and
+    reads the line it writes to `$GITHUB_OUTPUT`.
+    """
+    assert _browser_scope(tmp_path, [changed]) == f"browser={str(needed).lower()}"
+
+
+@requires_bash
+def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
+    tmp_path: Path,
+) -> None:
+    """A pull request is a set, not one file. Docs beside a frontend edit is the
+    ordinary shape of this repo's changes, and the frontend edit decides.
+    """
+    mixed = ["docs/reference/measurements.md", "frontend/src/routes/+page.svelte"]
+    assert _browser_scope(tmp_path, mixed) == "browser=true"
+
+
+@requires_bash
+def test_a_push_to_main_never_consults_the_list(tmp_path: Path) -> None:
+    """The allow-list is a wager that nobody forgot a path. The merge commit is
+    where that wager is settled, so it does not apply there - a pull request the
+    list was wrong about reddens `main` within minutes instead of reaching a
+    reader.
+    """
+    assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == "browser=true"
+
+
 #: Every job that builds the site and then commits what it built, named with the
 #: step that publishes. Both jobs write a day payload the build can reject, so
 #: both carry the same two-severity order.
@@ -1399,7 +1495,7 @@ PUBLISHING_SITE_JOBS: Final = (
 
 
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
-def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
+def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
     filename: str, job_name: str, commit_step: str
 ) -> None:
     """Two severities, and only one of them may cost a reader the day.
@@ -1408,11 +1504,12 @@ def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
     fails here instead of in a reader's browser. That day is broken and must not
     publish, so the build runs before the commit.
 
-    `npm run bundle-gate` compares each page against a weight we recorded
-    ourselves. A page over it still reads correctly - what grew is the document,
-    not the meaning - and stopping the publish for that throws away the day and
-    the two to three hours that built it. So it runs after the commit, and stays
-    fatal: the job goes red until somebody re-measures the ceiling.
+    `npm run bundle-gate` holds each capped page under the ceiling somebody
+    priced for it. A page over it still reads correctly - what grew is the
+    document, not the meaning - and stopping the publish for that throws away
+    the day and the two to three hours that built it. So it runs after the
+    commit, and stays fatal: the job goes red until somebody re-prices the
+    ceiling.
     """
     steps = _steps(_load_workflows()[filename], job_name)
     names = [step.get("name") for step in steps]
@@ -1435,23 +1532,22 @@ def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
         "npm ci" in str(step.get("run", "")) for step in before_build
     ), "the site must be installed before it is built"
     assert built < commit, "a payload the build rejects must never reach a reader"
-    assert commit < gate, "a page over its recorded weight loses the ceiling, not the day"
-    assert "continue-on-error" not in steps[gate], "the ratchet publishes the day; it still fails"
+    assert commit < gate, "a page over its ceiling loses the ceiling, not the day"
+    assert "continue-on-error" not in steps[gate], "the gate publishes the day; it still fails"
 
 
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
-def test_the_weight_ratchet_reads_a_build_of_the_tree_that_was_pushed(
+def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     filename: str, job_name: str, commit_step: str
 ) -> None:
-    """One tree's pages may not be weighed against another tree's records.
+    """One tree's pages may not be weighed against another tree's ceilings.
 
     `commit-and-push.sh` rebases when the push loses a race, and that brings
     main's tip into the checkout - its frontend source and its
-    `bundle-baseline.json` with it. `frontend/build` still holds the build made
-    before the commit, so the gate reads records the build it measures never
-    saw. Run 33270983446 failed exactly there: `/console/` 746 B under a record
-    that arrived with the rebase, while the build was 5 B off the record its own
-    source carried, on a day that had already published and deployed.
+    `config/idhazh.json` ceilings with it. `frontend/build` still holds the
+    build made before the commit, so the gate would read limits the build it
+    measures never saw. Run 33270983446 failed exactly that way, on a day that
+    had already published and deployed.
 
     So a build sits after every commit step in the job, and the gate reads that
     one. `npm ci` is deliberately not repeated with it: the lockfile moves far

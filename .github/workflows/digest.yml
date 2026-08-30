@@ -1208,6 +1208,6 @@ jobs:
       #
       # It reads the rebuild above, so its numbers describe the tree that was
       # pushed rather than the one this job started from.
-      - name: Bundle gate - encoder, first-load weight, page ceilings
+      - name: Bundle gate - encoder and page ceilings
         working-directory: frontend
         run: npm run bundle-gate

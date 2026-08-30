@@ -51,11 +51,11 @@ dependencies = [
 dev = [
     "mypy>=1.14",
     "pytest>=8.3",
-    # Runs the suite across the cores the machine already has. Off by default:
-    # `addopts` is unchanged, so a bare `pytest` is still one process and CI -
-    # which finishes the suite in 62.68 s on 4 vCPU - does not move. A developer
-    # opts in with `-n auto`, and a parallel-only failure therefore cannot hide
-    # inside the one gate everybody trusts.
+    # Runs the suite across the cores the machine already has, by default. It
+    # was opt-in until 2026-08-30, on the argument that a parallel-only failure
+    # would hide from the one gate everybody trusts. Running BOTH arms parallel
+    # settles that better than running one of each: a test that only fails
+    # under xdist now fails everywhere rather than only on a developer box.
     #
     # Dev-only; measured 2026-08-30 on Windows 11, Python 3.14.2, by summing
     # site-packages before and after the install: 720,767 installed bytes over
@@ -199,4 +199,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["backend/tests"]
 pythonpath = ["backend"]
-addopts = "-q"
+# `-n auto` is the default because the suite is parallel-safe and 3.37x faster
+# on a developer box; `-p no:xdist` or `-n 0` turns it off for a debugging run.
+addopts = "-q -n auto"
