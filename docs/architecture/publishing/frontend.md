@@ -1601,7 +1601,7 @@ spread across three days that differ by a factor of two in size. A least-squares
 fit over the four arms reads `28,855 + 20.09 x rows` and predicts every one of
 them inside 0.6 percent. Cloning a day instead reads 18 percent cheaper, because
 gzip sees a near-copy of a block it already holds and a real day is not a
-near-copy of anything ([../../reference/measurements.md](../../reference/measurements.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
+near-copy of anything ([../../reference/measurements.md](../../archive/measurements-2026-08.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
 
 **The unit changed with the page, and that is the point.** Until 2026-08-30 the
 rate was 60 gzipped bytes a published *item*, because the compression scatter

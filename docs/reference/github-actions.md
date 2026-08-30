@@ -121,7 +121,7 @@ pipeline. One dispatch has now run at eight and halved the slowest worker, from
 113.1 minutes to 58.8 - but it failed at `assemble` and published nothing, so no
 day has yet reached a reader through that fan-out. What moves `run.max_parallel`
 to eight is written under
-[Eight work shards](measurements.md#eight-work-shards), not this change.
+[Eight work shards](../archive/measurements-2026-08.md#eight-work-shards), not this change.
 
 A *derived* count above the ceiling is walked down into it rather than rejected:
 by then the feeds have been read, and a config the guard disagrees with must
@@ -212,7 +212,7 @@ ahead of the checkout, so the clock covers the cache restore and the weight load
 `$GITHUB_ENV`, and the counters step passes both to `python -m idhazh counters`.
 The rollback rule for the truncation cap reads that clock, and until 2026-08-29
 the only place it existed was the jobs API, which drops a job record when the run
-ages out ([measurements.md](measurements.md#the-instrument-trigger-a-reads)).
+ages out ([measurements.md](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)).
 
 ### The three commit steps push through a rebase, and the one that can rebuild rebuilds
 

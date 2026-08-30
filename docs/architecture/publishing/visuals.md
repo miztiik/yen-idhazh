@@ -110,7 +110,7 @@ Three things changed, and each one addresses a different link in that chain:
 **The budget stop is not a rare event, and that is now measured.** Over the eleven committed runs
 that routed anything, the stage spends its **whole** budget on ten of them and leaves items
 unrouted on nine, at a median of 48.9 seconds an asked item and a median of 18 items left
-([`../../reference/measurements.md`](../../reference/measurements.md#the-route-stages-per-item-cost-over-every-run)).
+([`../../reference/measurements.md`](../../archive/measurements-2026-08.md#the-route-stages-per-item-cost-over-every-run)).
 So a run that hits the bound is the normal case rather than a symptom, and **a single run's figure
 must not be quoted as what the stage costs** - the fastest run on record is 1.7 times faster per
 item than the next, which is enough to make an ordinary run look like a regression. What would

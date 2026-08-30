@@ -26,9 +26,9 @@ User approval supersedes every agent and every rule in this file. Amend conflict
 
 ### Design rationale
 
-**The fine-tuning clause was narrowed on 2026-08-27 to name what it was actually protecting.** It read "Fine-tuning, GPU runners, and models that do not fit the runner", which any reader took as a ban on using a fine-tuned model at all. That was never the hazard. The hazard is a build step the runner cannot execute: no GPU, 4 vCPU, and a job that stops at 6 hours. Training somewhere else costs the runner nothing, because the runner only opens a finished GGUF and reads bytes. The wide wording made an ordinary model swap look like a rule reversal, and a rule that fires on ordinary work stops being read.
+**The fine-tuning clause was narrowed on 2026-08-27.** The hazard is a build step the runner cannot execute, not a fine-tuned model. Training elsewhere costs the runner nothing - it only opens a finished GGUF and reads bytes. The old wording made an ordinary model swap look like a rule reversal, and a rule that fires on ordinary work stops being read.
 
-**The article-bodies clause was narrowed on 2026-08-28, and it cost something.** It read "Republishing article bodies", which forbade storing source text anywhere at all - `EvidenceItem` cites that clause as the reason it is gitignored. The thing worth protecting is what a reader is served, so the clause now names that and `corpus/` is carved out by name. The cost is real and is not hidden: this repository is public (Rule #2 says so, as the reason Actions minutes are free), so source text committed under `corpus/` is readable by anyone. The owner weighed that against a second private repository and took it, on 2026-08-28. What did not move: a source that forbids storage is still out of scope, and nothing under `corpus/` may reach a published page.
+**The article-bodies clause was narrowed on 2026-08-28, and it cost something.** What is worth protecting is what a reader is served, so the clause names that and carves out `corpus/`. The cost is stated rather than hidden: this repository is public, so source text under `corpus/` is readable by anyone. Owner weighed that against a second private repository and took it. A source that forbids storage is still out of scope, and nothing under `corpus/` may reach a published page.
 
 ## 0b. Voice
 
@@ -48,9 +48,9 @@ Everywhere else restates this section rather than inventing its own style rule (
 
 ### Design rationale
 
-**"Every answer" was added on 2026-08-25 because the caches bound it and the source did not.** `AGENTS.md` said "every answer" and `guardrails.md` said "every default-agent answer", but this section listed only agents, personas, docs, commit messages and reader-facing strings. Under Rule #4 the canonical file wins, so the binding version of the rule was the weakest of the three - and an agent reporting a benchmark result stayed inside the letter of it while writing `1.055x aggregate decode, spread 0.022, prefill flat` at a user who had asked what happened. A rule that three files state three ways is not one rule.
+**"Every answer" was added on 2026-08-25** because the three copies of this rule disagreed and the canonical one was the weakest. An agent reporting `1.055x aggregate decode, spread 0.022, prefill flat` at a user who asked what happened was inside the letter of it.
 
-**The number clause exists because the rest of the section cannot fail.** "Write in plain, direct language" is advice, and advice does not catch anything. "Say what the number means, next to the number" is a check a reader can apply to a sentence and get a yes or a no. It is deliberately the narrowest clause here, because the narrow one is the one that works.
+**The number clause exists because the rest of the section cannot fail.** "Write in plain language" is advice, and advice catches nothing. "Say what the number means, next to the number" is a check a reader applies to a sentence and gets a yes or a no.
 
 ## 1. Rules (Read First, Every Session)
 
@@ -68,13 +68,11 @@ Everywhere else restates this section rather than inventing its own style rule (
 
 ### Design rationale
 
-**These are "Rules", not "Holy Laws" (renamed 2026-08-23).** Section 0b forbids self-invented jargon, and the old name was exactly that: it dressed eleven engineering constraints in religious language, which made them sound unarguable rather than reasoned. A rule earns its authority from the reason written next to it. Every reference across the repo was renamed in one commit so no doc disagrees with another.
+**These are "Rules", not "Holy Laws" (renamed 2026-08-23).** The old name dressed eleven engineering constraints in religious language, which made them sound unarguable rather than reasoned. A rule earns its authority from the reason written next to it.
 
-**Rule #1 draws the line at "a service", not at "an origin" (amended 2026-08-23).** The rule previously banned any runtime fetch to a third-party origin. That was the wrong cut. It forbade a webfont and a stylesheet, which cost a reader nothing in privacy terms that a self-hosted copy does not, while the thing actually worth forbidding - logic executing off the reader's device, and anything reporting a reader's behaviour - was only implied. The new cut names the real hazard and leaves asset delivery to the dependency rule in section 8, where bytes and licence are already weighed. Practical consequence: an interactive chart may fetch our own committed CSV, and may use a third-party charting library, and neither is a Rule #1 question. A third-party script that phones home still is.
+**Rule #1 draws the line at "a service", not at "an origin" (amended 2026-08-23).** Banning any third-party origin forbade a webfont, which costs a reader nothing a self-hosted copy does not, while the real hazard - logic executing off the reader's device, and anything reporting a reader's behaviour - was only implied. Practical consequence: an interactive chart may fetch our own committed CSV and may use a third-party charting library. A third-party script that phones home still cannot.
 
-**Rule #10 took its one exception on 2026-08-30, and this is section 0 working rather than a rule bending.** The operator console prints a cost in currency, which the rule as written forbade, so the owner approved it and the rule is amended in the same commit - which is exactly what section 0 says to do. The reason is Rule #2's own reason. Actions minutes are free because this repository is public, so wall clock is the only budget the site can show, and wall clock cannot say whether four hours was a good trade. Priced at a hosted provider's rate the same run gets a second unit, and the operator can finally see whether running it ourselves is worth the clock it costs. Nothing else on the site answers that.
-
-The exception is narrow because the hazard is narrow. A money figure reads as a fact about a bank account, so this one prints the rate it used, says whether that rate is the configured one or one the operator typed, and is labelled a counterfactual. **We are not billed, and presenting it as a bill is the one way to make it a lie.** The rejected alternative was to ship the figure and leave Rule #10 alone, which would leave the repository's own memory contradicting its own published page - the failure Rule #4 exists to prevent. Authority: owner, 2026-08-30, with Fowler on the wording.
+**Rule #10 took its one exception on 2026-08-30, and that is section 0 working rather than a rule bending.** Actions minutes are free, so wall clock is the only budget the site can show, and wall clock cannot say whether four hours was a good trade. Priced at a hosted rate, the same run gets a second unit. The exception is narrow because the hazard is narrow: a money figure reads as a fact about a bank account, so this one prints the rate it used and is labelled a counterfactual. **We are not billed, and presenting it as a bill is the one way to make it a lie.** Authority: owner, 2026-08-30.
 
 ## 1a. Architecture Principles
 
@@ -204,8 +202,8 @@ Commit messages describe the change. **No AI co-author / attribution tags.**
 The commands behind these gates are in [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
 
 - [ ] Tests added/updated at the tier appropriate to the surface (section 13). No mocks per Rule #7.
-- [ ] Full suite green locally before commit.
-- [ ] Lint (`ruff`), type-check (`mypy --strict`), tests all pass.
+- [ ] Full suite green **on the merge candidate**. CI is the authoritative arm and is six to fifteen times faster than a developer box; a local full-suite run before every push is optional, not required.
+- [ ] Lint (`ruff`), type-check (`mypy --strict`), and the tests for the module you changed pass locally before the push.
 - [ ] Contract drift gate green: schemas and frontend types regenerate byte-identical to what is committed.
 - [ ] For published-site changes: smoke-tested via integrated browser tools per section 12.
 - [ ] For reader-facing and operator-facing surfaces: the sufficiency checks in [`docs/concepts/design-system.md`](docs/concepts/design-system.md) pass, or a `## Design rationale` entry says why not. A surface can fail by being too little.
@@ -323,9 +321,9 @@ Where Jony and Susan both touch the page: **Jony rules what survives on the page
 
 ### Design rationale
 
-**Susan was added on 2026-08-29 because the roster was six vetoes and no demand.** Jony removes before adding, Fowler owns when to delete, Carmack refuses on bytes, and Reader and Editor report rather than demand. Nothing in the roster asked whether a surface was good enough to be worth a stranger's attention, and a system of pure vetoes converges on the minimum that passes every veto - measured 2026-08-28 as a published surface using 40.6 percent of a 1536px screen, with two responsive breakpoints in the whole frontend, no elevation scale, no gradient, two icons and no interactive chart. Every one of those outcomes passed a review.
+**Susan was added on 2026-08-29 because the roster was six vetoes and no demand.** A system of pure vetoes converges on the minimum that passes every veto - measured 2026-08-28 as a published surface using 40.6 percent of a 1536px screen, two responsive breakpoints in the whole frontend, no elevation scale, two icons and no interactive chart. Every one of those passed a review.
 
-The rejected alternative was giving Jony the demand mandate as well. One head holding both "remove before adding" and "this is not enough" resolves to the veto every time, which is exactly the observed outcome. The second rejected alternative was making sufficiency advisory rather than a section 9 line; an advisory check is the one that is skipped on the day it would have bitten. Authority: owner, 2026-08-29, with Fowler on the roster shape.
+Giving Jony the demand mandate too was rejected: one head holding both "remove before adding" and "this is not enough" resolves to the veto every time. Making sufficiency advisory was rejected because an advisory check is the one skipped on the day it would have bitten. Authority: owner, 2026-08-29.
 
 ## See also
 
