@@ -1352,9 +1352,9 @@ Windows 11 10.0.26200, node v24.12.0, one build:
 | | Bytes | Files | Per published article | Runway to the 1 GB cap |
 | --- | --- | --- | --- | --- |
 | Committed payload tree | 10,414,335 | 170 | 2,478 to 4,541, median 3,261 | about 2,038 published days |
-| Built bundle | 152,249,115 | 343 | 46,933 cumulative, 25,752 marginal | 123 published days |
+| Built bundle | 152,373,806 | 343 | 46,971 cumulative, 25,786 marginal | 123 published days |
 
-The bundle is **14.62 times larger**, and it was eighteen times larger on
+The bundle is **14.63 times larger**, and it was eighteen times larger on
 2026-08-27 ([the run-manifest changelog](../../../backend/idhazh/contracts/run_manifest.py)),
 so the multiple itself is not stable. The card's sentence is therefore written
 caveat-first: it says the number is the committed payload tree and not the
@@ -1397,7 +1397,7 @@ A fourth was considered and dropped without a table row: a measured
 payload-to-site multiple held in `config/`. The two trees do not scale together
 - `frontend/static/assist/` is 45,328,441 bytes and does not grow with articles
 at all - so one multiplier is not just stale-prone, it is structurally wrong.
-The measured multiple was 14.62 on 2026-08-30 and eighteen three days earlier,
+The measured multiple was 14.63 on 2026-08-30 and eighteen three days earlier,
 which is the evidence.
 
 **The track reads about one percent full, and that is the honest picture.** It
