@@ -188,7 +188,7 @@ script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
 lighter needs no permission, so there is no lower bound. A route is named when
 its growth has been priced: `/404` and `/evals/` move only when the source moves,
 `/archive/` grows by one day link a published day, and `/console/` grows by about
-60 gzipped bytes a published item. A day page and the home page weigh what the
+20 gzipped bytes a published telemetry row. A day page and the home page weigh what the
 day published, so a fixed ceiling on either would cap the news instead of
 catching a regression - the only way under it is to publish fewer items, which
 [layout.md](../architecture/publishing/layout.md) forbids. Those two are covered
@@ -215,21 +215,22 @@ design: when the gate fires on an ordinary day about a year from now, the answer
 is to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
-**`/console/` is capped since 2026-08-29, and its headroom is days rather than a
-year.** Removing one real mature published day from every ledger it reads and
-rebuilding cost 43,745, 43,704 and 36,504 gzipped bytes over 731, 724 and 621
-scored items - about 60 bytes an item. So 301,580 is the heaviest of five builds
-plus three days of the heaviest of those plus the 64-byte noise floor, and it is
-meant to expire
-([../reference/measurements.md](../reference/measurements.md#the-console-ceiling-is-a-tripwire-and-it-is-priced-in-published-days)).
+**`/console/` is capped since 2026-08-29 and re-derived on 2026-08-30, and its
+headroom is days rather than a year.** Removing one real mature published day
+from every ledger it reads and rebuilding cost 19,974, 17,335 and 8,705 gzipped
+bytes over 1,000, 872 and 480 published telemetry rows - 18.1 to 20.0 bytes a
+row. So 259,908 is the heaviest of five builds plus seven days at the heaviest
+day on record plus the 64-byte noise floor, and it is meant to expire
+([../reference/measurements.md](../reference/measurements.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
 
-**When `/console/` fires, do not raise it.** The page grows with what it inlines,
-and the answer is always to stop inlining what the first paint does not need
-rather than to buy days. Both halves of the last one have shipped: the seed is
-windowed and the older points come through the telemetry projection since
-2026-08-29, and the compression scatter that put one mark on the page per article
-became a per-day count of three bins on 2026-08-30. So the ceiling is due a
-re-derivation against a page that no longer grows a mark an item, not a digit
+**When `/console/` fires, do not raise it. Turn `console.default_window_days`
+down.** The page grows with what it inlines, and the answer is always to stop
+inlining what the first paint does not need rather than to buy days. Both halves
+of the last saving have shipped: the seed is windowed and the older points come
+through the telemetry projection since 2026-08-29, and the compression scatter
+that put one mark on the page per article became a per-day count of three bins on
+2026-08-30. What is left is the seed itself, which is one row per planned item per
+run over the window - so the window length is the knob, and the ceiling is not
 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)).
 
 ## The browser suite

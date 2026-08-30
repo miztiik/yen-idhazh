@@ -776,10 +776,13 @@ they own no element, no canvas and no theme, and no reader route imports either
 one. `npm run bundle-gate` holds that true. Beside its encoder check it records
 every route class's first-load JavaScript and fails when the number moves, so
 the next dependency has to be measured and written down before it can ship. The
-same script also holds each prerendered page's HTML under a ceiling, but only
-for the routes whose weight does not grow with the published data - `/404` and
-`/evals/`: a route that grows with the corpus is measured and reported, never
-failed, so the payload workstream cannot fail a build over an ordinary publish
+same script also holds each prerendered page's HTML under a ceiling, and a
+route earns one when somebody has priced its growth: `/404` and `/evals/` move
+only when the source does, `/archive/` grows by one day link a published day,
+and `/console/` grows with the item-telemetry rows inside the page's window. A
+day page and the home page weigh whatever the day published, so they are
+measured and reported and never failed - a ceiling on either would cap the news
+rather than catch a regression
 ([../../concepts/config.md](../../concepts/config.md)).
 
 The item-health viewport has three parts, in this order:
@@ -1583,39 +1586,58 @@ Authority: Carmack, 2026-08-25.
 
 ## The console ceiling is a tripwire, and what to do when it fires
 
-`/console/` has a page-weight ceiling of 301,580 bytes since 2026-08-29. That is
-77.1 percent above the heaviest build measured, which is three more mature
-published days of ordinary growth and no more. **It is meant to expire, and the
+`/console/` has a page-weight ceiling of 259,908 bytes since 2026-08-30. That is
+116.5 percent above the heaviest build measured, which is seven more published
+days at the heaviest day on record and no more. **It is meant to expire, and the
 answer when it does is not a bigger number.**
 
 The derivation has the same three terms `/archive/` has, and only the middle one
 is different:
 
 ```text
-  170,281  heaviest of five builds of one tree
-+ 131,235  three mature published days, measured at the heaviest of three
+  120,026  heaviest of five builds of the tree that ships
++ 139,818  seven published days, measured at the heaviest day on record
 +      64  the build noise floor already derived in bundle-baseline.json
-= 301,580
+= 259,908
 ```
 
 **A published day was priced by removing a real one, not by cloning one.** Take
-every ledger the console reads - `state/scores.csv`, `state/item-health/`,
-`state/feed-health/`, the published telemetry shard and the day's own directory -
-drop one real mature day from all of them, and rebuild. Removing 2026-08-24,
-2026-08-25 and 2026-08-26 cost 43,745, 43,704 and 36,504 gzipped bytes over 731,
-724 and 621 scored items: **about 60 gzipped bytes a published item**, steady to
-within 3 percent across the three. Cloning a day instead reads 18 percent cheaper,
-because gzip sees a near-copy of a block it already holds and a real day is not a
-near-copy of anything ([../../reference/measurements.md](../../reference/measurements.md#the-console-ceiling-is-a-tripwire-and-it-is-priced-in-published-days)).
+every ledger the console reads - `state/item-health/`, `state/feed-health/`, the
+published telemetry shard and the day's own directory - drop one real mature day
+from all of them, and rebuild. Removing 2026-08-25, 2026-08-26 and 2026-08-27
+cost 19,974, 17,335 and 8,705 gzipped bytes over 1,000, 872 and 480 published
+telemetry rows: **18.1 to 20.0 gzipped bytes a telemetry row**, a 10 percent
+spread across three days that differ by a factor of two in size. A least-squares
+fit over the four arms reads `28,855 + 20.09 x rows` and predicts every one of
+them inside 0.6 percent. Cloning a day instead reads 18 percent cheaper, because
+gzip sees a near-copy of a block it already holds and a real day is not a
+near-copy of anything ([../../reference/measurements.md](../../reference/measurements.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
 
-**Three days, and not the year `/archive/` carries, because of what the headroom
+**The unit changed with the page, and that is the point.** Until 2026-08-30 the
+rate was 60 gzipped bytes a published *item*, because the compression scatter
+inlined one mark per article and nothing bounded it. The page charges by the
+telemetry row now, at a third of that, and the term is bounded: the seed carries
+`console.default_window_days` and no more, so a day entering a full window pushes
+the oldest day out.
+
+**Seven days, and not the year `/archive/` carries, because of what the headroom
 has to be smaller than.** The regression a page ceiling exists to catch on this
 route is a day payload inlined by a layout, which cost 313,300 gzipped bytes when
-it last happened. Three days of headroom is 131,235, so that regression is 2.4
-times the slack and the gate sees it land. A week of headroom would be 306,215,
-within 2 percent of the regression itself - a gate whose blind spot is the same
-size as the thing it watches for. The horizon is the largest whole number of
-measured ordinary publishes that keeps the margin above 2x, and that is three.
+it last happened. Seven days of headroom is 139,818, so that regression is 2.24
+times the slack and the gate sees it land. Eight days would be 159,792, a margin
+of 1.96 - under the 2x line. The horizon is the largest whole number of measured
+ordinary publishes that keeps the margin above 2x, and on this page that is seven.
+
+**Seven is the floor, and the ceiling fires before the window fills.** 19,974
+bytes is the heaviest day on record, a 1,000-row day from before the 160-item run
+cap; the last four days ran 160 to 655 rows, a mean of 420, which is 8,444 bytes
+at the fit and **16.6 days of headroom**. Either way the gate fires first: the fit
+crosses 259,908 at 11,500 telemetry rows, which is a 27-day window at 420 rows a
+day, and the window is 30. **When it fires, turn `console.default_window_days`
+down.** That is a number an operator can reason about, it shortens only what the
+page opens on, and panning back still fetches whole months. Raising the ceiling
+buys days and blinds the gate, which is the move that got the last `/archive/`
+ceiling deleted after it was raised twice in one day.
 
 **Why a ceiling here does not cap the news, when one on a day page would.** A day
 page and the home page render published items, so the only way under a ceiling on
@@ -1707,15 +1729,16 @@ knob to turn then is `console.default_window_days`, not the ceiling** - it is a
 number an operator can reason about, it shortens only what the page opens on, and
 panning back still fetches whole months.
 
-**The `/console/` ceiling was not moved, and lowering it now would be wrong.**
-The page is 148,800 bytes against a 301,580 ceiling, so the headroom is 152,780 -
-more than the three published days it was sized for. That is the gate working,
-not a number to re-derive. It watches for a day payload inlined by a layout,
-which cost 313,300 gzipped bytes the last time it happened, and a larger margin
-does not blind it to a regression twice its own size. The key is also asserted in
-ten files, including `backend/tests/test_contracts.py` and
+**The `/console/` ceiling was not moved on the day this landed, and that was
+right at the time.** The page was 148,800 bytes against a 301,580 ceiling, so the
+headroom was 152,780 - more than the three published days it had been sized for.
+That is the gate working, not a number to re-derive on the day a saving lands. It
+was re-derived at the close of the console-signal plan instead, once the page had
+settled and the unit it grows by had changed, and it came down to 259,908; the
+section above carries that derivation. The key is asserted in ten files,
+including `backend/tests/test_contracts.py` and
 `tests/fixtures/contracts/app-config/tuned.json`, so moving it is a change of its
-own and not a footnote to this one.
+own and never a footnote to another one.
 
 Two things that are still not the answer. **Raising the number** spends the
 headroom somebody measured and buys days, which is the move that got the last
@@ -1752,12 +1775,14 @@ axis, cap-line arithmetic and pointer readout left in the same commit. 1,496 B o
 JavaScript bought 72,870 B of document, which is 49 times its own size, and the
 document is the part every visit pays for whether a script runs or not.
 
-**What the page now grows with is a column a day, not a mark an article.** A
+**What the chart now grows with is a column a day, not a mark an article.** A
 published day adds up to three rectangles and its share of a date label, whatever
-it published, so the term that used to be linear in items is linear in days and
-bounded by the window. The ceiling is due a re-derivation against that shape
-rather than a raise, and re-deriving it is the closure row's job, not this one's:
-every row still in flight moves the page.
+it published. The page is a separate question, and the closure measurement
+settled it on 2026-08-30: the prerendered seed still carries one row per planned
+item per run, so the document is linear in telemetry rows at **20.09 gzipped
+bytes a row** - a third of the 60 bytes an item the scatter charged, and bounded
+by the window rather than by the calendar. The ceiling was re-derived against
+that shape and came down to 259,908; the section above carries the arms.
 
 ## Design rationale
 

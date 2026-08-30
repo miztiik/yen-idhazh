@@ -611,17 +611,40 @@ to them.
 **The refusal of a shared table component was reversed on 2026-08-29, and the
 reason it was right at the time is the reason it is wrong now.** It was refused
 as "an abstraction for two call sites", which is a good rule: a component built
-for two callers usually fits neither and has to be argued with by both. The
-count is four - the compression outliers, the failed feeds, the failure ledger
-ranked by cause, and the chart-arm's two thresholds - and one of those did not
-exist when the refusal was written. What the refusal protected against was a
-generic `Table`, and that is still refused: the console's problem was never
-table markup, it was that a table is the wrong shape for "which one is worst",
-and a generic table would make the wrong shape cheaper to produce. What landed
-instead is a shape with an opinion - one order, one divisor, one tail sentence,
-two empty states - which is the opposite kind of abstraction. Authority: Fowler
+for two callers usually fits neither and has to be argued with by both. Counted
+again on 2026-08-30 once every section had landed, the three components draw
+**nine times across five sections**: `RankedList` twice, in the band-distance
+outliers and the failure ledger; `TargetBar` three times, on the feed
+quarantine countdown and the chart arm's two thresholds; and `Sparkline` four
+times, in the failure ledger, `What the model did` and the chart arm. Two of
+those sections did not exist when the refusal was written. What the refusal
+protected against was a generic `Table`, and that is still refused: the
+console's problem was never table markup, it was that a table is the wrong
+shape for "which one is worst", and a generic table would make the wrong shape
+cheaper to produce. What landed instead is a shape with an opinion - one order,
+one divisor, one tail sentence, two empty states - which is the opposite kind
+of abstraction. Authority: Fowler
 ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md))
 on the reversal, Susan on the shape, 2026-08-29.
+
+**The refusal to window `Sources cut short most often` was reversed on
+2026-08-30, and it turns on one word: hidden.** The section read a fixed seven
+days, and widening it was refused because a span the reader cannot see makes
+the section's own sentence lie - `17 of 38 cut` over a span nobody names is a
+count with no denominator in time, and a number in a config file is exactly
+that kind of unseen span. What changed is that the span stopped being unseen.
+One control at the top of the page holds it, all four presets are on the screen
+at once, and every windowed section states the span it read in its own sentence
+and in its accessible description. A control the operator is looking at cannot
+make the sentence lie, so long as the sentence reads the same window the query
+reads - and `frontend/tests/console-window.spec.ts` asserts exactly that, for
+every surface that declares itself windowed. The section prints its own
+denominator too, which at seven days runs as low as six articles, so the
+narrowest window says how thin it is instead of hiding it. The rejected
+alternative was leaving the seven days fixed while every other section followed
+the control: two spans on one page is the defect the shared window exists to
+remove, and the section that disagreed would be the one nobody checked.
+Authority: Susan on the reversal, Fowler on recording it, 2026-08-30.
 
 **The geometry was pulled out of the two chart helpers rather than copied.**
 `sparkline.ts` and `targetbar.ts` already owned the rules - the track is the
