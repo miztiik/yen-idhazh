@@ -495,6 +495,97 @@ GitHub Pages cannot serve a SvelteKit server redirect, so the redirect must be
 static HTML. A reader with JavaScript disabled still receives a page and can use
 the link.
 
+## The console is three routes, and the strip is real anchors
+
+Since 2026-08-30 the operator surface is three prerendered routes, drawn as a
+tab strip:
+
+| Path | Label | What it answers |
+| --- | --- | --- |
+| `/console/` | **Pipelines** | Did the runs work, which feeds broke, and what each stage cost. |
+| `/console/model/` | **Model** | What the model wrote, how long it took, and what it got wrong. |
+| `/console/machine/` | **Machine** | The hardware the model ran on, and how much it varied between runs. |
+
+`/console/` keeps its path. It is the one an operator types and the one every
+existing bookmark points at, so moving it to `/console/pipelines/` would have
+cost a redirect and bought a symmetry nobody asked for.
+
+**The labels are the owner's own words, taken verbatim on 2026-08-30.** Each
+carries a one-line description under it and the same text as a `title`. `Model`
+and `Machine` share a first letter, which is the recorded cost of that name set;
+it is paid off by the description line and by the silhouette of the first panel
+on each route, which is what an operator recognises before he reads a word.
+`What the model did` survives verbatim as the h2 on the Model route - it is
+protected copy, and [../../../frontend/tests/console-model.spec.ts](../../../frontend/tests/console-model.spec.ts)
+holds all eleven of its labels byte for byte.
+
+**Routes, not tabs, and the JavaScript-disabled gate is why.** A tab strip that
+switches with script shows one panel set and no way to reach the others when the
+script does not run, and every panel it hides still ships inside the one
+document. Three routes with real anchors pass both, and each one can be weighed
+on its own. Tabs keyed on a query string cannot prerender at all; tabs keyed on
+a hash stop find-in-page at the hidden panels.
+
+**Every label carries its own worst state**, computed at build time from the
+committed ledger - `Machine - no panel reads the counters yet`, not `Machine`.
+Without it a route is where a metric goes to die: nobody opens a page to find
+out whether it was worth opening.
+
+**The strip never takes the health ramp.** The one thing that differs between
+routes is a 3px rule under the active label, from the categorical ramp. Green,
+amber and red on a label would say a route is failing, and a route is a noun.
+[../../../frontend/tests/console-nav.spec.ts](../../../frontend/tests/console-nav.spec.ts)
+reads the computed style of every tab and fails on any of the six verdict
+tokens.
+
+**Identity is otherwise identical across the three** - type scale, space scale,
+radius, elevation, frame width, both ramps. The shapes they share live in
+[../../../frontend/src/styles/app.css](../../../frontend/src/styles/app.css)
+rather than in three scoped `<style>` blocks, because three copies are three
+identities that happen to agree today.
+
+### The standing band carries four things and nothing else
+
+Above the strip, on all three routes: yesterday's verdict as a sentence, the one
+worst thing and which route it is on, site size against the 1 GB cap with its
+runway, and the window control. It is derived once in
+[../../../frontend/src/lib/server/console-shell.ts](../../../frontend/src/lib/server/console-shell.ts)
+and read by all three, so they cannot disagree about which route is worst.
+
+The first three are **not windowed**, and that is the difference between the
+band and the per-article cost panel on Pipelines. The band stands on every
+route, so a figure that moved when a control on one route moved would read as
+three different sites. The runway is taken over every published day on record
+and says so.
+
+The window control sits **inside** the band rather than under it, because a
+control below the thing it governs is read second. Each route hands its own
+control in: Pipelines prices the month files a wider window would fetch, Model
+fetches nothing and prices nothing, and Machine draws no control at all and
+prints a sentence saying where the control is. That last one is a deliberate
+departure from "the band carries the window control on all three routes":
+nothing on Machine is windowed yet, and a control that answers a click by
+changing nothing is worse than an absent one. The choice is still shared - all
+three routes read the same `idhazh:console-window` key - so setting it on
+Pipelines and clicking Model keeps the span.
+
+### Three cross-boundary carries, one sentence each
+
+Each route ends its introduction with one sentence pointing at a panel another
+route owns: Pipelines says what the model spent of the day it just described,
+Model says how far apart the day's runs read, Machine says how many articles the
+day published. No chart, no card - a signpost that looks like a figure gets read
+as one. They exist because the failure mode of splitting a page is a route that
+hides the panel explaining another route's numbers.
+
+### Machine ships almost empty, and says so
+
+The pipeline has written `state/runtime-counters.csv` since 2026-08-26 and no
+page has ever read a cell of it. The route exists before its panels do, and says
+what is missing once at the top and once per named panel. A route that hid
+itself until it had data would be a route nobody knew to check - which is
+exactly how a ledger goes four days unread.
+
 **The run strip is a time axis: one column per day, oldest on the left.** Days
 advance left to right the way every other time series does, so "it broke on
 Tuesday and has been amber since" is a shape rather than a sentence. Each day is
@@ -1576,68 +1667,73 @@ retypes it.
 
 ## The console ceiling is a tripwire, and what to do when it fires
 
-`/console/` has a page-weight ceiling of 259,908 bytes since 2026-08-30. That is
-116.5 percent above the heaviest build measured, which is seven more published
-days at the heaviest day on record and no more. **It is meant to expire, and the
-answer when it does is not a bigger number.**
+**Since 2026-08-31 there are three of them, one per route.** `/console/` is
+capped at 250,643 bytes, `/console/model/` at 18,682 and `/console/machine/` at
+6,899. One key over three surfaces still fails when any of them grows and then
+cannot say which one did, so the operator raises the shared number and the
+regression lands under it. Sizing them separately is what makes the split worth
+having. **They are meant to expire.**
 
-The derivation has the same three terms `/archive/` has, and only the middle one
-is different:
+Each of the first two has the same three terms `/archive/` has, and only the
+middle one differs:
 
 ```text
-  120,026  heaviest of five builds of the tree that ships
-+ 139,818  seven published days, measured at the heaviest day on record
+  115,829  heaviest of five builds of the tree that ships
++ 134,750  seven published days, at 19,250 bytes measured by removing a real one
 +      64  the build noise floor, derived in measurements.md
-= 259,908
+= 250,643  /console/
+
+   13,508  heaviest of five builds
++   5,110  seven published days, at 730 bytes measured the same way
++      64  the build noise floor
+=  18,682  /console/model/
 ```
 
-**A published day was priced by removing a real one, not by cloning one.** Take
-every ledger the console reads - `state/item-health/`, `state/feed-health/`, the
-published telemetry shard and the day's own directory - drop one real mature day
-from all of them, and rebuild. Removing 2026-08-25, 2026-08-26 and 2026-08-27
-cost 19,974, 17,335 and 8,705 gzipped bytes over 1,000, 872 and 480 published
-telemetry rows: **18.1 to 20.0 gzipped bytes a telemetry row**, a 10 percent
-spread across three days that differ by a factor of two in size. A least-squares
-fit over the four arms reads `28,855 + 20.09 x rows` and predicts every one of
-them inside 0.6 percent. Cloning a day instead reads 18 percent cheaper, because
-gzip sees a near-copy of a block it already holds and a real day is not a
-near-copy of anything ([../../reference/measurements.md](../../archive/measurements-2026-08.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
+`/console/machine/` reads no ledger yet, so a published day costs it nothing -
+measured at minus three bytes against a nine-byte build spread. Its allowance is
+a bound on text rather than a growth rate: three publishes' worth of rewriting
+all 502 characters of the band, the strip's worst states and its carry, which is
+`5,329 + 3 x 502 + 64 = 6,899`.
 
-**The unit changed with the page, and that is the point.** Until 2026-08-30 the
-rate was 60 gzipped bytes a published *item*, because the compression scatter
-inlined one mark per article and nothing bounded it. The page charges by the
-telemetry row now, at a third of that, and the term is bounded: the seed carries
-`console.default_window_days` and no more, so a day entering a full window pushes
-the oldest day out.
+**A published day was priced by removing a real one, not by cloning one.** Take
+every ledger the console reads - `state/scores.csv`, `state/item-health/`,
+`state/feed-health/`, the published telemetry shard and the day's own directory -
+drop one real mature day from all of them through `STATE_ROOT`, `TELEMETRY_ROOT`
+and `DIGEST_ROOT`, and rebuild. Cloning a day instead reads 18 percent cheaper,
+because gzip sees a near-copy of a block it already holds and a real day is not a
+near-copy of anything ([../../reference/measurements.md](../../reference/measurements.md#three-console-routes-three-ceilings-and-a-day-priced-on-each-2026-08-31)).
 
 **Seven days, and not the year `/archive/` carries, because of what the headroom
 has to be smaller than.** The regression a page ceiling exists to catch on this
 route is a day payload inlined by a layout, which cost 313,300 gzipped bytes when
-it last happened. Seven days of headroom is 139,818, so that regression is 2.24
-times the slack and the gate sees it land. Eight days would be 159,792, a margin
-of 1.96 - under the 2x line. The horizon is the largest whole number of measured
-ordinary publishes that keeps the margin above 2x, and on this page that is seven.
+it last happened. `/console/`'s slack is 134,814, so that regression is 2.32
+times it and the gate sees it land; eight days would put the margin under 2x. The
+horizon is the largest whole number of measured ordinary publishes that keeps the
+margin above 2x. On the other two routes the margins are 60.6x and 199.6x, so
+seven days is nowhere near binding there and the term that decides them is their
+own growth rather than the guard.
 
-**Seven is the floor, and the ceiling fires before the window fills.** 19,974
-bytes is the heaviest day on record, a 1,000-row day from before the 160-item run
-cap; the last four days ran 160 to 655 rows, a mean of 420, which is 8,444 bytes
-at the fit and **16.6 days of headroom**. Either way the gate fires first: the fit
-crosses 259,908 at 11,500 telemetry rows, which is a 27-day window at 420 rows a
-day, and the window is 30. **When it fires, turn `console.default_window_days`
-down.** That is a number an operator can reason about, it shortens only what the
-page opens on, and panning back still fetches whole months. Raising the ceiling
-buys days and blinds the gate, which is the move that got the last `/archive/`
-ceiling deleted after it was raised twice in one day.
+**When one of them fires, the panel does not move.** The owner ruled on
+2026-08-31 that no approved feature is removed, deferred or shrunk to stay under
+a page-weight number: a ceiling is a ratchet, not a budget, so a crossed ceiling
+means re-measure it, raise it, and record in the same commit what the bytes
+bought. **This reverses what this page said until then**, which was to turn
+`console.default_window_days` down and never to raise the number. That instinct
+is still right when the page is inlining something the first paint does not need
+- windowing the seed on 2026-08-29 and folding the compression scatter on
+2026-08-30 were savings, and both are described below - but a saving is not a
+cut, and neither is a reason to leave a panel unbuilt. What the ruling does not
+waive: Rule #2's 1 GB Pages cap, which is a platform limit, and the 200,000-byte
+lazy chart chunk, which stands because a new echarts registration is a decision
+about the chart vocabulary rather than about size.
 
 **Why a ceiling here does not cap the news, when one on a day page would.** A day
 page and the home page render published items, so the only way under a ceiling on
 them is to publish fewer - and [layout.md](layout.md) forbids removing an item a
-run published, so the ceiling would be deciding how much news ships. `/console/`
-renders no published item. It is the operator's surface, and every figure on it
-is derived at build time from ledgers that stay committed and complete whatever
-the page shows. The way under its ceiling is to stop inlining points the page
-does not need at first paint, which changes what an operator sees before they pan
-and changes nothing about what was published or what a reader can read.
+run published, so the ceiling would be deciding how much news ships. No console
+route renders a published item. It is the operator's surface, and every figure on
+it is derived at build time from ledgers that stay committed and complete
+whatever the page shows.
 
 ### The response, taken on 2026-08-29 before the gate fired
 
@@ -1717,7 +1813,10 @@ wrote, thirty days is about 168,000 bytes of seed and the page sits comfortably
 under the ceiling. At the 1,000 rows a day of 2026-08-24 it would not, and **the
 knob to turn then is `console.default_window_days`, not the ceiling** - it is a
 number an operator can reason about, it shortens only what the page opens on, and
-panning back still fetches whole months.
+panning back still fetches whole months. Since the owner's ruling of 2026-08-31
+that is the better first move rather than the only one: windowing a seed the
+first paint does not need is a saving, and raising a re-measured ceiling is now
+also an answer.
 
 **The `/console/` ceiling was not moved on the day this landed, and that was
 right at the time.** The page was 148,800 bytes against a 301,580 ceiling, so the
@@ -1736,6 +1835,15 @@ headroom somebody measured and buys days, which is the move that got the last
 plot** - sampling points, or dropping the oldest days from the ledger - changes
 what the chart is a measurement of, and a scatter that quietly stopped drawing
 some of its rows is worse than one that got heavy.
+
+**The first of those two was reversed on 2026-08-31 and the second was not.**
+The owner ruled that a page-weight ceiling is a ratchet rather than a budget, so
+raising it - re-measured, with the reason recorded in the same commit - is now
+the correct response to a page that genuinely carries more, and no approved
+feature is cut to stay under a number. What that ruling does not touch is
+thinning the plot: that is not a byte decision at all, it is a change to what the
+chart measures, and it stays wrong for the reason written above. The section at
+the head of this page carries the current rule.
 
 Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case
 sizing, Carmack.

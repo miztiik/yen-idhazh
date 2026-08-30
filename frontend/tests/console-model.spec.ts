@@ -38,7 +38,7 @@ const CARDS = '[data-model-cards]';
  */
 function columns(): { key: string; label: string; line: string }[] {
 	const source = readFileSync(
-		path.join(frontend, 'src', 'routes', 'console', '+page.svelte'),
+		path.join(frontend, 'src', 'routes', 'console', 'model', '+page.svelte'),
 		'utf8'
 	);
 	const start = source.indexOf('const COLUMNS');
@@ -118,7 +118,7 @@ test.describe('the eleven measures, as cards', () => {
 		const wanted = columns();
 		expect(wanted, 'the source no longer holds eleven columns').toHaveLength(11);
 
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 		await expect(page.locator(CARDS), 'the model section draws no card grid').toHaveCount(1);
 
 		const drawn = await page.locator(`${CARDS} [data-kpi]`).evaluateAll((cards) =>
@@ -141,7 +141,7 @@ test.describe('the eleven measures, as cards', () => {
 		expect(wanted.map((column) => column.label)).toEqual(ruled.map((row) => row.label));
 		expect(wanted.map((column) => column.line)).toEqual(ruled.map((row) => row.line));
 
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 		for (const column of ruled) {
 			const line = page.locator(`${card(column.label)} [data-kpi-line]`);
 			if (column.line === '') {
@@ -155,7 +155,7 @@ test.describe('the eleven measures, as cards', () => {
 	});
 
 	test("every card's figure is the newest day's cell for that key", async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 		const wanted = columns();
 		const newest = await newestDay(page);
 
@@ -182,7 +182,7 @@ test.describe('the eleven measures, as cards', () => {
 	test('a quality figure prints what it is out of, and the timing card keeps its second figure', async ({
 		page
 	}) => {
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 		const newest = await newestDay(page);
 		await openDailyFigures(page);
 
@@ -223,7 +223,7 @@ test.describe('the eleven measures, as cards', () => {
 	});
 
 	test('no card is tinted', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 		// `Copied, not rewritten` reads about 12 percent and nobody has agreed what
 		// a bad number would be. A tint would invent that threshold and publish it.
 		const tones = await page
@@ -235,7 +235,7 @@ test.describe('the eleven measures, as cards', () => {
 
 	test('the cards are a grid of small multiples, not a stack', async ({ page }) => {
 		await page.setViewportSize({ width: 1440, height: 900 });
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 
 		const rows = await page.locator(`${CARDS} [data-kpi]`).evaluateAll((cards) =>
 			cards.map((node) => Math.round(node.getBoundingClientRect().top))
@@ -246,7 +246,7 @@ test.describe('the eleven measures, as cards', () => {
 
 	test('every card line is drawn, and stays inside the card that owns it', async ({ page }) => {
 		await page.setViewportSize({ width: 1440, height: 900 });
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 
 		// `console-frame.spec.ts` excludes every svg inside `[data-kpi]` from its
 		// 320px minimum, correctly - a sparkline carries no axis to read a value
@@ -276,7 +276,7 @@ test.describe('the eleven measures, as cards', () => {
 
 test.describe('the daily figures, behind a control', () => {
 	test('the table is closed on arrival and its control says what it opens', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 
 		const control = page.locator('[data-model-table-control]');
 		await expect(control).toHaveCount(1);
@@ -291,7 +291,7 @@ test.describe('the daily figures, behind a control', () => {
 	});
 
 	test('opening it shows every day, in the order it always had', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 		await openDailyFigures(page);
 
 		const days = await page
@@ -304,7 +304,7 @@ test.describe('the daily figures, behind a control', () => {
 	});
 
 	test('the header is the label alone now the sentence lives on the card', async ({ page }) => {
-		await page.goto('/console/');
+		await page.goto('/console/model/');
 		await openDailyFigures(page);
 
 		const headers = await page

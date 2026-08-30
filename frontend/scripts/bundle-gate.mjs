@@ -153,11 +153,12 @@ let failed = false;
  * here, but never failed. A route earns a ceiling when somebody priced its
  * growth: /404 and /evals/ move only when the source moves, /archive/ grows by
  * one day link a published day so its number carries a measured year of that,
- * and /console/ grows by about 60 gzipped bytes a published item so its number
- * carries a measured three days and is meant to expire. A page that renders a
- * day is never capped, because the only way under such a ceiling is to publish
- * fewer items - `tests/payload-weight.spec.ts` covers that class by counting a
- * marker instead.
+ * and each of the three /console/ routes grows with the ledger its own panels
+ * read so each carries a measured few days and is meant to expire. One surface
+ * split across several routes takes one key per route, or a blown budget cannot
+ * name which route blew it. A page that renders a day is never capped, because
+ * the only way under such a ceiling is to publish fewer items -
+ * `tests/payload-weight.spec.ts` covers that class by counting a marker instead.
  */
 const CONFIG = resolve(process.cwd(), '..', 'config', 'idhazh.json');
 
@@ -245,15 +246,16 @@ if (over.length > 0) {
 			'config/idhazh.json, in the commit that earned the bytes, and say in the message\n' +
 			'what they buy.'
 	);
-	if (over.some(({ name }) => name === '/console/')) {
+	if (over.some(({ name }) => name.startsWith('/console/'))) {
 		console.error(
-			'\n/console/ is the third case and raising it is the wrong answer. Its ceiling\n' +
-				'carries three published days on purpose, and the page grows because the\n' +
-				'compression scatter inlines a point for every row the ledger has ever held.\n' +
-				'Window that seed the way the telemetry seed is already windowed, and publish\n' +
-				'the older points through the telemetry projection so panning back still\n' +
-				'reaches them - a windowed seed on its own empties the plot behind the window,\n' +
-				'which is a lie. See docs/architecture/publishing/frontend.md.'
+			'\nA console route is the third case, and raising it IS the answer. The owner\n' +
+				'ruled on 2026-08-31 that no approved feature is cut, deferred or shrunk to\n' +
+				'stay under a page-weight number: a ceiling here is a ratchet, not a budget.\n' +
+				'Re-measure it - five builds, heaviest per route, never a mean - raise it, and\n' +
+				'say in the same commit what the bytes bought. Windowing a seed the first paint\n' +
+				'does not need is still the better first move, because a saving costs the\n' +
+				'operator nothing; leaving a panel unbuilt is not.\n' +
+				'See docs/architecture/publishing/frontend.md.'
 		);
 	}
 }
