@@ -44,6 +44,7 @@ import {
 	telemetryMonths,
 	telemetryRows,
 	TELEMETRY_ROOT,
+	type DayVisuals,
 	type FeedResult,
 	type RunRecord,
 	type RunSummary
@@ -110,6 +111,9 @@ export interface ChartDay {
 	asked: number;
 	drafted: number;
 	published: number;
+	/** Items the day published, chart or no chart. The arm's second threshold is
+	 * a share of this, and a share needs its denominator on the page. */
+	items: number;
 	routerMinutes: number | null;
 	minutesPerChart: number | null;
 }
@@ -120,19 +124,21 @@ export interface ChartDay {
  * millisecond total; the division happens at read time, so a ratio can never
  * disagree with the counts printed beside it.
  */
-function chartDays(days: RunSummary[], charts: Map<string, number>): ChartDay[] {
+function chartDays(days: RunSummary[], charts: Map<string, DayVisuals>): ChartDay[] {
 	return days.map((day) => {
 		const sum = (of: (run: RunRecord) => number) =>
 			day.records.reduce((total, run) => total + of(run), 0);
 		const timed = day.records.map((run) => run.routeMs).filter((ms): ms is number => ms !== null);
 		const routerMinutes = timed.length === 0 ? null : timed.reduce((a, b) => a + b, 0) / 60_000;
-		const published = charts.get(day.date) ?? 0;
+		const seen = charts.get(day.date);
+		const published = seen?.charts ?? 0;
 		return {
 			date: day.date,
 			reached: sum((run) => run.routed + run.prefiltered),
 			asked: sum((run) => run.routed),
 			drafted: sum((run) => run.chartsDrafted),
 			published,
+			items: seen?.items ?? 0,
 			routerMinutes,
 			minutesPerChart: routerMinutes === null || published === 0 ? null : routerMinutes / published
 		};
@@ -489,7 +495,10 @@ export async function load() {
 	// Six questions, six shapes. Each is drawn here so the console is complete
 	// before any script runs; the client rebuilds the same option to hydrate.
 	const runsDonut = runHealth(manifests);
-	const cost = routerCost(charts.filter((day) => inSeed(day.date)));
+	const cost = routerCost(
+		charts.filter((day) => inSeed(day.date)),
+		console.chart_arm_minutes_target
+	);
 	const articles = publishedItems();
 	const perArticle = siteCost(manifests, articles, seed);
 	const mixDates = datesIn(publicRows);
