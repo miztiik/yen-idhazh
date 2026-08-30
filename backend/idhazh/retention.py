@@ -459,3 +459,67 @@ def prune_telemetry(
         hard_deleted=tuple(hard_deleted),
         dry_run=dry_run,
     )
+
+
+# --- The seen shards ---------------------------------------------------------
+
+
+@dataclass(frozen=True)
+class SeenPruneResult:
+    """Which seen shards went, and what they weighed."""
+
+    deleted: tuple[str, ...]
+    bytes_freed: int
+    kept: tuple[str, ...]
+    dry_run: bool
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.deleted)
+
+
+def prune_seen(
+    state_dir: Path,
+    *,
+    today: str,
+    within_days: int,
+    dry_run: bool = False,
+) -> SeenPruneResult:
+    """Delete every seen shard the reader would no longer open.
+
+    `ledger.load_seen` consults `shards_in_window(today, within_days)` and
+    nothing else, so a shard outside that set is already invisible to the
+    pipeline - it is bytes in the working tree answering no question. Without
+    this the ledger grows for ever at a rate nothing bounds: measured
+    2026-08-31, 356 KB a day after the address column came off, which is 32 MB
+    over a 90-day window and no ceiling after that.
+
+    The keep-set comes from the reader's own helper rather than from a second
+    date calculation here. That is the safety argument: two calculations drift,
+    and the day they drift this one deletes a shard the next plan wanted.
+
+    There is no fuse and no `max_deletes_per_run`. A shard nobody reads is not
+    the archive, and the picture pruner's fuse exists because a date-parse bug
+    there eats published images - the worst case here is that the pipeline
+    re-learns a first-sight date it had already forgotten.
+    """
+    keep = set(ledger.shards_in_window(today, within_days))
+    deleted: list[str] = []
+    kept: list[str] = []
+    freed = 0
+
+    for shard in month_shards(state_dir / ledger.SEEN_DIRNAME):
+        if shard.stem in keep:
+            kept.append(shard.stem)
+            continue
+        deleted.append(shard.stem)
+        freed += shard.stat().st_size
+        if not dry_run:
+            shard.unlink()
+
+    return SeenPruneResult(
+        deleted=tuple(deleted),
+        bytes_freed=freed,
+        kept=tuple(kept),
+        dry_run=dry_run,
+    )

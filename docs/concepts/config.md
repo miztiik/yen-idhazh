@@ -380,7 +380,7 @@ it was ever downsampled; the contract refuses the pair otherwise.
 **What `keep_months` actually governs is `state/item-health/`, and nothing
 else.** Past the window a month is folded to one row per `(date, stage)` in
 `state/telemetry-aggregate/<YYYY-MM>.csv` and the full-grain shard is deleted, by
-`idhazh prune-telemetry` in the assemble job - after the day is committed, never
+`idhazh prune-state` in the assemble job - after the day is committed, never
 before it. What survives is every count and every timing total; what goes is the
 per-item detail, which is what the console's failure list offers and no rate
 needs. Folding the committed `state/item-health/2026-08.csv` on 2026-08-30 turned
@@ -393,11 +393,16 @@ over four stages**, because `plan` wrote no row in that month - so 93 KB a year,
 2.4 times cheaper than the estimate. The description keeps the estimate's
 conclusion, which the measurement only strengthens.
 
-The two ledgers the fold does not reach are named here rather than left to be
-discovered. `state/seen/` was 5,166,315 bytes on 2026-08-30 - 54 percent of
-`state/` - and `state/scores.csv` was 2,359,230, against `state/item-health/`'s
-1,270,452. Neither is a month shard, and neither has a `stage`, so both need a
-retention decision of their own. See
+The two ledgers the fold does not reach were named here rather than left to be
+discovered, and one of them has since been answered. `state/seen/` was 5,166,315
+bytes on 2026-08-30 - 54 percent of `state/` - and `state/scores.csv` was
+2,359,230, against `state/item-health/`'s 1,270,452. On 2026-08-31 `state/seen/`
+took the decision its own shape asked for: it is a lookup rather than a
+measurement, so an out-of-window shard is deleted rather than folded, and the
+address column that no reader opened came off with it - together 49.1 percent of
+the file and a 90-day ceiling where there had been none. `state/scores.csv` is
+still one file with no `stage` and four readers, so it still needs a decision of
+its own. See
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
 
 ## Reader surface

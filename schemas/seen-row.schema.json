@@ -4,19 +4,18 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Removed canonical_url. The row is url_key, first_seen_at and first_seen_run.",
+      "version": "2026-08-31",
+      "why": "The same defect PublishedRow shed on 2026-08-26, one ledger over, and it was worse here because this ledger is written for every candidate rather than for every published item. `load_seen` is the only reader and it opens url_key and first_seen_at. Measured on the committed shard: 2,800,867 of 5,705,102 bytes, 49.1 percent of the file, over 25,036 rows in 8 days. The address is still recoverable where it matters - a row that reached a reader joins to that day's payload by url_key, and a row that did not is one nobody can look up anyway."
+    },
+    {
       "change": "Initial shape: the address, when we first saw it, and the run that saw it.",
       "version": "2026-08-22T11:00",
       "why": "An undated article has no age we can trust. First sight is the only honest one, and it has to survive the run that observed it."
     }
   ],
-  "description": "One row of `state/seen/<YYYY-MM>.csv`, appended the first time an address is a candidate.",
+  "description": "One row of `state/seen/<YYYY-MM>.csv`, appended the first time an address is a candidate.\n\nIt carries no address, for the reason `PublishedRow` carries none: nothing on\nthe read path opens one. `ledger.load_seen` reads `url_key` and\n`first_seen_at` and returns a map of the two.",
   "properties": {
-    "canonical_url": {
-      "maxLength": 2048,
-      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
-      "title": "Canonical Url",
-      "type": "string"
-    },
     "first_seen_at": {
       "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
       "title": "First Seen At",
@@ -33,7 +32,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-22T11:00",
+      "default": "2026-08-31",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -41,11 +40,10 @@
   },
   "required": [
     "url_key",
-    "canonical_url",
     "first_seen_at",
     "first_seen_run"
   ],
   "title": "SeenRow",
   "type": "object",
-  "version": "2026-08-22T11:00"
+  "version": "2026-08-31"
 }
