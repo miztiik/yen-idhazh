@@ -3371,6 +3371,14 @@ That predicts `3 + 40 x 2.29 = 94.6` minutes for a worker at today's item
 ceiling. The worst one measured is 94.5. The arithmetic is a check on the
 measurement here, not a substitute for it.
 
+**The 3 minutes is a 2026-08-22 figure and the direct measurement is larger.**
+Run `2026-08-29-2` spent 1,340.6 s of its 13,362 s of shard clock outside
+fetching, extracting and summarizing - **335.1 s a shard, 5.6 minutes** - and the
+server's own counters put the same quantity at 284 to 447 s ([Three figures the
+ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). A line through two 5-item days on the retired
+8B is a weaker instrument than one run read against its own clock, so take the
+5.6 minutes and read the 3 as history.
+
 ### Where the 150-minute bound comes from
 
 `run.safety_ceiling_per_run` is 160 and `run.max_parallel` is 4, so a worker on
@@ -3714,7 +3722,10 @@ so the escalation in step 7 did not fire either.
 rung's 3,000-word floor. Six items were read past the old 1,923-word ceiling and
 all six were read whole. Rows 6 and 7 ask about at-cap items and there were
 none, so they report what the run does say instead, and each says which
-question it could not answer.
+question it could not answer. **Both arrived later the same day.** Runs `2026-08-29-3`
+and `2026-08-29-4` each read one article to the full 3,846-word ceiling, so an
+at-cap item now exists - one article, three rows ([Three figures the ledgers
+already held](#three-figures-the-ledgers-already-held-2026-08-30)).
 
 **The proof it ran at the new cap is committed, not inferred.** Every eval row
 of `2026-08-29-2` carries pipeline fingerprint `5e608717`; every row of
@@ -3787,7 +3798,7 @@ read a committed file instead of an API.
 | 7 | Output tokens on at-cap items, median. **This is now expected to rise** | 331 tokens over the same 25 items. A cap change alone cannot move the ask, because the band comes from `band_source_words` and that is pre-cap. The fifth summary rung, landed 2026-08-29, does move it: its floor is 3,000 words and every at-cap item is 3,846 words or more, so every one of them left the 110-200 ask for 150-230. Expect about **+45 tokens**, and read a move of that size as the new rung rather than as a fault | **The fifth rung never fired: no item reached 3,000 words**, so the +45 cannot be looked for. What the run does answer is the half that catches a mistake - median output on items **below** 3,000 words is **248 tokens over 104 items**, against **251.5 over 108** on run 1. It did not rise, so the 2026-08-26 band defect has not come back |
 | 8 | Slowest single item, seconds | 449 s on record, against the 1,326 s bound (`models.inference.request_timeout_minutes` of 22.1) | **337.3 s**, the slowest `summarize_ms` of the run - 25.4 percent of the bound. Run `2026-08-29-1` the same day held a 503.3 s item, so this run's tail is shorter than the cap-2500 run before it |
 | 9 | Widest complete request, prompt plus output tokens, from `n_tokens_max` | 3,775 + 900 measured, against `n_ctx` of 8,192. **Above 7,800 the cap comes down to 4000 and `n_ctx` does not move** | **4,925 tokens**, shard 2. The four shards read 3,122, 4,178, 4,570 and 4,925. **2,875 below the 7,800 line and 3,267 below the window** - step 7 did not fire and the cap stays at 5000 |
-| 10 | Implied tokens per word on the widest item | 1.35 to 1.44 measured on this project's prose; 1.59 or worse is what it takes to overflow | **1.387 tokens an article word over the run, and 1.352 on the widest item.** Regressing `input_tokens` on `source_words` over the 104 sized items gives a slope of 1.387 and a fixed prompt of 951 tokens, with a residual spread of 119 tokens. On the widest item - 2,772 words, 4,698 prompt tokens - the article's own share is 3,747 tokens. Both sit inside the measured band and well under the 1.59 that would overflow |
+| 10 | Implied tokens per word on the widest item | 1.35 to 1.44 measured on this project's prose; 1.59 or worse is what it takes to overflow | **1.387 tokens an article word over the run, and 1.352 on the widest item.** Regressing `input_tokens` on `source_words` over the 104 sized items gives a slope of 1.387 and a fixed prompt of 951 tokens, with a residual spread of 119 tokens. On the widest item - 2,772 words, 4,698 prompt tokens - the article's own share is 3,747 tokens. Both sit inside the measured band and well under the 1.59 that would overflow. **Superseded 2026-08-30 by a wider population**: over all 413 rows written at cap 5000 the slope is **1.2999** and the fixed prompt 998 tokens ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The 1.387 here is this one run and it reproduces exactly; the two runs after it read an article to the full 3,846-word ceiling and the widest point is what sets a slope. 1.2999 sits *below* the 1.35 to 1.44 band this row checks against, so the band is superseded rather than confirmed, and 1.2999 is 18.2 percent under the 1.59 that overflows |
 | 11 | `context_exceeded` rows | 0 over 3,672 rows of `state/item-health/2026-08.csv`, counted 2026-08-29. Read it beside row 3 - a zero here means nothing if nothing was read past 1,923 words | **0 of 160 planned rows.** It is a measurement rather than an absence, because row 3 says 6 items were read past the old ceiling on this run |
 | 12 | Peak resident set per worker | 14.39 GiB high point on record, against 16 GB on the runner | **12.56, 12.64, 12.70 and 13.55 GiB** for `llama-server`, plus 1.43 to 1.98 GiB for the Python worker, over 167 to 260 samples a shard. Under the 14.39 on record and 2.45 GiB under the runner's 16 GB at the worst shard. `cgroup_memory_peak_bytes` printed `unavailable` on all four, so that instrument is still broken ([Still unmeasured](#still-unmeasured)) |
 | 13 | `route`: `items_prefiltered`, `items_asked`, `unrouted` | 18 unrouted is the median of the runs on record. A longer body yields more quantities, so **prefiltered should fall and unrouted should rise**. It costs charts, not clock - the stage self-stops at `run.route_budget_minutes` of 40 | **58 prefiltered, 46 asked, 0 unrouted** over the 104 items the stage decided, with 10 charts drafted and 8 kept. It spent 37.0 of its 40 minutes, so it just fit. **The prediction did not hold, and this run cannot test it**: prefiltered rose from 44.1 percent on run 1 (41 of 93) to 55.8 percent, and unrouted fell from a median of 18 to zero. Only 6 items got any extra text at all, so nothing here is attributable to the cap |
@@ -4673,6 +4684,201 @@ items where the days behind them carried 731. **A cap date computed from a day
 rate moves when the item ceiling moves.** Anyone re-deriving it should divide
 the per-item cost by the ceiling in force rather than averaging whatever days
 happen to be on disk.
+
+## Three figures the ledgers already held (2026-08-30)
+
+**Measured 2026-08-30** over the committed ledgers at `origin/main` `57a930e`:
+`state/runtime-counters.csv` (34 rows, 7 runs), `state/item-health/2026-08.csv`
+(4,167 rows, 23 runs) and `state/scores.csv`. Deterministic arithmetic over
+committed files, so hardware does not apply and the spread quoted is the spread
+of the rows themselves. Every figure below re-derives with
+`python backend/utilities/measure_ledgers.py`, which is the code that produced
+them.
+
+Nothing was instrumented to take these. All three are arithmetic over cells the
+pipeline had already been writing for days, and none of the three had been done.
+
+### The model is busy for 89 percent of a work shard
+
+Run `2026-08-29-2` is the only run whose two ledgers can be joined: four shards,
+four clocks, one execution each.
+
+| Where the shard clocks went | Seconds | Share |
+| --- | --- | --- |
+| summarizing | 11,929.8 | **89.3 percent** |
+| fetching | 86.6 | 0.65 percent |
+| extracting | 5.0 | 0.04 percent |
+| everything else | **1,340.6** | **10.0 percent** |
+| four shard jobs, summed | 13,362 | 100 percent |
+
+**"Everything else" is 335.1 s a shard - 5.6 minutes** of cache restore, `pip
+install`, weight load, warmup and commit, repeated once per shard.
+
+**What that decides: shard count is a real lever.** Nine tenths of a shard is
+the model working, so splitting a run across more machines moves nearly all of
+it. The price is that the 5.6 minutes is paid again by each new shard: at four
+shards the fixed cost is 10.0 percent of the run's clock, and eight shards
+against the same model time would put it near 18 percent. That is the cost side
+of the question [Eight work shards](#eight-work-shards) measures from the other
+end.
+
+**The figure is computed twice and the difference is named.** The item ledger
+gives `13,362 - (86.6 + 5.0 + 11,929.8) = 1,340.6 s`. The server's own counters
+give `13,362 - (prompt_seconds_total + tokens_predicted_seconds_total) =
+1,443.7 s`, which is 284, 346, 366 and 447 s over the four shards and is row 2
+of [What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record).
+The 103.1 s between them is accounted for rather than left over: fetching
+(86.6 s), extracting (5.0 s), the summed clock residual of the next figure
+(7.3 s) and 4.1 s from three items that recorded a stopwatch but no server
+timings. That is 103.0 s of 103.1.
+
+**Per SHARD has the instrument and not yet the population.** `shard` landed on
+`ItemHealthRow` on 2026-08-30, hours after these figures were taken, and **0 of
+the 4,167 committed rows carry a value** - a column is null on every row written
+before it existed. So every figure above is a whole run, which averages the
+shards together, and the split arrives with the next scheduled run. That matters
+because the read rate spreads 2.30x between shards inside one run, which is
+exactly the variance a per-run figure hides. `measure_ledgers.py` reads the
+column and splits on it as soon as a run's rows carry one; nothing else has to
+change.
+
+**The other clocked run cannot be read at all, and that is a defect worth
+filing.** Run `2026-08-29-3` filed **six counter rows for four shards** - shards
+1 and 3 were each scraped twice, about two hours apart (21:06 and 23:15, 21:10
+and 23:38 UTC). Its item ledger holds **212 rows for 168 distinct items**: 44
+rows duplicate the ledger's own `(date, run_id, item_id)` key, because both
+executions append and `state/*.csv` merges line by line, so neither execution
+can see the other's rows. Summed anyway the run reports **-394 s unaccounted**,
+which is summarizing at 100.3 percent of the shard clocks and is impossible. All
+123 items of run `2026-08-29-4` appear in run `2026-08-29-3` as well. None of
+that is a measurement; it is the record of a day that ran twice.
+
+**24 of 34 counter rows carry no clock at all.** `job_seconds` and `cpu_model`
+landed on 2026-08-29, so the six runs before that date cannot be read this way
+and never will be.
+
+### Our stopwatch and the server's own clocks agree to 0.066 percent
+
+`summarize_ms` is the pipeline's stopwatch around the HTTP call.
+`prefill_ms + decode_ms` is what the model server said the same call cost. Over
+the 2,317 committed rows that carry all three, from run `2026-08-25-1` to
+`2026-08-29-4`:
+
+| Residual, `summarize_ms - (prefill_ms + decode_ms)` | Value |
+| --- | --- |
+| minimum | 6 ms |
+| median | 79 ms |
+| 95th percentile | 236 ms |
+| maximum | 2,639 ms |
+| negative | **0 of 2,317** |
+
+**The median residual is 0.065 percent of the median summarize call** - 79 ms
+against 122,432 ms. Summed over the ledger it is 220.5 s of 334,944.8 s, which
+is **0.066 percent**; the worst single item spent 1.698 percent of its call
+outside the model's own clocks.
+
+**What that decides: when a day is slow it is the model, not us.** Transport,
+JSON and validation are two thirds of one tenth of one percent of what
+summarizing costs, so there is no room in the client for a slow day to hide. It
+also says the split `summarize_ms` was given is complete - `prefill_ms` and
+`decode_ms` account for 99.934 percent of the wall clock we measure around the
+call, and the part they do not name is 79 ms.
+
+**Zero negatives, against an expectation of "occasionally".** The measurement
+was ordered on the understanding that a negative residual turns up now and then,
+from the two clocks rounding the same way. It has never happened: the smallest
+residual in 2,317 rows is +6 ms. The threshold this was to earn - a column of
+its own if the alarm fires more than once - has fired zero times, so the
+residual stays a figure on this page and is not published.
+
+**It halved on 2026-08-27, and nothing here says why:**
+
+| Runs | Rows | Median | 95th percentile | Maximum |
+| --- | --- | --- | --- | --- |
+| `2026-08-25-1` to `2026-08-26-5` | 1,345 | 114 ms | 279 ms | 2,639 ms |
+| `2026-08-27-1` to `2026-08-29-4` | 972 | 52 ms | 174 ms | 1,293 ms |
+
+The boundary is the day the configured 9B replaced the retired 8B
+(`pipeline_fingerprint` `f0d4ecc7` to `6a23e277`). A residual is our side of the
+call, so the model is an odd cause for it, and more than one thing changed that
+day. It is recorded as a boundary and not as an attribution (Rule #10).
+
+### The extractor's 1.3 tokens a word is right to 0.01 percent
+
+`input_tokens` regressed on `source_words` - **regressed, never divided** - over
+every committed row written at `extract.truncation_cap_tokens` = 5000:
+
+| Quantity | Value |
+| --- | --- |
+| rows | **413** |
+| runs | `2026-08-29-2` (104), `2026-08-29-3` (194), `2026-08-29-4` (115) |
+| slope | **1.2999 tokens an article word** |
+| intercept | **998 tokens**, which is the fixed prompt |
+| residual spread | 93 tokens |
+| r-squared | 0.9876 |
+| article widths covered | 35 to 3,846 words, median 623 |
+
+**`extract.TOKENS_PER_WORD` is 1.3 and the measured rate is 1.2999.** That
+constant is what places the cut, and it is right to 0.01 percent. It is the
+answer to whether the cap and the tokenizer agree, and nobody had checked it
+since the cap moved on 2026-08-29.
+
+**How the 413 rows were chosen, and it is two proofs rather than one.** A run
+counts as running at the configured cap if either instrument says so, and where
+both apply they agree:
+
+- **The eval ledger.** `state/scores.csv` carries `pipeline_fingerprint`, and
+  the cap is a field of the payload that stamp is taken over, so the stamp moved
+  when the cap moved. Live means the stamp on the newest committed row, the same
+  rule `label_queue.py` uses for `scorer_version`. It admits `2026-08-29-2` and
+  `2026-08-29-3`.
+- **The item ledger itself.** `source_words` is post-cap and cannot exceed
+  `int(5000 / 1.3) = 3846`, so a row sitting exactly on 3,846 with a larger
+  `source_words_before_cap` is physical proof the configured cap did the
+  cutting. It admits `2026-08-29-3` and `2026-08-29-4`.
+
+Neither alone is enough, and that is the point. Run `2026-08-29-4` has no eval
+rows committed at all, so it has no stamp; run `2026-08-29-2` never had an
+article long enough to cut, so it cut nothing. Either instrument on its own
+would have dropped about a quarter of the population for want of the other.
+
+**The widest article the cap has ever produced.** One article,
+`business-economy-0152846431`, 6,562 words before the cap and 3,846 after it,
+cost **5,757 prompt tokens**. With `models.inference.max_output_tokens` of 900
+that is **6,657 tokens of an `n_ctx` of 8,192 - 81.3 percent used, 1,535
+spare**. It is the first item ever to reach the 3,846-word ceiling. It appears
+three times in the ledger, twice in run `2026-08-29-3` and once in
+`2026-08-29-4`, because that day ran twice - so the at-cap population is three
+rows and one article, and n=1 article is a sighting rather than a distribution.
+
+**Dividing would have read 1.497 tokens a word on that item**, 15.2 percent
+above the regression, because the ratio carries the 998-token fixed prompt
+inside it. Pooled over all 413 rows the ratio is 2.625, twice the true rate,
+because most articles are short and the fixed prompt dominates them. That is the
+whole reason this is a regression.
+
+**Two corrections to the record, both to row 10 of
+[What the first run at cap 5000 must record](#what-the-first-run-at-cap-5000-must-record).**
+
+1. That row reads **1.387 tokens an article word, intercept 951, residual spread
+   119, over 104 items**. Re-derived here it reproduces exactly - for run
+   `2026-08-29-2` alone, which is what it measured. That run's longest article
+   was 2,772 words; the two runs after it reached 3,846, and the widest point is
+   what sets a slope. Over all three runs the slope is **1.2999**, 6.3 percent
+   below the one-run figure, and 413 rows is the better estimate.
+2. That row checks the result against "1.35 to 1.44 measured on this project's
+   prose". **1.2999 sits below that band**, so the band is superseded rather
+   than confirmed. What survives unchanged is the conclusion it was there to
+   support: 1.59 tokens a word is what it takes to overflow the window, and
+   1.2999 is **18.2 percent under it**.
+
+**And the population rows 6 and 7 of that sheet could not find has arrived.**
+The one at-cap article was summarised three times, at 296, 353 and 353 output
+tokens over 58.6, 90.5 and 90.5 s of decode - 5.05, 3.90 and 3.90 tokens a
+second, against 4.89 tok/s over 25 at-cap items at the old cap. One article is
+not a rate. What it does settle is that an at-cap item now exists, so the rows
+have an instrument and a population for the first time.
+
 ## Still unmeasured
 
 Each line names the measurement that would settle it. Nothing here may be cited
@@ -4681,6 +4887,8 @@ to justify a design decision.
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
 | **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
+| **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |
+| **A work shard's fixed cost on more than one run** | **one run measured: 335.1 s a shard, 5.6 minutes** | only run `2026-08-29-2` has four clocks and one execution each; `2026-08-29-3` filed six counter rows for four shards and cannot be joined, and the six runs before 2026-08-29 have no `job_seconds` cell at all ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). Re-run `python backend/utilities/measure_ledgers.py` after a few more clocked days, and read the spread rather than the single figure. | | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Whether a day at eight work shards publishes** | **answered 2026-08-27: it does** | run `33114410534` published the 2026-08-27 day at `shards = 8`, with 25 charts over 25 distinct paths and 25 files in the tree ([Eight work shards, paired](#eight-work-shards-paired-2026-08-27)). What remains is a decision about `run.max_parallel`, not a measurement. |
 | **How many candidates a run produces before the ceiling cuts it** | **unmeasured; only the post-cut figure of 200 is on record** | `cli._within_ceiling` logs `safety ceiling reached planned=N ceiling=200` whenever it fires, and it has fired on all ten runs since 2026-08-23 ([The safety ceiling fires on every run](#the-safety-ceiling-fires-on-every-run)). Read `N` out of a `plan` job log. Until then nobody knows whether the pool is 210 or 2,100, and that is the number that decides whether 200 is a guard or a cap. |
 | **The published site's growth rate over more than one day** | **one day measured: 1,767 KB on 2026-08-24** | the five committed days span 4 to 731 items, so a mean over them describes a corpus that was still growing. Re-read the day-directory totals once the day size has been stable for a fortnight ([Days to the 1 GB Pages ceiling](#days-to-the-1-gb-pages-ceiling)). |
