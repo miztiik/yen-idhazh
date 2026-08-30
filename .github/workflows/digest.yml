@@ -1151,6 +1151,36 @@ jobs:
           bash .github/scripts/commit-and-push.sh
           frontend/public/digest frontend/public/telemetry frontend/public/assist/index state corpus
 
+      # After the day is committed and never before it. The fold deletes a
+      # committed file, so it may only run once the thing it might collide with
+      # is already pushed - a fold that ran first and then lost the push would
+      # leave the month deleted in a tree nobody kept, and every later run would
+      # fold a shard that had already been folded.
+      #
+      # `continue-on-error` on both, for the reason the harvest carries it: what
+      # this job owes a reader is the published day, and thirteen-month-old
+      # telemetry must never be what stops one. A month it does not fold today it
+      # folds on the next run.
+      #
+      # It stages `state` whole rather than the two directories it touches.
+      # `git add` runs under `set -euo pipefail` and would abort on a path a
+      # fresh checkout does not carry, and `state/telemetry-aggregate/` does not
+      # exist until the first fold writes it. `state` always does, and the day's
+      # own commit above has already taken everything else in it.
+      - name: Fold an out-of-window telemetry shard into its daily aggregate
+        continue-on-error: true
+        run: python -m idhazh prune-telemetry --date "${{ needs.plan.outputs.date }}"
+
+      - name: Commit the folded telemetry
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: "telemetry: fold the months past observability.keep_months"
+          NOTHING_STAGED_MESSAGE: "every month is still at full grain"
+          PUSH_FAILED_MESSAGE: "could not push the folded telemetry after three attempts"
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          state
+
       # The other severity, and the reason it is down here. A page heavier than
       # the weight recorded for it in config/idhazh.json still reads correctly:
       # what grew is the document, not the meaning. Losing the day for it also
