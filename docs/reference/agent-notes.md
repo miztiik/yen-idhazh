@@ -296,18 +296,21 @@ An untracked plan-doc cannot be deleted by a pull request, and there is nothing
 to repoint - but its findings still have to reach `docs/`, which is the half
 that matters.
 
-**Line endings are pinned, so do not hand-normalise.** `.gitattributes` sets
-`text eol=lf` on every authored file type. A tool that writes CRLF is normalised
-when git stores the blob. A blanket normalise pass rewrites files you never
-touched and produces a phantom diff of hundreds of lines.
+**Line endings are pinned, so do not hand-normalise.** `.gitattributes` defaults
+every path to `text=auto eol=lf`, then marks known binary formats explicitly.
+Future text types therefore use LF without another extension rule, while binary
+bytes stay untouched. A blanket normalise pass rewrites files you never touched
+and produces a phantom diff of hundreds of lines.
 
 **That normalisation happens at `git add`, and the gates run before it.**
 `test_repo_text_is_ascii_and_lf` in `backend/tests/test_contracts.py` reads the
 WORKING-TREE bytes of every file under `schemas/`, `config/` and the fixture
 directories, and asserts `b"\r\n" not in raw`. A new JSON file authored on
 Windows lands CRLF, so the test fails on a file you just wrote and the
-`.gitattributes` entry that covers it does nothing until the blob is stored.
-Write new files LF explicitly:
+`.gitattributes` rule does nothing until the blob is stored. The shared VS Code
+setting and `.editorconfig` make normal editor writes LF. File tools, generated
+output and PowerShell can bypass both, so write new files LF explicitly before
+the first test:
 
 ```powershell
 [System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
