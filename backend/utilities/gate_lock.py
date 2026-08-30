@@ -472,29 +472,19 @@ def acquire(
 def release(path: Path, holder: Holder) -> bool:
     """Drop the lock, but only while the record on disk is still ours.
 
-    The delete goes through the same seat as `reclaim_if_free`, for the same
-    reason: without it a caller that judged this record stale can unlink between
-    our read and our unlink, and ours then deletes the lock its successor has
-    already won.
-
-    A seat we cannot get does not stop the release. A lock that outlives its gate
-    stops every gate on the box until the reclaim line, which is far worse than
-    the window the seat closes - and the only caller that can hold the seat
-    against a record whose holder is alive is one that has judged this record
-    unheld and is deleting it anyway.
+    This is a compare and delete and it does not take the reclaim seat, unlike
+    `reclaim_if_free`. The only caller that can remove our record while we are
+    alive is one that has judged it past the reclaim line, and `created_at` is
+    now the second the lock was won - so reaching that needs a gate still
+    running 7,200 s in, which is 6.6x the longest one ever measured here. The
+    seat would cost six file operations on every single hand-over to cover it,
+    and a hand-over that is slow is the thing this tool exists to avoid.
     """
     raw = holder.to_json().encode("utf-8")
     if _read_bytes(path) != raw:
         LOG.warning("the gate lock is no longer ours, so it stays where it is")
         return False
-    mine = take_the_right(path)
-    if mine is None:
-        LOG.info("the gate lock goes back without the reclaim seat, which somebody else holds")
-        return _delete_exactly(path, raw)
-    try:
-        return _delete_exactly(path, raw)
-    finally:
-        _give_back_the_right(path, mine)
+    return _delete_exactly(path, raw)
 
 
 def run_command(command: Sequence[str]) -> int:

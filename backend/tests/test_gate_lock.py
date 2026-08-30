@@ -722,14 +722,13 @@ def test_a_seat_its_own_caller_never_gave_back_is_taken_over(tmp_path: Path) -> 
     assert gate_lock.SEAT_SECONDS < gate_lock.STALE_AFTER_SECONDS
 
 
-def test_a_release_gives_the_lock_back_even_when_the_reclaim_seat_is_taken(
-    tmp_path: Path,
-) -> None:
-    """Releasing takes the same seat, because it is the same unconditional delete.
+def test_a_release_does_not_wait_for_the_reclaim_seat(tmp_path: Path) -> None:
+    """Releasing is a compare and delete, and it stays one.
 
-    It does not wait for it. A lock that outlives its gate stops every gate on
-    the box until the reclaim line, which is far worse than the window the seat
-    closes - so the seat is best effort on this side and the delete is not.
+    The seat would cost six file operations on every hand-over to cover a case
+    that needs a gate still running 7,200 s in, and a slow hand-over is the thing
+    this tool exists to avoid. A hand-over that waited on a seat somebody else
+    held would be exactly that.
     """
     lock = tmp_path / "gate.lock"
     ours = gate_lock.holder_for(["python", "-m", "pytest"])
@@ -740,7 +739,7 @@ def test_a_release_gives_the_lock_back_even_when_the_reclaim_seat_is_taken(
     assert gate_lock.release(lock, ours) is True
     assert not lock.exists()
     assert gate_lock.right_path(lock).read_text(encoding="ascii") == theirs.to_json(), (
-        "it took a seat it never won"
+        "it touched a seat it never took"
     )
 
 
