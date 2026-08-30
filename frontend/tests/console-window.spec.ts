@@ -127,7 +127,6 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'failure-rate',
 		'feed-outcomes',
 		'model-cards',
-		'router-cost',
 		'run-health',
 		'site-cost-per-item',
 		'site-size-movement',
@@ -202,17 +201,17 @@ test('a rule stated over 14 days prints no median in a 7-day window', async ({ p
 	await page.goto('/console/');
 	await hydrated(page);
 
-	const card = page.locator('[data-windowed="router-cost"]');
+	const section = page.locator('[data-windowed="chart-arm"]');
 	await setWindow(page, RULE_DAYS);
-	await expect(card.locator('[data-window-too-narrow="router-cost"]')).toHaveCount(0);
+	await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveCount(0);
 
 	await setWindow(page, 7);
 	// The exact sentence, because a median of the wrong span is the same figure
 	// with a different meaning and nothing on the page to say which one it is.
-	await expect(card.locator('[data-window-too-narrow="router-cost"]')).toHaveText(
+	await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveText(
 		'The rule reads 14 days. Widen the window to see it.'
 	);
-	await expect(card.locator('svg')).toHaveCount(0);
+	await expect(section.locator('[data-charts-verdict]')).toHaveCount(0);
 });
 
 test('two surfaces do not follow the window, and each says so', async ({ page }) => {

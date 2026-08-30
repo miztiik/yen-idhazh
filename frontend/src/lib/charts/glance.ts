@@ -16,7 +16,7 @@ import type { RunSummary } from '$lib/server/payload';
 import { donut } from './donut';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
 import { stacked } from './stacked';
-import { targetBar, targetMarks, type TargetMarks } from './targetbar';
+import { targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
 import { paint, type ChartToken } from './theme';
 import type { StageFailureSeries } from './series';
@@ -70,24 +70,6 @@ export function runHealth(manifests: readonly RunSummary[]) {
 		],
 		'finished'
 	);
-}
-
-/** Is the chart arm worth its router time?
- *
- * The page states the rule in its own prose: over the rule's span the arm is
- * retired if the median day spends more than the target in router minutes per
- * published chart. That is a value against a target, and a number without its
- * target beside it cannot be acted on.
- *
- * The target arrives as an argument rather than as a constant here, because an
- * operator moves a threshold in `config/appearance.json` and never in a
- * component (Rule #6).
- */
-export function routerCost(days: readonly GlanceDay[], target: number) {
-	const median = middleOf(
-		days.map((d) => d.minutesPerChart).filter((m): m is number => m !== null)
-	);
-	return targetBar(median, target, 'lower-is-better', 'Router minutes per chart');
 }
 
 /** What share of a day's published items carried a chart, in percent.
