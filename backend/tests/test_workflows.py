@@ -393,8 +393,14 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 # every scalar a string, so the value to compare is the word, not the boolean.
 WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
 TOLERATED: Final = "true"
-COMMIT_IDENTITY: Final = (
-    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
+#: Every file that configures git before a job commits. A runner carries no
+#: identity of its own, so each of these has to set one, and two copies of a
+#: name drift in silence unless something reads both.
+#: `.invalid` is reserved by RFC 2606, so the address can never route anywhere.
+GIT_IDENTITY_SOURCES: Final = (
+    SCRIPTS_DIR / "commit-and-push.sh",
+    WORKFLOWS_DIR / "prune.yml",
 )
 # What a `${{ }}` expression stands in for when a test runs the real call site
 # outside Actions. `day_dir` is the digest date as a path, which is what lets the
@@ -1306,6 +1312,50 @@ def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
     assert "continue-on-error" not in steps[gate], "the ratchet publishes the day; it still fails"
 
 
+@pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
+def test_the_weight_ratchet_reads_a_build_of_the_tree_that_was_pushed(
+    filename: str, job_name: str, commit_step: str
+) -> None:
+    """One tree's pages may not be weighed against another tree's records.
+
+    `commit-and-push.sh` rebases when the push loses a race, and that brings
+    main's tip into the checkout - its frontend source and its
+    `bundle-baseline.json` with it. `frontend/build` still holds the build made
+    before the commit, so the gate reads records the build it measures never
+    saw. Run 33270983446 failed exactly there: `/console/` 746 B under a record
+    that arrived with the rebase, while the build was 5 B off the record its own
+    source carried, on a day that had already published and deployed.
+
+    So a build sits after every commit step in the job, and the gate reads that
+    one. `npm ci` is deliberately not repeated with it: the lockfile moves far
+    more rarely than the source, and a reinstall would delete `node_modules` on
+    every run to cover the rarer of the two.
+    """
+    steps = _steps(_load_workflows()[filename], job_name)
+    names = [step.get("name") for step in steps]
+    builds = [
+        index for index, step in enumerate(steps) if "npm run build" in str(step.get("run", ""))
+    ]
+    commits = [
+        index
+        for index, step in enumerate(steps)
+        if COMMIT_SCRIPT_CALL[1] in str(step.get("run", ""))
+    ]
+    gate = next(
+        index
+        for index, step in enumerate(steps)
+        if "npm run bundle-gate" in str(step.get("run", ""))
+    )
+
+    assert names.index(commit_step) in commits, "the publishing step runs the shared commit script"
+    rebuilt = [index for index in builds if index > max(commits)]
+    assert rebuilt, "the gate must read a build made after the last commit, not before it"
+    assert max(rebuilt) < gate, "the rebuild is what the gate reads, so it comes first"
+    assert "continue-on-error" not in steps[rebuilt[0]], (
+        "a rebuild that fails quietly leaves the gate reading the stale build again"
+    )
+
+
 #: Every job that builds the site, and so every job that can grow it past the cap.
 SITE_WEIGHT_JOBS: Final = (
     ("ci.yml", "site"),
@@ -2070,6 +2120,28 @@ def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
 
     assert set(COMMIT_STAGED_PATHS["work"]) <= set(refreshed)
+
+
+def test_every_committing_job_configures_the_same_identity() -> None:
+    """The pipeline commits as itself, and it says so in one voice.
+
+    A hosted runner carries no git identity, so a job that commits has to set
+    one or `git commit` refuses. Two files set it and only one of them is
+    executed by a test, so the other could drift to a different name and nothing
+    would notice until a reader wondered who two different authors were.
+    """
+    found = {
+        path.name: (
+            re.search(r'git config user\.name "([^"]+)"', read_text(path)),
+            re.search(r'git config user\.email "([^"]+)"', read_text(path)),
+        )
+        for path in GIT_IDENTITY_SOURCES
+    }
+
+    for name, (author, address) in found.items():
+        assert author is not None, f"{name} commits, so it must set user.name"
+        assert address is not None, f"{name} commits, so it must set user.email"
+        assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
 
 
 @requires_bash

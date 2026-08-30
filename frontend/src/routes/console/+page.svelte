@@ -764,14 +764,17 @@
 				>.
 			</p>
 
-			{#if data.throughputDays.length > 0}
-				<ThroughputTrend
-					days={data.throughputDays}
-					height={data.console.chart_height}
-					width={data.console.chart_width}
-					reference={data.throughputReference}
-				/>
-			{/if}
+<!-- Always rendered, empty window included. The chart owns its own empty
+		     state, the way the stage-timing trend above it does, so a window with
+		     nothing in it says so instead of taking the heading away with it. -->
+		<ThroughputTrend
+			days={data.throughputDays}
+			height={data.console.chart_height}
+			width={data.console.chart_width}
+			reference={data.throughputReference}
+			tickDensity={data.chart.tick_density}
+			readoutMaxShare={data.chart.readout_max_share}
+		/>
 
 			{#if data.modelWork.length > 0}
 				<div class="console-table mt-6" data-model="table">
