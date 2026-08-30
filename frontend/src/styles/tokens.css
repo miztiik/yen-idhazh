@@ -32,6 +32,23 @@
 	--band-medium: #8a6300;
 	--band-low: #b4331f;
 
+	/* --- Fill ramp -------------------------------------------------------
+	   The three above are TEXT colours and stay text colours: a chip, a table
+	   cell and a card all read them as type, so lightening them to suit a
+	   solid would fail text contrast everywhere else they are used. A 16px
+	   filled square is a different job, and at text weight these hues do it
+	   badly - measured 2026-08-30 against --color-surface, --band-medium is
+	   5.43:1 and --band-low 6.12:1, which is above the 4.5:1 that makes a
+	   colour text weight, and on screen they read as olive and brick.
+
+	   So the ramp is parallel rather than a replacement: lighter here, and
+	   the same values in the dark theme, where a fill sits lighter than its
+	   ground and cannot become ink. design-system.md owns the band a value
+	   has to land in and where each bound comes from. */
+	--fill-high: #2e9e63;
+	--fill-medium: #c08200;
+	--fill-low: #e0523a;
+
 	/* --- Chart ramp ------------------------------------------------------
 	   Categorical, eight stops, and it holds no green, no amber and no red -
 	   a chart that borrowed the confidence ramp once told a reader the
@@ -119,6 +136,13 @@
 	--band-high: #4bbd84;
 	--band-medium: #d6a743;
 	--band-low: #f0836c;
+
+	/* Written out rather than pointed at the three above, even though they
+	   agree today. The dark theme is designed, not derived, and a later change
+	   made for the sake of text must not silently repaint every fill. */
+	--fill-high: #4bbd84;
+	--fill-medium: #d6a743;
+	--fill-low: #f0836c;
 
 	--chart-1: #5b95f5;
 	--chart-2: #b79bf0;

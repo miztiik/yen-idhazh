@@ -126,6 +126,11 @@ interface Box {
 	bottom: number;
 }
 
+/** Wide enough that the run strip cannot fill its frame at any day count the
+ * window admits, because `cellFor` caps a day column. That is what lets an
+ * alignment test assert on spare room without depending on today's ledger. */
+const UNDERFULL_VIEWPORT = { width: 1680, height: 900 };
+
 /** `DOMRect` does not survive the wire, so only the numbers cross it. */
 const TO_BOX = (nodes: Element[]): Box[] =>
 	nodes.map((node) => {
@@ -394,14 +399,32 @@ test('no two date labels print on top of each other', async ({ page }) => {
 	}
 });
 
-test('a short history sits at the newest edge, never adrift on the left', async ({ page }) => {
+test('a short history starts at the left edge and grows right', async ({ page }) => {
+	// Where an OVERFLOWING strip opens and where an UNDERFULL one sits are two
+	// questions, and `today_anchor` only answers the first. Anchored right, the
+	// whole strip slid left by a column every time a day was published, so a run
+	// an operator had looked at yesterday was somewhere else today. Anchored
+	// left, a day keeps its place and the empty room is on the side where the
+	// days that have not happened yet belong.
+	//
+	// Wide on purpose. `cellFor` caps a day column, so past a frame width the
+	// strip CANNOT fill its room whatever the ledger holds - which is what makes
+	// the premise below a property of the layout rather than of today's data.
+	await page.setViewportSize(UNDERFULL_VIEWPORT);
 	await page.goto('/console/');
 
 	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
 	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
 
-	expect(Math.abs(strip.right - columns[columns.length - 1].right)).toBeLessThan(2);
-	expect(columns[0].x - strip.x).toBeGreaterThan(1);
+	// The premise: fewer days than the strip has room for. Without it the test
+	// passes on a full strip, where left and right alignment are the same thing.
+	const drawn = columns[columns.length - 1].right - columns[0].x;
+	expect(drawn, 'the strip is full, so alignment cannot be told apart').toBeLessThan(
+		strip.width - 2
+	);
+
+	expect(Math.abs(columns[0].x - strip.x)).toBeLessThan(2);
+	expect(strip.right - columns[columns.length - 1].right).toBeGreaterThan(1);
 });
 
 test('on a phone the strip scrolls, and opens on the newest run', async ({ page }) => {
