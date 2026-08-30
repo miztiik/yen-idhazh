@@ -473,6 +473,7 @@ def test_the_item_health_ledger_columns_are_defined_once() -> None:
         "output_tokens",
         "cached_tokens",
         "source_words_before_cap",
+        "shard",
     )
 
 
