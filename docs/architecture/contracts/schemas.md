@@ -81,6 +81,8 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 
 **The grain argument earned two more cells on 2026-08-29.** `job_seconds` and `cpu_model` are facts about the `work` job rather than about its model server, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/measurements.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
 
+**And three more on 2026-08-30, for the same reason.** `cpu_busy_pct`, `peak_rss_bytes` and `model_load_ms` are facts about the machine one shard drew, not about the model it served. They arrive as raw text the job printed - the `cpu` line of `/proc/stat` at each end of the job, the memory sampler's file, llama-server's own log - and every derivation happens inside the contract. A shell that computes a percentage is a second place the arithmetic lives and no place it can be tested; a contract that parses the raw text is one place, and its oracle is the real captures under `tests/fixtures/runtime/`.
+
 What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
 
 ### A ledger shards by month only when its read carries a window
