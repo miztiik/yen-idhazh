@@ -254,6 +254,19 @@ class ChartConfig(Model):
             "critical information intact while still answering 'what is that bar'."
         ),
     )
+    readout_max_share: float = Field(
+        default=0.33,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The widest the readout strip under a plot may be, as a share of that "
+            "plot. The strip sits below the plot rather than over it, so it cannot "
+            "cover a mark at any width; the cap is what stops it becoming a paragraph "
+            "beside a chart a reader is glancing at. Measured 2026-08-29, the floating "
+            "box this replaced covered 88 to 121px of a 220px plot - 40 to 55 percent "
+            "of the chart it was explaining."
+        ),
+    )
     palette: ChartPalette = Field(
         default=ChartPalette.CATEGORICAL,
         description="Which ramp a chart draws from. Never the confidence ramp.",
@@ -343,6 +356,21 @@ class AppearanceConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30",
+            change=(
+                "chart.readout_max_share added, defaulting to 0.33: the widest the "
+                "readout strip under a plot may be, as a share of that plot."
+            ),
+            why=(
+                "The stage-timing chart gained a readout, and a readout needs a bound "
+                "somebody can move without editing a component. Measured 2026-08-29, "
+                "the floating box this replaces covered 88 to 121px of a 220px plot - "
+                "40 to 55 percent of the chart it was explaining. Additive with a "
+                "default, so an appearance file written before today still validates "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T22:00",
             change=(

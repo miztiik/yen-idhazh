@@ -94,6 +94,14 @@
           "default": "categorical",
           "description": "Which ramp a chart draws from. Never the confidence ramp."
         },
+        "readout_max_share": {
+          "default": 0.33,
+          "description": "The widest the readout strip under a plot may be, as a share of that plot. The strip sits below the plot rather than over it, so it cannot cover a mark at any width; the cap is what stops it becoming a paragraph beside a chart a reader is glancing at. Measured 2026-08-29, the floating box this replaced covered 88 to 121px of a 220px plot - 40 to 55 percent of the chart it was explaining.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Readout Max Share",
+          "type": "number"
+        },
         "sparkline_height_px": {
           "default": 36,
           "description": "A sparkline inside a card. Direction at a glance, no axis. The ceiling is below `height_px`'s floor of 120 on purpose, so a sparkline can never be configured taller than a chart - the bound does the work a cross-field validator would, and a validator that cannot fire is worse than none.",
@@ -477,6 +485,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "chart.readout_max_share added, defaulting to 0.33: the widest the readout strip under a plot may be, as a share of that plot.",
+      "version": "2026-08-30",
+      "why": "The stage-timing chart gained a readout, and a readout needs a bound somebody can move without editing a component. Measured 2026-08-29, the floating box this replaces covered 88 to 121px of a 220px plot - 40 to 55 percent of the chart it was explaining. Additive with a default, so an appearance file written before today still validates (section 11)."
+    },
+    {
       "change": "console.window_presets added, and console.default_window_days must now be one of its members. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
       "version": "2026-08-29T22:00",
       "why": "The console gained one time-window control that governs every windowed section on it, and a control needs the list of spans it offers. Additive with a default, so an appearance file written before today still validates (section 11)."
@@ -517,7 +530,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-08-29T22:00",
+      "default": "2026-08-30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -525,5 +538,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-08-29T22:00"
+  "version": "2026-08-30"
 }

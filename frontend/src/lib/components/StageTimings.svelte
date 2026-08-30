@@ -16,9 +16,11 @@
 	 * in `frame.ts` remains the rule for series of comparable size; it yields
 	 * here because the drawn extent spans more than two decades.
 	 *
-	 * The x axis is the calendar, not the list of days that have rows. Three
-	 * different facts used to arrive here as one missing number, and each one
-	 * now draws as itself. A day nothing timed breaks the line. A day measured
+	 * The x axis is the window the page's control set, not the list of days that
+	 * have rows. A chart that sized itself to its own data drew six columns under
+	 * a control reading thirty, and two spans on one page cannot be compared.
+	 * Three different facts used to arrive here as one missing number, and each
+	 * one now draws as itself. A day nothing timed breaks the line. A day measured
 	 * at zero breaks it too and draws an open dot on the baseline rule: zero has
 	 * no position on a decade axis, and clamping it into the bottom decade draws
 	 * a plunge that says the stage got a thousand times faster. A day timed for
@@ -31,17 +33,44 @@
 	 * not lent out: on a page where green means a clean run and red means a
 	 * failed one, a red fetch line beside a green score line reads as "fetch is
 	 * broken" when it only means "these are two different stages".
+	 *
+	 * The strip under the plot is the legend AND the readout, because they were
+	 * the same four numbers. It opens on the newest day and follows a pointer or
+	 * an arrow key; the row order is fixed by the newest day and never re-sorts
+	 * under the eye.
 	 */
-	import { chartWidth, frame, logAxis, MARGIN, observeWidth } from '$lib/charts/frame';
-	import { axisLabels, type LabelAlign } from '$lib/charts/run-history';
+	import {
+		chartWidth,
+		dayColumnX,
+		dayTicks,
+		frame,
+		logAxis,
+		MARGIN,
+		observeWidth,
+		pointerReadout,
+		readoutCapStyle,
+		readoutMarks,
+		type DayReadout
+	} from '$lib/charts/frame';
+	import { shortDate } from '$lib/format';
 	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
-	import { daysInWindow } from '$lib/charts/viewport';
+	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
 
 	let {
 		days,
+		span,
 		height,
-		width
-	}: { days: StageTimingDay[]; height: number; width: number } = $props();
+		width,
+		tickDensity,
+		readoutMaxShare
+	}: {
+		days: StageTimingDay[];
+		span: TimeWindow;
+		height: number;
+		width: number;
+		tickDensity: number;
+		readoutMaxShare: number;
+	} = $props();
 
 	const STAGES = [
 		{ key: 'fetch', label: 'fetch', colour: 'var(--series-1)' },
@@ -70,19 +99,21 @@
 	/** The server draws at the knob; the client redraws once it has measured the
 	 * column it actually got, so one unit is one CSS pixel. */
 	let measured = $state<number | null>(null);
+	/** Which column the pointer or the arrow keys are on, or null for none. */
+	let selected = $state<number | null>(null);
 	const box = $derived(frame(chartWidth(measured, width), height, PLOT_MARGIN));
 
-	const ordered = $derived([...days].sort((a, b) => a.date.localeCompare(b.date)));
-	const calendar = $derived(
-		ordered.length === 0
-			? []
-			: daysInWindow({
-					start: ordered[0].date,
-					end: ordered[ordered.length - 1].date
-				})
+	/** The columns are the window the operator set, not the days that happen to
+	 * carry a row. A chart that shrinks to its own data while the control above it
+	 * reads 30 days puts two spans on one page, and the two cannot be compared -
+	 * which is the question the operator came here to ask. */
+	const calendar = $derived(daysInWindow(span));
+	const ordered = $derived(
+		days
+			.filter((day) => day.date >= span.start && day.date <= span.end)
+			.sort((a, b) => a.date.localeCompare(b.date))
 	);
 	const byDate = $derived(new Map(ordered.map((day) => [day.date, day])));
-	const step = $derived(box.innerWidth / Math.max(1, calendar.length - 1));
 	/** Whole decades, rounded outward to the decade that holds the data. That is
 	 * the log form of the rounding rule, not an exception to it. */
 	const scale = $derived(
@@ -98,7 +129,7 @@
 			.flatMap((decade) => MINOR_STEPS.map((factor) => factor * decade))
 			.filter((value) => value < scale.domain[1])
 	);
-	const axis = $derived(axisLabels(calendar));
+	const axis = $derived(dayTicks(calendar, tickDensity));
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 
 	/** A stage is on the chart where the window timed it at all, a zero
@@ -134,11 +165,32 @@
 			.filter((note) => note.blank > 0 || note.zero > 0 || note.partDays > 0)
 	);
 
-	const ANCHOR: Record<LabelAlign, 'start' | 'middle' | 'end'> = {
-		start: 'start',
-		centre: 'middle',
-		end: 'end'
-	};
+	/** One column per day, whether or not the day timed anything. A column the
+	 * strip skipped would be a day an arrow key steps over without saying so. */
+	const columns = $derived<DayReadout[]>(
+		calendar.map((date, index) => ({
+			x: x(index),
+			date: shortDate(date),
+			rows: legend.map((stage) => ({
+				label: stage.label,
+				value: reading(at(date, stage.key)),
+				colour: stage.colour
+			}))
+		}))
+	);
+	const marks = $derived(readoutMarks(columns));
+	/** The strip opens on the newest day the window timed, so it is never blank
+	 * and never shifts the page as it fills. Not the window's last column: a
+	 * window runs to today and a run can be hours away, so that column is often
+	 * four `not timed` rows, which is not a resting state anybody can read. */
+	const resting = $derived(
+		columns.length === 0
+			? null
+			: (columns[newest === null ? columns.length - 1 : calendar.indexOf(newest.date)] ??
+				columns[columns.length - 1])
+	);
+	const readout = $derived(selected === null ? resting : (columns[selected] ?? resting));
+	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
 
 	function timingOn(date: string, key: Stage['key']): StageTiming | null {
 		return byDate.get(date)?.[key] ?? null;
@@ -159,11 +211,23 @@
 	}
 
 	function x(index: number): number {
-		return calendar.length === 1 ? (box.left + box.right) / 2 : box.left + index * step;
+		return dayColumnX(index, calendar.length, box);
 	}
 
 	function y(ms: number): number {
 		return scale.scale(ms);
+	}
+
+	/** Every day a stage has a positive number for, as a point of its own.
+	 *
+	 * The line carries the trend and the point carries the day: without a mark
+	 * there is nothing to aim a pointer at and nothing for an arrow key to land
+	 * on, and a spike between two labelled columns could not be dated at all. */
+	function marksOf(key: Stage['key']): Point[] {
+		return calendar
+			.map((date, index) => ({ ms: at(date, key), index }))
+			.filter((day): day is { ms: number; index: number } => day.ms !== null && day.ms > 0)
+			.map((day) => ({ x: x(day.index), y: y(day.ms) }));
 	}
 
 	/** Each unbroken stretch of days with a positive number, so an absent day
@@ -204,10 +268,10 @@
 		return ms >= 1000 ? `${(ms / 1000).toFixed(1)} s` : `${Math.round(ms)} ms`;
 	}
 
-	/** What the legend prints for the newest day. `0 ms` would say the stage
-	 * took no time, which is the sentence this chart exists not to say. */
-	function newestValue(stage: Stage): string {
-		const ms = newestOf(stage);
+	/** What a stage's number reads as, in the strip and in the announcement.
+	 * `0 ms` would say the stage took no time, which is the sentence this chart
+	 * exists not to say, and a blank would say the same thing more quietly. */
+	function reading(ms: number | null): string {
 		if (ms === null) return 'not timed';
 		return ms === 0 ? 'under 1 ms' : duration(ms);
 	}
@@ -232,8 +296,11 @@
 
 <h2 class="mt-10 text-[1.0625rem] font-semibold text-text">Time per item, by stage</h2>
 
-{#if calendar.length === 0}
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary">No timings recorded yet.</p>
+{#if ordered.length === 0}
+	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-timing="empty">
+		Nothing was timed in these {calendar.length}
+		{plural(calendar.length)}. Widen the window to look further back.
+	</p>
 {:else}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		Median per item, each day. Each gridline is ten times the one below, so the same slowdown looks
@@ -243,13 +310,24 @@
 
 	<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-timing="chart">
 		<div use:observeWidth={(next) => (measured = next)}>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
-				class="w-full overflow-visible"
+				class="w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				height={box.height}
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
-				aria-label="Time per item by stage, oldest day on the left, on a ten-times scale"
+				tabindex="0"
+				aria-label={`Time per item by stage over ${calendar.length} ${plural(calendar.length)}, ${shortDate(calendar[0])} to ${shortDate(calendar[calendar.length - 1])}, oldest day on the left, on a ten-times scale`}
 				data-timing="plot"
+				data-timing-days={calendar.length}
+				data-timing-series={drawn.length}
+				data-timing-first={calendar[0] ?? ''}
+				data-timing-last={calendar[calendar.length - 1] ?? ''}
+				use:pointerReadout={{
+					marks,
+					width: box.width,
+					onSelect: (index) => (selected = index)
+				}}
 			>
 				{#each scale.ticks as tick (tick)}
 					<line
@@ -295,17 +373,21 @@
 				/>
 				<line x1={box.left} x2={box.left} y1={box.top} y2={box.bottom} stroke="var(--color-rule)" />
 
+				{#if guide !== null}
+					<line
+						x1={guide}
+						x2={guide}
+						y1={box.top}
+						y2={box.bottom}
+						stroke="var(--color-text-tertiary)"
+						stroke-opacity="0.5"
+						data-timing="guide"
+					/>
+				{/if}
+
 				{#each drawn as stage (stage.key)}
 					{#each runs(stage.key) as run, index (`${stage.key}-${index}`)}
-						{#if run.length === 1}
-							<circle
-								cx={run[0].x}
-								cy={run[0].y}
-								r="3.5"
-								fill={stage.colour}
-								data-stage-mark={stage.label}
-							/>
-						{:else}
+						{#if run.length > 1}
 							<polyline
 								points={points(run)}
 								fill="none"
@@ -315,6 +397,15 @@
 								data-stage-mark={stage.label}
 							/>
 						{/if}
+					{/each}
+					{#each marksOf(stage.key) as mark, index (`${stage.key}-point-${index}`)}
+						<circle
+							cx={mark.x}
+							cy={mark.y}
+							r="2.5"
+							fill={stage.colour}
+							data-stage-mark={stage.label}
+						/>
 					{/each}
 					{#each zeros(stage.key) as mark, index (`${stage.key}-zero-${index}`)}
 						<circle
@@ -329,13 +420,14 @@
 					{/each}
 				{/each}
 
-				{#each axis as label (label.column)}
+				{#each axis as label (label.index)}
 					<text
-						x={x(label.column - 1)}
+						x={x(label.index)}
 						y={box.bottom + 14}
-						text-anchor={ANCHOR[label.align]}
+						text-anchor={label.anchor}
 						fill="var(--color-text-tertiary)"
 						font-size="10"
+						data-timing-label={label.date}
 					>
 						{label.text}
 					</text>
@@ -343,22 +435,30 @@
 			</svg>
 		</div>
 
-		<ul class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-			{#each legend as stage (stage.key)}
-				<li
-					class="flex items-center gap-2"
-					class:opacity-50={!drawn.includes(stage)}
-					data-stage={stage.label}
-				>
-					<span class="size-3 shrink-0 rounded-sm" style="background: {stage.colour}"></span>
-					{stage.label}
-					<span class="tabular-nums text-text-secondary">{newestValue(stage)}</span>
-				</li>
-			{/each}
-		</ul>
-		{#if newest}
-			<p class="mt-2 text-[0.75rem] text-text-tertiary">
-				Values are the newest day on record, {newest.date}.
+		{#if readout}
+			<!-- Below the plot, never over it. A strip here cannot cover a mark at
+			     any width, and it is the legend as well, so the four numbers a
+			     reader compares are printed once. -->
+			<dl
+				class="mt-3 text-[0.75rem] text-text-tertiary"
+				style={readoutCapStyle(readoutMaxShare)}
+				data-readout="timings"
+				aria-live="polite"
+			>
+				<dt class="font-semibold text-text-secondary" data-readout-day>
+					{readout.date}{selected === null ? ', the newest day we timed' : ''}
+				</dt>
+				{#each readout.rows as row (row.label)}
+					<div class="mt-1 flex items-center gap-2" data-stage={row.label}>
+						<span class="size-3 shrink-0 rounded-sm" style="background: {row.colour}"></span>
+						<dd class="grow">{row.label}</dd>
+						<dd class="tabular-nums text-text-secondary">{row.value}</dd>
+					</div>
+				{/each}
+			</dl>
+			<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint="timings">
+				Point at a day to read it. Left and Right step through the days, Escape returns to the
+				newest.
 			</p>
 		{/if}
 		{#each notes as note (note.stage.key)}
