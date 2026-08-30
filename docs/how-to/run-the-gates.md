@@ -223,11 +223,13 @@ plus three days of the heaviest of those plus the 64-byte noise floor, and it is
 meant to expire
 ([../reference/measurements.md](../reference/measurements.md#the-console-ceiling-is-a-tripwire-and-it-is-priced-in-published-days)).
 
-**When `/console/` fires, do not raise it.** The page grows because the
-compression scatter inlines a point for every row the ledger has ever held. The
-answer is to window that seed and publish the older points through the telemetry
-projection, in one change - a windowed seed on its own empties the plot behind
-the window, which is a lie
+**When `/console/` fires, do not raise it.** The page grows with what it inlines,
+and the answer is always to stop inlining what the first paint does not need
+rather than to buy days. Both halves of the last one have shipped: the seed is
+windowed and the older points come through the telemetry projection since
+2026-08-29, and the compression scatter that put one mark on the page per article
+became a per-day count of three bins on 2026-08-30. So the ceiling is due a
+re-derivation against a page that no longer grows a mark an item, not a digit
 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)).
 
 ## The browser suite

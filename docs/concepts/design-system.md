@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -133,6 +133,12 @@ The reading page carries both, one line apart, and without this rule the second 
 **One tint for every member of a label family, not one per member.** A lens chip uses `--tint-accent` whatever the topic is: the word carries the category and the colour carries only "this is a topic". Six hues to say what six words already say would collide with the confidence ramp and the chart ramp, and a `war` chip in a warn hue would read as a severity we never assigned. The seventh lens then arrives with its slot already filled and needs no colour decision - which is the point.
 
 A tinted label is decorative under the rule above, because it repeats a word that is already there. It stays decorative only while it carries the word; a tinted chip carrying an icon alone would be semantic colour with no second signal, and is refused.
+
+### Content on demand is a `<details>`, not a button
+
+A section that leads with a shape and keeps its rows behind a control uses a native `<details>` and `<summary>`. Every page here is prerendered and complete before a script runs, so a button plus a conditional block does not hide the rows - it deletes them for a reader with no script, and the section then makes a claim the reader cannot check. The element is also keyboard-reachable for free and says which state it is in without a second label.
+
+The other shape is different and stays: `Show N more` on the failed-item list and the day list is a button that extends a list already on the page. Nothing behind it is hidden, so nothing is lost when the button is dead.
 
 ## Sufficiency is a gate, not a taste
 
@@ -349,13 +355,59 @@ reads with, so the count is zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
 is already being printed.
 
+### Eleven measures are eleven cards, and the rows are one control away
+
+The eleven above shipped as eleven columns of one table until 2026-08-30, and
+that shape could not answer the question an operator brings to it. **Did it get
+worse is a vertical scan**, and in a wide table every column beside the one being
+scanned is a different quantity - a count, a percent, a second, a minute. At a
+thirty-day window it was 330 numbers under eleven header paragraphs.
+
+So the section leads with eleven cards on one `auto-fit minmax(220px, 1fr)`
+grid, and each card carries the same five things:
+
+- **The label, verbatim.** The copy above is protected; the shape was the defect
+  and the words were not. `frontend/tests/console-model.spec.ts` compares the
+  rendered labels byte for byte against the page's own `COLUMNS` and against the
+  table on this page, so a paraphrase fails the build rather than a review.
+- **The newest day's figure**, at reading size. Which day that is is printed
+  once above the grid, not eleven times.
+- **A line over the window**, drawn as markup by `Sparkline`. Eleven
+  engine-backed sparklines would be eleven chart instances and a lazy chunk on a
+  page that renders complete without one.
+- **What it is out of**, for the six quality figures. On a table row the day's
+  count sat one column away; a card has no row, so it carries its own
+  denominator or it invites a trend that is not there.
+- **Its sentence**, moved out of the header into the body where there is room
+  for it.
+
+**A day the model changed draws a dashed rule across every line**, at the first
+drawn point on the new model, from the same rows the daily table draws its
+dividers from. Whether a swap moved anything is the question the table could not
+answer at all. The rule carries a date and an id and nothing else - an arrow or
+a delta across it would claim the swap caused whatever the line then did, and no
+committed figure says that.
+
+**No card is tinted.** `Copied, not rewritten` reads about 12 percent and nobody
+has agreed what a bad number would be, so a tint there would invent a threshold
+and publish it. The health ramp is lent to a threshold somebody agreed to, and
+to nothing else.
+
+**The daily table stays, below, behind a `Show the daily figures` control.**
+Nothing is deleted: after a card moves, the rows are what say which day. It is a
+native disclosure, so the rows are in the prerendered document either way,
+opening it costs no fetch, and the whole section works with no script at all.
+The dash-not-zero rule, the `<1` rule and the version-stamped share are
+unchanged by any of this.
+
 ### An axis title and a column header take one form
 
 `Article length, words`. **Sentence case, a comma, the unit in lower case, and
 no full stop.** `Sources cut short most often` shipped `Longest article, words`
-first, and the compression chart's two axes followed it on 2026-08-29. Three
-labels naming a quantity and its unit the same way is a form, so it is written
-down here rather than copied a fourth time by eye.
+first, and the compression chart's two axes followed it on 2026-08-29. That
+column became a range plot on 2026-08-30 and its axis carries the same form.
+Three labels naming a quantity and its unit the same way is a form, so it is
+written down here rather than copied a fourth time by eye.
 
 - **The quantity, then the unit.** `Summary length, words` - never `Summary
   length (words)` and never `words`. A bracket reads as a footnote, and a label
@@ -432,34 +484,52 @@ a verdict the page never measured.
 
 ## What the cap cost, by source
 
-`Sources cut short most often` is one table of ten rows, and it is the only
-place on the site that names a source next to a number about that source. It
-exists for one decision: **whether raising the truncation cap would actually
+`Sources cut short most often` is one row per source, ten of them, and it is the
+only place on the site that names a source next to a number about that source.
+It exists for one decision: **whether raising the truncation cap would actually
 reach a source's articles.**
 
-| Header | What it prints |
+It is a horizontal range plot on a log word-length axis. One row per source, the
+shortest, middle and longest article that source published drawn as a track, and
+a dashed rule at each cut point across every row. Everything right of the widest
+rule is where the cap bites.
+
+| Part | What it says |
 | --- | --- |
-| `Source` | the source id, as the ledger spells it |
-| `Cut short` | articles this source lost text on |
-| `Articles` | articles it published in the window - the denominator |
-| `Share cut` | whole percent, or a dash under `console.min_attempts_for_rate` |
-| `Longest article, words` | the longest article it published, before the cut |
+| the row label | the source id, as the ledger spells it |
+| the line under it | `17 of 38 cut` - articles it lost text on, over articles it published |
+| the track | shortest to longest article, with a dot at the middle one |
+| the emphasised span | the part of that range past the widest cut point |
+| a dashed rule | where a cut fell, read off the rows that were cut, and dated where the window holds more than one |
 
-Five rulings hold it, all Jony's, 2026-08-29:
+Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
 
+- **The cap is on the chart.** This is the whole defect the plot fixes. Five
+  columns of numbers were unreadable because the single number they all had to
+  be compared against appeared nowhere in the section. Susan, 2026-08-30.
+- **The rule comes off the rows, never off `extract.truncation_cap_tokens`.** A
+  window can hold rows a run wrote under an older cap, and the setting is one
+  number: over the committed ledger a thirty-day window holds cuts at 1,923
+  words and at 3,846, and the file says only 3,846. A rule from the file also
+  draws in a window where nothing was cut. Fowler, 2026-08-30.
 - **It sorts by count, never by rate.** Measured over the committed ledger the
   shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
   puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
-  seventeen that cost the digest its articles. The sort order is the ranking,
-  which is also why **no row is tinted**: the confidence ramp means good, watch
-  and bad about a summary, and a source at 55 percent is not broken, it publishes
-  long articles.
+  seventeen that cost the digest its articles. `Share cut` was dropped as a
+  column on 2026-08-30 for the same reason it was never the sort key. What a
+  reader loses is the share as a number; both counts are still on the row.
+- **No row is tinted.** The order is the ranking. The confidence ramp means
+  good, watch and bad about a summary, and a source at 55 percent is not broken,
+  it publishes long articles. The rule itself is drawn in tertiary text colour
+  rather than the low band: a red vertical would say the cap is a fault, and the
+  cap is a setting somebody chose.
 - **Ten rows and no `Show more`.** The worst seven hold 69 of 153 cuts, 45
   percent; past ten the tail is sources with a single cut in a week, and a
   control that reveals rows nobody acts on does nothing.
-- **The longest article is the whole article, cut or not.** A column that read
-  the longest *cut* article would answer a question about the cap with a number
-  the cap produced.
+- **The track is the whole article, cut or not.** A track drawn over the cut
+  articles alone would answer a question about the cap with a set the cap
+  produced, and it would hide how short the rest of the source's articles are -
+  which is the part that says whether the cap is the problem.
 - **No ledger or config name reaches it.** Not `truncation_flagged`, not
   `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
 - **The two empty states say different things.** `Nothing has recorded an
@@ -469,11 +539,17 @@ Five rulings hold it, all Jony's, 2026-08-29:
 
 Rejected here: the cut share on the run-health strip (a 16px square has no room
 for a number, and it answers "did it work" rather than "what did it read"); a
-histogram of article lengths (the engineer's chart - the scatter already shows
-that distribution along its x axis); a gauge, dial, donut or progress bar (six
-percent on a dial is one pixel of arc); a before-and-after of a cap change on
-this page (two caps over two different article sets is two measurements, not a
-trend, and that claim belongs in
+histogram of article lengths (the engineer's chart - it answers what the corpus
+looks like, and this section exists to answer whether raising the cap would
+reach a source); a linear length axis (the lengths span more than two decades,
+and linear crushes every short source onto the left edge - Carmack, 2026-08-30);
+keeping the table and printing the cap in the intro sentence (recorded as the
+fallback if the plot overran; it answers "how far past the cap" by subtraction
+rather than by looking - Susan, 2026-08-30); tinting rows by share cut (a source
+at 55 percent is not broken, so the tint would invent a fault); a gauge, dial,
+donut or progress bar (six percent on a dial is one pixel of arc); a
+before-and-after of a cap change on this page (two caps over two different
+article sets is two measurements, not a trend, and that claim belongs in
 [../reference/measurements.md](../reference/measurements.md)); and a table
 component shared with `Feeds that failed` (an abstraction for two call sites -
 reversed on 2026-08-29, when the count reached four; the shape is the ranked

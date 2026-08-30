@@ -51,6 +51,30 @@ dependencies = [
 dev = [
     "mypy>=1.14",
     "pytest>=8.3",
+    # Runs the suite across the cores the machine already has. Off by default:
+    # `addopts` is unchanged, so a bare `pytest` is still one process and CI -
+    # which finishes the suite in 62.68 s on 4 vCPU - does not move. A developer
+    # opts in with `-n auto`, and a parallel-only failure therefore cannot hide
+    # inside the one gate everybody trusts.
+    #
+    # Dev-only; measured 2026-08-30 on Windows 11, Python 3.14.2, by summing
+    # site-packages before and after the install: 720,767 installed bytes over
+    # 84 files, for pytest-xdist 3.8.0 and the execnet 2.1.2 it pulls in. That
+    # is 7,574 bytes under PyYAML's 728,341 and 2.1 percent of shellcheck-py's
+    # 34,782,285. It added those two distributions and moved no version that was
+    # already there.
+    #
+    # Measured effect, same box and date (12 logical CPUs, 31.8 GiB RAM, every
+    # arm wrapped in backend/utilities/gate_lock.py so no sibling gate could
+    # land inside it): 548.03, 484.68 and 505.78 s serially, against 159.04,
+    # 149.60 and 147.67 s under `-n auto` (n=3 each; means 512.83 s and
+    # 152.10 s; spreads 63.35 s and 11.37 s). That is 3.37x - about six minutes
+    # back on every local run of the suite. All six runs passed the same 1,695
+    # node ids, none skipped, and `git status --porcelain` was empty after each,
+    # so no test needed pinning to one worker.
+    #
+    # Beneficiary: the full suite a developer runs before pushing.
+    "pytest-xdist>=3.6",
     # Structured parsing for the workflow trigger contract test. Dev-only;
     # measured 2026-08-23 on Windows 11, Python 3.12: 728341 installed bytes.
     # One observation, so no spread. Beneficiary: workflow routing regression gate.

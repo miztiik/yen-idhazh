@@ -143,6 +143,35 @@
       "additionalProperties": false,
       "description": "Knobs for the operator console's time viewport.",
       "properties": {
+        "band_outlier_rows": {
+          "default": 10,
+          "description": "How many summaries the console names as furthest from the length the prompt asked for. Capped, with the tail stated in a sentence, because the list exists to be acted on and the far tail is a one-word miss nobody chases. Ten, matching the source-cut table beside it.",
+          "minimum": 1,
+          "title": "Band Outlier Rows",
+          "type": "integer"
+        },
+        "chart_arm_coverage_pct": {
+          "default": 5.0,
+          "description": "The share of a day's published items that must carry a chart, in whole percent. Below this on the median day the arm is retired: an arm that reaches almost nothing is paying for a capability the digest does not use.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 100.0,
+          "title": "Chart Arm Coverage Pct",
+          "type": "number"
+        },
+        "chart_arm_minutes_target": {
+          "default": 6.0,
+          "description": "Router minutes per published chart above which the median day retires the chart arm. Drawn as a marker on the bar, never as a subtraction the reader performs.",
+          "exclusiveMinimum": 0.0,
+          "title": "Chart Arm Minutes Target",
+          "type": "number"
+        },
+        "chart_arm_rule_days": {
+          "default": 14,
+          "description": "The span the chart arm's retirement rule is stated over. A median taken over any other span is the same figure with a different meaning and nothing on the page to say which one is being read, so under this many days the section prints the rule's own span and no number at all.",
+          "minimum": 1,
+          "title": "Chart Arm Rule Days",
+          "type": "integer"
+        },
         "chart_height": {
           "default": 180,
           "minimum": 120,
@@ -485,6 +514,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
+      "version": "2026-08-30T21:15",
+      "why": "The chart arm section now leads with the two figures its retirement rule names, each as a bar with the limit drawn on it. A limit a component hardcodes is one an operator cannot move (Rule #6), and these three were constants in a TypeScript module. Additive with defaults, so an appearance file written before today still validates (section 11)."
+    },
+    {
+      "change": "console.band_outlier_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
+      "version": "2026-08-30T20:00",
+      "why": "The console now names the summaries furthest from the length the prompt asked for, in place of a scatter that drew 2,740 marks in one colour. A capped list needs its cap where an operator can move it. Additive with a default, so an appearance file written before today still validates (section 11)."
+    },
+    {
       "change": "chart.readout_max_share added, defaulting to 0.33: the widest the readout strip under a plot may be, as a share of that plot.",
       "version": "2026-08-30",
       "why": "The stage-timing chart gained a readout, and a readout needs a bound somebody can move without editing a component. Measured 2026-08-29, the floating box this replaces covered 88 to 121px of a 220px plot - 40 to 55 percent of the chart it was explaining. Additive with a default, so an appearance file written before today still validates (section 11)."
@@ -530,7 +569,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-08-30",
+      "default": "2026-08-30T21:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -538,5 +577,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-08-30"
+  "version": "2026-08-30T21:15"
 }

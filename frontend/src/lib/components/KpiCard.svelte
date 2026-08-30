@@ -9,16 +9,27 @@
 	 * The sparkline is optional and secondary. Where there is no history the
 	 * card is still a card - an empty plot area with a dash in it is worse than
 	 * no plot at all.
+	 *
+	 * A trend arrives one of two ways. An engine-backed pair (a server-drawn SVG
+	 * and the option that redraws it) is right where the shape needs a scale and
+	 * an axis. Markup is right where it does not: it costs no chunk, it follows
+	 * the page's window with no second drawing on the server, and it is finished
+	 * before any script runs.
 	 */
 	import Chart from '$lib/charts/Chart.svelte';
+	import { percentOf } from '$lib/charts/rank';
 	import type { EChartsOption } from 'echarts';
+	import type { Snippet } from 'svelte';
 
 	let {
 		label,
 		value,
 		note = null,
+		line = null,
 		tone = 'neutral',
 		movement = null,
+		track = null,
+		trend = null,
 		trendSvg = null,
 		trendOption = null,
 		windowed = null,
@@ -28,9 +39,25 @@
 		/** Already formatted. The card never does arithmetic on a number. */
 		value: string;
 		note?: string | null;
+		/** What the figure means, in one sentence, under everything else.
+		 *
+		 * A table header has room for a label and nothing else, so an explanation
+		 * put there is a paragraph in a column. A card has a body. */
+		line?: string | null;
 		tone?: 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 		/** Signed share, e.g. 0.12 for up 12 percent. Null prints nothing. */
 		movement?: number | null;
+		/** How full something is, and what it is full of. A level against a limit
+		 * that will not move is a length the eye reads without arithmetic - and
+		 * the caption is required, because a bar with no named limit says only
+		 * that a bar exists. */
+		track?: { fraction: number; caption: string } | null;
+		/** A trend drawn as markup, in the card's own trend slot.
+		 *
+		 * Eleven engine-backed sparklines is eleven chart instances and a lazy chunk
+		 * on a page that already renders complete without one, so a grid of cards
+		 * takes this one and it wins where both are given. */
+		trend?: Snippet | null;
 		trendSvg?: string | null;
 		trendOption?: EChartsOption | null;
 		/** Names the card as following the page's time window. Null where it does
@@ -52,19 +79,36 @@
 	data-windowed={windowed}
 	data-window-days={windowDays}
 >
-	<p class="kpi-label">{label}</p>
-	<p class="kpi-value tabular-nums">{value}</p>
-	{#if trendSvg && trendOption}
+	<p class="kpi-label" data-kpi-label>{label}</p>
+	<p class="kpi-value tabular-nums" data-kpi-value>{value}</p>
+	{#if track}
+		<div
+			class="kpi-track"
+			data-kpi-track={label}
+			data-kpi-fraction={track.fraction.toFixed(6)}
+			role="img"
+			aria-label="{label}: {value}, {track.caption}."
+		>
+			<span class="kpi-track-fill" style="inline-size: {percentOf(track.fraction)}"></span>
+		</div>
+		<p class="kpi-track-caption" data-kpi-caption={label}>{track.caption}</p>
+	{/if}
+	{#if trend}
+		<div class="kpi-trend">{@render trend()}</div>
+	{:else if trendSvg && trendOption}
 		<div class="kpi-trend">
 			<Chart svg={trendSvg} option={trendOption} width={220} height={34} label="{label}, recent trend" />
 		</div>
 	{/if}
-	<p class="kpi-foot">
-		{#if movement !== null}
-			<span class="kpi-move" data-direction={arrow}>{percent}</span>
-		{/if}
-		{#if note}<span class="kpi-note">{note}</span>{/if}
-	</p>
+	{#if movement !== null || note}
+		<p class="kpi-foot">
+			{#if movement !== null}
+				<span class="kpi-move" data-direction={arrow}>{percent}</span>
+			{/if}
+			{#if note}<span class="kpi-note" data-kpi-note>{note}</span>{/if}
+		</p>
+	{/if}
+	{#if line}<p class="kpi-line" data-kpi-line>{line}</p>{/if}
 </div>
 
 <style>
@@ -112,6 +156,40 @@
 		margin-block: var(--space-1);
 	}
 
+	/* The same track the target bars draw, minus the marker: this limit is the
+	   whole length of the bar rather than a line across it. */
+	.kpi-track {
+		position: relative;
+		block-size: 10px;
+		margin-block-start: var(--space-1);
+		border-radius: var(--radius-full);
+		background: var(--color-surface-sunken);
+		overflow: hidden;
+	}
+
+	.kpi-track-fill {
+		display: block;
+		block-size: 100%;
+		/* A minimum, so a level far under its limit is still a mark on the track
+		   rather than an empty bar that reads as nothing measured. */
+		min-inline-size: 2px;
+		border-radius: var(--radius-full);
+		background: var(--chart-1);
+	}
+
+	.kpi[data-tone='warn'] .kpi-track-fill {
+		background: var(--fill-medium);
+	}
+	.kpi[data-tone='bad'] .kpi-track-fill {
+		background: var(--fill-low);
+	}
+
+	.kpi-track-caption {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--color-text-tertiary);
+	}
+
 	.kpi-foot {
 		display: flex;
 		flex-wrap: wrap;
@@ -120,6 +198,15 @@
 		margin: 0;
 		font-size: var(--text-xs);
 		color: var(--color-text-tertiary);
+	}
+
+	/* Last and quietest. The figure is what the operator came for; this is what
+	   they read once, the first time. */
+	.kpi-line {
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: 1.45;
+		color: var(--color-text-secondary);
 	}
 
 	.kpi-move[data-direction='up'] {
