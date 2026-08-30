@@ -576,3 +576,133 @@ def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path)
     assert after[:-1] == before, "the append moved a cell an earlier run wrote"
     assert after[-1]["source_words_before_cap"] == "2610"
     assert after[-1]["source_words"] == "1923"
+
+
+# --- Which worker wrote the row ---------------------------------------------
+
+
+def flagged_article() -> Article:
+    """An article extract kept and flagged, so the degraded-but-done arm has a payload."""
+    return extract.to_article(
+        item(),
+        FetchResult(
+            FetchOutcome.OK,
+            status=200,
+            body=b"<html><body><article><p>Two words.</p></article></body></html>",
+        ),
+        config=config.load(CONFIG_DIR).app.extract,
+        fetched_at="2026-08-21T06:00:00Z",
+    )
+
+
+def refused_summary() -> Summary:
+    return summary().model_copy(
+        update={
+            "status": "failed",
+            "summary": None,
+            "key_points": [],
+            "failure_code": FailureCode.MODEL_UNREACHABLE,
+        }
+    )
+
+
+def every_arm() -> dict[str, tuple[Article | None, Summary | None]]:
+    """One payload pair for each place `classify_item` builds a row."""
+    return {
+        "nothing reached it": (None, None),
+        "extract failed": (failed_article(ArticleStatus.EXTRACT_FAILED, "=SUM(1,1)"), None),
+        "extract flagged it and stopped": (flagged_article(), None),
+        "the summary payload is missing": (article(), None),
+        "the model refused": (article(), refused_summary()),
+        "published": (article(), summary()),
+    }
+
+
+def test_every_arm_of_the_classifier_carries_the_shard() -> None:
+    """Six places build a row and a shard missed on one is a hole in the join.
+
+    The hole would not raise: the cell reads empty, which is the same thing an
+    unclaimed row says, so a per-shard figure would quietly drop those items and
+    still add up to a plausible number.
+    """
+    for name, (payload, reply) in every_arm().items():
+        row = telemetry.classify_item(
+            planned=item(),
+            article=payload,
+            summary=reply,
+            date=plan().date,
+            run_id="2026-08-21-1",
+            shard=6,
+        )
+        assert row.shard == 6, f"{name} lost the shard"
+        assert row.csv_row()["shard"] == "6", f"{name} did not write the shard"
+
+
+def test_shard_zero_is_a_worker_and_an_empty_cell_is_not() -> None:
+    """The one confusion this column can cause, refused at the round trip.
+
+    Every row committed before 2026-08-30 has an empty cell, and there are
+    thousands of them. A reader that coerces empty to zero would hand shard 0 the
+    whole history of the ledger and report it as the slowest machine we own.
+    """
+    worker = telemetry.classify_item(
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+        shard=0,
+    )
+    unclaimed = telemetry.classify_item(
+        planned=item(),
+        article=article(),
+        summary=summary(),
+        date=plan().date,
+        run_id="2026-08-21-1",
+    )
+
+    assert worker.csv_row()["shard"] == "0"
+    assert unclaimed.csv_row()["shard"] == ""
+    assert ItemHealthRow.from_csv_row(worker.csv_row()).shard == 0
+    assert ItemHealthRow.from_csv_row(unclaimed.csv_row()).shard is None
+
+
+def test_a_row_written_before_the_shard_column_reads_as_unclaimed() -> None:
+    old = ItemHealthRow(
+        version="2026-08-28",
+        date=plan().date,
+        run_id="2026-08-21-1",
+        item_id=item().item_id,
+        url_key=item().url_key,
+        canonical_url=item().canonical_url,
+        vertical=item().vertical,
+        source_id=item().source_id,
+        stage=ItemStage.PUBLISH,
+        outcome=ItemOutcome.OK,
+    ).csv_row()
+    old.pop("shard")
+
+    row = ItemHealthRow.from_csv_row(old)
+
+    assert row.shard is None
+
+
+def test_every_migrated_item_health_row_leaves_the_shard_empty() -> None:
+    """An empty cell, never the shard the item would have gone to.
+
+    `shard_of` is deterministic, so the machine each committed row was meant for
+    could be worked out from the plan. Writing it down would say a machine
+    produced a row when the run may have used a different number of workers that
+    day, and a per-shard rate would then be quoted over items that machine never
+    touched.
+    """
+    shards = committed_shards()
+    assert shards, "no item-health shard is committed, so this proves nothing"
+
+    for shard in shards:
+        relpath = shard.relative_to(REPO_ROOT).as_posix()
+        rows = records(shard)
+        assert rows, f"{relpath} has a header and no rows"
+        predates = [record for record in rows if record["version"] < "2026-08-30"]
+        assert predates, f"{relpath} holds no row older than the column, so nothing was migrated"
+        assert {record["shard"] for record in predates} == {""}

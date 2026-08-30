@@ -64,7 +64,8 @@ function writeItemHealthCanary() {
 		'version', 'date', 'run_id', 'item_id', 'url_key', 'canonical_url', 'vertical',
 		'source_id', 'stage', 'outcome', 'code', 'http_status', 'source_chars', 'source_words',
 		'summary_words', 'detail', 'fetch_ms', 'extract_ms', 'summarize_ms', 'prefill_ms',
-		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap'
+		'decode_ms', 'input_tokens', 'output_tokens', 'cached_tokens', 'source_words_before_cap',
+		'shard'
 	];
 	// Named cells, so a column added to the row cannot silently shift every
 	// number one place to the left.
