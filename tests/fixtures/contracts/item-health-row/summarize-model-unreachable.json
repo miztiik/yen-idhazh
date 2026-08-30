@@ -14,6 +14,7 @@
   "output_tokens": null,
   "prefill_ms": null,
   "run_id": "2026-08-24-2",
+  "shard": null,
   "source_chars": 7420,
   "source_id": "example-lab-blog",
   "source_words": 1320,

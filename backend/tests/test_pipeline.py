@@ -1639,6 +1639,85 @@ def test_a_shard_whose_server_died_still_files_a_row(
     assert ledger.load_runtime_counters(tmp_path / "state", run_id=run_plan.run_id) == [row]
 
 
+def test_the_two_ledgers_agree_about_which_shards_ran(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The Oracle for the shard column: the per-item file joins the per-run file.
+
+    Read speed varied 1.10x to 4.19x between the shards of one run over the seven
+    runs committed on 2026-08-30, so a rate pooled over a run averages away the
+    thing an operator needs to see. The join is `(run_id, shard)`, and it only
+    works if both files name the same set of workers - two ledgers that disagree
+    about how many machines ran cannot be put on one chart.
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    capture = FIXTURES_DIR / "runtime" / "2026-08-26-5-shard-3.prom"
+
+    for shard in (0, 1):
+        cli.stage_work(
+            run_plan,
+            settings=settings,
+            scorer=None,
+            fetcher=captured_article_fetch,
+            shard=shard,
+            shards=2,
+            model_endpoint=closed_loopback_endpoint(),
+        )
+        cli.stage_record(run_plan, shard=shard, shards=2)
+        cli.stage_counters(run_plan, metrics_path=capture, shard=shard, shards=2)
+
+    rows = health_rows(state, run_plan.date)
+    counted = ledger.load_runtime_counters(state, run_id=run_plan.run_id)
+
+    assert {row.shard for row in rows} == {row.shard for row in counted} == {0, 1}
+    assert len(rows) == len(run_plan.items)
+    for shard in (0, 1):
+        mine = {item.item_id for item in cli.shard_of(run_plan, shard=shard, shards=2)}
+        assert {row.item_id for row in rows if row.shard == shard} == mine
+        assert mine, "a shard with no items would make the set comparison pass on nothing"
+
+
+def test_the_census_assemble_adds_names_no_machine(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """One worker of two ran, and the rows for the other half stay unclaimed.
+
+    `shard_of` is deterministic, so assemble could work out which machine each
+    missing item was meant for. It must not: the item was not worked, and a
+    number there would put items on a machine's bar that the machine never
+    touched. Empty is the honest cell, and it is the same cell every row written
+    before 2026-08-30 holds.
+    """
+    run_plan = plan()
+    settings = config.load(CONFIG_DIR)
+    isolate_ledgers(tmp_path, monkeypatch)
+    state = tmp_path / "state"
+    cli.stage_work(
+        run_plan,
+        settings=settings,
+        scorer=None,
+        fetcher=captured_article_fetch,
+        shard=0,
+        shards=2,
+        model_endpoint=closed_loopback_endpoint(),
+    )
+    cli.stage_record(run_plan, shard=0, shards=2)
+
+    cli.stage_assemble(run_plan, settings=settings, commit_sha="a" * 40, runner="fixture")
+
+    rows = health_rows(state, run_plan.date)
+    worked = {item.item_id for item in cli.shard_of(run_plan, shard=0, shards=2)}
+    assert len(rows) == len(run_plan.items)
+    assert {row.item_id for row in rows if row.shard == 0} == worked
+    assert {row.item_id for row in rows if row.shard is None} == {
+        item.item_id for item in run_plan.items
+    } - worked
+    assert any(row.shard is None for row in rows), "the run left nothing for assemble to census"
+
+
 def test_a_later_run_appends_and_never_reorders() -> None:
     settings = config.load(CONFIG_DIR)
     first = assemble.build_day(
