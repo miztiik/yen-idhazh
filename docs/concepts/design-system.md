@@ -134,6 +134,12 @@ The reading page carries both, one line apart, and without this rule the second 
 
 A tinted label is decorative under the rule above, because it repeats a word that is already there. It stays decorative only while it carries the word; a tinted chip carrying an icon alone would be semantic colour with no second signal, and is refused.
 
+### Content on demand is a `<details>`, not a button
+
+A section that leads with a shape and keeps its rows behind a control uses a native `<details>` and `<summary>`. Every page here is prerendered and complete before a script runs, so a button plus a conditional block does not hide the rows - it deletes them for a reader with no script, and the section then makes a claim the reader cannot check. The element is also keyboard-reachable for free and says which state it is in without a second label.
+
+The other shape is different and stays: `Show N more` on the failed-item list and the day list is a button that extends a list already on the page. Nothing behind it is hidden, so nothing is lost when the button is dead.
+
 ## Sufficiency is a gate, not a taste
 
 A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.

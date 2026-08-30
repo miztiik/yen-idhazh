@@ -20,6 +20,9 @@
   },
   "console": {
     "band_outlier_rows": 10,
+    "chart_arm_coverage_pct": 5.0,
+    "chart_arm_minutes_target": 6.0,
+    "chart_arm_rule_days": 14,
     "chart_height": 180,
     "chart_width": 600,
     "default_window_days": 30,

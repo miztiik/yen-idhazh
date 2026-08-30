@@ -14,15 +14,19 @@
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
 import { donut } from './donut';
+import { sparklineMarks, type SparklineMarks } from './sparkline';
 import { stacked } from './stacked';
-import { targetBar } from './targetbar';
+import { targetBar, targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
 import { paint, type ChartToken } from './theme';
 import type { StageFailureSeries } from './series';
 
 export interface GlanceDay {
 	date: string;
+	/** Charts a reader can see on the day's page. */
 	published: number;
+	/** Items the day published, chart or no chart. The denominator of coverage. */
+	items: number;
 	minutesPerChart: number | null;
 }
 
@@ -70,28 +74,131 @@ export function runHealth(manifests: readonly RunSummary[]) {
 
 /** Is the chart arm worth its router time?
  *
- * The page already states the rule: over 14 days the arm is retired if the
- * median day spends more than 6 router minutes per published chart. That is a
- * value against a target, and a number without its target beside it cannot be
- * acted on.
- */
-export const ROUTER_MINUTES_TARGET = 6;
-
-/** The span the retirement rule is stated over.
+ * The page states the rule in its own prose: over the rule's span the arm is
+ * retired if the median day spends more than the target in router minutes per
+ * published chart. That is a value against a target, and a number without its
+ * target beside it cannot be acted on.
  *
- * A window narrower than this cannot show the rule, and a median taken over the
- * wrong span is worse than no median: it is the same figure with a different
- * meaning and nothing on the page to say which one you are reading. So the card
- * prints the rule's own span and no number at all.
+ * The target arrives as an argument rather than as a constant here, because an
+ * operator moves a threshold in `config/appearance.json` and never in a
+ * component (Rule #6).
  */
-export const RULE_WINDOW_DAYS = 14;
+export function routerCost(days: readonly GlanceDay[], target: number) {
+	const median = middleOf(
+		days.map((d) => d.minutesPerChart).filter((m): m is number => m !== null)
+	);
+	return targetBar(median, target, 'lower-is-better', 'Router minutes per chart');
+}
 
-export function routerCost(days: readonly GlanceDay[]) {
-	const timed = days.map((d) => d.minutesPerChart).filter((m): m is number => m !== null);
-	const median = middleOf(timed);
-	// The median, not the mean, because the rule the page states is about the
-	// median day and one pathological day would otherwise decide it.
-	return targetBar(median, ROUTER_MINUTES_TARGET, 'lower-is-better', 'Router minutes per chart');
+/** What share of a day's published items carried a chart, in percent.
+ *
+ * Null where the day published nothing. A share of no articles is not zero
+ * percent, it is no measurement at all, and a zero would read as an arm that
+ * ran and reached nobody.
+ */
+export function coverageOf(day: GlanceDay): number | null {
+	if (day.items <= 0) return null;
+	return (day.published / day.items) * 100;
+}
+
+/** The three numbers the chart arm's retirement rule is written from. */
+export interface ArmThresholds {
+	/** The span the rule is stated over. */
+	ruleDays: number;
+	/** Router minutes per published chart that retires the arm. */
+	minutesTarget: number;
+	/** The share of published items that must carry a chart, in whole percent. */
+	coveragePct: number;
+}
+
+/** Both halves of the rule, each as a bar, a trend and a clause of one sentence. */
+export interface ChartArm {
+	/** The window is narrower than the rule's own span, so no median is offered. */
+	narrow: boolean;
+	/** Window median router minutes per published chart, or null. */
+	minutes: number | null;
+	/** Window median coverage in percent, or null. */
+	coverage: number | null;
+	minutesMarks: TargetMarks;
+	coverageMarks: TargetMarks;
+	minutesTrend: SparklineMarks;
+	coverageTrend: SparklineMarks;
+	/** How many days each median was actually taken from. A median of one day is
+	 * a day, and the page says which it is looking at. */
+	minutesDays: number;
+	coverageDays: number;
+	/** One sentence stating both figures and whether each is inside its threshold. */
+	verdict: string;
+}
+
+/** A threshold as words - `6`, not `6.0`, and `4.5` where it really is. */
+function trim(value: number): string {
+	return String(Number(value.toFixed(1)));
+}
+
+/** The two clauses of the verdict, joined.
+ *
+ * Each clause names its figure, its threshold and which side of it the figure
+ * fell. A clause that only printed the figure would leave the reader to do the
+ * comparison the rule already made.
+ */
+function verdictOf(
+	minutes: number | null,
+	coverage: number | null,
+	thresholds: ArmThresholds,
+	days: number
+): string {
+	const cost =
+		minutes === null
+			? `No router time was written down in the last ${days} days`
+			: `The median day spends ${minutes.toFixed(1)} router minutes per chart, ` +
+				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
+				`${trim(thresholds.minutesTarget)} that retires the arm`;
+	const reach =
+		coverage === null
+			? 'no day published anything to put a chart on'
+			: `puts a chart on ${Math.round(coverage)}% of what it published, ` +
+				`${coverage < thresholds.coveragePct ? 'below' : 'above'} the ` +
+				`${trim(thresholds.coveragePct)}% floor`;
+	return `${cost}, and ${reach}.`;
+}
+
+/**
+ * The chart arm judged against its own written rule, over the open window.
+ *
+ * `windowDays` is the span the page is holding, not the number of days the
+ * ledger answered for. Under the rule's own span nothing is measured at all: a
+ * median of the wrong span is the same figure with a different meaning, and
+ * nothing on the page would say which one is being read.
+ */
+export function chartArm(
+	days: readonly GlanceDay[],
+	thresholds: ArmThresholds,
+	windowDays: number
+): ChartArm {
+	const narrow = windowDays < thresholds.ruleDays;
+	const ordered = [...days].sort((a, b) => a.date.localeCompare(b.date));
+	const costs = narrow
+		? []
+		: ordered.map((d) => d.minutesPerChart).filter((m): m is number => m !== null);
+	const reach = narrow
+		? []
+		: ordered.map(coverageOf).filter((c): c is number => c !== null);
+	const minutes = middleOf(costs);
+	const coverage = middleOf(reach);
+
+	return {
+		narrow,
+		minutes,
+		coverage,
+		minutesMarks: targetMarks(minutes, thresholds.minutesTarget, 'lower-is-better'),
+		coverageMarks: targetMarks(coverage, thresholds.coveragePct, 'higher-is-better'),
+		minutesTrend: sparklineMarks(costs),
+		coverageTrend: sparklineMarks(reach),
+		minutesDays: costs.length,
+		coverageDays: reach.length,
+		verdict: verdictOf(minutes, coverage, thresholds, windowDays)
+	};
 }
 
 /** One published day's marginal cost, in bytes of payload tree per article. */

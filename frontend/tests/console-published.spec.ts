@@ -29,7 +29,9 @@ const PRESETS = CONFIG.console?.window_presets ?? [7, 14, 30, 90];
 const DEFAULT_DAYS = CONFIG.console?.default_window_days ?? 30;
 
 function day(date: string, published: number): GlanceDay {
-	return { date, published, minutesPerChart: null };
+	// The skyline reads the date and the count only; `items` is the chart arm's
+	// coverage denominator, and `published` is its smallest consistent value.
+	return { date, published, items: published, minutesPerChart: null };
 }
 
 function sourceFiles(): string[] {
