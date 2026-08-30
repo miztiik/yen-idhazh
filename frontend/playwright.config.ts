@@ -83,8 +83,24 @@ export function previewPort(worktree: string, env: Record<string, string | undef
 // root.
 const PORT = previewPort(dirname(fileURLToPath(import.meta.url)), process.env);
 
+/**
+ * The operator console's own specs, skipped when nothing it renders has moved.
+ *
+ * 233 of the suite's 411 tests are `console-*.spec.ts`. None of them is about
+ * the digest: the console is the operator's dashboard, and a reader never opens
+ * it. `.github/scripts/browser-suite-needed.sh` decides, from the paths a pull
+ * request touched, and a push to `main` always runs everything - so a path
+ * nobody thought of costs a red merge commit rather than a broken page.
+ *
+ * Skipping is opt-in through the environment and never the default: a bare
+ * `npm run test:browser` on a developer box runs the whole suite, and so does
+ * every scheduled and manual run.
+ */
+const SKIP_CONSOLE = (process.env.SKIP_CONSOLE_SUITE ?? '').trim() === 'true';
+
 export default defineConfig({
 	testDir: 'tests',
+	testIgnore: SKIP_CONSOLE ? /console.*\.spec\.ts$/ : undefined,
 	fullyParallel: false,
 	forbidOnly: Boolean(process.env.CI),
 	retries: 0,

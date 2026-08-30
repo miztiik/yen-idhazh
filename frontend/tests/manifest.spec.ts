@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, test, type Locator } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -158,24 +158,35 @@ test.describe('the browser chrome follows the page', () => {
 
 	test('a manual theme choice repaints the chrome', async ({ page }) => {
 		await page.goto('/');
-		const result = await page.evaluate(async () => {
-			const read = () =>
-				document
-					.querySelector<HTMLMetaElement>('meta[name="theme-color"]:not([media])')
-					?.content?.trim() ?? null;
-			const buttons = [...document.querySelectorAll('[aria-label="Theme"] button')];
-			const byLabel = (text: string) =>
-				buttons.find((b) => (b.textContent ?? '').trim().startsWith(text)) as HTMLElement | undefined;
-			byLabel('Dark')?.click();
-			await new Promise((done) => setTimeout(done, 250));
-			const dark = read();
-			byLabel('Light')?.click();
-			await new Promise((done) => setTimeout(done, 250));
-			return { dark, light: read(), buttons: buttons.length };
-		});
-		expect(result.buttons).toBeGreaterThan(0);
-		expect(result.dark).toBeTruthy();
-		expect(result.light).toBeTruthy();
-		expect(result.light).not.toBe(result.dark);
+
+		const theme = page.getByRole('group', { name: 'Theme' });
+		// `paintBrowserChrome` in lib/theme.ts writes this tag, and only a click
+		// reaches it: mount reads the stored choice and paints nothing. So the page
+		// offers no DOM change that means "hydrated", and any fixed wait before the
+		// click is a guess. This test used to click 250 ms after `goto`; before
+		// hydration that click lands on a button with no handler, both reads come
+		// back equal, and the failure reads as a broken theme rather than a race.
+		const chrome = page.locator('meta[name="theme-color"]:not([media])');
+
+		// Picking a theme is idempotent, so a click that lands early costs nothing
+		// and the next one answers. `pick` sets `choice` and calls `apply` in the
+		// same tick, and `aria-pressed` renders after both - so the attribute
+		// turning true means the tag is already written.
+		const choose = async (button: Locator): Promise<string> => {
+			await expect
+				.poll(async () => {
+					await button.click();
+					return await button.getAttribute('aria-pressed');
+				})
+				.toBe('true');
+			return (await chrome.getAttribute('content'))?.trim() ?? '';
+		};
+
+		const dark = await choose(theme.getByRole('button', { name: 'Dark', exact: true }));
+		expect(dark, 'dark left the chrome unpainted').toBeTruthy();
+
+		const light = await choose(theme.getByRole('button', { name: 'Light', exact: true }));
+		expect(light, 'light left the chrome unpainted').toBeTruthy();
+		expect(light).not.toBe(dark);
 	});
 });
