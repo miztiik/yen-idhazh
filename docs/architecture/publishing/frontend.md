@@ -703,12 +703,43 @@ failed, so the payload workstream cannot fail a build over an ordinary publish
 
 The item-health viewport has three parts, in this order:
 
-- **Failure panels**: fetch, extract and summarize failure rates as separate bars. **The rate is printed in type under each stage name** - `16% failed, 126 of 800.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **The y domain is fixed at 0 to 100%.** Scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **A window holding one day draws no chart at all**: a chart of one value is a rectangle, and the sentence is the panel. Thin denominators use outlined bars below `console.min_attempts_for_rate`, explained once under the row rather than once per bar. Colour is spent only on a failure.
+- **Failure rate against volume**: one chart. Per-day columns of the day's items, split by where each one stopped - finished, then fetch, extract and summarize failures in the categorical ramp - so the height of a column IS the volume. Each stage's failure share is a line on a right-hand axis **fixed at 0 to 100%**: scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **Every rate is printed in type with its denominator in the same sentence** - `16% failed, 668 of the 4,167 that reached it.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **A stage under `console.min_attempts_for_rate` prints its counts and no rate at all**, and its line breaks over any day that thin: the same knob decides the source-cut share, so two shares on one page cannot disagree about when a denominator is too small. An empty window says so rather than drawing a column of zeroes, because a column of zeroes reads as a run that went badly.
 - **Compression scatter**: article length against summary length on a log x axis with decade ticks and the eight steps between them, summary words labelled on a y axis of their own, the `summarize.bands` step function drawn once as a shaded target zone, a distinct mark for an article the run cut short, and one dashed vertical per cut length in view saying where the cut falls. One chart, hand-written SVG. Two things it used to do: carry a second `uplot` canvas underneath drawing the same dataset with neither the band reference nor the truncation mark, which is two drawings of one dataset that disagree; and draw the band reference as one vertical line per point, which measured 1166 nodes on 2026-08-25 for a fact that has one value per configured band. The zone is one `<path>` at any point count, and `summary words` moved off the bottom row, where it was printed beside the x axis title of the variable it is not.
 - **Failed item list**: the rows behind the shape, **capped at `console.failure_list_max` with a `Show 25 more` button**, and stating its own scope - `Showing 25 of 214 failed items in this window.` A panel chip filters it, because after a spike the operator needs rows, and a new window or a new chip resets the cap because it is a new question. Uncapped it measured 7824px against 800 rows and put the compression chart at document y=9105. It sits last for the same reason: it is the only child that can outgrow the screen, so it cannot sit between two charts.
 
 Measured 2026-08-24 on the committed ledger: the console document went from
 11552px to 4878px.
+
+**A stage's denominator is what the stage before it let through, never the
+day.** An item that died at fetch never reached extract, so counting it in
+extract's denominator understates every stage after the first. The projection
+carries the funnel already: one row per planned item per run, holding the stage
+that item ended at, so `series.ts` walks the pipeline order once per day and
+each stage's `reached` is the one before it minus that one's failures. A row
+that never left `plan` is in the day and in no stage's denominator. Measured
+2026-08-30 over the 4,167 rows of the committed projection: 668 items died at
+fetch, 432 at extract and 19 at summarize, so extract reads 10.4 percent against
+the day's 4,167 and 12.3 percent against the 3,499 that actually reached it, and
+summarize reads 0.5 against 0.6. The three panels divided by the day and were
+wrong about two stages of three.
+
+**Three panels became one chart because a rate on its own cannot be acted on.**
+A stage that failed both of the two items it was given drew the same full bar as
+an outage, and the number that tells them apart - the denominator - was the one
+number the panel did not print. Volume and rate are one question, so they are
+one picture: the column says how much work there was and the line says how much
+of it failed. The split also cost every panel its width: three charts side by
+side measured 164px each in a 624px column, and `font-size="10"` reached the
+screen at 4.5px in one of them (measured 2026-08-25). That 164px is the number
+`console-frame.spec.ts` forbids, and the three-up row was the surface it was
+written against - so the chart that replaces it is a `<figure>`, which is what
+that check scans. Ruled by Susan (Craft and Delight) and Jony (UI/UX) on the
+console signal review, 2026-08-30.
+
+Two alternatives were rejected there. **Keeping three panels and adding
+sparklines** leaves the split, which is the defect rather than the content
+(Jony). **A single headline failure rate for the whole pipeline** hides which
+stage failed, and which stage failed is the actionable half (Susan).
 
 **Where the cut falls is a line on the scatter, and its value comes from the
 rows.** The cut is a value on the x axis and nothing else, so it is a dashed
@@ -767,8 +798,8 @@ same sentence its `<title>` already carried, so there is one sentence about a
 day and not two.
 
 Only these two charts get it. `FailurePanels`, `StageTimings` and the run-health
-strip each already print their headline in type, and three readouts across a
-three-up row is three things moving at once.
+strip each already print their headline in type, and a readout that repeats a
+sentence already on the page is a second thing moving for nothing.
 
 **Stage timings are one trend chart, not a list per day.** Four polylines over a
 calendar x axis, oldest on the left, sharing the run strip's own sparse-label
@@ -1372,7 +1403,7 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | Grouping a day that ran to a single topic | One heading over the whole page states what the page already says, and it puts items behind a link that leads back to the same list. | Jony |
 | A failure bar scaled to the window's own maximum | With one day in view the bar normalises to itself, so a 12% failure rate and a 90% one both fill the panel. | Jony |
 | A failure rate carried only by an SVG `<title>` | A tooltip does not fire on touch and does not survive the screenshot an operator pastes into an issue. | Jony |
-| A bar chart for a window holding one day | A chart of a single value is a rectangle. The number is the panel. | Jony |
+| Suppressing the failure chart for a window holding one day | It was right when the panel drew one bar per stage: a chart of a single value is a rectangle. The column carries the volume now, so one day is one column and still says how much work there was. Only a window holding nothing at all draws no chart. | Jony |
 | Rendering every failed row in the window | 800 rows measured 7824px and pushed the compression chart to document y=9105. The rows are on demand. | Jony |
 | A virtual-scrolling failure table | A dependency and a scroll-position bug for something a cap and a button already solve. | Jony |
 | A per-day stacked bar list for stage timings | Thirty days is about 150 rows and no trend, and the trend is the only question the section is asked. | Jony |
@@ -1395,7 +1426,7 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | An SVG `<title>` as the chart tooltip | It does not fire on touch, carries a delay nobody chose, cannot be styled, is not keyboard-reachable, and does not survive a screenshot pasted into an issue. It stays as the accessible name. | Jony |
 | A readout pinned to the pointer | A readout under a thumb is a readout nobody reads. | Jony |
 | A tab stop on every data point | The committed ledger draws 2,541 of them. A 2,541-stop tab order is a trap, not access. | Jony |
-| A readout on `FailurePanels`, `StageTimings` or the run-health strip | Each already prints its headline in type, and three readouts across a three-up row is three things moving at once. | Jony |
+| A readout on `FailurePanels`, `StageTimings` or the run-health strip | Each already prints its headline in type, and a readout repeating a sentence already on the page is a second thing moving for nothing. | Jony |
 | A charting library for the readout | There is none on this surface and this adds none. One action beside `observeWidth`. | Jony, Rule #8 |
 
 ## See also
