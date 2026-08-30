@@ -99,7 +99,13 @@ gh pr merge NNN --squash --delete-branch
 
 Both commits squash to one entry on `main`. The merged-to-main commit contains the correct `PR #NNN` reference inline.
 
-**Do NOT use `--auto`** unless `enablePullRequestAutoMerge` is enabled in repo settings; otherwise gh returns a GraphQL error. Plain `--squash --delete-branch` is the default.
+**`--auto` queues the merge behind the gates instead of behind a person.** It needs auto-merge enabled in repo settings; without it `gh` returns a GraphQL error and the plain form above is the fallback. Where it is available, prefer it: a green pull request that waits for somebody to notice it is the delay that plain `--squash` cannot remove, and it grows with every parallel branch.
+
+```powershell
+gh pr merge NNN --squash --delete-branch --auto
+```
+
+It merges only on green, and a failing gate leaves the pull request open rather than merging anything. Two things it does not do: it does not re-run a gate, and it does not rebase a stale branch - so the paragraph above about a moved target branch still applies.
 
 ## Post-merge cleanup
 

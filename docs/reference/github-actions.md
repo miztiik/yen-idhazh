@@ -702,7 +702,7 @@ Read from the repository API on 2026-08-25.
 | `allow_rebase_merge` | true | Same reason. History looks squash-only, but rebase is available. |
 | `allow_update_branch` | true | A PR can be brought up to date from `main` without a local push. |
 | `delete_branch_on_merge` | true | The remote branch goes away on merge. |
-| `allow_auto_merge` | **false** | Deliberate. See below. |
+| `allow_auto_merge` | true | Turned on 2026-08-31. See below. |
 | `squash_merge_commit_title` | `PR_TITLE` | The subject is the PR title. GitHub appends the PR number. |
 | `squash_merge_commit_message` | `PR_BODY` | The body is the PR body. Branch commit bodies are never concatenated. See below. |
 | `merge_commit_title` | `MERGE_MESSAGE` | The merge path, when a PR carries several intents. |
@@ -712,10 +712,27 @@ Read from the repository API on 2026-08-25.
 publication.** `digest.yml` and `validate.yml` push their state commits straight
 to `main` - the eval ledger, the seen-URL store, feed health, the digest
 payload. A branch-protection rule makes those pushes fail, and a scheduled run
-that cannot commit has done its work for nothing. GitHub's built-in auto-merge
-requires branch protection, which is why `allow_auto_merge` is off rather than
-merely unused. Protecting `main` is possible, but only after the direct pushes
-in those two workflows are redesigned or explicitly exempted.
+that cannot commit has done its work for nothing. Protecting `main` is possible,
+but only after the direct pushes in those two workflows are redesigned or
+explicitly exempted.
+
+**`allow_auto_merge` was turned on anyway on 2026-08-31, and what it buys is
+narrower than the name suggests.** The setting was off on the argument that
+GitHub's auto-merge needs branch protection. That argument is half right: with
+nothing required, GitHub calls a green pull request `CLEAN` and refuses to queue
+it - `gh pr merge --auto` answers `Pull request is in clean status` and the
+merge has to be asked for again. What the setting does buy is the case that
+actually costs time here, which is a pull request that is NOT yet green:
+`gh pr merge <n> --squash --delete-branch --auto` on a pull request whose checks
+are still running queues the merge, and it lands the moment they pass rather
+than when somebody next looks. That removes the wait this repository really
+pays, because a branch is opened and merged in the same session.
+
+The remaining half - a green pull request that still needs one command - needs
+either a ruleset requiring the `gates` and `site` checks with
+`github-actions[bot]` on its bypass list, or the redesign above. Neither has
+been done, and a ruleset that forgets the bypass stops the digest publishing,
+so it is written here as the next step rather than taken quietly.
 
 **A squash commit takes its message from the pull request, not from the branch
 commits.** `squash_merge_commit_message` was `COMMIT_MESSAGES` until 2026-08-25.

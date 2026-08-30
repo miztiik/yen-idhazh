@@ -33,6 +33,7 @@ jobs:
     timeout-minutes: 5
     outputs:
       browser: ${{ steps.decide.outputs.browser }}
+      console: ${{ steps.decide.outputs.console }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -214,8 +215,15 @@ jobs:
 
       # Eight canaries on the published surface, plus the hand-labelled
       # retrieval bar. A single injection getting through fails the build.
+      #
+      # `SKIP_CONSOLE_SUITE` drops the operator console's own specs - 233 of the
+      # 411 tests, none of which is about the digest - when a pull request
+      # touched nothing the console renders. It is false on a push to main, so
+      # everything runs on the merge commit.
       - name: Browser suite - canaries and retrieval
         working-directory: frontend
+        env:
+          SKIP_CONSOLE_SUITE: ${{ needs.scope.outputs.console == 'false' }}
         run: npm run test:browser
 
       - uses: actions/upload-artifact@v7
