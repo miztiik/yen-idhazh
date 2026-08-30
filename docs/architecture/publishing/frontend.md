@@ -577,7 +577,36 @@ a fill value has to land in.
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
-Beneath the strip is **every feed that failed at least once**, worst first, with its attempt count, its last outcome and how close it is to quarantine. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
+Beneath the strip is **every feed that failed at least once, nearest to a rest first**. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
+
+**The count beside a feed is its run of failures, not its lifetime total.** The
+pipeline rests a feed on failures in a row ending at the newest read, so that is
+the number the page prints. A source that failed twelve times in July and
+answered this morning is healthy, and a lifetime total printed beside a rest
+marker is a number the pipeline never used to rest anything. The rule is
+restated on the read side in `frontend/src/lib/feed-health.ts`, which runs the
+same loop `discover._rests` runs, so a test can drive it with rows it made up.
+Ranking follows the same fact: nearest to a rest first, then by how much has
+gone wrong in total, because a feed four failures into a five-failure rule is
+one run from being dropped and a feed with more failures spread over a month is
+not.
+
+**Each feed carries a target bar and a strip of days.** The bar's track is
+`collect.quarantine_after_failures`, its fill is the run of failures, and its
+marker sits on the threshold - the same `TargetBar` the truncation cap and the
+router-minute rule draw with. The strip is one square a day over the page's
+window, oldest to newest, on a single date axis every row shares, so "broken
+since Tuesday" and "flaky all month" cannot draw the same picture. It shrinks to
+fit its row rather than scrolling, because twenty scroll regions in one column
+is not a list. Every square carries its whole day's tally as a sentence: colour
+is one signal and never the only one, and the two outcomes that are not a
+verdict - a polite refusal and a day nobody asked - take no verdict colour at
+all. The squares that do are painted from the **fill ramp**, the same three
+tokens the run strip above uses, so the console holds one health ramp rather
+than two: a square this small is a solid, and the band ramp is weighted to be
+read as type.
+`Last result` stays free text, because it is the only human-readable cause on
+the page and is never traded for a glyph.
 
 **The console reads committed records in two ways.** The run strip, feed list and
 timing medians still read the ledgers at build time. The item-health viewport
@@ -640,17 +669,17 @@ Three surfaces do not simply follow the span, and each says so on the page:
 
 | Surface | What it does | Why |
 | --- | --- | --- |
-| `Feeds that failed` | Counts every run on record | A windowed count would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. |
-| `Site size` | Absolute number always; only the movement is windowed | The size is a level and the operator wants today's whatever span he is reading. Only the movement is a rate, and a rate has to say what it is over. |
+| `Feeds that failed` | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
+| `Site size` | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Router minutes per chart` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
 `Sources cut short most often` used to hard-code seven days. It follows the
 control now, and the section prints its own denominator, which at seven days
-runs as low as six articles. Its table is aggregated once per preset at build
-time - four tables of ten rows costs less than one fetch, and it keeps the
-section working with no script at all. It follows the window's *length* rather
-than where a pan leaves it, and the section says so: the days it reads always
-end on the newest day the ledger holds.
+runs as low as six articles. Its rows are aggregated once per preset at build
+time - four sets of ten costs less than one fetch, and it keeps the section
+working with no script at all. It follows the window's *length* rather than
+where a pan leaves it, and the section says so: the days it reads always end on
+the newest day the ledger holds.
 
 `Charts published` used to draw a smoothed line over a fixed fourteen days,
 under a control reading thirty. It is one bar a day over the control's own
@@ -755,8 +784,8 @@ failed, so the payload workstream cannot fail a build over an ordinary publish
 
 The item-health viewport has three parts, in this order:
 
-- **Failure rate against volume**: one chart. Per-day columns of the day's items, split by where each one stopped - finished, then fetch, extract and summarize failures in the categorical ramp - so the height of a column IS the volume. Each stage's failure share is a line on a right-hand axis **fixed at 0 to 100%**: scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **Every rate is printed in type with its denominator in the same sentence** - `16% failed, 672 of the 4,273 that reached it.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **A stage under `console.min_attempts_for_rate` prints its counts and no rate at all**, and its line breaks over any day that thin: the same knob decides the source-cut share, so two shares on one page cannot disagree about when a denominator is too small. An empty window says so rather than drawing a column of zeroes, because a column of zeroes reads as a run that went badly.
-- **Summary length against the length asked for**: one column a day, stacked three ways - inside the target band, short of it, past it - with the `summarize.bands` ladder printed as numbers beside the chart and the worst misses named underneath in a ranked list. Hand-written SVG in the categorical chart ramp, a word beside every swatch, and the counts carried on the column as `data-band-inside`, `data-band-short` and `data-band-long` so an oracle can add them up. It follows the shared window and declares itself `data-windowed="band-distance"`.
+- **Failure rate against volume**: one chart. Per-day columns of the day's items, split by where each one stopped - finished, then fetch, extract and summarize failures in the categorical ramp - so the height of a column IS the volume. Each stage's failure share is a line on a right-hand axis **fixed at 0 to 100%**: scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **Every rate is printed in type with its denominator in the same sentence** - `16% failed, 672 of the 4,273 that reached it.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **A stage under `console.min_attempts_for_rate` prints its counts and no rate at all**, and its line breaks over any day that thin, because a share of four items is not a measurement. An empty window says so rather than drawing a column of zeroes, because a column of zeroes reads as a run that went badly.
+- **Summary length against the length asked for**: one column a day, stacked three ways - inside the target band, short of it, past it - with the `summarize.bands` ladder printed as numbers beside the chart and the worst misses named underneath in a ranked list. Hand-written SVG in the categorical chart ramp, a word beside every swatch, and the counts carried on the column as `data-band-inside`, `data-band-short` and `data-band-long` so an oracle can add them up. It follows the shared window and declares itself `data-windowed="band-distance"`. It replaced a scatter of article length against summary length: the scatter placed every article in the browser, which is what made the console document 40 percent of its weight, and it answered "what does the corpus look like" where the operator's question is "how many missed, and by how much".
 - **Failed item list**: the rows behind the shape, **capped at `console.failure_list_max` with a `Show 25 more` button**, and stating its own scope - `Showing 25 of 214 failed items in this window.` A panel chip filters it, because after a spike the operator needs rows, and a new window or a new chip resets the cap because it is a new question. Uncapped it measured 7824px against 800 rows and put the compression chart at document y=9105. It sits last for the same reason: it is the only child that can outgrow the screen, so it cannot sit between two charts.
 
 Measured 2026-08-24 on the committed ledger: the console document went from
@@ -1175,7 +1204,7 @@ about it, and each one is on the surface that already owns its grain.
 | `Time to write one`, second figure | the model table | one day | `state/item-health/` |
 | `Too long to send` | the model table | one day | `state/item-health/` |
 | `n read only in part` | the run square's own label | one run | `state/item-health/` |
-| `Sources cut short most often` | its own table | one source, 7 days | `state/item-health/` |
+| `Sources cut short most often` | its own range plot | one source, the open window | `state/item-health/` |
 
 **The run grain is a clause on a label and never a published figure.** Measured
 2026-08-29 over the 19 committed runs, the count is 1 to 12 articles of 160 to
@@ -1192,15 +1221,53 @@ because a share whose numerator and denominator answer different questions is
 not a share. Both are null - a dash, never a zero - on a day made only of older
 rows.
 
-**The source table is aggregated on the server and ships ten rows.** Seven days
-of the committed ledger is a few thousand rows, and this page inlines whatever
-it is handed, so the browser never sees the rows the table was made from. The
-window ends on the newest day the ledger holds rather than on the build clock,
-so rebuilding an old tree prints what that tree said rather than an empty table.
-The 7 days and the 10 rows are constants in
+**The source section is a range plot, and the cap is a rule across it.** It was
+five columns of numbers, and the one number every column had to be read against
+- where the cut falls - appeared nowhere in the section. One row per source now,
+on a log word-length axis, with the shortest, middle and longest article that
+source published drawn as a track, and a dashed rule at the cut point across
+every row. The part of a track right of the rule is where the cap bites, and the
+distance is the text the machine never read. The axis is a log one because the
+lengths span more than two decades: a 400-word note and a 9,000-word feature sit
+on the same plot, and a linear axis puts every short source on the left edge.
+
+**One rule per cut point, not one rule.** `caps` is one entry per distinct
+post-cap length among the window's cut articles, oldest first - the same rule
+the compression plot reads its own lines by, so two drawings of one fact
+cannot disagree. A thirty-day window over the committed ledger holds two of
+them, 1,923 words and 3,846, because the cap moved on 29 August. Past the widest
+of them an article lost text whichever cut was in force, so the emphasised span
+starts there and says the strong thing; the narrower rule is drawn with its own
+dates, so the move is visible rather than averaged away.
+
+**The rule is read off the rows and never off the setting.** Every cut point
+comes off the `source_words` cell a run wrote after its own cap fired. Two
+things break if the page reads `extract.truncation_cap_tokens` instead. The
+setting is one number, so a window spanning a change draws one rule where the
+rows say two - measured on this tree the file says 5,000 tokens, which is 3,846
+words, and half the window's cut rows sit at 1,923. And a rule from the file
+draws even in a window where nothing was cut at all, which a derived one cannot.
+[frontend/tests/console-sources.spec.ts](../../../frontend/tests/console-sources.spec.ts)
+holds it with a pair of calls over rows cut at two different lengths: no
+constant satisfies both.
+
+**Two columns went, and what a reader loses is named.** `Share cut` is gone: it
+was dashed below `console.min_attempts_for_rate`, it was explicitly not the sort
+key, and a rate ranking was already ruled wrong here. What is lost is the share
+as a number - a source at 55 percent and one at 12 percent now read the same
+until their two counts are compared, and both counts are on the row.
+`Cut short` and `Articles` are gone as columns and are the row's own label,
+`17 of 38 cut`, which keeps the count sort and puts the denominator beside the
+track it describes. Authority: Susan, 2026-08-30.
+
+**Aggregated on the server, ten rows per preset.** A window of the committed
+ledger is a few thousand rows, and this page inlines whatever it is handed, so
+the browser never sees the rows the plot was made from. The window ends on the
+newest day the ledger holds rather than on the build clock, so rebuilding an old
+tree draws what that tree said rather than an empty plot. The 10 rows are a
+constant in
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)
-and not config knobs, because the table's own first sentence states the number -
-a knob there is a way to make the copy lie.
+and not a config knob, because a knob there is a way to make the copy lie.
 
 **A cut is two cells of one row compared, and never a count against the cap.**
 `source_words_before_cap > source_words` is the whole test
@@ -1239,8 +1306,127 @@ cap line - it is `Article length against summary length`, which is the string
 the chart's own accessible name already used. `Charts` on a page of six charts
 reads as "the charts" rather than as the router's output, so it is `Charts drawn
 for articles`. `Runs` sat four headings below `Run health` and neither name said
-which was which; it is `Runs and site size`, which is what its columns are. No
-doc anchor and no test selector read any of the three.
+which was which; it became `Runs and site size`, which is what its columns were.
+No doc anchor and no test selector read any of the three. `Runs and site size`
+is itself gone since 2026-08-30 - two nouns joined by "and" is two sections, and
+the section below says where each half went.
+
+## The site's size is a rate, and the level beside it says which tree
+
+The console asks one size question - is the site going to outgrow the 1 GB Pages
+cap - and until 2026-08-30 it answered with two levels and no date. A waterfall
+drew megabytes added per day, and a table drew the running total. Neither says
+when.
+
+**The waterfall drew the item ceiling and called it site growth.** Measured
+2026-08-30 over the ten committed manifests, a day's gain ran 0.04 MB to 2.82 MB
+while the day published 4 articles or 731. Divided by the articles, the same ten
+days sit between 2,478 and 4,541 bytes. The first series moves when the feeds
+have a busy morning; the second moves when somebody changes what a payload
+carries, which is the only thing anybody can act on. So the chart is
+`What one more article costs`, in bytes of payload tree per published article,
+and it follows the page's window.
+
+**A day outside one standard deviation of the window's median is marked, and the
+rule is the whole of the marking.** The band is taken about the median rather
+than about the mean: the line drawn on the chart is the median, and a band whose
+centre and whose width came from two different statistics is asymmetric about
+its own centre for no reason a reader can see. One published day in the window
+reports no spread at all rather than a spread of zero, which would call that day
+perfectly typical of itself. The values are published as text beside the chart -
+that is what a chart owes anybody who cannot see it, and it is also the only way
+the flags can be checked: `frontend/tests/console-site-size.spec.ts` recomputes
+the band from exactly those numbers and fails if the marks disagree.
+
+**The window bounds what is drawn and never what is differenced.** A day's cost
+is its own bytes minus the previous manifest's, so the oldest day on screen
+still reads against the day before it. Differenced against zero it would report
+the whole tree as one day's work, and the window would invent an outlier every
+time it moved.
+
+**The `Site size` card carries the level, a track against the cap, the window's
+delta and a runway.** The runway is the arithmetic
+[../../../backend/idhazh/retention.py](../../../backend/idhazh/retention.py)
+already runs: headroom divided by one published day's growth, where a day's
+growth is the per-article cost times `run.safety_ceiling_per_run`. The item
+ceiling and not an average of the days on disk - a day that published 97
+articles is no evidence the next one will, and a runway has to be the worst case
+to be worth printing (Rule #10). Where the window measured no growth there is no
+rate, so the card says there is no runway instead of printing a date.
+
+**The delta is megabytes and not a percentage, and that was a measurement.** The
+oldest committed manifest recorded 13,595 bytes, so a share taken from there read
+`+73,933%` on 2026-08-30 - true, unreadable, and painted green by the card's
+own up-is-good rule, which is the wrong verdict on a site size as well as one
+nobody asked for. `Up 9.6 MB over 30 days` is the same fact in the unit the
+number above it is already in.
+
+**The card names the tree it measured, and this is the one thing it cannot fix
+itself.** `site_bytes` in a run manifest is `frontend/public/digest/`, and the
+Pages cap is measured on the built bundle, which also carries every prerendered
+page and the on-device model. Measured 2026-08-30 on Intel Core i7-1265U,
+Windows 11 10.0.26200, node v24.12.0, one build:
+
+| | Bytes | Files | Per published article | Runway to the 1 GB cap |
+| --- | --- | --- | --- | --- |
+| Committed payload tree | 10,414,335 | 170 | 2,478 to 4,541, median 3,261 | about 2,038 published days |
+| Built bundle | 152,373,806 | 343 | 46,971 cumulative, 25,786 marginal | 123 published days |
+
+The bundle is **14.63 times larger**, and it was eighteen times larger on
+2026-08-27 ([the run-manifest changelog](../../../backend/idhazh/contracts/run_manifest.py)),
+so the multiple itself is not stable. The card's sentence is therefore written
+caveat-first: it says the number is the committed payload tree and not the
+published site, that the site is what the cap measures, and that
+`idhazh site-weight` prints the runway that binds - and only then that
+`160 articles a day would fill this tree to 1 GB in about N published days`. It
+never says "the site" has N days, because it does not know that. Measured
+2026-08-30 the card read 2,038 published days and `site-weight` read 123, which
+is the size of the gap the wording exists to keep visible
+([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
+
+**What the deleted table was for, and where each column went.** `Runs`,
+`Planned` and `Failed` were per-day run counts, and all three are already on the
+run strip four headings above - `Planned` rides the run square's own label as
+`N of M succeeded`, which is where run-level facts live. `Site` is the card.
+`Files` is gone with no replacement: it was the count of files under the payload
+tree, and the question it answered - did the tree grow because we published more
+or because pages got heavier - is the question the per-article chart now answers
+directly.
+
+### Design rationale
+
+**The plan that ordered this row asked for a runway and assumed the console
+could measure the tree the cap measures. It cannot, and that was found by
+measuring rather than by reading.** The row's stated basis was 24,378 bytes an
+article, spread 23,066 to 26,538, which is the built bundle's cumulative average
+from `idhazh site-weight`. The console reads run manifests, and the same
+arithmetic over those gives 2,478 to 4,541 bytes an article - a different tree,
+roughly seven times smaller per article and thirteen times smaller in total.
+
+Three options were weighed:
+
+| # | Option | Outcome |
+| --- | --- | --- |
+| 1 | Print the runway from the payload tree against the cap and call it the site's | Rejected on the measurement. It reads about 2,000 published days where `site-weight` reads 123 - out by a factor of sixteen, and a fabricated date is worse than the level it replaced. |
+| 2 | Add `built_site_bytes` to the run manifest | Rejected here, not on merit. It is a persisted-contract change, which is `CLAUDE.md` section 6 Level 5 and pauses work. It is the change that would make the console's runway exact, and it is recorded here so the next person does not have to rediscover it. |
+| 3 | Print the runway of the tree the console has, and name that tree inside the sentence | Taken. Every clause on the card is true and checkable, the direction of the error is stated, and the instrument that measures the other tree is named. |
+
+A fourth was considered and dropped without a table row: a measured
+payload-to-site multiple held in `config/`. The two trees do not scale together
+- `frontend/static/assist/` is 45,328,441 bytes and does not grow with articles
+at all - so one multiplier is not just stale-prone, it is structurally wrong.
+The measured multiple was 14.63 on 2026-08-30 and eighteen three days earlier,
+which is the evidence.
+
+**The track reads about one percent full, and that is the honest picture.** It
+fails the "does it use the screen it is on" sufficiency check
+([../../concepts/design-system.md](../../concepts/design-system.md)) in the sense
+that a nearly-empty bar carries little information, and it ships anyway: the
+caption prints the room left as a number beside it - `1,014 MB left of the 1 GB
+Pages cap` - and the fill has a 2px minimum so a level far under its limit still
+reads as a measurement rather than as an empty control. The alternative -
+rescaling the track to make the bar look busy - is a chart that lies about how
+much room is left.
 
 ## The bundle gate is a regression detector, not a performance budget
 

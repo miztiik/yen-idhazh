@@ -17,6 +17,7 @@
 	 * before any script runs.
 	 */
 	import Chart from '$lib/charts/Chart.svelte';
+	import { percentOf } from '$lib/charts/rank';
 	import type { EChartsOption } from 'echarts';
 	import type { Snippet } from 'svelte';
 
@@ -26,6 +27,7 @@
 		note = null,
 		tone = 'neutral',
 		movement = null,
+		track = null,
 		trend = null,
 		trendSvg = null,
 		trendOption = null,
@@ -39,6 +41,11 @@
 		tone?: 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 		/** Signed share, e.g. 0.12 for up 12 percent. Null prints nothing. */
 		movement?: number | null;
+		/** How full something is, and what it is full of. A level against a limit
+		 * that will not move is a length the eye reads without arithmetic - and
+		 * the caption is required, because a bar with no named limit says only
+		 * that a bar exists. */
+		track?: { fraction: number; caption: string } | null;
 		/** A trend drawn as markup, in the card's own trend slot. */
 		trend?: Snippet | null;
 		trendSvg?: string | null;
@@ -64,6 +71,18 @@
 >
 	<p class="kpi-label">{label}</p>
 	<p class="kpi-value tabular-nums">{value}</p>
+	{#if track}
+		<div
+			class="kpi-track"
+			data-kpi-track={label}
+			data-kpi-fraction={track.fraction.toFixed(6)}
+			role="img"
+			aria-label="{label}: {value}, {track.caption}."
+		>
+			<span class="kpi-track-fill" style="inline-size: {percentOf(track.fraction)}"></span>
+		</div>
+		<p class="kpi-track-caption" data-kpi-caption={label}>{track.caption}</p>
+	{/if}
 	{#if trend}
 		<div class="kpi-trend">{@render trend()}</div>
 	{:else if trendSvg && trendOption}
@@ -122,6 +141,40 @@
 
 	.kpi-trend {
 		margin-block: var(--space-1);
+	}
+
+	/* The same track the target bars draw, minus the marker: this limit is the
+	   whole length of the bar rather than a line across it. */
+	.kpi-track {
+		position: relative;
+		block-size: 10px;
+		margin-block-start: var(--space-1);
+		border-radius: var(--radius-full);
+		background: var(--color-surface-sunken);
+		overflow: hidden;
+	}
+
+	.kpi-track-fill {
+		display: block;
+		block-size: 100%;
+		/* A minimum, so a level far under its limit is still a mark on the track
+		   rather than an empty bar that reads as nothing measured. */
+		min-inline-size: 2px;
+		border-radius: var(--radius-full);
+		background: var(--chart-1);
+	}
+
+	.kpi[data-tone='warn'] .kpi-track-fill {
+		background: var(--fill-medium);
+	}
+	.kpi[data-tone='bad'] .kpi-track-fill {
+		background: var(--fill-low);
+	}
+
+	.kpi-track-caption {
+		margin: 0;
+		font-size: var(--text-xs);
+		color: var(--color-text-tertiary);
 	}
 
 	.kpi-foot {

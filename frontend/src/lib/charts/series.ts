@@ -170,6 +170,33 @@ export function compressionView(rows: readonly TelemetryRow[]): {
 	};
 }
 
+/** Where the cut fell, and over which days it was the cut in force. */
+export interface CapLine {
+	words: number;
+	/** Oldest and newest day in view that was cut at this length. */
+	first: string;
+	last: string;
+}
+
+/** What one cap line says about itself.
+ *
+ * A lone cap needs no date at all - it is the cut, over the whole window. Where
+ * there are several the labels read as a handover: the oldest names the last
+ * day it applied, and each later one names the first day it did.
+ *
+ * The source-cut range plot is the only caller. The compression scatter was the
+ * other one and this row retired it, along with `capsInView` and `seenWords`;
+ * the range plot derives its own cut points in `capPoints`.
+ */
+export function capLabel(caps: readonly CapLine[], index: number): string {
+	const cap = caps[index];
+	const words = `cut at ${grouped(cap.words)} words`;
+	if (caps.length === 1) return words;
+	return index === 0
+		? `${words} (to ${dayMonth(cap.last)})`
+		: `${words} (from ${dayMonth(cap.first)})`;
+}
+
 /** Thousands separated by hand, because `toLocaleString` reads the machine's
  * locale and two builds have to agree. */
 export function grouped(value: number): string {
@@ -536,4 +563,46 @@ export function failedRows(rows: TelemetryRow[], window: TimeWindow, code: strin
 		.filter((row) => row.outcome === 'failed')
 		.filter((row) => code === null || row.code === code)
 		.sort((a, b) => b.date.localeCompare(a.date) || a.item_id.localeCompare(b.item_id));
+}
+
+/** Where one source's row of the length range plot sits, in chart pixels. */
+export interface RangeMarks {
+	/** The shortest, the middle and the longest article of that source. */
+	x0: number;
+	xMid: number;
+	x1: number;
+	/** Where the text past the cut point starts, held inside the row's own span.
+	 *
+	 * Equal to `x1` where nothing this source published reached the cut point,
+	 * so the emphasised segment has no length and draws nothing.
+	 */
+	xCut: number;
+	/** True where the longest article ran past the cut point. */
+	past: boolean;
+}
+
+/** One row of the length range plot, placed.
+ *
+ * Pure arithmetic over a scale somebody else built, so the plot's geometry can
+ * be checked in Node against an identity scale. The clamp is the part worth
+ * having in one place: a cut point left of a source's shortest article would
+ * otherwise draw the emphasised segment starting outside the track it belongs
+ * to, which reads as text lost from an article that is not on the row.
+ */
+export function rangeMarks(
+	range: { min: number; median: number; max: number },
+	capWords: number | null,
+	scale: (words: number) => number
+): RangeMarks {
+	const x0 = scale(range.min);
+	const xMid = scale(range.median);
+	const x1 = scale(range.max);
+	const past = capWords !== null && range.max > capWords;
+	return {
+		x0,
+		xMid,
+		x1,
+		xCut: past ? Math.min(x1, Math.max(x0, scale(capWords as number))) : x1,
+		past
+	};
 }
