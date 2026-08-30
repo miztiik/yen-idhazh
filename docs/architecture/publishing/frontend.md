@@ -522,13 +522,37 @@ it and not again. The arithmetic lives in
 [frontend/src/lib/charts/run-history.ts](../../../frontend/src/lib/charts/run-history.ts)
 so it can be tested without a browser.
 
-**Overflow opens on the newest edge.** The strip is a native horizontal scroll
-region - focusable, labelled, and pannable with the arrow keys, with no buttons
-and no chart dependency. A history shorter than the viewport aligns right, so
-the newest run is in the same place whether there are three days or three
-hundred. JavaScript sets the initial scroll to the newest edge once, on the
-first animation frame after mount, and never again: after that the position
-belongs to the operator.
+**The strip starts on the left, and the spare room is on the right.** Until
+2026-08-30 a history shorter than its frame was pushed to the right edge, on the
+argument that the newest run should sit in one place whatever the day count.
+Measured on 2026-08-30 at 1440px over the committed ledger, on this tree with
+the one alignment declaration flipped back: its nine days draw 378px inside a
+1326px frame, so right-anchored they leave 948px of empty page on the left - the
+strip uses 28 percent of its own row, which reads as one that failed to draw
+rather than as one with room to spare. Left-anchored the same nine days start at
+the frame's own left edge, 0px in, and the 948px of room falls on the right. And
+every publish slid the whole sequence a column left, so a run an operator had
+looked at yesterday was somewhere else today. Left-anchored, a day keeps its
+place and the empty room is on the side the days that have not happened yet
+belong to.
+
+**Where an overflowing strip OPENS is a different question, and it is the one
+`console.today_anchor` answers.** The two were one line of layout for a while
+and they are not the same fact: the anchor is a scroll position, and the
+alignment above is where the columns sit inside a frame that is wider than they
+are. The strip is a native horizontal scroll region - focusable, labelled, and
+pannable with the arrow keys, with no buttons and no chart dependency.
+JavaScript sets the initial scroll to the newest edge once, on the first
+animation frame after mount, and never again: after that the position belongs to
+the operator.
+
+**The strip is a panel, and it follows the page's window.** It draws the days
+inside the span the window control holds, states that span in its own note and
+in its accessible label, and carries `data-windowed="run-health"` like every
+other windowed section. A window that reaches no run says so in its own sentence
+rather than showing an empty grid, and that sentence is not the one an empty
+ledger gets - "no run recorded a manifest in the last N days" and "no run has
+recorded a manifest yet" are different facts.
 
 Three colours, and the boundaries are read from config rather than chosen by the page:
 
@@ -539,6 +563,15 @@ Three colours, and the boundaries are read from config rather than chosen by the
 | Red | The run failed, or its success rate fell below `run.success_floor_pct` |
 
 **The red threshold is the same knob CI uses to decide whether a run opens an issue.** A red square and an open issue can never disagree, because there is one number and both read it.
+
+**The squares are painted from the fill ramp, not the confidence ramp.** A 16px
+solid is not type, and until 2026-08-30 it was painted in colours that are:
+measured against the panel's surface, `--band-medium` is 5.43:1 and `--band-low`
+6.12:1, which is text weight, and on screen they read as olive and brick. The
+band tokens stay text colours because four other surfaces read them as type;
+`--fill-high`, `--fill-medium` and `--fill-low` are the parallel set, and
+[../../concepts/design-system.md](../../concepts/design-system.md) owns the band
+a fill value has to land in.
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
