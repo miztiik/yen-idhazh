@@ -34,6 +34,14 @@ One row per work shard per run, read one run at a time by an audit that carries
 no time window - so it is one file. It is also the slowest-growing: eight shards
 times five runs a day is 40 rows, and a year is 14,600.
 
+`state/telemetry-aggregate/<YYYY-MM>.csv` is what is left of an item-health
+month once `observability.keep_months` has passed: one row per (date, stage),
+folded by `retention.fold_month`. It shards by month because the shard it
+replaces did, so the two file by the same stem and a reader looking for a month
+looks in one of two places rather than in a directory and a lookup table. It is
+the one file here that is rewritten rather than appended, because every row in
+it is derived from the shard it summarises.
+
 No reader fails on a missing file. A fresh clone has no history, and a run with
 no history is a run where nothing was seen, nothing was published and no feed
 has a record yet - which is exactly what an empty result says.
@@ -55,11 +63,13 @@ from idhazh.contracts.feed_health import FeedHealthRow
 from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 
 STATE_DIRNAME: Final = "state"
 SEEN_DIRNAME: Final = "seen"
 HEALTH_DIRNAME: Final = "feed-health"
 ITEM_HEALTH_DIRNAME: Final = "item-health"
+TELEMETRY_AGGREGATE_DIRNAME: Final = "telemetry-aggregate"
 PUBLISHED_FILENAME: Final = "published.csv"
 RUNTIME_COUNTERS_FILENAME: Final = "runtime-counters.csv"
 
@@ -110,6 +120,22 @@ def item_health_relpath(date: str) -> str:
 
 def item_health_path(state_dir: Path, date: str) -> Path:
     return state_dir / ITEM_HEALTH_DIRNAME / f"{date[:7]}.csv"
+
+
+def telemetry_aggregate_relpath(month: str) -> str:
+    """`state/telemetry-aggregate/<YYYY-MM>.csv` - the POSIX form, for a log line."""
+    return f"{STATE_DIRNAME}/{TELEMETRY_AGGREGATE_DIRNAME}/{month}.csv"
+
+
+def telemetry_aggregate_path(state_dir: Path, month: str) -> Path:
+    """Where the folded summary of one item-health month lives.
+
+    Its own directory rather than a second filename inside `item-health/`,
+    because `publish_telemetry.publish` globs that directory for month shards
+    and reads every file it finds as a full-grain row - the aggregate is a
+    different shape and would fail that read.
+    """
+    return state_dir / TELEMETRY_AGGREGATE_DIRNAME / f"{month}.csv"
 
 
 def published_path(state_dir: Path) -> Path:
@@ -343,6 +369,37 @@ def append_runtime_counters(state_dir: Path, rows: Iterable[RuntimeCountersRow])
 def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     """Every shard the file already carries a snapshot for."""
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
+
+
+def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
+    """Every row of one month's full-grain shard. Empty for a month never written."""
+    return [ItemHealthRow.from_csv_row(row) for row in _read_rows(path)]
+
+
+def write_telemetry_aggregate(path: Path, rows: list[TelemetryAggregateRow]) -> int:
+    """Write one month's folded summary whole, replacing whatever was there.
+
+    The only writer here that rewrites rather than appends, and the reason is
+    that this file is derived: every row is a function of the shard it was folded
+    from, so writing it twice writes the same bytes twice. Appending would double
+    a month whenever the fold ran again over a shard a lost race had restored,
+    and `merge=union` could not tell the copy from the original.
+
+    Returns how many rows landed, so a caller can log the count.
+    """
+    path.parent.mkdir(parents=True, exist_ok=True)
+    columns = TelemetryAggregateRow.csv_columns()
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        writer = csv.DictWriter(handle, fieldnames=columns, lineterminator="\n")
+        writer.writeheader()
+        for row in rows:
+            writer.writerow(row.csv_row())
+    return len(rows)
+
+
+def load_telemetry_aggregate(path: Path) -> list[TelemetryAggregateRow]:
+    """Every folded row of one month. Empty for a month never folded."""
+    return [TelemetryAggregateRow.from_csv_row(row) for row in _read_rows(path)]
 
 
 def load_runtime_counters(state_dir: Path, *, run_id: str) -> list[RuntimeCountersRow]:

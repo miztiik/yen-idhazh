@@ -218,6 +218,32 @@ That is **twelve prerendered documents per published day**: six HTML pages - the
 
 The three levers this page already names - encode efficiently, honour the visual rule, then prune - were all argued about images. **None of them touches an HTML document.** Whatever answers this is a fourth thing, and it has not been designed. What is written down here is the measurement, so the next person starts from a number rather than a feeling.
 
+### What bounds the committed state tree
+
+`state/` is the other tree that grows every run, and it is bounded separately, because what it costs is a checkout rather than a deploy. Measured on this checkout 2026-08-30, over the eight days the ledgers then held:
+
+| File | Bytes | Share of `state/` | Bounded by |
+| --- | --- | --- | --- |
+| `state/seen/<YYYY-MM>.csv` | 5,166,315 | 54.5 percent | **nothing** |
+| `state/scores.csv` | 2,359,230 | 24.9 percent | **nothing** |
+| `state/item-health/<YYYY-MM>.csv` | 1,270,452 | 13.4 percent | `observability.keep_months` |
+| `state/published.csv` | 338,979 | 3.6 percent | nothing, and deliberately - published is forever |
+| everything else | 352,309 | 3.7 percent | small enough not to ask |
+
+**The fold covers `state/item-health/` and only that.** A month older than `observability.keep_months` is read whole, folded to one row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv`, and the full-grain shard is deleted - in that order, with the aggregate read back before the shard is unlinked, so a fold that cannot be written leaves the shard where it was. Thirteen months, because `console.max_window_days` is 366 and a shard has to answer for a year with the current month still being written.
+
+**Measured on this checkout, 2026-08-30.** Folding the committed `state/item-health/2026-08.csv` - 4,167 rows over six published days, 1,270,452 bytes - gives 24 aggregate rows and 1,531 bytes: **829.8 times smaller**, 63.8 bytes an aggregate row, 255.2 bytes a published day, 93,136 bytes a year against the shard's 77,285,830. Four rows a day and not five, because `plan` wrote no row that month.
+
+Three things make it the one ledger the fold reaches, and each of them is why the other two need a decision of their own rather than a copy of this one:
+
+- Its rows carry a `stage`, which is what the aggregate is keyed on. A `seen` row is an address and a timestamp; a `scores.csv` row is a faithfulness measurement. Neither folds to `(date, stage)`.
+- It shards by month, so a fold is a whole file appearing and a whole file going. `state/scores.csv` is one file, and bounding it means either sharding it - a change across four readers, `payload.ts`, `model-work.ts`, `drift.py` and `label_queue.py` - or rewriting it in place.
+- It is a measurement whose totals are worth keeping. `state/seen/` is a lookup, read only through `collect.seen_window_days`, so a shard past that window answers nothing and its honest retention is deletion rather than a fold.
+
+**What this does not do, stated plainly: it does not bound the `/console/` document.** That page is linear in items at a measured 50.45 gzipped bytes an item and crosses its 301,580-byte ceiling on published day 16, because the compression scatter inlines every row `state/scores.csv` has ever held. Thirteen months is roughly published day 395. The two problems share a file and share nothing else, and the fold cannot be read as an answer to the page.
+
+The aggregate is kept forever by default. `observability.hard_delete_after_months` is null, and the contract refuses a value at or below `keep_months` - so a month is never deleted before it has been folded.
+
 ## The frontend stack
 
 Svelte 5, Vite, TypeScript, Tailwind, vitest, Playwright, `json-schema-to-typescript`, and `ajv`.

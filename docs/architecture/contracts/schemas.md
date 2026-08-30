@@ -53,6 +53,7 @@ The shapes, and where each one lives once written:
 | `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
 | `FeedHealthRow` | `feed-health-row` | one appended row of `state/feed-health/<YYYY-MM>.csv` |
 | `ItemHealthRow` | `item-health-row` | one appended row of `state/item-health/<YYYY-MM>.csv` |
+| `TelemetryAggregateRow` | `telemetry-aggregate-row` | one row of `state/telemetry-aggregate/<YYYY-MM>.csv`, rewritten whole |
 | `RuntimeCountersRow` | `runtime-counters-row` | one appended row of `state/runtime-counters.csv` |
 | `ValidationRow` | `validation-row` | one appended row of `state/validation-<date>.csv` |
 | `RunManifest` | `run-manifest` | `.../<DD>/run.json`, append-only per date |
@@ -62,6 +63,8 @@ The shapes, and where each one lives once written:
 | `CorpusMeta` | `corpus-meta` | `corpus/corpus.meta.json` |
 
 Everything under `state/` is a row contract rather than a file contract, because a file that is only ever appended to has no shape of its own - the row is the unit that has to hold. Which of those ledgers a later run reads back, and what each one answers, is [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md).
+
+`TelemetryAggregateRow` is the one exception and says so in its own line above: its file is derived from the item-health shard it replaces, so every run of the fold writes the same bytes and the file is rewritten rather than appended to. Appending would double a month whenever the fold ran twice over a shard a lost race had restored, and `merge=union` could not tell the copy from the original. What decides when a month is folded is `observability.keep_months`, and what it costs is in [../publishing/layout.md](../publishing/layout.md#what-bounds-the-committed-state-tree).
 
 ### A new row ledger ships with its header, not with its first run
 
@@ -96,6 +99,7 @@ carry a time window?**
 | `state/seen/` | monthly shards | how old is this address? | yes, `collect.seen_window_days` |
 | `state/feed-health/` | monthly shards | is this source still working? | yes, `ledger.HEALTH_WINDOW_DAYS` |
 | `state/item-health/` | monthly shards | what did every planned item do? | yes - the console pans a window (`default_window_days` 30) and fetches month shards |
+| `state/telemetry-aggregate/` | monthly shards | what did a month past `keep_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published.csv` | one file | have we already published this? | no - published is forever |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
 | `state/scores.csv` | one file | how did every scored item do? | no |

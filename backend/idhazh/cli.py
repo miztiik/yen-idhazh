@@ -30,6 +30,7 @@ import sys
 import time
 from collections import Counter
 from collections.abc import Callable, Iterable, Sequence
+from datetime import date as date_type
 from pathlib import Path
 from typing import Final, NamedTuple
 from urllib.error import HTTPError
@@ -2295,6 +2296,44 @@ def stage_prune_stamp(*, corpus_dir: Path, date: str) -> int:
     return 0
 
 
+def stage_prune_telemetry(
+    *,
+    observability: ObservabilityConfig,
+    today: date_type,
+    state_dir: Path | None = None,
+    dry_run: bool = False,
+) -> int:
+    """Fold an out-of-window item-health month, then delete the shard it came from.
+
+    Runs after the day is committed, never before. A fold that ran first and then
+    failed would leave a month deleted from a tree nothing pushed, and the next
+    run would fold a shard that had already been folded - so it sits behind the
+    commit that makes the day real, where the worst it can cost is one run's
+    worth of bytes.
+
+    It reports rather than fails. What this job owes a reader is the published
+    day; a fold that will not run must never be the thing that stops one.
+    """
+    state = state_dir if state_dir is not None else STATE_ROOT
+    result = retention.prune_telemetry(state, observability, today, dry_run=dry_run)
+    if not result.changed:
+        LOG.info(
+            "telemetry fold: nothing older than %s months, so every month is still at "
+            "full grain",
+            observability.keep_months,
+        )
+        return 0
+    LOG.info(
+        "telemetry fold%s: %s folded %s rows into %s, hard-deleted %s",
+        " (dry run)" if result.dry_run else "",
+        ", ".join(result.folded) or "no month",
+        result.rows_folded,
+        result.aggregate_rows,
+        ", ".join(result.hard_deleted) or "no month",
+    )
+    return 0
+
+
 def stage_assemble(
     plan: RunPlan, *, settings: config.Settings, commit_sha: str, runner: str = "local"
 ) -> DigestDay:
@@ -2860,6 +2899,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "assemble",
             "harvest",
             "prune-stamp",
+            "prune-telemetry",
             "run",
             "validate",
             "decide",
@@ -3022,6 +3062,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         action="store_true",
         help="Harvest even when finetune.harvest_every_days says it is not due yet.",
     )
+    parser.add_argument(
+        "--dry-run",
+        action="store_true",
+        help="Report what the telemetry fold would do and change nothing on disk.",
+    )
     args = parser.parse_args(argv)
 
     settings = config.load(args.config)
@@ -3044,6 +3089,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
         return stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
+
+    if args.stage == "prune-telemetry":
+        # And this one only reads and deletes committed files. A fold that opened
+        # a socket would be reading the open web to decide what to delete.
+        return stage_prune_telemetry(
+            observability=settings.app.observability,
+            today=date_type.fromisoformat(args.date or _today()),
+            dry_run=args.dry_run,
+        )
 
     date = args.date or _today()
     # One fetcher for the whole invocation, so `idhazh run` reads each host's
