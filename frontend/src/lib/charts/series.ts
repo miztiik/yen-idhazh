@@ -216,6 +216,10 @@ export function capsInView(points: readonly CompressionPoint[]): CapLine[] {
  * A lone cap needs no date at all - it is the cut, over the whole window. Where
  * there are several the labels read as a handover: the oldest names the last
  * day it applied, and each later one names the first day it did.
+ *
+ * Two drawings call this, and they are on different sections: the compression
+ * scatter and the source-cut range plot. Retiring either one leaves the other
+ * holding it.
  */
 export function capLabel(caps: readonly CapLine[], index: number): string {
 	const cap = caps[index];

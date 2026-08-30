@@ -1186,7 +1186,7 @@ on the same plot, and a linear axis puts every short source on the left edge.
 
 **One rule per cut point, not one rule.** `caps` is one entry per distinct
 post-cap length among the window's cut articles, oldest first - the same rule
-`capsInView` reads the compression plot's lines by, so two drawings of one fact
+the compression plot reads its own lines by, so two drawings of one fact
 cannot disagree. A thirty-day window over the committed ledger holds two of
 them, 1,923 words and 3,846, because the cap moved on 29 August. Past the widest
 of them an article lost text whichever cut was in force, so the emphasised span
