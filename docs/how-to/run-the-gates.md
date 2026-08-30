@@ -242,13 +242,13 @@ npm run build:canary
 npm run test:browser
 ```
 
-296 tests in 25 files (2026-08-30), and nothing skips itself any more. The
+317 tests in 27 files (2026-08-30), and nothing skips itself any more. The
 failure surface has a file of its own, `console-failure.spec.ts`, split by what
 the fixture can reach: the canary records no failure at all, so the two facts
 that need one - a denominator walked down the pipeline, and a rate withheld
 under `console.min_attempts_for_rate` - are driven as pure functions, and every
 state the fixture does reach is driven in the browser through the controls an
-operator has. Ninety-four of them are pure-function tests over
+operator has. A hundred and four of them are pure-function tests over
 `frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
 frontend unit-test runner, so a pure module proves itself here.
 

@@ -71,9 +71,9 @@ test('a stage is measured against what reached it, never against the day', () =>
 	// One day, ten items. Four die at fetch, so only six ever reach extract and
 	// only four ever reach summarize. Dividing by the day instead understates
 	// every stage after the first, which is what the page did until this row:
-	// measured 2026-08-30 over the 4,167 rows of the committed projection,
-	// extract read 10.4 percent against the day and 12.3 percent against the
-	// 3,499 items that got as far as extract.
+	// measured 2026-08-30 over the 4,273 rows of the committed projection,
+	// extract read 10.2 percent against the day and 12.1 percent against the
+	// 3,601 items that got as far as extract.
 	const rows = [
 		...Array.from({ length: 4 }, (_, i) => row('2026-08-20', `f${i}`, 'fetch', 'failed', 'no_text')),
 		...Array.from({ length: 2 }, (_, i) =>
