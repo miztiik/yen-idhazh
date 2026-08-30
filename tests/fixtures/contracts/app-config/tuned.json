@@ -58,6 +58,7 @@
     "zoom_factor": 2.0
   },
   "drift": {
+    "min_window_rows": 12,
     "month_over_month_pct": 8.0,
     "quarterly_refresh_fraction": 0.25,
     "year_over_year_pct": 4.0
