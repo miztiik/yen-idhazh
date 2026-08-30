@@ -2009,6 +2009,10 @@ def stage_counters(
     shards: int = 1,
     job_started_at: int | None = None,
     cpu_model: str | None = None,
+    cpu_stat_at_start: str | None = None,
+    cpu_stat_at_end: str | None = None,
+    rss_samples_path: Path | None = None,
+    server_log_path: Path | None = None,
 ) -> RuntimeCountersRow:
     """Commit what this shard's model server counted, so the ledger can be checked.
 
@@ -2021,20 +2025,20 @@ def stage_counters(
     Both counters are cumulative for the server process and a shard runs one
     server for its whole job, so this one read covers the shard entirely.
 
-    The same row carries the job's own clock and the host it ran on. Neither is
-    the server's to report, so both arrive as arguments: `job_started_at` is the
-    epoch second the job's first step stamped, and `cpu_model` is the host's
-    `model name` line. A stage reads a file and writes a file, so it does not go
-    looking for `/proc/cpuinfo` itself - that file exists on the runner and on
-    no developer machine this project is written on.
+    The same row carries the job's own facts as well as the server's: the clock,
+    the host, how busy that host was, the memory high point and what the weights
+    cost to open. None of them is the server's to report, so each arrives as an
+    argument. A stage reads a file and writes a file, so it does not go looking
+    for `/proc` itself - that tree exists on the runner and on no developer
+    machine this project is written on. What it does do is the arithmetic, so
+    the derivation behind a cell is in the contract rather than in a shell.
 
     A missing or empty body still writes a row, with every counter null. A shard
     whose server was already gone and a shard that never ran are different facts,
     and pooling a run needs to see the shard that contributed nothing.
     """
-    text = metrics_path.read_text(encoding="utf-8") if metrics_path.exists() else ""
     row = RuntimeCountersRow.from_metrics_text(
-        text,
+        _text_if_readable(metrics_path),
         date=plan.date,
         run_id=plan.run_id,
         shard=shard,
@@ -2042,10 +2046,15 @@ def stage_counters(
         scraped_at=assemble.utc_now(),
         job_started_at=job_started_at,
         cpu_model=cpu_model,
+        cpu_stat_at_start=cpu_stat_at_start,
+        cpu_stat_at_end=cpu_stat_at_end,
+        rss_samples=_text_if_readable(rss_samples_path),
+        server_log=_text_if_readable(server_log_path),
     )
     landed = ledger.append_runtime_counters(STATE_ROOT, [row])
     LOG.info(
-        "counted shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s cpu=%s rows=%s",
+        "counted shard=%s/%s run=%s read_tokens=%s read_seconds=%s job_seconds=%s cpu=%s "
+        "cpu_busy_pct=%s peak_rss_bytes=%s model_load_ms=%s rows=%s",
         shard,
         shards,
         plan.run_id,
@@ -2053,9 +2062,19 @@ def stage_counters(
         row.prompt_seconds_total,
         row.job_seconds,
         row.cpu_model,
+        row.cpu_busy_pct,
+        row.peak_rss_bytes,
+        row.model_load_ms,
         landed,
     )
     return row
+
+
+def _text_if_readable(path: Path | None) -> str:
+    """A file the job may not have written is absent text, never a failed stage."""
+    if path is None or not path.exists():
+        return ""
+    return path.read_text(encoding="utf-8", errors="replace")
 
 
 def stage_harvest(
@@ -2700,6 +2719,38 @@ def main(argv: Sequence[str] | None = None) -> int:
         ),
     )
     parser.add_argument(
+        "--cpu-stat-at-start",
+        default="",
+        help=(
+            "The aggregate `cpu` line of /proc/stat, read by the first step of the shard "
+            "job. Differenced against the reading at the scrape, it says what share of "
+            "the host's processor seconds the job actually used."
+        ),
+    )
+    parser.add_argument(
+        "--cpu-stat-at-end",
+        default="",
+        help="The same /proc/stat line, read at the scrape. The other end of the window.",
+    )
+    parser.add_argument(
+        "--rss-samples-file",
+        type=Path,
+        default=Path("rss-samples.tsv"),
+        help=(
+            "The memory sampler's own file. Its `llama_vmhwm_kb` column is the high-water "
+            "mark that says whether a candidate model fits the runner's 16 GB."
+        ),
+    )
+    parser.add_argument(
+        "--server-log",
+        type=Path,
+        default=Path("llama-server.log"),
+        help=(
+            "llama-server's own log. The two lines it brackets a model load with give the "
+            "fixed cost `run.shard_size` exists to amortise."
+        ),
+    )
+    parser.add_argument(
         "--site-tree",
         type=Path,
         default=None,
@@ -2830,6 +2881,10 @@ def main(argv: Sequence[str] | None = None) -> int:
             shards=args.shards,
             job_started_at=int(args.job_started_at) if args.job_started_at else None,
             cpu_model=args.cpu_model,
+            cpu_stat_at_start=args.cpu_stat_at_start,
+            cpu_stat_at_end=args.cpu_stat_at_end,
+            rss_samples_path=args.rss_samples_file,
+            server_log_path=args.server_log,
         )
         return 0
 

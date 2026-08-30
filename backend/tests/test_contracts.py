@@ -69,6 +69,25 @@ LONG_HEX = re.compile(r"[0-9a-f]{16,}")
 #: b10598 lists neither `prompt_tokens_cached_total` nor the wording that says
 #: what `prompt_tokens_total` counts, so only the binary's own output settles it.
 METRICS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-26-5-shard-*.prom"))
+#: The memory sampler's own files and the head of llama-server's own log, one
+#: pair per work shard of run `2026-08-29-3`, pulled from that run's
+#: `runtime-log-*` artifacts before they expired. Real captures for the same
+#: reason the metrics bodies are: the timestamp llama.cpp stamps a log line with
+#: is four dot-separated numbers whose units no page states, and only a real
+#: capture of a job whose length is known settles which is which.
+RSS_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.rss-samples.tsv"))
+SERVER_LOG_CAPTURES = sorted((FIXTURES_DIR / "runtime").glob("2026-08-29-3-shard-*.server-head.txt"))
+#: One real `/proc/stat` pair, twenty seconds apart, captured on a GitHub-hosted
+#: `ubuntu-latest` runner on 2026-08-30. The gap is what makes it an oracle: the
+#: tick delta has to reproduce twenty seconds of four processors at 100 Hz, and
+#: no hand-written file can be checked that way.
+PROC_STAT_AT_START = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-start.txt"
+PROC_STAT_AT_END = FIXTURES_DIR / "runtime" / "2026-08-30-probe-proc-stat-at-end.txt"
+#: What the probe slept for, what the runner reported to `nproc`, and the
+#: kernel's tick rate. Rule #2 fixes the second at 4.
+PROBE_SECONDS = 20
+PROBE_PROCESSORS = 4
+USER_HZ = 100
 #: The two pages that spell the item-health failure vocabulary out by hand.
 DOC_ITEM_HEALTH = REPO_ROOT / "docs" / "architecture" / "sources" / "item-health.md"
 DOC_ONE_URL = REPO_ROOT / "docs" / "how-to" / "troubleshoot-one-url.md"
@@ -769,6 +788,9 @@ def test_the_runtime_counters_columns_are_defined_once() -> None:
         "n_busy_slots_per_decode",
         "job_seconds",
         "cpu_model",
+        "cpu_busy_pct",
+        "peak_rss_bytes",
+        "model_load_ms",
     )
 
 
@@ -897,6 +919,165 @@ def test_a_shard_with_no_stamp_and_no_host_reports_absence_not_zero() -> None:
     assert row.cpu_model is None
     assert cells["job_seconds"] == ""
     assert cells["cpu_model"] == ""
+    assert RuntimeCountersRow.from_csv_row(cells) == row
+
+
+def _aggregate_cpu_line(text: str) -> list[int]:
+    """The ten counters on the one `cpu ` line of a /proc/stat capture."""
+    aggregate = [line for line in text.splitlines() if line.split()[:1] == ["cpu"]]
+    assert len(aggregate) == 1, "a /proc/stat capture has exactly one aggregate cpu line"
+    return [int(cell) for cell in aggregate[0].split()[1:]]
+
+
+def test_every_runtime_capture_an_oracle_reads_is_committed() -> None:
+    """A parametrized oracle over an empty glob is green and proves nothing.
+
+    `.gitignore` carries `*.log`, so the first spelling of the server-log
+    capture was ignored the moment it was named after the file it came from -
+    and the test over it collected zero cases without saying so.
+    """
+    assert len(METRICS_CAPTURES) == 4
+    assert len(RSS_CAPTURES) == 4
+    assert len(SERVER_LOG_CAPTURES) == 4
+    for path in (PROC_STAT_AT_START, PROC_STAT_AT_END):
+        assert path.is_file(), path.name
+
+
+def test_the_processor_busy_share_is_read_from_a_real_proc_stat_pair() -> None:
+    """The Oracle for `cpu_busy_pct`: the capture proves its own window.
+
+    Twenty seconds of four processors at 100 Hz is 8,000 ticks. A real pair
+    reproduces that, and a hand-written pair only does so by arithmetic somebody
+    already did - which is the same arithmetic under test. The busy share itself
+    is worked out here from the raw text, field by field, so this cannot pass by
+    agreeing with the contract about a mistake.
+
+    The reading is near zero because the probe slept through its own window. The
+    shape is what is under test; the expected value on a work shard is near 100.
+    """
+    at_start = read_text(PROC_STAT_AT_START)
+    at_end = read_text(PROC_STAT_AT_END)
+    start = _aggregate_cpu_line(at_start)
+    end = _aggregate_cpu_line(at_end)
+    # guest sits inside user and guest_nice inside nice, so a plain sum of the
+    # line counts both twice. idle and iowait are the processors standing free.
+    available = (sum(end) - end[8] - end[9]) - (sum(start) - start[8] - start[9])
+    idle = (end[3] + end[4]) - (start[3] + start[4])
+
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-30",
+        run_id="2026-08-30-1",
+        shard=0,
+        shards=4,
+        scraped_at="2026-08-30T02:45:02Z",
+        cpu_stat_at_start=at_start,
+        cpu_stat_at_end=at_end,
+    )
+
+    assert available == pytest.approx(PROBE_SECONDS * PROBE_PROCESSORS * USER_HZ, rel=0.01)
+    assert row.cpu_busy_pct == pytest.approx(100 * (available - idle) / available, abs=0.005)
+    assert RuntimeCountersRow.from_csv_row(row.csv_row()) == row
+
+
+@pytest.mark.parametrize("path", RSS_CAPTURES, ids=lambda p: p.name)
+def test_the_memory_high_point_is_the_highest_the_sampler_saw(path: Path) -> None:
+    """The Oracle for `peak_rss_bytes`: the column is found by name, in bytes.
+
+    `VmHWM` is a high-water mark, so the last sample carries the whole life of
+    the process - but a sample can come back blank, and a column can move. The
+    expected value is worked out here off the sampler's own header rather than
+    off a position, which is the failure this would otherwise hide.
+    """
+    text = read_text(path)
+    rows = [line.split("\t") for line in text.splitlines()]
+    column = rows[0].index("llama_vmhwm_kb")
+    peaks = [int(cells[column]) for cells in rows[1:] if cells[column].strip().isdigit()]
+
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-29",
+        run_id="2026-08-29-3",
+        shard=int(path.name.split("shard-")[1][0]),
+        shards=len(RSS_CAPTURES),
+        scraped_at="2026-08-29T23:15:35Z",
+        rss_samples=text,
+    )
+
+    assert row.peak_rss_bytes == max(peaks) * 1024
+    # The unit is what a wrong answer gets wrong. A 9B at `n_ctx` 8192 holds
+    # gigabytes, so kilobytes read as bytes would land a thousandfold low.
+    assert row.peak_rss_bytes > 8 * 1024**3
+
+
+@pytest.mark.parametrize("path", SERVER_LOG_CAPTURES, ids=lambda p: p.name)
+def test_the_model_load_time_is_the_gap_between_the_servers_own_two_lines(path: Path) -> None:
+    """The Oracle for `model_load_ms`: llama.cpp's stamp decoded from a real job.
+
+    The stamp is four dot-separated numbers and no page says what they are. The
+    third field reaches 809 on a real line, so it cannot be seconds-in-a-minute;
+    the last field steps by 15 between two lines printed back to back, and the
+    first field of the last line of a 99-minute job reads 99. That fixes it as
+    minutes, seconds, milliseconds, microseconds - and only a capture of a job
+    whose length is known settles it.
+    """
+    text = read_text(path)
+    stamps: dict[str, int] = {}
+    for line in text.splitlines():
+        for marker in ("load_model: loading model", "llama_server: model loaded"):
+            if marker in line and marker not in stamps:
+                minutes, seconds, milli, micro = (int(p) for p in line.split(" ")[0].split("."))
+                stamps[marker] = (((minutes * 60) + seconds) * 1000 + milli) * 1000 + micro
+    assert len(stamps) == 2, f"{path.name} does not bracket a model load"
+
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-29",
+        run_id="2026-08-29-3",
+        shard=int(path.name.split("shard-")[1][0]),
+        shards=len(SERVER_LOG_CAPTURES),
+        scraped_at="2026-08-29T23:15:35Z",
+        server_log=text,
+    )
+
+    expected = stamps["llama_server: model loaded"] - stamps["load_model: loading model"]
+    assert row.model_load_ms == expected / 1000
+    # Seconds, not minutes and not microseconds. A unit slip is the one mistake
+    # a gap between two stamps can make and still look plausible.
+    assert 1000 < row.model_load_ms < 60_000
+
+
+def test_a_shard_whose_host_readings_never_arrived_reports_absence_not_zero() -> None:
+    """A machine nobody read and a machine that did nothing are not one fact.
+
+    The readings come from workflow steps and from files a job writes as it
+    goes. A stage run anywhere else - a developer machine, a re-run of one shard
+    whose first step never fired - has none of them, and one end of the
+    processor window on its own says nothing either.
+    """
+    row = RuntimeCountersRow.from_metrics_text(
+        "",
+        date="2026-08-29",
+        run_id="2026-08-29-3",
+        shard=0,
+        shards=4,
+        scraped_at="2026-08-29T23:15:35Z",
+        cpu_stat_at_start="",
+        cpu_stat_at_end="cpu  2088 1 1373 304131 3508 0 30 0 0 0",
+        rss_samples="",
+        # The two lines under the markers llama.cpp uses today, renamed. A build
+        # that renames one leaves the cell empty rather than reporting a load
+        # that took no time.
+        server_log="0.00.011.682 I srv    load_model: opening weights\n",
+    )
+    cells = row.csv_row()
+
+    assert row.cpu_busy_pct is None
+    assert row.peak_rss_bytes is None
+    assert row.model_load_ms is None
+    assert cells["cpu_busy_pct"] == ""
+    assert cells["peak_rss_bytes"] == ""
+    assert cells["model_load_ms"] == ""
     assert RuntimeCountersRow.from_csv_row(cells) == row
 
 

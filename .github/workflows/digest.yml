@@ -338,11 +338,20 @@ jobs:
       # swing between hosts, and a clock that cannot be read against the next
       # run's clock is not a measurement (Rule #10). `|| true` because a host
       # with no `model name` line must cost an empty cell, never the shard.
+      #
+      # And the processor counters, so the counters step can difference them and
+      # say what share of the host's processor seconds this job actually used. It
+      # has to be read here rather than only at the end: `/proc/stat` counts
+      # since boot, and a runner boots minutes of idle before a job starts.
+      # `/proc/stat` rather than a cgroup file because two cgroup files this
+      # repository once read - `memory.peak` and `cpu.max` - are both absent on
+      # a GitHub-hosted runner.
       - name: Stamp the shard clock and the host
         run: |
           set -euo pipefail
           echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
           echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)" >> "$GITHUB_ENV"
+          echo "CPU_STAT_AT_START=$(awk '/^cpu / { print }' /proc/stat || true)" >> "$GITHUB_ENV"
 
       - uses: actions/checkout@v6
 
@@ -642,18 +651,27 @@ jobs:
           # shard that never ran are different facts, and pooling a run has to be
           # able to see the shard that contributed nothing.
           #
-          # The last two arguments are the job's own facts rather than the
+          # The arguments after the body are the job's own facts rather than the
           # server's, so the row that says what this shard read also says how
-          # long it took and which processor read it. `:-` because a stamp that
-          # never ran must leave an empty cell, not send the word "unbound" to a
-          # contract that would refuse it.
+          # long it took, which processor read it, how much of that processor it
+          # used, how much memory it held and what the weights cost to open. `:-`
+          # because a reading that never ran must leave an empty cell, not send
+          # the word "unbound" to a contract that would refuse it. The two files
+          # are the ones this job has been writing all along and the ones the
+          # runtime artifact already carries, so nothing new is produced here -
+          # only read.
+          CPU_STAT_AT_END=$(awk '/^cpu / { print }' /proc/stat || true)
           python -m idhazh counters \
             --date "${{ needs.plan.outputs.date }}" \
             --shard ${{ matrix.shard }} \
             --shards ${{ needs.plan.outputs.shards }} \
             --counters-file llama-metrics.prom \
             --job-started-at "${JOB_STARTED_AT:-}" \
-            --cpu-model "${CPU_MODEL:-}"
+            --cpu-model "${CPU_MODEL:-}" \
+            --cpu-stat-at-start "${CPU_STAT_AT_START:-}" \
+            --cpu-stat-at-end "${CPU_STAT_AT_END:-}" \
+            --rss-samples-file rss-samples.tsv \
+            --server-log llama-server.log
 
       # The shape the plan job uses, for the reason written there, and the same
       # script - eight shards racing one branch is what its rebase loop and the
