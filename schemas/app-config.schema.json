@@ -985,7 +985,7 @@
     },
     "ObservabilityConfig": {
       "additionalProperties": false,
-      "description": "What the pipeline records about itself, and what an operator may switch off.\n\nThree switches rather than one master switch. Collection, scoring and\npublishing fail in different ways and a reader has to behave differently for\neach of them, so one switch would leave nobody able to say which instrument\nwent dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.",
+      "description": "What the pipeline records about itself, and what an operator may switch off.\n\nFour switches rather than one master switch. Collection, scoring, publishing\nand tracing fail in different ways and a reader has to behave differently\nfor each of them, so one switch would leave nobody able to say which\ninstrument went dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.",
       "properties": {
         "evaluation_enabled": {
           "default": true,
@@ -1032,6 +1032,12 @@
           "default": true,
           "description": "Whether a run copies its item-health rows into frontend/public/telemetry/<YYYY-MM>.csv. False leaves that month file at whatever the last publishing run wrote, so every console chart ends on that date and the page says which day it read to. Nothing is lost: state/item-health/ still holds every row, so switching it back on republishes the gap.",
           "title": "Telemetry Publish",
+          "type": "boolean"
+        },
+        "tracing_enabled": {
+          "default": false,
+          "description": "Whether a work shard builds a span tree. The only switch here that is OFF unconfigured, because it is the only instrument nothing reads: no page renders a span, no gate consults one, and the ledgers stay the record. It buys a developer the nesting a flat row cannot carry - the robots read inside the fetch, the prompt render and the reply parse either side of the model call. True writes one JSON line per span under backend/var/traces/, which is gitignored and published nowhere. A host is opt-in on top of that, through LANGFUSE_HOST with its key pair, and CI names none - so an ordinary run reaches no third party whatever this says.",
+          "title": "Tracing Enabled",
           "type": "boolean"
         }
       },
@@ -1446,6 +1452,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability.tracing_enabled added, defaulting to false.",
+      "version": "2026-08-30T16:00",
+      "why": "A work shard can now build a span tree, which is the one thing the three ledgers cannot hold: a start instant, a parent, and a step too small to earn a column. The robots read nests inside the fetch, and the prompt render and the reply parse sit either side of the model call, so a slow item finally says which of the five it was slow in. It is the only switch in this block that is off unconfigured, because it is the only instrument nothing reads: no page renders a span, no gate consults one, and a trace is evidence where a ledger row is the record (CLAUDE.md section 1b). Off is also what keeps CI clean - a publish job that could fail on a third party's availability is a worse job."
+    },
+    {
       "change": "The observability block added: evaluation_enabled, telemetry_publish, runtime_counters_scrape, sample_rate, keep_months and hard_delete_after_months.",
       "version": "2026-08-30T14:00",
       "why": "The pipeline had no way to turn a measurement off or to thin one, so every instrument was all-or-nothing at the command line and nothing at all in config (Rule #6). Three switches rather than one, because collection, scoring and publishing fail differently: state/scores.csv empties when the scorer will not load, the published telemetry file stops when a run does not publish, and state/runtime-counters.csv is silent when llama-server was gone before it was read. One master switch would leave a reader unable to say which of the three went dark. sample_rate is a rate over RUNS and is refused at zero, because a second way to say off is how two ways of saying it end up disagreeing. The item-health census is deliberately absent and the model says so: it is the denominator under every rate, so switching it off would make every other measurement unreadable rather than cheaper. Additive with defaults that reproduce today's behaviour exactly, so an older config still validates and no read-side migration is needed (section 11)."
@@ -1739,7 +1750,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-30T14:00",
+      "default": "2026-08-30T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1753,5 +1764,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-30T14:00"
+  "version": "2026-08-30T16:00"
 }

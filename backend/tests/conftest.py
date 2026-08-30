@@ -64,6 +64,25 @@ def llama_server_flags() -> frozenset[str]:
     )
 
 
+@pytest.fixture(autouse=True)
+def no_tracing_host(monkeypatch: pytest.MonkeyPatch) -> None:
+    """No test may reach a tracing host, whatever the developer's shell holds.
+
+    `cli.trace_sink` adds a Langfuse sink when `LANGFUSE_HOST` and its key pair
+    are all set. A developer who has those exported, has the optional extra
+    installed and runs the suite with `observability.tracing_enabled` true would
+    otherwise post every span of every fixture run to a third party - which is a
+    test touching the network (Rule #7) and article-adjacent data leaving the
+    machine without anybody asking for it.
+
+    Autouse, because the tests that would do it are not the tests that know
+    about tracing. The two cases that assert on these variables set them
+    themselves afterwards, which is what monkeypatch ordering guarantees.
+    """
+    for named in ("LANGFUSE_HOST", "LANGFUSE_PUBLIC_KEY", "LANGFUSE_SECRET_KEY"):
+        monkeypatch.delenv(named, raising=False)
+
+
 @pytest.fixture
 def article_ok() -> Article:
     return Article.from_json(read_text(CONTRACT_FIXTURES_DIR / "article" / "ok.json"))

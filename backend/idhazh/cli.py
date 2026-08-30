@@ -25,6 +25,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from collections import Counter
@@ -133,6 +134,10 @@ CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
 LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
+#: Where a span tree lands. Under `backend/var/`, so it is gitignored, nothing
+#: downloads it and no page can read it: a trace is evidence and the three
+#: ledgers are the record (CLAUDE.md section 1b).
+TRACE_ROOT: Final = config.REPO_ROOT / "backend" / "var" / "traces"
 
 
 def _index_root() -> Path:
@@ -181,21 +186,73 @@ midnight.
 """
 
 
-def live_fetcher(settings: config.Settings) -> Fetcher:
+def _trace_id(run_id: str, item: PlannedItem) -> str:
+    """One item on one run. The work stage opens it twice and route opens it again."""
+    return f"{run_id}-{item.item_id}"
+
+
+def silent_tracer() -> telemetry.Tracer:
+    """A tracer that records nothing, so no call site has to branch on a toggle.
+
+    Built fresh rather than shared, because a tracer holds the open stack and a
+    shared one would let two callers pop each other's spans.
+    """
+    return telemetry.Tracer(sink=telemetry.NullSink(), now=assemble.utc_now)
+
+
+def trace_sink(
+    settings: config.Settings, *, date: str, run_id: str, shard: int
+) -> telemetry.SpanSink:
+    """Where this shard's spans go: nowhere, a file, or a file and a host.
+
+    A file by default and a host only when the environment names one, with its
+    key pair (owner decision, 2026-08-30). No workflow sets those, so a daily
+    run reaches no third party and needs no secret; a developer who wants the
+    hosted view exports three variables and gets both. The host is added to the
+    file and never instead of it, so the record a test reads and the record a
+    host receives are the same record.
+    """
+    if not settings.app.observability.tracing_enabled:
+        return telemetry.NullSink()
+    local = telemetry.FileSink(TRACE_ROOT / date / f"{run_id}-{shard:02d}.jsonl")
+    host = os.environ.get("LANGFUSE_HOST", "").strip()
+    public_key = os.environ.get("LANGFUSE_PUBLIC_KEY", "").strip()
+    secret_key = os.environ.get("LANGFUSE_SECRET_KEY", "").strip()
+    if not (host and public_key and secret_key):
+        return local
+    remote = telemetry.langfuse_sink(host=host, public_key=public_key, secret_key=secret_key)
+    if remote is None:
+        LOG.warning("a langfuse host is named but the package is absent; tracing to the file")
+        return local
+    return telemetry.FanOut((local, remote))
+
+
+def live_fetcher(settings: config.Settings, *, tracer: telemetry.Tracer | None = None) -> Fetcher:
     """The real thing: one robots read per host, honoured on every later read.
 
     The cache lives in the closure rather than in a module global, so a caller
     decides its lifetime instead of the interpreter deciding it.
+
+    `tracer` is what makes the robots read visible, and it is the sub-step no
+    ledger column can hold. `fetch_ms` is one number covering both reads, so the
+    first item from a host with a slow robots.txt reads as a slow article and
+    the next twenty from that host read as fast ones for no stated reason.
     """
     robots: dict[str, str | None] = {}
+    trace = tracer if tracer is not None else silent_tracer()
 
     def read(url: str) -> fetch.FetchResult:
         host = urlsplit(url).netloc
-        if host not in robots:
-            result = fetch.fetch(fetch.robots_url(url), config=settings.app.extract, robots_txt="")
-            # A host that answered "no such file" publishes no rules; a host
-            # that did not answer at all stays a refusal (RFC 9309 sec 2.3.1).
-            robots[host] = fetch.robots_from_result(result)
+        with trace.span(telemetry.SpanName.ROBOTS) as span:
+            span.set(telemetry.AttrKey.ROBOTS_CACHED, host in robots)
+            if host not in robots:
+                result = fetch.fetch(
+                    fetch.robots_url(url), config=settings.app.extract, robots_txt=""
+                )
+                # A host that answered "no such file" publishes no rules; a host
+                # that did not answer at all stays a refusal (RFC 9309 sec 2.3.1).
+                robots[host] = fetch.robots_from_result(result)
+            span.set(telemetry.AttrKey.ROBOTS_KNOWN, robots[host] is not None)
         return fetch.fetch(url, config=settings.app.extract, robots_txt=robots[host])
 
     return read
@@ -574,7 +631,11 @@ def stage_work(
     model_endpoint: str = DEFAULT_ENDPOINT,
 ) -> None:
     """Fetch, extract, summarize and score one item at a time, writing as it goes."""
-    read_url = fetcher or live_fetcher(settings)
+    tracer = telemetry.Tracer(
+        sink=trace_sink(settings, date=plan.date, run_id=plan.run_id, shard=shard),
+        now=assemble.utc_now,
+    )
+    read_url = fetcher or live_fetcher(settings, tracer=tracer)
     inference = settings.app.models.inference
     model = settings.app.models.summarize
     observed = props(model_endpoint, timeout=inference.request_timeout_minutes * 60)
@@ -612,7 +673,14 @@ def stage_work(
     ready: list[_FetchedWorkItem] = []
     for original_index, item in enumerate(mine):
         started = time.monotonic()
-        article, source_text, fetch_ms, extract_ms = _fetch_one(item, settings, read_url)
+        with (
+            tracer.trace(_trace_id(plan.run_id, item)),
+            tracer.span(telemetry.SpanName.ITEM) as span,
+        ):
+            telemetry.item_attributes(span, item, run_id=plan.run_id, shard=shard)
+            article, source_text, fetch_ms, extract_ms = _fetch_one(
+                item, settings, read_url, tracer
+            )
         assemble.write_atomic(items_dir / f"{item.item_id}.article.json", article.to_json())
         if article.status is not ArticleStatus.OK:
             LOG.info("item degraded id=%s reason=%s", item.item_id, article.failure_detail)
@@ -632,62 +700,75 @@ def stage_work(
     for work in sorted(ready, key=lambda candidate: _summarize_band_sort_key(candidate, settings)):
         item = work.item
         article = work.article
-        model_started = time.monotonic()
-        summary = _summarize_one(
-            article, settings, fingerprint, endpoint=model_endpoint, run_id=plan.run_id
-        )
-        summarize_ms = int((time.monotonic() - model_started) * 1000)
-        summary = summary.model_copy(
-            update={
-                "duration_ms": int((time.monotonic() - work.started) * 1000),
-                "fetch_ms": work.fetch_ms,
-                "extract_ms": work.extract_ms,
-                "summarize_ms": summarize_ms,
-            }
-        )
-        assemble.write_atomic(items_dir / f"{item.item_id}.summary.json", summary.to_json())
-        if summary.status is not SummaryStatus.OK or scorer is None:
-            continue
+        with (
+            tracer.trace(_trace_id(plan.run_id, item)),
+            tracer.span(telemetry.SpanName.ITEM) as item_span,
+        ):
+            telemetry.item_attributes(item_span, item, run_id=plan.run_id, shard=shard)
+            model_started = time.monotonic()
+            summary = _summarize_one(
+                article,
+                settings,
+                fingerprint,
+                endpoint=model_endpoint,
+                run_id=plan.run_id,
+                tracer=tracer,
+            )
+            summarize_ms = int((time.monotonic() - model_started) * 1000)
+            summary = summary.model_copy(
+                update={
+                    "duration_ms": int((time.monotonic() - work.started) * 1000),
+                    "fetch_ms": work.fetch_ms,
+                    "extract_ms": work.extract_ms,
+                    "summarize_ms": summarize_ms,
+                }
+            )
+            assemble.write_atomic(items_dir / f"{item.item_id}.summary.json", summary.to_json())
+            if summary.status is not SummaryStatus.OK or scorer is None:
+                continue
 
-        seen = article.text or ""
-        # The article before the cap, so hhem_full answers a different question
-        # from hhem. Falls back to the cut text when nothing was cut away.
-        whole = work.source_text or seen
-        score_started = time.monotonic()
-        hhem, hhem_full = dual_score(
-            scorer,  # type: ignore[arg-type]
-            seen_text=seen,
-            full_text=whole,
-            summary=summary.summary or "",
-            evaluation=settings.app.evaluation,
-        )
-        score_ms = int((time.monotonic() - score_started) * 1000)
-        row = score.to_eval_row(
-            item=item,
-            article=article,
-            summary=summary,
-            full_text=whole,
-            premise=seen,
-            hhem=hhem,
-            hhem_full=hhem_full,
-            config=settings.app.evaluation,
-            date=plan.date,
-            run_id=plan.run_id,
-            scorer_version=scorer_version,
-            scored_at=assemble.utc_now(),
-        )
-        row = row.model_copy(update={"score_ms": score_ms})
-        assemble.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
-        _write_evidence(row, premise=seen, summary=summary.summary or "")
-        LOG.info(
-            "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
-            item.item_id,
-            row.band.value,
-            work.fetch_ms,
-            work.extract_ms,
-            summarize_ms,
-            score_ms,
-        )
+            seen = article.text or ""
+            # The article before the cap, so hhem_full answers a different question
+            # from hhem. Falls back to the cut text when nothing was cut away.
+            whole = work.source_text or seen
+            with tracer.span(telemetry.SpanName.SCORE) as score_span:
+                score_started = time.monotonic()
+                hhem, hhem_full = dual_score(
+                    scorer,  # type: ignore[arg-type]
+                    seen_text=seen,
+                    full_text=whole,
+                    summary=summary.summary or "",
+                    evaluation=settings.app.evaluation,
+                )
+                score_ms = int((time.monotonic() - score_started) * 1000)
+                row = score.to_eval_row(
+                    item=item,
+                    article=article,
+                    summary=summary,
+                    full_text=whole,
+                    premise=seen,
+                    hhem=hhem,
+                    hhem_full=hhem_full,
+                    config=settings.app.evaluation,
+                    date=plan.date,
+                    run_id=plan.run_id,
+                    scorer_version=scorer_version,
+                    scored_at=assemble.utc_now(),
+                )
+                row = row.model_copy(update={"score_ms": score_ms})
+                score_span.set(telemetry.AttrKey.BAND, row.band.value)
+            assemble.write_atomic(items_dir / f"{item.item_id}.eval.json", row.to_json())
+            _write_evidence(row, premise=seen, summary=summary.summary or "")
+            LOG.info(
+                "item scored id=%s band=%s fetch=%sms extract=%sms model=%sms score=%sms",
+                item.item_id,
+                row.band.value,
+                work.fetch_ms,
+                work.extract_ms,
+                summarize_ms,
+                score_ms,
+            )
+    tracer.flush()
 
 
 def _write_evidence(row: EvalRow, *, premise: str, summary: str) -> Path:
@@ -736,7 +817,10 @@ def _stamps(items_dir: Path) -> list[FingerprintRow]:
 
 
 def _fetch_one(
-    item: PlannedItem, settings: config.Settings, read_url: Fetcher
+    item: PlannedItem,
+    settings: config.Settings,
+    read_url: Fetcher,
+    tracer: telemetry.Tracer | None = None,
 ) -> tuple[Article, str, int, int]:
     """The article, the body it was cut from, and how long each step took.
 
@@ -744,16 +828,35 @@ def _fetch_one(
     slow extractor, and only one of those is ours to fix. The untruncated body
     travels beside the payload rather than inside it: the scorer needs it, and
     nothing persists it (Rule #1).
+
+    The two spans carry the same split and one thing the columns do not: the
+    tagger nests inside the extract span, so a taxonomy that grew a hundred
+    patterns shows up as its own step rather than as the extractor getting
+    slower.
     """
+    trace = tracer if tracer is not None else silent_tracer()
     started = time.monotonic()
-    result = read_url(item.canonical_url)
+    with trace.span(telemetry.SpanName.FETCH) as span:
+        result = read_url(item.canonical_url)
+        span.set(telemetry.AttrKey.OUTCOME, result.outcome.value)
+        span.set(telemetry.AttrKey.HTTP_STATUS, result.status)
+        span.set(telemetry.AttrKey.BODY_BYTES, len(result.body))
+        span.set(telemetry.AttrKey.BODY_TRUNCATED, result.body_truncated)
     fetch_ms = int((time.monotonic() - started) * 1000)
 
     started = time.monotonic()
-    article, source_text = extract.to_article_with_source(
-        item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
-    )
-    article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)
+    with trace.span(telemetry.SpanName.EXTRACT) as span:
+        article, source_text = extract.to_article_with_source(
+            item, result, config=settings.app.extract, fetched_at=assemble.utc_now()
+        )
+        with trace.span(telemetry.SpanName.TAG) as tag_span:
+            article = tag.tagged(article, taxonomy=settings.taxonomy, watchlist=settings.watchlist)
+            tag_span.set(telemetry.AttrKey.LENS_COUNT, len(article.lenses))
+            tag_span.set(telemetry.AttrKey.ENTITY_COUNT, len(article.entities))
+            tag_span.set(telemetry.AttrKey.EVENT_COUNT, len(article.events))
+        telemetry.article_attributes(
+            span, article, source_digest=text_digest(source_text) if source_text else None
+        )
     return article, source_text, fetch_ms, int((time.monotonic() - started) * 1000)
 
 
@@ -788,47 +891,85 @@ def _summarize_one(
     *,
     endpoint: str = DEFAULT_ENDPOINT,
     run_id: str | None = None,
+    tracer: telemetry.Tracer | None = None,
 ) -> Summary:
+    """One article becomes one summary, in three steps a single column hides.
+
+    `summarize_ms` covers all three. Rendering the prompt builds a JSON schema
+    from a Pydantic model; parsing the reply validates it back and then runs the
+    verbatim check over the whole source, which is the longest string comparison
+    in the pipeline. So an item that got slow is either the model, our schema
+    work or our own checking, and until these spans existed the three were one
+    number.
+    """
+    trace = tracer if tracer is not None else silent_tracer()
     inference = settings.app.models.inference
     model_id = settings.app.models.summarize.id
-    payload = summarize.build_request(
-        article,
-        model_id=model_id,
-        inference=inference,
-        prompt_config=settings.app.summarize,
-        evaluation=settings.app.evaluation,
-    )
-    completion: Completion | None
-    no_reply = FailureCode.MODEL_UNREACHABLE
-    try:
-        request_timeout_seconds = settings.app.models.inference.request_timeout_minutes * 60
-        completion = post(
-            payload,
-            endpoint=endpoint,
-            timeout=request_timeout_seconds,
-        )
-    except HTTPError as error:
-        # Before OSError, which HTTPError subclasses. A server that answered is
-        # not an unreachable one, and the body is the only place it says why it
-        # refused. It is a stream, so read it once.
-        completion = None
-        with error:
-            if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
-                no_reply = FailureCode.CONTEXT_EXCEEDED
-        _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
-    except OSError as error:
-        completion = None
-        _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
-    return summarize.to_summary(
-        article,
-        completion,
-        model_id=model_id,
-        pipeline_fingerprint=fingerprint,
-        generated_at=assemble.utc_now(),
-        prompt_config=settings.app.summarize,
-        evaluation=settings.app.evaluation,
-        no_reply=no_reply,
-    )
+    with trace.span(telemetry.SpanName.SUMMARIZE) as stage_span:
+        stage_span.set(telemetry.AttrKey.MODEL_ID, model_id)
+        with trace.span(telemetry.SpanName.RENDER_PROMPT) as span:
+            payload = summarize.build_request(
+                article,
+                model_id=model_id,
+                inference=inference,
+                prompt_config=settings.app.summarize,
+                evaluation=settings.app.evaluation,
+            )
+            rendered = canonical_json(payload)
+            prompt_digest = text_digest(rendered)
+            span.set(telemetry.AttrKey.PROMPT_DIGEST, prompt_digest)
+            span.set(telemetry.AttrKey.PROMPT_CHARS, len(rendered))
+        completion: Completion | None
+        no_reply = FailureCode.MODEL_UNREACHABLE
+        with trace.generation() as span:
+            span.set(telemetry.AttrKey.MODEL_ID, model_id)
+            span.set(telemetry.AttrKey.PROMPT_DIGEST, prompt_digest)
+            try:
+                request_timeout_seconds = settings.app.models.inference.request_timeout_minutes * 60
+                completion = post(
+                    payload,
+                    endpoint=endpoint,
+                    timeout=request_timeout_seconds,
+                )
+            except HTTPError as error:
+                # Before OSError, which HTTPError subclasses. A server that answered is
+                # not an unreachable one, and the body is the only place it says why it
+                # refused. It is a stream, so read it once.
+                completion = None
+                with error:
+                    if is_context_exceeded(error.read().decode("utf-8", errors="replace")):
+                        no_reply = FailureCode.CONTEXT_EXCEEDED
+                _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
+            except OSError as error:
+                completion = None
+                _log_no_reply(article, model_id=model_id, code=no_reply, error=error, run_id=run_id)
+            if completion is None:
+                span.set(telemetry.AttrKey.FAILURE_CODE, no_reply.value)
+            else:
+                # Prefill and decode are totals the server reports after the call
+                # returned, so they are attributes and cannot be child spans. A
+                # span drawn around a duration nobody timed is a shape we invented.
+                span.set(telemetry.AttrKey.INPUT_TOKENS, completion.prompt_tokens)
+                span.set(telemetry.AttrKey.OUTPUT_TOKENS, completion.completion_tokens)
+                span.set(telemetry.AttrKey.CACHED_TOKENS, completion.cached_tokens)
+                span.set(telemetry.AttrKey.PREFILL_MS, completion.prefill_ms)
+                span.set(telemetry.AttrKey.DECODE_MS, completion.decode_ms)
+                span.set(telemetry.AttrKey.HIT_THE_BUDGET, completion.hit_the_budget)
+                span.set(telemetry.AttrKey.REASONED, completion.reasoned)
+        with trace.span(telemetry.SpanName.PARSE_REPLY) as span:
+            summary = summarize.to_summary(
+                article,
+                completion,
+                model_id=model_id,
+                pipeline_fingerprint=fingerprint,
+                generated_at=assemble.utc_now(),
+                prompt_config=settings.app.summarize,
+                evaluation=settings.app.evaluation,
+                no_reply=no_reply,
+            )
+            telemetry.summary_attributes(span, summary)
+        telemetry.summary_attributes(stage_span, summary)
+    return summary
 
 
 # --- route -------------------------------------------------------------------
@@ -917,6 +1058,10 @@ def stage_route(
     """
     items_dir = _run_dir(plan.date) / "items"
     visuals = settings.app.visuals
+    tracer = telemetry.Tracer(
+        sink=trace_sink(settings, date=plan.date, run_id=plan.run_id, shard=0),
+        now=assemble.utc_now,
+    )
     spent: list[int] = []
     skipped = 0
     drafted = 0
@@ -942,21 +1087,30 @@ def stage_route(
         article = Article.from_json(entry.article_path.read_text(encoding="utf-8"))
 
         started = clock()
-        decision, asked = _route_one(article, summary, settings)
-        if not asked:
-            skipped += 1
-        if decision.drafted_chart:
-            drafted += 1
-        if decision.kind is not VisualKind.NONE:
-            decision = render_route(
-                decision,
-                public_root=PUBLIC_ROOT.parent,
-                relpath=asset_relpath(plan.date, item.item_id),
-                canvas_width=visuals.canvas_width,
-                canvas_height=visuals.canvas_height,
-            )
-        if decision.kind is VisualKind.CHART:
-            kept += 1
+        with (
+            tracer.trace(_trace_id(plan.run_id, item)),
+            tracer.span(telemetry.SpanName.ROUTE) as span,
+        ):
+            telemetry.item_attributes(span, item, run_id=plan.run_id, shard=0)
+            decision, asked = _route_one(article, summary, settings)
+            if not asked:
+                skipped += 1
+            if decision.drafted_chart:
+                drafted += 1
+            if decision.kind is not VisualKind.NONE:
+                decision = render_route(
+                    decision,
+                    public_root=PUBLIC_ROOT.parent,
+                    relpath=asset_relpath(plan.date, item.item_id),
+                    canvas_width=visuals.canvas_width,
+                    canvas_height=visuals.canvas_height,
+                )
+            if decision.kind is VisualKind.CHART:
+                kept += 1
+            span.set(telemetry.AttrKey.MODEL_ASKED, asked)
+            span.set(telemetry.AttrKey.DRAFTED_CHART, decision.drafted_chart)
+            span.set(telemetry.AttrKey.VISUAL_KIND, decision.kind.value)
+            span.set(telemetry.AttrKey.VISUAL_STATE, decision.visual_state.value)
         route_ms = int((clock() - started) * 1000)
         spent.append(route_ms)
         decision = decision.model_copy(update={"route_ms": route_ms})
@@ -974,6 +1128,7 @@ def stage_route(
     # it spent. The gap between the two is the fixed cost - checkout, weights,
     # install, model start - and separating them is the whole point of the
     # measurement (Rule #10).
+    tracer.flush()
     total_ms = sum(spent)
     # `drafted` minus `kept` is what the post-model checks refused. Without both
     # numbers a model that stopped asking for charts reads the same as checks
