@@ -219,6 +219,65 @@ The same component still marks a point as cut straight from `truncation_flagged`
 with no version stamp read, which is the per-item form of the error the table
 above no longer makes.
 
+## What the machine did - read at build time, never published
+
+The same arrangement as the model section above, over a third private ledger:
+`state/runtime-counters.csv`, one row per work shard per run, holding what
+llama-server itself counted. The reader is
+[frontend/src/lib/server/runtime-counters.ts](../../../frontend/src/lib/server/runtime-counters.ts),
+under `$lib/server/` for the same reason `model-work.ts` is. Nothing is served
+and no column is published: `state/` is not part of the site, and the figures
+below reach a page as numbers, never as rows.
+
+| Figure | Made from | Composed as |
+| --- | --- | --- |
+| Seconds reading, seconds writing | `prompt_seconds_total`, `tokens_predicted_seconds_total` | summed over shards, and never added together into one "model seconds" |
+| Read and write speed | those seconds against `prompt_tokens_total` and `tokens_predicted_total` | sum over sum, never a mean of per-shard rates |
+| Read spread | the fastest shard's read rate over the slowest | one run only; a run of one shard reports nothing |
+| Prompt cache | `prompt_tokens_total` against `prompt_tokens_cached_total` | share of every token the prompt needed, read or reused |
+| Context headroom | `n_tokens_max` against `models.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
+| Job clock | `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
+| The processor | `cpu_model` | text, per shard, and never averaged |
+| Busy, memory, load | `cpu_busy_pct`, `peak_rss_bytes`, `model_load_ms` | lowest, highest, slowest |
+| Do the two clocks agree | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
+
+Both ceilings come from `config/idhazh.json` through
+[frontend/src/lib/server/config.ts](../../../frontend/src/lib/server/config.ts)
+(Rule #6). A counter without its ceiling is not a measurement: 4,925 says
+nothing until 8,192 sits beside it.
+
+### Every figure carries the shards it was made from
+
+Three columns landed on 2026-08-29 and three more on 2026-08-30, so most
+committed rows are blank in most of them. Each derived figure therefore leaves
+the module as a `Reading` - a value, the shards that reported the cells it needs,
+and the shards the run split into. A page can then tell **never measured** (`from`
+is zero) from **measured on some** from **measured on all**, without guessing.
+
+`value: 0` with `from` above zero is a measurement of zero and stays one. A blank
+cell is `value: null` with `from` of zero. `RuntimeCountersRow.csv_row` states
+the rule on the writer's side: "A server that never answered and a server that
+read no tokens are different facts, and one of them is a broken scrape."
+
+### A shard is a set, and a run that cannot be reconciled is refused
+
+`state/runtime-counters.csv` is merged line by line with the union driver, while
+the deduplication that writes it reads a tree frozen at checkout. So two workflow
+runs that compute the same `run_id` both append, and the file ends up holding one
+shard index twice. Summed as rows rather than as a set, run `2026-08-29-3`
+reported **-394 seconds** against the item ledger, which is not a number any
+machine produced.
+
+The reader groups by shard index. Two rows for one shard whose every counter cell
+matches are one scrape written twice, and collapse to one. Two rows that differ
+anywhere are two llama-server processes, and the counters are cumulative per
+process - so they can neither be added nor chosen between, and the whole run is
+refused. A refused run is returned with its id and the reason, never dropped
+silently: a page that prints half a run prints a figure that reads as the run.
+
+Measured 2026-08-30 over the committed ledger: 50 rows, 11 runs, **10 read and 1
+refused** - `2026-08-29-3`, whose shard 1 committed two different scrapes.
+
 ## Degrade rules
 
 A missing or unparsable month draws a gap. The page stays alive and logs a

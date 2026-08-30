@@ -45,6 +45,20 @@ export interface RunConfig {
 	 * day is not evidence the next one will be quiet, and a runway has to be the
 	 * worst case to be worth printing (Rule #10). */
 	safety_ceiling_per_run: number;
+	/** When the platform stops a work shard. The ceiling the machine page reads
+	 * `job_seconds` against - 4,208 seconds means nothing until 150 minutes sits
+	 * beside it. */
+	shard_timeout_minutes: number;
+}
+
+/** What the console needs to say how much room a prompt had left.
+ *
+ * One knob of the pipeline's `models.inference` block, not the whole of it: the
+ * machine page reads `n_tokens_max` against the window, and a counter without
+ * its ceiling is not a measurement.
+ */
+export interface InferenceConfig {
+	n_ctx: number;
 }
 
 /** What the console needs to say how much room the site has left. */
@@ -167,7 +181,12 @@ const DEFAULTS: UiConfig = {
 	archive_page_size: 25
 };
 
-const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70, safety_ceiling_per_run: 160 };
+const RUN_DEFAULTS: RunConfig = {
+	success_floor_pct: 70,
+	safety_ceiling_per_run: 160,
+	shard_timeout_minutes: 150
+};
+const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
@@ -245,6 +264,7 @@ interface RawConfig {
 	summarize?: Partial<SummarizeConfig>;
 	console?: Partial<ConsoleConfig>;
 	assist?: Partial<AssistConfig>;
+	models?: { inference?: Partial<InferenceConfig> };
 }
 
 interface RawAppearance {
@@ -300,6 +320,10 @@ export function uiConfig(): UiConfig {
 
 export function runConfig(): RunConfig {
 	return { ...RUN_DEFAULTS, ...(raw().run ?? {}) };
+}
+
+export function inferenceConfig(): InferenceConfig {
+	return { ...INFERENCE_DEFAULTS, ...(raw().models?.inference ?? {}) };
 }
 
 export function retentionConfig(): RetentionConfig {
