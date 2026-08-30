@@ -120,13 +120,15 @@ whose prompt is a guess is the one thing this module exists to make impossible.
    `sequence_length`.**~~ **Both answered on 2026-08-29: 2 and 8192.** Neither
    was work; both were one config value that had gone stale under a change made
    in another subsystem.
-4. **Write the notebook (gate 6).** The only gate left, and the only piece of
-   phase B nothing else is waiting on. A few kilobytes of instructions; only
-   *running* it needs a GPU.
+4. ~~**Write the notebook (gate 6).**~~ **Done on 2026-08-29.**
+   `notebooks/finetune.ipynb`, 13 cells, and `backend/tests/test_notebooks.py`
+   holds its gates so they cannot rot.
 5. **Answer three questions (inputs 3, 4 and 6).** Which teacher, which student,
    and free Colab or paid. All three have defaults, so silence is an answer.
-6. **Then the training rows (6 to 9), which need a GPU that is not ours.**
-7. **Row 10 is the only one that changes what a reader receives, and it needs
+6. **Run it.** Every pre-flight gate is green, so the next step is a Colab
+   session and the first real measurement of what training costs here.
+7. **Then rows 7 to 9** - publish the weights, score them twice, distil.
+8. **Row 10 is the only one that changes what a reader receives, and it needs
    your explicit approval** (Level 5).
 
 ### Everything that must be true before a Colab session is worth starting
@@ -138,15 +140,25 @@ whose prompt is a guess is the one thing this module exists to make impossible.
 | 3 | Rows fit `finetune.sequence_length` | **CLEARED.** `sequence_length` set to 8192: 0 of 1,308 rows over it, against 15 at the old 4096 |
 | 4 | The reference set exists | **CLEARED. 544 rows**, against a 500-row target. Train 434, test 110, no `url_key` on both sides |
 | 5 | `models.<role>.hf_base_repo` names a repository that really exists | **CLEARED.** `Qwen/Qwen3.5-9B` is real: 12,507,912 downloads, last changed 2026-03-02. `Qwen/Qwen3-4B` is real too, 4,961,204 downloads |
-| 6 | The notebook exists | Not written. A few kilobytes of instructions; only *running* it needs a GPU |
+| 6 | The notebook exists | **CLEARED.** `notebooks/finetune.ipynb`, 13 cells. Run offline against the real corpus: 1,000 rows sampled, 0 in the holdout, 0 in the reference test slice |
 | 7 | Inputs 3, 4 and 6 answered | Defaults stand |
 
-**Every gate but the notebook is now green.** Both failures were a config value
-rather than work, and both were expected to be a formality. That is the argument
-for running a gate rather than reasoning about it: two knobs had quietly gone
-stale under a change made somewhere else, and no test could see it because
-neither value is wrong on its own - each was wrong only against a number in
-another subsystem.
+**Every gate is now green, and a Colab session is the next step.** Two of the
+three that were called a formality failed, and both were a config value rather
+than work - each wrong only against a number in another subsystem, which is why
+no test could see it. That is the argument for running a gate instead of
+reasoning about it.
+
+### What the notebook found that the plan had not
+
+**`reference.jsonl` carries no train/test slice.** `check --write` emits rows in
+`CorpusRow` shape, and that shape has six fields, none of them the slice. The
+slice exists only in `queue.jsonl`. A loader that reads the emitted file alone
+trains on all 544 rows including the 110 test references - ESCALATE trigger 2,
+silently. The notebook joins the two files on `url_key` and refuses any row whose
+side of the line cannot be established. **That is a workaround, not the fix.**
+The fix is either a second emitted file or a slice on the row, and it is a
+contract change, so it is deferred rather than smuggled in here.
 
 ### Gate 2 - `holdout_days` is longer than the corpus has existed
 
@@ -1139,7 +1151,7 @@ A critical read of this plan against the repo as it actually stands. Six finding
   | 6 | Free-tier T4 must train in `fp16`, not `bf16`. Loss scaling on, `max_grad_norm` 1.0, watch for NaN loss. | The T4 is a Turing card with no `bf16`. |
   | 7 | **TPU is not an option.** | 4-bit quantisation is CUDA-only. There is no working QLoRA path on a TPU. |
   | 8 | No example packing, and `attn_implementation="sdpa"`. | Packing crosses article boundaries, and FlashAttention-2 needs Ampere or newer, so a T4 cannot keep packed examples from attending to each other. |
-  | 9 | `sequence_length` is 4096, from measurement. | Max article seen 1,923 words (~2,500 tokens, the cap), plus a 3,787-byte system prompt (~950 tokens), plus 900 output tokens = ~4,350 worst case. 8192 would waste T4 memory quadratically in attention for headroom nothing uses. |
+  | 9 | `sequence_length` is read from config, and an over-length row is **dropped and counted, never truncated**. | Set to 8192 on 2026-08-29 after `verify --tokens` measured the real worst case at 7,155 tokens. The earlier 4,096 came from a 1,923-word article, which was the truncation cap before it moved - it would have silently cut 15 of 1,308 rows, and a truncated target teaches the model to stop mid-summary. |
   | 10 | Sample `train_rows` from the window with a `vertical` quota, so no single vertical exceeds its share. | This is what the bigger window in input #2 buys. Measured 2026-08-27, the top two verticals are 54 of 114 items. |
   | 11 | Starting settings, all estimates until measured: LoRA rank 16, alpha 32, dropout 0.05, all linear layers; no embedding or head training; lr 1e-4 to 2e-4, cosine, 3 percent warmup; batch 1 with gradient accumulation to an effective 8-16; gradient checkpointing on. | All linear layers because the MLP blocks carry format, and format is most of what is being taught. |
   | 12 | Checkpoint to Drive every ~20 minutes. | A free session that disconnects then costs 20 minutes, not the run. |
