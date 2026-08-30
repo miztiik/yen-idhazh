@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -775,6 +775,19 @@ Verified 2026-08-20.
   plan that assumes one is proposing something that cannot be done. Job *logs*
   are the exception: they outlive every artifact here, which is why a question
   about what a past run did is asked with `gh run view --job <id> --log`.
+- **A re-run is per job, never per step, and it reuses the original commit.**
+  `gh run rerun <id> --failed` and `gh run rerun --job <id>` start the failed job
+  again from its first step; there is no way to resume at the step that failed.
+  That is survivable here only because the expensive jobs are separate: a failed
+  `assemble` re-runs alone - 82 s in run `33270983446` - while `plan`, the four
+  `work` shards and `route` keep their results and are not repeated. It works
+  for one day, because the `plan` and `routes` artifacts it downloads carry
+  `retention-days: 1`. **The re-run uses the same `GITHUB_SHA` and the same
+  workflow file as the original event**, so it cannot pick up a fix that landed
+  afterwards, and a job that failed against a `main` which has since moved will
+  re-measure the tree it started from rather than the one that is published now.
+  A re-run that goes green for that reason has laundered the failure rather than
+  answered it.
 
 ## See also
 
