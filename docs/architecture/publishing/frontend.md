@@ -542,7 +542,32 @@ Three colours, and the boundaries are read from config rather than chosen by the
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
-Beneath the strip is **every feed that failed at least once**, worst first, with its attempt count, its last outcome and how close it is to quarantine. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
+Beneath the strip is **every feed that failed at least once, nearest to a rest first**. A feed with a clean record is not listed: the operator came here to find what is broken, and a list naming all seventy sources hides the four that are. The failing rule matches `FeedHealthRow.failing` in the contract exactly - a `200` that parsed to no entries counts as a failure, a `robots.txt` refusal does not ([../sources/health.md](../sources/health.md)).
+
+**The count beside a feed is its run of failures, not its lifetime total.** The
+pipeline rests a feed on failures in a row ending at the newest read, so that is
+the number the page prints. A source that failed twelve times in July and
+answered this morning is healthy, and a lifetime total printed beside a rest
+marker is a number the pipeline never used to rest anything. The rule is
+restated on the read side in `frontend/src/lib/feed-health.ts`, which runs the
+same loop `discover._rests` runs, so a test can drive it with rows it made up.
+Ranking follows the same fact: nearest to a rest first, then by how much has
+gone wrong in total, because a feed four failures into a five-failure rule is
+one run from being dropped and a feed with more failures spread over a month is
+not.
+
+**Each feed carries a target bar and a strip of days.** The bar's track is
+`collect.quarantine_after_failures`, its fill is the run of failures, and its
+marker sits on the threshold - the same `TargetBar` the truncation cap and the
+router-minute rule draw with. The strip is one square a day over the page's
+window, oldest to newest, on a single date axis every row shares, so "broken
+since Tuesday" and "flaky all month" cannot draw the same picture. It shrinks to
+fit its row rather than scrolling, because twenty scroll regions in one column
+is not a list. Every square carries its whole day's tally as a sentence: colour
+is one signal and never the only one, and the two outcomes that are not a
+verdict - a polite refusal and a day nobody asked - take no band colour at all.
+`Last result` stays free text, because it is the only human-readable cause on
+the page and is never traded for a glyph.
 
 **The console reads committed records in two ways.** The run strip, feed list and
 timing medians still read the ledgers at build time. The item-health viewport
@@ -605,7 +630,7 @@ Three surfaces do not simply follow the span, and each says so on the page:
 
 | Surface | What it does | Why |
 | --- | --- | --- |
-| `Feeds that failed` | Counts every run on record | A windowed count would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. |
+| `Feeds that failed` | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
 | `Site size` | Absolute number always; only the movement is windowed | The size is a level and the operator wants today's whatever span he is reading. Only the movement is a rate, and a rate has to say what it is over. |
 | `Router minutes per chart` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
