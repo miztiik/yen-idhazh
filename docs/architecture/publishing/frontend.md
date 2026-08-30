@@ -135,6 +135,49 @@ newly extracted articles through the deterministic rule in
 [../sources/discovery.md](../sources/discovery.md). The UI ruling holds either
 way: sparse, payload-dependent dimensions do not get a permanent control row.
 
+### A lens is a chip on the item, not a control anywhere
+
+Ruled by Jony and Susan on 2026-08-30 after Editor cut the vocabulary to six.
+The pill row is unchanged; the item's eyebrow gains a chip.
+
+A lens renders after the desk name as an inert tinted chip carrying the display
+name and nothing else. Two chips at most, in the vocabulary's own order, with no
+overflow marker - three of "Trade and tariffs" length wrap the eyebrow on a
+390px screen, and the reader keeps a one-line eyebrow on every item in exchange
+for the third word on a rare three-lens story. An item with no lens renders
+nothing at all: the majority have none, the absence is a gap in our keyword list
+rather than a fact about the story, and printing it on nine items in ten would
+be printing our own homework.
+
+**Inert, and the reason is the count.** On a page grouped by desk, "War" beside
+a World item and beside an Energy item says those two are the same story seen
+twice, which a desk heading cannot say. Filtering to it would be a different
+thing: `war` is expected at 10 to 14 percent, so on a seventeen-item day the
+filter's usual result is two items - it removes fifteen things the reader came
+for and shows nothing scrolling would not have. Raising it to a control would
+also need client JavaScript against a 64-byte-per-route ratchet, to do that.
+
+**Events and entities stay off the page**, and the rule behind all three is one
+sentence: a classification may go on the page when it says something the title
+cannot, **and** being wrong about it costs the reader nothing they can check.
+"Acquisition" above a title that says X buys Y is the same fact in a worse
+typeface. "Nvidia" on an item whose title does not say Nvidia is a factual
+claim resting on one keyword, and a wrong one is a defect. A lens is a broad
+frame - disagree with it and nothing is lost. Lenses pass, entities fail, events
+duplicate.
+
+**The cross-day question is deferred, with a number rather than a mood.** "What
+has been happening on trade" is real and is not answerable by scrolling, and it
+belongs on `/archive/` as an in-place filter over the month index that page
+already fetches - no new route and no new request. The trigger:
+
+> **When the lowest-share active lens reaches 10 items in the archive's default
+> window, the archive story rows gain a lens filter.**
+
+Until then that filter would return a list shorter than the control bar above
+it. Susan accepted the deferral on the condition the trigger was written down,
+because a trigger nobody wrote down is a feature nobody ships.
+
 ## The read mark is held per day, and it expires
 
 A reader can mark an item read. The mark lives in `localStorage` and nowhere else - never a cookie, because a cookie is sent on every request and would put a reading history into the host's access logs.

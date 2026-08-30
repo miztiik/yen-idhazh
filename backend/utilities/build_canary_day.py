@@ -52,7 +52,7 @@ from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.route import Route, SpecFormat, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest, RunRecord, RunStatus
 from idhazh.contracts.sources import SourceForm
-from idhazh.contracts.taxonomy import SourceKind, SourceTier
+from idhazh.contracts.taxonomy import LensId, SourceKind, SourceTier
 from idhazh.embed import Embedder
 from idhazh.evals import metrics, score, writer
 from idhazh.ledger import append_health
@@ -332,8 +332,24 @@ def to_item(
         source_form=source.source_form,
         reader_note=reader_note(source),
         truncated=source.truncated,
+        lenses=lenses_for(index),
         introduced_by_run=run_n,
     )
+
+
+def lenses_for(index: int) -> list[LensId]:
+    """Enough lens states for the page to be tested, planted on existing items.
+
+    Three states and no fourth: none, one, and more than the page will show. The
+    third is what proves the cap, and it has to exceed it rather than meet it.
+    A new item would have been the obvious way to carry these and is the wrong
+    one - the canary suite counts what is on the page.
+    """
+    if index == 1:
+        return [LensId.WAR]
+    if index == 2:
+        return [LensId.CHINA, LensId.TRADE, LensId.CHIPS]
+    return []
 
 
 def visual_for(index: int, item_id: str, target: Path) -> Route | None:

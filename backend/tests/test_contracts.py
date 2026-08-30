@@ -490,6 +490,32 @@ def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None
     assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == ItemHealthRow.csv_columns()
 
 
+def test_the_frontend_names_every_live_lens_and_no_retired_one() -> None:
+    """The page's own copy of the lens display names, held against the config.
+
+    `frontend/src/lib/payload/lenses.ts` restates them because it is TypeScript
+    and the vocabulary is JSON, and it holds them rather than taking them
+    through `data` so the six names are not repeated inside every prerendered
+    day page. Drift either way is a defect a build never catches: a missing name
+    renders nothing where a chip belongs, and a stale one puts a tombstone back
+    on the page.
+    """
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    source = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "payload" / "lenses.ts")
+    declared = re.search(r"LENS_NAMES: Readonly<Record<string, string>> = \{(.*?)\};", source, re.DOTALL)
+    assert declared is not None, "lenses.ts no longer declares LENS_NAMES"
+    named = dict(re.findall(r"(\S+): '([^']+)'", declared.group(1)))
+    live = {
+        lens.id.value: lens.display_name
+        for lens in taxonomy.lenses
+        if lens.status is not LifecycleStatus.RETIRED
+    }
+    assert named == live, "the page and config/taxonomy.json disagree about the lens names"
+
+    retired = {lens.id.value for lens in taxonomy.lenses if lens.status is LifecycleStatus.RETIRED}
+    assert not (retired & set(named)), f"a retired lens can still render: {sorted(retired & set(named))}"
+
+
 def test_the_console_reads_a_prefix_of_the_published_telemetry_columns() -> None:
     """The browser's copy of the projection header, held against the writer.
 

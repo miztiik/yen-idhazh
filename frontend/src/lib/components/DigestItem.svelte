@@ -9,8 +9,10 @@
 	 * have this" rather than "you already had this".
 	 */
 	import type { DigestItem } from '$lib/payload/types';
+	import { shownLenses } from '$lib/payload/lenses';
 	import ItemMeta from './ItemMeta.svelte';
 	import ItemVisual from './ItemVisual.svelte';
+	import LensChips from './LensChips.svelte';
 
 	let {
 		item,
@@ -35,6 +37,8 @@
 		day?: { date: string; href: string };
 		onRead?: () => void;
 	} = $props();
+
+	const lenses = $derived(shownLenses(item.lenses));
 </script>
 
 <article
@@ -45,22 +49,26 @@
 	data-truncated={item.truncated}
 	data-read={read}
 	data-visual={item.visual?.state ?? 'absent'}
+	data-lenses={lenses.length ? lenses.join(' ') : undefined}
 >
 	<div class="item-body">
 		<!-- Under a topic heading the name would repeat the heading, and a bullet on
 		     its own is decoration. The line then earns its place only when it has
-		     the one thing left to say. -->
-		{#if showVertical || read}
+		     the one thing left to say. A topic is one of those things. -->
+		{#if showVertical || read || lenses.length}
 			<p
 				class="mb-1 flex items-center gap-2 text-[0.75rem] tracking-wide text-text-tertiary uppercase"
 			>
-				<span
-					class="inline-block h-1.5 w-1.5 rounded-full border border-current"
-					class:bg-current={!read}
-					aria-hidden="true"
-				></span>
+				{#if showVertical || read}
+					<span
+						class="inline-block h-1.5 w-1.5 rounded-full border border-current"
+						class:bg-current={!read}
+						aria-hidden="true"
+					></span>
+				{/if}
 				{#if showVertical}{verticalName}{/if}
 				{#if read}<span class="normal-case">Read</span>{/if}
+				<LensChips {lenses} />
 			</p>
 		{/if}
 
