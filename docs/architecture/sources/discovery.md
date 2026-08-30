@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-30
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -328,6 +328,37 @@ the fetch is allowed, but `corpus/` commits article text as training samples
 (CLAUDE.md section 0a), so the publisher's stated intent and one of our uses
 point in opposite directions. Recorded here rather than resolved: the owner
 takes that call, and if it goes the other way the fix is one `retired_on`.
+
+### The 2026-08-30 requested feed check: none entered live config
+
+Eight endpoints were checked independently from a developer machine on
+2026-08-30. The probe used the production fetcher and extractor: the configured
+user agent, public-address check, `robots.txt` policy, bounded retries,
+`feedparser`, publisher-declared paywall check and prose extraction. This is
+evidence about that developer machine, not qualification on the GitHub runner.
+
+| Candidate | Feed result | Sample article result | Decision |
+| --- | --- | --- | --- |
+| Fortune all-site - `https://fortune.com/feed/fortune-feeds/?id=3230629` | 200; 10 of 10 entries dated; mixes business, sport, lifestyle, world and AI | 200; publisher-declared paywall | Keep the existing `fortune` tombstone. This is not a Tech or AI feed. |
+| Fortune Tech CMS - `https://content.fortune.com/section/tech/feed/` | 200; 30 of 30 entries dated; malformed XML raises `SAXParseException` | 200; publisher-declared paywall | Reject. |
+| Fortune AI CMS - `https://content.fortune.com/section/artificial-intelligence/feed/` | 200; 30 of 30 entries dated; malformed XML raises `SAXParseException` | 200; publisher-declared paywall | Reject. |
+| The Economist - `https://www.economist.com/the-world-this-week/rss.xml` | 200; 300 of 300 entries dated | HTTP 403 | Reject. The two existing Economist tombstones record the same article-access failure. |
+| McKinsey Insights - `https://www.mckinsey.com/insights/rss` | `robots.txt` could not be reached on two probes | Not fetched | Reject. Unknown rules remain a refusal. |
+| Business Insider - `https://feeds2.feedburner.com/businessinsider` | 200; 50 of 50 entries dated | 200; publisher-declared paywall | Reject. Keep the existing `business-insider` tombstone. |
+| VentureBeat - `https://feeds.feedburner.com/venturebeat/SZYF` | 200; 7 of 7 entries dated | HTTP 429 on two probes | Reject. Keep the existing `venturebeat-ai` tombstone. |
+| The Washington Post - `https://feeds.washingtonpost.com/rss/world` | 200; 10 of 10 entries dated | Timed out on two probes | Keep the existing `wapo-world` tombstone. |
+
+The two Fortune topic feeds are directly hosted on Fortune's CMS origin, but
+the public Tech and AI pages advertise no RSS or Atom alternate. Their public
+`/feed/` routes return 404. A topic label therefore does not rescue them: both
+CMS feeds are malformed and both still point at articles the pipeline refuses
+as paywalled.
+
+None cleared the source rule above: a feed must parse cleanly and one article
+behind it must return readable prose through the production path. Rejected
+alternate addresses do not enter `Sources.retired`; that list preserves the ids
+of feeds the project configured and later retired, not every candidate that
+failed research.
 
 ### The forty, and why each one went
 
