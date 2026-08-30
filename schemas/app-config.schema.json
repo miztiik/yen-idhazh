@@ -257,6 +257,13 @@
     "DriftConfig": {
       "additionalProperties": false,
       "properties": {
+        "min_window_rows": {
+          "default": 20,
+          "description": "Rows a window must hold on each side before a comparison of the two means anything. Below it the review fails instead of reporting no drift, because an empty window and a healthy one produce the same empty finding list. Sized against the ledger rather than picked round: measured 2026-08-30 over the 3,113 rows committed to state/scores.csv, the lightest full day holds 117 and the heaviest 731, so a seven-day recent window holding under 20 is a stopped instrument and not a quiet week - 20 is a sixth of one of those days.",
+          "minimum": 1,
+          "title": "Min Window Rows",
+          "type": "integer"
+        },
         "month_over_month_pct": {
           "default": 10.0,
           "exclusiveMinimum": 0.0,
@@ -1449,6 +1456,11 @@
       "change": "The observability block added: evaluation_enabled, telemetry_publish, runtime_counters_scrape, sample_rate, keep_months and hard_delete_after_months.",
       "version": "2026-08-30T14:00",
       "why": "The pipeline had no way to turn a measurement off or to thin one, so every instrument was all-or-nothing at the command line and nothing at all in config (Rule #6). Three switches rather than one, because collection, scoring and publishing fail differently: state/scores.csv empties when the scorer will not load, the published telemetry file stops when a run does not publish, and state/runtime-counters.csv is silent when llama-server was gone before it was read. One master switch would leave a reader unable to say which of the three went dark. sample_rate is a rate over RUNS and is refused at zero, because a second way to say off is how two ways of saying it end up disagreeing. The item-health census is deliberately absent and the model says so: it is the denominator under every rate, so switching it off would make every other measurement unreadable rather than cheaper. Additive with defaults that reproduce today's behaviour exactly, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
+      "change": "Added drift.min_window_rows.",
+      "version": "2026-08-30T12:00",
+      "why": "The drift review printed 'no drift across 0 recent and 0 baseline rows' and exited 0, because compare() walks the domains a window holds and an empty window holds none. Turn the scorer off for a week and the only automated watchman for slow extraction failure reports all clear every day, under a green check. The floor that separates 'nothing to compare' from 'no drift' is a tunable, not a literal (Rule #6). Additive with a default, so an older config still validates (section 11)."
     },
     {
       "change": "Added collect.max_age_hours. collect.recency_weight's description now says it orders inside that window rather than deciding admission.",
