@@ -40,6 +40,18 @@ export interface UiConfig {
 /** What the console needs to say whether a run went well. */
 export interface RunConfig {
 	success_floor_pct: number;
+	/** The most articles one run may publish. The console divides the site's
+	 * headroom by this rather than by an average of the days on disk: a quiet
+	 * day is not evidence the next one will be quiet, and a runway has to be the
+	 * worst case to be worth printing (Rule #10). */
+	safety_ceiling_per_run: number;
+}
+
+/** What the console needs to say how much room the site has left. */
+export interface RetentionConfig {
+	/** Where the build starts warning, below the platform's own ceiling.
+	 * `backend/idhazh/retention.py` reads the same number. */
+	site_budget_mb: number;
 }
 
 /** What the console needs to say how close a feed is to being rested. */
@@ -146,7 +158,8 @@ const DEFAULTS: UiConfig = {
 	archive_page_size: 25
 };
 
-const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70 };
+const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70, safety_ceiling_per_run: 160 };
+const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
@@ -214,6 +227,7 @@ const MOTION_DEFAULTS: MotionConfig = {
 interface RawConfig {
 	ui?: Partial<UiConfig>;
 	run?: Partial<RunConfig>;
+	retention?: Partial<RetentionConfig>;
 	collect?: Partial<CollectConfig>;
 	summarize?: Partial<SummarizeConfig>;
 	console?: Partial<ConsoleConfig>;
@@ -273,6 +287,10 @@ export function uiConfig(): UiConfig {
 
 export function runConfig(): RunConfig {
 	return { ...RUN_DEFAULTS, ...(raw().run ?? {}) };
+}
+
+export function retentionConfig(): RetentionConfig {
+	return { ...RETENTION_DEFAULTS, ...(raw().retention ?? {}) };
 }
 
 export function collectConfig(): CollectConfig {
