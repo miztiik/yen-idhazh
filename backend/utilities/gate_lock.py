@@ -384,9 +384,14 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"Where the lock lives. Default: {LOCK_FILENAME} in the user temp directory.",
     )
     parser.add_argument(
-        "--poll",
+        "--retry-every",
         type=float,
         default=POLL_SECONDS,
+        # Not `--poll`. `test_summarize.py::test_exactly_one_function_spells_a_
+        # llama_server_flag` holds a closed-world set of the files under
+        # `backend/` that may spell a llama-server flag, and `--poll` is one of
+        # them. A flag that reads like the inference server's is a flag somebody
+        # will one day pass to the wrong program.
         help=f"Seconds between attempts while waiting. Default: {POLL_SECONDS}.",
     )
     parser.add_argument(
@@ -434,7 +439,7 @@ def main(argv: Sequence[str] | None = None) -> int:
     if acquire(
         lock,
         holder,
-        poll=float(args.poll),
+        poll=float(args.retry_every),
         stale_after=float(args.stale_after),
         timeout=float(args.timeout),
     ):

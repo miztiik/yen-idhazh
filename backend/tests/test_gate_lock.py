@@ -89,7 +89,7 @@ def _argv(
     poll: float = 0.05,
     timeout: float | None = None,
 ) -> list[str]:
-    flags = ["--lock-file", str(lock), "--poll", str(poll)]
+    flags = ["--lock-file", str(lock), "--retry-every", str(poll)]
     if timeout is not None:
         flags += ["--timeout", str(timeout)]
     return [sys.executable, str(GATE_LOCK), *flags, "--", *command]
@@ -468,12 +468,12 @@ def test_running_in_ci_reads_the_variable_a_runner_sets() -> None:
 
 def test_split_argv_keeps_the_gates_own_flags() -> None:
     ours, command = gate_lock.split_argv(
-        ["--poll", "1", "--", "python", "-m", "pytest", "-q", "--durations=25"]
+        ["--retry-every", "1", "--", "python", "-m", "pytest", "-q", "--durations=25"]
     )
 
-    assert ours == ["--poll", "1"]
+    assert ours == ["--retry-every", "1"]
     assert command == ["python", "-m", "pytest", "-q", "--durations=25"]
-    assert gate_lock.split_argv(["--poll", "1"]) == (["--poll", "1"], [])
+    assert gate_lock.split_argv(["--retry-every", "1"]) == (["--retry-every", "1"], [])
     # Only the first `--` is ours, so a gate that needs one of its own keeps it.
     assert gate_lock.split_argv(["--", "npm", "run", "build", "--", "--mode=x"]) == (
         [],
