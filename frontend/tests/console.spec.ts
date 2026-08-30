@@ -1072,7 +1072,10 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'What the model did' })).toBeVisible();
-	await expect(page.locator('[data-charts="table"]')).toBeVisible();
+	// The daily rows are behind a disclosure now, so what has to survive is the
+	// control that reaches them - not the table itself.
+	await expect(page.locator('[data-charts="daily"]')).toBeVisible();
+	await expect(page.locator('[data-charts-verdict]')).toBeVisible();
 
 	expect(errors).toEqual([]);
 	expect(missing).toEqual([]);
@@ -1128,6 +1131,20 @@ test('the days the seed drops stay on disk for a pan to reach', () => {
 	expect(older.every((row) => !seededIds.has(row.item_id))).toBe(true);
 });
 
+/** Open the daily figures.
+ *
+ * The rows are on demand: the section leads with the two figures its own
+ * retirement rule names and keeps the seven daily columns behind a native
+ * disclosure. `page.evaluate` rather than a click, because the integrated
+ * browser is a hidden page and a click waits for an element to be stable.
+ */
+async function openDailyCharts(page: Page) {
+	await page.locator('[data-charts="daily"]').evaluate((node) => {
+		(node as HTMLDetailsElement).open = true;
+	});
+	await expect(page.locator('[data-charts="table"]')).toBeVisible();
+}
+
 /** What the fixture's own files say the Charts table has to print for a day.
  *
  * Derived here from `run.json` and `digest.json` rather than typed as constants,
@@ -1166,6 +1183,9 @@ function chartCells(date: string): Record<string, string> {
 		asked: String(sum((run) => run.items_routed ?? 0)),
 		drafted: String(sum((run) => run.charts_drafted ?? 0)),
 		published: String(published),
+		// The denominator of the arm's coverage rule, and the reason a share of no
+		// articles is printed as an absence rather than as zero percent.
+		items: String(items.length),
 		minutes: printed(minutes),
 		'per-chart': printed(minutes === null || published === 0 ? null : minutes / published)
 	};
@@ -1173,6 +1193,7 @@ function chartCells(date: string): Record<string, string> {
 
 test('every chart cell equals what the day committed', async ({ page }) => {
 	await page.goto('/console/');
+	await openDailyCharts(page);
 
 	const dates = await page
 		.locator('[data-chart-day]')
@@ -1197,6 +1218,7 @@ test('the measured day prints rates, and the day with no router prints dashes', 
 	page
 }) => {
 	await page.goto('/console/');
+	await openDailyCharts(page);
 
 	// The attack day is the one the fixture gives router counts to. Asserting it
 	// is not all zeros is what stops the oracle above passing on an empty table.
@@ -1220,6 +1242,7 @@ test('the measured day prints rates, and the day with no router prints dashes', 
 
 test('a diagram is a visual and is not a published chart', async ({ page }) => {
 	await page.goto('/console/');
+	await openDailyCharts(page);
 
 	const [year, month, day] = DAY.split('-');
 	const items = (
