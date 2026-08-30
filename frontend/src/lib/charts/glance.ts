@@ -2,7 +2,9 @@
  *
  * Six questions, six different shapes, because one shape repeated six times is
  * what made this page read as a single grey instrument. Each function here is
- * pure and is tested without a browser; the drawing belongs to the engine.
+ * pure and is tested without a browser. Most hand the engine an option; the
+ * skyline hands back geometry, because a strip of bars inside a card needs no
+ * engine and a shape drawn as markup is finished before any script runs.
  *
  * Nothing is invented for the sake of a complete vocabulary. Every question
  * below is one the page already answered in prose or in a table, and each one
@@ -14,6 +16,7 @@ import { donut } from './donut';
 import { sparkline } from './sparkline';
 import { stacked } from './stacked';
 import { targetBar } from './targetbar';
+import { daysInWindow, type TimeWindow } from './viewport';
 import { waterfall } from './waterfall';
 import type { StageFailureSeries } from './series';
 
@@ -113,10 +116,68 @@ export function failureMix(series: readonly StageFailureSeries[]) {
 	);
 }
 
-/** Which way is publishing going? Direction only - the count says how much. */
-export function publishedTrend(days: readonly GlanceDay[]) {
-	const ordered = [...days].sort((a, b) => a.date.localeCompare(b.date)).slice(-TREND_DAYS);
-	return sparkline(ordered.map((d) => d.published));
+/** One bar a day: how much was published, and on which days.
+ *
+ * Bars, never a line. A count per day is a discrete quantity, and a line drawn
+ * between two days claims a value for the hours in between that nobody
+ * counted. The busiest day in the window sets the height of every other bar,
+ * so the shape answers "which days were heavy" while the count beside it
+ * answers "how many".
+ *
+ * The columns are the window the control set, not the days that happen to
+ * carry a run. A chart that sizes itself to its own data while the control
+ * above it reads thirty days puts two spans on one page, and two spans cannot
+ * be compared - which is the question the operator came here to ask.
+ *
+ * Geometry only. Every value is a share of the drawing box, so the same bars
+ * fit whatever width a card gives them and the markup does no arithmetic.
+ */
+export interface SkylineBar {
+	date: string;
+	published: number;
+	/** Left edge and width, as a share of the box. */
+	x: number;
+	width: number;
+	/** Height as a share of the box, measured up from the baseline. A day that
+	 * published nothing is zero high and still has a bar, so the column count is
+	 * the day count whatever the ledger holds. */
+	height: number;
+}
+
+export interface Skyline {
+	bars: SkylineBar[];
+	/** Everything the window published. The count beside the bars is this. */
+	total: number;
+	/** The busiest day, which every other bar is drawn against. */
+	busiest: number;
+	/** True where the window published nothing at all. A strip of thirty zeros
+	 * is an empty plot area, which is worse than no plot. */
+	empty: boolean;
+}
+
+/** How much of a column a bar fills, leaving the rest as the gap beside it. A
+ * share rather than a pixel, so ninety columns separate as cleanly as seven. */
+const BAR_SHARE = 0.8;
+
+export function publishedSkyline(days: readonly GlanceDay[], span: TimeWindow): Skyline {
+	const calendar = daysInWindow(span);
+	const onDate = new Map(days.map((day) => [day.date, day.published]));
+	const counts = calendar.map((date) => onDate.get(date) ?? 0);
+	const busiest = counts.reduce((high, count) => Math.max(high, count), 0);
+	const pitch = 1 / calendar.length;
+	const width = pitch * BAR_SHARE;
+	return {
+		total: counts.reduce((sum, count) => sum + count, 0),
+		busiest,
+		empty: busiest === 0,
+		bars: calendar.map((date, index) => ({
+			date,
+			published: counts[index],
+			x: index * pitch + (pitch - width) / 2,
+			width,
+			height: busiest === 0 ? 0 : counts[index] / busiest
+		}))
+	};
 }
 
 /** Which way is the site's size going? Same shape, different question.

@@ -38,13 +38,14 @@
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
 		failureMix,
-		publishedTrend,
+		publishedSkyline,
 		routerCost,
 		runHealth,
 		ROUTER_MINUTES_TARGET,
 		RULE_WINDOW_DAYS,
 		siteGrowth,
-		sizeTrend
+		sizeTrend,
+		type SkylineBar
 	} from '$lib/charts/glance';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
@@ -154,6 +155,20 @@
 	const windowedSize = $derived(
 		sizeTrend(data.manifests.filter((run) => inWindow(run.date)), windowDays)
 	);
+	/** One bar a day, over the window the control set. The card's own count is
+	 * the same window summed, so a reader can check the number against the
+	 * picture - which an all-time total under a thirty-day strip could not do. */
+	const skyline = $derived(publishedSkyline(data.charts, viewport));
+
+	/** The card's trend slot, in CSS pixels. */
+	const SKYLINE = { width: 220, height: 34 };
+
+	/** A day that published one chart against a busiest of forty is a fortieth
+	 * of the box, which draws as nothing at all. A hairline floor keeps a quiet
+	 * day distinguishable from a day no run happened on. */
+	function barHeight(bar: SkylineBar): number {
+		return bar.published === 0 ? 0 : Math.max(1, bar.height * SKYLINE.height);
+	}
 
 	let strip = $state<HTMLDivElement | null>(null);
 
@@ -368,8 +383,6 @@
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
 	<p class="mt-1 text-[0.9375rem] text-text-secondary">
 		What the pipeline cost and how well it did, per day, from the committed ledger.
-		{data.totalRows} scored {data.totalRows === 1 ? 'item' : 'items'} on record.
-		{data.itemHealthRows} item-health {data.itemHealthRows === 1 ? 'row' : 'rows'} on record.
 	</p>
 
 	<!-- The window sits above everything it governs, so it is read before the
@@ -386,15 +399,41 @@
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
+	<!-- Bars, not a line: a count per day is a discrete quantity, and a line
+	     between two days claims a value for the hours in between that nobody
+	     counted. Drawn as markup rather than by the engine, so it is complete
+	     before any script runs and follows the window with one drawing. -->
+	{#snippet publishedBars()}
+		<svg
+			class="block"
+			width={SKYLINE.width}
+			height={SKYLINE.height}
+			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
+			role="img"
+			aria-label="Charts published each day over {windowDays} days, {skyline.total} in all, busiest day {skyline.busiest}"
+			data-published-days={skyline.bars.length}
+			data-published-total={skyline.total}
+		>
+			{#each skyline.bars as bar (bar.date)}
+				<rect
+					x={(bar.x * SKYLINE.width).toFixed(2)}
+					width={(bar.width * SKYLINE.width).toFixed(2)}
+					y={(SKYLINE.height - barHeight(bar)).toFixed(2)}
+					height={barHeight(bar).toFixed(2)}
+					fill="var(--chart-3)"
+					data-published-bar={bar.date}
+					data-published={bar.published}
+				/>
+			{/each}
+		</svg>
+	{/snippet}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<KpiCard
 			label="Charts published"
-			value={String(data.charts.reduce((sum, day) => sum + day.published, 0))}
-			note="over the days on record"
+			value={String(skyline.total)}
+			note="in these {windowDays} days"
 			tone="info"
-			movement={data.glance.publishedMovement}
-			trendSvg={data.glance.publishedSvg}
-			trendOption={publishedTrend(data.charts).option}
+			trend={skyline.empty ? null : publishedBars}
 		/>
 		<!-- Half windowed, on purpose. The size is a level and the operator wants
 		     today's, whatever span he is looking at; only the movement under it is
