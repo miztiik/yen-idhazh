@@ -37,15 +37,16 @@
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
+		chartArm,
 		failureMix,
 		publishedTrend,
 		routerCost,
 		runHealth,
-		ROUTER_MINUTES_TARGET,
-		RULE_WINDOW_DAYS,
 		siteGrowth,
 		sizeTrend
 	} from '$lib/charts/glance';
+	import Sparkline from '$lib/components/Sparkline.svelte';
+	import TargetBar from '$lib/components/TargetBar.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
@@ -150,7 +151,26 @@
 		data.sourceCutsByWindow.find((table) => table.days === windowDays) ??
 			data.sourceCutsByWindow[0]
 	);
-	const windowedCost = $derived(routerCost(data.charts.filter((day) => inWindow(day.date))));
+	const windowedCost = $derived(
+		routerCost(
+			data.charts.filter((day) => inWindow(day.date)),
+			data.console.chart_arm_minutes_target
+		)
+	);
+	/** The chart arm's own rule, read from config rather than written into a
+	 * component. An operator moves a threshold in `config/appearance.json`. */
+	const thresholds = $derived({
+		ruleDays: data.console.chart_arm_rule_days,
+		minutesTarget: data.console.chart_arm_minutes_target,
+		coveragePct: data.console.chart_arm_coverage_pct
+	});
+	const arm = $derived(
+		chartArm(
+			data.charts.filter((day) => inWindow(day.date)),
+			thresholds,
+			windowDays
+		)
+	);
 	const windowedSize = $derived(
 		sizeTrend(data.manifests.filter((run) => inWindow(run.date)), windowDays)
 	);
@@ -436,15 +456,15 @@
 				data-window-days={windowDays}
 			>
 				<figcaption class="text-[0.75rem] text-text-tertiary">
-					Router minutes per published chart, against the {ROUTER_MINUTES_TARGET} that retires the
+					Router minutes per published chart, against the {thresholds.minutesTarget} that retires the
 					arm. Over {windowDays} days.
 				</figcaption>
-				{#if windowDays < RULE_WINDOW_DAYS}
+				{#if windowDays < thresholds.ruleDays}
 					<!-- A median of the wrong span is worse than no median: it is the
 					     same figure with a different meaning and nothing on the page to
 					     say which one is being read. -->
 					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-too-narrow="router-cost">
-						The rule reads {RULE_WINDOW_DAYS} days. Widen the window to see it.
+						The rule reads {thresholds.ruleDays} days. Widen the window to see it.
 					</p>
 				{:else if windowedCost.empty}
 					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="router-cost">
@@ -847,17 +867,57 @@
 
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Charts drawn for articles</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			What the router cost and what it published, one row per day, newest first. Reached is every
-			item the router looked at. Asked the model is the part it sent a request for: an item whose
-			own numbers cannot fill a chart is answered without one. Charts drafted is what the model
-			asked for, and charts published is what survived the checks that run after it answers. A
-			dash means no router time was written down, so there is no rate to divide, and zero
-			reached means nothing committed says what the router did - it never ran, or its manifest
-			is older than these counts. Over 14 days with the chart-only gate on, the arm is retired
-			if the median day spends more than 6 router minutes per published chart, or puts a chart
-			on fewer than 5% of the items it published.
-		</p>
+		<div data-windowed="chart-arm" data-window-days={windowDays}>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+				Over {thresholds.ruleDays} days with the chart-only gate on, the arm is retired if the
+				median day spends more than {thresholds.minutesTarget} router minutes per published chart,
+				or puts a chart on fewer than {thresholds.coveragePct}% of the items it published. Over
+				{windowDays} days.
+			</p>
+			<div class="console-panel mt-3" data-charts="arm">
+				{#if arm.narrow}
+					<!-- The rule is stated over its own span, and a median of any other
+					     span is the same figure with a different meaning. -->
+					<p class="text-[0.9375rem] text-text-secondary" data-window-too-narrow="chart-arm">
+						The rule reads {thresholds.ruleDays} days. Widen the window to see it.
+					</p>
+				{:else}
+					<p class="text-[0.9375rem] text-text" data-charts-verdict>{arm.verdict}</p>
+					<div class="arm-figures">
+						<div class="arm-figure" data-arm-figure="minutes">
+							<TargetBar
+								marks={arm.minutesMarks}
+								label="Router minutes per chart"
+								valueText={arm.minutes === null ? '-' : arm.minutes.toFixed(1)}
+								targetText="Retired above {thresholds.minutesTarget}, on the median day."
+								emptyNote="No router time was written down in these {windowDays} days."
+							/>
+							<Sparkline
+								marks={arm.minutesTrend}
+								width={220}
+								height={30}
+								label="Router minutes per chart, day by day, over {arm.minutesDays} measured days"
+							/>
+						</div>
+						<div class="arm-figure" data-arm-figure="coverage">
+							<TargetBar
+								marks={arm.coverageMarks}
+								label="Published items with a chart"
+								valueText={arm.coverage === null ? '-' : `${Math.round(arm.coverage)}%`}
+								targetText="Retired below {thresholds.coveragePct}%, on the median day."
+								emptyNote="No day in these {windowDays} days published anything to put a chart on."
+							/>
+							<Sparkline
+								marks={arm.coverageTrend}
+								width={220}
+								height={30}
+								label="Share of published items carrying a chart, day by day, over {arm.coverageDays} measured days"
+							/>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
 		{#if data.flowSvg}
 			<div class="panel mt-4" data-flow="chart">
 				<Chart
@@ -871,40 +931,56 @@
 		{:else if data.flowNote}
 			<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
 		{/if}
-		<div class="console-table mt-3" data-charts="table">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule">
-						<th class="py-2 text-start font-normal">Day</th>
-						<th class="py-2 text-end font-normal">Reached</th>
-						<th class="py-2 text-end font-normal">Asked the model</th>
-						<th class="py-2 text-end font-normal">Charts drafted</th>
-						<th class="py-2 text-end font-normal">Charts published</th>
-						<th class="py-2 text-end font-normal">Router minutes</th>
-						<th class="py-2 text-end font-normal">Minutes per chart</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.charts as day (day.date)}
-						<tr class="border-b border-rule" data-chart-day={day.date}>
-							<td class="py-2">{day.date}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="reached">{day.reached}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="asked">{day.asked}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="drafted">{day.drafted}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="published"
-								>{day.published}</td
-							>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
-								>{minutes(day.routerMinutes)}</td
-							>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
-								>{minutes(day.minutesPerChart)}</td
-							>
+		<!-- A native disclosure, not a button and a block: the console is complete
+		     before any script runs, and a button would leave the rows unreachable
+		     with JavaScript off. -->
+		<details class="console-disclosure mt-4" data-charts="daily">
+			<summary class="console-summary" data-charts-toggle>Show the daily figures</summary>
+			<p class="mt-3 text-[0.8125rem] text-text-tertiary">
+				One row per day, newest first. Reached is every item the router looked at. Asked the model
+				is the part it sent a request for: an item whose own numbers cannot fill a chart is
+				answered without one. Charts drafted is what the model asked for, and charts published is
+				what survived the checks that run after it answers. A dash means no router time was
+				written down, so there is no rate to divide, and zero reached means nothing committed says
+				what the router did - it never ran, or its manifest is older than these counts.
+			</p>
+			<div class="console-table mt-3" data-charts="table">
+				<table class="w-full text-[0.8125rem]">
+					<thead class="text-text-tertiary">
+						<tr class="border-b border-rule">
+							<th class="py-2 text-start font-normal">Day</th>
+							<th class="py-2 text-end font-normal">Reached</th>
+							<th class="py-2 text-end font-normal">Asked the model</th>
+							<th class="py-2 text-end font-normal">Charts drafted</th>
+							<th class="py-2 text-end font-normal">Charts published</th>
+							<th class="py-2 text-end font-normal">Items published</th>
+							<th class="py-2 text-end font-normal">Router minutes</th>
+							<th class="py-2 text-end font-normal">Minutes per chart</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+					</thead>
+					<tbody>
+						{#each data.charts as day (day.date)}
+							<tr class="border-b border-rule" data-chart-day={day.date}>
+								<td class="py-2">{day.date}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="reached">{day.reached}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="asked">{day.asked}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="drafted">{day.drafted}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="published"
+									>{day.published}</td
+								>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="items">{day.items}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
+									>{minutes(day.routerMinutes)}</td
+								>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
+									>{minutes(day.minutesPerChart)}</td
+								>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</details>
 	{/if}
 </section>
 
@@ -927,6 +1003,59 @@ border: 1px solid var(--color-rule);
 border-radius: var(--radius-lg);
 background: var(--color-surface);
 box-shadow: var(--shadow-sm);
+}
+
+/* Two figures, side by side where there is room and stacked where there is
+   not. The rule names both, so reading one without the other answers half a
+   question. */
+.arm-figures {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+gap: var(--space-6);
+margin-block-start: var(--space-4);
+}
+
+.arm-figure {
+display: flex;
+flex-direction: column;
+gap: var(--space-2);
+min-inline-size: 0;
+}
+
+/* The rows are on demand, and the control that opens them is a native
+   disclosure - so it works with no script, takes keyboard focus for free, and
+   says which state it is in without a second label. */
+.console-panel,
+.console-disclosure {
+padding: var(--space-4);
+border: 1px solid var(--color-rule);
+border-radius: var(--radius-lg);
+background: var(--color-surface);
+box-shadow: var(--shadow-sm);
+}
+
+.console-summary {
+cursor: pointer;
+min-block-size: 1.75rem;
+font-size: var(--text-sm);
+line-height: var(--leading-sm);
+color: var(--color-accent);
+}
+
+.console-summary:focus-visible {
+outline: 2px solid var(--color-accent);
+outline-offset: 2px;
+border-radius: var(--radius-sm);
+}
+
+/* The table brings its own frame everywhere else on the page. Inside the
+   disclosure it would be a box in a box. */
+.console-disclosure .console-table {
+padding: 0;
+border: 0;
+border-radius: 0;
+background: none;
+box-shadow: none;
 }
 
 /* The header row stays put while the body scrolls, which is what makes a

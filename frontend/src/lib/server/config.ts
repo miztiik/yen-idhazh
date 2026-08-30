@@ -71,6 +71,13 @@ export interface ConsoleConfig {
 	chart_height: number;
 	chart_width: number;
 	failure_list_max: number;
+	/** The span the chart arm's retirement rule is stated over. Under it the
+	 * section prints the rule's own span and no median. */
+	chart_arm_rule_days: number;
+	/** Router minutes per published chart that retires the arm. */
+	chart_arm_minutes_target: number;
+	/** The share of a day's published items that must carry a chart, in whole percent. */
+	chart_arm_coverage_pct: number;
 }
 
 /** What on-device archive search reads, keeps and shows. */
@@ -168,7 +175,10 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_attempts_for_rate: 5,
 	chart_height: 180,
 	chart_width: 600,
-	failure_list_max: 25
+	failure_list_max: 25,
+	chart_arm_rule_days: 14,
+	chart_arm_minutes_target: 6,
+	chart_arm_coverage_pct: 5
 };
 const ASSIST_DEFAULTS: AssistConfig = {
 	similarity_floor: 0.35,

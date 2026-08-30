@@ -1094,6 +1094,98 @@ somebody has to edit, and re-measuring it is the reason it is.
 
 Authority: the shape, Jony, 2026-08-30; the chunk, Carmack, 2026-08-30.
 
+## The chart arm is judged against its own rule, and the daily rows come second
+
+`Charts drawn for articles` is the only console section carrying a written
+decision rule in its own prose: over a stated span the arm is retired if the
+median day spends more than a set number of router minutes per published chart,
+or puts a chart on fewer than a set share of the items it published. Until
+2026-08-30 the section printed that rule in a paragraph and then showed none of
+the three numbers in it. Seven columns of daily counts sat where the answer
+should have been, and the operator was asked to take a fourteen-day median of a
+ratio, twice, against two limits that were nowhere on the screen.
+
+The section leads with the two figures the rule names. Each is a `TargetBar` -
+the track at the threshold's own scale, the fill at the window median, a rule
+drawn at the threshold - with a `Sparkline` under it, because `4.2 and falling`
+and `4.2 and rising` are different pictures and a single number is neither. One
+sentence above them states both figures and which side of its threshold each
+fell on.
+
+**The sentence and the two bars are one computation.** `chartArm` in
+[frontend/src/lib/charts/glance.ts](../../../frontend/src/lib/charts/glance.ts)
+returns the medians, both bars' geometry, both trends and the sentence together,
+and the browser suite asserts the printed sentence is byte-identical to the one
+the module builds. A verdict written in the template could say `inside` while
+the bar beside it drew a fill past its marker, and nothing on the page would
+look wrong.
+
+**All three numbers are config.** `console.chart_arm_rule_days`,
+`console.chart_arm_minutes_target` and `console.chart_arm_coverage_pct` live in
+`config/appearance.json`, bounded by `ConsoleConfig`. They were constants in a
+TypeScript module until 2026-08-30, which made the one section that states a
+threshold the one section an operator could not move a threshold on (Rule #6).
+The contract also refuses a preset list whose widest span cannot reach
+`chart_arm_rule_days`: a rule no preset can show would print the
+widen-the-window notice at every setting of the control, which reads as a broken
+surface rather than as a narrow window.
+
+**Coverage divides by what the day published, and a day that published nothing
+has no share at all.** The denominator is the item count on the day's own
+`digest.json`, read in the same pass that counts its charts, so no new telemetry
+column was published to answer this. A quiet day returns null rather than zero
+percent: zero would say the arm ran and reached nobody, and nineteen quiet days
+would drag the median of a healthy fortnight onto the floor. This is the
+null-is-not-zero rule the timing medians already follow
+([../../concepts/design-system.md](../../concepts/design-system.md)).
+
+**Neither bar takes the health ramp.** These are limits somebody chose, not a
+verdict on the machine, so `TargetBar` draws them in its `policy` tone. The
+marker carries the fact. Tinting a policy threshold green would invent a health
+judgement nobody agreed to, which is the same mistake as a chart borrowing the
+band tokens.
+
+**Below the rule's own span the section prints the notice and no number.** The
+window control governs the medians, and under `chart_arm_rule_days` the section
+says `The rule reads 14 days. Widen the window to see it.` and draws no bar. It
+is the same sentence and the same reason as the glance card next to it: a median
+of the wrong span is the same figure with a different meaning, and nothing on
+the page would say which one is being read. The section carries
+`data-windowed="chart-arm"` and states its span in words at every setting, so
+the window oracle in `frontend/tests/console-window.spec.ts` holds it to the
+control like every other windowed surface.
+
+**The seven daily columns are behind a native `<details>`, not a button.** The
+console is complete before any script runs and stays complete if none does, so a
+button plus a conditional block would leave the rows permanently unreachable
+with JavaScript off - the rows would be gone rather than on demand. A disclosure
+is keyboard-reachable for free and says which state it is in without a second
+label. `Reached`, `Asked the model`, `Charts drafted` and raw `Router minutes`
+moved down with the table: the flow diagram above already draws the first three
+as branches, and router minutes on its own is the numerator of the ratio rather
+than a decision. Nothing was deleted, and the table gained the `Items published`
+column that coverage divides by, so the share and its denominator sit on one
+row.
+
+**What it cost, measured 2026-08-30 on one Windows dev machine, node 24, with
+six sibling agents on the box, with main's own source built first on this same
+tree and this branch built four times after it.** First-load JavaScript on
+`/console/` went from 80,843 to 82,761, 82,758, 82,761 and 82,755 gzipped bytes:
+**1,915 B for the section**, which is 2.4 percent of the route, and 6 B of
+spread over the four treatment builds. The control arm is the six routes this
+row does not touch - `/`, `/404`, `/<date>/`, `/<date>/<topic>/`, `/archive/`
+and `/evals/` moved -4 to -12 B between the arms, every one of them inside the
+64-byte tolerance against its committed record, so the delta on the console is
+the change and not the toolchain. **No chart type was registered**, so the lazy
+engine chunk did not move at all: 197,961 gzipped bytes in both arms, against
+the 200,000 the console plan draws. The prerendered console document went from
+179,776 to 180,653 gzipped bytes, **877 bytes** for two bars, two trends, one
+extra table column over twenty rows and a summary element, and against the
+301,580 ceiling that leaves 120,927 spare - 0.29 percent of the ceiling spent.
+
+Authority: the two bars and the verdict, Susan, 2026-08-30; the disclosure
+element, Jony, 2026-08-30.
+
 ## What the cap costs, and the four places the console says it
 
 The truncation cap is the one setting on this project that silently removes

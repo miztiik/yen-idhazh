@@ -19,6 +19,9 @@
     "width_px": 760
   },
   "console": {
+    "chart_arm_coverage_pct": 5.0,
+    "chart_arm_minutes_target": 6.0,
+    "chart_arm_rule_days": 14,
     "chart_height": 220,
     "chart_width": 760,
     "default_window_days": 30,

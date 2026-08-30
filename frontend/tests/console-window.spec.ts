@@ -121,7 +121,14 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the page publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual(['router-cost', 'run-health', 'site-size-movement', 'source-cuts', 'telemetry-viewport']);
+	).toEqual([
+		'chart-arm',
+		'router-cost',
+		'run-health',
+		'site-size-movement',
+		'source-cuts',
+		'telemetry-viewport'
+	]);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
