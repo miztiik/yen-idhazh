@@ -124,6 +124,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 	).toEqual([
 		'failure-rate',
 		'router-cost',
+		'run-health',
 		'site-size-movement',
 		'source-cuts',
 		'telemetry-viewport'
