@@ -24,7 +24,7 @@ Knobs, by the surface they tune:
 - **Run shape** - the safety ceiling, the batch size, per-job timeouts, and concurrency ([pipeline-loop.md](pipeline-loop.md)).
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, and the published-site alarm point ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` is read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller.
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
-- **Logging** - the level, and which events emit ([telemetry.md](telemetry.md)).
+- **Logging** - the level, and nothing else ([telemetry.md](telemetry.md)).
 - **Observability** - which instruments run, how often the scorer runs, and how long a ledger stays at full grain ([telemetry.md](telemetry.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
   zoom factor, minimum denominator for rate bars, and chart height.

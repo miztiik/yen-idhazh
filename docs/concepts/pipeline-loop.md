@@ -1,6 +1,6 @@
 # Pipeline Loop
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-30
 
 The stages one article passes through, what each stage owns, and the rule that they talk in payloads rather than calls. This is the build-time equivalent of a product's core loop: it is the thing that happens over and over, and every other concept doc hangs off it.
 
@@ -149,7 +149,7 @@ Owner override O3.
 - [evaluation.md](evaluation.md) - what the Evaluate stage measures and what it cannot see.
 - [digest.md](digest.md) - what Assemble publishes and what a reader gets.
 - [config.md](config.md) - the knobs that tune the stages.
-- [telemetry.md](telemetry.md) - the event envelope each stage emits and logs.
+- [telemetry.md](telemetry.md) - the event envelope a stage logs, and the one event name that is emitted.
 - [principles.md](principles.md) - the beliefs behind the invariants on this page.
 - [../architecture/contracts/schemas.md](../architecture/contracts/schemas.md) - the payload contracts.
 - [../architecture/contracts/determinism.md](../architecture/contracts/determinism.md) - what makes "this re-run changed nothing" checkable.
