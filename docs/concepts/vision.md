@@ -1,6 +1,6 @@
 # Vision
 
-**Last Updated**: 2026-08-25
+**Last Updated**: 2026-08-30
 
 What yen-idhazh is, what it is not, and the one-sentence product idea every other concept doc serves. This is the top of the concept tier; if a later doc contradicts this page, this page is wrong and gets fixed.
 
@@ -68,7 +68,7 @@ Three, in the order they bite:
 
 1. **Static-first publication.** What reaches a reader is a committed file. This removes an entire category of design (runtime inference, personalisation, telemetry, accounts) and is why the project can run for years at no cost.
 2. **The runner is the architecture.** 4 vCPU, no GPU, a 6 h job cap and a 10 GB cache decide which model can be used and how work is divided. The budget is the platform, not a preference: a feature that does not fit gets simplified, never a bigger machine.
-3. **Measured, not estimated.** Throughput, cost and quality claims carry the hardware, the date and the spread. This has already changed the architecture once - measured per-job overhead against measured per-item work is what turned one-job-per-item into batching.
+3. **Measured, not estimated.** Throughput, cost and quality claims carry the hardware, the date and the spread. This has already changed the architecture once - measured per-job overhead against measured per-item work is what turned one-job-per-item into batching. One figure is exempt and says so on the page: the operator console prices a run at a rate the operator sets, as a counterfactual and never as a bill ([`CLAUDE.md`](../../CLAUDE.md) Rule #10).
 
 ## What the ceiling actually is
 

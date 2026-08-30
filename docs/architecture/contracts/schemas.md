@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -80,6 +80,8 @@ The training corpus ships the same way and for the same reason: `corpus/corpus.j
 `RuntimeCountersRow` could have been a list on `RunRecord`, and four things say it should not be. **Grain**: a manifest run record is one run and a counter snapshot is one shard, so the manifest would grow a variable-length list keyed by something it does not otherwise carry. **Producer**: the manifest is written by `assemble`, in another job hours later, so the numbers would have to travel inside the `items-*` artifact - which expires in a day and is not uploaded at all when a job is cancelled, and a cancelled shard's counters are the ones most worth having. **Audience**: `run.json` is a published payload a reader's browser fetches, and this is measurement evidence, which belongs under `state/` where nothing is served. **Timing**: a concurrent branch was also opening `RunManifest`, and two branches stamping one contract's changelog on the same date raise `TypeError` at import.
 
 **The grain argument earned two more cells on 2026-08-29.** `job_seconds` and `cpu_model` are facts about the `work` job rather than about its model server, and they landed here rather than on the manifest for the first reason above: one run draws up to eight hosts and takes eight different clocks, so a manifest field would have to become a per-shard list - which is what this ledger already is. `docs/reference/measurements.md` owns what they measure and how to read them; the rollback rule for the truncation cap is the caller.
+
+**And three more on 2026-08-30, for the same reason.** `cpu_busy_pct`, `peak_rss_bytes` and `model_load_ms` are facts about the machine one shard drew, not about the model it served. They arrive as raw text the job printed - the `cpu` line of `/proc/stat` at each end of the job, the memory sampler's file, llama-server's own log - and every derivation happens inside the contract. A shell that computes a percentage is a second place the arithmetic lives and no place it can be tested; a contract that parses the raw text is one place, and its oracle is the real captures under `tests/fixtures/runtime/`.
 
 What would overturn it: a published surface that needs the counters, which would make them a published payload; or a run that stops being sharded, which would make shard grain and run grain the same thing and the manifest the cheaper home.
 
@@ -269,6 +271,6 @@ Making `version` a date-stamp rather than an integer is a small choice with a sp
 - [../../reference/measurements.md](../../reference/measurements.md) - the ledger sizes the shard rule is argued from.
 - [../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md) - the stages whose payloads these are.
 - [../../concepts/config.md](../../concepts/config.md) - config as a versioned contract like any other.
-- [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, one of these shapes.
+- [../../concepts/telemetry.md](../../concepts/telemetry.md) - the event envelope, which is deliberately not one of these shapes.
 - [../../concepts/evaluation.md](../../concepts/evaluation.md) - the eval ledger row.
 - [../../../CLAUDE.md](../../../CLAUDE.md) - Rule #3, section 1a, section 4, section 11.

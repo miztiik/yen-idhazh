@@ -9,13 +9,15 @@ one scrape at job end is the whole shard, and there is nothing to subtract. A
 per-request scrape would add requests to the thing it measures and still report
 only the last one.
 
-**Two cells are about the job rather than the server.** `job_seconds` is the
-shard job's own clock and `cpu_model` is the processor it drew. They live here
-because one work job is one row, which is the grain both facts have; the run
-manifest is one row per run and a run draws up to eight hosts. The truncation
-cap reverts on the slowest work job's wall-clock, and before these two cells the
-only place that number existed was the GitHub jobs API, which drops a job record
-when the run ages out.
+**Five cells are about the job rather than the server.** `job_seconds` is the
+shard job's own clock, `cpu_model` is the processor it drew, `cpu_busy_pct` is
+how much of that processor it actually used, `peak_rss_bytes` is the memory high
+point it reached, and `model_load_ms` is what it paid before the first item. They
+live here because one work job is one row, which is the grain all five facts
+have; the run manifest is one row per run and a run draws up to eight hosts. The
+truncation cap reverts on the slowest work job's wall-clock, and before these
+cells the only place that number existed was the GitHub jobs API, which drops a
+job record when the run ages out.
 
 **Why this exists.** Every timing on the item-health ledger is a field the
 summarize stage copied out of one model reply, and two documents publish rates
@@ -48,6 +50,7 @@ import (`docs/architecture/contracts/schemas.md`).
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from typing import Annotated, Any, ClassVar, Final, Self
 
@@ -100,12 +103,76 @@ _WHOLE: Final = frozenset(
     }
 )
 
+#: The columns of the aggregate `cpu` line of `/proc/stat`, in the order the
+#: kernel prints them. A kernel that publishes fewer is read as far as it goes.
+#: `/proc/stat` rather than a cgroup file on purpose: this project has measured
+#: `/sys/fs/cgroup/memory.peak` and `/sys/fs/cgroup/cpu.max` both absent on a
+#: GitHub-hosted runner, and `/proc/stat` is on every Linux there is.
+_CPU_FIELDS: Final = (
+    "user",
+    "nice",
+    "system",
+    "idle",
+    "iowait",
+    "irq",
+    "softirq",
+    "steal",
+    "guest",
+    "guest_nice",
+)
+
+#: Time the processors were available and took no work. Everything else is busy.
+_CPU_IDLE: Final = frozenset({"idle", "iowait"})
+
+#: The kernel counts guest time inside `user` and guest-nice inside `nice` as
+#: well as reporting it again, so a plain sum of the line counts it twice.
+_CPU_DOUBLE_COUNTED: Final = ("guest", "guest_nice")
+
+#: The column of `rss-samples.tsv` carrying llama-server's own high-water mark.
+#: The sampler reads it out of `/proc/<pid>/status` every 15 seconds while the
+#: server lives.
+_RSS_PEAK_COLUMN: Final = "llama_vmhwm_kb"
+
+#: The two lines llama-server brackets its own model load with, on llama.cpp
+#: `b10598`. Read from a real capture. A rename leaves the cell empty, which
+#: reads as unknown - never as a load that took no time.
+_LOAD_STARTED: Final = "load_model: loading model"
+_LOAD_FINISHED: Final = "llama_server: model loaded"
+
+#: How llama-server stamps a log line: minutes, seconds, milliseconds and
+#: microseconds since its own process started. Decoded from a real capture
+#: rather than from the source - the last field steps by 15 between two lines
+#: printed back to back, which only works if it is microseconds.
+_LOG_INSTANT: Final = re.compile(r"^(\d+)\.(\d{2})\.(\d{3})\.(\d{3}) ")
+
 
 class RuntimeCountersRow(Contract):
     """One `work` shard, one run, one row."""
 
     __schema_stem__: ClassVar[str] = "runtime-counters-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30",
+            change=(
+                "Appended `cpu_busy_pct`, the share of every processor second the host "
+                "spent busy over the job; `peak_rss_bytes`, llama-server's own high-water "
+                "mark; and `model_load_ms`, the time the server took to open the weights."
+            ),
+            why=(
+                "The row said what the server counted and how long the job took, and "
+                "nothing about the machine that did it. Three questions had no committed "
+                "answer. A shard that reads the prompt 2.30x slower than its sibling in "
+                "the same run is either short of processor or waiting on something else, "
+                "and only a busy figure separates those - the cgroup ran 3.99 of 4 "
+                "processors when it was last measured by hand, so the reading is expected "
+                "at or near 100 and a drop is the signal. Whether a candidate model fits "
+                "the runner's 16 GB at `n_ctx` 8192 was answered by whether the run "
+                "survived; a qualification proves a model is fast enough and faithful "
+                "enough and proves nothing about what it holds. And model load is the "
+                "fixed cost `run.shard_size` exists to amortise, which cannot be sized "
+                "against a number nobody kept."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29",
             change=(
@@ -217,6 +284,40 @@ class RuntimeCountersRow(Contract):
         ),
     )
 
+    cpu_busy_pct: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The share of every processor second the host spent busy between the job's "
+            "first step and this scrape, from the aggregate `cpu` line of /proc/stat. "
+            "The cgroup ran 3.99 of 4 processors the one time it was measured by hand, "
+            "so the reading is expected at or near 100 and a DROP is the signal - it "
+            "says the shard spent the job waiting rather than computing. Above 100 means "
+            "the two readings disagree about the window, never that the host found a "
+            "fifth processor."
+        ),
+    )
+    peak_rss_bytes: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "The highest `VmHWM` llama-server reached, over every sample this shard "
+            "took. It answers what a qualification cannot: whether a candidate model can "
+            "be SERVED on the runner's 16 GB at `n_ctx` 8192 with headroom left. Until "
+            "this cell, a run either survived or the runner killed it."
+        ),
+    )
+    model_load_ms: float | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Milliseconds from llama-server saying it is loading the weights to saying "
+            "they are loaded, read off its own log stamps. Model load is the fixed cost "
+            "`run.shard_size` exists to amortise, so it is one figure per shard and "
+            "never one per item."
+        ),
+    )
+
     @model_validator(mode="after")
     def _shard_fits_inside_the_run(self) -> Self:
         if self.shard >= self.shards:
@@ -270,8 +371,12 @@ class RuntimeCountersRow(Contract):
         scraped_at: str,
         job_started_at: int | None = None,
         cpu_model: str | None = None,
+        cpu_stat_at_start: str | None = None,
+        cpu_stat_at_end: str | None = None,
+        rss_samples: str | None = None,
+        server_log: str | None = None,
     ) -> Self:
-        """Read one row out of a `GET /metrics` body.
+        """Read one row out of a `GET /metrics` body and the host readings beside it.
 
         A series this build does not publish is left null rather than defaulted,
         so a llama.cpp rename shows as a missing column instead of as a zero that
@@ -284,6 +389,12 @@ class RuntimeCountersRow(Contract):
         caller - so the two cells can never say different things about the same
         instant. No stamp leaves the cell empty. Empty is not zero: a job whose
         stamp went missing and a job that took no time are different facts.
+
+        The last four arguments are raw text the host printed, not numbers a
+        caller worked out: the `cpu` line of `/proc/stat` at each end of the job,
+        the memory sampler's whole file, and llama-server's own log. Every
+        derivation happens here, so the arithmetic behind three cells is in one
+        testable place rather than spread across a shell script.
         """
         values: dict[str, Any] = {}
         for line in text.splitlines():
@@ -304,9 +415,113 @@ class RuntimeCountersRow(Contract):
                 "scraped_at": scraped_at,
                 "job_seconds": _elapsed(scraped_at, job_started_at),
                 "cpu_model": (cpu_model or "").strip() or None,
+                "cpu_busy_pct": _cpu_busy_pct(cpu_stat_at_start, cpu_stat_at_end),
+                "peak_rss_bytes": _peak_rss_bytes(rss_samples),
+                "model_load_ms": _model_load_ms(server_log),
                 **values,
             }
         )
+
+
+def _cpu_ticks(text: str | None) -> dict[str, int] | None:
+    """The aggregate `cpu` line of `/proc/stat`, by field name.
+
+    Reads the line out of whatever it is handed - the workflow passes that one
+    line, and a whole capture of the file is the same fact with the per-processor
+    lines still attached. Anything else - an empty variable, a truncated read -
+    is absent rather than a zero reading.
+    """
+    if not text:
+        return None
+    for line in text.splitlines():
+        cells = line.split()
+        if cells[:1] != ["cpu"] or len(cells) < 2:
+            continue
+        ticks: dict[str, int] = {}
+        for name, raw in zip(_CPU_FIELDS, cells[1:], strict=False):
+            if not raw.isdigit():
+                return None
+            ticks[name] = int(raw)
+        return ticks
+    return None
+
+
+def _cpu_busy_pct(at_start: str | None, at_end: str | None) -> float | None:
+    """Busy processor time as a share of processor time available, between two reads.
+
+    Differencing two reads is what makes this the job's number rather than the
+    host's: `/proc/stat` counts since boot, and a runner boots minutes of mostly
+    idle time before the job starts. The denominator is every processor's time,
+    so nothing here needs to know how many there are.
+    """
+    start = _cpu_ticks(at_start)
+    end = _cpu_ticks(at_end)
+    if start is None or end is None:
+        return None
+    totals = []
+    idles = []
+    for ticks in (start, end):
+        totals.append(sum(ticks.values()) - sum(ticks.get(n, 0) for n in _CPU_DOUBLE_COUNTED))
+        idles.append(sum(ticks.get(n, 0) for n in _CPU_IDLE))
+    available = totals[1] - totals[0]
+    if available <= 0:
+        return None
+    busy = available - (idles[1] - idles[0])
+    return round(100 * busy / available, 2)
+
+
+def _peak_rss_bytes(text: str | None) -> int | None:
+    """The highest `VmHWM` the memory sampler saw, in bytes.
+
+    The column is found by name off the sampler's own header rather than by
+    position, so a column added to the left of it cannot silently shift which
+    number this reads. `/proc` reports kilobytes and this row reports bytes.
+    """
+    if not text:
+        return None
+    lines = text.splitlines()
+    if not lines:
+        return None
+    header = lines[0].split("\t")
+    if _RSS_PEAK_COLUMN not in header:
+        return None
+    column = header.index(_RSS_PEAK_COLUMN)
+    peaks = [
+        int(cells[column])
+        for cells in (line.split("\t") for line in lines[1:])
+        if len(cells) > column and cells[column].strip().isdigit()
+    ]
+    return max(peaks) * 1024 if peaks else None
+
+
+def _log_microseconds(line: str) -> int | None:
+    """A llama-server log stamp, in microseconds since its process started."""
+    found = _LOG_INSTANT.match(line)
+    if found is None:
+        return None
+    minutes, seconds, milliseconds, microseconds = (int(part) for part in found.groups())
+    return (((minutes * 60) + seconds) * 1000 + milliseconds) * 1000 + microseconds
+
+
+def _model_load_ms(text: str | None) -> float | None:
+    """Milliseconds between the two lines llama-server brackets its load with.
+
+    Both ends have to be present and stamped. A build that renames either line,
+    or one that logs without timestamps, leaves the cell empty - which reads as
+    unknown, and is the failure `SERIES` is written for as well.
+    """
+    if not text:
+        return None
+    instants: dict[str, int] = {}
+    for line in text.splitlines():
+        for marker in (_LOAD_STARTED, _LOAD_FINISHED):
+            if marker in line and marker not in instants:
+                stamped = _log_microseconds(line)
+                if stamped is not None:
+                    instants[marker] = stamped
+    if len(instants) != 2:
+        return None
+    return (instants[_LOAD_FINISHED] - instants[_LOAD_STARTED]) / 1000
 
 
 def _elapsed(scraped_at: str, job_started_at: int | None) -> int | None:

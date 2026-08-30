@@ -167,6 +167,14 @@
       "sha256": "9caa16fbc3f9ead557b3019aa486f444bb63e97823cca4807319998b4be424da"
     }
   },
+  "observability": {
+    "evaluation_enabled": false,
+    "hard_delete_after_months": 36,
+    "keep_months": 13,
+    "runtime_counters_scrape": false,
+    "sample_rate": 0.25,
+    "telemetry_publish": false
+  },
   "page_weight": {
     "ceilings_bytes": {
       "/404": 2048,
