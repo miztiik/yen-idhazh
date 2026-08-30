@@ -682,6 +682,20 @@ class DriftConfig(Model):
     month_over_month_pct: float = Field(default=10.0, gt=0.0)
     year_over_year_pct: float = Field(default=5.0, gt=0.0)
     quarterly_refresh_fraction: float = Field(default=0.5, gt=0.0, le=1.0)
+    min_window_rows: int = Field(
+        default=20,
+        ge=1,
+        description=(
+            "Rows a window must hold on each side before a comparison of the two "
+            "means anything. Below it the review fails instead of reporting no "
+            "drift, because an empty window and a healthy one produce the same "
+            "empty finding list. Sized against the ledger rather than picked "
+            "round: measured 2026-08-30 over the 3,113 rows committed to "
+            "state/scores.csv, the lightest full day holds 117 and the heaviest "
+            "731, so a seven-day recent window holding under 20 is a stopped "
+            "instrument and not a quiet week - 20 is a sixth of one of those days."
+        ),
+    )
 
 
 class RetentionConfig(Model):
@@ -1297,6 +1311,20 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30T12:00",
+            change="Added drift.min_window_rows.",
+            why=(
+                "The drift review printed 'no drift across 0 recent and 0 baseline "
+                "rows' and exited 0, because compare() walks the domains a window "
+                "holds and an empty window holds none. Turn the scorer off for a "
+                "week and the only automated watchman for slow extraction failure "
+                "reports all clear every day, under a green check. The floor that "
+                "separates 'nothing to compare' from 'no drift' is a tunable, not a "
+                "literal (Rule #6). Additive with a default, so an older config "
+                "still validates (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30",
             change=(

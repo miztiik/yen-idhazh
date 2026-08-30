@@ -59,15 +59,19 @@ jobs:
           done
           python - <<'PY' | tee drift.txt
           import csv, datetime, os, pathlib
-          from idhazh.drift import Observation, compare
+          from idhazh.config import load
+          from idhazh.drift import Observation, compare, shortfall
 
           recent_days = int(os.environ["RECENT_DAYS"])
           baseline_days = int(os.environ["BASELINE_DAYS"])
+          minimum = load().app.drift.min_window_rows
           today = datetime.date.today()
           ledger = pathlib.Path("state/scores.csv")
           if not ledger.exists():
-              print("ledger is empty - nothing to compare")
-              raise SystemExit(0)
+              # Not a green check. An absent ledger compared nothing, and a
+              # review that compared nothing has not cleared anything.
+              print("state/scores.csv is not there - nothing was compared")
+              raise SystemExit(1)
 
           recent, baseline = [], []
           unknown_length = 0
@@ -95,6 +99,13 @@ jobs:
 
           if unknown_length:
               print(f"{unknown_length} rows do not record the article's length")
+
+          # Before any finding is read. `compare` has nothing to say about an
+          # empty window, and nothing to say reads as "no drift" - so the two
+          # must not share an exit code (drift.min_window_rows).
+          if (thin := shortfall(recent, baseline, minimum)) is not None:
+              print(f"nothing was compared: {thin}")
+              raise SystemExit(1)
 
           findings = compare(recent, baseline)
           if not findings:
