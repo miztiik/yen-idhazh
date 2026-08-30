@@ -48,11 +48,11 @@ The gate reads the date the run believes, not the date the feed printed - so a f
 
 Plenty of feeds carry no publish date, and the ones that omit it omit it consistently. For those the only honest age is the first time we saw the address, so the planning step writes one down.
 
-`state/seen/<YYYY-MM>.csv` is append-only: the URL key, the canonical address, the timestamp, and the run that saw it first. An address seen for the first time is treated as new, which is the truth as far as we can check it. Every run after that reads its real first-sighting.
+`state/seen/<YYYY-MM>.csv` is append-only: the URL key, the timestamp, and the run that saw it first. It carries no address, because `ledger.load_seen` opens the key and the timestamp and nothing else - the address was 49.1 percent of the file for no reader, and it came off on 2026-08-31 for the reason `PublishedRow` shed its own on 2026-08-26. An address seen for the first time is treated as new, which is the truth as far as we can check it. Every run after that reads its real first-sighting.
 
 **An undated article is therefore never refused for age on the day we find it, and is always refused a day later.** Dropping it on sight would silently retire every feed that omits a date, which is a different decision from refusing a back catalogue, and it is not the one taken here.
 
-The shard is monthly and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over.
+The shard is monthly and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over. A shard outside that window is therefore deleted rather than kept: `retention.prune_seen` takes its keep-set from `ledger.shards_in_window`, the same function the read uses, so it cannot delete a shard a later plan would have opened.
 
 ## A date in the future is ignored
 
