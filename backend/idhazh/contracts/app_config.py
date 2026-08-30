@@ -1493,12 +1493,12 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-08-30T23:30",
+            version="2026-08-31",
             change=(
-                "page_weight.ceilings_bytes gained /console/model/ and "
-                "/console/machine/ in config/idhazh.json, and PageWeightConfig now says "
-                "a surface that splits into routes takes a ceiling per route. No field "
-                "moved."
+                "page_weight.ceilings_bytes gained /console/model/ at 18,682 and "
+                "/console/machine/ at 6,899 in config/idhazh.json, and /console/ moved "
+                "from 259,908 to 250,643. PageWeightConfig now says a surface that "
+                "splits into routes takes a ceiling per route. No field moved."
             ),
             why=(
                 "The console became three prerendered routes, and one ceiling covering "
@@ -1506,10 +1506,14 @@ class AppConfig(Contract):
                 "decisive argument for routes over tabs, so the split is not finished "
                 "until the ceilings follow it. The gate already fails a ceiling that "
                 "names no route in the build; a route that names no ceiling is only "
-                "reported, so two new surfaces would have grown unwatched. Committed "
-                "values only - the model default stays empty, the shape and the "
-                "validation are unchanged, and every older config still validates, so "
-                "no read-side migration (section 11)."
+                "reported, so two new surfaces would have grown unwatched. All three "
+                "numbers are re-derived rather than carried over: heaviest of five "
+                "builds, plus seven published days priced by removing a real one, plus "
+                "the 64-byte noise floor, measured 2026-08-31 (measurements.md). "
+                "/console/ came down because its model panels moved to a route of their "
+                "own. Committed values only - the model default stays empty, the shape "
+                "and the validation are unchanged, and every older config still "
+                "validates, so no read-side migration (section 11)."
             ),
         ),
         ChangelogEntry(

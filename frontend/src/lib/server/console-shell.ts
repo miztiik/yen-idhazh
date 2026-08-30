@@ -265,9 +265,10 @@ export function consoleShell(): ConsoleShell {
 	// --- The routes and their worst states ---------------------------------
 	const worstPipelines = worstOf(pipelinesCandidates(newest, feeds));
 	const worstModel = worstOf(modelCandidates(newestModelDay));
-	// Row #12 gives this route its reader. Until it does, the honest worst state
-	// is that nothing on the page reads the ledger the route exists for - which
-	// is a state a route has to say out loud, or nobody knows to come back.
+	// `$lib/server/runtime-counters.ts` reads the ledger since 2026-08-30, and no
+	// panel renders a cell of it - so the honest worst state is that the route
+	// exists before its panels do, which is a state a route has to say out loud or
+	// nobody knows to come back.
 	const worstMachine: Candidate = {
 		text: 'no panel reads the counters yet',
 		severity: WORTH_KNOWING

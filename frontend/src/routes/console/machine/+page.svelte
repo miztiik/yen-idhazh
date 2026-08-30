@@ -3,9 +3,11 @@
 	 *
 	 * This route ships almost empty and that is correct, not an oversight. The
 	 * pipeline has written `state/runtime-counters.csv` since 2026-08-26 and no
-	 * page has ever read a cell of it, so for four days every throughput figure
+	 * page has ever drawn a cell of it, so for four days every throughput figure
 	 * this project quoted was taken on hardware whose read speed varied by more
 	 * than 2x inside a single run with no surface on which anyone could notice.
+	 * `$lib/server/runtime-counters.ts` can read it since 2026-08-30; the panels
+	 * that render what it reads are the rows after this one.
 	 *
 	 * A route that hid itself until it had data would be a route nobody knew to
 	 * check. So it says what is missing, once at the top and once per panel, and

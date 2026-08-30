@@ -1488,9 +1488,9 @@
   "additionalProperties": false,
   "changelog": [
     {
-      "change": "page_weight.ceilings_bytes gained /console/model/ and /console/machine/ in config/idhazh.json, and PageWeightConfig now says a surface that splits into routes takes a ceiling per route. No field moved.",
-      "version": "2026-08-30T23:30",
-      "why": "The console became three prerendered routes, and one ceiling covering three surfaces cannot say which of them blew a budget - which is the decisive argument for routes over tabs, so the split is not finished until the ceilings follow it. The gate already fails a ceiling that names no route in the build; a route that names no ceiling is only reported, so two new surfaces would have grown unwatched. Committed values only - the model default stays empty, the shape and the validation are unchanged, and every older config still validates, so no read-side migration (section 11)."
+      "change": "page_weight.ceilings_bytes gained /console/model/ at 18,682 and /console/machine/ at 6,899 in config/idhazh.json, and /console/ moved from 259,908 to 250,643. PageWeightConfig now says a surface that splits into routes takes a ceiling per route. No field moved.",
+      "version": "2026-08-31",
+      "why": "The console became three prerendered routes, and one ceiling covering three surfaces cannot say which of them blew a budget - which is the decisive argument for routes over tabs, so the split is not finished until the ceilings follow it. The gate already fails a ceiling that names no route in the build; a route that names no ceiling is only reported, so two new surfaces would have grown unwatched. All three numbers are re-derived rather than carried over: heaviest of five builds, plus seven published days priced by removing a real one, plus the 64-byte noise floor, measured 2026-08-31 (measurements.md). /console/ came down because its model panels moved to a route of their own. Committed values only - the model default stays empty, the shape and the validation are unchanged, and every older config still validates, so no read-side migration (section 11)."
     },
     {
       "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
@@ -1811,7 +1811,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-30T23:30",
+      "default": "2026-08-31",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1825,5 +1825,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-30T23:30"
+  "version": "2026-08-31"
 }

@@ -172,9 +172,9 @@
     "ceilings_bytes": {
       "/404": 1706,
       "/archive/": 7553,
-      "/console/": 172318,
-      "/console/machine/": 6787,
-      "/console/model/": 18034,
+      "/console/": 250643,
+      "/console/machine/": 6899,
+      "/console/model/": 18682,
       "/evals/": 3279
     }
   },

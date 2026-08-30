@@ -248,22 +248,29 @@ design: when the gate fires on an ordinary day about a year from now, the answer
 is to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
-**`/console/` is capped since 2026-08-29 and re-derived on 2026-08-30, and its
-headroom is days rather than a year.** Removing one real mature published day
-from every ledger it reads and rebuilding cost 19,974, 17,335 and 8,705 gzipped
-bytes over 1,000, 872 and 480 published telemetry rows - 18.1 to 20.0 bytes a
-row. So 259,908 is the heaviest of five builds plus seven days at the heaviest
-day on record plus the 64-byte noise floor, and it is meant to expire
-([../reference/measurements.md](../archive/measurements-2026-08.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
+**The console is three routes and takes three ceilings, re-derived 2026-08-31.**
+One key over three surfaces fails without saying which surface failed, so
+`/console/`, `/console/model/` and `/console/machine/` each carry their own.
+Removing one real mature published day from every ledger the console reads and
+rebuilding cost 19,250 gzipped bytes on `/console/`, 730 on `/console/model/` and
+nothing at all on `/console/machine/`, which reads no ledger yet. So the numbers
+are the heaviest of five builds plus seven of those days plus the 64-byte noise
+floor - 250,643 and 18,682 - and Machine, which no publish moves, takes three
+publishes' worth of rewriting its 502 characters of ledger-derived text instead,
+at 6,899. All three are meant to expire
+([../reference/measurements.md](../reference/measurements.md#three-console-routes-three-ceilings-and-a-day-priced-on-each-2026-08-31)).
 
-**When `/console/` fires, do not raise it. Turn `console.default_window_days`
-down.** The page grows with what it inlines, and the answer is always to stop
-inlining what the first paint does not need rather than to buy days. Both halves
-of the last saving have shipped: the seed is windowed and the older points come
-through the telemetry projection since 2026-08-29, and the compression scatter
-that put one mark on the page per article became a per-day count of three bins on
-2026-08-30. What is left is the seed itself, which is one row per planned item per
-run over the window - so the window length is the knob, and the ceiling is not
+**When a console ceiling fires, the panel does not move.** The owner ruled on
+2026-08-31 that no approved feature is removed, deferred or shrunk to stay under
+a page-weight number: a ceiling is a ratchet, so the answer is to re-measure it,
+raise it, and record in the same commit what the bytes bought. That reverses the
+guidance this page carried until then, which was to turn `console.default_window_days`
+down instead. Turning the window down is still the right first move when the
+page is inlining something the first paint does not need - it is a saving rather
+than a cut - but it is no longer a reason to leave a panel unbuilt. The two
+limits the ruling does **not** waive are Rule #2's 1 GB Pages cap, which is a
+platform limit, and the 200,000-byte lazy chart chunk, which stands because a new
+echarts registration is a decision about the chart vocabulary and not about size
 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)).
 
 ## The browser suite
