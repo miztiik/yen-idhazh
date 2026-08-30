@@ -2167,6 +2167,96 @@ rewrites a day's payload several times an hour; a rewrite on 2026-08-26 moved
 written moved `/console/` 914 bytes. The five builds the ceiling is set from were
 re-taken after the final fetch of `origin/main`, and that is the only defence.
 
+#### The console grows on items, not on days, and the window does not bound it (2026-08-30)
+
+Hardware: Intel Core i7-1265U, Windows 11, node v24.12.0. Date: 2026-08-30.
+Tree: `origin/main` at `76cdc72`, nine published days, 3,054 items, 3,113 scored
+rows. Method: copy `frontend/public/digest/`, `frontend/public/telemetry/`,
+`frontend/public/assist/` and `state/` to a scratch directory, reach it through
+`DIGEST_ROOT`, `STATE_ROOT` and `TELEMETRY_ROOT`, remove whole real days from
+every one of them, rebuild, and take
+`gzipSync(readFileSync('build/console/index.html'), { level: 9 }).length` - the
+byte the page-weight gate itself takes. n=1 per arm; the five in-repo builds of a
+single commit recorded above spanned 10 bytes, so an arm difference of tens of
+thousands is far outside the build noise.
+
+**The redirection is not a variable, re-checked.** The control arm builds the
+same source over a copy of the three trees reached through `DIGEST_ROOT`,
+`STATE_ROOT` and `TELEMETRY_ROOT` and reads 173,269. An in-repo build of the same
+commit with no redirection at all, taken minutes later, reads **173,278** - nine
+bytes apart, inside the ten-byte spread five in-repo builds of one commit showed
+above.
+
+**Every arm that sets a level removes real days. Nothing in the first three is
+cloned.** A clone is a near-copy of a block gzip already holds and reads low,
+which the synthetic scan above shows directly and the last row here re-measures.
+The days removed are mid-range ones, so the newest and the oldest are the same in
+every arm and the 30-day window anchor never moves.
+
+| Arm | Days | Items | Scored rows | `/console/` | Of the 301,580 ceiling |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| every day (control) | 9 | 3,054 | 3,113 | **173,269** | 57.5 percent |
+| without 2026-08-25 | 8 | 2,330 | 2,389 | 136,676 | 45.3 percent |
+| without 2026-08-24, 25 and 26 | 6 | 978 | 1,037 | **68,534** | 22.7 percent |
+| a full 30-day window, cloned fill | 30 | 17,586 | 17,645 | **671,577** | **2.23x** |
+
+**The two arms the row asked for are 68,534 bytes at six days and 671,577 at
+thirty.** The first is measured on real days. The second is not, and the rest of
+this section is about why the difference matters more than either number.
+
+**The page is linear in items and the slope barely moves.** 2026-08-25 alone is
+724 items and 36,593 bytes, which is **50.5 gzipped bytes an item**. The three
+days together are 2,076 items and 104,735 bytes, which is **50.4**. Over the
+whole span of real arms, 978 items to 3,054, the fit is:
+
+```text
+/console/ gzipped bytes = 19,300 + 50.45 x items in the ledger
+```
+
+That predicts the control at 173,317 against a measured 173,269 - **0.03 percent
+out**, over a range where the page more than doubles.
+
+**The synthetic arm reads 25.9 percent low, so it is a floor and not a level.**
+Its 21 filler days are clones of three mature days, and the fit above puts 17,586
+items at 906,503 bytes where the build measured 671,577. The recorded bias for a
+one-day clone scan is 18 percent; cloning three days twenty-one times is more
+repetitive than that, and it reads correspondingly lower. **Use the slope, not
+this row.**
+
+**The 30-day window does not bound this, and that is the finding.** The
+telemetry seed is windowed by `console.default_window_days`, so that term does
+stop. The compression scatter is not: it inlines a point for every row
+`state/scores.csv` has ever held, and nothing prunes that file today. So the page
+grows on total scored rows, forever, at whatever the day publishes.
+
+**The runway for this page is short, and it is short in published days.** The
+ceiling is 301,580 and the page is 173,269, so the headroom is 128,311 bytes. At
+the item ceiling in force - `run.safety_ceiling_per_run` is 160 - a published day
+costs `160 x 50.45 = 8,072` bytes, and the headroom is **15.9 published days**.
+At the observed nine-day mean of 339 items a day it is 7.5 days. Both are
+derived from the measured slope; neither is a separate measurement.
+
+**The "2.49x the ceiling" extrapolation was wrong, and its shape was the
+problem rather than its size.** 2.49 times 301,580 is 750,935 bytes. The fit
+reaches that at 14,500 items, which is **71 published days away at the 160-item
+ceiling** - not 30. The synthetic arm lands at 2.23x and the same arm corrected
+for its own clone bias at about 3.0x, so 2.49 sits inside the range for a window
+of 700-item days. **That regime no longer exists**: the day cap has been 160
+since 2026-08-27, and every figure taken from days that published 731 describes
+a pipeline this one is not.
+
+**What the same measurement says instead is worse, because it carries a date.**
+21 more published days at 160 items puts the page near 342,800 bytes, **1.14x the
+ceiling** - a smaller multiple, arriving sooner, and crossing on **published day
+16**. A magnitude with no date has exactly the defect a level has, which is the
+whole subject of the row that took this measurement.
+
+**What this does not settle.** Every real arm here removes days from a ledger of
+nine, so nothing measured the page against 30 days of real rows - those do not
+exist yet. And the fix is not this row's: bounding `state/scores.csv` is the
+retention row's work, and this section is the measurement that says the page
+needs it inside 16 published days rather than inside a quarter.
+
 ### Days to the 1 GB Pages ceiling
 
 **This section divided by the wrong tree until 2026-08-27, and both of its
@@ -2214,6 +2304,60 @@ the runner's.
 The first three published days ran 4, 10 and 147 items; including them halves
 the answer and mixes two regimes, because those days are what a corpus looks
 like while it is starting rather than while it is running.
+
+#### The instrument prints the runway now, and it prints a floor (2026-08-30)
+
+Every figure above was worked out by hand on this page, three times, and got the
+wrong answer twice. `idhazh site-weight` now prints it from the tree it just
+measured. Hardware: Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-08-30, `origin/main` at `76cdc72`, nine published days, 3,054 items.
+Method: `npm run build` then `python -m idhazh site-weight --site-tree build`.
+n=1; a byte count over a fixed tree has no spread to report.
+
+```text
+site-weight build: 141.1 MB in 311 files, 883 MB left to the 1024 MB Pages cap
+site-weight by directory: assist 43.2 MB, _app 22.3 MB, 2026-08-24 15.6 MB,
+                          2026-08-25 15.5 MB, 2026-08-26 13.4 MB, 2026-08-29 7.4 MB
+site-weight rate: 48457 B per published item over 3054 items,
+                  so 7.39 MB a published day at the 160 item ceiling
+site-weight runway: 89 published days to the 800 MB alarm point, 119 to the 1024 MB Pages cap
+```
+
+Exactly: **147,986,756 bytes in 311 files**, 141.13 MiB of a 1,024 MiB cap -
+13.8 percent used - and **119.4 published days** to the cap, **89.1** to the
+alarm point.
+
+**The printed rate is an average that charges the fixed directories to the
+items, so the runway is a floor.** Nothing in the tree is only per-item: the
+on-device encoder under `assist/` and the JavaScript under `_app/` cost the same
+whether a day publishes 4 items or 160.
+
+| Part of the tree | Bytes | Share | Moves with items? |
+| --- | ---: | ---: | --- |
+| `assist/` - the on-device encoder | 45,328,441 | 30.6 percent | no |
+| `_app/` - the built JavaScript | 23,367,156 | 15.8 percent | no |
+| `fonts/`, `icons/`, `404.html`, manifest, favicon | 109,159 | 0.1 percent | no |
+| everything else - day routes, payloads, index, console | 79,182,000 | 53.5 percent | yes |
+
+**46.5 percent of the site does not grow with a published day.** Divide only the
+part that does and the rate is **25,927 bytes an item**, which is 3.96 MiB a day
+at the 160-item ceiling and **223 published days** to the cap. That figure is
+derived from the split above, not separately measured - but it lands within 6.4
+percent of the 24,378 bytes an item measured independently on 2026-08-29 over
+seven mature days, from a different tree state and a different method.
+
+**So the honest reading of the printed line is "at least 119 days, and about
+223".** The instrument prints the conservative one on purpose: a runway that
+assumes the model directory is bought again every day is wrong in the direction
+that costs nobody a site. `by_directory` is on the same output precisely so a
+reader can do the sum above rather than take the floor as the answer.
+
+**Where the bytes actually are.** `assist/` is the largest single directory in
+the published site and it is a feature no digest assertion depends on
+(CLAUDE.md section 0a). Deleting it would give back 30.6 percent of the site and
+buy nothing on the rate, which is the same lesson PR #171 taught one level down:
+a one-off saving buys a fraction of a day forever, and only the rate moves a
+date.
 
 #### The image rows, kept as history
 

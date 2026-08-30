@@ -2518,8 +2518,63 @@ def stage_backfill_vectors(
     return 0
 
 
+def _report_site_growth(
+    size: retention.SiteSize,
+    config: RetentionConfig,
+    *,
+    items_per_day: int,
+    cap_mb: int,
+) -> None:
+    """The rate, the runway, and which directory is holding the bytes.
+
+    Reporting only, and deliberately: `npm run bundle-gate` already fails a build
+    on a crossed per-route ceiling and `cap_breach` above fails one past the
+    platform's, so a third gate here would be a third thing to keep green for no
+    coverage it does not already have.
+
+    The runway is the point of the whole step. A megabyte figure and a headroom
+    figure are both levels, and no level yields a date - only a rate does.
+    """
+    named = retention.heaviest_directories(size, limit=6)
+    if named:
+        LOG.info(
+            "site-weight by directory: %s",
+            ", ".join(f"{name} {count / retention.BYTES_PER_MB:.1f} MB" for name, count in named),
+        )
+
+    if size.published_items <= 0 or items_per_day <= 0:
+        LOG.info(
+            "site-weight runway: unknown - %s published items in the measured tree at a "
+            "%s item day ceiling. The size above is a level, and a level has no date in it",
+            size.published_items,
+            items_per_day,
+        )
+        return
+
+    LOG.info(
+        "site-weight rate: %.0f B per published item over %s items, so %.2f MB a "
+        "published day at the %s item ceiling",
+        size.bytes_per_published_item,
+        size.published_items,
+        retention.daily_growth_bytes(size, items_per_day) / retention.BYTES_PER_MB,
+        items_per_day,
+    )
+    LOG.info(
+        "site-weight runway: %.0f published days to the %s MB alarm point, %.0f to the "
+        "%s MB Pages cap",
+        retention.days_to_alarm(size, config, items_per_day),
+        config.site_budget_mb,
+        retention.days_to_cap(size, items_per_day, cap_mb=cap_mb),
+        cap_mb,
+    )
+
+
 def stage_site_weight(
-    tree: Path, config: RetentionConfig, *, cap_mb: int = retention.PAGES_HARD_CAP_MB
+    tree: Path,
+    config: RetentionConfig,
+    *,
+    items_per_day: int = 0,
+    cap_mb: int = retention.PAGES_HARD_CAP_MB,
 ) -> int:
     """Measure the built bundle against the alarm point and the Pages cap.
 
@@ -2534,9 +2589,11 @@ def stage_site_weight(
     Three outcomes: an empty tree fails, because a measurement of nothing reads
     exactly like a site inside budget; over the cap fails, because those bytes
     cannot be published; over the alarm point reports and passes, because they
-    still can.
+    still can. Both outcomes that pass also print the rate and the runway, and
+    not only the one over the alarm point - the day the alarm fires is not the
+    day anybody wanted to first learn the date.
     """
-    size = retention.measure(tree)
+    size = retention.measure(tree, published_items=retention.count_published_items(tree))
     if size.files == 0:
         LOG.error(
             "site-weight measured 0 files under %s - build the site first. "
@@ -2550,15 +2607,6 @@ def stage_site_weight(
         LOG.error("%s", breach)
         return 1
 
-    alarm = retention.budget_alarm(size, config, cap_mb=cap_mb)
-    if alarm is not None:
-        # An Actions workflow command, so the line lands on the run's summary
-        # rather than three thousand lines into a log nobody opens. Outside
-        # Actions it is one more printed line and costs nothing.
-        print(f"::warning title=Published site approaching the Pages cap::{alarm}")
-        LOG.warning("%s", alarm)
-        return 0
-
     LOG.info(
         "site-weight %s: %.1f MB in %s files, %.0f MB left to the %s MB Pages cap",
         tree.as_posix(),
@@ -2567,6 +2615,15 @@ def stage_site_weight(
         retention.headroom_mb(size, cap_mb=cap_mb),
         cap_mb,
     )
+    _report_site_growth(size, config, items_per_day=items_per_day, cap_mb=cap_mb)
+
+    alarm = retention.budget_alarm(size, config, cap_mb=cap_mb)
+    if alarm is not None:
+        # An Actions workflow command, so the line lands on the run's summary
+        # rather than three thousand lines into a log nobody opens. Outside
+        # Actions it is one more printed line and costs nothing.
+        print(f"::warning title=Published site approaching the Pages cap::{alarm}")
+        LOG.warning("%s", alarm)
     return 0
 
 
@@ -2823,7 +2880,11 @@ def main(argv: Sequence[str] | None = None) -> int:
         # and starting one to do it would read every host's robots.txt for nothing.
         if args.site_tree is None:
             parser.error("site-weight needs --site-tree: the built bundle to measure")
-        return stage_site_weight(args.site_tree, settings.app.retention)
+        return stage_site_weight(
+            args.site_tree,
+            settings.app.retention,
+            items_per_day=settings.app.run.safety_ceiling_per_run,
+        )
 
     if args.stage == "prune-stamp":
         # Above the fetcher for the same reason: it rewrites one committed field.
