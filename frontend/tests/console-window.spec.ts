@@ -122,6 +122,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		found.map((surface) => surface.name).sort(),
 		'the page publishes no windowed surfaces, so the oracle asserts nothing'
 	).toEqual([
+		'failure-rate',
 		'router-cost',
 		'run-health',
 		'site-cost-per-item',

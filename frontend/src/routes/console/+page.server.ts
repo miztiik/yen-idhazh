@@ -9,7 +9,6 @@ import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import {
 	failureMix,
-	publishedTrend,
 	routerCost,
 	runHealth,
 	siteCost
@@ -497,7 +496,9 @@ export async function load() {
 						end: mixDates[mixDates.length - 1]
 					})
 				);
-	const published = publishedTrend(charts);
+	// The published skyline is not drawn here. It is markup over `charts`, which
+	// already crosses, so the page renders it at prerender time and redraws it
+	// from the same array when the window moves - one drawing, not two.
 	const draw = async (
 		chart: { option: import('echarts').EChartsOption; empty: boolean },
 		width: number,
@@ -528,11 +529,10 @@ export async function load() {
 			costSvg: await draw(cost, 460, 40),
 			costBand: cost.empty ? null : cost.band,
 			perArticleSvg: await draw(perArticle, 760, 220),
-			mixSvg: await draw(mix, 760, 220),
-			publishedSvg: await draw(published, 220, 34),
-			publishedMovement: published.empty ? null : published.movement
-			// No size chart and no size movement beside it: both follow the window,
-			// and the page recomputes them from the manifests it already carries.
+			mixSvg: await draw(mix, 760, 220)
+			// No size chart and no published strip beside them: both follow the
+			// window, and the page rebuilds each from an array it already carries
+			// rather than from a second drawing on the server.
 		},
 		// Drawn here, so the shape is on the page before any script runs and stays
 		// there if none ever does. Colour leaves as a custom-property reference, so
@@ -546,8 +546,6 @@ export async function load() {
 		// Printed where the diagram would have been. A panel that is simply absent
 		// says nothing about which of the two nothings happened.
 		flowNote: flow.reason,
-		totalRows: rows.length,
-		itemHealthRows: itemRows.length,
 		grid,
 		floorPct,
 		itemCeiling,
