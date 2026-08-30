@@ -525,16 +525,18 @@ so it can be tested without a browser.
 **The strip starts on the left, and the spare room is on the right.** Until
 2026-08-30 a history shorter than its frame was pushed to the right edge, on the
 argument that the newest run should sit in one place whatever the day count.
-Measured on 2026-08-30 at 1440px over the committed ledger, on this tree with
-the one alignment declaration flipped back: its nine days draw 378px inside a
-1326px frame, so right-anchored they leave 948px of empty page on the left - the
-strip uses 28 percent of its own row, which reads as one that failed to draw
-rather than as one with room to spare. Left-anchored the same nine days start at
-the frame's own left edge, 0px in, and the 948px of room falls on the right. And
-every publish slid the whole sequence a column left, so a run an operator had
-looked at yesterday was somewhere else today. Left-anchored, a day keeps its
-place and the empty room is on the side the days that have not happened yet
-belong to.
+Re-measured on 2026-08-30 after merging `origin/main`, at 1440px over the
+committed ledger, on this tree with the one alignment declaration flipped back:
+its ten days draw 421px inside a 1326px frame, so right-anchored they leave
+905px of empty page on the left - the strip uses 32 percent of its own row,
+which reads as one that failed to draw rather than as one with room to spare.
+Left-anchored the same ten days start at the frame's own left edge, 0px in, and
+the 905px of room falls on the right. The argument for the right edge is the
+thing that broke it: the ledger went from nine days to ten while this change was
+being merged, so a right-anchored strip slid every column one place left and a
+run the operator had looked at yesterday was somewhere else today. Left-anchored,
+a day keeps its place and the empty room is on the side the days that have not
+happened yet belong to.
 
 **Where an overflowing strip OPENS is a different question, and it is the one
 `console.today_anchor` answers.** The two were one line of layout for a while
