@@ -547,7 +547,10 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 	await expect(flaky.locator('[data-rested]')).toHaveCount(1);
 	await expect(page.locator('[data-feed="canary-gone"] [data-rested]')).toHaveCount(0);
 
-	// Worst first. An operator reading top-down reads the biggest problem first.
+	// Nearest to a rest first. `canary-flaky` has failed every run it was asked,
+	// `canary-empty` answered once before its two blank runs, and `canary-gone`
+	// has one failure. The full ordering rule is held in console-feeds.spec.ts,
+	// against the page's own published streaks rather than against this list.
 	const named = await page
 		.locator('[data-feed]')
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-feed')));
