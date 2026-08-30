@@ -1185,6 +1185,24 @@ the variable protects the shell you remember to set it in and nothing else.
 
 ## The canary build
 
+- **`npm run build:canary` does not build the canary day, and the browser suite
+  dies at COLLECTION without it.** On a fresh worktree the whole suite fails
+  before a single test runs, with
+  `Error: ENOENT: no such file or directory, scandir '<worktree>\backend\var\canary\digest'`
+  attributed to `console.spec.ts:33` - three specs read the canary tree at module
+  scope, so it reads like three broken tests and is one missing directory.
+  `npm run build:canary` exits 1 and prints five words of hint. Two commands, in
+  this order, and the first needs the venv's Python on `PATH`:
+
+  ```powershell
+  & .\.venv\Scripts\python.exe backend/utilities/build_canary_day.py
+  cd frontend; npm run build:canary
+  ```
+
+  Run it before the suite, not after a red one. `backend/var/` is gitignored, so
+  every fresh worktree pays this and CI pays it on every run - which is why
+  `ci.yml` runs `build:canary` immediately before `test:browser`.
+
 - **`build_canary_day.py` used to append to the canary ledgers instead of
   replacing them.** Running it a second time doubled every feed-health row, and
   by the fifth run `canary-gone` had five failures, crossed
