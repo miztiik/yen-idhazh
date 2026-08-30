@@ -49,6 +49,56 @@ network. No test imports any of them, and `langfuse` is imported inside one
 function that only runs when `LANGFUSE_HOST` and its key pair are all set. The
 local span sink needs none of it.
 
+## Running the gates when the machine is shared
+
+Several agents work in their own worktrees on one box, and each starts its own
+gate the moment it is ready. Nothing coordinates them, so the gates fight over
+the same cores - and the loser looks like a broken branch rather than a busy
+machine. Wrap the three gates measured as CPU-bound so one of them runs at a
+time across every worktree:
+
+```powershell
+python backend/utilities/gate_lock.py -- python -m pytest
+python backend/utilities/gate_lock.py -- npm run build
+python backend/utilities/gate_lock.py -- npm run test:browser
+```
+
+`ruff`, `mypy`, `svelte-check`, `shellcheck` and `bundle-gate` stay unwrapped:
+serialising a gate that finishes in seconds only adds waiting. The tool reads no
+configuration and imports nothing from `idhazh`, so any supported Python runs it
+from a fresh clone. **CI never takes it** - a runner is one job alone on its own
+machine (Rule #2), so nothing about a CI run moves. A caller that has to wait
+prints who holds the lock, from which worktree, running what, and for how long,
+every 30 seconds. And it cannot fail your gate: a lock whose holder died is
+reclaimed, and a caller that waits out `--timeout` runs the gate unlocked rather
+than returning an error. What the lock does not save you from is in
+[../reference/agent-notes.md](../reference/agent-notes.md).
+
+**Never buy a pass with a raised timeout, an added retry or a relaxed
+assertion.** A suite that times out while siblings hold the cores has measured
+the box, not the branch. Take the lock, or re-run it alone. Widening the bar
+hides the contention and the false red returns at the next fan-out.
+
+### The backend suite can use every core the box has
+
+`-n auto` shards the suite across the machine's processors. It is opt-in:
+`addopts` is unchanged, so a bare `pytest` is still one process, and the CI gate
+everybody trusts runs exactly the way it always did.
+
+```powershell
+python backend/utilities/gate_lock.py -- python -m pytest -n auto
+```
+
+Nothing needs pinning to one worker. Every test that binds a port binds an
+ephemeral one, no test changes the working directory, and no test writes into a
+tracked root - so the parallel run passes the same node ids as the serial one
+and leaves `git status --porcelain` empty.
+
+**What each gate costs on a developer box, and what `-n auto` buys, is measured
+in [../reference/measurements.md](../reference/measurements.md#what-the-gates-cost-on-a-developer-box).**
+Read it there rather than guessing from one run: on a machine several agents
+share, the same suite spans a factor of three depending on who else is working.
+
 ## The backend gates
 
 Run all five from the repository root. Each must be clean.
@@ -293,14 +343,22 @@ zone has a mark under it, and two items carry the truncation flag that draws a
 diamond. A chart state the fixture does not reach is a chart state this suite
 cannot test.
 
-**Set `PREVIEW_PORT` when another checkout may be running the suite.**
-`playwright.config.ts` reads it and defaults to 4173, and the whole config -
-`baseURL`, the preview command and the poll URL - follows it. Two worktrees on
-one port do not queue; the second adopts the first one's server and reads its
-build.
+**The preview port derives from the checkout, so two worktrees cannot share one
+server.** `playwright.config.ts` hashes its own directory into a port between
+20000 and 29999, and the whole config - `baseURL`, the preview command and the
+poll URL - follows it. A runner keeps 4173, so nothing about a CI run moved.
+`PREVIEW_PORT` still overrides both, and it is what to reach for on the roughly
+1 percent of checkout pairs that hash to one number:
 
 ```powershell
 $env:PREVIEW_PORT = '4181'
+```
+
+Run this from `frontend/` to print the number this checkout will use, which is
+the same derivation the config runs:
+
+```powershell
+node -e "const {createHash}=require('node:crypto');console.log(20000+createHash('sha256').update(process.cwd()).digest().readUInt32BE(0)%10000)"
 ```
 
 Three traps make this suite lie to you. A fourth used to, and was fixed at the
@@ -321,10 +379,12 @@ The traps that remain:
   `playwright.config.ts` sets `reuseExistingServer` outside CI, so a server left
   running by an earlier run serves stale bytes and most of the suite fails at
   once. The tell is that everything fails together while the pure-function tests
-  still pass. Clear it, then re-run - do not start debugging the code:
+  still pass. Clear it, then re-run - do not start debugging the code. Kill only
+  your own checkout's port, which the command above prints; another number in
+  the band belongs to a sibling worktree that is using it:
 
   ```powershell
-  Get-NetTCPConnection -LocalPort 4173 -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
+  Get-NetTCPConnection -LocalPort $port -State Listen | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }
   ```
 
 - **The canary day has one vertical** (`ai`, 8 items). Any rule that only shows
