@@ -24,6 +24,7 @@ set -euo pipefail
 
 if [ "$EVENT" != "pull_request" ] || [ -z "$BASE" ] || [ -z "$HEAD" ]; then
 	echo "browser=true"
+	echo "console=true"
 	exit 0
 fi
 
@@ -43,10 +44,38 @@ PATTERN+='|backend/utilities/build_canary_day\.py'
 PATTERN+='|[.]github/(workflows/ci\.yml|scripts/browser-suite-needed\.sh)'
 PATTERN+=')'
 
+# The console's own half. 233 of the 411 browser tests are its specs, and a
+# reader never opens that page - so a change to a reading route, to the search
+# index or to the on-device encoder buys the other 178 and stops. Everything a
+# console panel draws from is here: its route, the chart engine, the shared
+# components and server loaders it renders through, the ledgers and projections
+# it reads at build time, the canary that stands in for them, and the config it
+# takes its window and its bands from.
+CONSOLE='^('
+CONSOLE+='frontend/src/routes/console/'
+CONSOLE+='|frontend/src/lib/(charts|components|server)/'
+CONSOLE+='|frontend/tests/console'
+CONSOLE+='|frontend/scripts/build-canary\.mjs'
+CONSOLE+='|frontend/playwright\.config\.ts'
+CONSOLE+='|config/'
+CONSOLE+='|state/'
+CONSOLE+='|frontend/public/telemetry/'
+CONSOLE+='|backend/idhazh/contracts/'
+CONSOLE+='|backend/idhazh/(publish_telemetry|telemetry|retention|ledger)\.py'
+CONSOLE+='|backend/utilities/build_canary_day\.py'
+CONSOLE+='|[.]github/(workflows/ci\.yml|scripts/browser-suite-needed\.sh)'
+CONSOLE+=')'
+
 changed=$(git diff --name-only "$BASE...$HEAD")
 
 if printf '%s\n' "$changed" | grep -Eq "$PATTERN"; then
 	echo "browser=true"
 else
 	echo "browser=false"
+fi
+
+if printf '%s\n' "$changed" | grep -Eq "$CONSOLE"; then
+	echo "console=true"
+else
+	echo "console=false"
 fi

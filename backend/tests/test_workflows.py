@@ -1354,25 +1354,36 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
-#: A change, and whether the canary build and the browser suite have to pay for
-#: it. The last three are the trap the allow-list exists to avoid: a backend
-#: module the canary day is built through, and a fixture the attack text is read
-#: from, can all move a published page without touching `frontend/`.
+#: A change, and what it has to pay for: the browser half at all, and the
+#: operator console's own 233 specs inside it. The backend rows are the trap the
+#: allow-list exists to avoid - a module the canary day is built through, and a
+#: fixture the attack text is read from, can move a published page without
+#: touching `frontend/`. The two reading-route rows are the saving: they publish
+#: a page and draw nothing the console draws.
 BROWSER_SCOPE_CASES: Final = (
-    ("frontend/src/routes/console/+page.svelte", True),
-    ("config/idhazh.json", True),
-    ("backend/idhazh/contracts/item_health.py", True),
-    ("backend/utilities/build_canary_day.py", True),
-    ("backend/idhazh/sanitize.py", True),
-    ("tests/fixtures/canaries/fake-system-delimiter.json", True),
-    ("docs/reference/measurements.md", False),
-    ("backend/tests/test_discover.py", False),
-    ("backend/idhazh/discover.py", False),
-    ("TODO/some-plan.md", False),
+    ("frontend/src/routes/console/+page.svelte", True, True),
+    ("frontend/src/lib/charts/engine.ts", True, True),
+    ("frontend/src/lib/components/KpiCard.svelte", True, True),
+    ("frontend/src/lib/server/payload.ts", True, True),
+    ("frontend/tests/console-feeds.spec.ts", True, True),
+    ("config/idhazh.json", True, True),
+    ("backend/idhazh/contracts/item_health.py", True, True),
+    ("backend/utilities/build_canary_day.py", True, True),
+    ("frontend/src/routes/[date]/+page.svelte", True, False),
+    ("frontend/src/lib/assist/loader.ts", True, False),
+    ("frontend/src/app.html", True, False),
+    ("backend/idhazh/sanitize.py", True, False),
+    ("tests/fixtures/canaries/fake-system-delimiter.json", True, False),
+    ("docs/reference/measurements.md", False, False),
+    ("backend/tests/test_discover.py", False, False),
+    ("backend/idhazh/discover.py", False, False),
+    ("TODO/some-plan.md", False, False),
 )
 
 
-def _browser_scope(tmp_path: Path, changed: Sequence[str], event: str = "pull_request") -> str:
+def _browser_scope(
+    tmp_path: Path, changed: Sequence[str], event: str = "pull_request"
+) -> dict[str, str]:
     """Run the shipped filter over a real two-commit history and read its answer."""
     env = _isolated_env(tmp_path)
     root = tmp_path / "repo"
@@ -1399,22 +1410,39 @@ def _browser_scope(tmp_path: Path, changed: Sequence[str], event: str = "pull_re
         check=False,
     )
     assert completed.returncode == 0, completed.stderr
-    return completed.stdout.strip()
+    return dict(
+        line.split("=", 1) for line in completed.stdout.strip().splitlines() if "=" in line
+    )
 
 
 @requires_bash
-@pytest.mark.parametrize(("changed", "needed"), BROWSER_SCOPE_CASES)
+@pytest.mark.parametrize(("changed", "browser", "console"), BROWSER_SCOPE_CASES)
 def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
-    changed: str, needed: bool, tmp_path: Path
+    changed: str, browser: bool, console: bool, tmp_path: Path
 ) -> None:
     """The filter is executed, not read.
 
     A copy of the pattern in this file would agree with itself forever while the
     shipped script skipped a change that breaks a published page. So the test
     builds a real two-commit history, runs the script the workflow runs, and
-    reads the line it writes to `$GITHUB_OUTPUT`.
+    reads the lines it writes to `$GITHUB_OUTPUT`.
     """
-    assert _browser_scope(tmp_path, [changed]) == f"browser={str(needed).lower()}"
+    assert _browser_scope(tmp_path, [changed]) == {
+        "browser": str(browser).lower(),
+        "console": str(console).lower(),
+    }
+
+
+@requires_bash
+def test_the_console_half_is_never_bought_without_the_browser_half(tmp_path: Path) -> None:
+    """A containment the two patterns must satisfy for any input.
+
+    `SKIP_CONSOLE_SUITE` is only read inside the `browser` job, so a change that
+    needed the console specs and not the job would silently run neither. Every
+    case in the table is checked rather than the design being asserted in prose.
+    """
+    for changed, browser, console in BROWSER_SCOPE_CASES:
+        assert not (console and not browser), f"{changed} asks for the console with no job"
 
 
 @requires_bash
@@ -1425,7 +1453,7 @@ def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
     ordinary shape of this repo's changes, and the frontend edit decides.
     """
     mixed = ["docs/reference/measurements.md", "frontend/src/routes/+page.svelte"]
-    assert _browser_scope(tmp_path, mixed) == "browser=true"
+    assert _browser_scope(tmp_path, mixed)["browser"] == "true"
 
 
 @requires_bash
@@ -1435,7 +1463,10 @@ def test_a_push_to_main_never_consults_the_list(tmp_path: Path) -> None:
     list was wrong about reddens `main` within minutes instead of reaching a
     reader.
     """
-    assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == "browser=true"
+    assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == {
+        "browser": "true",
+        "console": "true",
+    }
 
 
 #: Every job that builds the site and then commits what it built, named with the
@@ -2872,6 +2903,28 @@ def test_every_setup_python_pin_is_inside_the_declared_interpreter_range() -> No
         assert floor <= minor < ceiling, f"{where} pins {version}, outside {declared}"
 
 
+#: The shared start sequence `digest.yml` delegates to. A step that calls it is
+#: still a server starter, and the shell it really runs is its own body plus
+#: this file's.
+START_SERVER_SCRIPT: Final = SCRIPTS_DIR / "start-llama-server.sh"
+
+
+def _starter_shell(step: Mapping[str, object]) -> str:
+    """Everything a starter step executes, following one level of delegation.
+
+    `work` and `route` ran 31 lines of near-identical inline shell, 80.6 percent
+    the same, differing in the config attribute and two filenames. They call one
+    script now. Reading the step alone would report that neither reaches
+    `server_argv` any more, which is the opposite of what happened.
+    """
+    body = step.get("run")
+    if not isinstance(body, str):
+        return ""
+    if START_SERVER_SCRIPT.name not in body:
+        return body
+    return body + "\n" + read_text(START_SERVER_SCRIPT)
+
+
 def _server_starters(
     workflows: Mapping[str, dict[str, object]],
 ) -> dict[tuple[str, str], str]:
@@ -2884,8 +2937,7 @@ def _server_starters(
     for filename, workflow in workflows.items():
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):
-                script = step.get("run")
-                if not (isinstance(script, str) and "server_argv" in script):
+                if "server_argv" not in _starter_shell(step):
                     continue
                 name = step.get("name")
                 assert isinstance(name, str), f"{filename}/{job_name}: name the step"
@@ -2921,7 +2973,7 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
             f"{where} imports idhazh, so the install runs first"
         )
 
-        script = _script(_step(workflows[filename], job_name, "name", step_name), where)
+        script = _starter_shell(_step(workflows[filename], job_name, "name", step_name))
         assert "from idhazh.llm.server import server_argv" in script, where
         if config_root is None:
             continue
@@ -2933,21 +2985,61 @@ def test_every_job_that_starts_a_server_reaches_the_one_argv_builder() -> None:
     # The other side of the same Oracle: no command a runner executes renders
     # the list itself. Only `run:` scripts are read, because a dispatch-form
     # description that names `-tb` tells an operator what an input tunes and
-    # starts nothing.
+    # starts nothing. The shipped shell under .github/scripts/ is read too - a
+    # flag moved out of a workflow into a script is still a second spelling.
     flags = llama_server_flags()
+    executed: list[tuple[str, str]] = [
+        (path.name, read_text(path)) for path in sorted(SCRIPTS_DIR.glob("*.sh"))
+    ]
     for filename, workflow in sorted(workflows.items()):
         for job_name in _mapping(workflow.get("jobs"), "jobs"):
             for step in _steps(workflow, job_name):
                 body = step.get("run")
                 if not isinstance(body, str):
                     continue
-                where = f"{filename}/{job_name}/{step.get('name')}"
-                commands = _uncommented(body)
-                for flag in flags:
-                    # A whole token: `-fa` sits inside `fail-fast`, so a
-                    # substring search reports a flag nobody wrote.
-                    spelled = re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", commands)
-                    assert not spelled, f"{where} spells {flag} instead of importing it"
+                executed.append((f"{filename}/{job_name}/{step.get('name')}", body))
+
+    for where, body in executed:
+        commands = _uncommented(body)
+        for flag in flags:
+            # A whole token: `-fa` sits inside `fail-fast`, so a substring
+            # search reports a flag nobody wrote.
+            spelled = re.search(rf"(?<![\w-]){re.escape(flag)}(?![\w-])", commands)
+            assert not spelled, f"{where} spells {flag} instead of importing it"
+
+
+@requires_bash
+@pytest.mark.parametrize(
+    ("argv", "message"),
+    [
+        ([], "usage:"),
+        (["summarize"], "usage:"),
+        (["gibberish", "llama-server"], "unknown role"),
+    ],
+)
+def test_the_start_script_refuses_a_call_it_cannot_serve(
+    argv: list[str], message: str, tmp_path: Path
+) -> None:
+    """Run it, do not read it.
+
+    Two jobs share this script and each passes a role and a filename. A typo in
+    either used to be impossible, because the shell was written out per job; now
+    it is one string in a workflow, so the script says no rather than starting a
+    server for the wrong model or writing a log nobody later reads.
+    """
+    shell = _bash()
+    assert shell is not None
+    completed = subprocess.run(
+        [shell, START_SERVER_SCRIPT.as_posix(), *argv],
+        cwd=tmp_path,
+        env={**_isolated_env(tmp_path), "LLAMA_WEIGHTS": "w.gguf", "LLAMA_PORT": "8080"},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert completed.returncode == 2, completed.stdout
+    assert message in completed.stderr
 # --- The qualification arm (Row #10) ----------------------------------------
 
 
