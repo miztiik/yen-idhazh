@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -778,9 +778,10 @@ sentence at all. A chart that drops points without saying so is a chart that
 under-reports its own gaps.
 
 **Three charts carry a pointer readout, and it is not an SVG `<title>`.** The
-compression scatter and the throughput candle each get a plain absolutely
-positioned `<div>` inside the chart card, **pinned to the top of the plot and
-never to the pointer** - a readout under a thumb is a readout nobody reads. One
+compression scatter gets a plain absolutely positioned `<div>` inside the chart
+card; the stage-timing and throughput trends each get a strip below their plot.
+All three are **never pinned to the pointer** - a readout under a thumb is a
+readout nobody reads. One
 Svelte action beside `observeWidth` drives it
 ([frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)):
 `pointermove` and `pointerdown` on the `<svg>`, which is one stream covering
@@ -795,9 +796,7 @@ Home and End jump, Escape closes. A tab stop per data point is a trap rather
 than access - the committed ledger draws 2,541 of them. The `<title>` elements
 stay as each mark's accessible name and are never the publication: nothing a
 readout alone can tell you is needed to read either chart, which is also the
-whole no-JavaScript answer. The candle's readout is `caption()` unchanged, the
-same sentence its `<title>` already carried, so there is one sentence about a
-day and not two.
+whole no-JavaScript answer.
 
 **The stage-timing chart takes the third, and it is a strip below the plot
 rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
@@ -815,6 +814,60 @@ values, opens on the newest day, and follows a pointer or an arrow key; the row
 order is still fixed by the newest day, because a legend that re-sorts under the
 eye as the pointer moves is a legend nobody can read. Nothing is hidden until a
 pointer arrives, so the no-JavaScript answer is the page as it prerenders.
+
+**The throughput candle's readout moved below its plot on 2026-08-30, and it is
+no longer `caption()` verbatim.** It was a box over the plot carrying the
+`<title>` sentence unchanged, on the rule that one day gets one sentence rather
+than two. That box is the one measured above, and this strip is bounded by the
+same `chart.readout_max_share`. `caption()` closes with a run list that grows
+with the day's run count, so it is the one clause with no bound, and at a third
+of the plot it wrapped to four lines per series. The strip is a `<dl>` printing
+the day, then one row per series carrying the median and the extent - every
+series at once, so comparing read against write costs no second hover. It rests
+on the newest day rather than opening blank, so pointing at the chart never
+changes the room it takes and never moves the marks under the pointer. The
+`<title>` keeps every word, including the middle half the box already draws, and
+the run count stays in the verdict line under the legend. The compression
+scatter's readout is unchanged.
+
+The strip's shape is not this chart's own. `dayTicks`, `dayColumnX`,
+`readoutCapStyle` and `readoutMarks` in
+[frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
+hold the axis-thinning, the column arithmetic, the cap and the announcement, so
+the stage-timing trend directly above this one on the page and this chart cannot
+drift apart. Two charts stacked on one page that hover differently cost the
+operator a second guess.
+
+**A window with nothing in it says so, rather than removing the chart.** Until
+2026-08-30 the throughput trend rendered nothing at all when no day in the
+window carried a measurement, while the stage-timing trend six inches above it
+printed `Nothing was timed in these 30 days`. Found 2026-08-30 by rebuilding the
+console against an emptied item-health ledger: the page was intact and threw
+nothing, and the chart had simply gone. A chart that vanishes beside one that
+explains itself reads as a chart that broke. The heading now stays and one line
+of type under it says the window is empty.
+
+**The throughput axis names a day per column.** It shared the run strip's
+sparse-label arithmetic until 2026-08-30, which printed the whole window as one
+span string and no per-day label at all, so a spike could not be attributed to a
+date. It now prints one date per plotted day through `dayTicks`,
+thinned evenly to `chart.tick_density` with both endpoints always kept, and the
+span it used to print moved into the `<svg>`'s accessible name. Measured
+2026-08-30 by building the canary console from either side of the change on one
+machine in one session: 6 text nodes carrying 0 date labels before, 7 carrying 2
+after, over a canary of two days. Five of those nodes are the y axis's own ticks
+either way, so what moved is one span string becoming one date per column. A
+dashed
+vertical rule marks each boundary where the day's model differs from the day
+before it, so a step in the trend is attributable to a swap rather than guessed
+at; the model reaches the page through the prerendered HTML, from the same score
+rows the model table reads, and no telemetry column was added to publish it. The
+committed ledger holds one real swap - `qwen3-8b-q4-k-m` to 2026-08-26 and
+`qwen3-5-9b-q4-k-m` from 2026-08-27 - and the published console draws exactly
+one rule, on 2026-08-27, measured 2026-08-30 on a production build. The canary's
+throughput days are older than the ledger's first row, so no day there names a
+model and the rule cannot draw in the browser gate; the test says where it stops
+rather than passing quietly on an absence.
 
 **Stage timings are one trend chart, not a list per day.** Four polylines over a
 calendar x axis, oldest on the left, with a mark at every point and a date under

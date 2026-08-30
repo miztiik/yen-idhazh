@@ -118,6 +118,15 @@ jobs:
           set -euo pipefail
           bash .github/scripts/commit-and-push.sh frontend/public/digest frontend/public/assist/index
 
+      # The commit step rebases when the push loses a race, which leaves
+      # `frontend/build` describing the tree this job started from rather than
+      # the one it pushed. The gate below reads that directory, so it is rebuilt
+      # first. See ../../docs/architecture/publishing/layout.md.
+      - name: Rebuild the site against the tree that was pushed
+        if: inputs.commit
+        working-directory: frontend
+        run: npm run build
+
       # The other severity. A page over the weight recorded for it is a page
       # that still reads correctly, so the repaired days publish first and this
       # then fails the job. Raising the ceiling is one line in
