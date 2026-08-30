@@ -1158,14 +1158,16 @@ background: transparent;
 }
 
 /* Quarantine is a health fact and every square carries its own sentence as
-   well, so this is one of the two places the confidence ramp is the honest
-   colour. The two states that are not a verdict take no band colour at all. */
+   well, so this is one of the two places a verdict ramp is the honest colour.
+   The FILL ramp, the same one the run strip above uses: a square this small is
+   a solid, not type, and the band tokens are weighted to be read as type. The
+   two states that are not a verdict take no verdict colour at all. */
 .feed-square[data-feed-outcome='answered'] {
-background: var(--band-high);
+background: var(--fill-high);
 }
 
 .feed-square[data-feed-outcome='failed'] {
-background: var(--band-low);
+background: var(--fill-low);
 }
 
 .feed-square[data-feed-outcome='refused'] {

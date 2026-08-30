@@ -600,7 +600,11 @@ since Tuesday" and "flaky all month" cannot draw the same picture. It shrinks to
 fit its row rather than scrolling, because twenty scroll regions in one column
 is not a list. Every square carries its whole day's tally as a sentence: colour
 is one signal and never the only one, and the two outcomes that are not a
-verdict - a polite refusal and a day nobody asked - take no band colour at all.
+verdict - a polite refusal and a day nobody asked - take no verdict colour at
+all. The squares that do are painted from the **fill ramp**, the same three
+tokens the run strip above uses, so the console holds one health ramp rather
+than two: a square this small is a solid, and the band ramp is weighted to be
+read as type.
 `Last result` stays free text, because it is the only human-readable cause on
 the page and is never traded for a glyph.
 

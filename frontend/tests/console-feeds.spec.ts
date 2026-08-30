@@ -351,6 +351,69 @@ test('every square carries a sentence, not only a colour', async ({ page }) => {
 	expect(seen.has('failed'), 'the fixture drew no failed day').toBe(true);
 });
 
+/** Both themes, because the two ramps hold the SAME values in the dark theme.
+ * Only the light one can tell a fill token from a band token - and a hardcoded
+ * hex cannot equal the fill token in both themes at once, so running the pair
+ * is also what proves the colour arrives through a custom property. */
+const THEMES = ['light', 'dark'] as const;
+
+for (const theme of THEMES) {
+	test(`the squares are painted from the fill ramp, ${theme}`, async ({ page }) => {
+		await page.addInitScript(`localStorage.setItem('idhazh:theme', '${theme}')`);
+		await page.goto('/console/');
+		await expect
+			.poll(() => page.evaluate(() => document.documentElement.getAttribute('data-theme')))
+			.toBe(theme);
+
+		// Both sides are resolved by the browser off one probe element, so the
+		// token and the painted square arrive in the same notation and no colour
+		// parser has to be written or trusted.
+		const seen = await page.evaluate(() => {
+			const probe = document.createElement('span');
+			document.body.append(probe);
+			const resolved = (expression: string) => {
+				probe.style.backgroundColor = expression;
+				return getComputedStyle(probe).backgroundColor;
+			};
+			const painted = (outcome: string) => {
+				const node = document.querySelector(
+					`[data-feed-strip] [data-feed-outcome="${outcome}"]`
+				);
+				return node === null ? null : getComputedStyle(node).backgroundColor;
+			};
+			const out = {
+				fillHigh: resolved('var(--fill-high)'),
+				fillLow: resolved('var(--fill-low)'),
+				bandHigh: resolved('var(--band-high)'),
+				bandLow: resolved('var(--band-low)'),
+				answered: painted('answered'),
+				failed: painted('failed')
+			};
+			probe.remove();
+			return out;
+		});
+
+		expect(seen.answered, 'no answered square was drawn').not.toBeNull();
+		expect(seen.failed, 'no failed square was drawn').not.toBeNull();
+		expect(seen.answered, 'an answered square is not painted --fill-high').toBe(seen.fillHigh);
+		expect(seen.failed, 'a failed square is not painted --fill-low').toBe(seen.fillLow);
+
+		if (theme === 'light') {
+			// The bite. Put the band tokens back and these two fail; in the dark
+			// theme they could not, because the two ramps agree there by design.
+			expect(seen.fillHigh, 'the light theme ramps are identical, so this proves nothing').not.toBe(
+				seen.bandHigh
+			);
+			expect(seen.answered, 'an answered square is still on the text-weight ramp').not.toBe(
+				seen.bandHigh
+			);
+			expect(seen.failed, 'a failed square is still on the text-weight ramp').not.toBe(
+				seen.bandLow
+			);
+		}
+	});
+}
+
 test('the date axis labels the same columns the squares sit in', async ({ page }) => {
 	await page.goto('/console/');
 
