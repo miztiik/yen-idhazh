@@ -1,8 +1,15 @@
-"""Classify one planned item's terminal state for the item-health ledger."""
+"""The structured-event envelope, and one planned item's terminal state.
+
+A log line is evidence that something happened; the item-health row is the
+record of it. Both shapes live here so no stage builds either one by hand.
+"""
 
 from __future__ import annotations
 
+import json
 import re
+from collections.abc import Mapping
+from enum import StrEnum
 from typing import Final
 
 from idhazh.contracts.article import Article, ArticleStatus
@@ -14,11 +21,63 @@ from idhazh.sanitize import sanitize
 _FORMULA_PREFIXES: Final = ("=", "+", "-", "@", "\t", "\r")
 _HTTP_DETAIL = re.compile(r"^HTTP (?P<status>[0-9]{3})$")
 
+#: Envelope version. It rides every record so a reader can evolve its parsing.
+ENVELOPE_VERSION: Final = "1"
+
 #: Extract signals that end an item without failing it. The article is kept, the
 #: model is never asked, and the row publishes as `ok` carrying the signal.
 DEGRADED_BUT_DONE: Final = frozenset(
     {FailureCode.TOO_SHORT, FailureCode.NOT_PROSE, FailureCode.BOILERPLATE}
 )
+
+
+class EventName(StrEnum):
+    """Every event name a stage may emit.
+
+    One member, because one stage emits. A name with no emitter cannot be told
+    apart from one that fires, so a name is added here in the commit that emits
+    it.
+    """
+
+    ITEM_SUMMARIZE_FAILED = "item.summarize.failed"
+
+
+class EventLevel(StrEnum):
+    """Severity, as the envelope spells it."""
+
+    WARNING = "warning"
+
+
+def event(
+    *,
+    ts: str,
+    src: ItemStage,
+    run: str | None,
+    name: EventName,
+    level: EventLevel,
+    ctx: Mapping[str, str | None],
+    data: Mapping[str, str | None],
+) -> str:
+    """Serialize one event as the single line a stage logs.
+
+    `ctx` and `data` stay open because their keys vary by event. The envelope
+    around them does not, and building it here rather than at the call site is
+    what stops a second emitter shipping a second shape.
+    """
+    return json.dumps(
+        {
+            "ts": ts,
+            "src": src.value,
+            "v": ENVELOPE_VERSION,
+            "run": run,
+            "name": name.value,
+            "level": level.value,
+            "ctx": dict(ctx),
+            "data": dict(data),
+        },
+        sort_keys=True,
+        separators=(",", ":"),
+    )
 
 
 def is_final(article: Article | None, summary: Summary | None) -> bool:
