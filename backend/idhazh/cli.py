@@ -55,6 +55,7 @@ from idhazh import (
     telemetry,
 )
 from idhazh.contracts.app_config import (
+    CollectConfig,
     EvaluationConfig,
     ExtractConfig,
     InferenceConfig,
@@ -505,7 +506,6 @@ def _first_sights(
         fresh[candidate.url_key] = SeenRow(
             version=SeenRow.schema_version(),
             url_key=candidate.url_key,
-            canonical_url=candidate.canonical_url,
             first_seen_at=at,
             first_seen_run=run_id,
         )
@@ -2296,14 +2296,20 @@ def stage_prune_stamp(*, corpus_dir: Path, date: str) -> int:
     return 0
 
 
-def stage_prune_telemetry(
+def stage_prune_state(
     *,
     observability: ObservabilityConfig,
+    collect: CollectConfig,
     today: date_type,
     state_dir: Path | None = None,
     dry_run: bool = False,
 ) -> int:
-    """Fold an out-of-window item-health month, then delete the shard it came from.
+    """Retire what the ledgers no longer answer for: an item-health month, and
+    every seen shard outside the window the planner reads.
+
+    Two ledgers, one step, because they share the one property that makes this
+    safe: both run after the day is committed, and neither can cost a reader
+    anything it has not already been given.
 
     Runs after the day is committed, never before. A fold that ran first and then
     failed would leave a month deleted from a tree nothing pushed, and the next
@@ -2315,6 +2321,8 @@ def stage_prune_telemetry(
     day; a fold that will not run must never be the thing that stops one.
     """
     state = state_dir if state_dir is not None else STATE_ROOT
+    _prune_seen_shards(state, collect, today, dry_run=dry_run)
+
     result = retention.prune_telemetry(state, observability, today, dry_run=dry_run)
     if not result.changed:
         LOG.info(
@@ -2332,6 +2340,35 @@ def stage_prune_telemetry(
         ", ".join(result.hard_deleted) or "no month",
     )
     return 0
+
+
+def _prune_seen_shards(
+    state: Path, collect: CollectConfig, today: date_type, *, dry_run: bool
+) -> None:
+    """Delete the seen shards `rank` will not read again, and say what went.
+
+    Separate from the fold above so a shard that will not delete cannot stop a
+    month being folded, and so the log line names one ledger at a time.
+    """
+    seen = retention.prune_seen(
+        state,
+        today=today.isoformat(),
+        within_days=collect.seen_window_days,
+        dry_run=dry_run,
+    )
+    if not seen.changed:
+        LOG.info(
+            "seen prune: every shard is inside the %s-day window, so none was deleted",
+            collect.seen_window_days,
+        )
+        return
+    LOG.info(
+        "seen prune%s: deleted %s, freed %s bytes, kept %s",
+        " (dry run)" if seen.dry_run else "",
+        ", ".join(seen.deleted),
+        seen.bytes_freed,
+        ", ".join(seen.kept) or "no shard",
+    )
 
 
 def stage_assemble(
@@ -2899,7 +2936,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "assemble",
             "harvest",
             "prune-stamp",
-            "prune-telemetry",
+            "prune-state",
             "run",
             "validate",
             "decide",
@@ -3090,11 +3127,12 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Above the fetcher for the same reason: it rewrites one committed field.
         return stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
 
-    if args.stage == "prune-telemetry":
+    if args.stage == "prune-state":
         # And this one only reads and deletes committed files. A fold that opened
         # a socket would be reading the open web to decide what to delete.
-        return stage_prune_telemetry(
+        return stage_prune_state(
             observability=settings.app.observability,
+            collect=settings.app.collect,
             today=date_type.fromisoformat(args.date or _today()),
             dry_run=args.dry_run,
         )

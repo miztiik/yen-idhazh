@@ -30,16 +30,34 @@ from idhazh.contracts.base import (
     ItemId,
     RunId,
     Timestamp,
-    Url,
     UrlKey,
 )
 
 
 class SeenRow(Contract):
-    """One row of `state/seen/<YYYY-MM>.csv`, appended the first time an address is a candidate."""
+    """One row of `state/seen/<YYYY-MM>.csv`, appended the first time an address is a candidate.
+
+    It carries no address, for the reason `PublishedRow` carries none: nothing on
+    the read path opens one. `ledger.load_seen` reads `url_key` and
+    `first_seen_at` and returns a map of the two.
+    """
 
     __schema_stem__: ClassVar[str] = "seen-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31",
+            change="Removed canonical_url. The row is url_key, first_seen_at and first_seen_run.",
+            why=(
+                "The same defect PublishedRow shed on 2026-08-26, one ledger over, and "
+                "it was worse here because this ledger is written for every candidate "
+                "rather than for every published item. `load_seen` is the only reader "
+                "and it opens url_key and first_seen_at. Measured on the committed "
+                "shard: 2,800,867 of 5,705,102 bytes, 49.1 percent of the file, over "
+                "25,036 rows in 8 days. The address is still recoverable where it "
+                "matters - a row that reached a reader joins to that day's payload by "
+                "url_key, and a row that did not is one nobody can look up anyway."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-22T11:00",
             change="Initial shape: the address, when we first saw it, and the run that saw it.",
@@ -51,7 +69,6 @@ class SeenRow(Contract):
     )
 
     url_key: UrlKey
-    canonical_url: Url
     first_seen_at: Timestamp
     first_seen_run: RunId
 

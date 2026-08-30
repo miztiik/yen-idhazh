@@ -6,7 +6,7 @@ fresh machine with a fresh checkout, so anything one run needs to tell the next
 has to be committed (Rule #1).
 
 A ledger shards by month only when the read that consumes it carries a time
-window. A window lets `_shards_in_window` skip whole files; without one, every
+window. A window lets `shards_in_window` skip whole files; without one, every
 shard is opened anyway and splitting the file buys nothing. The rule is in
 `docs/architecture/contracts/schemas.md`.
 
@@ -151,8 +151,12 @@ def runtime_counters_path(state_dir: Path) -> Path:
     return state_dir / RUNTIME_COUNTERS_FILENAME
 
 
-def _shards_in_window(today: str, within_days: int) -> list[str]:
+def shards_in_window(today: str, within_days: int) -> list[str]:
     """The month stems a window of days can touch, newest first.
+
+    Public because the pruner keeps exactly what this returns. Deriving the
+    keep-set from the reader's own helper is what makes it impossible to delete
+    a shard a later read would have opened.
 
     Walking days rather than subtracting months keeps the arithmetic honest
     across a year boundary and needs no calendar table.
@@ -257,7 +261,7 @@ def load_seen(state_dir: Path, *, today: str, within_days: int) -> dict[str, str
     what "first" means.
     """
     first_seen: dict[str, str] = {}
-    for stem in _shards_in_window(today, within_days):
+    for stem in shards_in_window(today, within_days):
         for row in _read_rows(state_dir / SEEN_DIRNAME / f"{stem}.csv"):
             url_key, at = row["url_key"], row["first_seen_at"]
             if url_key not in first_seen or at < first_seen[url_key]:
@@ -428,7 +432,7 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
     and refusing to start costs the reader the whole day.
     """
     rows: list[FeedHealthRow] = []
-    for stem in _shards_in_window(today, within_days):
+    for stem in shards_in_window(today, within_days):
         for raw in _read_rows(state_dir / HEALTH_DIRNAME / f"{stem}.csv"):
             try:
                 rows.append(FeedHealthRow.from_csv_row(raw))

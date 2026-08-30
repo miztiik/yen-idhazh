@@ -24,9 +24,10 @@ from typing import Final
 import pytest
 
 from idhazh import ledger
-from idhazh.cli import main, stage_prune_telemetry, stage_site_weight
-from idhazh.contracts.app_config import ObservabilityConfig, RetentionConfig
+from idhazh.cli import main, stage_prune_state, stage_site_weight
+from idhazh.contracts.app_config import CollectConfig, ObservabilityConfig, RetentionConfig
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.seen import SeenRow
 from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.retention import (
     BYTES_PER_MB,
@@ -48,6 +49,7 @@ from idhazh.retention import (
     over_budget,
     over_cap,
     prune,
+    prune_seen,
     prune_telemetry,
     visuals_older_than,
 )
@@ -781,8 +783,11 @@ def test_the_stage_reports_what_it_folded(
     state = a_state_tree(tmp_path)
     with caplog.at_level(logging.INFO):
         assert (
-            stage_prune_telemetry(
-                observability=ObservabilityConfig(), today=TODAY, state_dir=state
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
             )
             == 0
         )
@@ -800,10 +805,123 @@ def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
     )
     with caplog.at_level(logging.INFO):
         assert (
-            stage_prune_telemetry(
-                observability=ObservabilityConfig(), today=TODAY, state_dir=state
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
             )
             == 0
         )
     assert "every month is still at full grain" in caplog.text
     assert ledger.item_health_path(state, day).exists()
+
+
+# --- The seen shards ---------------------------------------------------------
+
+
+def _seen_shard(state: Path, stem: str, rows: int = 1) -> Path:
+    """One month of the seen ledger, written by the real appender."""
+    day = f"{stem}-15"
+    ledger.append_seen(
+        state,
+        day,
+        [
+            SeenRow(
+                version=SeenRow.schema_version(),
+                url_key=hashlib.sha256(f"{stem}-{n}".encode()).hexdigest(),
+                first_seen_at=f"{day}T06:00:00Z",
+                first_seen_run=f"{day}-1",
+            )
+            for n in range(rows)
+        ],
+    )
+    return ledger.seen_path(state, day)
+
+
+def test_a_seen_shard_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> None:
+    """The keep-set is the reader's own, so this is a property rather than a list.
+
+    Every stem `load_seen` would open is asserted to survive, for the window the
+    committed config actually sets - not for a window the test picked.
+    """
+    state = tmp_path / "state"
+    window = CollectConfig().seen_window_days
+    today = TODAY.isoformat()
+    inside = ledger.shards_in_window(today, window)
+    for stem in inside:
+        _seen_shard(state, stem)
+
+    result = prune_seen(state, today=today, within_days=window)
+
+    assert result.deleted == ()
+    assert sorted(result.kept) == sorted(inside)
+    assert all(ledger.seen_path(state, f"{stem}-15").exists() for stem in inside)
+
+
+def test_a_seen_shard_outside_the_window_goes_and_says_what_it_weighed(
+    tmp_path: Path,
+) -> None:
+    """A shard no read can reach is bytes answering no question.
+
+    `2024-01` is far outside any window this config can name, and the assertion
+    is that `load_seen` cannot see it either - the two have to agree, or the
+    prune is deleting something the planner wanted.
+    """
+    state = tmp_path / "state"
+    window = CollectConfig().seen_window_days
+    today = TODAY.isoformat()
+    stale = _seen_shard(state, "2024-01", rows=3)
+    weight = stale.stat().st_size
+    kept = _seen_shard(state, TODAY.strftime("%Y-%m"))
+
+    before = ledger.load_seen(state, today=today, within_days=window)
+    result = prune_seen(state, today=today, within_days=window)
+    after = ledger.load_seen(state, today=today, within_days=window)
+
+    assert result.deleted == ("2024-01",)
+    assert result.bytes_freed == weight
+    assert not stale.exists()
+    assert kept.exists()
+    # What the prune removed was already invisible: the reader's answer is
+    # unchanged, which is the whole safety claim stated as data.
+    assert after == before
+
+
+def test_a_dry_run_names_the_shard_and_leaves_it(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    stale = _seen_shard(state, "2024-01")
+
+    result = prune_seen(
+        state, today=TODAY.isoformat(), within_days=CollectConfig().seen_window_days, dry_run=True
+    )
+
+    assert result.deleted == ("2024-01",)
+    assert result.dry_run
+    assert stale.exists()
+
+
+def test_the_stage_says_so_when_every_seen_shard_is_inside_the_window(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A prune that deleted nothing has to say which window it measured against.
+
+    Without the number, "nothing was deleted" reads the same whether the window
+    is 90 days or the config went missing.
+    """
+    state = tmp_path / "state"
+    _seen_shard(state, TODAY.strftime("%Y-%m"))
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+            )
+            == 0
+        )
+
+    assert "seen prune: every shard is inside the" in caplog.text
+    assert str(CollectConfig().seen_window_days) in caplog.text

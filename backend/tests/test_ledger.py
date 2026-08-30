@@ -38,7 +38,6 @@ def seen_row() -> SeenRow:
     return SeenRow(
         version=SeenRow.schema_version(),
         url_key=URL_KEY,
-        canonical_url=URL,
         first_seen_at=STAMP,
         first_seen_run=RUN_ID,
     )

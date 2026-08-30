@@ -1107,14 +1107,14 @@ jobs:
       # fresh checkout does not carry, and `state/telemetry-aggregate/` does not
       # exist until the first fold writes it. `state` always does, and the day's
       # own commit above has already taken everything else in it.
-      - name: Fold an out-of-window telemetry shard into its daily aggregate
+      - name: Retire the ledger shards the pipeline no longer reads
         continue-on-error: true
-        run: python -m idhazh prune-telemetry --date "${{ needs.plan.outputs.date }}"
+        run: python -m idhazh prune-state --date "${{ needs.plan.outputs.date }}"
 
       - name: Commit the folded telemetry
         continue-on-error: true
         env:
-          COMMIT_MESSAGE: "telemetry: fold the months past observability.keep_months"
+          COMMIT_MESSAGE: "state: retire the shards past their reading window"
           NOTHING_STAGED_MESSAGE: "every month is still at full grain"
           PUSH_FAILED_MESSAGE: "could not push the folded telemetry after three attempts"
         run: >-

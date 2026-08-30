@@ -224,7 +224,7 @@ The three levers this page already names - encode efficiently, honour the visual
 
 | File | Bytes | Share of `state/` | Bounded by |
 | --- | --- | --- | --- |
-| `state/seen/<YYYY-MM>.csv` | 5,166,315 | 54.5 percent | **nothing** |
+| `state/seen/<YYYY-MM>.csv` | 5,166,315 | 54.5 percent | `collect.seen_window_days`, since 2026-08-31 |
 | `state/scores.csv` | 2,359,230 | 24.9 percent | **nothing** |
 | `state/item-health/<YYYY-MM>.csv` | 1,270,452 | 13.4 percent | `observability.keep_months` |
 | `state/published.csv` | 338,979 | 3.6 percent | nothing, and deliberately - published is forever |
@@ -238,7 +238,7 @@ Three things make it the one ledger the fold reaches, and each of them is why th
 
 - Its rows carry a `stage`, which is what the aggregate is keyed on. A `seen` row is an address and a timestamp; a `scores.csv` row is a faithfulness measurement. Neither folds to `(date, stage)`.
 - It shards by month, so a fold is a whole file appearing and a whole file going. `state/scores.csv` is one file, and bounding it means either sharding it - a change across four readers, `payload.ts`, `model-work.ts`, `drift.py` and `label_queue.py` - or rewriting it in place.
-- It is a measurement whose totals are worth keeping. `state/seen/` is a lookup, read only through `collect.seen_window_days`, so a shard past that window answers nothing and its honest retention is deletion rather than a fold.
+- It is a measurement whose totals are worth keeping. `state/seen/` is a lookup, read only through `collect.seen_window_days`, so a shard past that window answers nothing and its honest retention is deletion rather than a fold. **That is what it now gets**, in the same step as the fold: `retention.prune_seen` deletes every shard outside `ledger.shards_in_window(today, seen_window_days)` - the reader's own helper, so the keep-set cannot drift from what the planner opens. The same day the ledger also shed `canonical_url`, which no reader had ever opened: 2,800,881 bytes of 5,705,102 over 25,036 rows, **49.1 percent of the file**, leaving about 356 KB a published day and roughly 32 MB across a full 90-day window.
 
 **What this does not do, stated plainly: it does not bound the `/console/` document.** That page was linear in items at a measured 50.45 gzipped bytes an item and crossed its 301,580-byte ceiling on published day 16, because the compression scatter inlined every row `state/scores.csv` had ever held. Both halves of that are closed - the plot moved to a windowed seed over the telemetry projection on 2026-08-29, and the scatter itself became a per-day count of three bins on 2026-08-30 - so the page no longer grows a mark an item. The fold was never an answer to it either way: the two problems share a file and share nothing else.
 
