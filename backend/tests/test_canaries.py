@@ -23,13 +23,14 @@ from pathlib import Path
 from typing import Any, Literal
 
 import pytest
+import test_spans as spans
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT, read_text
 from pydantic import ValidationError
 
-from idhazh import cli, config, extract
+from idhazh import cli, config, extract, telemetry
 from idhazh.contracts.app_config import VisualsConfig
 from idhazh.contracts.article import Article, ArticleStatus
-from idhazh.contracts.base import Model, derive_url_key
+from idhazh.contracts.base import Model, derive_output_digest, derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
 from idhazh.contracts.qualification import CanaryObservation
 from idhazh.contracts.route import VisualKind
@@ -37,6 +38,7 @@ from idhazh.contracts.run_plan import PlannedItem
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import SourceTier
 from idhazh.fetch import FetchResult
+from idhazh.fingerprint import text_digest
 from idhazh.route import numeric_facts, reachable_kinds
 from idhazh.sanitize import FENCE_CLOSE, FENCE_OPEN, sanitize, untrusted_block
 
@@ -322,6 +324,73 @@ def test_the_canary_arm_is_a_stage_the_cli_answers_to(
     with pytest.raises(FileNotFoundError):
         cli.main(["qualify-canaries", "--config", str(tmp_path / "absent")])
     assert "invalid choice" not in capsys.readouterr().err
+
+
+# --- Decision 4: nothing an attack planted reaches a span -------------------
+
+
+@pytest.mark.parametrize("canary", ALL, ids=lambda c: c.name)
+def test_no_planted_attack_reaches_a_span_attribute(canary: Canary, tmp_path: Path) -> None:
+    """The tracing guard, run over all five committed attacks.
+
+    `backend/tests/test_spans.py` runs the same sweep over an ordinary article
+    with a planted sentinel. This runs it over the five pages that were written
+    to get something past a control, because the strings an attacker chooses are
+    not the strings a test author would have thought to plant - one of them is
+    base64, one is a fake system delimiter, and one is an address.
+
+    Every canary declares `must_survive`: text the sanitizer has to keep, which
+    is therefore text that is definitely inside `article.text` when the spans
+    are built. Asserting on that rather than on `must_not_survive` is what makes
+    this a test of the spans instead of a second test of the sanitizer.
+
+    A single leaked character fails the row and stops the plan
+    (`TODO/20260830-observability-plan.md`, ESCALATE trigger b).
+    """
+    article = as_a_real_page(canary)
+    assert article.status is ArticleStatus.OK, "a refused page proves nothing about a span"
+
+    sink = spans.Collect()
+    tracer = telemetry.Tracer(sink=sink, now=lambda: "2026-08-30T06:00:00Z")
+    with tracer.trace(f"2026-08-30-1-{article.item_id}"), tracer.span(telemetry.SpanName.ITEM):
+        with tracer.span(telemetry.SpanName.EXTRACT) as span:
+            telemetry.article_attributes(
+                span, article, source_digest=text_digest(article.text or "")
+            )
+        with tracer.span(telemetry.SpanName.PARSE_REPLY) as span:
+            telemetry.summary_attributes(span, _summary_repeating(canary, article))
+
+    planted = (
+        canary.raw_title,
+        canary.raw_text,
+        *canary.must_survive,
+        *canary.must_not_survive,
+    )
+    spans.assert_nothing_leaked(
+        [span.as_record() for span in sink.written],
+        tuple(text for text in planted if text.strip()),
+    )
+
+
+def _summary_repeating(canary: Canary, article: Article) -> Summary:
+    """A reply that copied the attack, which is the worst case for a span.
+
+    The pipeline refuses to publish one - `verbatim_run` is what catches it -
+    but it refuses it AFTER the payload exists, and the payload is what a
+    summarize span reads. So the guard is asked the harder question: even a
+    summary that is the attack word for word must reach no attribute.
+    """
+    base: dict[str, Any] = json.loads(read_text(CONTRACT_FIXTURES_DIR / "summary" / "ok.json"))
+    key_points = [*canary.must_survive] or ["nothing survived"]
+    base["item_id"] = article.item_id
+    base["url_key"] = article.url_key
+    base["title"] = canary.raw_title
+    base["summary"] = canary.raw_text
+    base["key_points"] = key_points
+    base["output_digest"] = derive_output_digest(
+        canary.raw_text, key_points, title=canary.raw_title
+    )
+    return Summary.model_validate(base)
 
 
 # --- Housekeeping the fixtures have to keep --------------------------------

@@ -164,7 +164,8 @@
     "keep_months": 13,
     "runtime_counters_scrape": true,
     "sample_rate": 1.0,
-    "telemetry_publish": true
+    "telemetry_publish": true,
+    "tracing_enabled": false
   },
   "page_weight": {
     "ceilings_bytes": {

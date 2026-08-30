@@ -324,6 +324,10 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     Written as an agreement between two configs rather than as three literals: a
     default that is asserted by value is a test that fails the day somebody
     legitimately changes it, which teaches people to edit the test.
+
+    Tracing is the exception and is asserted by value, because its default is
+    the claim: a span tree is the one instrument nothing reads, so it stays off
+    until a developer asks for it and CI never builds one.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     fresh = AppConfig.model_validate({"models": committed.models.model_dump()})
@@ -332,6 +336,7 @@ def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None
     assert fresh.observability.evaluation_enabled
     assert fresh.observability.telemetry_publish
     assert fresh.observability.runtime_counters_scrape
+    assert not fresh.observability.tracing_enabled
 
 
 def test_the_item_health_census_is_not_switchable() -> None:
@@ -340,14 +345,25 @@ def test_the_item_health_census_is_not_switchable() -> None:
     Turning the census off would not thin a measurement, it would make every
     other measurement unreadable - a failure rate with no denominator beside it
     is the exact defect the census exists to prevent. The guard is the switch
-    list itself, so adding a fourth boolean fails here and has to be argued for.
+    list itself, so adding a fifth boolean fails here and has to be argued for.
+
+    `tracing_enabled` was the fourth, added 2026-08-30. The argument it had to
+    make: it switches an instrument nothing else divides by. No page reads a
+    span, no gate consults one, and every rate the console prints still has its
+    denominator with tracing off - which is not true of any of the other three
+    in the same way, and is why it was allowed to be off by default.
     """
     switches = {
         name
         for name, field in ObservabilityConfig.model_fields.items()
         if field.annotation is bool
     }
-    assert switches == {"evaluation_enabled", "telemetry_publish", "runtime_counters_scrape"}
+    assert switches == {
+        "evaluation_enabled",
+        "telemetry_publish",
+        "runtime_counters_scrape",
+        "tracing_enabled",
+    }
     assert "census" in (ObservabilityConfig.__doc__ or "")
 
 
