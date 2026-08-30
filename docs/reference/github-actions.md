@@ -121,7 +121,7 @@ pipeline. One dispatch has now run at eight and halved the slowest worker, from
 113.1 minutes to 58.8 - but it failed at `assemble` and published nothing, so no
 day has yet reached a reader through that fan-out. What moves `run.max_parallel`
 to eight is written under
-[Eight work shards](measurements.md#eight-work-shards), not this change.
+[Eight work shards](../archive/measurements-2026-08.md#eight-work-shards), not this change.
 
 A *derived* count above the ceiling is walked down into it rather than rejected:
 by then the feeds have been read, and a config the guard disagrees with must
@@ -212,7 +212,7 @@ ahead of the checkout, so the clock covers the cache restore and the weight load
 `$GITHUB_ENV`, and the counters step passes both to `python -m idhazh counters`.
 The rollback rule for the truncation cap reads that clock, and until 2026-08-29
 the only place it existed was the jobs API, which drops a job record when the run
-ages out ([measurements.md](measurements.md#the-instrument-trigger-a-reads)).
+ages out ([measurements.md](../archive/measurements-2026-08.md#the-instrument-trigger-a-reads)).
 
 ### The three commit steps push through a rebase, and the one that can rebuild rebuilds
 
@@ -702,7 +702,7 @@ Read from the repository API on 2026-08-25.
 | `allow_rebase_merge` | true | Same reason. History looks squash-only, but rebase is available. |
 | `allow_update_branch` | true | A PR can be brought up to date from `main` without a local push. |
 | `delete_branch_on_merge` | true | The remote branch goes away on merge. |
-| `allow_auto_merge` | **false** | Deliberate. See below. |
+| `allow_auto_merge` | true | Turned on 2026-08-31. See below. |
 | `squash_merge_commit_title` | `PR_TITLE` | The subject is the PR title. GitHub appends the PR number. |
 | `squash_merge_commit_message` | `PR_BODY` | The body is the PR body. Branch commit bodies are never concatenated. See below. |
 | `merge_commit_title` | `MERGE_MESSAGE` | The merge path, when a PR carries several intents. |
@@ -712,10 +712,32 @@ Read from the repository API on 2026-08-25.
 publication.** `digest.yml` and `validate.yml` push their state commits straight
 to `main` - the eval ledger, the seen-URL store, feed health, the digest
 payload. A branch-protection rule makes those pushes fail, and a scheduled run
-that cannot commit has done its work for nothing. GitHub's built-in auto-merge
-requires branch protection, which is why `allow_auto_merge` is off rather than
-merely unused. Protecting `main` is possible, but only after the direct pushes
-in those two workflows are redesigned or explicitly exempted.
+that cannot commit has done its work for nothing. Protecting `main` is possible,
+but only after the direct pushes in those two workflows are redesigned or
+explicitly exempted.
+
+**`allow_auto_merge` was turned on on 2026-08-31, and on its own it buys
+nothing. Measured, not assumed.** The setting was off on the argument that
+GitHub's auto-merge needs branch protection, and that argument is right.
+`gh pr merge 303 --squash --delete-branch --auto` was run against a pull request
+whose four checks were still in flight: it **exited 0 and queued nothing**.
+`autoMergeRequest` read `null` and `mergeStateStatus` read `UNSTABLE`, with
+`rulesets` empty and `branches/main/protection` answering 404. A zero exit code
+is not evidence here - read `autoMergeRequest` through the GraphQL API instead.
+
+The reason is that auto-merge queues a merge behind something that BLOCKS it.
+With no required status check nothing blocks, so there is nothing to queue
+behind, and GitHub declines rather than waiting for checks it was never told to
+care about.
+
+**What would make it work, and what that costs.** A repository ruleset on `main`
+requiring the `gates` and `site` checks, with `github-actions[bot]` on its
+bypass list. The bypass is load-bearing: `digest.yml` and `validate.yml` push
+state commits straight to `main` with the job's own token - the eval ledger, the
+seen-URL store, feed health, the digest payload - and a ruleset that forgets it
+stops the digest publishing that night. The setting stays on because it is free
+and is the half that cannot break anything; the ruleset is written here as the
+next step rather than taken quietly.
 
 **A squash commit takes its message from the pull request, not from the branch
 commits.** `squash_merge_commit_message` was `COMMIT_MESSAGES` until 2026-08-25.

@@ -773,9 +773,8 @@ arbitrary one is the defect.
 The arithmetic comes from `d3-scale` and `d3-array`, which compute and draw
 nothing. This is not a chart library returning ([../../concepts/design-system.md](../../concepts/design-system.md)):
 they own no element, no canvas and no theme, and no reader route imports either
-one. `npm run bundle-gate` holds that true. Beside its encoder check it records
-every route class's first-load JavaScript and fails when the number moves, so
-the next dependency has to be measured and written down before it can ship. The
+one. `npm run bundle-gate` holds that true: its encoder check refuses any of the
+three assist symbols on the first-load path, whatever pulled them there. The
 same script also holds each prerendered page's HTML under a ceiling, and a
 route earns one when somebody has priced its growth: `/404` and `/evals/` move
 only when the source does, `/archive/` grows by one day link a published day,
@@ -1523,66 +1522,57 @@ reads as a measurement rather than as an empty control. The alternative -
 rescaling the track to make the bar look busy - is a chart that lies about how
 much room is left.
 
-## The bundle gate is a regression detector, not a performance budget
+## The bundle gate checks two promises, and used to check three
 
-`npm run bundle-gate` reads one number per route class - the gzipped first-load
-JavaScript - and compares it against `frontend/bundle-baseline.json`. **The
-threshold is the last known-good measurement and nothing else.**
+`npm run bundle-gate` asserts that no encoder reaches the first-load path, and
+that every capped page is under the ceiling `config/idhazh.json` sets for it.
 
-It used to be a measured baseline plus an invented constant: 1 KB of "headroom"
-on a reader route and 10 KB on the console. Nothing measured either one. Rule #10
-forbids an unmeasured number justifying a design, and the console's 10 KB
-allowance was down to 464 B spare within a day of being granted - which is what
-an unused allowance always does. Both constants are gone, and the word with
-them.
+**A third check was deleted on 2026-08-30: a per-route first-load JavaScript
+ratchet against a hand-maintained record in `frontend/bundle-baseline.json`,
+failing when a route moved more than 64 bytes in either direction.** The file is
+gone with it. Deleting a gate deserves the same argument as adding one, so here
+is the whole of it.
 
-**A budget would need a cost this page does not have.** Every route is
-prerendered, so the document is complete HTML before a script runs and the
-reading path works with JavaScript off. First-load JavaScript is hydration cost,
-not time-to-read. There is no measured number for what that cost may be, and
-Rule #1 forbids the telemetry that would produce one, so the gate does not
-pretend to own a budget it cannot defend.
+**The gate never had a requirement behind it.** Its own docstring said so: every
+route is prerendered, so first-load JavaScript is hydration cost rather than
+time-to-read, nobody had measured what that cost a reader, and Rule #1 forbids
+the telemetry that would settle it. Having no number to defend, it defined bad
+as *different*. That is a change-detector, and Rule #10 says an unmeasured
+number may not justify a design.
 
-**The ratchet is two-sided.** A route heavier than its record fails, and a route
-lighter than its record fails too. One-sided decays back into a flat constant:
-slack accumulates, the next regression lands inside it, and the gate goes quiet.
-Tolerance is 64 bytes either way, the same for every route, and it is derived
-rather than measured - see
-[../../reference/measurements.md](../../reference/measurements.md).
+**What it cost is measured.** A local Windows build does not reproduce a Linux
+CI build inside 64 bytes on a route of about 80,000 - 0.08 percent - so a
+failure could not be read without a control build of `origin/main` on the same
+tree: two extra builds, roughly six minutes, before a branch could tell its own
+change from the toolchain. `origin/main`'s own source failed its own record more
+than once. Worse, the record was one file every branch had to rewrite, so the
+fifteen rows of the console-signal plan serialised behind it - each one rebuilt,
+re-measured and re-recorded a number its own change had not moved, because a
+sibling had merged first.
 
-Three things the file's shape is doing:
+**And it caught nothing.** Across every firing in that plan the resolution was
+to re-record the number. Not one was a regression somebody then fixed.
 
-- **It is hand-edited.** No writer, no `--update` flag, no environment escape
-  hatch. A file the build rewrites is a log, and a gate whose own tooling
-  updates its baseline cannot fail. The printed lines are copy-pasteable, so the
-  friction is ten seconds and the deliberate act is the friction working.
-- **`why` is required, and an empty one fails.** That turns "edit the number"
-  into a written justification sitting in the PR diff forever, and it gives a
-  reviewer a one-sentence job instead of a byte-diffing job. The gate cannot
-  tell whether a `why` went stale when `bytes` moved; a reviewer sees both in
-  the same diff, and machinery for that is not worth building.
-- **The measurement is per file.** Each module is gzipped on its own, because
-  that is how it arrives - one response, one gzip stream. Gzipping the
-  concatenation is order-sensitive, so a bundler reordering the preloads would
-  move the number for a reason nobody caused.
-
-The encoder symbol grep stays beside it. It costs no bytes and it names a cause
-the byte number cannot: the byte gate catches the hazard that is not on the
-list, and the grep catches the three that are.
+What survives answers the question that was actually worth asking. The page
+ceilings are absolute limits somebody priced, in `config/idhazh.json`, so
+nothing has to re-record them to merge and a page that got lighter needs no
+permission. The encoder grep names a cause a byte count never could. And
+`tests/payload-weight.spec.ts` covers the pages a ceiling cannot bound - a page
+that renders a day weighs whatever the day published - by counting a marker
+instead of bytes, which is the same number whatever the published history holds.
 
 | Option | Why rejected |
 | --- | --- |
-| Delete the gate | `/archive/` shipped at 873.1 KB of gzipped HTML and nobody noticed until somebody measured - the same failure class, on the axis that had no gate. Deleting the gate that exists *because* it is quiet reads half the data. |
-| A transfer-time budget on a stated connection speed | Replaces one invented constant with two, and Rule #1 forbids the telemetry that would settle either. It also models a cost the reader does not pay, because the page is prerendered. |
-| A relative cap - the console may exceed the heaviest reader route by N% | Couples two routes that have nothing to do with each other, lets a legitimate reader-route increase silently grant the console more room, and N is the same invented constant wearing a percent sign. |
-| A flat constant with the justification written down | This is what was there, minus the prose. A written justification does not stop an allowance being spent: the 10 KB went to 464 B spare exactly as an unused allowance always does. Headroom is a budget people spend, not a margin they respect. |
-| A one-sided ratchet | Decays into the flat constant. |
-| The weights in `config/` | `config/` holds knobs; this is a recorded measurement, and it would make every byte change a schema change. |
-| A generated baseline file | A file the build rewrites is a log. |
-| The numbers inline in `bundle-gate.mjs` | Mixes a logic diff and a measurement diff in one review, and pollutes `git log -p` on the numbers. |
-| Gzip over the concatenated module set | Order-sensitive, so a bundler reorder moves the number for a reason nobody caused, and it under-reports the wire cost. |
+| Keep the ratchet and widen the tolerance | The tolerance was never the problem. A wider one still needs a per-route record in one shared file, which is what serialised the branches. |
+| Keep the ratchet and generate the record | A file the build rewrites is a log, and a gate whose own tooling updates its baseline cannot fail. |
+| Replace it with a transfer-time budget | Two invented constants instead of one, and Rule #1 forbids the telemetry that would settle either. It also models a cost a reader of a prerendered page does not pay. |
+| Delete the page ceilings too | `/archive/` shipped at 873.1 KB of gzipped HTML and nobody noticed until somebody measured. A ceiling is a priced limit, not a change-detector, and it costs nothing to hold. |
 
-Authority: Carmack, 2026-08-25.
+Authority: owner, 2026-08-30. The ratchet was Carmack's, 2026-08-25, on the
+argument that a new dependency must be measured before it ships; measuring a
+dependency is still right, and `docs/reference/measurements.md` is where that
+measurement goes. What is gone is failing every unrelated branch until somebody
+retypes it.
 
 ## The console ceiling is a tripwire, and what to do when it fires
 
@@ -1597,7 +1587,7 @@ is different:
 ```text
   120,026  heaviest of five builds of the tree that ships
 + 139,818  seven published days, measured at the heaviest day on record
-+      64  the build noise floor already derived in bundle-baseline.json
++      64  the build noise floor, derived in measurements.md
 = 259,908
 ```
 
@@ -1611,7 +1601,7 @@ spread across three days that differ by a factor of two in size. A least-squares
 fit over the four arms reads `28,855 + 20.09 x rows` and predicts every one of
 them inside 0.6 percent. Cloning a day instead reads 18 percent cheaper, because
 gzip sees a near-copy of a block it already holds and a real day is not a
-near-copy of anything ([../../reference/measurements.md](../../reference/measurements.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
+near-copy of anything ([../../reference/measurements.md](../../archive/measurements-2026-08.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
 
 **The unit changed with the page, and that is the point.** Until 2026-08-30 the
 rate was 60 gzipped bytes a published *item*, because the compression scatter
@@ -1799,18 +1789,11 @@ chart library owns the element, the redraw and the theme, which is how the last
 one ended up drawing a chart that already existed; a scale library returns a
 number. The beneficiary feature Rule #8 asks for is the whole console: four
 charts that agree on what a pixel is. The cost is measured rather than argued -
-the recorded weight in `frontend/bundle-baseline.json` is what a later row is
-compared against, and Carmack made that gate a condition of accepting the
-dependency at all. Authority: Jony and Carmack, 2026-08-25, owner accepted.
-
-The first-load weights sit in `frontend/bundle-baseline.json` rather than in
-`config/`, and that is not the config rule being waived. `config/` holds knobs a
-person tunes to change behaviour; this is a recorded measurement, and filing a
-measurement under preferences invites editing it as one. Routing it through
-`config/idhazh.json` would also drag in the `AppConfig` model, a schema
-regeneration, a `changelog` stamp and the `frontend/src/lib/server/config.ts`
-mirror - which would make every byte change a schema change. Authority: Carmack,
-2026-08-25.
+the gzipped route weight was measured and written into
+`docs/reference/measurements.md`, and Carmack made measuring it a condition of
+accepting the dependency at all. That condition still holds; what was dropped on
+2026-08-30 is the per-route gate that failed every later branch until somebody
+retyped the number. Authority: Jony and Carmack, 2026-08-25, owner accepted.
 
 The same script gates the prerendered HTML and the first-load JavaScript, which
 was once rejected on the grounds that one gate over both would make two
@@ -1825,9 +1808,10 @@ as long as the growth is measured and the headroom is stated in published days.
 `/archive/` returned on 2026-08-27 with a year of headroom and `/console/` on
 2026-08-29 with three days. What has not come back is a ceiling on a page that
 renders a day, and that is the line the original fix was really drawing. So the
-two checks share a script and stay independent: the JavaScript ratchet reads
-`frontend/bundle-baseline.json`, the HTML ceilings read `config/idhazh.json`, and
-neither fails the other's build.
+two checks that remain share a script and answer for different things: the
+encoder grep reads the built modules, the HTML ceilings read
+`config/idhazh.json`, and neither fails the other's build. The JavaScript
+ratchet that was the third was deleted on 2026-08-30, for the reasons above.
 Authority: Carmack (the original rejection), resolved by the page-weight change.
 
 Folding `/evals/` into `/console/` keeps one route answering "how is the
@@ -1918,7 +1902,7 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | `d3-scale` from a CDN | The HTTP cache is partitioned per site, so the shared-cache argument is dead, and the repo's `script-src` allows `self` only. | Carmack |
 | Fixing the units by hand instead of taking the dependency | `.nice()` and `ticks()` are exactly the part hand-rolling gets wrong, and an axis labelled 0, 37, 74 is an axis nobody reads a value off. | Jony |
 | A `console.chart_width` default per chart shape | One knob names the width the reading column leaves; a chart sharing a row divides it. Four knobs would be four ways to disagree about one column. | Jony |
-| Putting the first-load ceilings in `config/` | An operator has no reason to raise the weight a reader pays, and a budget that can be edited to fit the build is not a budget. | Carmack, Rule #2 |
+| Putting the page ceilings anywhere but `config/` | A ceiling is a limit a person chose and raises on purpose, which is the definition of a knob (Rule #6). | Carmack, Rule #2 |
 | A `run.success_floor_pct` reference line on a stage failure panel | That floor is a published rate over attempted items; a stage panel is a different denominator. A wrong reference line is worse than none. | Jony |
 | A separate chart for where the cut falls | It is a line. A chart that says what a line says has not earned its place. | Jony |
 | A cap line read from `extract.truncation_cap_tokens` | A thirty-day window can hold two settings, so the knob is a claim about a config file rather than about the plot. It also draws a line when nothing in view was cut, and the data-derived line cannot. | Jony |

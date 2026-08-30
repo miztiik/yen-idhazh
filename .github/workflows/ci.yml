@@ -22,6 +22,30 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  # Which half of the site gate a change has to pay for. `site` runs on every
+  # change because almost any backend module reaches it through `pip install`;
+  # the canary and browser half only reads the published surface, so a change
+  # that cannot move that surface should not spend four minutes proving it.
+  # A pull request that is wrong about this reddens `main` on the merge push,
+  # where the filter does not apply - that is the failure this trades for.
+  scope:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      browser: ${{ steps.decide.outputs.browser }}
+      console: ${{ steps.decide.outputs.console }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - id: decide
+        env:
+          EVENT: ${{ github.event_name }}
+          BASE: ${{ github.event.pull_request.base.sha }}
+          HEAD: ${{ github.event.pull_request.head.sha }}
+        run: .github/scripts/browser-suite-needed.sh >> "$GITHUB_OUTPUT"
+
   gates:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -66,7 +90,7 @@ jobs:
 
   site:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
 
@@ -76,9 +100,8 @@ jobs:
           cache: npm
           cache-dependency-path: frontend/package-lock.json
 
-      # The canary day is built by the backend, through the same contracts and
-      # the same encoder the pipeline uses. Building it any other way would test
-      # a payload shape nothing actually writes.
+      # For the site-weight gate at the end, which is a backend module: one
+      # reader of `config/idhazh.json` rather than a second copy of the budget.
       - uses: actions/setup-python@v7
         with:
           python-version: '3.12'
@@ -89,7 +112,7 @@ jobs:
         working-directory: frontend
         run: npm ci
 
-      - name: Install the backend, for the canary day builder
+      - name: Install the backend, for the site-weight gate
         run: pip install -e .
 
       # The build strips types, so it passes on code the type-checker rejects.
@@ -110,7 +133,7 @@ jobs:
       # review. Each route's first-load JavaScript must match its recorded
       # weight. Each page that renders no day must stay under its ceiling in
       # config/idhazh.json. Read which one failed - they have different answers.
-      - name: Bundle gate - encoder, first-load weight, page ceilings
+      - name: Bundle gate - encoder and page ceilings
         working-directory: frontend
         run: npm run bundle-gate
 
@@ -121,6 +144,39 @@ jobs:
       - name: Measure the built site against the Pages cap
         working-directory: frontend
         run: python -m idhazh site-weight --site-tree build
+
+  # Everything that needs a second and third build of the site, plus a browser.
+  # It answers for the published surface only, so it is skipped when nothing a
+  # published page reads has moved.
+  browser:
+    needs: scope
+    if: needs.scope.outputs.browser == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        working-directory: frontend
+        run: npm ci
+
+      # The canary day is built by the backend, through the same contracts and
+      # the same encoder the pipeline uses. Building it any other way would test
+      # a payload shape nothing actually writes.
+      - name: Install the backend, for the canary day builder
+        run: pip install -e .
 
       # The oracle for the assist row: delete the whole model directory, build,
       # and the digest must be untouched. If it degrades at all, the feature is
@@ -159,8 +215,15 @@ jobs:
 
       # Eight canaries on the published surface, plus the hand-labelled
       # retrieval bar. A single injection getting through fails the build.
+      #
+      # `SKIP_CONSOLE_SUITE` drops the operator console's own specs - 233 of the
+      # 411 tests, none of which is about the digest - when a pull request
+      # touched nothing the console renders. It is false on a push to main, so
+      # everything runs on the merge commit.
       - name: Browser suite - canaries and retrieval
         working-directory: frontend
+        env:
+          SKIP_CONSOLE_SUITE: ${{ needs.scope.outputs.console == 'false' }}
         run: npm run test:browser
 
       - uses: actions/upload-artifact@v7
@@ -170,9 +233,3 @@ jobs:
           path: frontend/test-results/
           retention-days: 7
           if-no-files-found: ignore
-
-      # The canary build is the last thing in the directory. Leaving it there
-      # would let a later step, or a careless copy, publish hostile fixtures.
-      - name: Rebuild the real site
-        working-directory: frontend
-        run: npm run build
