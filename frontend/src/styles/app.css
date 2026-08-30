@@ -29,6 +29,9 @@
 	--color-band-high: var(--band-high);
 	--color-band-medium: var(--band-medium);
 	--color-band-low: var(--band-low);
+	--color-fill-high: var(--fill-high);
+	--color-fill-medium: var(--fill-medium);
+	--color-fill-low: var(--fill-low);
 
 	--color-chart-1: var(--chart-1);
 	--color-chart-2: var(--chart-2);
