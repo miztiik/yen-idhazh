@@ -295,7 +295,7 @@ npm run build:canary
 npm run test:browser
 ```
 
-317 tests in 27 files (2026-08-30), and nothing skips itself any more. The
+432 tests in 28 files (2026-08-30), and nothing skips itself any more. The
 failure surface has a file of its own, `console-failure.spec.ts`, split by what
 the fixture can reach: the canary records no failure at all, so the two facts
 that need one - a denominator walked down the pipeline, and a rate withheld

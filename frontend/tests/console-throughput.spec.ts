@@ -67,7 +67,7 @@ async function box(page: Page, selector: string) {
 }
 
 test('the axis names a day per column, thinned to the density knob', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const { days, first, last } = await axisDays(page);
 	expect(days, 'the chart drew no columns, so there is no axis to check').toBeGreaterThan(0);
@@ -95,7 +95,7 @@ test('the axis names a day per column, thinned to the density knob', async ({ pa
 });
 
 test('every plotted day carries a mark to aim at, in every series', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const drawn = await drawnDays(page);
 	expect(drawn.length, 'no candles drew').toBeGreaterThan(0);
@@ -116,7 +116,7 @@ test('every plotted day carries a mark to aim at, in every series', async ({ pag
 });
 
 test('the readout sits below the plot and stays inside its share of it', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const readout = page.locator('[data-readout="throughput"]');
 
@@ -142,7 +142,7 @@ test('the readout sits below the plot and stays inside its share of it', async (
 test('the keyboard reaches every column, and Escape gives the newest day back', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const { days, last } = await axisDays(page);
 	const svg = page.locator(PLOT);
@@ -180,7 +180,7 @@ test('the keyboard reaches every column, and Escape gives the newest day back', 
 });
 
 test('the heading survives a window with nothing in it, and says so', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	// The canary window has days, so this asserts the pair rather than the empty
 	// branch: exactly one of the chart and the notice is on the page, never both
@@ -194,7 +194,7 @@ test('the heading survives a window with nothing in it, and says so', async ({ p
 });
 
 test('a day whose model differs from the day before it draws a rule', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const drawn = await drawnDays(page);
 

@@ -495,6 +495,97 @@ GitHub Pages cannot serve a SvelteKit server redirect, so the redirect must be
 static HTML. A reader with JavaScript disabled still receives a page and can use
 the link.
 
+## The console is three routes, and the strip is real anchors
+
+Since 2026-08-30 the operator surface is three prerendered routes, drawn as a
+tab strip:
+
+| Path | Label | What it answers |
+| --- | --- | --- |
+| `/console/` | **Pipelines** | Did the runs work, which feeds broke, and what each stage cost. |
+| `/console/model/` | **Model** | What the model wrote, how long it took, and what it got wrong. |
+| `/console/machine/` | **Machine** | The hardware the model ran on, and how much it varied between runs. |
+
+`/console/` keeps its path. It is the one an operator types and the one every
+existing bookmark points at, so moving it to `/console/pipelines/` would have
+cost a redirect and bought a symmetry nobody asked for.
+
+**The labels are the owner's own words, taken verbatim on 2026-08-30.** Each
+carries a one-line description under it and the same text as a `title`. `Model`
+and `Machine` share a first letter, which is the recorded cost of that name set;
+it is paid off by the description line and by the silhouette of the first panel
+on each route, which is what an operator recognises before he reads a word.
+`What the model did` survives verbatim as the h2 on the Model route - it is
+protected copy, and [../../../frontend/tests/console-model.spec.ts](../../../frontend/tests/console-model.spec.ts)
+holds all eleven of its labels byte for byte.
+
+**Routes, not tabs, and the JavaScript-disabled gate is why.** A tab strip that
+switches with script shows one panel set and no way to reach the others when the
+script does not run, and every panel it hides still ships inside the one
+document. Three routes with real anchors pass both, and each one can be weighed
+on its own. Tabs keyed on a query string cannot prerender at all; tabs keyed on
+a hash stop find-in-page at the hidden panels.
+
+**Every label carries its own worst state**, computed at build time from the
+committed ledger - `Machine - no panel reads the counters yet`, not `Machine`.
+Without it a route is where a metric goes to die: nobody opens a page to find
+out whether it was worth opening.
+
+**The strip never takes the health ramp.** The one thing that differs between
+routes is a 3px rule under the active label, from the categorical ramp. Green,
+amber and red on a label would say a route is failing, and a route is a noun.
+[../../../frontend/tests/console-nav.spec.ts](../../../frontend/tests/console-nav.spec.ts)
+reads the computed style of every tab and fails on any of the six verdict
+tokens.
+
+**Identity is otherwise identical across the three** - type scale, space scale,
+radius, elevation, frame width, both ramps. The shapes they share live in
+[../../../frontend/src/styles/app.css](../../../frontend/src/styles/app.css)
+rather than in three scoped `<style>` blocks, because three copies are three
+identities that happen to agree today.
+
+### The standing band carries four things and nothing else
+
+Above the strip, on all three routes: yesterday's verdict as a sentence, the one
+worst thing and which route it is on, site size against the 1 GB cap with its
+runway, and the window control. It is derived once in
+[../../../frontend/src/lib/server/console-shell.ts](../../../frontend/src/lib/server/console-shell.ts)
+and read by all three, so they cannot disagree about which route is worst.
+
+The first three are **not windowed**, and that is the difference between the
+band and the per-article cost panel on Pipelines. The band stands on every
+route, so a figure that moved when a control on one route moved would read as
+three different sites. The runway is taken over every published day on record
+and says so.
+
+The window control sits **inside** the band rather than under it, because a
+control below the thing it governs is read second. Each route hands its own
+control in: Pipelines prices the month files a wider window would fetch, Model
+fetches nothing and prices nothing, and Machine draws no control at all and
+prints a sentence saying where the control is. That last one is a deliberate
+departure from "the band carries the window control on all three routes":
+nothing on Machine is windowed yet, and a control that answers a click by
+changing nothing is worse than an absent one. The choice is still shared - all
+three routes read the same `idhazh:console-window` key - so setting it on
+Pipelines and clicking Model keeps the span.
+
+### Three cross-boundary carries, one sentence each
+
+Each route ends its introduction with one sentence pointing at a panel another
+route owns: Pipelines says what the model spent of the day it just described,
+Model says how far apart the day's runs read, Machine says how many articles the
+day published. No chart, no card - a signpost that looks like a figure gets read
+as one. They exist because the failure mode of splitting a page is a route that
+hides the panel explaining another route's numbers.
+
+### Machine ships almost empty, and says so
+
+The pipeline has written `state/runtime-counters.csv` since 2026-08-26 and no
+page has ever read a cell of it. The route exists before its panels do, and says
+what is missing once at the top and once per named panel. A route that hid
+itself until it had data would be a route nobody knew to check - which is
+exactly how a ledger goes four days unread.
+
 **The run strip is a time axis: one column per day, oldest on the left.** Days
 advance left to right the way every other time series does, so "it broke on
 Tuesday and has been amber since" is a shape rather than a sentence. Each day is

@@ -422,13 +422,15 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     day payloads and now grows by one day link a day. The assertion below is on
     its size rather than on its presence: a ceiling at the megabyte the page used
     to weigh is a gate that never fires, so the number has to stay in the
-    thousands. `/console/` is capped since 2026-08-29 and its assertion has the
-    same shape for the same reason - the regression a page ceiling exists to
-    catch on this route is a day payload inlined by a layout, which cost 313,300
-    gzipped bytes when it last happened, so a ceiling more than that above the
-    page could never see it land again. The page measured 120,026 gzipped bytes
-    at the close of the console-signal plan on 2026-08-30, so the bound is
-    433,000 and the committed ceiling is 259,908.
+    thousands. The three `/console/` routes are capped for the same reason - the
+    regression a page ceiling exists to catch on that surface is a day payload
+    inlined by a layout, which cost 313,300 gzipped bytes when it last happened,
+    so a ceiling more than that above the page could never see it land again.
+
+    All three console routes are asserted, and that is the point of splitting
+    them: one key over three surfaces still fails when any of them grows and
+    cannot say which one did, so the operator raises the shared number and the
+    regression lands under it.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     ceilings = committed.page_weight.ceilings_bytes
@@ -440,11 +442,16 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
         "the archive ceiling is back above the weight of the payloads row #4 removed - "
         "a ceiling that high never fires again"
     )
-    assert ceilings["/console/"] < 433_000, (
-        "the console ceiling is above the 120,026 the page measured plus the 313,300 a "
-        "day payload cost when a layout last inlined one - a ceiling that high cannot "
-        "catch the one regression this route has actually had"
-    )
+    for route in ("/console/", "/console/model/", "/console/machine/"):
+        assert route in ceilings, (
+            f"{route} is a prerendered route with no ceiling - the bundle gate reports "
+            "an unnamed route without failing it, so this one would grow unwatched"
+        )
+        assert ceilings[route] < 433_000, (
+            f"the ceiling on {route} is above the heaviest console document plus the "
+            "313,300 a day payload cost when a layout last inlined one - a ceiling that "
+            "high cannot catch the one regression this surface has actually had"
+        )
 
 
 def test_a_page_ceiling_bounds_a_route_and_bounds_it_above_zero() -> None:

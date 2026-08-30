@@ -198,42 +198,51 @@ test('the cost section says what it counts, in bytes and per article', async ({ 
 	await expect(section).toContainText('over the articles that day published');
 });
 
-test('the size card carries the level, the track, the delta and the runway', async ({
-	page
-}) => {
+test('the standing band carries the level, the track and the runway', async ({ page }) => {
 	await page.goto('/console/');
 	await hydrated(page);
 
-	const card = page.locator('[data-windowed="site-size-movement"]');
-	await expect(card.locator('.kpi-value')).toHaveText(/[\d.]+ MB/);
+	// The size moved off a card and into the band on 2026-08-30, because the band
+	// stands on all three console routes and one page may not state one figure
+	// twice. What it owes is unchanged: a level, the share of the one limit that
+	// cannot move (Rule #2), and a runway in published days.
+	const band = page.locator('[data-console-band] [data-band-fact="size"]');
+	await expect(band).toHaveCount(1);
+	const sentence = page.locator('[data-band-size]');
+	await expect(sentence).toContainText(/[\d.]+ MB of the 1 GB Pages cap/);
 
-	// The track is against the one limit that cannot move (Rule #2), and the
-	// fraction it draws is the value it prints over that limit.
-	const track = card.locator('[data-kpi-track]');
+	// The track draws the value it prints over that limit.
+	const track = band.locator('[data-band-size-pct]');
 	await expect(track).toHaveCount(1);
-	await expect(card.locator('[data-kpi-caption]')).toContainText(
-		/[\d,]+ MB left of the 1 GB Pages cap/
-	);
+	const printedMb = Number(/([\d.]+) MB/.exec((await sentence.innerText()) ?? '')?.[1]);
+	const drawnPct = Number(await track.getAttribute('data-band-size-pct'));
+	const cap = Number(await track.getAttribute('data-band-size-cap'));
+	expect(cap).toBe(PAGES_CAP_BYTES);
+	expect(drawnPct).toBeCloseTo(((printedMb * 1024 * 1024) / PAGES_CAP_BYTES) * 100, 1);
 
-	const printedMb = Number(/([\d.]+) MB/.exec((await card.locator('.kpi-value').innerText()) ?? '')?.[1]);
-	const fraction = Number(await track.getAttribute('data-kpi-fraction'));
-	expect(fraction).toBeCloseTo((printedMb * 1024 * 1024) / PAGES_CAP_BYTES, 4);
-
-	// The runway, in published days, at a rate the page also prints, against an
+	// The runway, in published days, at a rate the band also prints, against an
 	// item ceiling the config owns. A date with no basis beside it is the thing
 	// the level it replaced was already guilty of.
-	await expect(card).toContainText(
-		new RegExp(`[\\d,]+ B an article, ${ITEM_CEILING} articles a day`)
+	await expect(sentence).toContainText(
+		new RegExp(`[\\d,]+ B an article over \\d+ published days?, ${ITEM_CEILING} articles a day`)
 	);
-	await expect(card).toContainText(/about [\d.,]+ published days/);
-	// And it names the tree it measured before it prints the days, because the
-	// cap is measured on a larger one and the number is optimistic by a multiple.
-	await expect(card).toContainText('committed payload tree, not the published site');
-	await expect(card).toContainText('idhazh site-weight');
-	// The window delta, in the unit the card's own number is in. A share from
-	// the 13,595 bytes the oldest manifest recorded read +73,933 percent.
-	await expect(card).toContainText(/(Up|Down) [\d.,]+ MB over \d+ days/);
-	await expect(card.locator('.kpi-move')).toHaveCount(0);
+	await expect(sentence).toContainText(/fills it in about [\d.,]+ more/);
+	// And it names the tree it measured, because the cap is measured on a larger
+	// one and the number is optimistic by a multiple.
+	await expect(sentence).toContainText('committed payload tree, not the published site');
+	await expect(sentence).toContainText('idhazh site-weight');
+});
+
+test('the window delta is on the windowed panel, in megabytes', async ({ page }) => {
+	await page.goto('/console/');
+	await hydrated(page);
+
+	// It is a rate, so it lives with the other windowed size fact rather than in
+	// the band, which is not windowed and stands on all three routes. A share is
+	// what this used to print, and from the 13,595 bytes the oldest manifest
+	// recorded it read +73,933 percent - and green, on a card watching growth.
+	const panel = page.locator('[data-windowed="site-cost-per-item"]');
+	await expect(panel).toContainText(/(Up|Down) [\d.,]+ MB over \d+ days|No second measurement/);
 });
 
 test('the runs-and-size table is gone, and its run facts are on the run squares', async ({

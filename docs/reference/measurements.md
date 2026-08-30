@@ -2257,6 +2257,95 @@ exist yet. And the fix is not this row's: bounding `state/scores.csv` is the
 retention row's work, and this section is the measurement that says the page
 needs it inside 16 published days rather than inside a quarter.
 
+#### Three console routes, three ceilings, and a day priced on each (2026-08-30)
+
+Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-08-30. Tree: `feat/the-console-becomes-three-routes` over `origin/main` at
+`2655bf0`, ten published days, 3,472 scored rows. Method: `npm run build` then
+`gzipSync(readFileSync(page), { level: 9 }).length`, which is the byte the gate
+itself takes.
+
+**A published day was priced by removing a real one**, the same method the
+2026-08-29 section used and for the same reason a clone scan cannot be used:
+2026-08-25 was dropped from `state/scores.csv`, `state/item-health/`,
+`state/feed-health/`, `frontend/public/telemetry/` and its own directory under
+`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT`, and the tree rebuilt. That is 732 scored rows, 1,876 item-health
+rows and 1,000 telemetry rows. The day dropped is neither the newest nor the
+oldest, so the window anchor never moves.
+
+| Route | all ten days | without 2026-08-25 | cost of that day |
+| --- | ---: | ---: | ---: |
+| `/console/` | 113,920 | 94,539 | **19,381** |
+| `/console/model/` | 13,277 | 11,776 | **1,501** |
+| `/console/machine/` | 5,227 | 5,227 | **0** |
+
+**`/console/machine/` costs zero, and that is the useful reading.** It renders no
+ledger at all today, so a 20 percent cut to every ledger the console reads moved
+it not one byte - which is also the control that says the root redirection is not
+a variable, exactly as the 2026-08-29 section found by a different route.
+
+**The Model route grows per published day, not per item.** It inlines one row a
+day from `modelWork` and one from `throughputDays`, and no per-item array. At
+1,501 bytes a day against `/console/`'s 19,381 it is 7.7 percent of the
+Pipelines cost, and that ratio is the point of the split: the term that grows is
+almost all on one route.
+
+The ceilings then follow the method already written down - heaviest measured
+build, plus three mature published days, plus the 64-byte build noise floor.
+The levels below are from the final build of this branch, which is 190 bytes a
+route heavier than the one the day was priced on because the band gained the
+clause naming which tree it measured:
+
+```text
+/console/          114,111 + 3 x 19,381 +  64 = 172,318
+/console/model/     13,467 + 3 x  1,501 +  64 =  18,034
+/console/machine/    5,328 +      1,395 +  64 =   6,787
+```
+
+**Machine's allowance is not days, because a day costs it nothing.** What varies
+on that route is the band's own three sentences and the strip's three worst
+states - 403 and 62 characters of ledger-derived text, measured off the built
+page - so the allowance is three publishes' worth of rewriting all of it,
+465 x 3 = 1,395. That is a bound on text length rather than a measured growth,
+and it is labelled as one.
+
+**The guard the 2026-08-29 section set still holds on all three.** The regression
+a console ceiling exists to catch is a day payload inlined by a layout, measured
+2026-08-26 at 313,300 gzipped bytes. Against these ceilings the slack is 58,207,
+4,567 and 1,459 bytes, so the regression is 5.4x, 68.6x and 215x the slack. The
+old single ceiling of 259,908 had 139,882 of slack, which is 2.24x - so splitting
+the surface made every one of the three gates strictly tighter than the one it
+replaced.
+
+**The route split cost every reading page about a kilobyte of JavaScript, and
+none of it is console code.** Paired measurement, one session, the same worktree
+built twice back to back with only the changed source swapped - and the
+`origin/main` arm passed the bundle gate outright on every route, which is what
+makes the second arm readable:
+
+| Route | `origin/main` | branch | delta | modules |
+| --- | ---: | ---: | ---: | ---: |
+| `/` | 52,881 | 53,926 | +1,045 | 20 -> 24 |
+| `/404` | 42,841 | 43,811 | +970 | 15 -> 19 |
+| `/<date>/` | 52,117 | 53,149 | +1,032 | 20 -> 24 |
+| `/<date>/<topic>/` | 52,211 | 53,241 | +1,030 | 20 -> 24 |
+| `/archive/` | 53,517 | 54,545 | +1,028 | 19 -> 23 |
+| `/console/` | 90,473 | 89,072 | **-1,401** | 19 -> 26 |
+| `/evals/` | 43,794 | 44,766 | +972 | 18 -> 22 |
+
+**The four added modules were opened and read.** They are Svelte's own runtime,
+re-cut into more and smaller chunks; none of them names the console. The shared
+entry chunk itself went 2,709 -> 3,103 bytes, which is the client manifest
+embedding two new route nodes and a layout node, and every route preloads the
+entry. The rest is gzip overhead from two shared chunks becoming five. This is
+the same mechanism `bundle-baseline.json` recorded on 2026-08-29 for the chart
+engine: adding a lazily-imported chunk grows the manifest the entry embeds.
+
+**The lazy chart chunk did not move.** 585,481 raw and 197,561 gzipped bytes on
+both arms, byte for byte, against the 200,000 escalate trigger. No new echarts
+type was registered, and none was needed.
+
 ### Days to the 1 GB Pages ceiling
 
 **This section divided by the wrong tree until 2026-08-27, and both of its

@@ -1082,13 +1082,13 @@
     },
     "PageWeightConfig": {
       "additionalProperties": false,
-      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when somebody has priced its growth in\npublished days. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone and their ceiling is the heaviest build\nplus the 64-byte noise floor. `/archive/` grows, but only by one day link a\nday since it stopped inlining the day payloads, so its ceiling carries a year\nof that growth as measured headroom. `/console/` grows far faster - about 60\ngzipped bytes a published item, so 36,504 to 43,745 bytes a mature day\nmeasured 2026-08-29 - so its ceiling carries three days rather than a year\nand expires by design. What a page that renders a day cannot have is a fixed\nceiling at all: the only way under one is to publish fewer items, which is\ncapping the news rather than catching a regression, so `/` and `/<date>/` are\ncounted and reported and never failed.",
+      "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when somebody has priced its growth in\npublished days. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone and their ceiling is the heaviest build\nplus the 64-byte noise floor. `/archive/` grows, but only by one day link a\nday since it stopped inlining the day payloads, so its ceiling carries a year\nof that growth as measured headroom. The three `/console/` routes grow with\nthe ledger their panels read, so each ceiling carries a measured few days and\nexpires by design. What a page that renders a day cannot have is a fixed\nceiling at all: the only way under one is to publish fewer items, which is\ncapping the news rather than catching a regression, so `/` and `/<date>/` are\ncounted and reported and never failed.\n\n**A surface that splits into routes takes a ceiling per route.** One number\ncovering three surfaces still fails when any of them grows, and then cannot\nsay which one did - so the operator raises the shared number and the\nregression lands under it. Sizing them separately is what makes the split\nworth having.",
       "properties": {
         "ceilings_bytes": {
           "additionalProperties": {
             "type": "integer"
           },
-          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed. A route earns a ceiling when its growth is priced: /404 and /evals/ grow only when the source does, /archive/ grows by one day link a day so its ceiling carries a measured year of that, and /console/ grows with the ledger its charts read so its ceiling carries a measured three days and is meant to expire. A page that renders a day is never capped, because the only way under such a ceiling is to publish less.",
+          "description": "Route class -> the largest gzip -9 size that route's prerendered HTML may reach. The committed values live in config/idhazh.json, which the gate reads; this default is empty so the numbers are not duplicated here where they could drift from the file the gate enforces (Rule #6). A route the object does not name is measured and reported by the gate but not failed. A route earns a ceiling when its growth is priced: /404 and /evals/ grow only when the source does, /archive/ grows by one day link a day so its ceiling carries a measured year of that, and each of the three /console/ routes grows with the ledger its own panels read so each carries a measured few days and is meant to expire. One surface split across several routes takes one key per route, or a blown budget cannot name which route blew it. A page that renders a day is never capped, because the only way under such a ceiling is to publish less.",
           "title": "Ceilings Bytes",
           "type": "object"
         }
@@ -1488,6 +1488,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "page_weight.ceilings_bytes gained /console/model/ and /console/machine/ in config/idhazh.json, and PageWeightConfig now says a surface that splits into routes takes a ceiling per route. No field moved.",
+      "version": "2026-08-30T23:30",
+      "why": "The console became three prerendered routes, and one ceiling covering three surfaces cannot say which of them blew a budget - which is the decisive argument for routes over tabs, so the split is not finished until the ceilings follow it. The gate already fails a ceiling that names no route in the build; a route that names no ceiling is only reported, so two new surfaces would have grown unwatched. Committed values only - the model default stays empty, the shape and the validation are unchanged, and every older config still validates, so no read-side migration (section 11)."
+    },
+    {
       "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
       "version": "2026-08-30T21:15",
       "why": "The chart arm is the only console section with a written decision rule in its own prose, and all three numbers in that rule were constants in a TypeScript module - so the one section that states a threshold was the one section an operator could not move a threshold on (Rule #6). The two limits are now markers on bars and the span is what decides whether a median is printed at all. Additive with defaults, so a config written before today still validates (section 11)."
@@ -1806,7 +1811,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-30T21:15",
+      "default": "2026-08-30T23:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1820,5 +1825,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-30T21:15"
+  "version": "2026-08-30T23:30"
 }
