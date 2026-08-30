@@ -5060,6 +5060,117 @@ second, against 4.89 tok/s over 25 at-cap items at the old cap. One article is
 not a rate. What it does settle is that an at-cap item now exists, so the rows
 have an instrument and a population for the first time.
 
+## What the gates cost on a developer box
+
+Every figure in this section: **Windows 11, 12 logical CPUs, 31.8 GiB RAM,
+Python 3.14.2, pytest 9.1.1, pytest-xdist 3.8.0, execnet 2.1.2, node v24.12.0,
+2026-08-30.** A laptop measures the laptop, and this section measures a
+developer box - none of it is a runner figure and none of it changes one. The
+lock is skipped when `CI` is set, `addopts` is unchanged, and a runner keeps
+preview port 4173.
+
+The commands are in
+[../how-to/run-the-gates.md](../how-to/run-the-gates.md#running-the-gates-when-the-machine-is-shared).
+
+### The backend suite, one process against every core
+
+Taken at base commit `18769fc`, in a venv built inside the measuring worktree.
+`-n auto` resolved to 12 workers. **Every arm ran through the gate lock**, so no
+sibling agent's gate could land inside a timing.
+
+| Arm | Run 1 | Run 2 | Run 3 | Mean | Spread |
+| --- | --- | --- | --- | --- | --- |
+| Serial (`pytest`) | 548.03 s | 484.68 s | 505.78 s | **512.83 s** | 63.35 s |
+| Parallel (`pytest -n auto`) | 159.04 s | 149.60 s | 147.67 s | **152.10 s** | 11.37 s |
+
+**3.37x on the means** - 512.83 s down to 152.10 s, about six minutes back on
+every local run of the suite, against the row's 2x bar. The worst pairing
+(fastest serial against slowest parallel) is still **3.05x** and the best is
+3.71x, so the gain does not depend on which runs are picked. The parallel arm is
+also the steadier one: 11.37 s of spread against 63.35 s.
+
+### The same suite on the merged tree
+
+Re-measured on `820db62`, with all four changes in, under the lock:
+
+| Arm | Wall clock | Result |
+| --- | --- | --- |
+| Serial (`pytest`) | 379.68 s | 1,697 passed |
+| Parallel (`pytest -n auto`) | 137.06 s | 1,697 passed |
+
+**One run per arm, so neither figure carries a spread**, and the box was **not
+idle** - about seven sibling agents were working in their own worktrees
+throughout. Read this as a confirmation that the merged tree did not regress,
+not as a replacement for the paired figures above.
+
+Two things it does say. The ratio holds at **2.77x**, inside the paired 3.05x to
+3.71x band once the missing spread is allowed for. And the serial arm came in
+**26.0 percent under** the 512.83 s mean measured at base `18769fc` - 379.68 s
+against 512.83 s. That is the direction the setup work removed from
+`test_workflows.py` predicts, and its size is consistent with it, but one
+unspread run on a loaded box cannot attribute the drop: the load differed
+between the two measurements, and that alone moves this suite by a factor of
+three.
+
+### Where the serial suite spent its time, and what one file gave back
+
+`test_workflows.py` is where the serial suite spends longest. Wrapping every
+helper for one run (351.07 s, under heavy load) said the row's premise was right
+about the file and wrong about which part of it costs:
+
+| Helper | Calls | Seconds | Share of the run |
+| --- | --- | --- | --- |
+| `_run_commit_script` | 19 | 127.953 | 36.4 percent |
+| `_load_workflows` | 104 | 63.958 | 18.2 percent |
+| `_scripted_origin` | 9 | 44.618 | 12.7 percent |
+| `_digest_origin` | 3 | 26.346 | 7.5 percent |
+| `_run_the_inline_program` | 15 | 11.202 | 3.2 percent |
+| `_rebuild` | 9 | 10.141 | 2.9 percent |
+| `_run_the_decide_step` | 9 | 5.752 | 1.6 percent |
+
+Building the three reusable ones once a session and handing out copies made the
+file **16.6 percent faster**, measured as three interleaved base/head pairs -
+**14.7, 18.5 and 16.5 percent** - against that row's 10 percent bar. Interleaved
+rather than run in blocks, because box load drifts over the minutes between two
+arms and an unpaired comparison reports the drift.
+
+### The preview port derivation
+
+`playwright.config.ts` hashes its own directory into a port between 20000 and
+29999. Over the **16 worktree paths registered on this box: 16 distinct ports,
+zero collisions.** `yi-g01`, `yi-g02` and `yi-g03` differ by one character and
+land 2,276 and 2,869 apart - which is why the derivation hashes rather than
+sums. A character sum would have put them adjacent and rebuilt the clustering
+the change exists to remove. About 1 percent of checkout pairs still collide by
+birthday arithmetic, and `PREVIEW_PORT` is the override for those.
+
+### The lock's own correctness, and two defects it had
+
+The lock's oracle is "K real callers, and no two of them overlap". It failed
+once in CI, so it was reproduced with a harness that starts K real callers on
+one lock, each writing its own monotonic `(start, end)` pair:
+
+| K | wait | rounds | rounds with two callers holding at once |
+| --- | --- | --- | --- |
+| 5 | 0.05 s | 20 | 0 |
+| 20 | 0.05 s | 50 | **4** |
+
+The 50-round run took 715.92 s. The four overlaps ran 3.0, 12.2, 26.8 and
+39.5 ms into holds of 50.6 to 58.6 ms; the 3.0 ms one is the CI signature - two
+callers starting 3 ms apart and running the whole hold together. The same 50
+rounds surfaced a second defect nobody had filed: **61 callers of 1,000 died
+with a traceback and a non-zero exit**, across 36 of the 50 rounds. On Windows a
+name whose last handle is closing is "delete pending", and every create on it is
+refused with access denied rather than with "it already exists".
+
+Both are fixed. The record is now linked into place with `os.link` rather than
+created and then written, and the stale-lock delete runs under a second
+exclusive create. A refused create is a lost create, not a crash. `release`
+deliberately does not take the second seat: it would cost six file operations on
+every hand-over to cover a case that needs a gate still running 7,200 s in -
+**6.6x the longest gate ever measured here** - and with twenty callers spinning
+it took a hand-over from 0.7 s to about 10 s.
+
 ## Still unmeasured
 
 Each line names the measurement that would settle it. Nothing here may be cited
