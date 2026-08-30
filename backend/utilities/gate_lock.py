@@ -84,8 +84,14 @@ STALE_AFTER_SECONDS: Final = 7200.0
 WAIT_TIMEOUT_SECONDS: Final = 3600.0
 
 # `os.O_BINARY` exists only on Windows, where the C runtime would otherwise
-# translate a newline on the way to disk.
-_BINARY: Final[int] = os.O_BINARY if sys.platform == "win32" else 0
+# translate a newline on the way to disk. Written as a statement rather than a
+# conditional expression: mypy narrows an `if` on `sys.platform` and does not
+# narrow the same test inside an expression, so the one-line version fails the
+# type gate on Linux while passing it on Windows.
+if sys.platform == "win32":
+    _BINARY = os.O_BINARY
+else:
+    _BINARY = 0
 
 # What an unset or switched-off `CI` looks like. GitHub Actions sets `CI=true`.
 _CI_OFF: Final = frozenset({"", "0", "false", "no", "off"})
