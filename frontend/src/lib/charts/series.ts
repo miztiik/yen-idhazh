@@ -1,5 +1,5 @@
 import { dayMonth } from '../format';
-import { daysInWindow, type TimeWindow } from './viewport';
+import { daysBetween, daysInWindow, type TimeWindow } from './viewport';
 
 /** The published projection's header, in `PUBLIC_COLUMNS` order.
  *
@@ -428,9 +428,135 @@ export function failureSeries(rows: TelemetryRow[], window: TimeWindow): StageFa
 	}));
 }
 
-export function failedRows(rows: TelemetryRow[], window: TimeWindow, code: string | null): TelemetryRow[] {
+export function failedRows(
+	rows: TelemetryRow[],
+	window: TimeWindow,
+	code: string | null,
+	cause: string | null = null
+): TelemetryRow[] {
 	return rowsInWindow(rows, window)
 		.filter((row) => row.outcome === 'failed')
 		.filter((row) => code === null || row.code === code)
+		.filter((row) => cause === null || causeKey(row) === cause)
 		.sort((a, b) => b.date.localeCompare(a.date) || a.item_id.localeCompare(b.item_id));
+}
+
+/** A stage and a code, which is the pair an operator acts on.
+ *
+ * An empty code reads as `unknown` here and nowhere else, so the ledger and the
+ * rows behind it can never disagree about which cause a row belongs to.
+ */
+export function causeKey(row: TelemetryRow): string {
+	return `${row.stage}/${row.code || 'unknown'}`;
+}
+
+/** A key for one drawn row of the failed-item list.
+ *
+ * The index is in it because a run writes a row per stage for an item, so a run
+ * and an item together repeat. A keyed each over a repeated key throws, the
+ * update is abandoned part-way, and the rows already on screen stay - which
+ * reads as a filter letting foreign causes through rather than as an error.
+ * Measured 2026-08-30 against the committed projection: selecting
+ * `extract/paywalled` left `fetch/http_client_error` rows in the table.
+ */
+export function failureRowKey(row: TelemetryRow, index: number): string {
+	return `${index}-${row.run_id}-${row.item_id}-${row.stage}-${row.code}`;
+}
+
+/** One cause of failure, and everything the ledger prints about it. */
+export interface FailureCause {
+	/** `stage/code`. What a selected row hands back, and what `failedRows`
+	 * filters on. */
+	key: string;
+	stage: string;
+	code: string;
+	count: number;
+	/** One count per day of the window, oldest first, so the trend line and the
+	 * count beside it are read off the same rows. */
+	daily: number[];
+	/** Distinct sources this cause reached. */
+	sources: number;
+	/** The newest day it fired. */
+	last: string;
+	/** Days between that and the window's end. Zero is the newest day in view.
+	 * Measured against the window rather than against the clock, because this
+	 * page is prerendered and a build-time "today" goes stale on the shelf. */
+	lastAgo: number;
+}
+
+export interface FailureLedger {
+	causes: FailureCause[];
+	/** Every failed row in the window. The causes' counts sum to exactly this. */
+	failed: number;
+	/** Distinct sources with any row in the window, failed or not. This is the
+	 * denominator breadth is read against: one cause on 1 of 47 sources is a
+	 * site that changed its markup, and the same count on 40 of 47 is the
+	 * extractor. */
+	sourcesSeen: number;
+	/** Rows of any kind in the window. Zero means the ledger cannot answer,
+	 * which is a different fact from nothing having failed. */
+	rows: number;
+}
+
+/** Failures grouped by cause, over one window.
+ *
+ * Uncapped on purpose. The cap is a display choice, and a ledger that dropped
+ * its tail here would report a sum smaller than the rows it is drawn from.
+ */
+export function failureLedger(rows: TelemetryRow[], window: TimeWindow): FailureLedger {
+	const inWindow = rowsInWindow(rows, window);
+	const days = daysInWindow(window);
+	const slot = new Map(days.map((date, index) => [date, index]));
+	const sourcesSeen = new Set<string>();
+
+	interface Held {
+		stage: string;
+		code: string;
+		count: number;
+		daily: number[];
+		sources: Set<string>;
+		last: string;
+	}
+	const held = new Map<string, Held>();
+
+	let failed = 0;
+	for (const row of inWindow) {
+		if (row.source_id) sourcesSeen.add(row.source_id);
+		if (row.outcome !== 'failed') continue;
+		failed += 1;
+		const key = causeKey(row);
+		let cause = held.get(key);
+		if (cause === undefined) {
+			cause = {
+				stage: row.stage,
+				code: row.code || 'unknown',
+				count: 0,
+				daily: days.map(() => 0),
+				sources: new Set<string>(),
+				last: row.date
+			};
+			held.set(key, cause);
+		}
+		cause.count += 1;
+		const index = slot.get(row.date);
+		if (index !== undefined) cause.daily[index] += 1;
+		if (row.source_id) cause.sources.add(row.source_id);
+		if (row.date > cause.last) cause.last = row.date;
+	}
+
+	return {
+		causes: [...held.entries()].map(([key, cause]) => ({
+			key,
+			stage: cause.stage,
+			code: cause.code,
+			count: cause.count,
+			daily: cause.daily,
+			sources: cause.sources.size,
+			last: cause.last,
+			lastAgo: daysBetween(cause.last, window.end) - 1
+		})),
+		failed,
+		sourcesSeen: sourcesSeen.size,
+		rows: inWindow.length
+	};
 }
