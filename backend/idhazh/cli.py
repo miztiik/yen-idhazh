@@ -65,7 +65,7 @@ from idhazh.contracts.digest_day import DigestDay
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
-from idhazh.contracts.item_health import FailureCode, ItemHealthRow
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemStage
 from idhazh.contracts.qualification import (
     CanaryObservation,
     CandidateIdentity,
@@ -760,24 +760,25 @@ def _fetch_one(
 def _log_no_reply(
     article: Article, *, model_id: str, code: FailureCode, error: OSError, run_id: str | None
 ) -> None:
-    event = {
-        "ts": assemble.utc_now(),
-        "src": "summarize",
-        "v": "1",
-        "run": run_id,
-        "name": "item.summarize.failed",
-        "level": "warning",
-        "ctx": {
-            "item_id": article.item_id,
-            "source_id": article.source_id,
-            "model_id": model_id,
-        },
-        "data": {
-            "failure_code": code.value,
-            "error_type": type(error).__name__,
-        },
-    }
-    LOG.warning("%s", json.dumps(event, sort_keys=True, separators=(",", ":")))
+    LOG.warning(
+        "%s",
+        telemetry.event(
+            ts=assemble.utc_now(),
+            src=ItemStage.SUMMARIZE,
+            run=run_id,
+            name=telemetry.EventName.ITEM_SUMMARIZE_FAILED,
+            level=telemetry.EventLevel.WARNING,
+            ctx={
+                "item_id": article.item_id,
+                "source_id": article.source_id,
+                "model_id": model_id,
+            },
+            data={
+                "failure_code": code.value,
+                "error_type": type(error).__name__,
+            },
+        ),
+    )
 
 
 def _summarize_one(

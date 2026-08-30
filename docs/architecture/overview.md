@@ -1,6 +1,6 @@
 # Architecture overview
 
-**Last Updated**: 2026-08-27
+**Last Updated**: 2026-08-30
 
 How the whole system fits together, in one page. Every box here has a deeper
 document behind it; this page exists so you can find the right one.
@@ -112,7 +112,11 @@ See [`contracts/schemas.md`](contracts/schemas.md).
 ## Where a number comes from
 
 Nothing in this project may cite a throughput, cost or quality figure without
-saying what measured it and when. The numbers that currently shape the design:
+saying what measured it and when. One exception, added 2026-08-30: the operator
+console prints a counterfactual cost in currency, from measured token counts and
+a rate the operator sets, labelled a counterfactual and never a bill
+([../../CLAUDE.md](../../CLAUDE.md) Rule #10). The numbers that currently shape
+the design:
 
 | Measured | Value | Where |
 | --- | --- | --- |

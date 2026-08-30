@@ -1,6 +1,6 @@
 # Principles
 
-**Last Updated**: 2026-08-21
+**Last Updated**: 2026-08-30
 
 The small set of beliefs that shape every yen-idhazh decision, stated once as vocabulary. These operationalize the engineering contract for a build-time digest pipeline; the authoritative rules live in [../../CLAUDE.md](../../CLAUDE.md) and the rules-only digest in [../agents/guardrails.md](../agents/guardrails.md). This page explains the *why* a reader needs before those rules make sense - it does not restate them.
 
@@ -14,7 +14,7 @@ A stock 4 vCPU runner with no GPU, a 6 h job cap and a 10 GB cache is the machin
 
 ## 3. Measured, not estimated
 
-An unmeasured number may not justify a design. Every throughput, cost, size and quality claim carries the hardware it came from, the date and the spread; a laptop figure is labelled a laptop figure. When a measurement contradicts the design, the design changes. This has already happened here, which is the point of measuring at all.
+An unmeasured number may not justify a design. Every throughput, cost, size and quality claim carries the hardware it came from, the date and the spread; a laptop figure is labelled a laptop figure. When a measurement contradicts the design, the design changes. This has already happened here, which is the point of measuring at all. The one exception is a counterfactual: the operator console prices a run at a rate the operator sets, to answer whether the self-hosted design is worth its wall clock, and it is labelled a counterfactual rather than a bill ([../../CLAUDE.md](../../CLAUDE.md) Rule #10).
 
 ## 4. Contracts before logic
 
