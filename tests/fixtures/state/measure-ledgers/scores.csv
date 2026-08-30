@@ -1,0 +1,5 @@
+date,run_id,item_id,pipeline_fingerprint
+2026-01-01,2026-01-01-1,ai-0000000001,aaaaaaaa
+2026-01-01,2026-01-01-1,ai-0000000002,aaaaaaaa
+2026-01-01,2026-01-01-2,ai-0000000003,bbbbbbbb
+2026-01-01,2026-01-01-2,ai-0000000004,bbbbbbbb

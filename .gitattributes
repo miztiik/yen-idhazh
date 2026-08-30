@@ -1,0 +1,106 @@
+# Unknown future file types still need a deterministic default. Git detects
+# whether the content is text; text uses LF and binary content stays untouched.
+* text=auto eol=lf
+
+# Generated contract artifacts and their source schemas are always LF so the
+# contract drift gate (regenerate + `git diff --exit-code`) is byte-stable
+# across operating systems and every contributor's core.autocrlf setting. The
+# Pydantic exporter and the frontend type generator both emit LF; these
+# attributes make the stored blob and every checkout match.
+schemas/*.schema.json text eol=lf
+frontend/src/contracts/*.schema.json text eol=lf
+frontend/src/contracts/*.d.ts text eol=lf
+
+# Human-edited tunables. A config file whose bytes shift with the checkout would
+# change the hash the run manifest records for it.
+config/*.json text eol=lf
+
+# The committed run state: the eval ledger, the fingerprints, the seen-URL
+# store and the feed-health record. Rows are appended by CI on Linux and read by
+# a developer on Windows; a CRLF rewrite would show every historical row as
+# changed.
+#
+# `merge=union` because every file here is append-only and every row is
+# independent of its neighbours. Two runs that both append are not in
+# disagreement, so the union of both sides is the answer and a text merge that
+# stops the push costs a reader the whole day. A reader of these ledgers already
+# deduplicates: `load_published` and `load_seen` keep the earliest row per
+# address, and the eval writer refuses an observation it already holds.
+#
+# `frontend/public/telemetry/*.csv` is deliberately NOT union. It is a full
+# rewrite of `state/item-health/`, so a union of two rewrites is a file with
+# every row twice. Assemble regenerates it instead.
+state/*.csv text eol=lf merge=union
+state/**/*.csv text eol=lf merge=union
+
+# The training window. Deliberately NOT `merge=union`: it is a rolling window
+# rather than an append-only ledger, so the union of two rolls is a file that
+# holds evicted rows again and exceeds `finetune.corpus_rows`. The harvest
+# records what its run saw, so a race is answered by replaying those rows onto
+# the new base.
+corpus/*.jsonl text eol=lf
+corpus/*.json text eol=lf
+corpus/*.txt text eol=lf
+
+# Test fixtures are byte-exact inputs. A golden summary, a canary payload, or a
+# captured page is compared against a fresh pipeline run, so any end-of-line
+# conversion would fail the comparison on whichever machine has the other
+# core.autocrlf setting.
+tests/fixtures/** text eol=lf
+
+# Source files are edited on Windows and Linux. Keep diffs about code, not line
+# endings.
+*.py text eol=lf
+*.ts text eol=lf
+*.svelte text eol=lf
+*.yml text eol=lf
+*.yaml text eol=lf
+
+# Prose is reviewed line by line. A checkout must not rewrite the document.
+*.md text eol=lf
+
+# The prompts are fingerprint inputs: `fingerprint.build_inputs` hashes the
+# prompt string, so their bytes are part of the determinism stamp. Python's
+# `read_text` folds CRLF to LF before that hash, which is why a CRLF copy has
+# never broken a fingerprint - but an unpinned file still shows as modified on
+# a fresh Linux checkout, and a dirty tree is what aborts the publish push.
+*.txt text eol=lf
+
+# The rest of the authored surface. Every one of these was unpinned until a
+# CRLF blob in a single doc aborted a rebase and discarded a whole day's
+# digest; pinning the file type is cheaper than finding the next one.
+*.js text eol=lf
+*.mjs text eol=lf
+*.css text eol=lf
+*.html text eol=lf
+*.json text eol=lf
+*.ipynb text eol=lf
+*.toml text eol=lf
+*.svg text eol=lf
+*.csv text eol=lf
+.editorconfig text eol=lf
+.gitignore text eol=lf
+.gitattributes text eol=lf
+
+# Shell a workflow step runs. A CRLF blob here is not a diff nuisance, it is a
+# broken job: the runner's bash reads the carriage return as part of the shebang
+# and as part of every command.
+*.sh text eol=lf
+
+# Published digest payloads. Their sha256 is recorded in the run manifest and
+# re-verified, so the stored bytes and the checked-out bytes must agree.
+frontend/public/**/*.json text eol=lf
+frontend/public/**/*.md text eol=lf
+
+# The month search index's vector sibling: raw int8 laid end to end, not text.
+# An end-of-line conversion here would rewrite bytes inside a vector, and every
+# offset after it, and each one would still decode without complaint.
+frontend/public/assist/index/*.bin binary
+
+# Downloaded, not authored: never diff or eol-convert these.
+*.woff2 binary
+*.gguf binary
+*.png binary
+*.webp binary
+*.onnx binary
+*.wasm binary

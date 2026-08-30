@@ -1,0 +1,153 @@
+{
+  "date": "2026-08-21",
+  "embeddings": {
+    "dimensions": 384,
+    "dtype": "int8",
+    "model_id": "all-minilm-l6-v2-quantized",
+    "vectors": {
+      "ai-02": "+wEC/Ab1+AH0AQUJ9f8EAwr5BQUA//78BAP4AQb/AAEBB/36CP/wA/j8/AYGBAIB+wL89wICBQX8AvkIBf4BBQMADPII9PYHAvv1+/sBEfYK8v7/9gUD/wP9/QEPBvsCBQUACP75B/oGAg8F//wFB/jy+/8BBv8DBvn7+/r7AAD6/voDBAABAvn1A/r5DwnxAg8IAQf9BQMIEQL//gACAf0A/gL0/AL++Af89QD4/AYC+/oH8wkD+Av/AgYGCvv3BAUC/f4F/QX8AgL///f+A/YIAAX4AwEHBAQAAQIGAwD3BPcK+AIDCPoIBwsCCAX/+/r+AQcJ/v8D9gUI/PoG/fz7E/gM+gIACQj8BQYAAQn78QP9AwED/vUJ/f39AgEACAz5BPsHAfn99vgE//r99QUADQQB/AUHAvryBe4M/QD8BP3/Cwr5/wIEAfz8AQoK/wj+/QEABPn+9PsDAPQCDv3/BATzEQkABfwCBPn9/u36//oB+gX//wH7BgQF/wIG",
+      "ai-03": "/v78CQ8CAwUAAP70AQQDAgj9+/gFCQUCAQL+9/gNCPwJBvoA/AX9CAD8/AQFAPcDAwX0AggJAP4A/fb6A/IFAgwE+v34/fYFAwsDCvwCCfr6/AkMDQAGBfz++/wLBgQK9P0B/vX/9wYD+Qn8Cf8IAQsFBP79EQwHAvoFAQgR/AAEAQz8A/f19/8E///3DgL9/wUE9wb0AAIDDAAFA/73AQL/+/0ABQAKAAEG+/7/9wEB/PgACfn1+/f4A/37BQAEAQEKAP0MAw0A/QD/BP369fwD+QAB+Pb98fn5BPoD8gD5AgP9C/b59gYFC/QA//4K+P759wYA/QL+BQYHA/b5/f77/Qj+9PwKCAHq+QD9/Aj+/wP/+v/3//4B/f38/wcJ+wEE/f4K//7/BAb69gX7/wL0Bv4GCAME/wr1AfkK8QAM+wz+/AH3Cf38BPkB/AP//Qf++gj/A/4N9/wD+gj/AwYDBP7/+fv/+Af3BAvwAwEJ/P78CQoIBQH/A/oM+Pv9",
+      "ai-04": "BfHzCAf7/fsA/f4D+/77+/8BAf/39///Bgr/BQf7Ag7/Bf8J/wMA/AUCAvgF//4BAAT6B/UG+QIG+AX9DvkJAgIPDwb9/QP98v79DQP3BP0ABAb8BwID/AH8Aw0P/v/9/v8FCvwCBgn5//0AAfwCFP39+AMB+f4MAv7/BwEI8wD79wr1BwP/AvwE+xICBQf2AwkE7/z3Bfv9CAEDAwL+/f8E/vz98wT7+AUG8fkM/QID+Pv9AQX4BgL+AQf1/vMD+w4DDwUFAQgBAQX9/wn4/PoBBgIBBAH3/PHyAAgD/gD8+QEHA/v6/AAEAPcD+wT/AwD//gD8Cf4F/wD2BQb6BgAEBQYA/QH3Awf2+wcDAAn7/fgCBwT5CAQF+fsA/AL9Bvv78/0FAwIA//UG/fP9Awj+/ggFAgYFCwL4AwMI9QD7//oDBfsAAvgAFPTxAvr6+wL8Av4CCQMD8QcCCv72+gQGAgf/Dv8KAfwBAvsK8v8T/P38+wj9A/UCDPf88v/9",
+      "ai-05": "+QP5Av3//P8C/Pj9//0D/hT7/fr9AAAAAQL99P38BQEBAgcE/v0KAfz3+v4M//T8/gbu/gP/+g0G+gIA//MJBAcH+vYA/PoJ/QgCA/oBCfT8AfoK/wIKAAMEAvsD+wMJ+PYC/gIJAPf4AAj5AvUB+gv0CPz+Cf//BAgFBgYL/gD/Awf7AfkEA/gC+wP/AAMA+g4EAAn4AQMOCAYEBP4A//4LAAX3/AYI7wYAA/b8+AIJ9gAGDQID/AcBBRQEA/UK+AMDDgr6/wUH/gT+BPkA+fkG/P8G/PoB+gP1APUJBAAA+fMNBvz+9wMC//37/QP8APsAAAYL+AT7CPr8A/wFAPIHBQEH/QIABfv1AAYN9/4AAfQF8wD2+/r4/Qb9BQ8E/wEI//v6Avj6DgQG//0BCQH8AgUBCv4DBAj3/PcD+AD/AwsA+//3CP31B/j5Agr9+AX/8wUBAfoE9wEIAwEI/Af8EAL/CAsH9QX9AQb89PkF9v30+w0IBAbzAgcBAQAE"
+    }
+  },
+  "generated_at": "2026-08-22T08:49:17Z",
+  "items": [
+    {
+      "band": "low",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-02",
+      "key_points": [
+        "A new version of the software, v0.2.0, has been released with updates across multiple components.",
+        "The release includes improvements to the web UI and changes to the release process.",
+        "The update includes bug fixes and optimizations for performance and compatibility across different hardware platforms.",
+        "The version update includes support for various hardware platforms and improvements to the ggml library.",
+        "The release also includes changes to the CI/CD pipeline and improvements to the documentation."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T18:38:55Z",
+      "reader_note": null,
+      "source_form": "article",
+      "source_id": "llama-cpp-releases",
+      "source_kind": "announcement",
+      "source_name": "llama.cpp releases",
+      "source_url": "https://github.com/ggml-org/llama.cpp/releases/tag/v0.2.0",
+      "summary": "A new version of the software, v0.2.0, has been released. The release includes various updates and improvements across different components, such as the web UI, ggml, and support for different hardware platforms. The version update includes changes to the release process, bug fixes, and optimizations for performance and compatibility.",
+      "title": "v0.2.0",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "low",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-03",
+      "key_points": [
+        "The Biomarker Discovery Framework is a multi-agent system that prioritizes candidate biomarkers from wearable sensor data through an iterative process under human supervision.",
+        "The framework was tested on three large-scale cohorts, identifying 41 digital biomarkers for mental health and 25 for metabolic outcomes.",
+        "In a blinded evaluation, the Biomarker Discovery Framework received the highest scores across all seven quality dimensions, outperforming other AI systems.",
+        "The framework combines deterministic computation with generative reasoning to ensure statistical rigor and human oversight in biomarker discovery.",
+        "The system is designed to address the challenge of turning large-scale physiological data into clinically relevant biomarkers by focusing on principled hypothesis generation and validation."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T17:02:24Z",
+      "reader_note": null,
+      "source_form": "article",
+      "source_id": "google-research-blog",
+      "source_kind": "research",
+      "source_name": "Google Research",
+      "source_url": "https://research.google/blog/an-ai-tool-for-prioritizing-candidate-biomarkers-from-wearable-sensor-data",
+      "summary": "A new AI tool, the Biomarker Discovery Framework, is designed to help identify potential biomarkers from wearable sensor data by combining hypothesis generation, statistical analysis, and literature-based reasoning. The framework aims to address the challenge of turning large-scale physiological data into clinically relevant biomarkers. It uses a multi-agent system under human supervision to prioritize candidate biomarkers through an iterative process, ensuring statistical rigor and human oversight. The system was tested on three large-scale cohorts, identifying 41 digital biomarkers for mental health and 25 for metabolic outcomes. The framework outperformed other AI systems in a blinded evaluation, receiving the highest scores across multiple quality dimensions.",
+      "title": "An AI tool for prioritizing candidate biomarkers from wearable sensor data",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-04",
+      "key_points": [
+        "A GPU-accelerated clustering method using AdaptGrow and SymNMF is presented to improve the grouping of financial instruments for portfolio construction, risk aggregation, and trade surveillance.",
+        "The method uses rolling correlation and tail-dependence matrices to produce hard labels, soft factor loadings, and structural-break signals, addressing the challenge of unstable groupings and structural changes.",
+        "The approach is scalable from single-GPU to multi-node infrastructure and is memory-efficient, allowing for the processing of up to 100,000 instruments on a single GPU and one million instruments across 16 nodes.",
+        "The method separates routine variation from structural change and reruns cheaply as new returns arrive, ensuring stability and accuracy in risk budgeting and trade surveillance.",
+        "The technique uses a memory-efficient SymNMF formulation that reduces peak storage from ~20n2 to ~4n2 bytes, enabling the processing of large-scale instruments on high-memory GPUs."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T16:21:04Z",
+      "reader_note": "We could only read the first part of this page.",
+      "source_form": "article",
+      "source_id": "nvidia-technical-blog",
+      "source_kind": "announcement",
+      "source_name": "NVIDIA Technical Blog",
+      "source_url": "https://developer.nvidia.com/blog/gpu-accelerated-clustering-for-financial-instruments-at-scale",
+      "summary": "A GPU-accelerated clustering method using AdaptGrow and SymNMF is presented to improve the grouping of financial instruments for portfolio construction, risk aggregation, and trade surveillance. The method addresses the challenge of unstable groupings and structural changes by using rolling correlation and tail-dependence matrices to produce hard labels, soft factor loadings, and structural-break signals. The approach is scalable from single-GPU to multi-node infrastructure and is memory-efficient, allowing for the processing of up to 100,000 instruments on a single GPU and one million instruments across 16 nodes.",
+      "title": "GPU-Accelerated Clustering for Financial Instruments at Scale",
+      "truncated": true,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    },
+    {
+      "band": "medium",
+      "entities": [],
+      "events": [],
+      "introduced_by_run": 1,
+      "item_id": "ai-05",
+      "key_points": [
+        "SOP-Bench is an open benchmark that evaluates AI agents on real business procedures, addressing the shortcomings of existing benchmarks that focus on isolated capabilities.",
+        "The benchmark includes 12 business areas with over 2,000 tasks, each featuring tools, specifications, and test cases, allowing agents to be assessed on their ability to complete tasks.",
+        "SOP-Bench is a framework that allows for customization and extension, with a focus on realistic procedures and the ability to track agent performance against known outcomes.",
+        "The benchmark highlights that newer models or more tools do not always lead to better performance, and that the success of an agent depends on the specific procedure and setup.",
+        "The results show that a single benchmark score is insufficient, as performance varies widely across different procedures, and that human oversight remains essential for certain tasks."
+      ],
+      "lenses": [],
+      "published_at": "2026-08-21T15:57:17Z",
+      "reader_note": null,
+      "source_form": "article",
+      "source_id": "amazon-science",
+      "source_kind": "research",
+      "source_name": "Amazon Science",
+      "source_url": "https://amazon.science/blog/sop-bench-a-new-benchmark-for-evaluating-ai-agents-on-real-business-procedures",
+      "summary": "SOP-Bench is a new benchmark designed to evaluate AI agents on real business procedures, addressing the limitations of existing benchmarks that fail to test the complex, ambiguous nature of actual operational workflows. The benchmark pairs real enterprise procedures with tools and ground-truth answers, allowing agents to be assessed on their ability to complete tasks rather than just generating text that a grader might find acceptable. The benchmark was presented at the 2026 KDD conference and includes 12 business areas with over 2,000 tasks, each featuring tools, specifications, and test cases. It is a framework that allows for customization and extension, with a focus on realistic procedures and the ability to track agent performance against known outcomes.",
+      "title": "SOP-Bench: A new benchmark for evaluating AI agents on real business procedures",
+      "truncated": false,
+      "updated_at": null,
+      "vertical": "ai",
+      "visual": null
+    }
+  ],
+  "items_failed": 1,
+  "items_planned": 5,
+  "partial": true,
+  "retention_window_months": -1,
+  "runs": [
+    {
+      "at": "2026-08-21T21:12:48Z",
+      "items_added": 4,
+      "n": 1
+    },
+    {
+      "at": "2026-08-22T08:49:17Z",
+      "items_added": 0,
+      "n": 2
+    }
+  ],
+  "version": "2026-08-22",
+  "verticals": [
+    {
+      "count": 4,
+      "display_name": "AI",
+      "id": "ai"
+    }
+  ]
+}

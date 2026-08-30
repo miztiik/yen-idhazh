@@ -1,0 +1,332 @@
+{
+  "$defs": {
+    "CandidateIdentity": {
+      "additionalProperties": false,
+      "description": "Which bytes ran. A model-card name identifies nothing.",
+      "properties": {
+        "bytes_expected": {
+          "minimum": 1,
+          "title": "Bytes Expected",
+          "type": "integer"
+        },
+        "bytes_observed": {
+          "minimum": 1,
+          "title": "Bytes Observed",
+          "type": "integer"
+        },
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "repo": {
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "description": "An immutable repository revision, not a branch.",
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "runtime_build": {
+          "minLength": 1,
+          "title": "Runtime Build",
+          "type": "string"
+        },
+        "sha256_expected": {
+          "description": "What the adoption target declares.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256 Expected",
+          "type": "string"
+        },
+        "sha256_observed": {
+          "description": "What the runtime actually opened.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256 Observed",
+          "type": "string"
+        }
+      },
+      "required": [
+        "model_id",
+        "repo",
+        "revision",
+        "file",
+        "quantisation",
+        "sha256_expected",
+        "sha256_observed",
+        "bytes_expected",
+        "bytes_observed",
+        "runtime_build"
+      ],
+      "title": "CandidateIdentity",
+      "type": "object"
+    },
+    "Diagnostic": {
+      "additionalProperties": false,
+      "description": "A number recorded and never blocked on.\n\nEvery one carries its denominator. A rate over four items is not a rate, and\na diagnostic that hides its denominator is how an unmeasured number gets\ncited later as if it were evidence (Rule #10).",
+      "properties": {
+        "denominator": {
+          "description": "How many observations produced the value.",
+          "minimum": 0,
+          "title": "Denominator",
+          "type": "integer"
+        },
+        "name": {
+          "minLength": 1,
+          "title": "Name",
+          "type": "string"
+        },
+        "value": {
+          "minLength": 1,
+          "title": "Value",
+          "type": "string"
+        }
+      },
+      "required": [
+        "name",
+        "value",
+        "denominator"
+      ],
+      "title": "Diagnostic",
+      "type": "object"
+    },
+    "GateName": {
+      "description": "The eleven gates that block adoption. Closed set, never free text.",
+      "enum": [
+        "reasoning_leakage",
+        "schema_validity",
+        "injection_canaries",
+        "determinism",
+        "publishable_length",
+        "context_fit",
+        "identity",
+        "budget",
+        "scored_denominator",
+        "faithfulness_floor",
+        "brief_copying_ceiling"
+      ],
+      "title": "GateName",
+      "type": "string"
+    },
+    "GateOutcome": {
+      "additionalProperties": false,
+      "description": "One gate, and the arithmetic that decided it.\n\n`measured` and `threshold` are spelled rather than typed as floats because\nthe gates do not share a unit - one counts calls, one counts minutes, one is\na mean between zero and one - and a column that means a different thing on\nevery row is a column nobody can read.",
+      "properties": {
+        "detail": {
+          "description": "The gate's own words, so a reader needs no code.",
+          "minLength": 1,
+          "title": "Detail",
+          "type": "string"
+        },
+        "gate": {
+          "$ref": "#/$defs/GateName"
+        },
+        "measured": {
+          "description": "What this run observed, in its own unit.",
+          "minLength": 1,
+          "title": "Measured",
+          "type": "string"
+        },
+        "source": {
+          "description": "Where the bar is read from. Never a number typed here.",
+          "minLength": 1,
+          "title": "Source",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/GateStatus"
+        },
+        "threshold": {
+          "description": "The bar, in the same unit.",
+          "minLength": 1,
+          "title": "Threshold",
+          "type": "string"
+        }
+      },
+      "required": [
+        "gate",
+        "status",
+        "measured",
+        "threshold",
+        "source",
+        "detail"
+      ],
+      "title": "GateOutcome",
+      "type": "object"
+    },
+    "GateStatus": {
+      "enum": [
+        "passed",
+        "failed"
+      ],
+      "title": "GateStatus",
+      "type": "string"
+    },
+    "ScorerIdentity": {
+      "additionalProperties": false,
+      "description": "Which instrument read the summaries.\n\n`pinned` is false when the revision is a branch name. The faithfulness gate\nrefuses to run on an unpinned scorer: a floor measured with an instrument\nthat can move overnight measures an unknown instrument.",
+      "properties": {
+        "pinned": {
+          "title": "Pinned",
+          "type": "boolean"
+        },
+        "revision": {
+          "minLength": 1,
+          "title": "Revision",
+          "type": "string"
+        },
+        "scorer_id": {
+          "minLength": 1,
+          "title": "Scorer Id",
+          "type": "string"
+        },
+        "scorer_version": {
+          "minLength": 1,
+          "title": "Scorer Version",
+          "type": "string"
+        },
+        "weights_sha256": {
+          "description": "Digest of the weights that loaded, never of the name they were asked for.",
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Weights Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "scorer_id",
+        "revision",
+        "pinned",
+        "weights_sha256",
+        "scorer_version"
+      ],
+      "title": "ScorerIdentity",
+      "type": "object"
+    }
+  },
+  "$id": "qualification-report.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: eleven hard gates, the diagnostics, and the corpus digest.",
+      "version": "2026-08-26",
+      "why": "An adoption gate that reports a pass without the number that produced it cannot be re-read six months later (Rule #10)."
+    }
+  ],
+  "description": "The merged verdict: every gate, every diagnostic, one answer.",
+  "properties": {
+    "candidate": {
+      "$ref": "#/$defs/CandidateIdentity"
+    },
+    "commit_sha": {
+      "minLength": 7,
+      "title": "Commit Sha",
+      "type": "string"
+    },
+    "corpus_digest": {
+      "description": "Digest over the frozen item hashes. Two runs on one corpus share it.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Corpus Digest",
+      "type": "string"
+    },
+    "corpus_items": {
+      "minimum": 0,
+      "title": "Corpus Items",
+      "type": "integer"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "detail": {
+      "minLength": 1,
+      "title": "Detail",
+      "type": "string"
+    },
+    "diagnostics": {
+      "items": {
+        "$ref": "#/$defs/Diagnostic"
+      },
+      "title": "Diagnostics",
+      "type": "array"
+    },
+    "gates": {
+      "items": {
+        "$ref": "#/$defs/GateOutcome"
+      },
+      "title": "Gates",
+      "type": "array"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "planned": {
+      "description": "The full attempted denominator, failures included.",
+      "minimum": 0,
+      "title": "Planned",
+      "type": "integer"
+    },
+    "qualified": {
+      "title": "Qualified",
+      "type": "boolean"
+    },
+    "repeats": {
+      "minimum": 1,
+      "title": "Repeats",
+      "type": "integer"
+    },
+    "runner": {
+      "minLength": 1,
+      "title": "Runner",
+      "type": "string"
+    },
+    "scored": {
+      "minimum": 0,
+      "title": "Scored",
+      "type": "integer"
+    },
+    "scorer": {
+      "$ref": "#/$defs/ScorerIdentity"
+    },
+    "version": {
+      "default": "2026-08-26",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "commit_sha",
+    "runner",
+    "candidate",
+    "scorer",
+    "pipeline_fingerprint",
+    "corpus_digest",
+    "corpus_items",
+    "planned",
+    "repeats",
+    "scored",
+    "gates",
+    "qualified",
+    "detail"
+  ],
+  "title": "QualificationReport",
+  "type": "object",
+  "version": "2026-08-26"
+}

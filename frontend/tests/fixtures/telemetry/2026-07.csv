@@ -1,0 +1,11 @@
+date,run_id,item_id,vertical,source_id,stage,outcome,code,source_words,summary_words
+2026-07-01,2026-07-01-1,tel-062,ai,fixture-gamma,publish,ok,,1334,132
+2026-07-02,2026-07-02-1,tel-063,ai,fixture-alpha,fetch,failed,http_503,,
+2026-07-03,2026-07-03-1,tel-064,ai,fixture-beta,publish,ok,,1348,134
+2026-07-04,2026-07-04-1,tel-065,ai,fixture-gamma,publish,ok,,1355,135
+2026-07-05,2026-07-05-1,tel-066,ai,fixture-alpha,publish,ok,,1362,136
+2026-07-06,2026-07-06-1,tel-067,ai,fixture-beta,publish,ok,,1369,137
+2026-07-07,2026-07-07-1,tel-068,ai,fixture-gamma,publish,ok,,1376,138
+2026-07-08,2026-07-08-1,tel-069,ai,fixture-alpha,publish,ok,,1383,139
+2026-07-09,2026-07-09-1,tel-070,ai,fixture-beta,fetch,failed,http_503,,
+2026-07-10,2026-07-10-1,tel-071,ai,fixture-gamma,publish,ok,,1397,141

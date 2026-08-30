@@ -1,0 +1,457 @@
+name: Model validation
+
+# Row #10: qualify one candidate summarizer on absolute machine gates.
+#
+# One model runs. The owner ruled on 2026-08-26 that the candidate is judged
+# alone, so there is no incumbent arm, no paired replay and no second set of
+# weights on this runner. Andre ruled the consequence: re-basing the dropped
+# comparisons on the committed 8B history would be confounded, so the gates
+# that survived read their thresholds from config, from the adoption target in
+# docs/reference/measurements.md, and from this dispatch's own job bound.
+#
+# The corpus is frozen, not replanned. Each shard fetches and extracts its own
+# slice exactly once, hashes the bytes, writes the hashes down, and only then
+# starts calling the model - three times over the same bytes. The article
+# bodies never leave the job that captured them; only hashes and measurements
+# travel (CLAUDE.md section 0a).
+#
+# Never scheduled. A model swap is an ESCALATE, so this is dispatched by a
+# human who intends to read the answer.
+
+on:
+  workflow_dispatch:
+    inputs:
+      # Every candidate field is empty by default and falls back to the model
+      # `config/idhazh.json` names, so no model ref is written in this file
+      # (Rule #6). A dispatch that leaves them empty re-qualifies the incumbent,
+      # which is a coherent run rather than a broken one. Qualifying a NEW model
+      # means filling them in; the values for the model under adoption are in
+      # docs/reference/measurements.md, which is where a target is declared.
+      candidate_repo:
+        description: 'Hugging Face GGUF repository. Empty = the configured summarizer.'
+        default: ''
+      candidate_revision:
+        description: 'Immutable repository revision. A branch name is not a pin.'
+        default: ''
+      candidate_file:
+        description: 'GGUF filename. Empty = the configured summarizer.'
+        default: ''
+      candidate_id:
+        description: 'Model id the summaries and the ledger will carry'
+        default: ''
+      candidate_quantisation:
+        description: 'Quantisation the ledger will carry'
+        default: ''
+      candidate_sha256:
+        description: 'SHA-256 the adoption target declares for those bytes'
+        default: ''
+      candidate_bytes:
+        description: 'Byte count the adoption target declares. 0 = it declares none.'
+        default: '0'
+      shards:
+        description: 'Capture-and-replay jobs. Each one freezes its own slice.'
+        default: '3'
+      corpus_per_shard:
+        description: 'Frozen articles each shard replays'
+        default: '10'
+      repeats:
+        description: 'Deterministic repeats per frozen article'
+        default: '3'
+      job_budget_minutes:
+        description: 'Per-job bound. The budget gate is measured against it (Rule #2).'
+        default: '330'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: validate
+  cancel-in-progress: false
+
+env:
+  # The build digest.yml and measure.yml pin. A qualification on a different
+  # runtime than production is not qualifying production.
+  LLAMA_CPP_BUILD: b10598
+  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
+  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+  # The one place this workflow says which port. `server_argv` binds it, every
+  # probe below reads it, and `idhazh.llm.server` reads it for the address the
+  # stage posts to - so the three cannot disagree (Rule #6).
+  LLAMA_PORT: '8080'
+
+jobs:
+  # One plan, read once, for every shard. A long run can cross UTC midnight, so
+  # the date is decided here and carried forward rather than recomputed - two
+  # halves of one qualification filed under two dates is two half-runs.
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      date: ${{ steps.decide.outputs.date }}
+      matrix: ${{ steps.fanout.outputs.matrix }}
+      candidate_repo: ${{ steps.candidate.outputs.repo }}
+      candidate_revision: ${{ steps.candidate.outputs.revision }}
+      candidate_file: ${{ steps.candidate.outputs.file }}
+      candidate_id: ${{ steps.candidate.outputs.id }}
+      candidate_quantisation: ${{ steps.candidate.outputs.quantisation }}
+      candidate_sha256: ${{ steps.candidate.outputs.sha256 }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - id: decide
+        run: echo "date=$(date -u +%F)" >> "$GITHUB_OUTPUT"
+
+      # One place decides what the candidate is: the dispatch input where one
+      # was given, `models.summarize` from config otherwise. Every job below
+      # reads the answer from here rather than repeating that fallback at each
+      # use site, which is what keeps the two from disagreeing.
+      #
+      # The inputs arrive through `env` and not through an expression pasted
+      # into the program, and each value is asserted to be one bare word here -
+      # downstream they are substituted straight into shell commands and into a
+      # download URL, and nothing after this point can catch a value carrying a
+      # space, a quote or a newline.
+      - id: candidate
+        env:
+          CANDIDATE_REPO: ${{ inputs.candidate_repo }}
+          CANDIDATE_REVISION: ${{ inputs.candidate_revision }}
+          CANDIDATE_FILE: ${{ inputs.candidate_file }}
+          CANDIDATE_ID: ${{ inputs.candidate_id }}
+          CANDIDATE_QUANTISATION: ${{ inputs.candidate_quantisation }}
+          CANDIDATE_SHA256: ${{ inputs.candidate_sha256 }}
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json, os
+
+          config = json.load(open("config/idhazh.json", encoding="utf-8"))
+          configured = config["models"]["summarize"]
+          for field in ("repo", "revision", "file", "id", "quantisation", "sha256"):
+              value = os.environ.get(f"CANDIDATE_{field.upper()}", "").strip()
+              value = value or configured.get(field) or ""
+              if value.split() != [value]:
+                  raise SystemExit(f"candidate {field} is empty or not one word")
+              print(f"{field}={value}")
+          PY
+
+      # Every number this dispatch carries, shaped once, here. `plan` is the job
+      # every other job needs, so "before its first use" is anywhere after this
+      # step - the qualify matrix, the job bound, the byte check and the gate
+      # all read these afterwards. They arrive through `env` and are read by
+      # name, so nothing below is pasted into a command.
+      - id: fanout
+        env:
+          SHARDS: ${{ inputs.shards }}
+          CORPUS_PER_SHARD: ${{ inputs.corpus_per_shard }}
+          REPEATS: ${{ inputs.repeats }}
+          JOB_BUDGET_MINUTES: ${{ inputs.job_budget_minutes }}
+          CANDIDATE_BYTES: ${{ inputs.candidate_bytes }}
+        run: |
+          set -euo pipefail
+          if ! [[ "$SHARDS" =~ ^[1-8]$ ]]; then
+            echo "shards must be an integer from 1 through 8" >&2
+            exit 1
+          fi
+          for count in "$CORPUS_PER_SHARD" "$REPEATS" "$JOB_BUDGET_MINUTES"; do
+            if ! [[ "$count" =~ ^[1-9][0-9]{0,3}$ ]]; then
+              echo "corpus_per_shard, repeats and job_budget_minutes are 1 through 9999" >&2
+              exit 1
+            fi
+          done
+          # 0 is the documented value for "the adoption target declares none".
+          if ! [[ "$CANDIDATE_BYTES" =~ ^[0-9]{1,15}$ ]]; then
+            echo "candidate_bytes is a byte count, or 0 when the target declares none" >&2
+            exit 1
+          fi
+          echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+      # The addresses only. A plan carries URLs and rank metadata, never an
+      # article body, so it is the one thing that may cross a job boundary here.
+      - name: Read the feeds
+        run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: plan
+          path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
+          retention-days: 1
+
+  qualify:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(inputs.job_budget_minutes) }}
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e ".[faithfulness]"
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      # The committed config still names the incumbent, and an experiment does
+      # not edit it. The scratch copy differs in `models.summarize` and nothing
+      # else, so every control the gates hold fixed - prompt, schema, sampler,
+      # context, threads, truncation cap - is the committed one by construction.
+      - name: Build the candidate config
+        run: |
+          set -euo pipefail
+          mkdir -p backend/var
+          rm -rf backend/var/candidate-config
+          cp -a config backend/var/candidate-config
+          python - <<'PY'
+          import json, os, pathlib
+          path = pathlib.Path("backend/var/candidate-config/idhazh.json")
+          config = json.loads(path.read_text(encoding="utf-8"))
+          config["models"]["summarize"] = {
+              "file": os.environ["CANDIDATE_FILE"],
+              "id": os.environ["CANDIDATE_ID"],
+              "quantisation": os.environ["CANDIDATE_QUANT"],
+              "repo": os.environ["CANDIDATE_REPO"],
+              "revision": os.environ["CANDIDATE_REVISION"],
+              "sha256": os.environ["CANDIDATE_SHA256"],
+          }
+          path.write_text(json.dumps(config, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+          PY
+        env:
+          CANDIDATE_FILE: ${{ needs.plan.outputs.candidate_file }}
+          CANDIDATE_ID: ${{ needs.plan.outputs.candidate_id }}
+          CANDIDATE_QUANT: ${{ needs.plan.outputs.candidate_quantisation }}
+          CANDIDATE_REPO: ${{ needs.plan.outputs.candidate_repo }}
+          CANDIDATE_REVISION: ${{ needs.plan.outputs.candidate_revision }}
+          CANDIDATE_SHA256: ${{ needs.plan.outputs.candidate_sha256 }}
+
+      # Keyed on the candidate bytes, not on its filename: two builds of one
+      # model share a name, and a key that cannot tell them apart serves the
+      # wrong weights under the right alias. One model per entry, so the cache
+      # never holds two multi-gigabyte GGUFs at once (Rule #2).
+      - name: Cache the candidate weights and runtime
+        id: weights
+        uses: actions/cache@v6
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: qualify-${{ needs.plan.outputs.candidate_sha256 }}-${{ env.LLAMA_CPP_BUILD }}
+
+      - name: Fetch the runtime and the candidate
+        if: steps.weights.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin backend/models
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
+            exit 1
+          fi
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
+          # `cp -a`, not `find -type f`. These builds ship versioned shared
+          # objects as symlinks, and `-type f` skips a symlink.
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
+          chmod +x backend/bin/llama-server
+          # An immutable revision in the path, never a branch name. A branch
+          # moves, and a candidate nobody can fetch again is a candidate nobody
+          # can reproduce.
+          curl -fsSL --retry 3 --retry-all-errors \
+            -o "backend/models/${{ needs.plan.outputs.candidate_file }}" \
+            "https://huggingface.co/${{ needs.plan.outputs.candidate_repo }}/resolve/${{ needs.plan.outputs.candidate_revision }}/${{ needs.plan.outputs.candidate_file }}?download=true"
+
+      # No `if:`. This runs on a cache hit too, because a restored entry is the
+      # one case where nobody watched the bytes arrive. It sits before the
+      # server starts, so wrong weights cost one step instead of a whole shard
+      # of measurements filed under a model that never ran (Rule #10).
+      - name: Verify the candidate bytes
+        run: |
+          set -euo pipefail
+          WEIGHTS="backend/models/${{ needs.plan.outputs.candidate_file }}"
+          echo "${{ needs.plan.outputs.candidate_sha256 }}  ${WEIGHTS}" | sha256sum --check
+          OBSERVED=$(stat -c %s "$WEIGHTS")
+          # A byte count the target declares is a cross-check of the DOCUMENT,
+          # not of the file - sha256 above already settles the bytes. Zero means
+          # no target declares one, which is what a dispatch that qualifies the
+          # configured model gets.
+          if [ "${{ inputs.candidate_bytes }}" != "0" ] \
+            && [ "$OBSERVED" != "${{ inputs.candidate_bytes }}" ]; then
+            echo "candidate is ${OBSERVED} bytes; the target declares ${{ inputs.candidate_bytes }}" >&2
+            exit 1
+          fi
+
+      - name: Start the candidate
+        env:
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.candidate_file }}
+        run: |
+          set -euo pipefail
+          chmod +x backend/bin/llama-server
+          mkdir -p backend/var
+          # The scratch config's `models.summarize` IS the candidate, so the
+          # alias and every flag come from the same place the run is judged
+          # against. This arm used to render the flag list from a second copy,
+          # which is how it went two changes without the context-shift refusal
+          # the daily run has had since PR #88.
+          python - <<'PY' > backend/var/llama-argv
+          import os
+          import sys
+          from pathlib import Path
+
+          from idhazh import config
+          from idhazh.llm.server import server_argv
+
+          settings = config.load(Path("backend/var/candidate-config"))
+          argv = server_argv(
+              binary=Path("backend/bin/llama-server"),
+              weights=Path(os.environ["LLAMA_WEIGHTS"]),
+              model=settings.app.models.summarize,
+              inference=settings.app.models.inference,
+              port=int(os.environ["LLAMA_PORT"]),
+          )
+          sys.stdout.write("\0".join(argv) + "\0")
+          PY
+          mapfile -d '' LLAMA_ARGV < backend/var/llama-argv
+          echo "starting: ${LLAMA_ARGV[*]}"
+          LD_LIBRARY_PATH=backend/bin nohup "${LLAMA_ARGV[@]}" > llama-server.log 2>&1 &
+          echo "$!" > llama-server.pid
+
+      - name: Check the candidate is the one serving
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 180); do
+            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null && break
+            sleep 5
+          done
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+            echo "the candidate never became healthy" >&2
+            tail -50 llama-server.log >&2
+            exit 1
+          }
+          SERVED=$(curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" | jq -r '.data[0].id')
+          if [ "$SERVED" != "${{ needs.plan.outputs.candidate_id }}" ]; then
+            echo "the server answers to ${SERVED}, not ${{ needs.plan.outputs.candidate_id }}" >&2
+            exit 1
+          fi
+
+      - name: What this runner is
+        run: |
+          nproc
+          grep -m1 'model name' /proc/cpuinfo || true
+          backend/bin/llama-server --version 2>&1 | head -5 || true
+
+      # Freeze, register the hashes, then replay. That ordering lives inside the
+      # stage rather than in this file, so nothing can call the model before the
+      # corpus is written down.
+      - name: Freeze the corpus and replay it
+        run: |
+          python -m idhazh qualify \
+            --config backend/var/candidate-config \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard "${{ matrix.shard }}" \
+            --shards "${{ fromJSON(inputs.shards) }}" \
+            --repeats "${{ fromJSON(inputs.repeats) }}" \
+            --corpus-per-shard "${{ fromJSON(inputs.corpus_per_shard) }}" \
+            --candidate-revision "${{ needs.plan.outputs.candidate_revision }}" \
+            --candidate-bytes "${{ fromJSON(inputs.candidate_bytes) }}" \
+            --weights "backend/models/${{ needs.plan.outputs.candidate_file }}" \
+            --commit "${GITHUB_SHA}" \
+            --runner ubuntu-latest
+
+      - name: Runtime log on failure
+        if: failure()
+        run: tail -80 llama-server.log || true
+
+      # Hashes, counts and timings. The frozen article payloads stay under
+      # backend/var/qualification/<date>/ on this runner and are thrown away
+      # with it - this repository is public and an article body is not ours to
+      # publish (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qualification-${{ matrix.shard }}
+          path: backend/var/qualification/shard-*.json
+          retention-days: 30
+
+  decide:
+    needs: [plan, qualify]
+    # `always()`, because a shard that died still leaves the gates something to
+    # say. This job fails on the merged evidence and names the metric, rather
+    # than inheriting a failure it cannot explain.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: qualification-*
+          merge-multiple: true
+          path: backend/var/qualification/
+
+      # Non-zero when a gate fails, deliberately: that verdict is an ESCALATE
+      # and a green build would let it pass unread.
+      - name: Run the gates
+        id: gates
+        continue-on-error: true
+        run: |
+          python -m idhazh qualify-decide \
+            --date "${{ needs.plan.outputs.date }}" \
+            --job-budget-minutes "${{ fromJSON(inputs.job_budget_minutes) }}" \
+            --runner ubuntu-latest
+
+      - name: Commit the validation ledger
+        env:
+          COMMIT_MESSAGE: "qualify: ${{ needs.plan.outputs.candidate_id }} ${{ needs.plan.outputs.date }}"
+          NOTHING_STAGED_MESSAGE: "the gates wrote no ledger row"
+          PUSH_FAILED_MESSAGE: "could not push the validation ledger after three attempts"
+        run: bash .github/scripts/commit-and-push.sh state
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: qualification-report
+          path: backend/var/qualification/
+          retention-days: 30
+
+      - name: Fail the run when a gate failed
+        if: steps.gates.outcome == 'failure'
+        run: |
+          echo "A hard gate failed. Adopting this model changes a persisted" >&2
+          echo "contract and re-goldens every fixture, so the run stops here" >&2
+          echo "for sign-off. The failing gate and its measured value are in" >&2
+          echo "the step log above and in the qualification-report artifact." >&2
+          exit 1

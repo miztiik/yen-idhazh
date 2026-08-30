@@ -1,0 +1,30 @@
+root = true
+
+# UTF-8 without a BOM, LF, one trailing newline. `.gitattributes` pins what git
+# STORES; this pins what an editor WRITES, which is the half that was missing -
+# a fixture saved as UTF-16 or with a BOM still round-trips through git's eol
+# rules untouched and fails only at read time.
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+[*.{py,pyi}]
+indent_size = 4
+
+[*.{ts,tsx,js,mjs,cjs,svelte,json,jsonl,ndjson,yml,yaml,css,html}]
+indent_size = 2
+
+[*.md]
+indent_size = 2
+# Two trailing spaces are a markdown line break.
+trim_trailing_whitespace = false
+
+# Byte-exact inputs and expectations compared against a fresh pipeline run.
+# Nothing may rewrite these bytes, matching the `text eol=lf` rule in
+# `.gitattributes`.
+[tests/fixtures/**]
+trim_trailing_whitespace = false
+insert_final_newline = false

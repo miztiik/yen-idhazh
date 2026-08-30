@@ -1,0 +1,301 @@
+{
+  "events": [
+    {
+      "display_name": "Release",
+      "id": "release",
+      "keywords": [
+        "released",
+        "launch",
+        "launched",
+        "unveiled",
+        "now available",
+        "general availability",
+        "rolled out",
+        "new version"
+      ]
+    },
+    {
+      "display_name": "Deal",
+      "id": "deal",
+      "keywords": [
+        "partnership",
+        "agreement",
+        "signed a deal",
+        "joint venture",
+        "contract with",
+        "teamed up"
+      ]
+    },
+    {
+      "display_name": "Acquisition",
+      "id": "acquisition",
+      "keywords": [
+        "acquired",
+        "acquisition",
+        "takeover",
+        "buyout",
+        "merger",
+        "to buy"
+      ]
+    },
+    {
+      "display_name": "Funding",
+      "id": "funding",
+      "keywords": [
+        "funding round",
+        "series a",
+        "series b",
+        "series c",
+        "seed round",
+        "venture capital",
+        "raised",
+        "valuation"
+      ]
+    },
+    {
+      "display_name": "Capital spending",
+      "id": "capex",
+      "keywords": [
+        "capital expenditure",
+        "capex",
+        "data centre",
+        "data center",
+        "gigawatt",
+        "build-out",
+        "megawatt"
+      ]
+    },
+    {
+      "display_name": "Earnings",
+      "id": "earnings",
+      "keywords": [
+        "earnings",
+        "quarterly results",
+        "fiscal quarter",
+        "operating income",
+        "earnings per share",
+        "quarterly revenue",
+        "full-year guidance"
+      ]
+    },
+    {
+      "display_name": "Regulation",
+      "id": "regulation",
+      "keywords": [
+        "regulator",
+        "regulators",
+        "regulation",
+        "regulatory",
+        "antitrust",
+        "lawsuit",
+        "legislation",
+        "sanctions"
+      ]
+    },
+    {
+      "display_name": "Research",
+      "id": "research",
+      "keywords": [
+        "researchers",
+        "arxiv",
+        "peer-reviewed",
+        "preprint",
+        "research paper",
+        "new study",
+        "the study",
+        "benchmark results"
+      ]
+    },
+    {
+      "display_name": "Incident",
+      "id": "incident",
+      "keywords": [
+        "outage",
+        "data breach",
+        "security incident",
+        "recall",
+        "disruption",
+        "went down",
+        "took the site down"
+      ]
+    }
+  ],
+  "lenses": [
+    {
+      "display_name": "Chips",
+      "id": "chips",
+      "keywords": [
+        "chips",
+        "semiconductor",
+        "semiconductors",
+        "chipmaker",
+        "chipmakers",
+        "chip maker",
+        "chipmaking",
+        "chip making",
+        "foundry",
+        "foundries",
+        "wafer",
+        "euv",
+        "lithography",
+        "chip plant",
+        "gpu",
+        "gpus"
+      ],
+      "weight": 0.3
+    },
+    {
+      "display_name": "China",
+      "id": "china",
+      "keywords": [
+        "china",
+        "chinese",
+        "beijing",
+        "shanghai",
+        "shenzhen",
+        "xi jinping"
+      ],
+      "weight": 0.0
+    },
+    {
+      "display_name": "Cyber",
+      "id": "cyber",
+      "keywords": [
+        "cyberattack",
+        "cyber attack",
+        "cyberattacks",
+        "cybersecurity",
+        "cyber security",
+        "ransomware",
+        "data breach",
+        "malware",
+        "phishing",
+        "hackers",
+        "hacked",
+        "zero-day",
+        "security flaw",
+        "threat actor",
+        "spyware"
+      ],
+      "weight": 0.0
+    },
+    {
+      "display_name": "Markets",
+      "id": "markets",
+      "keywords": [
+        "stock market",
+        "share price",
+        "shares fell",
+        "shares rose",
+        "shares jumped",
+        "shares slid",
+        "equities",
+        "investors",
+        "nasdaq",
+        "s&p 500",
+        "dow jones",
+        "ftse",
+        "sensex",
+        "nifty 50",
+        "bond yields",
+        "wall street",
+        "market cap",
+        "traders",
+        "shareholders"
+      ],
+      "weight": 0.0
+    },
+    {
+      "display_name": "Trade and tariffs",
+      "id": "trade",
+      "keywords": [
+        "tariff",
+        "tariffs",
+        "trade war",
+        "import duty",
+        "import duties",
+        "export control",
+        "export controls",
+        "export ban",
+        "export curbs",
+        "trade deal",
+        "trade talks",
+        "trade deficit",
+        "trade surplus",
+        "anti-dumping",
+        "trade sanctions",
+        "customs duty",
+        "wto"
+      ],
+      "weight": 0.3
+    },
+    {
+      "display_name": "War",
+      "id": "war",
+      "keywords": [
+        "at war",
+        "war in",
+        "war crimes",
+        "ceasefire",
+        "truce",
+        "invasion",
+        "troops",
+        "airstrike",
+        "air strike",
+        "missile strike",
+        "drone strike",
+        "military strike",
+        "shelling",
+        "peace talks",
+        "civilians killed"
+      ],
+      "weight": 0.0
+    },
+    {
+      "display_name": "Return on AI investment",
+      "id": "ai-roi",
+      "keywords": [],
+      "retired_on": "2026-08-30",
+      "status": "retired",
+      "weight": 0.0
+    }
+  ],
+  "version": "2026-08-30",
+  "verticals": [
+    {
+      "display_name": "AI",
+      "id": "ai",
+      "min_feeds": 35,
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "display_name": "Energy",
+      "id": "energy",
+      "min_feeds": 21,
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "display_name": "Business and Economy",
+      "id": "business-economy",
+      "min_feeds": 21,
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "display_name": "World",
+      "id": "world",
+      "min_feeds": 21,
+      "retired_on": null,
+      "status": "active"
+    },
+    {
+      "display_name": "India",
+      "id": "india",
+      "min_feeds": 21,
+      "retired_on": null,
+      "status": "active"
+    }
+  ]
+}

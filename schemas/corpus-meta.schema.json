@@ -1,0 +1,121 @@
+{
+  "$id": "corpus-meta.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the census of the window, plus harvested_date and pruned_date.",
+      "version": "2026-08-28",
+      "why": "Two schedules need somewhere to remember when they last fired, and a cron line cannot be that place - GitHub Actions parses on.schedule before any step runs, so no config value reaches it, and 5-field cron has no every-N-days field at all. The census beside it answers the question a person asks before spending a training session: how many rows are there, over what range of days, and is it all one vertical."
+    }
+  ],
+  "description": "What the window holds, and when each of its two schedules last fired.\n\nCommitted beside the rows, and it is the schedule itself rather than a\nreport about one. `on.schedule` is parsed before any step runs, so no value\nin `config/` can ever reach a cron line; a cadence that has to be\nconfigurable is therefore a due-check in a step, and a due-check needs\ndurable state to compare against. That state is this file.\n\nKeeping it as dates rather than as timestamps is deliberate: a due-check\nthat compares two `YYYY-MM-DD` strings is a test with no clock in it, and\nwhen the job actually ran is already recorded by the commit it made.",
+  "properties": {
+    "first_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The oldest run day in the window. None when it is empty.",
+      "title": "First Date"
+    },
+    "harvested_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The digest day the last harvest read. The harvest step compares it against the day it is running for, so a missed day self-corrects on the next wake.",
+      "title": "Harvested Date"
+    },
+    "last_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The newest run day in the window.",
+      "title": "Last Date"
+    },
+    "models": {
+      "description": "Rows per model that wrote the assistant turn. A mixed corpus has two.",
+      "patternProperties": {
+        "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+          "type": "integer"
+        }
+      },
+      "title": "Models",
+      "type": "object"
+    },
+    "prompt_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "sha256 over `summarize.prompt_inputs` at harvest time - the template plus every number substituted into it. Not derivable from the rows, which carry rendered prompts rather than the template, and it is what tells a person that the prompt moved under the corpus they are about to train on.",
+      "title": "Prompt Digest"
+    },
+    "pruned_date": {
+      "anyOf": [
+        {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The day `prune.yml` last squashed history. It is the only thing that stops a due-check from firing every day once the repository is older than `finetune.prune_keep_days`.",
+      "title": "Pruned Date"
+    },
+    "rows": {
+      "default": 0,
+      "description": "How many lines `corpus.jsonl` holds.",
+      "minimum": 0,
+      "title": "Rows",
+      "type": "integer"
+    },
+    "version": {
+      "default": "2026-08-28",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "verticals": {
+      "description": "Rows per vertical. What a diversity quota reads.",
+      "patternProperties": {
+        "^[a-z0-9]+(?:-[a-z0-9]+)*$": {
+          "type": "integer"
+        }
+      },
+      "title": "Verticals",
+      "type": "object"
+    }
+  },
+  "title": "CorpusMeta",
+  "type": "object",
+  "version": "2026-08-28"
+}

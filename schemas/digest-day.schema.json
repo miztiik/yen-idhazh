@@ -1,0 +1,549 @@
+{
+  "$defs": {
+    "BandReason": {
+      "description": "Why an item did not reach the top band.\n\nAn identifier, never copy: the sentence a reader sees is owned by the site\nand can be rewritten without a schema change. A `high` item has no reason,\nbecause there is nothing to explain.",
+      "enum": [
+        "unsupported_number",
+        "not_scored",
+        "lead_missing",
+        "hedge_dropped",
+        "faithfulness"
+      ],
+      "title": "BandReason",
+      "type": "string"
+    },
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    },
+    "DigestEmbeddings": {
+      "additionalProperties": false,
+      "description": "The day's item vectors, so a browser only ever embeds a reader's query.\n\nInside the day payload rather than beside it, because the per-page request\ncount is fixed and a sidecar would add one to every page whether or not a\nreader ever searches.\n\nSelf-describing on purpose: a reader-side decoder that guesses the width or\nthe dtype produces plausible nonsense instead of an error. Every field here\nexists so that a mismatch fails loudly.\n\nThis whole block is optional and strippable. A day with no `embeddings`\nrenders identically; it simply cannot be searched on the device.",
+      "properties": {
+        "dimensions": {
+          "minimum": 1,
+          "title": "Dimensions",
+          "type": "integer"
+        },
+        "dtype": {
+          "const": "int8",
+          "title": "Dtype",
+          "type": "string"
+        },
+        "model_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Model Id",
+          "type": "string"
+        },
+        "vectors": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "description": "item_id -> base64 of the quantised vector, one entry per embedded item.",
+          "title": "Vectors",
+          "type": "object"
+        }
+      },
+      "required": [
+        "model_id",
+        "dimensions",
+        "dtype"
+      ],
+      "title": "DigestEmbeddings",
+      "type": "object"
+    },
+    "DigestItem": {
+      "additionalProperties": false,
+      "description": "One item as a reader consumes it. The link is a first-class element, not a footnote.",
+      "properties": {
+        "band": {
+          "$ref": "#/$defs/ConfidenceBand"
+        },
+        "band_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BandReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the item is not in the top band. An identifier the site turns into a sentence; null on a `high` item and on a day published before this existed."
+        },
+        "entities": {
+          "items": {
+            "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+            "type": "string"
+          },
+          "title": "Entities",
+          "type": "array"
+        },
+        "events": {
+          "items": {
+            "$ref": "#/$defs/EventType"
+          },
+          "title": "Events",
+          "type": "array"
+        },
+        "introduced_by_run": {
+          "description": "A global fact, true for every reader, asserted without any storage.",
+          "minimum": 1,
+          "title": "Introduced By Run",
+          "type": "integer"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "key_points": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Key Points",
+          "type": "array"
+        },
+        "lenses": {
+          "items": {
+            "$ref": "#/$defs/LensId"
+          },
+          "title": "Lenses",
+          "type": "array"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "reader_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Our sentence explaining a source limitation, never a badge.",
+          "title": "Reader Note"
+        },
+        "source_form": {
+          "$ref": "#/$defs/SourceForm",
+          "default": "article",
+          "description": "Declared feed form, so a reader can see when an item is an abstract."
+        },
+        "source_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind",
+          "default": "reporting",
+          "description": "Who is speaking. A vendor's own copy must not look like a reporter's."
+        },
+        "source_name": {
+          "minLength": 1,
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_url": {
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Source Url",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "truncated": {
+          "default": false,
+          "description": "The reader is told before they find out by clicking through.",
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "updated_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reserved. Null in every payload ever written, because no run can revise an item: `rank.plan_vertical` drops a candidate already in `state/published.csv`, `cli` supplies that set, and `assemble.build_day` drops an item the day already holds. If a run ever does revise, the rule it must keep is that the item says so.",
+          "title": "Updated At"
+        },
+        "updated_by_run": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Reserved, and null everywhere for the same reason as `updated_at`. It would name the run that wrote the words this item carries, so the join to the run manifest answers with the right model. Until then `assemble.run_that_wrote` answers with `introduced_by_run`.",
+          "title": "Updated By Run"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        },
+        "visual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DigestVisual"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        }
+      },
+      "required": [
+        "item_id",
+        "vertical",
+        "title",
+        "source_url",
+        "source_id",
+        "source_name",
+        "summary",
+        "key_points",
+        "band",
+        "introduced_by_run"
+      ],
+      "title": "DigestItem",
+      "type": "object"
+    },
+    "DigestRunRef": {
+      "additionalProperties": false,
+      "description": "A run of this date, as the page footer and the new-arrivals block need it.",
+      "properties": {
+        "at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "At",
+          "type": "string"
+        },
+        "items_added": {
+          "minimum": 0,
+          "title": "Items Added",
+          "type": "integer"
+        },
+        "n": {
+          "minimum": 1,
+          "title": "N",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "n",
+        "at",
+        "items_added"
+      ],
+      "title": "DigestRunRef",
+      "type": "object"
+    },
+    "DigestVerticalRef": {
+      "additionalProperties": false,
+      "properties": {
+        "count": {
+          "minimum": 0,
+          "title": "Count",
+          "type": "integer"
+        },
+        "display_name": {
+          "minLength": 1,
+          "title": "Display Name",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "id",
+        "display_name",
+        "count"
+      ],
+      "title": "DigestVerticalRef",
+      "type": "object"
+    },
+    "DigestVisual": {
+      "additionalProperties": false,
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
+        "kind": {
+          "$ref": "#/$defs/VisualKind"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "state": {
+          "$ref": "#/$defs/VisualState"
+        }
+      },
+      "required": [
+        "kind",
+        "state"
+      ],
+      "title": "DigestVisual",
+      "type": "object"
+    },
+    "EventType": {
+      "description": "What happened to an item. One or more per item.",
+      "enum": [
+        "release",
+        "deal",
+        "acquisition",
+        "funding",
+        "capex",
+        "earnings",
+        "regulation",
+        "research",
+        "incident"
+      ],
+      "title": "EventType",
+      "type": "string"
+    },
+    "LensId": {
+      "description": "A question asked of items already collected. Costs no extra request.",
+      "enum": [
+        "china",
+        "ai-roi",
+        "markets",
+        "cyber",
+        "war",
+        "trade",
+        "chips"
+      ],
+      "title": "LensId",
+      "type": "string"
+    },
+    "SourceForm": {
+      "enum": [
+        "article",
+        "abstract"
+      ],
+      "title": "SourceForm",
+      "type": "string"
+    },
+    "SourceKind": {
+      "description": "What kind of speaker this is - the thing a reader uses to decide belief.\n\n\"A company said its product is faster\" and \"a reporter measured it\" are not\nthe same claim, and without this they arrive looking identical. The\ndangerous case is `announcement`: forwarding a vendor's own copy without\nknowing it was the vendor is how a reader ends up carrying an ad.",
+      "enum": [
+        "reporting",
+        "announcement",
+        "research",
+        "analysis",
+        "government",
+        "community"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "VisualKind": {
+      "enum": [
+        "chart",
+        "diagram",
+        "image",
+        "none"
+      ],
+      "title": "VisualKind",
+      "type": "string"
+    },
+    "VisualState": {
+      "description": "What became of the visual. \"Could not make it\" and \"made it then threw it\naway\" are different facts, so they never share a member.",
+      "enum": [
+        "absent",
+        "rendered",
+        "render_failed"
+      ],
+      "title": "VisualState",
+      "type": "string"
+    }
+  },
+  "$id": "digest-day.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Marked updated_at and updated_by_run reserved in their descriptions.",
+      "version": "2026-08-26",
+      "why": "Both read as machinery a run could use, and no run can: three gates stop a published address being planned, summarized or appended a second time. Measured on this checkout 2026-08-26 - 2,121 committed items, 2,121 carry updated_at, 2,107 carry updated_by_run, zero carry a value in either. Description-only, so no payload changes and none needs a migration."
+    },
+    {
+      "change": "Added optional updated_by_run to published items.",
+      "version": "2026-08-25",
+      "why": "An item's words are joined to the run manifest that names the model that wrote them. That join read introduced_by_run, which is the wrong run once a later run rewrites the text, so it answered with the wrong model rather than with nothing. Null until a run revises an item, and on every day published before this, so no committed payload had to be rewritten."
+    },
+    {
+      "change": "Added optional band_reason to published items.",
+      "version": "2026-08-24T11:15",
+      "why": "The medium band printed 'Mostly matches the source', which is a grade and not a sentence: it told a reader an item was worse without telling them what was missing. Both things that cap an item at medium were already computed and neither reached the page. Null on a high item and on every day published before this, which keeps an older payload rendering exactly as it does today."
+    },
+    {
+      "change": "Added source_form and reader_note to published items.",
+      "version": "2026-08-23T18:51",
+      "why": "Short and abstract sources can now publish, so the page needs our own sentence that tells the reader what kind of source was summarized without turning the limitation into a badge."
+    },
+    {
+      "change": "Added the optional embeddings block.",
+      "version": "2026-08-22",
+      "why": "On-device search needs the day's vectors committed, and the corpus is fixed at publish. Additive and optional - a day written before this, or a day whose encoder was unavailable, still validates and still renders."
+    },
+    {
+      "change": "Added source_kind to a published item.",
+      "version": "2026-08-21T06:00",
+      "why": "Reader's ruling: a company announcing itself and a reporter measuring it arrived on the page looking identical, and that is the risk a reader carries when they forward something."
+    },
+    {
+      "change": "Initial shape: the day's items in published order, its runs, and its counts.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - the published surface is fixed before it renders."
+    }
+  ],
+  "description": "`frontend/public/digest/<YYYY>/<MM>/<DD>/digest.json`.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "embeddings": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/DigestEmbeddings"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "items": {
+      "items": {
+        "$ref": "#/$defs/DigestItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "items_failed": {
+      "minimum": 0,
+      "title": "Items Failed",
+      "type": "integer"
+    },
+    "items_planned": {
+      "minimum": 0,
+      "title": "Items Planned",
+      "type": "integer"
+    },
+    "partial": {
+      "description": "A run with failures publishes, and says it was partial.",
+      "title": "Partial",
+      "type": "boolean"
+    },
+    "retention_window_months": {
+      "default": -1,
+      "description": "Stated to the reader before anything is deleted. -1 means nothing is deleted.",
+      "minimum": -1,
+      "title": "Retention Window Months",
+      "type": "integer"
+    },
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/DigestRunRef"
+      },
+      "minItems": 1,
+      "title": "Runs",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-08-26",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "verticals": {
+      "items": {
+        "$ref": "#/$defs/DigestVerticalRef"
+      },
+      "title": "Verticals",
+      "type": "array"
+    }
+  },
+  "required": [
+    "date",
+    "generated_at",
+    "partial",
+    "items_planned",
+    "items_failed",
+    "runs",
+    "verticals",
+    "items"
+  ],
+  "title": "DigestDay",
+  "type": "object",
+  "version": "2026-08-26"
+}

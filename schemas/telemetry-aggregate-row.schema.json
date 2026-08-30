@@ -1,0 +1,127 @@
+{
+  "$defs": {
+    "ItemStage": {
+      "description": "The terminal stage for an item.",
+      "enum": [
+        "plan",
+        "fetch",
+        "extract",
+        "summarize",
+        "publish"
+      ],
+      "title": "ItemStage",
+      "type": "string"
+    }
+  },
+  "$id": "telemetry-aggregate-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: one row per (date, stage) folded from an item-health shard.",
+      "version": "2026-08-30T20:00",
+      "why": "The item-health census grows at about 212,000 bytes a published day and nothing bounded it. Deleting an old shard outright would answer that and cost every year-over-year comparison, so a month past observability.keep_months is folded to this shape first. Five rows a day keeps the counts and the timing distribution and drops only the per-item detail, which is what the console's failure list offers and no rate needs."
+    }
+  ],
+  "description": "One `(date, stage)` pair, summarised from the item-health shard.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "failed": {
+      "description": "Of those rows, the ones whose outcome was not ok. The numerator.",
+      "minimum": 0,
+      "title": "Failed",
+      "type": "integer"
+    },
+    "items": {
+      "description": "Rows the shard held for this date and stage, counted as they were written. A run that executed twice under one run id really does leave two rows for one item, and the fold reproduces that rather than deciding for a later reader which of them to believe.",
+      "minimum": 1,
+      "title": "Items",
+      "type": "integer"
+    },
+    "max_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The slowest row of the group.",
+      "title": "Max Ms"
+    },
+    "p50_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Nearest-rank median of fetch, extract and summarize milliseconds added up per row. Empty when no row at this stage recorded any - empty is not zero.",
+      "title": "P50 Ms"
+    },
+    "p90_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Nearest-rank 90th percentile.",
+      "title": "P90 Ms"
+    },
+    "stage": {
+      "$ref": "#/$defs/ItemStage"
+    },
+    "sum_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Every timed row added together, so a day's total stage time survives the fold. A percentile cannot be re-added into a total; this can.",
+      "title": "Sum Ms"
+    },
+    "timed": {
+      "description": "Of those rows, the ones that recorded any milliseconds at all. The denominator the four figures below are taken over, which is never the row count: a plan-stage row times nothing, and a row written before the timing columns existed times nothing either.",
+      "minimum": 0,
+      "title": "Timed",
+      "type": "integer"
+    },
+    "version": {
+      "default": "2026-08-30T20:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "stage",
+    "items",
+    "failed",
+    "timed"
+  ],
+  "title": "TelemetryAggregateRow",
+  "type": "object",
+  "version": "2026-08-30T20:00"
+}

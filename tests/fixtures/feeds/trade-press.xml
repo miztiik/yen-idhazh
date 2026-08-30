@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Trade Press</title>
+    <link>https://trade.example-press.net/</link>
+    <description>Industry coverage.</description>
+    <item>
+      <title>Example Lab releases a smaller model</title>
+      <link>https://www.blog.example-lab.org/2026/08/model-release/?utm_source=newsletter&amp;utm_campaign=daily&amp;ref=trade</link>
+      <pubDate>Fri, 21 Aug 2026 08:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Analysts weigh the reactor order</title>
+      <link>https://trade.example-press.net/2026/08/reactor-analysis</link>
+      <pubDate>Fri, 21 Aug 2026 08:20:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>A story with no link at all</title>
+      <pubDate>Fri, 21 Aug 2026 08:40:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

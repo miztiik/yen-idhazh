@@ -1,0 +1,448 @@
+{
+  "date": "2026-08-26",
+  "runs": [
+    {
+      "charts_drafted": 7,
+      "commit_sha": "cdfa362e32561b44ece702e440d50455cb2caa6f",
+      "completed_at": "2026-08-26T05:59:42Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "1e0c59cfb16c00f18427e53f29dfd392b3f8ec569a5570b9eb58a8a135e67ce9"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "9d5cd6a5c08cf6d459b2d52799e8e7d698d8f94df1910ecb221061b144040c8d"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "8569e902b23790d66dac8b24135989013279a4b3805e5d64c1b5696272565f0c"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 57,
+      "items_planned": 198,
+      "items_prefiltered": 45,
+      "items_routed": 92,
+      "items_skipped": 0,
+      "items_succeeded": 141,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "revision": null,
+            "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 1,
+      "note": null,
+      "pipeline_fingerprints": [
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "969b1917d38f4b44344dc818559122547bcbaf1aa37c836fbfc2eec6d1d2b945"
+      ],
+      "route_ms": 2403290,
+      "run_id": "2026-08-26-1",
+      "runner": "ubuntu-latest",
+      "site_bytes": 4658669,
+      "site_files": 64,
+      "source_list_stale": false,
+      "started_at": "2026-08-26T03:28:00Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 48,
+          "published": 36
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 34,
+          "published": 28
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 33,
+          "published": 14
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 46,
+          "published": 31
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 37,
+          "published": 32
+        }
+      ]
+    },
+    {
+      "charts_drafted": 18,
+      "commit_sha": "954ed4033c46fc0e318b4d4ceb3ca44d9ca2cc78",
+      "completed_at": "2026-08-26T09:25:32Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "b9e7e2d8ebdd8030951d609a3da06c81a9b5ebdc159e7b7787572f654c9fb0ed"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "9d5cd6a5c08cf6d459b2d52799e8e7d698d8f94df1910ecb221061b144040c8d"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "8569e902b23790d66dac8b24135989013279a4b3805e5d64c1b5696272565f0c"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 62,
+      "items_planned": 194,
+      "items_prefiltered": 49,
+      "items_routed": 93,
+      "items_skipped": 0,
+      "items_succeeded": 132,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "revision": null,
+            "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 2,
+      "note": null,
+      "pipeline_fingerprints": [
+        "ec9df80e2c80c35c46ece49e6f61d277ad95ed1cefebf3d93b492a13606e8157"
+      ],
+      "route_ms": 2411293,
+      "run_id": "2026-08-26-2",
+      "runner": "ubuntu-latest",
+      "site_bytes": 5172405,
+      "site_files": 79,
+      "source_list_stale": false,
+      "started_at": "2026-08-26T07:11:57Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 46,
+          "published": 32
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 31,
+          "published": 25
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 33,
+          "published": 15
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 49,
+          "published": 32
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 35,
+          "published": 28
+        }
+      ]
+    },
+    {
+      "charts_drafted": 11,
+      "commit_sha": "bd1b3c99116b3aa15206b0b56c06269bcd21e98b",
+      "completed_at": "2026-08-26T13:11:16Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "f73548b97151c7125a79013819df7d089327010b527c14804413e06e7e77961a"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "9d5cd6a5c08cf6d459b2d52799e8e7d698d8f94df1910ecb221061b144040c8d"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "8569e902b23790d66dac8b24135989013279a4b3805e5d64c1b5696272565f0c"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 48,
+      "items_planned": 160,
+      "items_prefiltered": 50,
+      "items_routed": 96,
+      "items_skipped": 0,
+      "items_succeeded": 112,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "revision": null,
+            "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 3,
+      "note": null,
+      "pipeline_fingerprints": [
+        "ec9df80e2c80c35c46ece49e6f61d277ad95ed1cefebf3d93b492a13606e8157"
+      ],
+      "route_ms": 2416636,
+      "run_id": "2026-08-26-3",
+      "runner": "ubuntu-latest",
+      "site_bytes": 5567471,
+      "site_files": 87,
+      "source_list_stale": false,
+      "started_at": "2026-08-26T10:53:38Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 29,
+          "published": 23
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 20,
+          "published": 14
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 29,
+          "published": 14
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 43,
+          "published": 27
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 39,
+          "published": 34
+        }
+      ]
+    },
+    {
+      "charts_drafted": 11,
+      "commit_sha": "230f007e57a3901262a039388539121d8aa5f7c0",
+      "completed_at": "2026-08-26T18:13:54Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "aae63d4367bd04ac9caef5156ff478561b72fb0c28acd1e6294cbd5e2e969519"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "9d5cd6a5c08cf6d459b2d52799e8e7d698d8f94df1910ecb221061b144040c8d"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "8569e902b23790d66dac8b24135989013279a4b3805e5d64c1b5696272565f0c"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 40,
+      "items_planned": 160,
+      "items_prefiltered": 35,
+      "items_routed": 83,
+      "items_skipped": 0,
+      "items_succeeded": 120,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "revision": null,
+            "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 4,
+      "note": null,
+      "pipeline_fingerprints": [
+        "0000000000000000000000000000000000000000000000000000000000000000",
+        "ec9df80e2c80c35c46ece49e6f61d277ad95ed1cefebf3d93b492a13606e8157"
+      ],
+      "route_ms": 2406767,
+      "run_id": "2026-08-26-4",
+      "runner": "ubuntu-latest",
+      "site_bytes": 5953621,
+      "site_files": 93,
+      "source_list_stale": false,
+      "started_at": "2026-08-26T15:54:44Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 32,
+          "published": 26
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 25,
+          "published": 21
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 24,
+          "published": 12
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 44,
+          "published": 32
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 35,
+          "published": 29
+        }
+      ]
+    },
+    {
+      "charts_drafted": 8,
+      "commit_sha": "7d2031a247f204ba0896f4acf1dbd3516c5db079",
+      "completed_at": "2026-08-26T22:14:55Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "5c4346702e7c84321f15d2233d8c9870e0b65c38f985c715e304411aa24d4e5f"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "9d5cd6a5c08cf6d459b2d52799e8e7d698d8f94df1910ecb221061b144040c8d"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "8569e902b23790d66dac8b24135989013279a4b3805e5d64c1b5696272565f0c"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 44,
+      "items_planned": 160,
+      "items_prefiltered": 55,
+      "items_routed": 103,
+      "items_skipped": 0,
+      "items_succeeded": 116,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "revision": "7c41481f57cb95916b40956ab2f0b139b296d974",
+            "sha256": "d98cdcbd03e17ce47681435b5150e34c1417f50b5c0019dd560e4882c5745785"
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 5,
+      "note": null,
+      "pipeline_fingerprints": [
+        "f0d4ecc740eb6b0aebcaa546122f3037533e6904c4ef309f39b66890ba9ad669"
+      ],
+      "route_ms": 2437064,
+      "run_id": "2026-08-26-5",
+      "runner": "ubuntu-latest",
+      "site_bytes": 7024424,
+      "site_files": 99,
+      "source_list_stale": false,
+      "started_at": "2026-08-26T20:06:06Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 35,
+          "published": 28
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 27,
+          "published": 21
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 23,
+          "published": 9
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 43,
+          "published": 31
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 32,
+          "published": 27
+        }
+      ]
+    }
+  ],
+  "version": "2026-08-26T20:00"
+}

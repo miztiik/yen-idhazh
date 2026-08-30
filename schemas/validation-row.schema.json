@@ -1,0 +1,147 @@
+{
+  "$defs": {
+    "LeaderboardProvenance": {
+      "description": "Whether anybody published a number for this model, on this task.\n\n`not_reported` is not zero. A model whose card publishes no summarization or\nfaithfulness result has an unknown prior, and recording that as `0.0` would\nput a fabricated worst case into every mean, chart and comparison that ever\nreads the column (Rule #10).",
+      "enum": [
+        "reported",
+        "not_reported"
+      ],
+      "title": "LeaderboardProvenance",
+      "type": "string"
+    },
+    "ValidationVerdict": {
+      "description": "What the decision rule concluded. Never a free-text judgement.",
+      "enum": [
+        "confirmed",
+        "rescore_candidates",
+        "switch_and_pause",
+        "qualified",
+        "not_qualified"
+      ],
+      "title": "ValidationVerdict",
+      "type": "string"
+    }
+  },
+  "$id": "validation-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "leaderboard_hhem may be null beside a leaderboard_provenance of not_reported, and the verdict set gained qualified and not_qualified.",
+      "version": "2026-08-26",
+      "why": "A single-model qualification has no incumbent to compare against, and the candidate's model card publishes no summarization or faithfulness result. Recording that absence as 0.0 invents a worst case. Older rows carry a float and read as reported, which is the read-side migration."
+    },
+    {
+      "change": "Initial shape: the incumbent and its challengers, measured and predicted.",
+      "version": "2026-08-22",
+      "why": "Row #7 is an ESCALATE gate, so its inputs and its verdict are a persisted contract rather than a paragraph in a pull request."
+    }
+  ],
+  "description": "One candidate model, scored end to end through our own pipeline.",
+  "properties": {
+    "articles": {
+      "description": "How many golden articles produced the mean. A mean of one is not one.",
+      "minimum": 1,
+      "title": "Articles",
+      "type": "integer"
+    },
+    "commit_sha": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "string"
+        }
+      ],
+      "description": "The tree the measurement ran against.",
+      "minLength": 7,
+      "title": "Commit Sha"
+    },
+    "detail": {
+      "description": "The rule's own words for why, so a reader needs no code.",
+      "minLength": 1,
+      "title": "Detail",
+      "type": "string"
+    },
+    "is_incumbent": {
+      "description": "The model currently configured. Exactly one row per run carries this.",
+      "title": "Is Incumbent",
+      "type": "boolean"
+    },
+    "leaderboard_hhem": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "What the published leaderboard says. A prior, never evidence about us.",
+      "title": "Leaderboard Hhem"
+    },
+    "leaderboard_provenance": {
+      "$ref": "#/$defs/LeaderboardProvenance",
+      "default": "reported",
+      "description": "Whether a published number exists at all. Missing stays missing."
+    },
+    "measured_hhem": {
+      "description": "Mean HHEM over the golden set, through our own pipeline.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Measured Hhem",
+      "type": "number"
+    },
+    "measured_on": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Measured On",
+      "type": "string"
+    },
+    "model_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "runner": {
+      "description": "Where it ran. A laptop number is not a gate.",
+      "minLength": 1,
+      "title": "Runner",
+      "type": "string"
+    },
+    "selected": {
+      "description": "The model this run would run with. On a confirmed run, the incumbent.",
+      "title": "Selected",
+      "type": "boolean"
+    },
+    "verdict": {
+      "$ref": "#/$defs/ValidationVerdict",
+      "description": "What the run concluded. A run-level fact, identical on every row."
+    },
+    "version": {
+      "default": "2026-08-26",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "model_id",
+    "is_incumbent",
+    "selected",
+    "measured_hhem",
+    "articles",
+    "measured_on",
+    "commit_sha",
+    "runner",
+    "verdict",
+    "detail"
+  ],
+  "title": "ValidationRow",
+  "type": "object",
+  "version": "2026-08-26"
+}

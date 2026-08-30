@@ -1,0 +1,927 @@
+"""Unit-tier tests for the retention job and the site-budget alarm.
+
+The prune is the most dangerous code in this repository - it is the only thing
+that deletes a published byte - so the tests are written around the ways it goes
+wrong rather than the way it goes right.
+
+The telemetry fold at the foot of this file is the second thing that deletes,
+and its oracle is stricter for it: the totals recomputed from the aggregate have
+to equal the totals recomputed from the shard it replaced, read straight off the
+CSV text rather than through the code being checked.
+"""
+
+from __future__ import annotations
+
+import csv
+import hashlib
+import io
+import json
+import logging
+from datetime import date
+from pathlib import Path
+from typing import Final
+
+import pytest
+
+from idhazh import ledger
+from idhazh.cli import main, stage_prune_state, stage_site_weight
+from idhazh.contracts.app_config import CollectConfig, ObservabilityConfig, RetentionConfig
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.seen import SeenRow
+from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
+from idhazh.retention import (
+    BYTES_PER_MB,
+    PAGES_HARD_CAP_MB,
+    SiteSize,
+    budget_alarm,
+    cap_breach,
+    count_published_items,
+    cutoff,
+    daily_growth_bytes,
+    days_to_alarm,
+    days_to_cap,
+    fold_month,
+    headroom_mb,
+    heaviest_directories,
+    measure,
+    month_shards,
+    oldest_month_kept,
+    over_budget,
+    over_cap,
+    prune,
+    prune_seen,
+    prune_telemetry,
+    visuals_older_than,
+)
+
+
+def site(root: Path, days: dict[str, list[str]]) -> Path:
+    for day, files in days.items():
+        year, month, number = day.split("-")
+        folder = root / year / month / number
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "digest.json").write_text(f'{{"date": "{day}"}}', encoding="utf-8")
+        for name in files:
+            (folder / name).write_bytes(b"x" * 1000)
+    return root
+
+
+#: The fastest growth of the PUBLISHED SITE this project has measured: 16,641,956
+#: bytes a published day, 2026-08-27, over the three mature committed days.
+#: Rounded up to binary KB, the unit the code uses. It replaces 8,537, which was
+#: unmeasured arithmetic over a hypothetical PNG on every item AND was taken over
+#: the committed payload tree rather than the site - a different tree, eighteen
+#: times smaller. Source and the rest of the table:
+#: docs/reference/measurements.md, "Days to the 1 GB Pages ceiling".
+FASTEST_MEASURED_KB_PER_DAY = 16_252
+#: Days the alarm must buy at that rate. A judgement about one maintainer
+#: reading one issue, not a measurement (Rule #10), and derived as one in
+#: docs/reference/measurements.md, "Where the alarm fires, and what it buys".
+WARNING_DAYS_REQUIRED = 14
+
+
+def days_of_warning(budget_mb: int, kb_per_day: int) -> int:
+    """Whole days from the alarm to the wall. A partial day is not a day."""
+    return (PAGES_HARD_CAP_MB - budget_mb) * 1024 // kb_per_day
+
+
+# --- The alarm, on from the first run ---------------------------------------
+
+
+def test_an_absent_site_measures_as_nothing(tmp_path: Path) -> None:
+    assert measure(tmp_path / "missing").bytes_used == 0
+
+
+def test_the_site_is_measured_every_run(tmp_path: Path) -> None:
+    root = site(tmp_path, {"2026-08-21": ["a.webp", "b.webp"]})
+    size = measure(root)
+    assert size.files == 3
+    assert size.bytes_used > 2000
+
+
+def test_the_alarm_fires_below_the_platform_ceiling(tmp_path: Path) -> None:
+    """There has to be room to act between the alarm and the wall."""
+    config = RetentionConfig()
+    assert config.site_budget_mb < PAGES_HARD_CAP_MB
+
+
+def test_the_alarm_buys_the_days_it_was_derived_to_buy() -> None:
+    """Below the ceiling is not the property that matters. Days of warning is.
+
+    An alarm at 1,023 MB is below the ceiling and buys nobody anything, so the
+    inequality above cannot be the whole check.
+    """
+    config = RetentionConfig()
+    bought = days_of_warning(config.site_budget_mb, FASTEST_MEASURED_KB_PER_DAY)
+    assert bought >= WARNING_DAYS_REQUIRED, (
+        f"{config.site_budget_mb} MB buys {bought} days at "
+        f"{FASTEST_MEASURED_KB_PER_DAY} KB/day; re-derive it in "
+        f"docs/reference/measurements.md before changing it here"
+    )
+
+
+def test_the_shipped_alarm_point_is_the_derived_one() -> None:
+    """The derivation, not the round number. 800 MB buys 14 days at the measured rate.
+
+    It bought 26 while the rate came from the committed payload tree. Against the
+    site the tree is eighteen times smaller than, the same 800 MB clears the
+    14-day target by one tenth of a day. That is a live gate rather than a
+    comfortable one, and it is meant to be read that way.
+    """
+    assert RetentionConfig().site_budget_mb == 800
+    assert days_of_warning(800, FASTEST_MEASURED_KB_PER_DAY) == 14
+
+
+def test_a_ceiling_hugging_alarm_would_fail_this_check() -> None:
+    """The case a bare `< PAGES_HARD_CAP_MB` assertion lets through."""
+    assert days_of_warning(PAGES_HARD_CAP_MB - 1, FASTEST_MEASURED_KB_PER_DAY) == 0
+
+
+def test_the_alarm_only_reports(tmp_path: Path) -> None:
+    """It is an alarm, not a gate: it says yes and deletes nothing."""
+    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    (root / "2026" / "08" / "21" / "big.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
+    before = measure(root)
+    assert over_budget(before, RetentionConfig(site_budget_mb=1)) is True
+    assert measure(root) == before
+
+
+def test_a_small_site_is_not_over_budget(tmp_path: Path) -> None:
+    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    assert not over_budget(measure(root), RetentionConfig())
+
+
+def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
+    """The words the run logs: None below the budget, a headroom line above it."""
+    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    (root / "2026" / "08" / "21" / "big.webp").write_bytes(b"x" * 2 * BYTES_PER_MB)
+    over = measure(root)
+    assert budget_alarm(over, RetentionConfig()) is None
+    line = budget_alarm(over, RetentionConfig(site_budget_mb=1))
+    assert line is not None
+    assert "alarm point" in line
+    assert "Pages cap" in line
+
+
+def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:
+    root = site(tmp_path, {"2026-08-21": ["a.webp"]})
+    assert headroom_mb(measure(root)) == pytest.approx(PAGES_HARD_CAP_MB, abs=1)
+
+
+# --- A level is not a date -----------------------------------------------------
+
+#: The item ceiling in force, `run.safety_ceiling_per_run` in config/idhazh.json.
+#: Spelled out here so the arithmetic below is readable rather than looked up.
+ITEMS_PER_DAY = 160
+
+
+def sized_tree(root: Path, weights: dict[str, int]) -> Path:
+    """A built tree whose files weigh exactly what they are told to."""
+    for relative, count in weights.items():
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"x" * count)
+    return root
+
+
+def staged_days(root: Path, days: dict[str, int]) -> Path:
+    """Day payloads where the built tree keeps them, carrying a stated item count."""
+    for day, count in days.items():
+        payload = root / "digest" / day.replace("-", "/") / "digest.json"
+        payload.parent.mkdir(parents=True, exist_ok=True)
+        payload.write_text(
+            json.dumps({"date": day, "items": [{"item_id": str(n)} for n in range(count)]}),
+            encoding="utf-8",
+        )
+    return root
+
+
+def test_the_split_sums_to_the_total_and_names_what_grew(tmp_path: Path) -> None:
+    """One sum cannot say whether the visuals grew or the telemetry did.
+
+    The sum has to be exact. A split that loses bytes somewhere would name the
+    wrong directory on the day somebody used it to decide what to cut.
+    """
+    root = sized_tree(
+        tmp_path / "build",
+        {
+            "index.html": 900,
+            "_app/immutable/chunk.js": 40_000,
+            "digest/2026/08/21/digest.json": 5_000,
+            "digest/2026/08/22/digest.json": 7_000,
+            "console/index.html": 9_000,
+        },
+    )
+    size = measure(root)
+
+    assert sum(size.by_directory.values()) == size.bytes_used
+    assert size.by_directory == {
+        "_app": 40_000,
+        "console": 9_000,
+        "digest": 12_000,
+        "index.html": 900,
+    }
+    assert size.files == 5
+    assert heaviest_directories(size, limit=2) == [("_app", 40_000), ("digest", 12_000)]
+
+
+def test_published_items_are_counted_from_the_tree_that_was_measured(tmp_path: Path) -> None:
+    """Bytes and items have to come from one corpus, or the rate divides two."""
+    root = staged_days(tmp_path / "build", {"2026-08-21": 3, "2026-08-22": 5})
+    assert count_published_items(root) == 8
+    assert count_published_items(tmp_path / "never-built") == 0
+
+
+def test_the_runway_is_headroom_over_the_marginal_rate(tmp_path: Path) -> None:
+    """The row's whole point. A megabyte figure is a level, and no level has a date in it.
+
+    Every expected value here is computed from the fixture rather than read back
+    off the code, so the test fails if the arithmetic changes shape.
+    """
+    weight = 6 * BYTES_PER_MB
+    root = sized_tree(tmp_path / "build", {"index.html": weight})
+    size = measure(root, published_items=300)
+
+    per_item = weight / 300
+    rate = per_item * ITEMS_PER_DAY
+    assert size.bytes_per_published_item == pytest.approx(per_item)
+    assert daily_growth_bytes(size, ITEMS_PER_DAY) == pytest.approx(rate)
+
+    to_cap = (PAGES_HARD_CAP_MB - 6) * BYTES_PER_MB / rate
+    assert days_to_cap(size, ITEMS_PER_DAY) == pytest.approx(to_cap)
+
+    config = RetentionConfig()
+    to_alarm = (config.site_budget_mb - 6) * BYTES_PER_MB / rate
+    assert days_to_alarm(size, config, ITEMS_PER_DAY) == pytest.approx(to_alarm)
+    assert to_alarm < to_cap, "the alarm has to arrive before the wall or it buys nothing"
+
+
+def test_a_runway_from_nothing_raises_rather_than_reading_as_forever(tmp_path: Path) -> None:
+    """Zero published items divides into infinite runway, which reads as safety.
+
+    Same defect as the green light on the wrong tree: the comfortable answer is
+    the one an absent build produces, so the absent build must not produce one.
+    """
+    empty = measure(tmp_path / "never-built")
+    assert empty.files == 0
+
+    with pytest.raises(ValueError):
+        _ = empty.bytes_per_published_item
+    with pytest.raises(ValueError):
+        days_to_cap(empty, ITEMS_PER_DAY)
+    with pytest.raises(ValueError):
+        days_to_alarm(empty, RetentionConfig(), ITEMS_PER_DAY)
+
+    real = measure(sized_tree(tmp_path / "build", {"index.html": 1_000}), published_items=10)
+    with pytest.raises(ValueError):
+        days_to_cap(real, 0)
+
+
+def test_the_step_reports_the_rate_and_the_runway(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """What a person reads off the run: which directory, how fast, and until when."""
+    root = staged_days(tmp_path / "build", {"2026-08-21": 200, "2026-08-22": 200})
+    sized_tree(root, {"_app/immutable/chunk.js": 4 * BYTES_PER_MB})
+
+    with caplog.at_level(logging.INFO):
+        assert stage_site_weight(root, RetentionConfig(), items_per_day=ITEMS_PER_DAY) == 0
+
+    printed = caplog.text
+    assert "site-weight by directory: _app" in printed, "a growing directory has to be named"
+    assert "B per published item over 400 items" in printed
+    assert "published days to the 800 MB alarm point" in printed
+    assert "MB Pages cap" in printed
+
+
+def test_a_tree_with_no_day_payloads_says_unknown_rather_than_a_comfortable_number(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Reporting, not a gate: it still passes, and it refuses to invent a date."""
+    tree = built_site(tmp_path / "build", 3)
+    with caplog.at_level(logging.INFO):
+        assert stage_site_weight(tree, RetentionConfig(), items_per_day=ITEMS_PER_DAY) == 0
+    assert "site-weight runway: unknown" in caplog.text
+
+
+# --- The alarm has to be able to fire ---------------------------------------
+
+
+def built_site(root: Path, megabytes: int) -> Path:
+    """A stand-in for `frontend/build`: prerendered pages of a stated weight."""
+    page = root / "2026-08-24"
+    page.mkdir(parents=True, exist_ok=True)
+    (page / "index.html").write_bytes(b"x" * megabytes * BYTES_PER_MB)
+    return root
+
+
+def test_a_site_inside_budget_passes_quietly(tmp_path: Path) -> None:
+    tree = built_site(tmp_path / "build", 3)
+    assert stage_site_weight(tree, RetentionConfig()) == 0
+
+
+def test_the_alarm_fires_when_the_built_site_crosses_the_alarm_point(
+    tmp_path: Path, capsys: pytest.CaptureFixture[str]
+) -> None:
+    """The whole point of the row: the alarm can reach its own threshold.
+
+    A 3 MB tree against a 2 MB alarm point rather than a 1 GB fixture - the
+    arithmetic is the same and the fixture fits on a runner.
+    """
+    tree = built_site(tmp_path / "build", 3)
+
+    assert stage_site_weight(tree, RetentionConfig(site_budget_mb=2)) == 0, (
+        "the alarm reports and passes below the cap - those bytes still deploy"
+    )
+    printed = capsys.readouterr().out
+    assert "::warning" in printed, "an alarm nobody sees is the defect this row fixed"
+    assert "2 MB alarm point" in printed
+    assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in printed
+
+
+def test_the_gate_fails_when_the_built_site_crosses_the_platform_cap(tmp_path: Path) -> None:
+    """Past the cap the bytes cannot be published, so the build stops here.
+
+    The alarm point stays at its shipped 800 MB, so this proves the cap is
+    checked on its own rather than as a louder alarm.
+    """
+    tree = built_site(tmp_path / "build", 3)
+    assert stage_site_weight(tree, RetentionConfig(), cap_mb=2) == 1
+
+
+def test_the_cap_line_says_what_it_costs_and_what_to_do() -> None:
+    """The two words a person needs are the size and the ceiling it passed."""
+    inside = SiteSize(700 * BYTES_PER_MB, 4)
+    past = SiteSize(1100 * BYTES_PER_MB, 4)
+
+    assert over_cap(inside) is False
+    assert cap_breach(inside) is None
+
+    assert over_cap(past) is True
+    line = cap_breach(past)
+    assert line is not None
+    assert "1100 MB" in line
+    assert f"{PAGES_HARD_CAP_MB} MB Pages cap" in line
+
+
+def test_a_site_measured_as_nothing_fails_rather_than_passes(tmp_path: Path) -> None:
+    """Zero bytes clears every ceiling, which reads exactly like a healthy site.
+
+    Both shapes: a tree that was never built, and one that built nothing.
+    """
+    assert stage_site_weight(tmp_path / "never-built", RetentionConfig()) == 1
+
+    empty = tmp_path / "build"
+    empty.mkdir()
+    assert stage_site_weight(empty, RetentionConfig()) == 1
+
+
+def test_the_gate_has_no_default_tree() -> None:
+    """A default is how this came to measure the committed payloads.
+
+    `argparse` exits 2 on a usage error, so the run fails rather than measuring
+    whichever tree a default happened to name.
+    """
+    with pytest.raises(SystemExit) as exit_code:
+        main(["site-weight"])
+    assert exit_code.value.code == 2
+
+
+def test_the_committed_payload_tree_is_not_the_site(tmp_path: Path) -> None:
+    """The two trees the defect confused, measured against each other.
+
+    A day directory of payloads and a built bundle are different sizes on the
+    same corpus, so neither can stand in for the other. On this checkout,
+    2026-08-27: 7,027,075 bytes of payloads against 128,064,853 bytes of site.
+    """
+    payloads = site(tmp_path / "public", {"2026-08-24": ["ai-01.svg"]})
+    bundle = built_site(tmp_path / "build", 3)
+    assert measure(payloads).bytes_used < measure(bundle).bytes_used
+
+
+# --- Retention ships disabled ------------------------------------------------
+
+
+def test_retention_is_off_by_default() -> None:
+    """A default is a promise, not a placeholder."""
+    config = RetentionConfig()
+    assert config.image_months == -1
+    assert config.dry_run is True
+    assert cutoff(date(2026, 8, 21), config.image_months) is None
+
+
+def test_a_disabled_policy_deletes_nothing(tmp_path: Path) -> None:
+    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    result = prune(root, RetentionConfig(), date(2026, 8, 21))
+    assert result.deleted == 0
+    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+
+
+# --- What may be deleted, and what may never be -------------------------------
+
+
+def test_only_visuals_are_candidates(tmp_path: Path) -> None:
+    """The payload is the record that a day happened. Text is never pruned."""
+    root = site(tmp_path, {"2020-01-01": ["old.webp", "notes.txt"]})
+    found = visuals_older_than(root, date(2026, 8, 21))
+    assert [path.name for path in found] == ["old.webp"]
+
+
+def test_a_recent_day_is_never_a_candidate(tmp_path: Path) -> None:
+    root = site(tmp_path, {"2026-08-21": ["new.webp"]})
+    assert visuals_older_than(root, date(2026, 1, 1)) == []
+
+
+def test_a_dry_run_reports_without_deleting(tmp_path: Path) -> None:
+    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    config = RetentionConfig(image_months=6, dry_run=True)
+    result = prune(root, config, date(2026, 8, 21))
+    assert result.considered == 1
+    assert result.deleted == 0
+    assert (root / "2020" / "01" / "01" / "old.webp").exists()
+
+
+def test_an_enabled_policy_deletes_the_old_visual_and_keeps_the_day(tmp_path: Path) -> None:
+    root = site(tmp_path, {"2020-01-01": ["old.webp"]})
+    config = RetentionConfig(image_months=6, dry_run=False)
+    result = prune(root, config, date(2026, 8, 21))
+    assert result.deleted == 1
+    assert not (root / "2020" / "01" / "01" / "old.webp").exists()
+    assert (root / "2020" / "01" / "01" / "digest.json").exists(), "the day survives its picture"
+
+
+def test_the_fuse_caps_what_one_run_can_delete(tmp_path: Path) -> None:
+    """An off-by-one in a date parse must not eat the archive."""
+    root = site(tmp_path, {"2020-01-01": [f"{n}.webp" for n in range(10)]})
+    config = RetentionConfig(image_months=6, dry_run=False, max_deletes_per_run=3)
+    result = prune(root, config, date(2026, 8, 21))
+    assert result.deleted == 3
+    assert result.fuse_tripped
+    assert result.considered == 10
+
+
+def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
+    stray = tmp_path / "assets" / "brand"
+    stray.mkdir(parents=True)
+    (stray / "logo.svg").write_bytes(b"x" * 10)
+    config = RetentionConfig(image_months=1, dry_run=False)
+    assert prune(tmp_path, config, date(2026, 8, 21)).deleted == 0
+    assert (stray / "logo.svg").exists()
+
+
+# --- The telemetry fold ------------------------------------------------------
+
+#: The day the fold is run against in every test below, and the twenty months of
+#: history it is run over. Twenty rather than thirteen so both sides of the
+#: threshold carry several months: at `keep_months` 13 the fold takes seven and
+#: leaves thirteen, and a threshold off by one shows up as a shard on the wrong
+#: side rather than as an empty result.
+TODAY: Final = date(2026, 8, 30)
+HISTORY_MONTHS: Final = 20
+#: How far down the pipeline each terminal stage got, so a row carries the clocks
+#: an item that really stopped there would have carried and no others.
+STAGES_REACHED: Final = {
+    ItemStage.PLAN: (),
+    ItemStage.FETCH: ("fetch_ms",),
+    ItemStage.EXTRACT: ("fetch_ms", "extract_ms"),
+    ItemStage.SUMMARIZE: ("fetch_ms", "extract_ms", "summarize_ms"),
+    ItemStage.PUBLISH: ("fetch_ms", "extract_ms", "summarize_ms"),
+}
+CLOCK_MS: Final = {"fetch_ms": 900, "extract_ms": 1_400, "summarize_ms": 62_000}
+#: A failure code each stage really produces. `plan` is a refusal and `publish`
+#: is the census's one unambiguous success, so the two ends differ.
+STAGE_FAILURE: Final = {
+    ItemStage.PLAN: FailureCode.NOT_ATTEMPTED,
+    ItemStage.FETCH: FailureCode.HTTP_SERVER_ERROR,
+    ItemStage.EXTRACT: FailureCode.PAYWALLED,
+    ItemStage.SUMMARIZE: FailureCode.BAD_SHAPE,
+    ItemStage.PUBLISH: None,
+}
+
+
+def months_back(today: date, count: int) -> list[str]:
+    """`YYYY-MM` stems, oldest first, ending on the month `today` sits in."""
+    total = today.year * 12 + (today.month - 1)
+    return [
+        f"{(total - offset) // 12:04d}-{(total - offset) % 12 + 1:02d}"
+        for offset in reversed(range(count))
+    ]
+
+
+def health_row(*, day: str, run: int, number: int, stage: ItemStage) -> ItemHealthRow:
+    """One census row, shaped the way the contract's own validators demand."""
+    code = STAGE_FAILURE[stage]
+    # A slower item every third one, so a percentile has something to separate.
+    stretch = 1 + (number % 3)
+    reached = STAGES_REACHED[stage]
+
+    def clock(name: str) -> int | None:
+        return CLOCK_MS[name] * stretch if name in reached else None
+
+    return ItemHealthRow(
+        version=ItemHealthRow.schema_version(),
+        date=day,
+        run_id=f"{day}-{run}",
+        item_id=f"ai-{number:04d}",
+        url_key=hashlib.sha256(f"{day}-{number}".encode("ascii")).hexdigest(),
+        canonical_url=f"https://example.test/{day}/{number}",
+        vertical="ai",
+        source_id="example",
+        stage=stage,
+        outcome=ItemOutcome.OK if code is None else ItemOutcome.FAILED,
+        code=code,
+        fetch_ms=clock("fetch_ms"),
+        extract_ms=clock("extract_ms"),
+        summarize_ms=clock("summarize_ms"),
+    )
+
+
+def item_health_history(state_dir: Path, months: list[str]) -> None:
+    """A real item-health shard per month, written through the real appender."""
+    for index, month in enumerate(months):
+        for day_of_month in (4, 17):
+            day = f"{month}-{day_of_month:02d}"
+            rows = [
+                health_row(day=day, run=1, number=index * 100 + position, stage=stage)
+                for position, stage in enumerate(ItemStage)
+            ]
+            # A second run of the same day, so the fold meets the repeated
+            # `(date, run_id, item_id)` keys the committed ledger really carries.
+            rows.append(
+                health_row(day=day, run=2, number=index * 100 + 50, stage=ItemStage.PUBLISH)
+            )
+            ledger.append_item_health(state_dir, day, rows)
+
+
+def totals_from_shard(text: str) -> dict[tuple[str, str], tuple[int, int, int]]:
+    """Rows, failures and total milliseconds per (date, stage), read off the CSV.
+
+    Recomputed here from the raw text rather than by calling `fold_month`, so the
+    oracle cannot pass by agreeing with the code it is checking.
+    """
+    totals: dict[tuple[str, str], tuple[int, int, int]] = {}
+    for row in csv.DictReader(io.StringIO(text)):
+        key = (row["date"], row["stage"])
+        rows, failures, elapsed = totals.get(key, (0, 0, 0))
+        spent = sum(
+            int(row[name]) for name in ("fetch_ms", "extract_ms", "summarize_ms") if row[name]
+        )
+        totals[key] = (rows + 1, failures + (row["outcome"] != "ok"), elapsed + spent)
+    return totals
+
+
+def totals_from_aggregate(
+    rows: list[TelemetryAggregateRow],
+) -> dict[tuple[str, str], tuple[int, int, int]]:
+    return {
+        (row.date, row.stage.value): (row.items, row.failed, row.sum_ms or 0) for row in rows
+    }
+
+
+def a_state_tree(tmp_path: Path) -> Path:
+    state = tmp_path / "state"
+    item_health_history(state, months_back(TODAY, HISTORY_MONTHS))
+    return state
+
+
+def test_the_fold_keeps_thirteen_months_at_full_grain(tmp_path: Path) -> None:
+    """Every shard inside the window is byte-identical, and every shard outside is gone."""
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig()
+    before = {
+        path.stem: path.read_bytes() for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
+    }
+    assert len(before) == HISTORY_MONTHS
+
+    result = prune_telemetry(state, config, TODAY)
+
+    kept = oldest_month_kept(TODAY, config.keep_months)
+    assert kept == "2025-08", "thirteen months ending in August 2026 starts in August 2025"
+    assert list(result.folded) == sorted(stem for stem in before if stem < kept)
+    assert len(result.folded) == HISTORY_MONTHS - config.keep_months
+    for stem, bytes_before in before.items():
+        shard = ledger.item_health_path(state, f"{stem}-01")
+        if stem < kept:
+            assert not shard.exists(), f"{stem} is past the window and must be gone"
+        else:
+            assert shard.read_bytes() == bytes_before, f"{stem} is inside the window"
+
+
+def test_the_fold_loses_no_total(tmp_path: Path) -> None:
+    """The grain changes; the answer does not. A fold that loses a total is a failed fold."""
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig()
+    kept = oldest_month_kept(TODAY, config.keep_months)
+    doomed = {
+        path.stem: path.read_text(encoding="utf-8")
+        for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
+        if path.stem < kept
+    }
+    assert doomed, "the fixture has to reach past the window or this proves nothing"
+
+    prune_telemetry(state, config, TODAY)
+
+    for stem, text in doomed.items():
+        folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, stem))
+        assert totals_from_aggregate(folded) == totals_from_shard(text), (
+            f"{stem} lost a total in the fold"
+        )
+
+
+def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(
+    tmp_path: Path,
+) -> None:
+    """The committed ledger carries repeated keys, and the fold reproduces them.
+
+    Run `2026-08-29-3` really did leave 212 item-health rows for 168 items.
+    Collapsing them at fold time would make the aggregate disagree with the file
+    it replaced, and nobody could then say which of the two was right.
+    """
+    day = "2024-01-04"
+    state = tmp_path / "state"
+    rows = [health_row(day=day, run=run, number=7, stage=ItemStage.PUBLISH) for run in (1, 2)]
+    ledger.append_item_health(state, day, rows)
+
+    folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+
+    assert [row.items for row in folded] == [2]
+    assert folded[0].timed == 2
+    slowest = folded[0].max_ms
+    assert slowest is not None
+    assert folded[0].sum_ms == 2 * slowest, "both copies of one item, added"
+
+
+def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Path) -> None:
+    """An instrument that did not run writes an empty cell. Empty is not zero."""
+    day = "2024-01-04"
+    state = tmp_path / "state"
+    ledger.append_item_health(state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PLAN)])
+
+    folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+
+    assert [row.stage for row in folded] == [ItemStage.PLAN]
+    assert folded[0].items == 1
+    assert folded[0].timed == 0
+    assert (folded[0].p50_ms, folded[0].p90_ms, folded[0].max_ms, folded[0].sum_ms) == (
+        None,
+        None,
+        None,
+        None,
+    )
+    assert folded[0].csv_row()["p50_ms"] == ""
+
+
+def test_a_percentile_is_a_number_some_item_really_took(tmp_path: Path) -> None:
+    """Nearest rank, never interpolation. An invented millisecond count cannot be checked."""
+    assert percentile([5], 0.5) == 5
+    assert percentile([5], 0.9) == 5
+    assert percentile([1, 2, 3, 4], 0.5) == 2
+    assert percentile([1, 2, 3, 4], 0.9) == 4
+    assert percentile(list(range(1, 11)), 0.9) == 9
+    with pytest.raises(ValueError):
+        percentile([], 0.5)
+
+
+def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
+    state = a_state_tree(tmp_path)
+    before = {
+        path.relative_to(state).as_posix(): path.read_bytes() for path in sorted(state.rglob("*.csv"))
+    }
+
+    result = prune_telemetry(state, ObservabilityConfig(), TODAY, dry_run=True)
+
+    after = {
+        path.relative_to(state).as_posix(): path.read_bytes() for path in sorted(state.rglob("*.csv"))
+    }
+    assert result.dry_run is True
+    assert result.folded, "it still has to report what it would have done"
+    assert result.rows_folded > 0
+    assert after == before
+    assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists()
+
+
+def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
+    tmp_path: Path,
+) -> None:
+    """`console.max_window_days` is 366, so a shard has to answer for a year.
+
+    Running the fold twenty times over must never remove an aggregate while
+    `hard_delete_after_months` is null, which is what ships.
+    """
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig()
+    assert config.hard_delete_after_months is None
+
+    first = prune_telemetry(state, config, TODAY)
+    written = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+    again = prune_telemetry(state, config, TODAY)
+
+    assert written == sorted(first.folded)
+    assert again.folded == (), "the shards are gone, so a second fold has nothing to do"
+    assert again.hard_deleted == ()
+    assert (
+        sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+        == written
+    )
+
+
+def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(
+    tmp_path: Path,
+) -> None:
+    """The escape hatch, for the day the owner wants the bytes back.
+
+    The config refuses a threshold at or below `keep_months`, so a month is
+    always folded before it can be deleted - this proves the deletion happens at
+    the threshold the config does allow.
+    """
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig(hard_delete_after_months=16)
+    prune_telemetry(state, ObservabilityConfig(), TODAY)
+    before = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+
+    result = prune_telemetry(state, config, TODAY)
+
+    boundary = oldest_month_kept(TODAY, 16)
+    assert sorted(result.hard_deleted) == [stem for stem in before if stem < boundary]
+    assert result.hard_deleted, "a threshold inside the fixture has to remove something"
+    left = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+    assert left == [stem for stem in before if stem >= boundary]
+
+
+def test_the_window_is_counted_in_months_and_not_in_thirty_day_steps() -> None:
+    """A month file is kept or dropped whole, so the arithmetic is in months."""
+    assert oldest_month_kept(date(2026, 8, 30), 13) == "2025-08"
+    assert oldest_month_kept(date(2026, 8, 1), 13) == "2025-08"
+    assert oldest_month_kept(date(2026, 1, 15), 13) == "2025-01"
+    assert oldest_month_kept(date(2026, 1, 15), 1) == "2026-01"
+    assert oldest_month_kept(date(2026, 12, 31), 24) == "2025-01"
+    with pytest.raises(ValueError):
+        oldest_month_kept(date(2026, 8, 30), 0)
+
+
+def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
+    """A directory this deletes from names what it recognises, never the rest."""
+    directory = tmp_path / "state" / ledger.ITEM_HEALTH_DIRNAME
+    directory.mkdir(parents=True)
+    for name in ("2025-01.csv", "notes.csv", "2025-1.csv", "2025-13.csv", "README.md"):
+        (directory / name).write_text("header\n", encoding="utf-8")
+
+    assert [path.name for path in month_shards(directory)] == ["2025-01.csv"]
+
+
+def test_an_empty_state_tree_folds_nothing_and_says_so(tmp_path: Path) -> None:
+    """A fresh clone has no history, and no history is not an error."""
+    result = prune_telemetry(tmp_path / "state", ObservabilityConfig(), TODAY)
+    assert result.changed is False
+    assert result.rows_folded == 0
+
+
+def test_the_stage_reports_what_it_folded(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """What a person reads off the run: which months went, and how many rows they held."""
+    state = a_state_tree(tmp_path)
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+            )
+            == 0
+        )
+    assert "telemetry fold:" in caplog.text
+    assert "2025-07" in caplog.text
+
+
+def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    state = tmp_path / "state"
+    day = f"{TODAY:%Y-%m}-04"
+    ledger.append_item_health(
+        state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
+    )
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+            )
+            == 0
+        )
+    assert "every month is still at full grain" in caplog.text
+    assert ledger.item_health_path(state, day).exists()
+
+
+# --- The seen shards ---------------------------------------------------------
+
+
+def _seen_shard(state: Path, stem: str, rows: int = 1) -> Path:
+    """One month of the seen ledger, written by the real appender."""
+    day = f"{stem}-15"
+    ledger.append_seen(
+        state,
+        day,
+        [
+            SeenRow(
+                version=SeenRow.schema_version(),
+                url_key=hashlib.sha256(f"{stem}-{n}".encode()).hexdigest(),
+                first_seen_at=f"{day}T06:00:00Z",
+                first_seen_run=f"{day}-1",
+            )
+            for n in range(rows)
+        ],
+    )
+    return ledger.seen_path(state, day)
+
+
+def test_a_seen_shard_the_planner_still_reads_is_never_deleted(tmp_path: Path) -> None:
+    """The keep-set is the reader's own, so this is a property rather than a list.
+
+    Every stem `load_seen` would open is asserted to survive, for the window the
+    committed config actually sets - not for a window the test picked.
+    """
+    state = tmp_path / "state"
+    window = CollectConfig().seen_window_days
+    today = TODAY.isoformat()
+    inside = ledger.shards_in_window(today, window)
+    for stem in inside:
+        _seen_shard(state, stem)
+
+    result = prune_seen(state, today=today, within_days=window)
+
+    assert result.deleted == ()
+    assert sorted(result.kept) == sorted(inside)
+    assert all(ledger.seen_path(state, f"{stem}-15").exists() for stem in inside)
+
+
+def test_a_seen_shard_outside_the_window_goes_and_says_what_it_weighed(
+    tmp_path: Path,
+) -> None:
+    """A shard no read can reach is bytes answering no question.
+
+    `2024-01` is far outside any window this config can name, and the assertion
+    is that `load_seen` cannot see it either - the two have to agree, or the
+    prune is deleting something the planner wanted.
+    """
+    state = tmp_path / "state"
+    window = CollectConfig().seen_window_days
+    today = TODAY.isoformat()
+    stale = _seen_shard(state, "2024-01", rows=3)
+    weight = stale.stat().st_size
+    kept = _seen_shard(state, TODAY.strftime("%Y-%m"))
+
+    before = ledger.load_seen(state, today=today, within_days=window)
+    result = prune_seen(state, today=today, within_days=window)
+    after = ledger.load_seen(state, today=today, within_days=window)
+
+    assert result.deleted == ("2024-01",)
+    assert result.bytes_freed == weight
+    assert not stale.exists()
+    assert kept.exists()
+    # What the prune removed was already invisible: the reader's answer is
+    # unchanged, which is the whole safety claim stated as data.
+    assert after == before
+
+
+def test_a_dry_run_names_the_shard_and_leaves_it(tmp_path: Path) -> None:
+    state = tmp_path / "state"
+    stale = _seen_shard(state, "2024-01")
+
+    result = prune_seen(
+        state, today=TODAY.isoformat(), within_days=CollectConfig().seen_window_days, dry_run=True
+    )
+
+    assert result.deleted == ("2024-01",)
+    assert result.dry_run
+    assert stale.exists()
+
+
+def test_the_stage_says_so_when_every_seen_shard_is_inside_the_window(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """A prune that deleted nothing has to say which window it measured against.
+
+    Without the number, "nothing was deleted" reads the same whether the window
+    is 90 days or the config went missing.
+    """
+    state = tmp_path / "state"
+    _seen_shard(state, TODAY.strftime("%Y-%m"))
+
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_state(
+                observability=ObservabilityConfig(),
+                collect=CollectConfig(),
+                today=TODAY,
+                state_dir=state,
+            )
+            == 0
+        )
+
+    assert "seen prune: every shard is inside the" in caplog.text
+    assert str(CollectConfig().seen_window_days) in caplog.text

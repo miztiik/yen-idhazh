@@ -1,0 +1,37 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  A feed that dates its entries ahead of the clock.
+
+  Three entries, fixed in time so a test can place `now` wherever the rule
+  under examination needs it. Against a `now` of 2026-08-22T06:00:00Z:
+
+    tomorrow   +14h  - a claim no clock supports
+    soon        +3h  - inside any sane tolerance; embargoes and timezone
+                       arithmetic produce this honestly
+    settled      -1h  - the ordinary case
+
+  Recency is a sort key, so a feed that dates its entries forward takes the top
+  slot every single day and keeps it. That is the behaviour item 5 bounds.
+-->
+<rss version="2.0">
+  <channel>
+    <title>Example Forward Dating</title>
+    <link>https://forward.example-press.net/</link>
+    <description>A feed with an optimistic clock.</description>
+    <item>
+      <title>Datacentre build announced for the northern corridor</title>
+      <link>https://forward.example-press.net/2026/08/northern-corridor</link>
+      <pubDate>Sat, 22 Aug 2026 20:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Quarterly capex guidance raised on accelerator demand</title>
+      <link>https://forward.example-press.net/2026/08/capex-guidance</link>
+      <pubDate>Sat, 22 Aug 2026 09:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Transmission upgrade clears its final approval</title>
+      <link>https://forward.example-press.net/2026/08/transmission-upgrade</link>
+      <pubDate>Sat, 22 Aug 2026 05:00:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

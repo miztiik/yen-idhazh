@@ -1,0 +1,89 @@
+{
+  "date": "2026-08-22",
+  "runs": [
+    {
+      "commit_sha": "2ebeb91cdfdbc553d179538e00d4dca3c0da6758",
+      "completed_at": "2026-08-22T12:23:02Z",
+      "config_digests": [
+        {
+          "path": "config/idhazh.json",
+          "sha256": "9100c409726647f1a2892ab683f4d396ea2cfee422c0143754dc08d61a2ab88b"
+        },
+        {
+          "path": "config/sources.json",
+          "sha256": "84240613e0b4d2cb84eee37f55b0aa312169dabe4be564e43c0ab4befa1a74be"
+        },
+        {
+          "path": "config/taxonomy.json",
+          "sha256": "99a848ee9536552fee46831851e213df303a5f4ab278879fe414381345cb9f1f"
+        },
+        {
+          "path": "config/watchlist.json",
+          "sha256": "dc9da262c5c8d9d222a97560c4eda01f8be572783c7a5ba01edf8581c97608ab"
+        }
+      ],
+      "determinism_violations": 0,
+      "items_failed": 7,
+      "items_planned": 17,
+      "items_skipped": 0,
+      "items_succeeded": 10,
+      "models": [
+        {
+          "model_ref": {
+            "file": "Qwen3-8B-Q4_K_M.gguf",
+            "id": "qwen3-8b-q4-k-m",
+            "quantisation": "Q4_K_M",
+            "repo": "Qwen/Qwen3-8B-GGUF",
+            "sha256": null
+          },
+          "role": "summarize"
+        }
+      ],
+      "n": 1,
+      "note": null,
+      "pipeline_fingerprints": [
+        "3090231ddecd1ea99f053ebdd59456210f800c6d246fa6632f157afb58321513"
+      ],
+      "run_id": "2026-08-22-1",
+      "runner": "local",
+      "site_bytes": 54230,
+      "site_files": 4,
+      "source_list_stale": false,
+      "started_at": "2026-08-22T11:59:39Z",
+      "status": "partial",
+      "verticals": [
+        {
+          "below_feed_floor": false,
+          "id": "ai",
+          "planned": 5,
+          "published": 3
+        },
+        {
+          "below_feed_floor": false,
+          "id": "energy",
+          "planned": 3,
+          "published": 1
+        },
+        {
+          "below_feed_floor": false,
+          "id": "business-economy",
+          "planned": 3,
+          "published": 1
+        },
+        {
+          "below_feed_floor": false,
+          "id": "world",
+          "planned": 3,
+          "published": 2
+        },
+        {
+          "below_feed_floor": false,
+          "id": "india",
+          "planned": 3,
+          "published": 3
+        }
+      ]
+    }
+  ],
+  "version": "2026-08-21T02:00"
+}

@@ -1,0 +1,19 @@
+{
+  "choices": [
+    {
+      "finish_reason": "stop",
+      "index": 0,
+      "message": {
+        "content": "{\"title\": \"Central bank keeps its policy rate at 4.25 percent\", \"summary\": \"The central bank held its policy rate at 4.25 percent and said it would keep the rate there until inflation returns to target. Two of the nine members voted to cut. The bank publishes its next full forecast in November, after the winter meeting.\", \"key_points\": [\"The policy rate stays at 4.25 percent.\", \"Two of the nine members voted to cut.\", \"The next full forecast is published in November.\"]}",
+        "role": "assistant"
+      }
+    }
+  ],
+  "model": "qwen3-8b-q4-k-m",
+  "object": "chat.completion",
+  "usage": {
+    "completion_tokens": 96,
+    "prompt_tokens": 69,
+    "total_tokens": 165
+  }
+}

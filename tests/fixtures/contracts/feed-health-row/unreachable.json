@@ -1,0 +1,11 @@
+{
+  "checked_at": "2026-08-23T06:00:04Z",
+  "date": "2026-08-23",
+  "detail": "HTTP 503",
+  "feed_id": "example-grid-newsroom",
+  "items": 0,
+  "outcome": "transient",
+  "run_id": "2026-08-23-1",
+  "status": 503,
+  "version": "2026-08-23"
+}

@@ -1,0 +1,1153 @@
+name: Content refresh
+
+# The run, five times a day. An orchestrator that never does the work,
+# disposable workers that do, and an assemble step that publishes whatever
+# finished.
+#
+# The shape mirrors the runner's own economics (Rule #2): weights are
+# restored once per JOB rather than once per run, so a worker handles a shard of
+# several items to amortize the restore rather than one item per machine.
+
+on:
+  schedule:
+    # Five UTC runs, four hours apart. A story that broke at 07:00 waited a full
+    # day under a daily schedule, and the digest is only worth opening if it is
+    # current.
+    #
+    # The 02:20 slot exists so a finished digest is waiting before 06:30. A
+    # scheduled run here starts 40-70 min after its cron minute and then takes
+    # 164-184 min (ubuntu-latest, 2026-08-23/24, n=3), so the old 06:20 first
+    # slot did not publish until about 10:30.
+    #
+    # :20, not :00. GitHub queues scheduled jobs by load and the top of the hour
+    # is the busiest minute on the platform; twenty past costs a reader nothing
+    # and buys a run that starts closer to when it was asked for.
+    #
+    # Five lines rather than one `20 2,6,10,14,18 * * *`. The schedule is
+    # identical and `github.event.schedule` is not: with one line it returns the
+    # whole expression and a run cannot tell which of the five slots fired, so
+    # nothing could say how late it was. GitHub drops scheduled slots under load
+    # and 8 of 13 went missing between 2026-08-27 and 2026-08-29 without one
+    # failure to show for it (docs/reference/github-actions.md). Five lines are
+    # what let the run report that itself.
+    - cron: '20 2 * * *'
+    - cron: '20 6 * * *'
+    - cron: '20 10 * * *'
+    - cron: '20 14 * * *'
+    - cron: '20 18 * * *'
+  workflow_dispatch:
+    inputs:
+      date:
+        description: 'Digest date (YYYY-MM-DD). Defaults to today, UTC.'
+        default: ''
+      shards:
+        description: 'Total work-shard jobs'
+        type: choice
+        default: '4'
+        options:
+          - '1'
+          - '2'
+          - '3'
+          - '4'
+          - '5'
+          - '6'
+          - '7'
+          - '8'
+      faithfulness:
+        description: 'Run the faithfulness scorer (slow first run - downloads weights)'
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: digest
+  cancel-in-progress: false
+
+# No model ref lives here. `config/idhazh.json` is the only place one is written
+# and the `plan` job's `models` step republishes it, so every job below reads one
+# answer. A copy here was a second answer: the alias already came from config
+# while the weights came from this block, so one edit could serve 8B bytes under
+# a 9B alias and file every eval row under a model that never ran (Rule #10).
+env:
+  # The same build the measurement harness pins, so a number measured in
+  # measure.yml describes the binary that produces the digest.
+  LLAMA_CPP_BUILD: b10598
+  LLAMA_CPP_ASSET: llama-b10598-bin-ubuntu-x64.tar.gz
+  LLAMA_CPP_SHA256: d77a09db4165f8850b513629ed0ffeaab7851bb03e7cc3870b74e721f894694c
+  # The one place this workflow says which port. `server_argv` binds it, every
+  # probe below reads it, and `idhazh.llm.server` reads it for the address the
+  # stage posts to - so the three cannot disagree (Rule #6).
+  LLAMA_PORT: '8080'
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    outputs:
+      date: ${{ steps.decide.outputs.date }}
+      day_dir: ${{ steps.decide.outputs.day_dir }}
+      shards: ${{ steps.fanout.outputs.shards }}
+      matrix: ${{ steps.fanout.outputs.matrix }}
+      shard_timeout_minutes: ${{ steps.bounds.outputs.shard_timeout_minutes }}
+      faithfulness: ${{ steps.decide.outputs.faithfulness }}
+      summarize_repo: ${{ steps.models.outputs.summarize_repo }}
+      summarize_revision: ${{ steps.models.outputs.summarize_revision }}
+      summarize_file: ${{ steps.models.outputs.summarize_file }}
+      route_repo: ${{ steps.models.outputs.route_repo }}
+      route_revision: ${{ steps.models.outputs.route_revision }}
+      route_file: ${{ steps.models.outputs.route_file }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - id: decide
+        env:
+          # Through `env`, not pasted into the program below. A value read by
+          # name is a value, whatever it contains.
+          DISPATCH_DATE: ${{ inputs.date }}
+        run: |
+          set -euo pipefail
+          DATE="${DISPATCH_DATE:-}"
+          [ -n "$DATE" ] || DATE=$(date -u +%F)
+          # The shape check runs AFTER the default, so one pattern covers both
+          # paths and the scheduled one is the case it is proved against:
+          # `date -u +%F` writes 2026-08-27 and the pattern accepts it. The
+          # month and the day are bounded as well as counted, because
+          # 2026-13-45 is as publishable as 2026-08-27 and nothing downstream
+          # reads either one as a calendar date.
+          #
+          # This is a correctness check, not a permission check. Dispatching
+          # this workflow already needs write access, so the person typing the
+          # date could commit to `main` by hand. What they cannot see is the
+          # cost of a typo: `2026-8-27`, or a trailing space, publishes a day
+          # directory at an address no reader and no archive page will ever
+          # look at, silently, after a run of about three hours.
+          if ! [[ "$DATE" =~ ^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$ ]]; then
+            echo "date must be YYYY-MM-DD, and it becomes the day's address" >&2
+            exit 1
+          fi
+          # A scheduled run has no inputs at all, so every one of these is the
+          # empty string and every one needs its default here. `faithfulness`
+          # is normalized to a STRING for the same reason: read as a boolean,
+          # the empty string compares equal to `false` and silently turned the
+          # scorer off on every scheduled run - which is every automatic run.
+          FAITH="${{ inputs.faithfulness }}"
+          [ -n "$FAITH" ] || FAITH=true
+          # Where the day's payload lives. Derived once, here, because the date
+          # becomes a fact for the whole run here - and the assemble job needs
+          # to name `digest.json` and `run.json` one file at a time.
+          echo "day_dir=frontend/public/digest/${DATE//-//}" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+          echo "faithfulness=$FAITH" >> "$GITHUB_OUTPUT"
+
+      # The model refs, read once from config and published to every job that
+      # needs them. They travel as job OUTPUTS rather than as `env`, because the
+      # `needs` context resolves before a job's first step and `steps` does not -
+      # which is why the weights cache key could not name the file it holds until
+      # now, and had to be told by a second copy that could disagree.
+      #
+      # Each value is asserted to be one bare word here, at the one point that
+      # writes them, so an expression that substitutes one of them into a shell
+      # command below cannot carry a space, a quote or a newline into it.
+      - id: models
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+
+          models = json.load(open("config/idhazh.json", encoding="utf-8"))["models"]
+          for role in ("summarize", "route"):
+              for field in ("repo", "revision", "file"):
+                  value = models[role].get(field) or ""
+                  if value.split() != [value]:
+                      raise SystemExit(f"models.{role}.{field} is empty or not one word")
+                  print(f"{role}_{field}={value}")
+          PY
+
+      # How long a worker may take, read from the one file that says so. It
+      # travels as a job OUTPUT for the same reason the model refs do: a job's
+      # `timeout-minutes` resolves from `needs` before that job's first step,
+      # and `steps` is not readable there.
+      #
+      # Asserted to be a bare positive whole number here, at the one point that
+      # writes it. `timeout-minutes` takes whatever it is handed, so a value
+      # Actions cannot read as a number leaves the worker with no bound at all
+      # and the run finds out six hours later.
+      - id: bounds
+        run: |
+          set -euo pipefail
+          python - <<'PY' >> "$GITHUB_OUTPUT"
+          import json
+
+          run = json.load(open("config/idhazh.json", encoding="utf-8"))["run"]
+          minutes = run["shard_timeout_minutes"]
+          if type(minutes) is not int or minutes < 1:
+              raise SystemExit("run.shard_timeout_minutes must be a whole number of minutes, 1 or more")
+          print(f"shard_timeout_minutes={minutes}")
+          PY
+
+      # GitHub queues a scheduled workflow by load and silently drops the slots
+      # it cannot place. Measured 2026-08-27 to 2026-08-29: 13 slots elapsed, 5
+      # produced a run, and every run that started succeeded. So a thin day is a
+      # run that never happened rather than a run that failed, and nothing in
+      # this repository said so - the run list showed five green runs and no
+      # trace of the eight that were never created.
+      #
+      # This step cannot make the platform reliable. It makes the loss visible
+      # in the one place a person already looks, and it is why the cron is five
+      # one-slot lines: `github.event.schedule` names the line that fired, so
+      # the run can say which slot it is and how late.
+      - name: Say which slot this is and how late it started
+        if: github.event_name == 'schedule'
+        env:
+          # Through `env`, not pasted into the script. A value read by name is a
+          # value, whatever it contains.
+          SLOT: ${{ github.event.schedule }}
+        run: |
+          set -euo pipefail
+          SLOT_MINUTE=$(printf '%s' "$SLOT" | cut -d' ' -f1)
+          SLOT_HOUR=$(printf '%s' "$SLOT" | cut -d' ' -f2)
+          # A leading zero is octal to the shell, so every field is forced to
+          # base ten. `date -u +%H` writes 08 at eight in the morning.
+          ASKED=$(( 10#$SLOT_HOUR * 60 + 10#$SLOT_MINUTE ))
+          NOW=$(( 10#$(date -u +%H) * 60 + 10#$(date -u +%M) ))
+          LATE=$(( NOW - ASKED ))
+          # A slot placed after midnight is late by yesterday's clock, not early
+          # by today's. That case is the one worth catching: it is how the 18:20
+          # slot of 2026-08-28 became a run on 2026-08-29 and published to the
+          # wrong day.
+          [ "$LATE" -ge 0 ] || LATE=$(( LATE + 1440 ))
+          echo "slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC, started ${LATE} minutes late"
+          # 120 minutes is DERIVED, not measured: a scheduled run here normally
+          # starts 40-70 minutes after its cron minute, so this is roughly twice
+          # the recorded normal. It is a reporting threshold and nothing reads it
+          # to make a decision.
+          if [ "$LATE" -ge 120 ]; then
+            echo "::warning title=Late run::Slot ${SLOT_HOUR}:${SLOT_MINUTE} UTC started ${LATE} minutes late. GitHub queues scheduled runs by load and drops slots it cannot place - see docs/reference/github-actions.md."
+          fi
+
+      # No weights load here. The plan job is feed reads and arithmetic, and it
+      # finishes in seconds - which is what makes fanning out afterwards cheap.
+      - name: Plan the day
+        run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
+      # The day decides the fan-out, so this runs after the plan rather than
+      # beside the date. `run.shard_size` is what one worker is sized to carry,
+      # so a small day spends fewer jobs and restores the weights fewer times
+      # (Rule #2). The derivation is bounded by `run.max_parallel`, which is
+      # four, so a scheduled run still never asks for more workers than the four
+      # it has always had - the eight in the dispatch form above is the ceiling
+      # an operator may ask for, and moving the automatic path onto it needs the
+      # three conditions in docs/reference/measurements.md, not this step. A
+      # dispatch input still wins, which is why the guard stays a hard failure
+      # there. What this step writes is also what caps the workers that run at
+      # once, so the fan-out and its concurrency cap cannot disagree.
+      - id: fanout
+        run: |
+          set -euo pipefail
+          SHARD_PATTERN='^[1-8]$'
+          SHARDS="${{ inputs.shards }}"
+          if [ -z "$SHARDS" ]; then
+            SHARDS=$(python -m idhazh shards --date "${{ steps.decide.outputs.date }}")
+            # The derivation is bounded by run.max_parallel, which this pattern
+            # does not read. Walk a derived count down into what the pattern
+            # accepts instead of exiting: the feeds have already been read by
+            # now, and a config the pattern disagrees with must cost the tail of
+            # the fan-out rather than the whole day.
+            while [ "$SHARDS" -gt 1 ] && ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; do
+              SHARDS=$((SHARDS - 1))
+            done
+          fi
+          if ! [[ "$SHARDS" =~ $SHARD_PATTERN ]]; then
+            echo "shards must be an integer from 1 through 8" >&2
+            exit 1
+          fi
+          echo "shards=$SHARDS" >> "$GITHUB_OUTPUT"
+          echo "matrix=$(seq 0 $((SHARDS - 1)) | jq -R . | jq -sc .)" >> "$GITHUB_OUTPUT"
+
+      # The plan job writes the sight and health ledgers, so the plan job commits
+      # them - not assemble. A run that dies in the worker still saw what it saw,
+      # and the next run needs that: first sight is the only age an undated
+      # article has, and a feed we never recorded is a feed we cannot quarantine.
+      # A bad day is exactly the day worth measuring, so waiting for a successful
+      # publish would lose the records that matter most.
+      - name: Commit what the plan saw
+        env:
+          COMMIT_MESSAGE: "plan: ${{ steps.decide.outputs.date }}"
+          NOTHING_STAGED_MESSAGE: "nothing new to record"
+          PUSH_FAILED_MESSAGE: "could not push what the plan saw after three attempts"
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          state/seen state/feed-health
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: plan
+          path: backend/var/run/${{ steps.decide.outputs.date }}/plan.json
+          retention-days: 1
+
+  # This bound is the backstop, not the budget, and it is written in exactly one
+  # place: `run.shard_timeout_minutes` in config/idhazh.json, which the plan job
+  # publishes above. It used to say 330 here while config said 150, so anyone
+  # sizing a model against config was reading a number production ignored.
+  #
+  # 150 minutes is half again the slowest worker ever measured at the current
+  # item ceiling - 94.5 minutes on 2026-08-26 - and it still sits above the
+  # 117.5-minute slowest worker of 2026-08-24, when a day handed each worker 50
+  # items instead of 40. Raising it is not the fix for a slow worker (Rule #2);
+  # lowering `run.safety_ceiling_per_run` is, and that is the lever the ceiling
+  # was last moved with.
+  work:
+    needs: plan
+    runs-on: ubuntu-latest
+    timeout-minutes: ${{ fromJSON(needs.plan.outputs.shard_timeout_minutes) }}
+    strategy:
+      fail-fast: false
+      # The run's own worker count, so no worker ever waits for a sibling on
+      # either path: a scheduled run derives four from config, and a dispatch
+      # may name up to eight. A fixed number here is a second answer to how wide
+      # the fan-out is, and the two can disagree - at four it would have queued
+      # half of an eight-shard dispatch and handed back the wall-clock the
+      # fan-out buys. Eight workers plus the router is nine, well inside Rule
+      # #2's 20 concurrent jobs, and `route` waits on `work` rather than racing
+      # it.
+      max-parallel: ${{ fromJSON(needs.plan.outputs.shards) }}
+      matrix:
+        shard: ${{ fromJSON(needs.plan.outputs.matrix) }}
+    steps:
+      # First, before the checkout, so the number covers everything the job
+      # does: the cache restore, the weight load and the warmup as well as the
+      # model time. The truncation cap reverts when the slowest work job passes
+      # 110 minutes, and until this stamp existed the only place a job's clock
+      # lived was the GitHub jobs API - which drops a job record when the run
+      # ages out, so the rollback rule was a person making an API call by hand
+      # (docs/reference/measurements.md). The counters step subtracts this and
+      # files the difference beside the tokens the same shard read.
+      #
+      # The processor rides along for the same reason. `ubuntu-latest` names the
+      # image and not the part, this project has measured a 3.1x read-throughput
+      # swing between hosts, and a clock that cannot be read against the next
+      # run's clock is not a measurement (Rule #10). `|| true` because a host
+      # with no `model name` line must cost an empty cell, never the shard.
+      #
+      # And the processor counters, so the counters step can difference them and
+      # say what share of the host's processor seconds this job actually used. It
+      # has to be read here rather than only at the end: `/proc/stat` counts
+      # since boot, and a runner boots minutes of idle before a job starts.
+      # `/proc/stat` rather than a cgroup file because two cgroup files this
+      # repository once read - `memory.peak` and `cpu.max` - are both absent on
+      # a GitHub-hosted runner.
+      - name: Stamp the shard clock and the host
+        run: |
+          set -euo pipefail
+          echo "JOB_STARTED_AT=$(date -u +%s)" >> "$GITHUB_ENV"
+          echo "CPU_MODEL=$(grep -m1 'model name' /proc/cpuinfo | cut -d: -f2- | sed 's/^ *//' || true)" >> "$GITHUB_ENV"
+          echo "CPU_STAT_AT_START=$(awk '/^cpu / { print }' /proc/stat || true)" >> "$GITHUB_ENV"
+
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Before anything that imports `idhazh`, which now includes the step that
+      # builds the server command. It used to run after that step, and the whole
+      # reason a second copy of the flag list existed was to be readable from a
+      # job that had not installed the package yet.
+      - name: Install
+        run: |
+          if [ "${{ needs.plan.outputs.faithfulness }}" = "false" ]; then
+            pip install -e .
+          else
+            pip install -e ".[faithfulness]"
+          fi
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      # Restored once per JOB, not once per run. Every worker pays it, and it is
+      # the single largest fixed cost in the pipeline. Every shard shares this
+      # one key, so raising the shard count adds restores, never cache bytes.
+      #
+      # The key names every part of what it holds. The fetch below only runs on
+      # a miss, so a key that omits one of them turns a fetch step into dead code
+      # and serves the old bytes: without the build a cached binary stays frozen
+      # until the entry is evicted, without the weights a config change to
+      # `models.summarize` restores the previous model under the new alias, and
+      # without the revision two uploads of one filename share an entry - which
+      # would leave a repinned config stuck on a hit whose bytes fail the check
+      # below on every run until the entry expires.
+      # `v4` because the weights part moved from a workflow `env` copy to the
+      # plan job's output. Adding the revision changes the key again, so the
+      # first run after this refetches once.
+      - name: Cache weights and runtime
+        id: weights
+        uses: actions/cache@v6
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: llm-${{ needs.plan.outputs.summarize_file }}-${{ needs.plan.outputs.summarize_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
+
+      - name: Fetch runtime and weights
+        if: steps.weights.outputs.cache-hit != 'true'
+        # One pinned build, checked against its digest before anything runs from
+        # it. Authenticated, because every shard and the router ask at once and
+        # anonymous api.github.com allows 60 requests an hour - a ceiling of
+        # eight shards makes that nine askers on a cold cache, not five.
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin backend/models
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
+            exit 1
+          fi
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
+          # `cp -a`, not `find -type f`. These builds ship versioned shared
+          # objects as symlinks - libllama-common.so.0 points at the real file -
+          # and `-type f` skips a symlink, so the server died at exec on a
+          # library that had been "copied".
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
+          chmod +x backend/bin/llama-server
+          # The pinned commit, never a branch. A branch hands back whatever was
+          # uploaded last, so the bytes can move under a config that still
+          # records the old sha256 - and the check below would then fail a run
+          # nobody changed.
+          #
+          # `-f` is the load-bearing letter. Without it curl writes an HTTP
+          # error body into the weights file and exits 0, and `backend/models`
+          # is a cache path, so that file is then saved under the pinned key and
+          # served to every later run until the entry is evicted.
+          curl -fsSL --retry 3 --retry-all-errors \
+            -o "backend/models/${{ needs.plan.outputs.summarize_file }}" \
+            "https://huggingface.co/${{ needs.plan.outputs.summarize_repo }}/resolve/${{ needs.plan.outputs.summarize_revision }}/${{ needs.plan.outputs.summarize_file }}?download=true"
+
+      # No `if:`. This runs on a cache hit as well as a miss, because a restored
+      # entry is the one case where nobody watched the bytes arrive. It sits
+      # before the server starts, so wrong weights cost one step instead of a
+      # shard of summaries filed under a model that never ran (Rule #10).
+      - name: Verify the weights
+        run: |
+          set -euo pipefail
+          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["sha256"] or "")')
+          if [ -z "$EXPECTED" ]; then
+            echo "config records no sha256 for models.summarize" >&2
+            exit 1
+          fi
+          echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.summarize_file }}" | sha256sum --check
+
+      - name: Start the model
+        env:
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.summarize_file }}
+        run: |
+          .github/scripts/start-llama-server.sh summarize llama-server
+
+      - name: Check model health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 120); do
+            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
+            sleep 5
+          done
+          # Assert it, do not hope. Without this the loop simply ends, every
+          # item fails as "model unreachable", and the run publishes an empty
+          # day that looks like a quiet news day.
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+            echo "llama-server never became healthy" >&2
+            tail -50 llama-server.log >&2
+            exit 1
+          }
+          # Healthy says a server answers. It does not say which weights it
+          # answers for, and every summary and eval row is filed under the
+          # config alias whether or not the server agrees.
+          MODEL_ALIAS=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["summarize"]["id"])')
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/v1/models" \
+            | jq -e --arg alias "$MODEL_ALIAS" '[.data[].id] | index($alias) != null' > /dev/null || {
+            echo "the server does not serve ${MODEL_ALIAS}" >&2
+            curl -s "http://127.0.0.1:${LLAMA_PORT}/v1/models" >&2 || true
+            exit 1
+          }
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/props" \
+            | jq -e --arg file "${{ needs.plan.outputs.summarize_file }}" '[.. | strings | select(endswith($file))] | length > 0' > /dev/null || {
+            echo "the loaded weights are not ${{ needs.plan.outputs.summarize_file }}" >&2
+            curl -s "http://127.0.0.1:${LLAMA_PORT}/props" >&2 || true
+            exit 1
+          }
+
+      # A shard's throughput varies with the host it drew, and no run log named
+      # the host, the binary or the weights - so no number a shard produced could
+      # say which bytes produced it (Rule #10). These six lines settle all three.
+      # `always()`, because the shard that failed is the one whose host is worth
+      # naming.
+      - name: What this runner is
+        if: always()
+        run: |
+          echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
+          grep -m1 'model name' /proc/cpuinfo || true
+          nproc || true
+          grep -m1 'system_info' llama-server.log || true
+          LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
+          sha256sum backend/bin/llama-server || true
+          sha256sum "backend/models/${{ needs.plan.outputs.summarize_file }}" || true
+
+      # Neither of the two runs this shape was read from measured memory at all,
+      # and the runner has 16 GB (Rule #2). `measure.yml` already samples exactly
+      # this; the daily path did not. VmRSS is what a process holds, and the
+      # cgroup peak read at job end is what the runner counted against the limit.
+      - name: Sample memory
+        run: |
+          set -euo pipefail
+          cat > sample-rss.sh <<'SAMPLER'
+          set -u
+          pid="$1"
+          printf 'ts\tllama_vmrss_kb\tllama_vmhwm_kb\tpython_vmrss_kb\tpython_procs\n' > rss-samples.tsv
+          while kill -0 "$pid" 2>/dev/null; do
+            rss=$(awk '/^VmRSS:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
+            hwm=$(awk '/^VmHWM:/ {print $2}' "/proc/$pid/status" 2>/dev/null || true)
+            python_kb=0
+            python_n=0
+            for proc in /proc/[0-9]*; do
+              case "$(cat "$proc/comm" 2>/dev/null || true)" in
+                python*) ;;
+                *) continue ;;
+              esac
+              kb=$(awk '/^VmRSS:/ {print $2}' "$proc/status" 2>/dev/null || true)
+              [ -n "$kb" ] || continue
+              python_kb=$((python_kb + kb))
+              python_n=$((python_n + 1))
+            done
+            printf '%s\t%s\t%s\t%s\t%s\n' \
+              "$(date -u +%FT%TZ)" "${rss:-}" "${hwm:-}" "$python_kb" "$python_n" >> rss-samples.tsv
+            sleep 15
+          done
+          SAMPLER
+          nohup bash sample-rss.sh "$(cat llama-server.pid)" > sample-rss.log 2>&1 &
+          echo "$!" > sample-rss.pid
+
+      - name: Work the shard
+        run: |
+          python -m idhazh work \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard ${{ matrix.shard }} \
+            --shards ${{ needs.plan.outputs.shards }} \
+            ${{ needs.plan.outputs.faithfulness == 'false' && '--no-faithfulness' || '' }}
+
+      - name: Runtime log on failure
+        if: failure()
+        run: tail -50 llama-server.log || true
+
+      # The rows this shard earned, committed here rather than three hours later
+      # in assemble. Until then they exist only inside the items artifact at the
+      # end of this job, which keeps them for one day and is not uploaded at all
+      # when a job is cancelled - so a run stopped after the workers had measured
+      # every item recorded none of it.
+      #
+      # First of the `always()` steps for that reason: a cancelled job runs them
+      # in order inside a grace period, and this is the one whose loss the pair
+      # exists to prevent.
+      #
+      # Neither step may fail the shard. What this job owes the run is the items
+      # artifact assemble publishes from, and assemble writes the same census
+      # again - so a ledger that will not push costs this run an early copy of
+      # rows it is going to get anyway, while a failed shard costs the day a
+      # worker. `continue-on-error` says that out loud instead of leaving it to
+      # whether the last command in a `run:` body happens to return zero.
+      - name: Record what this shard measured
+        if: always()
+        continue-on-error: true
+        run: |
+          python -m idhazh record \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard ${{ matrix.shard }} \
+            --shards ${{ needs.plan.outputs.shards }}
+
+      # llama-server counts these already and only publishes them under
+      # `--metrics`, which `config/idhazh.json` turns on. Read once, at the end:
+      # they are cumulative over the job, so a per-request scrape would add
+      # requests to the thing it measures and still report only the last one.
+      # One server serves one shard for a whole job, so one read covers it all.
+      #
+      # Between the two ledger steps, and not after them, because the row it
+      # writes is committed by the step below. Until it was committed these
+      # numbers reached only this job log, which keeps them for two days - and
+      # that is what made the prefill rate the throughput doc and the console
+      # publish impossible to check against anything (Rule #10). See
+      # docs/architecture/summarize/throughput.md.
+      #
+      # `always()`, because the shard that died is the shard whose context high
+      # water mark matters most. `continue-on-error` for the reason written above
+      # the record step: an unreadable scrape costs one observation row, a failed
+      # shard costs the day a worker. The endpoint is llama-server's own loopback
+      # surface inside this job - nothing a reader can reach (Rule #1).
+      - name: What the server counted
+        if: always()
+        continue-on-error: true
+        run: |
+          curl -sf --max-time 30 "http://127.0.0.1:${LLAMA_PORT}/metrics" -o llama-metrics.prom || true
+          if [ -s llama-metrics.prom ]; then
+            # The whole counter set, so a llama.cpp rename is visible rather than
+            # silently absent, and then the two that decide a run.
+            grep -E '^llamacpp:' llama-metrics.prom || true
+            for series in llamacpp:n_busy_slots_per_decode llamacpp:n_tokens_max; do
+              grep -m1 "^${series} " llama-metrics.prom \
+                || echo "${series}: this build does not publish it"
+            done
+          else
+            echo "no metrics: llama-server was already gone, or models.inference.metrics is off"
+          fi
+          # A row lands either way. A shard whose server was already gone and a
+          # shard that never ran are different facts, and pooling a run has to be
+          # able to see the shard that contributed nothing.
+          #
+          # The arguments after the body are the job's own facts rather than the
+          # server's, so the row that says what this shard read also says how
+          # long it took, which processor read it, how much of that processor it
+          # used, how much memory it held and what the weights cost to open. `:-`
+          # because a reading that never ran must leave an empty cell, not send
+          # the word "unbound" to a contract that would refuse it. The two files
+          # are the ones this job has been writing all along and the ones the
+          # runtime artifact already carries, so nothing new is produced here -
+          # only read.
+          CPU_STAT_AT_END=$(awk '/^cpu / { print }' /proc/stat || true)
+          python -m idhazh counters \
+            --date "${{ needs.plan.outputs.date }}" \
+            --shard ${{ matrix.shard }} \
+            --shards ${{ needs.plan.outputs.shards }} \
+            --counters-file llama-metrics.prom \
+            --job-started-at "${JOB_STARTED_AT:-}" \
+            --cpu-model "${CPU_MODEL:-}" \
+            --cpu-stat-at-start "${CPU_STAT_AT_START:-}" \
+            --cpu-stat-at-end "${CPU_STAT_AT_END:-}" \
+            --rss-samples-file rss-samples.tsv \
+            --server-log llama-server.log
+
+      # The shape the plan job uses, for the reason written there, and the same
+      # script - eight shards racing one branch is what its rebase loop and the
+      # `merge=union` attribute on these two paths are for. It cannot rebuild
+      # what it commits, so it carries none of the refresh settings.
+      #
+      # Appending the same row twice is the one thing that would make this worse
+      # than the loss it fixes, because `publish_telemetry` copies every row into
+      # the file the console reads. `ledger.append_item_health` keys a row by run
+      # and item, `evals.writer.append` keys one by observation, and
+      # `ledger.append_runtime_counters` keys one by run and shard - so assemble's
+      # copy of these rows, or a re-run of this job, is the same row and lands
+      # once.
+      - name: Commit what this shard measured
+        if: always()
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
+          NOTHING_STAGED_MESSAGE: "nothing measured to record"
+          PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          state/item-health state/scores.csv state/runtime-counters.csv
+
+      - name: Prompt cache log summary
+        if: always()
+        run: |
+          if [ ! -f llama-server.log ]; then
+            echo "llama-server.log not found"
+            exit 0
+          fi
+          # A fixed list of known lines hid the proof of prefix reuse for two
+          # measured runs: the list greps `kv cache rm [`, which this build never
+          # emits, while the line that settles it starts `slot get_availabl:`.
+          # `^(srv|slot) ` cannot hide a line the runtime chose to print.
+          # `n_ctx_slot` and `n_ctx_seq` are one field under two llama.cpp
+          # spellings, and the pin does not stop a later bump from renaming it.
+          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' llama-server.log || true
+          # `f_sim_best` is the shared prefix over the incoming prompt and
+          # `f_keep` the same prefix over what the slot held. The distribution is
+          # where a prefix-reuse loss shows; the presence of the line is not.
+          for field in f_sim_best f_keep; do
+            grep -oE "${field} = [0-9.]+" llama-server.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
+              { v[NR] = $1 + 0 }
+              END {
+                if (NR == 0) { printf "%s: no samples\n", field; exit }
+                for (i = 1; i <= NR; i++) { b = int(v[i] * 10); if (b > 9) b = 9; bucket[b]++ }
+                line = ""
+                for (b = 0; b <= 9; b++) line = line sprintf(" %.1f:%d", b / 10, bucket[b] + 0)
+                printf "%s: n=%d min=%.3f median=%.3f max=%.3f buckets%s\n", field, NR, v[1], v[int((NR + 1) / 2)], v[NR], line
+              }'
+          done
+
+      - name: What memory this shard used
+        if: always()
+        run: |
+          if [ -f /sys/fs/cgroup/memory.peak ]; then
+            echo "cgroup_memory_peak_bytes=$(cat /sys/fs/cgroup/memory.peak)" | tee memory-peak.txt
+          else
+            echo "cgroup_memory_peak_bytes=unavailable" | tee memory-peak.txt
+          fi
+          if [ -f rss-samples.tsv ]; then
+            awk -F'\t' '
+              NR > 1 { if ($2 + 0 > llama) llama = $2 + 0; if ($4 + 0 > py) py = $4 + 0 }
+              END { printf "peak llama VmRSS %d kB, peak python VmRSS %d kB, n=%d samples\n", llama, py, NR - 1 }
+            ' rss-samples.tsv
+          else
+            echo "rss-samples.tsv not found"
+          fi
+
+      - name: Upload runtime log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: runtime-log-${{ matrix.shard }}
+          path: |
+            llama-server.log
+            rss-samples.tsv
+            memory-peak.txt
+            llama-metrics.prom
+          retention-days: 2
+          if-no-files-found: ignore
+
+      # Seven days, not one. Route and assemble read this within the hour, so
+      # one day was enough for the run itself - but it is also the only copy of
+      # the article text a finished run leaves behind, and
+      # `data_wrangler.py backfill` replays it into the training corpus.
+      #
+      # At one day the scheduled harvest is the only way rows ever arrive, and it
+      # takes one run every `finetune.harvest_every_days` - about 85 rows a week
+      # measured over runs 33179908136 and 33227285523 on 2026-08-29, which is
+      # roughly six months to fill a 2000-row window. At seven days a single
+      # backfill reaches every run of the past week and fills it in one sitting.
+      #
+      # Measured 2026-08-29: one run's four shards are 555,842 bytes, so five
+      # runs a day held for seven days is 18.6 MB against the 500 MB of artifact
+      # storage Rule #2 allows - 3.7 percent of the budget, for the only copy of
+      # the text that exists.
+      - uses: actions/upload-artifact@v7
+        with:
+          name: items-${{ matrix.shard }}
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+          retention-days: 7
+          if-no-files-found: ignore
+
+      # The article and the summary each scored item was judged on, for the
+      # person who labels the faithfulness queue by hand. The committed ledger
+      # keeps digests and no text, and this checkout is deleted when the job
+      # ends, so this artifact is the only copy that survives the run.
+      #
+      # Kept longer than every other artifact here and still not forever.
+      # Labelling sixty rows is an evening of a person's time, not a job step,
+      # so one day is not a window; ninety days would be a promise this project
+      # does not make about somebody else's article body. Fourteen days is a
+      # deadline a labeller can plan around, and it is what bounds the storage
+      # this costs (Rule #2). See
+      # docs/how-to/label-the-faithfulness-queue.md.
+      #
+      # Never committed, and deliberately not named in any commit-and-push.sh
+      # call: an article body is not ours to republish (CLAUDE.md section 0a).
+      - uses: actions/upload-artifact@v7
+        with:
+          name: evidence-${{ matrix.shard }}
+          path: backend/var/evidence/${{ needs.plan.outputs.date }}/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  # Visual routing runs on the small model, in its own job, because one
+  # llama-server serves one set of weights. It is deliberately unable to stop a
+  # publication: `continue-on-error` plus assemble's `always()` means a router
+  # that never starts costs every item its picture and costs the day nothing.
+  #
+  # This bound is the backstop, not the budget. The stage stops itself at
+  # `run.route_budget_minutes` in config/idhazh.json, which is set below this
+  # number with room for the fixed cost and one worst-case item. Raising this
+  # number is not the fix for a slow router (Rule #2); lowering that one is.
+  route:
+    needs: [plan, work]
+    if: always()
+    continue-on-error: true
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      # Before the step that builds the server command, for the same reason the
+      # work job installs early: that step imports `idhazh`.
+      - name: Install
+        run: pip install -e .
+
+      # Same key shape as the work job, and the same reason: the fetch below runs
+      # only on a miss, so the key is what dates the binary, the weights and the
+      # upload of those weights.
+      - name: Cache the router weights and runtime
+        id: router
+        uses: actions/cache@v6
+        with:
+          path: |
+            backend/models
+            backend/bin
+          key: llm-${{ needs.plan.outputs.route_file }}-${{ needs.plan.outputs.route_revision }}-${{ env.LLAMA_CPP_BUILD }}-v4
+
+      - name: Fetch runtime and router weights
+        if: steps.router.outputs.cache-hit != 'true'
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          mkdir -p backend/bin backend/models
+          URL=$(curl -fsS -H "Authorization: Bearer ${GITHUB_TOKEN}" \
+            "https://api.github.com/repos/ggml-org/llama.cpp/releases/tags/${LLAMA_CPP_BUILD}" \
+            | jq -r --arg asset "$LLAMA_CPP_ASSET" \
+              'if type=="object" then ([.assets[] | select(.name == $asset)][0].browser_download_url // "") else "" end')
+          if [ -z "$URL" ] || [ "$URL" = "null" ]; then
+            echo "pinned llama.cpp asset not found: ${LLAMA_CPP_BUILD}/${LLAMA_CPP_ASSET}" >&2
+            exit 1
+          fi
+          curl -fsSL --retry 3 --retry-all-errors -o llama.tar.gz "$URL"
+          echo "${LLAMA_CPP_SHA256}  llama.tar.gz" | sha256sum --check
+          mkdir -p llama && tar -xzf llama.tar.gz -C llama
+          SRC=$(dirname "$(find llama -type f -name 'llama-server' | head -1)")
+          cp -a "$SRC"/. backend/bin/
+          chmod +x backend/bin/llama-server
+          curl -fsSL --retry 3 --retry-all-errors \
+            -o "backend/models/${{ needs.plan.outputs.route_file }}" \
+            "https://huggingface.co/${{ needs.plan.outputs.route_repo }}/resolve/${{ needs.plan.outputs.route_revision }}/${{ needs.plan.outputs.route_file }}?download=true"
+
+      # No `if:`, for the same reason the work job's check carries none: a
+      # restored cache entry is the one case where nobody watched the bytes
+      # arrive. The router cannot stop a publication, so a wrong file here costs
+      # every item its picture in silence unless something says so (Rule #10).
+      - name: Verify the router weights
+        run: |
+          set -euo pipefail
+          EXPECTED=$(python -c 'import json; print(json.load(open("config/idhazh.json", encoding="utf-8"))["models"]["route"]["sha256"] or "")')
+          if [ -z "$EXPECTED" ]; then
+            echo "config records no sha256 for models.route" >&2
+            exit 1
+          fi
+          echo "${EXPECTED}  backend/models/${{ needs.plan.outputs.route_file }}" | sha256sum --check
+
+      - name: Start the router
+        env:
+          LLAMA_WEIGHTS: backend/models/${{ needs.plan.outputs.route_file }}
+        run: |
+          .github/scripts/start-llama-server.sh route router
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: items-*
+          merge-multiple: true
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+
+      - name: Check router health
+        run: |
+          set -euo pipefail
+          for _ in $(seq 1 120); do
+            curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" && break
+            sleep 5
+          done
+          curl -sf "http://127.0.0.1:${LLAMA_PORT}/health" > /dev/null || {
+            echo "the router never became healthy" >&2
+            tail -50 router.log >&2
+            exit 1
+          }
+
+      # The router's prefill rate varies 3x between runs (20.2 to 62.9 tok/s,
+      # six runs 2026-08-24/25) while the prompt size and the decode rate stay
+      # put, which is what decides whether a day fits its budget. The runner's
+      # CPU is the remaining suspect and nothing recorded it, so record it -
+      # along with the binary and the weights, so a number names its own bytes.
+      - name: What this runner is
+        if: always()
+        run: |
+          echo "pinned llama.cpp build: ${LLAMA_CPP_BUILD}"
+          grep -m1 'model name' /proc/cpuinfo || true
+          nproc || true
+          grep -m1 'system_info' router.log || true
+          LD_LIBRARY_PATH=backend/bin backend/bin/llama-server --version 2>&1 | head -3 || true
+          sha256sum backend/bin/llama-server || true
+          sha256sum "backend/models/${{ needs.plan.outputs.route_file }}" || true
+
+      - name: Route and render
+        run: python -m idhazh route --date "${{ needs.plan.outputs.date }}"
+
+      - name: Router log on failure
+        if: failure()
+        run: tail -50 router.log || true
+
+      - name: Router cache log summary
+        if: always()
+        run: |
+          if [ ! -f router.log ]; then
+            echo "router.log not found"
+            exit 0
+          fi
+          grep -E '^(srv|slot) |n_ctx_slot|n_ctx_seq|n_ctx_per_seq' router.log || true
+          for field in f_sim_best f_keep; do
+            grep -oE "${field} = [0-9.]+" router.log | awk '{ print $3 }' | sort -n | awk -v field="$field" '
+              { v[NR] = $1 + 0 }
+              END {
+                if (NR == 0) { printf "%s: no samples\n", field; exit }
+                for (i = 1; i <= NR; i++) { b = int(v[i] * 10); if (b > 9) b = 9; bucket[b]++ }
+                line = ""
+                for (b = 0; b <= 9; b++) line = line sprintf(" %.1f:%d", b / 10, bucket[b] + 0)
+                printf "%s: n=%d min=%.3f median=%.3f max=%.3f buckets%s\n", field, NR, v[1], v[int((NR + 1) / 2)], v[NR], line
+              }'
+          done
+
+      - name: Upload router log
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: router-log
+          path: router.log
+          retention-days: 2
+          if-no-files-found: ignore
+
+      # `always()`, because a cancelled job skips a step that has no condition.
+      # Every route decision and every rendered chart lives only in this
+      # artifact, so without it a router stopped for any reason hands assemble
+      # nothing and the day publishes with no visuals at all - which is exactly
+      # what four of the six runs on 2026-08-24/25 did.
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: routes
+          path: |
+            backend/var/run/${{ needs.plan.outputs.date }}/items/*.route.json
+            frontend/public/digest/
+          retention-days: 1
+          if-no-files-found: ignore
+
+  assemble:
+    needs: [plan, work, route]
+    # Always runs, even when a worker failed. A run that publishes nothing on a
+    # bad day is a run whose bad days are invisible.
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: actions/setup-python@v7
+        with:
+          python-version: '3.12'
+          cache: pip
+          cache-dependency-path: pyproject.toml
+
+      - name: Install
+        run: pip install -e .
+
+      - uses: actions/download-artifact@v8
+        with:
+          name: plan
+          path: backend/var/run/${{ needs.plan.outputs.date }}/
+
+      - uses: actions/download-artifact@v8
+        with:
+          pattern: items-*
+          merge-multiple: true
+          path: backend/var/run/${{ needs.plan.outputs.date }}/items/
+
+      # The routes and their rendered assets. `continue-on-error` above means
+      # this artifact may simply not exist, which is the degraded-not-failed
+      # path: every item then publishes with no picture.
+      - uses: actions/download-artifact@v8
+        continue-on-error: true
+        with:
+          name: routes
+          path: .
+
+      - name: Assemble and publish
+        run: |
+          python -m idhazh assemble \
+            --date "${{ needs.plan.outputs.date }}" \
+            --commit "${{ github.sha }}" \
+            --runner ubuntu-latest
+
+      # The training window, built here because here is the only place the text
+      # exists. `backend/var/run/<date>/items/` is gitignored and travels as a
+      # one-day artifact, so a scheduled workflow of its own would check out a
+      # fresh tree, find an empty directory and harvest nothing - silently, every
+      # week, until somebody went looking.
+      #
+      # It is still a stage that runs alone with a file in and a file out
+      # (CLAUDE.md section 4): what moved is the workflow it is invoked from, not
+      # the command. The cadence is `finetune.harvest_every_days` and the step
+      # decides for itself, because `on.schedule` is parsed before any step runs
+      # and no config value can reach a cron line.
+      #
+      # `continue-on-error`, for the reason the two worker ledger steps carry it:
+      # what this job owes a reader is the published day, and a corpus that will
+      # not build must never be what stops one.
+      - name: Harvest the training corpus
+        continue-on-error: true
+        run: python -m idhazh harvest --date "${{ needs.plan.outputs.date }}"
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install the site
+        working-directory: frontend
+        run: npm ci
+
+      # The day just written rides inside frontend/public, and /archive/ inlines
+      # every committed day for the on-device search - so this job is the one
+      # that can push a page past its ceiling or a payload the build rejects.
+      # Those are two different severities and they now sit on opposite sides of
+      # the commit below.
+      #
+      # A build failure means the payload is invalid. Prerendering turns what
+      # would be a reader's runtime error into a failure here, and that day must
+      # not publish - so the build runs BEFORE the commit and stops it. The
+      # weight ratchet runs after. See ../../docs/architecture/publishing/layout.md.
+      - name: Build the site
+        working-directory: frontend
+        run: npm run build
+
+      # The 1 GB Pages cap is measured HERE and nowhere else, because `build` is
+      # the tree the deploy uploads and it does not exist until the step above
+      # has run. `assemble` can only see the committed payloads, which are a
+      # different tree eighteen times smaller - measuring those was an alarm that
+      # could never fire. Over the alarm point this prints and passes; past the
+      # cap it fails, before the day is pushed rather than at the deploy.
+      - name: Measure the built site against the Pages cap
+        working-directory: frontend
+        run: python -m idhazh site-weight --site-tree build
+
+      # The checkout above carries main's tip at TRIGGER time, and this run has
+      # been going for two to three hours by now. So the day was just built on a
+      # base that old, and the push below is the first thing to find out.
+      #
+      # `REGENERATE_COMMAND` is the same invocation as the step above: when the
+      # push loses a race, the fix is to build the day again against the tip the
+      # push wants, not to ask git to text-merge two digests. `REFRESH_PATHS` is
+      # what that rebuild owns, named one file at a time under the day's
+      # directory - the routes artifact unpacked this run's rendered charts into
+      # that same directory, and no producer here can make those again.
+      #
+      # `DROP_RACED_ASSETS_COMMAND` is what keeps those charts from being the
+      # thing that loses the day. A chart is filed under its item's own id, so a
+      # path a run that pushed while this one worked has already taken is that
+      # same item's chart. Its file is published; this run's copy is not, and
+      # the rebuild keeps the published item anyway, so this run's copy goes.
+      #
+      # `corpus` is staged here and is deliberately NOT in `REFRESH_PATHS`. The
+      # window records what this run saw rather than deriving from the tip, so a
+      # race is answered by replaying this run's rows onto the new base - the
+      # same branch of the script `state/seen` takes - and never by rebuilding
+      # them.
+      - name: Commit the day
+        env:
+          COMMIT_MESSAGE: "digest: ${{ needs.plan.outputs.date }}"
+          NOTHING_STAGED_MESSAGE: "nothing changed"
+          PUSH_FAILED_MESSAGE: "could not push the day after three attempts"
+          REFRESH_PATHS: >-
+            ${{ needs.plan.outputs.day_dir }}/digest.json
+            ${{ needs.plan.outputs.day_dir }}/run.json
+            frontend/public/telemetry
+            frontend/public/assist/index
+            state/published.csv
+            state/scores.csv
+            state/item-health
+            state/runtime-counters.csv
+          REGENERATE_COMMAND: >-
+            python -m idhazh assemble --date ${{ needs.plan.outputs.date }}
+            --commit ${{ github.sha }} --runner ubuntu-latest
+          DROP_RACED_ASSETS_COMMAND: >-
+            python backend/utilities/drop_raced_assets.py
+            --date ${{ needs.plan.outputs.date }}
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          frontend/public/digest frontend/public/telemetry frontend/public/assist/index state corpus
+
+      # After the day is committed and never before it. The fold deletes a
+      # committed file, so it may only run once the thing it might collide with
+      # is already pushed - a fold that ran first and then lost the push would
+      # leave the month deleted in a tree nobody kept, and every later run would
+      # fold a shard that had already been folded.
+      #
+      # `continue-on-error` on both, for the reason the harvest carries it: what
+      # this job owes a reader is the published day, and thirteen-month-old
+      # telemetry must never be what stops one. A month it does not fold today it
+      # folds on the next run.
+      #
+      # It stages `state` whole rather than the two directories it touches.
+      # `git add` runs under `set -euo pipefail` and would abort on a path a
+      # fresh checkout does not carry, and `state/telemetry-aggregate/` does not
+      # exist until the first fold writes it. `state` always does, and the day's
+      # own commit above has already taken everything else in it.
+      - name: Retire the ledger shards the pipeline no longer reads
+        continue-on-error: true
+        run: python -m idhazh prune-state --date "${{ needs.plan.outputs.date }}"
+
+      - name: Commit the folded telemetry
+        continue-on-error: true
+        env:
+          COMMIT_MESSAGE: "state: retire the shards past their reading window"
+          NOTHING_STAGED_MESSAGE: "every month is still at full grain"
+          PUSH_FAILED_MESSAGE: "could not push the folded telemetry after three attempts"
+        run: >-
+          bash .github/scripts/commit-and-push.sh
+          state
+
+      # The commit steps above rebase when the push loses a race, and the
+      # rebuild there rewrites the day against the tip that won. `frontend/build`
+      # still holds the build made before any of that, so the gate below would
+      # weigh one tree's pages against another tree's records. Run 33270983446
+      # failed exactly there: /console/ read 746 B under a record that arrived
+      # with the rebase, while the build it measured was 5 B off the record its
+      # own source carried. The day was fine and had already published.
+      #
+      # `npm ci` is deliberately not repeated. frontend/package-lock.json moved
+      # 8 times in 60 days against about 8 frontend source commits a day, so a
+      # reinstall would delete node_modules on every run to cover the rarer of
+      # the two. The build alone is 17 s and writes only gitignored output.
+      - name: Rebuild the site against the tree that was pushed
+        working-directory: frontend
+        run: npm run build
+
+      # The other severity, and the reason it is down here. A page heavier than
+      # the weight recorded for it in config/idhazh.json still reads correctly:
+      # what grew is the document, not the meaning. Losing the day for it also
+      # throws away the two to three hours that built it, to hold a number we
+      # wrote down ourselves. So the day publishes first.
+      #
+      # It stays fatal. The job goes red, main's next CI goes red with it, and
+      # somebody re-measures the ceiling - one line in config/idhazh.json.
+      #
+      # It reads the rebuild above, so its numbers describe the tree that was
+      # pushed rather than the one this job started from.
+      - name: Bundle gate - encoder and page ceilings
+        working-directory: frontend
+        run: npm run bundle-gate

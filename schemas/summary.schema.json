@@ -1,0 +1,277 @@
+{
+  "$defs": {
+    "FailureCode": {
+      "description": "Stable failure vocabulary for item-health rows.",
+      "enum": [
+        "not_attempted",
+        "robots_denied",
+        "robots_unreachable",
+        "blocked_address",
+        "http_client_error",
+        "http_rate_limited",
+        "http_server_error",
+        "network_error",
+        "no_text",
+        "too_short",
+        "not_prose",
+        "boilerplate",
+        "paywalled",
+        "unsupported_form",
+        "model_unreachable",
+        "context_exceeded",
+        "output_truncated",
+        "bad_shape",
+        "length_out_of_range",
+        "copied_source",
+        "leaked_address",
+        "unknown"
+      ],
+      "title": "FailureCode",
+      "type": "string"
+    },
+    "SummaryStatus": {
+      "enum": [
+        "ok",
+        "failed",
+        "skipped"
+      ],
+      "title": "SummaryStatus",
+      "type": "string"
+    }
+  },
+  "$id": "summary.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "attempt says in its description that it is a constant, not a measurement.",
+      "version": "2026-08-30T20:00",
+      "why": "The description read 'A low-band summary is retried on the smaller model', which describes a retry the pipeline does not do. summarize takes attempt as a keyword defaulting to 1 and no caller passes anything else, so the column is 1 everywhere: measured 2026-08-30, 3,113 of 3,113 rows of state/scores.csv carry 1. A reader who believed the old sentence would have read a column of 1s as evidence that a retry almost never fires, which is a measurement the data cannot support. No field was added, removed or retyped and no payload was rewritten; the generated schema moves because a description is part of it."
+    },
+    {
+      "change": "failure_code may now carry copied_source or leaked_address.",
+      "version": "2026-08-27",
+      "why": "Summarize refuses two more replies: one that copies the source instead of summarizing it, and one that carries an address into our own words. No field on this payload changed, but the failure vocabulary is inlined into this schema, so the generated file's bytes move and the change is stamped here rather than left to the drift gate to announce. Additive - a payload written before today names none of the new values and still validates."
+    },
+    {
+      "change": "Added prefill_ms, decode_ms and cached_tokens.",
+      "version": "2026-08-24T18:30",
+      "why": "summarize_ms is one number covering two costs with different rates: reading the article runs about twice as fast per token as writing the summary, so a blended figure cannot say whether a slow run was a long article or a long reply. The runtime already reports both separately, and cached_tokens is what makes a prefill figure comparable between items. All three default to zero, so an older payload still validates."
+    },
+    {
+      "change": "Added optional failure_code for typed summarize failures.",
+      "version": "2026-08-23T17:36",
+      "why": "A dead local model server is infrastructure failure, not a malformed model reply. The failure payload now carries model_unreachable as a typed value so the item-health classifier can read it without pattern-matching failure_detail."
+    },
+    {
+      "change": "Added optional title, and folded it into output_digest when present.",
+      "version": "2026-08-23",
+      "why": "The digest published the source's own headline, which is written to win a click. The summarizer now writes a title from the article's own facts and it is published words like the rest, so it belongs in the digest that detects drift. Additive both ways: the field is optional, and a null title is left out of the digested payload rather than digested as null, so every payload written before today still recomputes to the same value."
+    },
+    {
+      "change": "Split duration_ms into fetch_ms, extract_ms and summarize_ms.",
+      "version": "2026-08-22",
+      "why": "One number covering fetch, extract and summarize could not answer the question it was there for: a slow item might be a slow host or a slow model, and only one of those is ours to fix. Additive - the blended field stays, and a payload written before this still validates."
+    },
+    {
+      "change": "Added required pipeline_fingerprint and output_digest.",
+      "version": "2026-08-21T02:00",
+      "why": "Skip-if-exists becomes skip-if-fingerprint-matches, and a match with unequal output has to be detectable. No payload predates this - the pipeline has never run - so the read-side migration is the fixtures, restamped here."
+    },
+    {
+      "change": "Initial shape: summary text, key points, the model, and the cost.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - Summarize is written against a fixed payload."
+    }
+  ],
+  "description": "The Summarize stage's output payload, one per item.",
+  "properties": {
+    "attempt": {
+      "default": 1,
+      "description": "Which summarize attempt wrote this payload. A count, not a duration - 1 is the first try. It is 1 on every payload and every ledger row ever written: 3,113 of 3,113 rows of state/scores.csv on 2026-08-30. summarize() takes it as a keyword defaulting to 1 and no caller passes anything else, because no retry budget exists yet. Nothing reads it today. It is kept for the retry budget it is named for, so read it as a constant that is reserved and never as a measurement of how often a summary is redone.",
+      "minimum": 1,
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "cached_tokens": {
+      "default": 0,
+      "description": "Prompt tokens the runtime reused instead of reading. input_tokens minus this is what prefill_ms actually paid for.",
+      "minimum": 0,
+      "title": "Cached Tokens",
+      "type": "integer"
+    },
+    "decode_ms": {
+      "default": 0,
+      "description": "Writing the summary. One token at a time, so about half the prefill rate.",
+      "minimum": 0,
+      "title": "Decode Ms",
+      "type": "integer"
+    },
+    "duration_ms": {
+      "default": 0,
+      "description": "Fetch plus extract plus summarize. The three below sum to it.",
+      "minimum": 0,
+      "title": "Duration Ms",
+      "type": "integer"
+    },
+    "extract_ms": {
+      "default": 0,
+      "description": "Boilerplate removal and sanitising.",
+      "minimum": 0,
+      "title": "Extract Ms",
+      "type": "integer"
+    },
+    "failure_code": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/FailureCode"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Typed summarize-stage failure, when the cause is already known. Older payloads omit it and still validate."
+    },
+    "failure_detail": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Detail"
+    },
+    "fetch_ms": {
+      "default": 0,
+      "description": "Network. Says more about the host than us.",
+      "minimum": 0,
+      "title": "Fetch Ms",
+      "type": "integer"
+    },
+    "generated_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Generated At",
+      "type": "string"
+    },
+    "input_tokens": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Input Tokens",
+      "type": "integer"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "key_points": {
+      "items": {
+        "type": "string"
+      },
+      "title": "Key Points",
+      "type": "array"
+    },
+    "model_id": {
+      "description": "The ModelRef id from config. The full ref lives in the manifest.",
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "output_digest": {
+      "description": "Digest of the words only. Recomputed on read, never trusted.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
+    "output_tokens": {
+      "default": 0,
+      "minimum": 0,
+      "title": "Output Tokens",
+      "type": "integer"
+    },
+    "pipeline_fingerprint": {
+      "description": "The stamp of every input that could have moved this text.",
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "prefill_ms": {
+      "default": 0,
+      "description": "Reading the prompt. Scales with article length, minus what the cache kept.",
+      "minimum": 0,
+      "title": "Prefill Ms",
+      "type": "integer"
+    },
+    "source_truncated": {
+      "default": false,
+      "title": "Source Truncated",
+      "type": "boolean"
+    },
+    "status": {
+      "$ref": "#/$defs/SummaryStatus"
+    },
+    "summarize_ms": {
+      "default": 0,
+      "description": "The model. The only one of the three that a model swap moves.",
+      "minimum": 0,
+      "title": "Summarize Ms",
+      "type": "integer"
+    },
+    "summary": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Summary"
+    },
+    "title": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Our own headline, written from the article's facts. Optional because a title outside the asked range degrades to the source's rather than costing the item (section 1a).",
+      "title": "Title"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-30T20:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "item_id",
+    "url_key",
+    "pipeline_fingerprint",
+    "output_digest",
+    "model_id",
+    "generated_at",
+    "status"
+  ],
+  "title": "Summary",
+  "type": "object",
+  "version": "2026-08-30T20:00"
+}

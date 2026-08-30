@@ -1,0 +1,157 @@
+import { expect, test } from '@playwright/test';
+import { readdirSync, readFileSync, statSync } from 'node:fs';
+import { join, resolve } from 'node:path';
+
+/**
+ * The staged day payload carries what a search result renders, and no more.
+ *
+ * `frontend/public/digest/` is the committed day: every field the digest page
+ * draws, plus the vector block. `scripts/copy-visuals.mjs` projects it into
+ * `static/`, which is the copy that reaches a reader - fetched by
+ * `lib/assist/day.ts` when a search result from that day is on screen.
+ *
+ * **The list below is a second copy on purpose.** The script holds the
+ * behaviour; this file holds the promise. Reading the script's own constant
+ * here would make the test agree with any widening, which is the one failure it
+ * exists to catch - a field added to the allow-list is paid for by every reader
+ * who searches, and nothing else in the build would say a word.
+ *
+ * Runs in Node over the tree the build just staged, like the arithmetic tests
+ * in `frame.spec.ts`. No page is loaded.
+ */
+
+const STAGED = resolve(process.cwd(), 'static', 'digest');
+const COMMITTED = resolve(process.cwd(), 'public', 'digest');
+
+/** Traced along the render path, not guessed: `DigestItem` with `ItemMeta`,
+ * `ItemVisual`, `ConfidenceChip`, `ReadAloud` and `SourceLink`. */
+const RENDERED_FIELDS = [
+	'band',
+	'band_reason',
+	'item_id',
+	'reader_note',
+	'source_id',
+	'source_kind',
+	'source_name',
+	'source_url',
+	'summary',
+	'title',
+	'truncated',
+	'vertical',
+	'visual'
+];
+
+/** The three `ItemVisual` reads. `kind` is a build-time field of the committed
+ * tree, for the console's chart count. */
+const VISUAL_FIELDS = ['alt', 'path', 'state'];
+
+interface Day {
+	path: string;
+	payload: Record<string, unknown>;
+}
+
+function daysUnder(root: string): Day[] {
+	const found: Day[] = [];
+	const walk = (at: string) => {
+		for (const name of readdirSync(at)) {
+			const path = join(at, name);
+			if (statSync(path).isDirectory()) walk(path);
+			else if (name === 'digest.json')
+				found.push({ path, payload: JSON.parse(readFileSync(path, 'utf8')) });
+		}
+	};
+	walk(root);
+	return found;
+}
+
+function staged(): Day[] {
+	const found = daysUnder(STAGED);
+	expect(found.length, 'nothing is staged under static/digest - build first').toBeGreaterThan(0);
+	return found;
+}
+
+function items(day: Day): Record<string, unknown>[] {
+	return day.payload.items as Record<string, unknown>[];
+}
+
+test('a staged day carries the one key the fetch reads', () => {
+	// `assist/day.ts` refuses a payload whose `items` is not an array and keeps
+	// nothing else, so this is the whole contract the fetched file answers to.
+	for (const day of staged()) {
+		expect(Object.keys(day.payload).sort(), `${day.path} is not the day projection`).toEqual([
+			'items'
+		]);
+		expect(Array.isArray(day.payload.items), `${day.path} has no items array`).toBe(true);
+	}
+});
+
+test('a staged item carries the thirteen fields a result renders, and no fourteenth', () => {
+	const wrong: string[] = [];
+	let counted = 0;
+	for (const day of staged()) {
+		for (const item of items(day)) {
+			counted += 1;
+			const keys = Object.keys(item).sort();
+			if (keys.join(',') !== RENDERED_FIELDS.join(',')) {
+				const extra = keys.filter((key) => !RENDERED_FIELDS.includes(key));
+				const missing = RENDERED_FIELDS.filter((key) => !keys.includes(key));
+				wrong.push(
+					`${day.path} ${String(item.item_id)}: extra [${extra}] missing [${missing}]`
+				);
+			}
+		}
+	}
+
+	expect(counted, 'the staged days hold no items, so this proved nothing').toBeGreaterThan(0);
+	expect(
+		wrong.slice(0, 10),
+		'the staged projection changed shape. Every field here is paid for by every\n' +
+			'reader who searches, so widening it is a decision, not a detail:\n' +
+			wrong.join('\n')
+	).toEqual([]);
+});
+
+test('a staged visual carries the three fields the image needs', () => {
+	let withVisual = 0;
+	for (const day of staged()) {
+		for (const item of items(day)) {
+			const visual = item.visual as Record<string, unknown> | null;
+			if (visual === null) continue;
+			withVisual += 1;
+			expect(Object.keys(visual).sort(), `${day.path} ${String(item.item_id)}`).toEqual(
+				VISUAL_FIELDS
+			);
+		}
+	}
+	// The canary corpus always renders at least one chart. Zero would mean the
+	// nested projection was never exercised, which reads the same as a pass.
+	expect(withVisual, 'no staged item carries a visual, so the nested projection is untested')
+		.toBeGreaterThan(0);
+});
+
+/**
+ * The block this projection exists to drop, and the tree that must keep it.
+ *
+ * The vectors have one store - the committed day payloads - and one production
+ * reader, the backend's index rebuild. If a day loses them the rebuild does not
+ * raise: it writes every entry and a zero-byte vector file, and search answers
+ * nothing for every query with no log line saying why.
+ */
+test('the vectors are gone from the staged copy and still in the committed one', () => {
+	for (const day of staged()) {
+		expect(
+			Object.keys(day.payload),
+			`${day.path} is staging the vector block again - it is 40 percent of a day`
+		).not.toContain('embeddings');
+	}
+
+	const committed = daysUnder(COMMITTED);
+	expect(committed.length, 'no committed day, so the control below proves nothing').toBeGreaterThan(
+		0
+	);
+	const carrying = committed.filter((day) => day.payload.embeddings !== null);
+	expect(
+		carrying.length,
+		'no committed day carries a vector block - the index rebuild has no source left'
+	).toBeGreaterThan(0);
+});

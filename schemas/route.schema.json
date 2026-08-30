@@ -1,0 +1,216 @@
+{
+  "$defs": {
+    "SpecFormat": {
+      "enum": [
+        "vega-lite",
+        "mermaid",
+        "image-prompt"
+      ],
+      "title": "SpecFormat",
+      "type": "string"
+    },
+    "VisualKind": {
+      "enum": [
+        "chart",
+        "diagram",
+        "image",
+        "none"
+      ],
+      "title": "VisualKind",
+      "type": "string"
+    },
+    "VisualState": {
+      "description": "What became of the visual. \"Could not make it\" and \"made it then threw it\naway\" are different facts, so they never share a member.",
+      "enum": [
+        "absent",
+        "rendered",
+        "render_failed"
+      ],
+      "title": "VisualState",
+      "type": "string"
+    }
+  },
+  "$id": "route.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "asset_path is now written as digest/<Y>/<M>/<D>/<item_id>.svg. It was digest/<Y>/<M>/<D>/<vertical>-<NN>.svg, where NN came from a counter seeded by reading the day's directory.",
+      "version": "2026-08-27",
+      "why": "A counter has to be seeded from somewhere a run can read, and two runs of one day read the same directory before either had pushed. Both wrote energy-03.svg for different items and run 32869125768 lost a finished day to CONFLICT (add/add). Naming the file after the item makes the path a function of the item, so no two runs and no two shards can pick one path for two stories, and sharding the route stage stops being blocked on it. No migration: the path is stored, not derived, so every payload written under the old shape still validates and still resolves to the file it names. Both shapes are live in committed data."
+    },
+    {
+      "change": "Added drafted_chart, defaulting to false and derived true for a chart.",
+      "version": "2026-08-25",
+      "why": "A chart draft that the post-model checks reject is today indistinguishable from a draft the model never wrote, so nothing committed says why 8 of 17 drafts died on 2026-08-25. The run manifest sums this into charts_drafted. The read-side migration is a validator: a payload written before the field existed whose kind is chart was necessarily drafted as one, and a default of false there would report fewer drafts than published charts."
+    },
+    {
+      "change": "Added asked_the_model, defaulting to true.",
+      "version": "2026-08-24T23:10",
+      "why": "The router now decides an item without posting when no enabled visual kind could survive its checks. That decision must be a field, not a sentence a reader parses out of the rationale, because the run manifest counts it and a chart rate quoted against the wrong denominator is the first thing this gate would break. True on an older payload, which is correct: every item was asked before the gate existed."
+    },
+    {
+      "change": "Added optional route_ms.",
+      "version": "2026-08-24T11:15",
+      "why": "The route job sits between 51 and 60 minutes against a 60-minute bound and nothing recorded what it spent, so every argument about the budget was an estimate (Rule #10). Null on a payload written before the clock existed, which is what keeps the field additive."
+    },
+    {
+      "change": "Initial shape: the four-way routing enum, the spec, and the render outcome.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - Route and Render are written against a fixed payload."
+    }
+  ],
+  "description": "The Route stage's decision plus the Render stage's outcome, one per item.",
+  "properties": {
+    "alt_text": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Alt Text"
+    },
+    "asked_the_model": {
+      "default": true,
+      "description": "False when the router decided this item on its own facts and never posted. True on a payload written before the gate existed, because every item was asked then.",
+      "title": "Asked The Model",
+      "type": "boolean"
+    },
+    "asset_path": {
+      "anyOf": [
+        {
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Relative POSIX path under frontend/public/, once rendered. Written as digest/<Y>/<M>/<D>/<item_id>.svg since 2026-08-27; payloads before that carry digest/<Y>/<M>/<D>/<vertical>-<NN>.svg and stay valid.",
+      "title": "Asset Path"
+    },
+    "drafted_chart": {
+      "default": false,
+      "description": "True when the model's reply asked for a chart, whatever this decision became. The gap between this and a kind of chart is what the post-model checks rejected.",
+      "title": "Drafted Chart",
+      "type": "boolean"
+    },
+    "failure_detail": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Failure Detail"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/VisualKind"
+    },
+    "model_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "rationale": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rationale"
+    },
+    "route_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Wall-clock for this item: the router call plus the render. Null on a payload written before the clock existed.",
+      "title": "Route Ms"
+    },
+    "routed_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Routed At",
+      "type": "string"
+    },
+    "spec": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Vega-Lite JSON, Mermaid source, or the image prompt.",
+      "title": "Spec"
+    },
+    "spec_format": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/SpecFormat"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "version": {
+      "default": "2026-08-27",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "visual_state": {
+      "$ref": "#/$defs/VisualState",
+      "default": "absent"
+    }
+  },
+  "required": [
+    "item_id",
+    "url_key",
+    "kind",
+    "model_id",
+    "routed_at"
+  ],
+  "title": "Route",
+  "type": "object",
+  "version": "2026-08-27"
+}

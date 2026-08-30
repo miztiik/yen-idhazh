@@ -1,0 +1,350 @@
+{
+  "$defs": {
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    }
+  },
+  "$id": "eval-row.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "hhem_delta, truncation_flagged and score_ms each say what they hold and how to read them. No column was added, removed or retyped.",
+      "version": "2026-08-30T20:00",
+      "why": "The owner had to ask what two of these columns meant, which is the definition of a description not doing its job, and each of the three carries a trap a reader cannot see from the cell. hhem_delta is derived and recomputed on read, so it is not an independent measurement, and the window geometry moves it by more than the whole medium band. truncation_flagged means one thing before 2026-08-29T09:00 and another after, so a query without the version branch reads two facts as one. score_ms is off the critical path and exists to size the census-versus-sample decision, which observability.sample_rate now implements. The generated schema moves because a description is part of it; every committed row still validates unchanged."
+    },
+    {
+      "change": "truncation_flagged is Article.truncated - whether extract cut the article body. It was hhem_delta above evaluation.truncation_gap_max, or a brief item copied past evaluation.brief_compression_ceiling. No column was added or removed and no row was rewritten.",
+      "version": "2026-08-29T09:00",
+      "why": "The column's name says the article was cut short and its only consumer prints exactly that sentence, and it was reading a faithfulness gap instead. The gap cannot answer the question: score_over_chunks takes the best of overlapping windows, and a cut article's last window is not a window of the whole article, so the two maxima are taken over different premises and the difference is not a cost. Measured 2026-08-28 over all 2,683 committed rows of state/scores.csv: 22 rows were genuinely cut, hhem_delta over them runs -0.1235 to +0.0381 against a threshold of +0.100, and the flag fired on 0 of them. It fired on exactly one row in the whole ledger, and that row read 748 words of a 748-word article. The brief-copying clause went with it: verbatim_run and extractiveness already carry that fact, and one column answers one question. A row stamped before this is UNKNOWN and never False, in both directions: a row before 2026-08-27T20:30 held two scores of one text so its gap could not be non-zero, and a row between the two stamps held a real gap read by the wrong rule. Neither state is recoverable from the row, so frontend/src/lib/server/model-work.ts counts the column only over rows stamped at or after 2026-08-28 and prints absence as absence."
+    },
+    {
+      "change": "source_word_count is nullable, source_seen_word_count may not exceed it, and the committed ledger is rewritten to obey that.",
+      "version": "2026-08-27T21:00",
+      "why": "The stamp below fixed the writer and left the committed rows carrying the old meaning. Measured over all 2,566 rows: 610 have the seen count LARGER than the full count, and every one of them was written by the old writer - none of the 220 rows the fixed writer produced reads that way. Nothing compared the two cells, which is how the pair stayed wrong for months, so the rule is a validator now rather than a habit. Null and not zero where the length cannot be recovered: extract discards the pre-cap body, so a truncated row written before this has no full length anywhere and zero would say the article was empty. backend/utilities/migrate_score_ledger.py is the read-side migration. It recovers rather than guesses - an article under the cap IS the text the model saw, so its two counts are equal by construction, and 2,204 rows got a real number back while 142 were emptied."
+    },
+    {
+      "change": "hhem_full is now scored against the article before the truncation cap, so hhem_delta and truncation_flagged can be non-zero. No column was added or removed and no row was rewritten.",
+      "version": "2026-08-27T20:30",
+      "why": "dual_score exists to tell a model that invented something from a model that faithfully summarized the half we gave it, and its only production caller handed it the same string twice: extract.truncate_to_tokens returned the cut text and to_article kept only that. Measured over all 2,232 rows written before this, hhem_delta is exactly 0.0 on 2,232 of 2,232 and hhem equals hhem_full on every one. Those rows record two scores of one text, so 'the gap was zero' means 'the gap was never measured' and must not be read as evidence that truncation costs nothing. Recorded only - no band reads either column, so METRICS_VERSION did not move."
+    },
+    {
+      "change": "source_word_count is now Article.source_word_count, the pre-cap count, rather than a recount of whatever text the caller passed as full_text. No column was added or removed and no row was rewritten.",
+      "version": "2026-08-27T20:00",
+      "why": "The pair source_word_count / source_seen_word_count reads as before-truncation and after-truncation and was neither. Both came off the same post-cap string through two different counters - len(_WORD.findall(t)) against len(t.split()) - so the difference between them measured the counters. Measured over all 2,232 rows written before this: they agree on 287, source_word_count is larger on 1,355, and source_seen_word_count is larger on 590, which is impossible if one string is a cut of the other. Read as a truncation signal the pair said 87 percent of items were truncated; counting the rows sitting on the 1,923-word cap says 6.3 percent. Rows written before this stamp carry the old meaning and must not be read as a truncation rate."
+    },
+    {
+      "change": "Added source_digest, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-08-27",
+      "why": "The row named the words that came out and never the text they were scored against. A person re-reading an item to label it by hand had no way to prove the article in front of them was the sanitized, truncated premise the scorer read, so a disagreement between the two measured premise mismatch and not scorer error. Empty on the 2,232 rows that predate it: those runs recorded no premise, and a digest computed today would name text nobody read. Recorded only - no band reads it, so METRICS_VERSION did not move."
+    },
+    {
+      "change": "Added self_repetition, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-08-26",
+      "why": "Every n-gram column here reads the summary against the article. Nothing read the summary against itself, so a summary that says the same clause three times scored clean on all eleven quality columns - greedy decoding has no sampling noise to break a loop, and a repeated sentence is still perfectly supported by the source. Null and not zero on the rows that predate it: zero means measured and not repeating. Recorded only - no band reads it, so METRICS_VERSION did not move."
+    },
+    {
+      "change": "Added evidential_density and speculative_density, nullable, at the end of the row. The ledger's header is migrated in the same commit.",
+      "version": "2026-08-23",
+      "why": "Every other column scores our summary against the article. These two score the article, which nothing did: a faithful summary of an unsourced rumour scores high on all of them and is still an unsourced rumour. First columns to land after the ledger had rows in it, hence appended rather than filed by meaning, and null rather than zero on the ten rows that predate them. Recorded only - no band reads them until enough rows exist to say what a normal value is (Rule #10)."
+    },
+    {
+      "change": "Added unsupported_numbers, hedge_dropped, extraction_suspect, verbatim_run and source_seen_word_count.",
+      "version": "2026-08-21T03:00",
+      "why": "Faithfulness cannot see a wrong number, a rumour asserted as fact, or a summary of navigation chrome - it scores all three generously. The ledger is still empty, so these cost a changelog entry today and a migration ever after."
+    },
+    {
+      "change": "Added pipeline_fingerprint, output_digest and determinism_violation.",
+      "version": "2026-08-21T02:00",
+      "why": "The ledger is the only committed record that survives a run, so it is the only place a later run can detect that identical inputs produced different words. No payload predates this - the ledger has never been written."
+    },
+    {
+      "change": "Initial shape: dual faithfulness scores, the counterweights, and the band.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - the columns are fixed before the first row lands."
+    }
+  ],
+  "description": "The Evaluate stage's output, appended once per item.",
+  "properties": {
+    "attempt": {
+      "minimum": 1,
+      "title": "Attempt",
+      "type": "integer"
+    },
+    "band": {
+      "$ref": "#/$defs/ConfidenceBand"
+    },
+    "compression": {
+      "description": "Summary length over source length. Recorded, never flagged: at a fixed output budget this measures the article's length, not the summary's quality.",
+      "minimum": 0.0,
+      "title": "Compression",
+      "type": "number"
+    },
+    "coverage": {
+      "description": "Survival of the lead's entities and numbers. The instrument for omission.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Coverage",
+      "type": "number"
+    },
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "determinism_violation": {
+      "default": false,
+      "description": "Identical inputs, different words. Counted and published, never fatal.",
+      "title": "Determinism Violation",
+      "type": "boolean"
+    },
+    "evidential_density": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Attribution markers as a share of the ARTICLE's words. How often the story says where it got a claim. Scores the source, not our summary of it. Null on a row scored before metrics-2.",
+      "title": "Evidential Density"
+    },
+    "extraction_suspect": {
+      "default": false,
+      "description": "The text looks like page furniture. A faithful summary of chrome scores high.",
+      "title": "Extraction Suspect",
+      "type": "boolean"
+    },
+    "extractiveness": {
+      "description": "Share of the summary's 4-grams found verbatim in the source.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Extractiveness",
+      "type": "number"
+    },
+    "hedge_dropped": {
+      "default": false,
+      "description": "The source hedged and the summary asserted. A rumour became a fact.",
+      "title": "Hedge Dropped",
+      "type": "boolean"
+    },
+    "hhem": {
+      "description": "Faithfulness against the text the model saw.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Hhem",
+      "type": "number"
+    },
+    "hhem_delta": {
+      "description": "hhem minus hhem_full, on the same 0-to-1 faithfulness scale. Derived, never independent: _delta_is_rebuilt_not_trusted recomputes it from the two scores on every read and raises if the stored cell disagrees, so it carries no information the two scores beside it do not. It is 0.0 on an article nobody cut, by construction - both scores read the same text and the scorer is deterministic - and 2,945 of the 2,945 uncut rows that carry both word counts are exactly 0.0 (measured 2026-08-30). It is non-zero on 3 of all 3,113 committed rows, because a row stamped before 2026-08-27T20:30 scored one text twice and almost no article is cut. Recorded only - no band reads it, and nothing on the published site prints it. Read it with the confound stated: measured 2026-08-29, a 3-window article scores 0.40 lower than the same article read whole, against bands at 0.80 and 0.50, so the window geometry alone is wider than the whole medium band and this number mixes the cost of the cut with the cost of the slicing. Until that settles it is not the cost of truncation on its own. See docs/concepts/evaluation.md.",
+      "title": "Hhem Delta",
+      "type": "number"
+    },
+    "hhem_full": {
+      "description": "Faithfulness against the article before the truncation cap. Equal to hhem on rows stamped before 2026-08-27T20:30, which scored one text twice.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Hhem Full",
+      "type": "number"
+    },
+    "item_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+      "title": "Item Id",
+      "type": "string"
+    },
+    "model_id": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Model Id",
+      "type": "string"
+    },
+    "output_digest": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Output Digest",
+      "type": "string"
+    },
+    "pipeline_fingerprint": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Pipeline Fingerprint",
+      "type": "string"
+    },
+    "run_id": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+      "title": "Run Id",
+      "type": "string"
+    },
+    "score_ms": {
+      "default": 0,
+      "description": "Milliseconds the faithfulness scorer spent on THIS one item, after the summary was already written. Not on the critical path of the published words: no digest sentence waits on it, and a run with the scorer off publishes the same text. The shard clock does wait on it, and that is the decision this column exists to size - whether the scorer stays a census or becomes a sample. observability.sample_rate is the knob that decision produced, so this is the instrument behind that knob and not a stage timing to tune. Measured 2026-08-30 over all 3,113 committed rows of state/scores.csv: median 2,763 ms an item, 95th percentile 14,814 ms, longest 51,587 ms. Per run, the heaviest of the 25 committed runs spent 859.7 s scoring 149 items - 14.3 minutes spread over that run's shards, so at today's volume of about 150 items a day the census is affordable and a rate below 1.0 is insurance rather than a rescue. Zero on the 10 rows written before the column existed, and those read as unmeasured rather than as instant.",
+      "minimum": 0,
+      "title": "Score Ms",
+      "type": "integer"
+    },
+    "scored_at": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+      "title": "Scored At",
+      "type": "string"
+    },
+    "scorer_version": {
+      "description": "Derived, never hand-typed: the scorer, its weights, the tagger and the band thresholds, spelled so a row still explains itself years later.",
+      "minLength": 1,
+      "title": "Scorer Version",
+      "type": "string"
+    },
+    "self_repetition": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Share of the summary's 4-word windows that repeat one it already used. The only column that reads the summary against ITSELF: every other n-gram column reads it against the article, and a repeated sentence is perfectly supported by the article. Zero means no window repeats. Recorded only, never banded. Null on a row scored before 2026-08-26.",
+      "title": "Self Repetition"
+    },
+    "source_digest": {
+      "anyOf": [
+        {
+          "pattern": "^[0-9a-f]{64}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The premise the faithfulness scorer read, digested whole: the article text after sanitizing and truncation. Not the fetched page, and not the summary - `output_digest` already names those words. It exists so a person labelling this item by hand can prove they are reading the same text the scorer read; without it a disagreement between them measures a premise mismatch rather than a scorer error. Null on a row scored before 2026-08-27.",
+      "title": "Source Digest"
+    },
+    "source_seen_word_count": {
+      "default": 0,
+      "description": "What the model actually got, after truncation. Counted the same way as source_word_count, so the difference between the two is the cut.",
+      "minimum": 0,
+      "title": "Source Seen Word Count",
+      "type": "integer"
+    },
+    "source_url": {
+      "maxLength": 2048,
+      "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+      "title": "Source Url",
+      "type": "string"
+    },
+    "source_word_count": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The article before the truncation cap, counted by Article.source_word_count. Null when the length is not knowable: the pre-cap body is never persisted, so a truncated row stamped before 2026-08-27T21:00 has no full length to recover. Rows stamped before 2026-08-27T20:00 recount the post-cap text.",
+      "title": "Source Word Count"
+    },
+    "speculative_density": {
+      "anyOf": [
+        {
+          "maximum": 1.0,
+          "minimum": 0.0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Unresolved-claim markers as a share of the ARTICLE's words. Read against evidential_density: speculation nobody is cited for is the fragile case. Null on a row scored before metrics-2.",
+      "title": "Speculative Density"
+    },
+    "summary_word_count": {
+      "minimum": 0,
+      "title": "Summary Word Count",
+      "type": "integer"
+    },
+    "title": {
+      "maxLength": 500,
+      "minLength": 1,
+      "title": "Title",
+      "type": "string"
+    },
+    "truncation_flagged": {
+      "description": "True when extract cut the article body before the model read it - Article.truncated, a fact from the stage that did the cutting, not a score. That is what the name always promised and what the column holds from 2026-08-29T09:00. A row stamped earlier holds a DIFFERENT fact: hhem_delta above a configured gap, which is the distance between two faithfulness scores and says nothing about a cut. Measured 2026-08-30 over all 3,113 committed rows of state/scores.csv, which are exact counts over a committed file and carry no spread. Of the 2,683 rows on the old side of the boundary it is true on 0 of the 22 genuinely cut rows, and true on exactly 1 row, which read 748 words of a 748-word article and was never cut. Of the 430 rows on the new side, 4 were cut and all 4 are flagged, and the flag agrees with the word counts on 430 of 430. Prefer the pair source_word_count > source_seen_word_count for any new reader: it is true exactly when the body was cut, on every row carrying both, with no version branch to get wrong. The pair has one hole of its own, and it prints as a hole - 142 of the 3,113 rows carry a null source_word_count, 4.6 percent, every one of them on the old side, and unknown is printed as unknown rather than as uncut. Its one reader is frontend/src/lib/server/model-work.ts, which counts it only over rows stamped from CUT_FLAG_MEANS_A_CUT_FROM.",
+      "title": "Truncation Flagged",
+      "type": "boolean"
+    },
+    "unsupported_numbers": {
+      "default": 0,
+      "description": "Numbers asserted by the summary that appear nowhere in the full source.",
+      "minimum": 0,
+      "title": "Unsupported Numbers",
+      "type": "integer"
+    },
+    "url_key": {
+      "pattern": "^[0-9a-f]{64}$",
+      "title": "Url Key",
+      "type": "string"
+    },
+    "verbatim_run": {
+      "default": 0.0,
+      "description": "Longest unbroken copied stretch. This is the one that names copying.",
+      "maximum": 1.0,
+      "minimum": 0.0,
+      "title": "Verbatim Run",
+      "type": "number"
+    },
+    "version": {
+      "default": "2026-08-30T20:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    },
+    "vertical": {
+      "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+      "title": "Vertical",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "run_id",
+    "item_id",
+    "url_key",
+    "source_url",
+    "title",
+    "vertical",
+    "model_id",
+    "attempt",
+    "hhem",
+    "hhem_full",
+    "hhem_delta",
+    "truncation_flagged",
+    "coverage",
+    "compression",
+    "extractiveness",
+    "band",
+    "summary_word_count",
+    "pipeline_fingerprint",
+    "output_digest",
+    "scorer_version",
+    "scored_at"
+  ],
+  "title": "EvalRow",
+  "type": "object",
+  "version": "2026-08-30T20:00"
+}

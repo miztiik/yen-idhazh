@@ -1,0 +1,498 @@
+{
+  "$defs": {
+    "ConfigDigest": {
+      "additionalProperties": false,
+      "description": "Which config bytes a run read. A silently edited knob changes every output.",
+      "properties": {
+        "path": {
+          "maxLength": 512,
+          "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+          "title": "Path",
+          "type": "string"
+        },
+        "sha256": {
+          "pattern": "^[0-9a-f]{64}$",
+          "title": "Sha256",
+          "type": "string"
+        }
+      },
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "title": "ConfigDigest",
+      "type": "object"
+    },
+    "ModelRef": {
+      "additionalProperties": false,
+      "description": "Which weights, from where. Per-item payloads carry only the `id`.",
+      "properties": {
+        "file": {
+          "minLength": 1,
+          "title": "File",
+          "type": "string"
+        },
+        "hf_base_repo": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The safetensors repository a fine-tune trains against, when this entry names a GGUF conversion of somebody else's weights. It sits here rather than in `finetune` because the two strings describe the same model: held apart, a model swap moves one and leaves the other, and a LoRA adapter loads onto a mismatched base without raising. Optional - only an entry we intend to fine-tune needs it.",
+          "title": "Hf Base Repo"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "quantisation": {
+          "minLength": 1,
+          "title": "Quantisation",
+          "type": "string"
+        },
+        "repo": {
+          "description": "Hugging Face repository the GGUF is pulled from.",
+          "minLength": 1,
+          "title": "Repo",
+          "type": "string"
+        },
+        "revision": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{40}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The hub commit the weights are fetched at. A download that names a branch gets whatever was uploaded last, so the bytes can change under a config that still records the old sha256.",
+          "title": "Revision"
+        },
+        "sha256": {
+          "anyOf": [
+            {
+              "pattern": "^[0-9a-f]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Recorded once measured. A weight that changes silently changes every output.",
+          "title": "Sha256"
+        }
+      },
+      "required": [
+        "id",
+        "repo",
+        "file",
+        "quantisation"
+      ],
+      "title": "ModelRef",
+      "type": "object"
+    },
+    "ModelRole": {
+      "enum": [
+        "summarize",
+        "route"
+      ],
+      "title": "ModelRole",
+      "type": "string"
+    },
+    "ModelUse": {
+      "additionalProperties": false,
+      "properties": {
+        "model_ref": {
+          "$ref": "#/$defs/ModelRef"
+        },
+        "role": {
+          "$ref": "#/$defs/ModelRole"
+        }
+      },
+      "required": [
+        "role",
+        "model_ref"
+      ],
+      "title": "ModelUse",
+      "type": "object"
+    },
+    "RunRecord": {
+      "additionalProperties": false,
+      "properties": {
+        "charts_drafted": {
+          "default": 0,
+          "description": "Items whose routing reply asked for a chart, whatever the decision became. Subtract the day's published charts and the remainder is what the post-model checks rejected - the only number that separates a model that does not want charts from checks that refuse the ones it wants. Zero on a manifest written before it existed.",
+          "minimum": 0,
+          "title": "Charts Drafted",
+          "type": "integer"
+        },
+        "commit_sha": {
+          "pattern": "^[0-9a-f]{40}$",
+          "title": "Commit Sha",
+          "type": "string"
+        },
+        "completed_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Completed At"
+        },
+        "config_digests": {
+          "items": {
+            "$ref": "#/$defs/ConfigDigest"
+          },
+          "title": "Config Digests",
+          "type": "array"
+        },
+        "determinism_violations": {
+          "default": 0,
+          "description": "Recorded, not raised. A gate that fires on a CPU class gets switched off.",
+          "minimum": 0,
+          "title": "Determinism Violations",
+          "type": "integer"
+        },
+        "evaluation_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether observability.evaluation_enabled was on for this run. False is deliberately off; true with no scorer_version is an instrument that failed to load. Null on a manifest written before this was recorded - never false, because absent and off are different facts.",
+          "title": "Evaluation Enabled"
+        },
+        "evaluation_sample_rate": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The fraction of runs the scorer was set to run on, recorded on EVERY run whether or not this one was drawn. Without it a year-old ledger cannot tell 800 rows of 1,000 from 800 rows of 800. Null on a manifest written before this was recorded.",
+          "title": "Evaluation Sample Rate"
+        },
+        "evaluation_sampled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether this run was drawn at that rate. False is the third reason a run has no rows, beside switched off and failed to load, and none of the three can be read off an absence. Always true at a rate of 1.0.",
+          "title": "Evaluation Sampled"
+        },
+        "items_failed": {
+          "minimum": 0,
+          "title": "Items Failed",
+          "type": "integer"
+        },
+        "items_planned": {
+          "minimum": 0,
+          "title": "Items Planned",
+          "type": "integer"
+        },
+        "items_prefiltered": {
+          "default": 0,
+          "description": "Items the router decided without asking the model, because no enabled visual kind could survive the checks. Counted separately so a chart rate is never quoted against items_routed alone.",
+          "minimum": 0,
+          "title": "Items Prefiltered",
+          "type": "integer"
+        },
+        "items_routed": {
+          "default": 0,
+          "description": "Items the router reached. Zero when the route job died.",
+          "minimum": 0,
+          "title": "Items Routed",
+          "type": "integer"
+        },
+        "items_skipped": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Items Skipped",
+          "type": "integer"
+        },
+        "items_succeeded": {
+          "minimum": 0,
+          "title": "Items Succeeded",
+          "type": "integer"
+        },
+        "models": {
+          "items": {
+            "$ref": "#/$defs/ModelUse"
+          },
+          "title": "Models",
+          "type": "array"
+        },
+        "n": {
+          "description": "Run sequence within the date. 1 is the morning run.",
+          "minimum": 1,
+          "title": "N",
+          "type": "integer"
+        },
+        "note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Note"
+        },
+        "pipeline_fingerprints": {
+          "description": "The distinct stamps this run wrote under.",
+          "items": {
+            "pattern": "^[0-9a-f]{64}$",
+            "type": "string"
+          },
+          "title": "Pipeline Fingerprints",
+          "type": "array"
+        },
+        "route_ms": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the router spent on this day, summed over its items. Read against items_routed and against the job's own wall-clock: a stage total far below the job total says the fixed cost is the problem, not the model.",
+          "title": "Route Ms"
+        },
+        "run_id": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
+          "title": "Run Id",
+          "type": "string"
+        },
+        "runner": {
+          "description": "The hardware this run's numbers were measured on.",
+          "minLength": 1,
+          "title": "Runner",
+          "type": "string"
+        },
+        "scorer_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The instrument that wrote this run's eval rows, as state/scores.csv spells it. Null when no row was written, which is what separates a run that measured nothing from one whose measurements are simply elsewhere. Null too on a manifest written before this was recorded.",
+          "title": "Scorer Version"
+        },
+        "site_bytes": {
+          "description": "Bytes under frontend/public/digest/ after this run - the committed payload tree, not the published site and not what the Pages cap is measured against.",
+          "minimum": 0,
+          "title": "Site Bytes",
+          "type": "integer"
+        },
+        "site_files": {
+          "description": "Files under frontend/public/digest/ after this run.",
+          "minimum": 0,
+          "title": "Site Files",
+          "type": "integer"
+        },
+        "source_list_stale": {
+          "default": false,
+          "description": "Source discovery failed and yesterday's list was reused.",
+          "title": "Source List Stale",
+          "type": "boolean"
+        },
+        "started_at": {
+          "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+          "title": "Started At",
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/RunStatus"
+        },
+        "verticals": {
+          "items": {
+            "$ref": "#/$defs/VerticalCount"
+          },
+          "title": "Verticals",
+          "type": "array"
+        }
+      },
+      "required": [
+        "run_id",
+        "n",
+        "started_at",
+        "status",
+        "commit_sha",
+        "runner",
+        "items_planned",
+        "items_succeeded",
+        "items_failed",
+        "site_bytes",
+        "site_files"
+      ],
+      "title": "RunRecord",
+      "type": "object"
+    },
+    "RunStatus": {
+      "enum": [
+        "completed",
+        "partial",
+        "failed"
+      ],
+      "title": "RunStatus",
+      "type": "string"
+    },
+    "VerticalCount": {
+      "additionalProperties": false,
+      "properties": {
+        "below_feed_floor": {
+          "default": false,
+          "description": "A vertical under its floor is collected but not rendered.",
+          "title": "Below Feed Floor",
+          "type": "boolean"
+        },
+        "id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Id",
+          "type": "string"
+        },
+        "planned": {
+          "description": "Items this run planned for this vertical.",
+          "minimum": 0,
+          "title": "Planned",
+          "type": "integer"
+        },
+        "published": {
+          "description": "Items this run introduced into the day payload for this vertical.",
+          "minimum": 0,
+          "title": "Published",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "id",
+        "planned",
+        "published"
+      ],
+      "title": "VerticalCount",
+      "type": "object"
+    }
+  },
+  "$id": "run-manifest.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Added optional evaluation_enabled, evaluation_sample_rate, evaluation_sampled and scorer_version to a run.",
+      "version": "2026-08-30T16:00",
+      "why": "The faithfulness scorer is now sampled by run, so a day with no eval rows has four possible causes - switched off in config, not drawn at the rate, the weights would not load, or the run never reached the scorer - and an absence in state/scores.csv looks the same for all four. The rate lands here rather than on EvalRow because the unit sampled is the run: every row of a run shares one rate, so one cell per run says everything a per-row column would, and no persisted ledger widens. All four are nullable and default to null, because an older manifest does not know what it was configured to do and a concrete default would invent the answer - the same rule the observability block states as an empty cell is never a zero."
+    },
+    {
+      "change": "The embedded ModelRef gained an optional hf_base_repo.",
+      "version": "2026-08-28",
+      "why": "A manifest embeds the whole model entry, so a field added there lands here whether or not this document wanted it - the same way the optional revision did on 2026-08-26. Nothing a run writes changes and no manifest needs migrating; the emitted schema gained one optional property, and a stale schema fails the drift gate."
+    },
+    {
+      "change": "site_bytes and site_files now say which tree they measure.",
+      "version": "2026-08-27T11:00",
+      "why": "They always held the committed payload tree, and this document said they measured the ceiling. Measured 2026-08-27, that tree was 7,027,075 bytes while the published site was 128,064,853 - eighteen times larger. A field that reads as the site cap and holds a tree eighteen times smaller is how the alarm came to watch the wrong thing. No value changed and no payload needs migrating; only the description did."
+    },
+    {
+      "change": "The embedded ModelRef gained an optional revision.",
+      "version": "2026-08-26T20:00",
+      "why": "A manifest says which model ran. Until now it could not say which upload of that model, because the weights were fetched from a branch. The reason for the field is on the app-config schema; this entry exists because the manifest embeds the same shape and its own document changed with it. Optional, so every published manifest still validates (section 11)."
+    },
+    {
+      "change": "Added optional charts_drafted to a run.",
+      "version": "2026-08-25",
+      "why": "On 2026-08-25 the router drafted 17 charts and published 9, and no committed row said where the other 8 went. Without the drafted count a model that stops asking for charts and a set of checks that starts refusing them look identical, so the chart arm's kill line cannot be read from anything the run leaves behind. Defaults to zero on a manifest written before it existed."
+    },
+    {
+      "change": "Added optional items_prefiltered to a run.",
+      "version": "2026-08-24T23:10",
+      "why": "The router now decides an item without asking the model when no enabled visual kind could survive its own checks. Counting those separately keeps the denominator honest: after the gate the same charts sit over a much smaller routed set, so a chart rate quoted against items_routed alone would climb without a single extra chart existing. Defaults to zero on a manifest written before it existed."
+    },
+    {
+      "change": "Added optional items_routed and route_ms to a run.",
+      "version": "2026-08-24T11:15",
+      "why": "The route job lands between 51 and 60 minutes against a 60-minute bound, and no committed artifact said what it spent or how many items it spent it on. The budget cannot be argued from an estimate (Rule #10). Both default on a manifest written before they existed."
+    },
+    {
+      "change": "Pinned RunRecord vertical published counts to the run that wrote them.",
+      "version": "2026-08-24T00:30",
+      "why": "A later run appends to the day payload. Counting the accumulated day against this run's plan rejected valid second and later runs."
+    },
+    {
+      "change": "Added optional pipeline_fingerprints and determinism_violations to a run.",
+      "version": "2026-08-21T02:00",
+      "why": "A run that cannot say which stamps it wrote under cannot be audited later."
+    },
+    {
+      "change": "Initial shape: append-only runs for one date, with counts and site size.",
+      "version": "2026-08-21",
+      "why": "Contracts before logic - a partial day is a recorded fact from run one."
+    }
+  ],
+  "description": "`frontend/public/digest/<YYYY>/<MM>/<DD>/run.json`.",
+  "properties": {
+    "date": {
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}$",
+      "title": "Date",
+      "type": "string"
+    },
+    "runs": {
+      "items": {
+        "$ref": "#/$defs/RunRecord"
+      },
+      "minItems": 1,
+      "title": "Runs",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-08-30T16:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "date",
+    "runs"
+  ],
+  "title": "RunManifest",
+  "type": "object",
+  "version": "2026-08-30T16:00"
+}

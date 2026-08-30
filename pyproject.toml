@@ -1,0 +1,204 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "idhazh"
+version = "0.1.0"
+description = "Build-time producer for yen-idhazh: a static-first, self-evaluating article digest."
+readme = "README.md"
+# The floor is what CI installs. The ceiling is what the dependencies publish:
+# the compiled ones ship one wheel per CPython minor, and `onnxruntime` is
+# pinned exactly, so its matrix is the wall. Version 1.29.0 publishes cp311
+# through cp314 and no source distribution at all, so 3.15 cannot install at any
+# price (read from the package index, 2026-08-26). Without a ceiling pip does
+# not refuse an interpreter it cannot resolve - it falls back to a source build
+# and stops answering. `a0` because pip matches this specifier with prereleases
+# enabled, so a plain `<3.15` would still admit a 3.15 beta.
+requires-python = ">=3.12,<3.15.0a0"
+license = "MIT"
+dependencies = [
+    # The single source of truth for every persisted shape (Rule #3). Also
+    # the JSON Schema emitter that schemas/ is generated from.
+    "pydantic>=2.12",
+    # Feed parsing for the Collect stage. Mature, tolerant of the malformed RSS
+    # the open web actually serves, and parses a string without any network of
+    # its own - so a test drives it from a committed fixture (Rule #8).
+    "feedparser>=6.0",
+    # Boilerplate removal for the Extract stage. A custom HTML extractor is a
+    # maintenance surface with no beneficiary feature.
+    "trafilatura>=1.12",
+    # Vega-Lite spec to SVG for the Render stage. The Vega toolchain compiled as
+    # a Rust extension, so it renders without Node and without a headless
+    # browser. Measured 2026-08-22 (Windows 11, 8 vCPU): 2568 ms for the first
+    # render in a process, 49 ms warm, ~7 KB of SVG. Beneficiary: Row #8.
+    "vl-convert-python>=1.9",
+    # The sentence encoder for build-time embeddings, run through the SAME ONNX
+    # file the browser loads - one artifact, two runtimes, no drift. Chosen over
+    # torch plus transformers, which is roughly 800 MB of wheels for weights
+    # that would then have to agree with a second copy. Measured 2026-08-22
+    # (Windows 11, 8 vCPU): 16 ms to embed three summaries. Beneficiary: Row #19.
+    #
+    # Pinned exactly, not floored. A committed vector is a claim that the same
+    # text re-encodes to the same bytes, and a kernel rewrite in a patch release
+    # can break that claim without breaking anything an API test would notice.
+    # A range here means two runners may disagree about the same day.
+    "onnxruntime==1.29.0",
+    "tokenizers>=0.21",
+]
+
+[project.optional-dependencies]
+dev = [
+    "mypy>=1.14",
+    "pytest>=8.3",
+    # Runs the suite across the cores the machine already has, by default. It
+    # was opt-in until 2026-08-30, on the argument that a parallel-only failure
+    # would hide from the one gate everybody trusts. Running BOTH arms parallel
+    # settles that better than running one of each: a test that only fails
+    # under xdist now fails everywhere rather than only on a developer box.
+    #
+    # Dev-only; measured 2026-08-30 on Windows 11, Python 3.14.2, by summing
+    # site-packages before and after the install: 720,767 installed bytes over
+    # 84 files, for pytest-xdist 3.8.0 and the execnet 2.1.2 it pulls in. That
+    # is 7,574 bytes under PyYAML's 728,341 and 2.1 percent of shellcheck-py's
+    # 34,782,285. It added those two distributions and moved no version that was
+    # already there.
+    #
+    # Measured effect, same box and date (12 logical CPUs, 31.8 GiB RAM, every
+    # arm wrapped in backend/utilities/gate_lock.py so no sibling gate could
+    # land inside it): 548.03, 484.68 and 505.78 s serially, against 159.04,
+    # 149.60 and 147.67 s under `-n auto` (n=3 each; means 512.83 s and
+    # 152.10 s; spreads 63.35 s and 11.37 s). That is 3.37x - about six minutes
+    # back on every local run of the suite. All six runs passed the same 1,695
+    # node ids, none skipped, and `git status --porcelain` was empty after each,
+    # so no test needed pinning to one worker.
+    #
+    # Beneficiary: the full suite a developer runs before pushing.
+    "pytest-xdist>=3.6",
+    # Structured parsing for the workflow trigger contract test. Dev-only;
+    # measured 2026-08-23 on Windows 11, Python 3.12: 728341 installed bytes.
+    # One observation, so no spread. Beneficiary: workflow routing regression gate.
+    "PyYAML>=6.0",
+    "ruff>=0.9",
+    # ShellCheck for .github/scripts/. It arrives as a wheel so the same
+    # manifest that pins ruff and mypy pins it; a CI step that downloaded the
+    # binary would be an unpinned fetch, which is the shape this repository has
+    # already had to remove once. Dev-only; measured 2026-08-27 on Windows 11,
+    # Python 3.12: 34782285 installed bytes across 8 files, from an 8.0 MB
+    # wheel. One observation, so no spread, and a Linux runner installs a
+    # different wheel. The bytes are a statically linked Haskell binary.
+    # Beneficiary: the commit-and-push loop both daily jobs run.
+    "shellcheck-py>=0.10",
+]
+# Only for backend/utilities/bench_image.py, which times CPU diffusion models on
+# a runner. Multi-hundred-megabyte wheels, so they are never in the default set.
+bench-image = [
+    "diffusers>=0.31",
+    "torch>=2.5",
+]
+# Only for backend/utilities/measure_corpus.py, which measures how long real
+# articles actually are. Reaches the network, so it never runs inside a test.
+measure = []
+# The faithfulness scorer. A 250M cross-encoder, but transformers plus torch is
+# hundreds of megabytes, so it stays out of the default install and out of the
+# test path - the model-free counterweights are what run everywhere.
+faithfulness = [
+    "torch>=2.5",
+    # Capped below 5. The HHEM checkpoint ships its own modelling code, which
+    # defines `_tied_weights_keys`; transformers 5 expects
+    # `all_tied_weights_keys` and raises AttributeError while loading it. An
+    # unpinned ceiling meant CI resolved to a version the model predates, and
+    # every worker died before summarizing a single article.
+    "transformers>=4.46,<5",
+]
+# The hosted span viewer, and ONLY the hosted one. Nothing in the default path
+# imports it: `observability.tracing_enabled` writes a JSON line per span to
+# backend/var/traces/ with the standard library, and this extra is what a
+# developer adds when he also wants the tree drawn on a Langfuse host he named
+# in the environment. CI installs neither the extra nor a key.
+#
+# Measured 2026-08-30 on Windows 11, Python 3.14.2, into three clean venvs
+# holding only pip: 32,656,612 installed bytes, identical on all three, and
+# 258.1 s / 249.8 s / 274.7 s wall clock (n=3, mean 260.9 s, spread 24.9 s;
+# taken while the test suite was running on the same box, so read it as an
+# upper bound).
+#
+# On top of `.[dev]` it adds 11 distributions and replaces none -
+# `pip install --dry-run --report`, same date. Six are OpenTelemetry:
+# langfuse 4.14.4 is built on it and requires -api, -sdk and
+# -exporter-otlp-proto-http, which drag in -proto, -exporter-otlp-proto-common
+# and -semantic-conventions. The other five are backoff, wrapt, requests,
+# googleapis-common-protos and langfuse itself. Its pydantic floor is `>=2,<3`,
+# which our `>=2.12` already satisfies, and it does not touch `tokenizers` - so
+# this is not a repeat of `.[faithfulness]`, which downgraded `tokenizers` and
+# broke `mypy` with import errors CI never saw.
+#
+# 32.7 MB is 45x PyYAML's 728,341 bytes and 94 percent of shellcheck-py's
+# 34,782,285, for a viewer no gate reads and no page renders. Which is the whole
+# argument for an extra rather than a dev dependency (Rule #8): a contributor
+# running `pip install -e ".[dev]"` pays none of it.
+#
+# Beneficiary: the nested span view - a robots read inside a fetch, and a prompt
+# render and a reply parse either side of the model call.
+langfuse = [
+    "langfuse>=4.14,<5",
+]
+
+[project.scripts]
+idhazh = "idhazh.cli:main"
+idhazh-export-schemas = "idhazh.contracts.export:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["backend/idhazh"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+src = ["backend"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle
+    "F",   # pyflakes
+    "I",   # isort
+    "N",   # pep8-naming
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "A",   # flake8-builtins
+    "C4",  # flake8-comprehensions
+    "PTH", # flake8-use-pathlib
+    "RUF", # ruff-specific
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Test names read better long, and a fixture literal is not a magic value.
+"backend/tests/*" = ["E501"]
+
+[tool.mypy]
+python_version = "3.12"
+mypy_path = "backend"
+files = ["backend"]
+strict = true
+warn_unreachable = true
+enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
+
+# Measurement-only dependencies, absent from a default install and shipping no
+# type stubs of their own.
+[[tool.mypy.overrides]]
+module = ["diffusers.*", "feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*", "vl_convert.*"]
+ignore_missing_imports = true
+
+# `langfuse` is an optional extra, so CI type-checks without it installed and
+# would otherwise fail on the import inside `telemetry.langfuse_sink`. It DOES
+# ship py.typed (measured against 4.14.4, 2026-08-30), so a developer who
+# installs the extra gets the real types and this entry does nothing.
+[[tool.mypy.overrides]]
+module = ["langfuse.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests"]
+pythonpath = ["backend"]
+# `-n auto` is the default because the suite is parallel-safe and 3.37x faster
+# on a developer box; `-p no:xdist` or `-n 0` turns it off for a debugging run.
+addopts = "-q -n auto"
