@@ -99,7 +99,14 @@ gh pr merge NNN --squash --delete-branch
 
 Both commits squash to one entry on `main`. The merged-to-main commit contains the correct `PR #NNN` reference inline.
 
-**Do NOT use `--auto`** unless `enablePullRequestAutoMerge` is enabled in repo settings; otherwise gh returns a GraphQL error. Plain `--squash --delete-branch` is the default.
+**`--auto` queues the merge behind the gates instead of behind a person, and it needs more than the repo setting.** Auto-merge queues behind something that *blocks* the merge, so with no required status check there is nothing to queue behind: `gh pr merge <n> --squash --delete-branch --auto` exits 0 and does nothing. Check `autoMergeRequest` rather than the exit code before believing it worked.
+
+```powershell
+gh pr merge NNN --squash --delete-branch --auto
+gh api graphql -f query='{repository(owner:"OWNER",name:"REPO"){pullRequest(number:NNN){autoMergeRequest{enabledAt}}}}'
+```
+
+A `null` there means the plain form above is still the merge.
 
 ## Post-merge cleanup
 
