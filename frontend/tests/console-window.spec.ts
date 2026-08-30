@@ -123,6 +123,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'the page publishes no windowed surfaces, so the oracle asserts nothing'
 	).toEqual([
 		'failure-rate',
+		'feed-outcomes',
 		'router-cost',
 		'run-health',
 		'site-size-movement',
@@ -213,7 +214,9 @@ test('two surfaces do not follow the window, and each says so', async ({ page })
 	await hydrated(page);
 
 	// A windowed quarantine count would disagree with the resting the pipeline
-	// actually performed, so the feed table counts every run and states it.
+	// actually performed, so the feed count reads every run and states it. The
+	// strip of days beside it does follow the window, and is a separate node -
+	// which is why this locator is the paragraph and not the section.
 	const feeds = page.locator('[data-window-exempt="feeds"]');
 	await expect(feeds).toContainText('does not follow the window');
 	await expect(feeds).not.toHaveAttribute('data-window-days', /.*/);
