@@ -1406,6 +1406,17 @@ the variable protects the shell you remember to set it in and nothing else.
   returns (`C:\Program Files\nodejs\npm.CMD` here). Measured 2026-08-30.
   Resolving with `shutil.which` also keeps the run off a shell, so nothing in
   the command line is ever read as a shell operator.
+- **`mypy` only checks the platform branch you are standing on, so a green local
+  type gate says nothing about the other one.** It skips a block guarded by
+  `if sys.platform == "win32":` when it is not running on Windows, and CI runs
+  on Linux - so the Windows half of any platform split is checked by your
+  machine alone, and the POSIX half by CI alone. Worse, the narrowing is
+  statement-only: `os.O_BINARY if sys.platform == "win32" else 0` passed on
+  Windows and failed CI with `Module has no attribute "O_BINARY"`, while the
+  same test written as an `if`/`else` block passes both. Run
+  `mypy --platform linux` before you push anything with a `sys.platform` in it -
+  it reproduced the CI failure exactly, in one command, and it needs a separate
+  `--cache-dir` or it fights the ordinary run for the cache.
 
 ## See also
 
