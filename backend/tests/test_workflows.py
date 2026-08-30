@@ -1306,6 +1306,50 @@ def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
     assert "continue-on-error" not in steps[gate], "the ratchet publishes the day; it still fails"
 
 
+@pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
+def test_the_weight_ratchet_reads_a_build_of_the_tree_that_was_pushed(
+    filename: str, job_name: str, commit_step: str
+) -> None:
+    """One tree's pages may not be weighed against another tree's records.
+
+    `commit-and-push.sh` rebases when the push loses a race, and that brings
+    main's tip into the checkout - its frontend source and its
+    `bundle-baseline.json` with it. `frontend/build` still holds the build made
+    before the commit, so the gate reads records the build it measures never
+    saw. Run 33270983446 failed exactly there: `/console/` 746 B under a record
+    that arrived with the rebase, while the build was 5 B off the record its own
+    source carried, on a day that had already published and deployed.
+
+    So a build sits after every commit step in the job, and the gate reads that
+    one. `npm ci` is deliberately not repeated with it: the lockfile moves far
+    more rarely than the source, and a reinstall would delete `node_modules` on
+    every run to cover the rarer of the two.
+    """
+    steps = _steps(_load_workflows()[filename], job_name)
+    names = [step.get("name") for step in steps]
+    builds = [
+        index for index, step in enumerate(steps) if "npm run build" in str(step.get("run", ""))
+    ]
+    commits = [
+        index
+        for index, step in enumerate(steps)
+        if COMMIT_SCRIPT_CALL[1] in str(step.get("run", ""))
+    ]
+    gate = next(
+        index
+        for index, step in enumerate(steps)
+        if "npm run bundle-gate" in str(step.get("run", ""))
+    )
+
+    assert names.index(commit_step) in commits, "the publishing step runs the shared commit script"
+    rebuilt = [index for index in builds if index > max(commits)]
+    assert rebuilt, "the gate must read a build made after the last commit, not before it"
+    assert max(rebuilt) < gate, "the rebuild is what the gate reads, so it comes first"
+    assert "continue-on-error" not in steps[rebuilt[0]], (
+        "a rebuild that fails quietly leaves the gate reading the stale build again"
+    )
+
+
 #: Every job that builds the site, and so every job that can grow it past the cap.
 SITE_WEIGHT_JOBS: Final = (
     ("ci.yml", "site"),
