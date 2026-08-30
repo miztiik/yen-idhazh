@@ -167,6 +167,47 @@
           "title": "Determinism Violations",
           "type": "integer"
         },
+        "evaluation_enabled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether observability.evaluation_enabled was on for this run. False is deliberately off; true with no scorer_version is an instrument that failed to load. Null on a manifest written before this was recorded - never false, because absent and off are different facts.",
+          "title": "Evaluation Enabled"
+        },
+        "evaluation_sample_rate": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0.0,
+              "maximum": 1.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The fraction of runs the scorer was set to run on, recorded on EVERY run whether or not this one was drawn. Without it a year-old ledger cannot tell 800 rows of 1,000 from 800 rows of 800. Null on a manifest written before this was recorded.",
+          "title": "Evaluation Sample Rate"
+        },
+        "evaluation_sampled": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Whether this run was drawn at that rate. False is the third reason a run has no rows, beside switched off and failed to load, and none of the three can be read off an absence. Always true at a rate of 1.0.",
+          "title": "Evaluation Sampled"
+        },
         "items_failed": {
           "minimum": 0,
           "title": "Items Failed",
@@ -260,6 +301,20 @@
           "minLength": 1,
           "title": "Runner",
           "type": "string"
+        },
+        "scorer_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The instrument that wrote this run's eval rows, as state/scores.csv spells it. Null when no row was written, which is what separates a run that measured nothing from one whose measurements are simply elsewhere. Null too on a manifest written before this was recorded.",
+          "title": "Scorer Version"
         },
         "site_bytes": {
           "description": "Bytes under frontend/public/digest/ after this run - the committed payload tree, not the published site and not what the Pages cap is measured against.",
@@ -361,6 +416,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional evaluation_enabled, evaluation_sample_rate, evaluation_sampled and scorer_version to a run.",
+      "version": "2026-08-30T16:00",
+      "why": "The faithfulness scorer is now sampled by run, so a day with no eval rows has four possible causes - switched off in config, not drawn at the rate, the weights would not load, or the run never reached the scorer - and an absence in state/scores.csv looks the same for all four. The rate lands here rather than on EvalRow because the unit sampled is the run: every row of a run shares one rate, so one cell per run says everything a per-row column would, and no persisted ledger widens. All four are nullable and default to null, because an older manifest does not know what it was configured to do and a concrete default would invent the answer - the same rule the observability block states as an empty cell is never a zero."
+    },
+    {
       "change": "The embedded ModelRef gained an optional hf_base_repo.",
       "version": "2026-08-28",
       "why": "A manifest embeds the whole model entry, so a field added there lands here whether or not this document wanted it - the same way the optional revision did on 2026-08-26. Nothing a run writes changes and no manifest needs migrating; the emitted schema gained one optional property, and a stale schema fails the drift gate."
@@ -422,7 +482,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-28",
+      "default": "2026-08-30T16:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -434,5 +494,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-28"
+  "version": "2026-08-30T16:00"
 }

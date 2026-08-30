@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -34,16 +34,20 @@ against `files.pythonhosted.org` (observed 2026-08-21). `ensurepip` then `pip`
 is the path that works. If `uv` starts working, nothing in the repo depends on
 which installer produced the environment.
 
-Four extras are declared. Install only what you need:
+Five extras are declared. Install only what you need:
 
 | Extra | Pulls | When |
 | --- | --- | --- |
 | `dev` | `ruff`, `mypy`, `pytest`, `PyYAML`, `shellcheck-py` | always - this is the gate set |
 | `measure` | `feedparser`, `trafilatura` | live source sampling; hits the network |
 | `bench-image` | `torch`, `diffusers` | image-model benchmarking; multi-gigabyte |
+| `faithfulness` | `torch`, `transformers` | the HHEM scorer; multi-gigabyte, and it downgrades `tokenizers` |
+| `langfuse` | `langfuse` and six OpenTelemetry distributions | only to send spans to a Langfuse host you named; 32.7 MB and about 4 minutes |
 
-`measure` and `bench-image` are heavy and reach the network. No test imports
-either one.
+`measure`, `bench-image` and `faithfulness` are heavy, and the first reaches the
+network. No test imports any of them, and `langfuse` is imported inside one
+function that only runs when `LANGFUSE_HOST` and its key pair are all set. The
+local span sink needs none of it.
 
 ## The backend gates
 
@@ -84,6 +88,39 @@ none of it is yours. Running it across the repo produces a large diff that has
 nothing to do with your change. Format only the files you author, or leave
 formatting alone.
 
+### If you touched the span tree, run the suite twice
+
+`observability.tracing_enabled` is false in the committed config, so the plain
+`pytest` above is the OFF run. The ON run is the same suite against a config
+with the toggle flipped:
+
+```powershell
+$c = Get-Content config/idhazh.json -Raw
+$c.Replace('"tracing_enabled": false', '"tracing_enabled": true') | Set-Content config/idhazh.json -NoNewline
+.\.venv\Scripts\python.exe -m pytest `
+  --deselect "backend/tests/test_contracts.py::test_a_fresh_clone_measures_itself_and_the_committed_config_agrees" `
+  --deselect "backend/tests/test_spans.py::test_tracing_off_writes_nothing_at_all"
+$c | Set-Content config/idhazh.json -NoNewline
+```
+
+**Those two are deselected because they are assertions ABOUT the committed
+file**, not about runtime behaviour: one says a fresh clone and the committed
+config agree, the other says the committed default writes no trace. Flipping the
+file makes both false by construction, and the same two would fail if you
+flipped `evaluation_enabled` instead. Every other test must pass unchanged.
+
+The point is the doctrine, not the coverage: a trace is evidence and the ledgers
+are the record
+([../concepts/telemetry.md](../concepts/telemetry.md#logs-are-not-the-record)),
+so no test may read a span to decide anything, and a test whose outcome moves
+between the two runs means one does.
+
+Measured 2026-08-30 (Windows 11, Python 3.14.2, five sibling agents on the box):
+1,599 passed in 534.8 s off, 1,597 passed and 2 deselected in 451.1 s on. The ON
+run writes to `backend/var/traces/`, which is gitignored, so `git status` is
+clean afterwards - and the restore line above is what keeps the config from
+being committed flipped.
+
 ## The frontend gates
 
 Run from `frontend/`.
@@ -106,6 +143,16 @@ cap it fails. **Point it at anything else and the suite fails**, because the tre
 is read back off `pages.yml`'s own upload step. It measures nothing until the
 site is built, so run it after `npm run build`, and a run that reports zero files
 fails rather than passes.
+
+It prints three more lines and none of them fails anything. `by directory` is the
+top-level children of `build/` largest first, so a directory that grew can be
+named instead of guessed at from one moving total. `rate` is bytes per published
+item, which is the unit that holds still - a rate per day moves by a factor of
+six across days that published 731 items and 117. `runway` divides the headroom
+by that rate at `run.safety_ceiling_per_run` items a day and prints the answer in
+published days, to the alarm point and to the cap. **The size on the line above
+is a level, and no level has a date in it.** A tree carrying no day payloads
+prints `runway: unknown` rather than a comfortable number.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it compares every route's first-load JavaScript against the weight

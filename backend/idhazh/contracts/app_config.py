@@ -733,10 +733,10 @@ class LoggingConfig(Model):
 class ObservabilityConfig(Model):
     """What the pipeline records about itself, and what an operator may switch off.
 
-    Three switches rather than one master switch. Collection, scoring and
-    publishing fail in different ways and a reader has to behave differently for
-    each of them, so one switch would leave nobody able to say which instrument
-    went dark.
+    Four switches rather than one master switch. Collection, scoring, publishing
+    and tracing fail in different ways and a reader has to behave differently
+    for each of them, so one switch would leave nobody able to say which
+    instrument went dark.
 
     **The item-health census is not on this list and must never be added to it.**
     Every rate this project publishes divides by that census, so switching it off
@@ -758,7 +758,10 @@ class ObservabilityConfig(Model):
             "score panels list nothing and each item bands from the model-free "
             "counterweights instead. The digest still publishes. `--no-faithfulness` "
             "is the same switch for one invocation and overrides this; no flag turns "
-            "it back on."
+            "it back on. It governs the daily pipeline's work stage only: `validate` "
+            "and `qualify` are asked for by hand and each refuses outright without a "
+            "scorer, so a standing switch cannot silence them into measuring nothing. "
+            "Every run records the state of this switch on its run manifest."
         ),
     )
     telemetry_publish: bool = Field(
@@ -793,7 +796,27 @@ class ObservabilityConfig(Model):
             "sample of that day and a per-day rate stays honest. Below 1.0 most days "
             "write no eval row and the console's score panels thin to the sampled "
             "days. Not a switch: `evaluation_enabled` is the way to say off, and a "
-            "rate of zero is refused so the two can never disagree about it."
+            "rate of zero is refused so the two can never disagree about it. The draw "
+            "is a digest of the run id, so it is reproducible from the committed "
+            "manifest and blind to the run's content, and both the rate and the draw "
+            "land on the run manifest whether or not the run was taken. A published "
+            "rate is still computed from the item-health census, which is never "
+            "sampled; the thinned ledger publishes distributions only."
+        ),
+    )
+    tracing_enabled: bool = Field(
+        default=False,
+        description=(
+            "Whether a work shard builds a span tree. The only switch here that is "
+            "OFF unconfigured, because it is the only instrument nothing reads: no "
+            "page renders a span, no gate consults one, and the ledgers stay the "
+            "record. It buys a developer the nesting a flat row cannot carry - the "
+            "robots read inside the fetch, the prompt render and the reply parse "
+            "either side of the model call. True writes one JSON line per span under "
+            "backend/var/traces/, which is gitignored and published nowhere. A host "
+            "is opt-in on top of that, through LANGFUSE_HOST with its key pair, and "
+            "CI names none - so an ordinary run reaches no third party whatever this "
+            "says."
         ),
     )
     keep_months: int = Field(
@@ -1415,6 +1438,42 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30T18:00",
+            change="observability.tracing_enabled added, defaulting to false.",
+            why=(
+                "A work shard can now build a span tree, which is the one thing the "
+                "three ledgers cannot hold: a start instant, a parent, and a step too "
+                "small to earn a column. The robots read nests inside the fetch, and "
+                "the prompt render and the reply parse sit either side of the model "
+                "call, so a slow item finally says which of the five it was slow in. "
+                "It is the only switch in this block that is off unconfigured, because "
+                "it is the only instrument nothing reads: no page renders a span, no "
+                "gate consults one, and a trace is evidence where a ledger row is the "
+                "record (CLAUDE.md section 1b). Off is also what keeps CI clean - a "
+                "publish job that could fail on a third party's availability is a "
+                "worse job."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-30T16:00",
+            change=(
+                "observability.evaluation_enabled and observability.sample_rate now say "
+                "which stage reads them and where the draw is recorded."
+            ),
+            why=(
+                "Both fields described a behaviour that nothing performed: the block "
+                "landed as config with no reader, so the scorer still took its decision "
+                "from the command-line flag alone. Wiring them raised two questions the "
+                "descriptions did not answer. A standing switch must not reach `validate` "
+                "or `qualify`, because each refuses to run without a scorer and a "
+                "config file would turn a deliberate measurement into an exit code. And "
+                "a rate is unreadable a year later unless the run says which rate it ran "
+                "under and whether it was drawn, so both now travel on the run manifest. "
+                "No field was added, removed or retyped; only two descriptions changed, "
+                "and every committed config still validates."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30T14:00",
             change=(

@@ -328,16 +328,23 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in `state/scores.csv`. |
 | `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
 | `runtime_counters_scrape` | `true` | The llama-server `GET /metrics` read, and so every row in `state/runtime-counters.csv`. |
+| `tracing_enabled` | `false` | Already off. True builds a span tree under `backend/var/traces/`. |
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `keep_months` | `13` | Nothing. It is where a month stops being kept at full grain. |
 | `hard_delete_after_months` | `null` | Nothing by default. Null means a downsampled month is never removed. |
 
-**Three switches and not one master switch.** Collection, scoring and publishing
-fail in different ways: the score ledger empties when the scorer will not load,
-the published telemetry file stops when a run does not publish, and the counters
-file is silent when llama-server was gone before it was read. Under one switch a
-reader sees three absences and cannot say which instrument went dark, so cannot
-say whether to fix the model, the publish step or the server.
+**Four switches and not one master switch.** Collection, scoring, publishing and
+tracing fail in different ways: the score ledger empties when the scorer will
+not load, the published telemetry file stops when a run does not publish, and
+the counters file is silent when llama-server was gone before it was read. Under
+one switch a reader sees three absences and cannot say which instrument went
+dark, so cannot say whether to fix the model, the publish step or the server.
+
+**`tracing_enabled` is the only one that is off unconfigured**, because it is
+the only instrument nothing reads: no page renders a span, no gate consults one,
+and every rate the console prints keeps its denominator with tracing off. It is
+for a developer looking at one slow item, and it is described in
+[telemetry.md](telemetry.md#the-span-tree).
 
 **The item-health census is not on that list and is not going to be.** Every
 rate the console and the dashboard print divides by it, so switching it off does
@@ -358,6 +365,9 @@ a third time.
 every item or none, so a sampled day's rows are never a partial sample of that
 day and a per-day rate stays honest. Zero is refused because `evaluation_enabled`
 already says off, and two ways of saying off is how the two end up disagreeing.
+The draw itself - a digest of the run id, recorded on the run manifest - is
+described once, in
+[../concepts/evaluation.md](evaluation.md#the-scorer-is-sampled-by-run-and-nothing-else-is).
 
 `hard_delete_after_months` defaults to null - never - and that is a decision
 rather than an omission. `console.max_window_days` is 366, so a shard has to stay
