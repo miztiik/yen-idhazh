@@ -1,3 +1,7 @@
+# Unknown future file types still need a deterministic default. Git detects
+# whether the content is text; text uses LF and binary content stays untouched.
+* text=auto eol=lf
+
 # Generated contract artifacts and their source schemas are always LF so the
 # contract drift gate (regenerate + `git diff --exit-code`) is byte-stable
 # across operating systems and every contributor's core.autocrlf setting. The
@@ -94,6 +98,7 @@ frontend/public/**/*.md text eol=lf
 frontend/public/assist/index/*.bin binary
 
 # Downloaded, not authored: never diff or eol-convert these.
+*.woff2 binary
 *.gguf binary
 *.png binary
 *.webp binary
