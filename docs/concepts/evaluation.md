@@ -1,6 +1,6 @@
 # Evaluation
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 How a summary is judged, how archive search is judged, why one number is never enough, and the rule that keeps the measurement honest. This page fixes the vocabulary; the concrete metric implementations, thresholds and the golden-set contents are owned by the plan-doc and the eval subsystem doc, and the tunable bands live in [config.md](config.md).
 
@@ -333,6 +333,31 @@ rows it exists for is not a threshold that needs retuning. Retuning was the
 rejected alternative: to catch the widest cut in the ledger the threshold would
 have to sit at or below `+0.038`, and at that level it fires on chunk-boundary
 noise on articles nobody cut.
+
+**Re-measured 2026-08-30, and the fixed writer now has committed rows to be
+judged on.** The ledger holds 3,113 rows and 430 of them are stamped
+`2026-08-29T09:00`, written after the change. The same exact counts over the
+same committed file:
+
+| What, over the 430 rows on the new side | Count |
+| --- | --- |
+| Rows genuinely cut | **4** |
+| Of those, rows the flag fired on | **4 of 4** |
+| Rows where the flag disagrees with the word-count pair | **0 of 430** |
+| Rows with no pre-cap length, so no pair to check | **0** |
+
+The 2,683 older rows did not move - still 0 of 22, still the one 748-of-748 row -
+because no row was rewritten. So the whole-ledger count of flagged rows is 5, and
+5 is the number nobody should quote: 4 of them answer the cut question and 1
+answers the old one. That is the version branch earning its keep rather than
+being a formality.
+
+**The word-count pair still stays the recommended test**, and the new agreement
+does not change that. The flag is right only on rows a reader has to filter for
+first; `source_word_count > source_seen_word_count` is right on every row that
+carries both, with nothing to remember. What the 430 of 430 buys is confidence
+that the two now say the same thing, so a reader who picks either one gets the
+same answer on any row written from here.
 
 **`hhem`, `hhem_full` and `hhem_delta` all stay.** They answer what the cut
 cost, which is a different question from whether there was a cut, and n=22 is
