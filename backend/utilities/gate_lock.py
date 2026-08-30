@@ -17,13 +17,23 @@ Wrap the three gates measured as CPU-bound, and nothing else:
 `ruff`, `mypy`, `svelte-check`, `shellcheck` and `bundle-gate` stay unwrapped.
 Serialising a gate that finishes in seconds only adds waiting.
 
-How it works. One lock file in the user temp directory, created with `O_CREAT`
-plus `O_EXCL` - the one file operation Windows and Linux both make atomic, so
-exactly one process wins the create and every other one is told the file is
-already there. The winner's record carries its pid, its worktree and the second
-it started, so a caller that loses says who holds the lock, from where and for
-how long instead of just hanging. Standard library only, no new dependency
-(Rule #8).
+How it works. One lock file in the user temp directory. The record is written to
+a private file first and then linked into place, because `os.link` refuses an
+existing destination on both Windows and Linux - so exactly one caller wins, and
+the lock never exists without the record that says who won it. That is the
+temp-file-plus-rename discipline CLAUDE.md section 1a already asks of every
+written unit, applied to the lock itself. The record carries the winner's pid,
+its worktree and the second it took the lock, so a caller that loses says who
+holds the lock, from where and for how long instead of just hanging. Standard
+library only, no new dependency (Rule #8).
+
+Taking a lock away from a dead holder is the one step no single file operation
+can decide, because deleting a file is unconditional: a caller that judged a
+record stale a moment ago will happily delete whatever sits at that path now,
+including a lock somebody else has since won. So the delete runs under a second
+exclusive create, `<lock>.reclaim`, and the invariant is that exactly one caller
+can transition the lock from "held by a dead holder" to absent. Every other
+caller sees either the old record or the new one, never neither.
 
 Two rules keep a lock from outliving the gate it belongs to. A lock whose pid is
 gone is reclaimed, and a lock older than the reclaim line is reclaimed whatever
@@ -55,7 +65,7 @@ import sys
 import tempfile
 import time
 from collections.abc import Mapping, Sequence
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import Final
 
@@ -64,6 +74,21 @@ LOG: Final = logging.getLogger("gate_lock")
 # One name for the whole machine. Two worktrees are two checkouts of one
 # repository on one set of cores, so they contend on the same file.
 LOCK_FILENAME: Final = "yen-idhazh-gate.lock"
+
+# The companion file that decides who may delete the lock. It sits beside the
+# lock so both are in one directory and one clean-up.
+RIGHT_SUFFIX: Final = ".reclaim"
+
+# How long a seat at that companion file can stand before anybody may take it.
+# The seat is held across two reads and one unlink, so this is four orders of
+# magnitude of headroom, and it is not a knob: nothing about a gate changes how
+# long a read and an unlink take. It has to be far shorter than the lock's own
+# reclaim line, because a caller CAN leak a seat while staying alive - on
+# Windows an unlink fails outright while any other process has the file open,
+# and the callers waiting on this lock read it in a loop. Measured 2026-08-30:
+# with the lock's 7,200 s line the first leaked seat stopped twenty callers for
+# six minutes and would have stopped them for two hours.
+SEAT_SECONDS: Final = 30.0
 
 # Short enough that a freed lock is picked up almost at once, long enough that a
 # queue of waiters costs nothing measurable.
@@ -82,16 +107,6 @@ STALE_AFTER_SECONDS: Final = 7200.0
 
 # How long a caller waits before giving up and running unlocked.
 WAIT_TIMEOUT_SECONDS: Final = 3600.0
-
-# `os.O_BINARY` exists only on Windows, where the C runtime would otherwise
-# translate a newline on the way to disk. Written as a statement rather than a
-# conditional expression: mypy narrows an `if` on `sys.platform` and does not
-# narrow the same test inside an expression, so the one-line version fails the
-# type gate on Linux while passing it on Windows.
-if sys.platform == "win32":
-    _BINARY = os.O_BINARY
-else:
-    _BINARY = 0
 
 # What an unset or switched-off `CI` looks like. GitHub Actions sets `CI=true`.
 _CI_OFF: Final = frozenset({"", "0", "false", "no", "off"})
@@ -231,68 +246,180 @@ def _read_bytes(path: Path) -> bytes | None:
     except FileNotFoundError:
         return None
     except OSError:
-        # Windows refuses a read while the winner still has the file open. The
-        # caller loops and the create decides, so there is nothing to report.
+        # Windows refuses a read on a name whose last handle is closing, which
+        # is what a lock being released looks like from here. The caller loops
+        # and the create decides, so there is nothing to report.
         return None
 
 
-def _try_create(path: Path, holder: Holder) -> bool:
-    """Win the lock, or answer False because somebody else already has it."""
-    flags = os.O_CREAT | os.O_EXCL | os.O_WRONLY | _BINARY
+def right_path(path: Path) -> Path:
+    """The companion file that decides who may delete `path`."""
+    return path.with_name(path.name + RIGHT_SUFFIX)
+
+
+def _try_create(path: Path, holder: Holder) -> Holder | None:
+    """Take `path`, or answer None because somebody else already has it.
+
+    Answers the record that went in. Its `created_at` is the moment the lock was
+    won rather than the moment this process started, so a caller that queued for
+    five minutes is not then reported to the next waiter as having held the lock
+    for five minutes.
+
+    The record is written to a private file and only then linked into place.
+    Creating the lock and writing the record as two steps leaves it readable as
+    zero bytes for the microseconds in between, and a caller that reads those
+    bytes judges the winner's own record unreadable wreckage and deletes a lock
+    that was being taken. `os.link` publishes the name and the bytes together and
+    refuses an existing destination, which is what picks the one winner -
+    measured 2026-08-30 on Windows 11 (errno 17, winerror 183) and the
+    documented POSIX behaviour.
+
+    A caller killed between the write and the link leaves the private file
+    behind. It is a few hundred bytes in the temp directory and nothing reads it.
+    """
+    # A stat before a scratch file. The link below is what decides - this only
+    # keeps a caller from building a record for a lock somebody plainly holds.
+    # Without it every pass of the wait costs a create and a delete, and measured
+    # 2026-08-30 with 20 callers spinning on one lock that turned the temp
+    # directory itself into the bottleneck.
+    if path.exists():
+        return None
+    won = replace(holder, created_at=time.time())
+    descriptor, name = tempfile.mkstemp(dir=str(path.parent), prefix=f"{path.name}.", suffix=".tmp")
+    scratch = Path(name)
     try:
-        descriptor = os.open(path, flags, 0o644)
-    except FileExistsError:
+        with os.fdopen(descriptor, "wb") as handle:
+            handle.write(won.to_json().encode("utf-8"))
+        # `mkstemp` is private to its creator. The lock is read by every gate on
+        # the machine, so it keeps the permissions a lock file has always had.
+        scratch.chmod(0o644)
+        try:
+            os.link(scratch, path)
+        except FileExistsError:
+            return None
+        except PermissionError:
+            # Windows only, and it means contention rather than a broken
+            # directory: a name whose last handle is closing is "delete
+            # pending", and every create on it is refused until the entry really
+            # goes. Measured 2026-08-30, 36 of 50 rounds at 20 callers on one
+            # lock: the old code let this out of `os.open` as a traceback and a
+            # non-zero exit, which is the scheduling aid failing the gate it
+            # exists to protect. A lost create is a lost create.
+            return None
+    finally:
+        try:
+            scratch.unlink()
+        except OSError:
+            pass
+    return won
+
+
+def _why_unheld(raw: bytes, *, stale_after: float, now: float | None = None) -> str | None:
+    """Why nobody is holding the record in `raw`, or None because somebody is."""
+    holder = parse_holder(raw.decode("utf-8", errors="replace"))
+    moment = time.time() if now is None else now
+    if holder is None:
+        return f"its record is not readable ({len(raw)} bytes)"
+    if not pid_alive(holder.pid):
+        return f"pid {holder.pid} is gone ({holder.describe(moment)})"
+    if moment - holder.created_at > stale_after:
+        return f"it is past the {stale_after:.0f} s reclaim line ({holder.describe(moment)})"
+    return None
+
+
+def _delete_exactly(path: Path, raw: bytes) -> bool:
+    """Remove `path`, but only while it still holds exactly these bytes."""
+    if _read_bytes(path) != raw:
         return False
-    with os.fdopen(descriptor, "wb") as handle:
-        handle.write(holder.to_json().encode("utf-8"))
+    try:
+        path.unlink()
+    except OSError:
+        return False
     return True
+
+
+def take_the_right(path: Path) -> Holder | None:
+    """Win the sole right to delete `path`, or answer None and leave it to whoever has it.
+
+    Deleting a file is unconditional, so two callers that judged one record stale
+    can both delete - the second removing a lock the first has already won, after
+    which both run. Re-reading the bytes immediately before the unlink narrows
+    that to microseconds; it does not close it, because nothing makes the read
+    and the unlink one step. This exclusive create does: exactly one caller at a
+    time may take the lock away from a dead holder, so every other caller sees
+    either the old record or the new one and never neither.
+
+    A seat can outlive its use even though the caller that took it is alive,
+    because the give-back is an unlink and on Windows an unlink fails while any
+    other process has the file open. So the seat answers to `SEAT_SECONDS` as
+    well as to the liveness probe, and that one delete is serialised by nothing -
+    there is nothing left to serialise it with.
+    """
+    right = right_path(path)
+    standing = _read_bytes(right)
+    if standing is not None:
+        why = _why_unheld(standing, stale_after=SEAT_SECONDS)
+        if why is None:
+            return None
+        LOG.warning("took over an abandoned seat at the gate lock's reclaim: %s", why)
+        _delete_exactly(right, standing)
+    try:
+        return _try_create(right, holder_for(["gate_lock", "reclaim"]))
+    except OSError as error:
+        LOG.warning("no seat at the gate lock's reclaim could be taken (%s)", error)
+        return None
+
+
+def _give_back_the_right(path: Path, mine: Holder) -> None:
+    """Hand the seat on.
+
+    A record that cannot be read counts as ours. We took the seat, and treating
+    an unreadable one as somebody else's is how a seat gets held for ever by a
+    caller that is still running - which stops every reclaim on the machine.
+    """
+    right = right_path(path)
+    standing = _read_bytes(right)
+    if standing is not None and standing != mine.to_json().encode("utf-8"):
+        return
+    try:
+        right.unlink()
+    except OSError:
+        # Windows refuses this while another caller has the seat open to read.
+        # `SEAT_SECONDS` is what stops that from being permanent.
+        LOG.warning("the seat at the gate lock's reclaim would not go back yet")
 
 
 def reclaim_if_free(path: Path, *, stale_after: float, now: float | None = None) -> str | None:
     """Remove a lock nobody is holding. Answers why it went, or None if it stands.
 
-    Two residual races are worth stating rather than pretending away.
+    The delete runs under `right_path(path)`, so exactly one caller can take the
+    lock from "held by a dead holder" to absent. Without that, two callers that
+    judged the same record stale both delete, the second one removing a lock the
+    first has already won, and both then run their gate - which is the defect
+    this repairs. It reached CI once, as two of five worker intervals overlapping
+    for the whole hold.
 
-    A pid answers "is some process this number", never "is it the one that took
-    the lock". An operating system that has recycled the number reports a dead
-    holder as alive, and the standard library exposes no portable way to read
-    another process's start time - which is why `created_at` rides in the record
-    and `stale_after` reclaims regardless. Inside that window a recycled pid does
-    keep a dead holder's lock, and this tool cannot see the difference.
-
-    Two waiters can judge one record stale in the same instant. Both re-read the
-    bytes they judged, one unlinks and the other is told the file is gone, and
-    the create that follows is still decided by `O_EXCL` - so the pair is safe.
-    What remains is a waiter the scheduler suspends between its re-read and its
-    unlink for long enough that another waiter reclaims, creates and starts: the
-    late unlink would then take a fresh lock. That window is microseconds wide
-    and it is the price of a lock file with no lease.
+    One residual race is worth stating rather than pretending away. A pid answers
+    "is some process this number", never "is it the one that took the lock". An
+    operating system that has recycled the number reports a dead holder as alive,
+    and the standard library exposes no portable way to read another process's
+    start time - which is why `created_at` rides in the record and `stale_after`
+    reclaims regardless. Inside that window a recycled pid does keep a dead
+    holder's lock, and this tool cannot see the difference.
     """
     raw = _read_bytes(path)
     if raw is None:
         return None
-    holder = parse_holder(raw.decode("utf-8", errors="replace"))
-    moment = time.time() if now is None else now
-    if holder is None:
-        reason = f"its record is not readable ({len(raw)} bytes)"
-    elif not pid_alive(holder.pid):
-        reason = f"pid {holder.pid} is gone ({holder.describe(moment)})"
-    elif moment - holder.created_at > stale_after:
-        reason = (
-            f"it is past the {stale_after:.0f} s reclaim line ({holder.describe(moment)})"
-        )
-    else:
+    reason = _why_unheld(raw, stale_after=stale_after, now=now)
+    if reason is None:
         return None
-    # Re-read immediately before unlinking and only remove the exact bytes that
-    # were judged. Without this, a holder that released between the read above
-    # and this line would cost its successor a lock it legitimately holds.
-    if _read_bytes(path) != raw:
+    mine = take_the_right(path)
+    if mine is None:
         return None
     try:
-        path.unlink()
-    except OSError:
-        return None
-    return reason
+        return reason if _delete_exactly(path, raw) else None
+    finally:
+        _give_back_the_right(path, mine)
 
 
 def acquire(
@@ -303,22 +430,37 @@ def acquire(
     stale_after: float = STALE_AFTER_SECONDS,
     timeout: float = WAIT_TIMEOUT_SECONDS,
     report_every: float = REPORT_SECONDS,
-) -> bool:
-    """Take the lock, or answer False after `timeout` seconds of waiting."""
-    path.parent.mkdir(parents=True, exist_ok=True)
+) -> Holder | None:
+    """Take the lock and answer the record that went in, or None after `timeout`.
+
+    Hand the record that comes back to `release`. It is not the `holder` that
+    went in: its `created_at` is the second the lock was won.
+    """
+    try:
+        path.parent.mkdir(parents=True, exist_ok=True)
+    except OSError as error:
+        LOG.warning("the gate lock has nowhere to live (%s), so the gate runs unlocked", error)
+        return None
     started = time.monotonic()
     # Negative so the first pass through the wait reports the holder at once.
     reported = -report_every
     while True:
-        if _try_create(path, holder):
-            return True
+        try:
+            won = _try_create(path, holder)
+        except OSError as error:
+            # The temp directory will not hold a lock at all. Saying so and
+            # running unlocked is the promise; refusing would fail the gate.
+            LOG.warning("no gate lock could be taken (%s), so the gate runs unlocked", error)
+            return None
+        if won is not None:
+            return won
         reason = reclaim_if_free(path, stale_after=stale_after)
         if reason is not None:
             LOG.warning("reclaimed the gate lock: %s", reason)
             continue
         waited = time.monotonic() - started
         if waited >= timeout:
-            return False
+            return None
         if waited - reported >= report_every:
             reported = waited
             current = read_holder(path)
@@ -328,15 +470,21 @@ def acquire(
 
 
 def release(path: Path, holder: Holder) -> bool:
-    """Drop the lock, but only while the record on disk is still ours."""
-    if read_holder(path) != holder:
+    """Drop the lock, but only while the record on disk is still ours.
+
+    This is a compare and delete and it does not take the reclaim seat, unlike
+    `reclaim_if_free`. The only caller that can remove our record while we are
+    alive is one that has judged it past the reclaim line, and `created_at` is
+    now the second the lock was won - so reaching that needs a gate still
+    running 7,200 s in, which is 6.6x the longest one ever measured here. The
+    seat would cost six file operations on every single hand-over to cover it,
+    and a hand-over that is slow is the thing this tool exists to avoid.
+    """
+    raw = holder.to_json().encode("utf-8")
+    if _read_bytes(path) != raw:
         LOG.warning("the gate lock is no longer ours, so it stays where it is")
         return False
-    try:
-        path.unlink()
-    except OSError:
-        return False
-    return True
+    return _delete_exactly(path, raw)
 
 
 def run_command(command: Sequence[str]) -> int:
@@ -436,17 +584,18 @@ def main(argv: Sequence[str] | None = None) -> int:
 
     lock = default_lock_path() if args.lock_file is None else Path(args.lock_file)
     holder = holder_for(command)
-    if acquire(
+    won = acquire(
         lock,
         holder,
         poll=float(args.retry_every),
         stale_after=float(args.stale_after),
         timeout=float(args.timeout),
-    ):
+    )
+    if won is not None:
         try:
             return run_command(command)
         finally:
-            release(lock, holder)
+            release(lock, won)
 
     LOG.warning(
         "gave up waiting for the gate lock after %.0f s and ran unlocked; "

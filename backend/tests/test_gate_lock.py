@@ -28,6 +28,8 @@ from itertools import pairwise
 from pathlib import Path
 from typing import Final
 
+import pytest
+
 from utilities import gate_lock
 
 REPO_ROOT: Final = Path(__file__).resolve().parents[2]
@@ -37,6 +39,14 @@ GATE_LOCK: Final = REPO_ROOT / "backend" / "utilities" / "gate_lock.py"
 # well past the ~15 ms floor a Windows monotonic tick can have.
 WORKERS: Final = 5
 HOLD_SECONDS: Final = 0.25
+
+# A crowd, for the arm that drives the reclaim path. Every caller in it fails the
+# create, judges the planted record stale and goes for the delete at the same
+# moment, which is the interleaving that produced the defect. Ten callers on a
+# 4 vCPU runner is a real queue; the hold is short because the point is the
+# handover, not the holding.
+CROWD: Final = 10
+CROWD_HOLD_SECONDS: Final = 0.1
 
 # The unlocked arm has to overlap to be a control, so its hold is long enough to
 # cover five process starts on a loaded box.
@@ -61,6 +71,37 @@ with open(target, "a", encoding="ascii") as handle:
 CLOCK_SOURCE: Final = """import time
 
 print(time.monotonic())
+"""
+
+# How many locks the watcher below stands over. Each one is a separate chance to
+# catch a lock that exists before its record does, and one catch is the finding.
+LOCKS_WATCHED: Final = 120
+
+# Spin on each lock in turn and report the first bytes that ever come back. A
+# poll cycle here is a few microseconds, so the reading lands within microseconds
+# of the lock appearing - which is where a two-step create is still empty. The
+# size rides in front of the record so an empty reading is a line rather than
+# nothing at all, and the `ready` file per lock is what keeps the watcher from
+# falling behind the parent and reading only finished files.
+WATCHER_SOURCE: Final = """import pathlib
+import sys
+
+room = pathlib.Path(sys.argv[1])
+seen = pathlib.Path(sys.argv[2])
+count = int(sys.argv[3])
+
+lines = []
+for index in range(count):
+    lock = room / f"lock-{index:04d}"
+    (room / f"ready-{index:04d}").write_text("go", encoding="ascii")
+    while True:
+        try:
+            raw = lock.read_bytes()
+        except OSError:
+            continue
+        break
+    lines.append(f"{len(raw)}|" + raw.decode("utf-8", errors="replace"))
+seen.write_text("\\n".join(lines) + "\\n", encoding="ascii")
 """
 
 
@@ -136,6 +177,34 @@ def _intervals(record: Path) -> list[tuple[float, float]]:
     return pairs
 
 
+def _marks(directory: Path) -> list[tuple[float, float]]:
+    """Every worker's own pair, read from its own file.
+
+    One shared file would be enough for the arm above, where a lost line and an
+    overlap are the same finding. The arm below has to say WHICH intervals
+    overlapped, and two callers appending to one file at the same instant on
+    Windows can lose one of them - so each worker gets a file nobody else writes.
+    """
+    pairs: list[tuple[float, float]] = []
+    for mark in sorted(directory.iterdir()):
+        pairs.extend(_intervals(mark))
+    return pairs
+
+
+def _a_lock_nobody_is_holding(age: float = 10.0 * gate_lock.STALE_AFTER_SECONDS) -> gate_lock.Holder:
+    """A record past the reclaim line, so every caller that meets it must reclaim.
+
+    The pid is this test's own and is alive, so it is the age that decides and
+    the arm is the same on both platforms.
+    """
+    return gate_lock.Holder(
+        pid=os.getpid(),
+        worktree="/a/worktree/that/is/long/gone",
+        command="python -m pytest",
+        created_at=time.time() - age,
+    )
+
+
 def _overlapping(intervals: Sequence[tuple[float, float]]) -> list[tuple[int, int]]:
     """Index pairs whose intervals overlap. Empty means the gates were serialised.
 
@@ -206,6 +275,94 @@ def test_the_lock_lets_one_gate_run_at_a_time(tmp_path: Path) -> None:
     assert len(intervals) == WORKERS, f"only {len(intervals)} of {WORKERS} workers ran"
     assert _overlapping(intervals) == [], f"gates ran at the same time: {intervals}"
     assert not lock.exists(), "the last worker left the lock behind"
+
+
+def test_a_crowd_meeting_one_dead_holders_lock_still_runs_one_gate_at_a_time(
+    tmp_path: Path,
+) -> None:
+    """The same oracle, aimed at the step that used to lose the property.
+
+    The lock is planted past the reclaim line, so every caller fails the create,
+    judges the same record unheld and goes for the delete at the same moment.
+    Deleting a file is unconditional, so before this was repaired a caller could
+    delete a lock a sibling had already won and both would then run. Two of five
+    intervals overlapping for a whole 0.25 s hold is what that looked like in CI.
+    """
+    worker = _write(tmp_path / "worker.py", WORKER_SOURCE)
+    marks = tmp_path / "marks"
+    marks.mkdir()
+    lock = tmp_path / "gate.lock"
+    lock.write_text(_a_lock_nobody_is_holding().to_json(), encoding="ascii")
+
+    results = _run_together(
+        [
+            _argv(
+                lock,
+                [sys.executable, str(worker), str(marks / f"{index}.txt"), str(CROWD_HOLD_SECONDS)],
+                poll=0.01,
+            )
+            for index in range(CROWD)
+        ],
+        cwd=tmp_path,
+        env=_developer_environment(),
+    )
+
+    assert [code for code, _ in results] == [0] * CROWD, results
+    intervals = _marks(marks)
+    assert len(intervals) == CROWD, f"only {len(intervals)} of {CROWD} workers ran"
+    assert _overlapping(intervals) == [], f"gates ran at the same time: {intervals}"
+    assert not lock.exists(), "the last worker left the lock behind"
+    assert not gate_lock.right_path(lock).exists(), "a reclaim right was left behind"
+
+
+def test_a_lock_that_exists_at_all_already_carries_its_whole_record(tmp_path: Path) -> None:
+    """The property the repair rests on, watched by a second real process.
+
+    Creating the lock and then writing the record into it are two steps, and
+    between them the lock is readable as zero bytes. A caller that reads those
+    bytes judges the winner's own record unreadable wreckage and deletes a lock
+    that is being taken - which is how two callers came to hold one lock. The
+    repair publishes the name and the bytes together, so the state simply does
+    not exist.
+
+    Proving the absence of a window needs somebody looking. The child announces
+    each lock before it stands over it, so it is always already spinning when the
+    lock appears, and it reports the FIRST bytes it ever manages to read. Every
+    one of them has to be a whole record.
+    """
+    room = tmp_path / "room"
+    room.mkdir()
+    seen = tmp_path / "seen.txt"
+    watcher = _write(tmp_path / "watch.py", WATCHER_SOURCE)
+
+    child = subprocess.Popen(
+        [sys.executable, str(watcher), str(room), str(seen), str(LOCKS_WATCHED)],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    try:
+        for index in range(LOCKS_WATCHED):
+            ready = room / f"ready-{index:04d}"
+            while not ready.exists() and child.poll() is None:
+                time.sleep(0)
+            gate_lock.acquire(
+                room / f"lock-{index:04d}", gate_lock.holder_for(["python", "-m", "pytest"])
+            )
+        _, errors = child.communicate(timeout=120)
+    finally:
+        if child.poll() is None:
+            child.kill()
+
+    assert child.returncode == 0, errors
+    watched = seen.read_text(encoding="ascii").split("\n")[:-1]
+    assert len(watched) == LOCKS_WATCHED, f"the watcher saw {len(watched)} of {LOCKS_WATCHED}"
+    records = [line.split("|", 1) for line in watched]
+    half = [size for size, text in records if gate_lock.parse_holder(text) is None]
+    assert half == [], (
+        f"{len(half)} of {LOCKS_WATCHED} locks existed before their record did, "
+        f"at these sizes: {sorted(set(half))}"
+    )
 
 
 def test_ci_runs_the_gate_unlocked_and_the_same_workers_then_overlap(tmp_path: Path) -> None:
@@ -320,6 +477,86 @@ def test_the_gates_exit_code_comes_back_and_the_lock_goes(tmp_path: Path) -> Non
     assert not lock.exists()
 
 
+def test_the_record_says_when_the_lock_was_won_not_when_the_caller_started(
+    tmp_path: Path,
+) -> None:
+    """Decision 3 needs an honest number and it was printing the wrong one.
+
+    `holder_for` stamps the second the caller started, and a caller can queue for
+    minutes before it wins. Writing that stamp into the record made the next
+    waiter read "held for 324 s" off a lock a second old - which happened on this
+    box on 2026-08-30, between two worktrees running their own gates. The record
+    now carries the second the lock was won.
+    """
+    lock = tmp_path / "gate.lock"
+    queued = gate_lock.Holder(
+        pid=os.getpid(),
+        worktree="/ours",
+        command="python -m pytest",
+        created_at=time.time() - 324.0,
+    )
+
+    won = gate_lock.acquire(lock, queued, poll=0.01)
+
+    assert won is not None
+    assert won.pid == queued.pid
+    assert won.worktree == queued.worktree
+    assert won.command == queued.command
+    assert won.created_at >= queued.created_at + 300.0, "it stamped the wait, not the win"
+    assert "held for 0 s" in won.describe(time.time())
+    assert gate_lock.read_holder(lock) == won
+    assert gate_lock.release(lock, won) is True
+
+
+def test_a_lock_with_nowhere_to_live_runs_the_gate_rather_than_failing_it(
+    tmp_path: Path,
+) -> None:
+    """The standing promise, met at the create rather than only at the timeout.
+
+    A lock path whose parent is a file has nowhere to be created. A scheduling
+    aid that raises here fails the gate it exists to protect, so it says what
+    happened and hands back nothing.
+    """
+    blocked = tmp_path / "not-a-directory"
+    blocked.write_text("", encoding="ascii")
+    holder = gate_lock.holder_for(["python", "-m", "pytest"])
+
+    assert gate_lock.acquire(blocked / "gate.lock", holder, poll=0.01, timeout=0.2) is None
+
+
+def test_a_create_the_system_refuses_is_a_lost_create_and_never_a_crash(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    """A Windows state no portable call can produce on demand, so it is injected.
+
+    A name whose last handle is closing is "delete pending", and every create on
+    it is refused with access denied rather than with "it already exists".
+    Measured 2026-08-30 on Windows 11, 12 logical CPUs: 36 of 50 rounds at 20
+    callers on one lock had a caller die with a traceback out of the create and
+    a non-zero exit - contention turned into a failed gate, which is the one
+    thing this tool may not do. A lost create is a lost create, whichever of the
+    two the operating system says.
+    """
+    lock = tmp_path / "gate.lock"
+    real_link = os.link
+    refusals = [PermissionError(13, "Permission denied")]
+
+    def refuses_the_first_one(source: object, destination: object) -> None:
+        if refusals:
+            raise refusals.pop()
+        real_link(source, destination)  # type: ignore[arg-type]
+
+    monkeypatch.setattr(os, "link", refuses_the_first_one)
+
+    won = gate_lock.acquire(
+        lock, gate_lock.holder_for(["python", "-m", "pytest"]), poll=0.01, timeout=30.0
+    )
+
+    assert not refusals, "the refusal never fired, so nothing was proved"
+    assert won is not None, "a refused create ended the wait instead of costing one pass"
+    assert gate_lock.read_holder(lock) == won
+
+
 def test_a_gate_has_to_be_named_after_a_double_dash() -> None:
     done = subprocess.run(
         [sys.executable, str(GATE_LOCK)],
@@ -400,6 +637,110 @@ def test_a_lock_past_the_reclaim_line_goes_even_though_its_pid_is_alive(tmp_path
     assert reason is not None
     assert "reclaim line" in reason
     assert not lock.exists()
+
+
+def test_a_reclaim_somebody_else_is_already_doing_is_left_to_them(tmp_path: Path) -> None:
+    """The invariant, from the losing side.
+
+    Deleting a file is unconditional, so a caller that judged a record stale a
+    moment ago would delete whatever sits at that path now - including a lock a
+    sibling has since won. Exactly one caller at a time may make that move, and
+    the seat is an exclusive create. Here the seat is already taken, so this
+    caller must leave the dead holder's lock exactly where it is.
+    """
+    lock = tmp_path / "gate.lock"
+    lock.write_text(_a_lock_nobody_is_holding().to_json(), encoding="ascii")
+    theirs = gate_lock.holder_for(["gate_lock", "reclaim"])
+    gate_lock.right_path(lock).write_text(theirs.to_json(), encoding="ascii")
+
+    assert gate_lock.reclaim_if_free(lock, stale_after=gate_lock.STALE_AFTER_SECONDS) is None
+    assert lock.exists(), "it reclaimed a lock somebody else was already reclaiming"
+    assert gate_lock.right_path(lock).read_text(encoding="ascii") == theirs.to_json()
+
+
+def test_the_right_to_reclaim_goes_back_when_the_reclaim_is_done(tmp_path: Path) -> None:
+    """A seat nobody gives up would stop every reclaim on the box."""
+    lock = tmp_path / "gate.lock"
+    lock.write_text(_a_lock_nobody_is_holding().to_json(), encoding="ascii")
+
+    assert gate_lock.reclaim_if_free(lock, stale_after=gate_lock.STALE_AFTER_SECONDS) is not None
+
+    assert not lock.exists()
+    assert not gate_lock.right_path(lock).exists()
+
+
+def test_an_abandoned_right_to_reclaim_does_not_wedge_the_box(tmp_path: Path) -> None:
+    """The seat is held for a read and an unlink, and a caller can still die in it.
+
+    If that stopped every later reclaim, one stale lock would stop every gate on
+    the machine - which is worse than the contention the lock exists to remove.
+    So the seat answers to the same liveness probe as the lock does.
+    """
+    lock = tmp_path / "gate.lock"
+    lock.write_text(_a_lock_nobody_is_holding().to_json(), encoding="ascii")
+    abandoned = gate_lock.Holder(
+        pid=_exited_pid(),
+        worktree="/a/worktree/that/crashed",
+        command="gate_lock reclaim",
+        created_at=time.time(),
+    )
+    gate_lock.right_path(lock).write_text(abandoned.to_json(), encoding="ascii")
+
+    reason = gate_lock.reclaim_if_free(lock, stale_after=gate_lock.STALE_AFTER_SECONDS)
+
+    assert reason is not None
+    assert not lock.exists()
+    assert not gate_lock.right_path(lock).exists()
+
+
+def test_a_seat_its_own_caller_never_gave_back_is_taken_over(tmp_path: Path) -> None:
+    """The seat expires on its own clock, and far sooner than the lock does.
+
+    A caller can leak a seat while staying alive, so a liveness probe is not
+    enough on its own: giving the seat back is an unlink, and on Windows an
+    unlink fails outright while any other caller has the file open to read.
+    Measured 2026-08-30 on Windows 11, 12 logical CPUs - the first leaked seat
+    stopped twenty callers for six minutes, and on the lock's own 7,200 s line it
+    would have stopped them for two hours.
+    """
+    lock = tmp_path / "gate.lock"
+    lock.write_text(_a_lock_nobody_is_holding().to_json(), encoding="ascii")
+    leaked = gate_lock.Holder(
+        pid=os.getpid(),
+        worktree="/a/worktree/that/is/still/running",
+        command="gate_lock reclaim",
+        created_at=time.time() - 10.0 * gate_lock.SEAT_SECONDS,
+    )
+    gate_lock.right_path(lock).write_text(leaked.to_json(), encoding="ascii")
+    assert gate_lock.pid_alive(leaked.pid) is True
+
+    reason = gate_lock.reclaim_if_free(lock, stale_after=gate_lock.STALE_AFTER_SECONDS)
+
+    assert reason is not None
+    assert not lock.exists()
+    assert not gate_lock.right_path(lock).exists()
+    assert gate_lock.SEAT_SECONDS < gate_lock.STALE_AFTER_SECONDS
+
+
+def test_a_release_does_not_wait_for_the_reclaim_seat(tmp_path: Path) -> None:
+    """Releasing is a compare and delete, and it stays one.
+
+    The seat would cost six file operations on every hand-over to cover a case
+    that needs a gate still running 7,200 s in, and a slow hand-over is the thing
+    this tool exists to avoid. A hand-over that waited on a seat somebody else
+    held would be exactly that.
+    """
+    lock = tmp_path / "gate.lock"
+    ours = gate_lock.holder_for(["python", "-m", "pytest"])
+    lock.write_text(ours.to_json(), encoding="ascii")
+    theirs = gate_lock.holder_for(["gate_lock", "reclaim"])
+    gate_lock.right_path(lock).write_text(theirs.to_json(), encoding="ascii")
+
+    assert gate_lock.release(lock, ours) is True
+    assert not lock.exists()
+    assert gate_lock.right_path(lock).read_text(encoding="ascii") == theirs.to_json(), (
+        "it touched a seat it never took"
+    )
 
 
 def test_a_lock_whose_record_will_not_parse_is_reclaimed(tmp_path: Path) -> None:
