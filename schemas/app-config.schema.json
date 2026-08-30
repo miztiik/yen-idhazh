@@ -983,6 +983,61 @@
       "title": "ModelsConfig",
       "type": "object"
     },
+    "ObservabilityConfig": {
+      "additionalProperties": false,
+      "description": "What the pipeline records about itself, and what an operator may switch off.\n\nThree switches rather than one master switch. Collection, scoring and\npublishing fail in different ways and a reader has to behave differently for\neach of them, so one switch would leave nobody able to say which instrument\nwent dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.",
+      "properties": {
+        "evaluation_enabled": {
+          "default": true,
+          "description": "Whether the faithfulness scorer runs. False writes no row to state/scores.csv, so for those days the eval dashboard and the console's score panels list nothing and each item bands from the model-free counterweights instead. The digest still publishes. `--no-faithfulness` is the same switch for one invocation and overrides this; no flag turns it back on.",
+          "title": "Evaluation Enabled",
+          "type": "boolean"
+        },
+        "hard_delete_after_months": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Months after which a downsampled month file is removed outright. Null means never, and never is the default: console.max_window_days is 366, so a shard has to stay readable for a year, and an aggregate costs about 219 KB a year. Set it and a window reaching past it shows nothing for those days rather than a thinner series. It must sit above keep_months, or a month would be deleted before it was ever downsampled.",
+          "title": "Hard Delete After Months"
+        },
+        "keep_months": {
+          "default": 13,
+          "description": "How many months of ledger stay at full grain before a month is downsampled to one row per (date, stage). Past this point a reader loses the per-item detail - the console's failure list offers no rows for those months - and keeps every daily total, so a year-over-year comparison still works. Thirteen, so a whole year plus the month being written is always readable in full.",
+          "minimum": 1,
+          "title": "Keep Months",
+          "type": "integer"
+        },
+        "runtime_counters_scrape": {
+          "default": true,
+          "description": "Whether a work shard reads llama-server's GET /metrics before it stops the server. False writes no row to state/runtime-counters.csv for that shard, so context headroom, reading against writing, cache hits and the shard clock all read as ABSENT for the run rather than as zero. Nothing else about the run changes - the counters are read after the last item is summarized.",
+          "title": "Runtime Counters Scrape",
+          "type": "boolean"
+        },
+        "sample_rate": {
+          "default": 1.0,
+          "description": "The fraction of RUNS whose scorer runs - never the fraction of items. A run scores every item or none, so a day's rows are never a partial sample of that day and a per-day rate stays honest. Below 1.0 most days write no eval row and the console's score panels thin to the sampled days. Not a switch: `evaluation_enabled` is the way to say off, and a rate of zero is refused so the two can never disagree about it.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Sample Rate",
+          "type": "number"
+        },
+        "telemetry_publish": {
+          "default": true,
+          "description": "Whether a run copies its item-health rows into frontend/public/telemetry/<YYYY-MM>.csv. False leaves that month file at whatever the last publishing run wrote, so every console chart ends on that date and the page says which day it read to. Nothing is lost: state/item-health/ still holds every row, so switching it back on republishes the gap.",
+          "title": "Telemetry Publish",
+          "type": "boolean"
+        }
+      },
+      "title": "ObservabilityConfig",
+      "type": "object"
+    },
     "PageWeightConfig": {
       "additionalProperties": false,
       "description": "A gzip-size ceiling per prerendered route, enforced by\n`frontend/scripts/bundle-gate.mjs`.\n\nThe gate reads `config/idhazh.json`, never this model, so a number here\nwould be a second copy of what the file already holds, free to drift from\nthe one the gate enforces. The default is empty for that reason: the\ncommitted config is the single source, and this model owns only the shape\nand the validation (Rule #6).\n\nA route is worth a fixed ceiling when somebody has priced its growth in\npublished days. `/404` and `/evals/` render no day and no ledger, so their\nweight is a function of source alone and their ceiling is the heaviest build\nplus the 64-byte noise floor. `/archive/` grows, but only by one day link a\nday since it stopped inlining the day payloads, so its ceiling carries a year\nof that growth as measured headroom. `/console/` grows far faster - about 60\ngzipped bytes a published item, so 36,504 to 43,745 bytes a mature day\nmeasured 2026-08-29 - so its ceiling carries three days rather than a year\nand expires by design. What a page that renders a day cannot have is a fixed\nceiling at all: the only way under one is to publish fewer items, which is\ncapping the news rather than catching a regression, so `/` and `/<date>/` are\ncounted and reported and never failed.",
@@ -1391,6 +1446,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "The observability block added: evaluation_enabled, telemetry_publish, runtime_counters_scrape, sample_rate, keep_months and hard_delete_after_months.",
+      "version": "2026-08-30T14:00",
+      "why": "The pipeline had no way to turn a measurement off or to thin one, so every instrument was all-or-nothing at the command line and nothing at all in config (Rule #6). Three switches rather than one, because collection, scoring and publishing fail differently: state/scores.csv empties when the scorer will not load, the published telemetry file stops when a run does not publish, and state/runtime-counters.csv is silent when llama-server was gone before it was read. One master switch would leave a reader unable to say which of the three went dark. sample_rate is a rate over RUNS and is refused at zero, because a second way to say off is how two ways of saying it end up disagreeing. The item-health census is deliberately absent and the model says so: it is the denominator under every rate, so switching it off would make every other measurement unreadable rather than cheaper. Additive with defaults that reproduce today's behaviour exactly, so an older config still validates and no read-side migration is needed (section 11)."
+    },
+    {
       "change": "Added collect.max_age_hours. collect.recency_weight's description now says it orders inside that window rather than deciding admission.",
       "version": "2026-08-30",
       "why": "Age was a bonus and never a gate, so nothing had a lower bound. Measured 2026-08-30 over the 2,900 items published between 2026-08-22 and 2026-08-29, aged at the moment their own run planned them: the median is 5.5 hours and the 90th percentile is 35.7 days. The oldest story the digest has published was 6,474 days old - a stock note from December 2008 - and 826 items (28.5 percent) were over a day old when they were added. They came from research-lab and institution feeds that serve a whole back catalogue, and the tier weighting scores an undated institution post at 1.0 against 0.64 for a three-day-old trade-press story, so the archive won. The argument for keeping age soft was that a cutoff wastes a slot on a quiet day. There are no quiet days: every run since 2026-08-25 has hit its ceiling, so each old item displaced a fresher one. Additive with a default, so an older config still validates (section 11)."
@@ -1660,6 +1720,9 @@
     "models": {
       "$ref": "#/$defs/ModelsConfig"
     },
+    "observability": {
+      "$ref": "#/$defs/ObservabilityConfig"
+    },
     "page_weight": {
       "$ref": "#/$defs/PageWeightConfig"
     },
@@ -1676,7 +1739,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-30",
+      "default": "2026-08-30T14:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1690,5 +1753,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-30"
+  "version": "2026-08-30T14:00"
 }
