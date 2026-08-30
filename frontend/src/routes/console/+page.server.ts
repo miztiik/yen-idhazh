@@ -8,12 +8,7 @@ import { datesIn, failureSeries } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
-import {
-	failureMix,
-	routerCost,
-	runHealth,
-	siteCost
-} from '$lib/charts/glance';
+import { failureMix, runHealth, siteCost } from '$lib/charts/glance';
 import { renderToSvg } from '$lib/server/chart-render';
 import {
 	modelByDate,
@@ -483,7 +478,7 @@ export async function load() {
 	const flow = chartFlow(charts);
 	// The window the page opens on, drawn here so the prerendered card and the
 	// control above it cannot disagree at first paint. The browser recomputes the
-	// same two cards from the same rows when the operator moves the control.
+	// same card from the same rows when the operator moves the control.
 	const today = new Date().toISOString().slice(0, 10);
 	const seed = windowOfDays(
 		datesIn(publicRows),
@@ -491,14 +486,9 @@ export async function load() {
 		console.default_window_days,
 		console.today_anchor
 	);
-	const inSeed = (date: string) => date >= seed.start && date <= seed.end;
 	// Six questions, six shapes. Each is drawn here so the console is complete
 	// before any script runs; the client rebuilds the same option to hydrate.
 	const runsDonut = runHealth(manifests);
-	const cost = routerCost(
-		charts.filter((day) => inSeed(day.date)),
-		console.chart_arm_minutes_target
-	);
 	const articles = publishedItems();
 	const perArticle = siteCost(manifests, articles, seed);
 	const mixDates = datesIn(publicRows);
@@ -541,8 +531,6 @@ export async function load() {
 			healthSvg: await draw(runsDonut, 260, 200),
 			healthShare: runsDonut.empty ? null : runsDonut.share,
 			healthTotal: runsDonut.total,
-			costSvg: await draw(cost, 460, 40),
-			costBand: cost.empty ? null : cost.band,
 			perArticleSvg: await draw(perArticle, 760, 220),
 			mixSvg: await draw(mix, 760, 220)
 			// No size chart and no published strip beside them: both follow the
