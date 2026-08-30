@@ -13,8 +13,8 @@
 	/** The item-telemetry surfaces, over the window the page is holding.
 	 *
 	 * The window is not owned here any more. It belongs to the page, because the
-	 * source table and the router-cost card read the same one, and a window owned
-	 * by the widget furthest down the page cannot be read by anything above it.
+	 * source table and the chart arm read the same one, and a window owned by the
+	 * widget furthest down the page cannot be read by anything above it.
 	 */
 	let {
 		rows,

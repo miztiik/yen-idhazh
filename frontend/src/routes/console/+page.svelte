@@ -43,7 +43,6 @@
 		chartArm,
 		failureMix,
 		publishedSkyline,
-		routerCost,
 		runHealth,
 		PAGES_CAP_BYTES,
 		siteCost,
@@ -156,12 +155,6 @@
 	const cuts = $derived(
 		data.sourceCutsByWindow.find((table) => table.days === windowDays) ??
 			data.sourceCutsByWindow[0]
-	);
-	const windowedCost = $derived(
-		routerCost(
-			data.charts.filter((day) => inWindow(day.date)),
-			data.console.chart_arm_minutes_target
-		)
 	);
 	/** The chart arm's own rule, read from config rather than written into a
 	 * component. An operator moves a threshold in `config/appearance.json`. */
@@ -716,41 +709,9 @@
 				/>
 			</figure>
 		{/if}
-		{#if data.glance.costSvg}
-			<figure
-				class="panel"
-				data-glance-chart="router-cost"
-				data-windowed="router-cost"
-				data-window-days={windowDays}
-			>
-				<figcaption class="text-[0.75rem] text-text-tertiary">
-					Router minutes per published chart, against the {thresholds.minutesTarget} that retires the
-					arm. Over {windowDays} days.
-				</figcaption>
-				{#if windowDays < thresholds.ruleDays}
-					<!-- A median of the wrong span is worse than no median: it is the
-					     same figure with a different meaning and nothing on the page to
-					     say which one is being read. -->
-					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-too-narrow="router-cost">
-						The rule reads {thresholds.ruleDays} days. Widen the window to see it.
-					</p>
-				{:else if windowedCost.empty}
-					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="router-cost">
-						No router time is on record for these {windowDays} days.
-					</p>
-				{:else}
-					{#key windowDays}
-						<Chart
-							svg={data.glance.costSvg}
-							option={windowedCost.option}
-							width={460}
-							height={40}
-							label="Median router minutes per published chart against its target, over {windowDays} days"
-						/>
-					{/key}
-				{/if}
-			</figure>
-		{/if}
+		<!-- No router-minutes card here. `Charts drawn for articles` prints the
+		     same window median against the same target, with the coverage half of
+		     the rule beside it, and one page may not state one figure twice. -->
 	</div>
 
 	<div data-windowed="site-cost-per-item" data-window-days={windowDays}>
