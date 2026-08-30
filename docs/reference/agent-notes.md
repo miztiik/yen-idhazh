@@ -329,42 +329,17 @@ tests, utilities and modules the change had nothing to do with. Run
 format pass has already happened, `git restore --` the specific unrelated paths
 rather than the tree.
 
-**`npm run bundle-gate` fails on a machine whose node is not the recorded one,
-on every route at once.** `frontend/bundle-baseline.json` names `node 22` and
-`ci.yml` installs 22. On node 24.12.0, measured 2026-08-29, `origin/main` itself
-read 81 to 87 B UNDER every one of the seven records - `/404`, `/archive/` and
-`/evals/` included, which no branch had touched. The tell is that the offset is
-uniform and in one direction across routes that share nothing but the entry
-chunk. It reads exactly like "my change grew every page", and it is not.
-
-Take a control before you conclude anything. Extract `origin/main` and build it
-with the same installed tree, which is two minutes rather than a second
-`npm ci`:
-
-```powershell
-git archive origin/main | tar -x -C $ctl
-New-Item -ItemType Junction -Path "$ctl\frontend\node_modules" -Target "<your worktree>\frontend\node_modules"
-```
-
-**But do not record the local difference either.** The same change measured 176 B
-a route on node 24 and 108 B a route on node 22, so a local delta added to the
-old record still misses by about 66 B - which is inside nothing, because the
-tolerance is 64. The number the gate compares against is CI's, so read it out of
-CI's own failing run and paste that:
-
-```powershell
-gh run view <runId> --repo <owner/repo> --log > out.txt
-Select-String -Path out.txt -Pattern 'fell to|grew to'
-```
-
-That costs one deliberately failing CI run per weight change, and it is the only
-reading that is on the gate's own scale. Expect the gate to stay red locally
-afterwards by the machine offset, and say so rather than nudging the number
-until it passes.
-
-Remove the junction before deleting the control tree. `Remove-Item -Recurse` on
-a directory holding a junction is the one command here that could reach into
-your real `node_modules`.
+**`npm run bundle-gate` no longer weighs a route against a recorded number.**
+Until 2026-08-30 it held every route's first-load JavaScript within 64 bytes of
+a hand-maintained record, and about a hundred lines of this page were about
+telling that gate's toolchain noise apart from a real change: node 22 against
+node 24, a local Windows build against CI's Linux one, a control build of
+`origin/main` before drawing any conclusion, and the rule that a locally
+measured number must never be recorded. All of it is gone with the gate and with
+`frontend/bundle-baseline.json`. What remains has no machine offset: the gate
+refuses an encoder on the first-load path, and holds each capped page under its
+ceiling in `config/idhazh.json`, which is an absolute limit rather than a
+comparison against another build.
 
 **A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
 Windows filenames are case-insensitive, so a gate script that writes
@@ -833,17 +808,6 @@ dependency nothing in the change touched.
   rule below: re-issue it only after checking whether the first one is running.
   `frontend/build` is one shared directory, so two builds in it is not a slow
   gate - it is a wrong number that looks like a right one.
-- **The bundle gate's CI step used to be named after one of its three checks.**
-  Until 2026-08-26 the step read `Bundle gate - no encoder on the first-load
-  path`, and any CI run from before that date still shows that name. It runs
-  three independent checks with three different answers: the encoder must stay
-  behind a dynamic import, each route's first-load JavaScript must match its
-  recorded weight in `frontend/bundle-baseline.json`, and each page that renders
-  no day must stay under its ceiling in `config/idhazh.json`. A page-weight
-  failure therefore appeared under a heading about the encoder, which cost three
-  people a diagnosis on 2026-08-26. **Read the gate's own output, never the step
-  name** - it prints which of the three failed and what to do about it. The step
-  is now named for all three.
 - **A page-weight failure is often not yours.** `/archive/` and `/console/` grow
   every time the pipeline publishes, so a red bundle gate on your branch may be
   red on `origin/main` too. Check before you change a number:
@@ -855,68 +819,6 @@ dependency nothing in the change touched.
   And when the number really is yours, a raise needs a control build of the old
   payload under the new source. See
   [../how-to/run-the-gates.md](../how-to/run-the-gates.md).
-- **The first-load ratchet fails locally for `origin/main` too, so build the
-  control before you record a baseline.** On 2026-08-26 `npm run bundle-gate`
-  reported `/`, `/<date>/` and `/<date>/<topic>/` 65 to 68 bytes under their
-  recorded weights and printed three replacement lines ready to paste. Building
-  `origin/main`'s own `frontend/src` on the same tree, the same node and the
-  same `node_modules` gave 67 to 70 bytes under - worse - while the `site` job
-  on that exact commit was green. A local Windows build does not reproduce CI's
-  `npm ci` on Linux closely enough for a 64-byte tolerance, on node 22 or node
-  24. Pasting those lines would have recorded somebody else's bytes under your
-  name and moved a baseline CI was happy with. The control is one build:
-
-  ```powershell
-  git checkout origin/main -- frontend/src frontend/bundle-baseline.json
-  npm run build; npm run bundle-gate
-  git checkout HEAD -- frontend/src frontend/bundle-baseline.json
-  ```
-
-  Read the *difference between the two runs*, never the delta against the
-  record. Mine was +2 to +4 bytes on those routes, which is the real answer.
-
-  **And the same unchanged tree passes on one run and fails on the next**, which
-  is what makes this read as something you broke. `frontend/bundle-baseline.json`
-  records `/` at 49,167 B on node 22 with a 64-byte tolerance derived from four
-  node-22 builds that ranged 49,193 to 49,205. Four node-24 builds of one
-  unchanged source measured 49,096 / 49,101 / 49,107 / 49,111 - deltas of -71,
-  -66, -60 and -56, so two of the four fall outside the tolerance and two do not.
-  Running the gate twice over one finished build gives byte-identical output, so
-  the jitter is in the build, not in the measurement. Two workers on 2026-08-26
-  each reached for `bundle-baseline.json` over this. Do not: CI pins node 22, the
-  local toolchain here is node 24, and re-recording moves a number CI is happy
-  with onto a toolchain CI never runs.
-- **The ratchet can fail in CI while passing on this machine, and then the record
-  really is the thing to change.** The entry above says do not re-record. It is
-  about a gate that failed *locally*, and it stays. The opposite case happened on
-  2026-08-27: three routes passed the local gate at -40 to -46 B and CI failed
-  them at -65 and -66 B against a +/-64 tolerance. The cause was not the branch.
-  `origin/main` was already building 56 to 59 B under its own record on five
-  routes and was green, because it sat 5 to 8 B inside the tolerance; a branch
-  that saved 6 to 10 more B on the shell every route loads tipped three of them
-  out. A 10-byte saving failed a 64-byte gate.
-
-  Get main's own CI numbers before deciding whose bytes moved. They are in the
-  `site` job's log, not in the check-run summary:
-
-  ```powershell
-  $j = gh api "repos/<owner>/<repo>/commits/<main sha>/check-runs" --jq '.check_runs[]|select(.name=="site")|.id'
-  $r = gh api "repos/<owner>/<repo>/actions/runs?per_page=60" --jq '[.workflow_runs[]|select(.head_sha|startswith("<main sha>"))]|.[0].id'
-  gh run view $r --repo <owner>/<repo> --job $j --log
-  ```
-
-  Read the branch and main side by side, both from CI, on the same day. The
-  difference between those two is what the branch did; the gap between main and
-  the record is somebody else's drift. Recording CI's measured value puts the
-  route back in the middle of the band, which is where a ratchet is useful - a
-  route sitting 2 B inside the tolerance fails on the next unrelated merge and
-  costs the next person the same hour. Say both numbers in the `why`, so nobody
-  has to guess which part of the change was yours.
-
-  **Read the failing route names before anything else.** Three routes failed and
-  `/archive/` - the only route the change touched - was not among them. That is
-  the tell that the record, not the branch, is the thing that moved.
-
 - **A Playwright spec cannot import a module that imports `$app/anything`.**
   Playwright's pure-function specs run in Node with no SvelteKit resolver, so a
   spec that reaches into `frontend/src/lib/` fails the *whole suite* at load
@@ -927,15 +829,6 @@ dependency nothing in the change touched.
   the pure half in its own file with no `$app` import, the fetching half
   re-exporting it. The tell is that the error names a *package* rather than a
   test.
-
-- **The local build can beat the ratchet, so build the control before you
-  believe the failure.** The entry above says a local node-24 build reads under
-  the recorded node-22 weights. On 2026-08-27 an untouched base build of one
-  tree read -48, -49, -47, -45, -8, +10 and -52 against the record - every route
-  inside the 64-byte tolerance, gate green. So "local always undershoots" is not
-  a rule you can apply without checking, and on that day the ratchet failure was
-  real. Build the base source on your own tree, run the gate on it, and only
-  then decide whether the delta is yours.
 
 ## Git Bash on Windows
 

@@ -204,9 +204,8 @@ published days, to the alarm point and to the cap. **The size on the line above
 is a level, and no level has a date in it.** A tree carrying no day payloads
 prints `runway: unknown` rather than a comfortable number.
 
-`bundle-gate` does three things. It asserts no encoder lands on the first-load
-path, it compares every route's first-load JavaScript against the weight
-recorded for it in `frontend/bundle-baseline.json`, and it holds every route
+`bundle-gate` does two things. It asserts no encoder lands on the first-load
+path, and it holds every route
 named in `config/idhazh.json` under the gzip ceiling set there.
 
 **That comparison is a two-sided ratchet, not a budget.** A route that grew past
