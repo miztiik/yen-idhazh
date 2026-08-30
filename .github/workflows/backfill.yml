@@ -131,6 +131,6 @@ jobs:
       # that still reads correctly, so the repaired days publish first and this
       # then fails the job. Raising the ceiling is one line in
       # config/idhazh.json, and it belongs in the commit that earned the bytes.
-      - name: Bundle gate - encoder, first-load weight, page ceilings
+      - name: Bundle gate - encoder and page ceilings
         working-directory: frontend
         run: npm run bundle-gate
