@@ -211,7 +211,9 @@ test.describe('the timing chart on the page', () => {
 
 		const plot = page.locator('[data-timing="plot"]');
 		const drawn = Number(await plot.getAttribute('data-timing-days'));
-		const day = page.locator('[data-readout-day]');
+		// Scoped to this chart's own strip. The throughput trend below carries a
+		// readout of the same shape, so a bare attribute selector matches two.
+		const day = page.locator('[data-readout="timings"] [data-readout-day]');
 
 		await plot.focus();
 		// Focus lands on the oldest column, so a keyboard reader starts where the
