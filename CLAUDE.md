@@ -124,6 +124,7 @@ In-memory `Path` objects for local I/O may stay platform-native. Rule applies at
 | `backend/var/`       | gitignored | Reproducible run output, caches and benchmark artifacts. Never the committed record of a run.                |
 | `frontend/`          | planned    | The published static site: the digest pages and the eval dashboard. `frontend/public/` holds the committed payloads the site renders; `frontend/src/contracts/` holds the generated types. |
 | `frontend/dist/`     | gitignored | Built bundle for GitHub Pages.                                                                               |
+| `notebooks/`         | created    | Committed notebooks a person runs off this machine, on hardware the runner does not have. Instructions only - never weights, never a token, and nothing in CI runs them (Rule #2). |
 | `evals/`             | folded     | Merged into `state/`. The published dashboard keeps the `/evals/` route; the folder is gone.                 |
 | `state/`             | created    | Everything one run commits for a later run to read: the eval ledger, fingerprints, seen URLs, feed health. Appended by CI, never recomputed at runtime, never served to a reader. |
 | `tests/`             | planned    | Cross-cutting fixtures: captured pages, golden summaries, injection canaries.                                |

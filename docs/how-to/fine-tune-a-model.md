@@ -389,11 +389,42 @@ expected upstream for an `unsloth/*-GGUF` repository; nobody has confirmed it
 exists or that its architecture matches. The first cell of any training notebook
 resolves it and must stop loudly if it does not.
 
+## Training a model
+
+[`../../notebooks/finetune.ipynb`](../../notebooks/finetune.ipynb) trains a LoRA
+adapter on the corpus above. Open it in Colab, set the runtime to a GPU, and run
+all. It clones this repository, reads `config/idhazh.json`, and resolves
+`finetune.teacher` to a base - **no model is named in it**, so a config swap
+moves the notebook with it.
+
+Four things it refuses to train on, and each one raises rather than warns:
+
+| Refused | Why a warning would not be enough |
+| --- | --- |
+| The corpus holdout | Held out by date, so the model trains on the past and is measured on the future. Training on it produces a model that measures well and is worthless. |
+| The reference set's test slice | The one honest measurement of the work. `reference.jsonl` carries no slice, so the notebook joins `queue.jsonl` on `url_key` to recover it. |
+| A row whose assistant turn carries an injection marker | That turn is our own model's output on a stranger's web page. If an attack ever landed, the row teaches the tuned model the injected behaviour. |
+| A row longer than `finetune.sequence_length` | Dropped and counted. A truncated target teaches the model to stop mid-summary. |
+
+**The cell that matters most asserts the loss mask before a step runs.** The
+median article is about six times the length of its summary, so training on the
+whole sequence puts most of the gradient into learning to write other people's
+news articles. The notebook builds the mask by length, decodes the span it will
+learn from, and stops if that span is not the assistant turn's JSON.
+
+**The merge and the quantise happen on your machine, not in Colab.** Merging
+loads the whole model at 16-bit and wants about 16 GB of ordinary RAM against
+the free tier's 12, so training would succeed and the save would die. The last
+cell gives the `llama-export-lora` and `llama-quantize` commands.
+
+`backend/tests/test_notebooks.py` holds the notebook's gates - that it parses,
+that it names no model, that a leak raises, and that the mask is asserted. None
+of it runs the notebook; that needs a GPU and a network.
+
 ## What is not built yet
 
-The reference set (`tests/fixtures/reference/`), the training notebook, the
-weights upload, the second scorer and the blind read. They are rows 5 through 10
-of [`../../TODO/20260827-summarizer-fine-tuning-plan.md`](../../TODO/20260827-summarizer-fine-tuning-plan.md).
+The weights upload, the second scorer and the blind read. They are rows 7
+through 10 of [`../../TODO/20260827-summarizer-fine-tuning-plan.md`](../../TODO/20260827-summarizer-fine-tuning-plan.md).
 Adopting a tuned model is a Level-5 change and needs explicit approval
 (`CLAUDE.md` section 6).
 
