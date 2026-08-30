@@ -586,6 +586,7 @@
 		window={viewport}
 		config={data.console}
 		bands={data.summarizeBands}
+		tickDensity={data.chart.tick_density}
 		onPan={pan}
 		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>

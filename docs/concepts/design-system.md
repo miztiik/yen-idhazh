@@ -469,8 +469,9 @@ Five rulings hold it, all Jony's, 2026-08-29:
 
 Rejected here: the cut share on the run-health strip (a 16px square has no room
 for a number, and it answers "did it work" rather than "what did it read"); a
-histogram of article lengths (the engineer's chart - the scatter already shows
-that distribution along its x axis); a gauge, dial, donut or progress bar (six
+histogram of article lengths (the engineer's chart - it answers what the corpus
+looks like, and this table exists to answer whether raising the cap would reach
+a source); a gauge, dial, donut or progress bar (six
 percent on a dial is one pixel of arc); a before-and-after of a cap change on
 this page (two caps over two different article sets is two measurements, not a
 trend, and that claim belongs in

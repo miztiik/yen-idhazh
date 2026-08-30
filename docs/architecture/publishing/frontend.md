@@ -701,13 +701,13 @@ outward to numbers a reader can place, and anchored at zero only where the
 mark's *length* carries the value; and log, snapped to whole decades. A mark
 that encodes by position takes the padded domain instead, because a zero no run
 was ever measured at is plot spent on nothing. The rounding is a default rather
-than a law. A chart whose domain is already decided by something else turns it
+than a law: a chart whose domain is already decided by something else turns it
 off, because rounding a fixed domain outward moves every mark on the chart to
-buy a tick label that reads the same either way - which is how the compression
-scatter gains a labelled y axis and still puts every point where it already
-was. The log rule has two users: the compression scatter's x axis and the
-stage-timing y axis, both drawing whole decades and the eight steps between
-them. Which rule a chart takes is decided by the extent it draws, and the
+buy a tick label that reads the same either way. The log rule has one user since
+2026-08-30 - the stage-timing y axis, drawing whole decades and the eight steps
+between them. It had two until the compression scatter was replaced by a per-day
+count, and a count of articles is linear. Which rule a chart takes is decided by
+the extent it draws, and the
 threshold is stated under stage timings below. The tick values come from `d3`
 either way, which
 is the part hand-rolling gets wrong. Before the frame, each chart chose its own
@@ -739,50 +739,69 @@ failed, so the payload workstream cannot fail a build over an ordinary publish
 The item-health viewport has three parts, in this order:
 
 - **Failure panels**: fetch, extract and summarize failure rates as separate bars. **The rate is printed in type under each stage name** - `16% failed, 126 of 800.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **The y domain is fixed at 0 to 100%.** Scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **A window holding one day draws no chart at all**: a chart of one value is a rectangle, and the sentence is the panel. Thin denominators use outlined bars below `console.min_attempts_for_rate`, explained once under the row rather than once per bar. Colour is spent only on a failure.
-- **Compression scatter**: article length against summary length on a log x axis with decade ticks and the eight steps between them, summary words labelled on a y axis of their own, the `summarize.bands` step function drawn once as a shaded target zone, a distinct mark for an article the run cut short, and one dashed vertical per cut length in view saying where the cut falls. One chart, hand-written SVG. Two things it used to do: carry a second `uplot` canvas underneath drawing the same dataset with neither the band reference nor the truncation mark, which is two drawings of one dataset that disagree; and draw the band reference as one vertical line per point, which measured 1166 nodes on 2026-08-25 for a fact that has one value per configured band. The zone is one `<path>` at any point count, and `summary words` moved off the bottom row, where it was printed beside the x axis title of the variable it is not.
+- **Summary length against the length asked for**: one column a day, stacked three ways - inside the target band, short of it, past it - with the `summarize.bands` ladder printed as numbers beside the chart and the worst misses named underneath in a ranked list. Hand-written SVG in the categorical chart ramp, a word beside every swatch, and the counts carried on the column as `data-band-inside`, `data-band-short` and `data-band-long` so an oracle can add them up. It follows the shared window and declares itself `data-windowed="band-distance"`.
 - **Failed item list**: the rows behind the shape, **capped at `console.failure_list_max` with a `Show 25 more` button**, and stating its own scope - `Showing 25 of 214 failed items in this window.` A panel chip filters it, because after a spike the operator needs rows, and a new window or a new chip resets the cap because it is a new question. Uncapped it measured 7824px against 800 rows and put the compression chart at document y=9105. It sits last for the same reason: it is the only child that can outgrow the screen, so it cannot sit between two charts.
 
 Measured 2026-08-24 on the committed ledger: the console document went from
 11552px to 4878px.
 
-**Where the cut falls is a line on the scatter, and its value comes from the
-rows.** The cut is a value on the x axis and nothing else, so it is a dashed
-vertical rather than a chart of its own. Its value is the distinct
-`source_seen_word_count` among the cut points *in view* - never
-`extract.truncation_cap_tokens`. A thirty-day window can hold two settings, so a
-line drawn from the knob is a claim about a config file rather than about the
-articles on the plot, and it draws even when nothing in view was cut at all. A
-data-derived line cannot. One line per distinct value, each label naming its own
-value and its own end of the handover: `cut at 1,923 words (to 27 Aug)`, then
-`cut at 3,846 words (from 28 Aug)`. A lone cap needs no date - it is the cut,
-throughout - and prints `cut at 1,923 words`. The line takes
-`--color-text-tertiary`, not `--band-low`: a red vertical says the cap is a
-failure, and the cap is a setting.
+**The scatter was replaced on 2026-08-30, and what it cost is why.** It drew
+article length against summary length on a log x axis: 2,740 marks in one colour
+on a 1026px plot, measured that day. The dense middle rendered as a solid block,
+which hid the outliers - the only marks on it anybody could act on - and reading
+it meant taking two axes per mark to answer one question. The question is how far
+a summary landed from the length the prompt asked for, so the distance is what
+is drawn: at the widest preset that is 90 columns instead of one mark an article,
+and the outliers are named rather than hunted for. Ruled by Susan (Craft and
+Delight) with the owner on the measurement, 2026-08-30. The runner-up was a
+density-binned scatter with only the outliers drawn individually; it was refused
+because it keeps the two-axis reading the bar removes. Reducing the mark opacity
+was refused for making a paler blob (Jony).
 
-**The diamond is gated by the row's own version stamp, exactly as the day's
-count in the table is.** `truncation_flagged` changed meaning at
-`CUT_FLAG_MEANS_A_CUT_FROM`; before it the column held the gap between two
-faithfulness scores, from it the column says extract cut the article body. The
-table has read it through that stamp since the count landed, and the plot read
-it raw for one commit - so one page made a per-item claim it refused to make per
-day. Both now read the same constant in
-[frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts),
-and there is exactly one of it.
+**Colour here is categorical, never the confidence ramp.** A summary outside its
+band missed a length somebody chose in `config/`, and a policy limit is not a
+verdict on the run - `TargetBar` draws the same line, lending the ramp only to a
+threshold that is a health fact. Every swatch carries its word, so the three bins
+are readable in a screenshot and in either theme.
 
-**A row the plot cannot place is counted out loud.** The article length before
+**The bounds are printed as numbers beside the chart.** A shaded target zone with
+no printed bound cannot be checked against what is drawn over it, which is what
+the scatter asked a reader to do. The table prints one row a rung -
+`under 60` / `30 to 45` - read off the ladder rather than off a rung, because a
+rung records only the length it starts at and the last one has no ceiling at all.
+
+**Three things went with the scatter, and none of them has a reader now.** The
+dashed cap lines and their handover labels, which read `extract`'s cut off the
+points in view; the diamond for an article the run cut short; and the pointer
+readout, because a bar of counts has no mark to land on and its column already
+carries a `<title>`. `capsInView`, `capLabel` and `seenWords` were deleted with
+them. `CompressionPoint` keeps `source_seen_words` and `truncation_flagged`,
+because `placeRow` still decides all three of its outcomes off the two lengths
+and nothing else.
+
+**A row the section cannot place is counted out loud.** The article length before
 the cut is nullable - the pre-cap body is never persisted, so an older cut row
-has no full length to recover - and a row without one has no x. Measured over
-the committed ledger 2026-08-29: 142 of 2,683 rows, 5.3 percent. The sentence
-under the intro says how many, for whatever window is open, and the count comes
-from the rows the server dropped rather than from a constant, so the sentence
-and the plot answer out of one decision. A window that dropped nothing prints no
-sentence at all. A chart that drops points without saying so is a chart that
-under-reports its own gaps.
+has no length to recover - and a row without one has no band. Measured over the
+committed ledger 2026-08-29: 142 of 2,683 rows, 5.3 percent. The sentence under
+the intro says how many, for whatever window is open, and the count comes from
+the rows the server dropped rather than from a constant, so the sentence and the
+columns answer out of one decision. A window that dropped nothing prints no
+sentence at all. A section that drops articles without saying so under-reports
+its own gaps.
 
-**Three charts carry a pointer readout, and it is not an SVG `<title>`.** The
-compression scatter gets a plain absolutely positioned `<div>` inside the chart
-card; the stage-timing and throughput trends each get a strip below their plot.
-All three are **never pinned to the pointer** - a readout under a thumb is a
+**The oracle is that the split adds up.** `inside + short + long` equals the
+day's own count of articles a band can be read for, recomputed in
+[frontend/tests/console-compression.spec.ts](../../../frontend/tests/console-compression.spec.ts)
+from the committed ladder and the canary's own projection rather than through the
+page's reader. A split that does not add up is mis-binning articles, and the
+picture would still look right. The canary was given one summary that runs past
+its band on the same day - 260 words where the rung asks for 50 to 90 - because
+every other row it writes lands inside or short, and a third state the fixture
+cannot reach is a state an implementation can pass by never entering.
+
+**Two charts carry a pointer readout, and it is not an SVG `<title>`.** The
+stage-timing and throughput trends each get a strip below their plot.
+Both are **never pinned to the pointer** - a readout under a thumb is a
 readout nobody reads. One
 Svelte action beside `observeWidth` drives it
 ([frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)):
@@ -800,7 +819,7 @@ stay as each mark's accessible name and are never the publication: nothing a
 readout alone can tell you is needed to read either chart, which is also the
 whole no-JavaScript answer.
 
-**The stage-timing chart takes the third, and it is a strip below the plot
+**The stage-timing chart takes one of the two, and it is a strip below the plot
 rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
 121px over a 220px plot - 40 to 55 percent of the chart it was explaining - so
 this one is laid out under the plot where it cannot cover a mark at any width,
@@ -829,8 +848,7 @@ series at once, so comparing read against write costs no second hover. It rests
 on the newest day rather than opening blank, so pointing at the chart never
 changes the room it takes and never moves the marks under the pointer. The
 `<title>` keeps every word, including the middle half the box already draws, and
-the run count stays in the verdict line under the legend. The compression
-scatter's readout is unchanged.
+the run count stays in the verdict line under the legend.
 
 The strip's shape is not this chart's own. `dayTicks`, `dayColumnX`,
 `readoutCapStyle` and `readoutMarks` in
@@ -1380,6 +1398,38 @@ some of its rows is worse than one that got heavy.
 
 Authority: Jony and Fowler, 2026-08-29; the measurement and the worst-case
 sizing, Carmack.
+
+### The second response, 2026-08-30: the plot stopped being a mark an article
+
+Windowing the seed bounded how many rows reached the page. Replacing the scatter
+bounded how much page a row costs, and it is the larger of the two. Measured
+2026-08-30 on Windows 11, node v24.12.0, 12th Gen Intel Core i7-1265U, both arms
+built back to back in one session on one tree over one committed ledger:
+
+| | scatter | band split | difference |
+| --- | --- | --- | --- |
+| `/console/` prerendered HTML, gzip -9 | 179,797 B | 106,927 B | **-72,870 B, 40.5 percent of the document** |
+| `/console/` first-load JavaScript | 80,834 B | 82,330 B | +1,496 B, 1.9 percent of the route |
+| room left under the 301,580 B ceiling | 121,783 B | 194,653 B | +72,870 B |
+
+The control is what makes those the change rather than the machine: the untouched
+arm read 80,834 B against a record of 80,831, and the six routes this row does
+not touch each moved 12 to 14 B down between the two builds, which is the shared
+shell getting lighter as one component leaves the client manifest.
+
+The first-load number went the other way, and it is the trade rather than a
+regression. `RankedList` and the `rank.ts` arithmetic behind it had no call site
+until this row, so every build before it tree-shook them away; the scatter's log
+axis, cap-line arithmetic and pointer readout left in the same commit. 1,496 B of
+JavaScript bought 72,870 B of document, which is 49 times its own size, and the
+document is the part every visit pays for whether a script runs or not.
+
+**What the page now grows with is a column a day, not a mark an article.** A
+published day adds up to three rectangles and its share of a date label, whatever
+it published, so the term that used to be linear in items is linear in days and
+bounded by the window. The ceiling is due a re-derivation against that shape
+rather than a raise, and re-deriving it is the closure row's job, not this one's:
+every row still in flight moves the page.
 
 ## Design rationale
 
