@@ -9,9 +9,16 @@
 	 * The sparkline is optional and secondary. Where there is no history the
 	 * card is still a card - an empty plot area with a dash in it is worse than
 	 * no plot at all.
+	 *
+	 * A trend arrives one of two ways. An engine-backed pair (a server-drawn SVG
+	 * and the option that redraws it) is right where the shape needs a scale and
+	 * an axis. Markup is right where it does not: it costs no chunk, it follows
+	 * the page's window with no second drawing on the server, and it is finished
+	 * before any script runs.
 	 */
 	import Chart from '$lib/charts/Chart.svelte';
 	import type { EChartsOption } from 'echarts';
+	import type { Snippet } from 'svelte';
 
 	let {
 		label,
@@ -19,6 +26,7 @@
 		note = null,
 		tone = 'neutral',
 		movement = null,
+		trend = null,
 		trendSvg = null,
 		trendOption = null,
 		windowed = null,
@@ -31,6 +39,8 @@
 		tone?: 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 		/** Signed share, e.g. 0.12 for up 12 percent. Null prints nothing. */
 		movement?: number | null;
+		/** A trend drawn as markup, in the card's own trend slot. */
+		trend?: Snippet | null;
 		trendSvg?: string | null;
 		trendOption?: EChartsOption | null;
 		/** Names the card as following the page's time window. Null where it does
@@ -54,7 +64,9 @@
 >
 	<p class="kpi-label">{label}</p>
 	<p class="kpi-value tabular-nums">{value}</p>
-	{#if trendSvg && trendOption}
+	{#if trend}
+		<div class="kpi-trend">{@render trend()}</div>
+	{:else if trendSvg && trendOption}
 		<div class="kpi-trend">
 			<Chart svg={trendSvg} option={trendOption} width={220} height={34} label="{label}, recent trend" />
 		</div>
