@@ -3666,12 +3666,49 @@ else
 
 **Every `work` job files its own clock and its own host, in the row it already
 wrote for the tokens it read.** `state/runtime-counters.csv` is one row per shard
-per run, and from 2026-08-29 it carries two more cells:
+per run, and it carries five cells about the job rather than about the model
+server - two from 2026-08-29 and three more from 2026-08-30:
 
 | Cell | Holds | Empty means |
 | --- | --- | --- |
 | `job_seconds` | seconds from the shard job's first step to the counters scrape | no stamp reached the step - a re-run of one shard, or a stage run by hand. Never zero seconds. |
 | `cpu_model` | the host's `/proc/cpuinfo` `model name` line | the host published no such line |
+| `cpu_busy_pct` | busy processor time as a share of the processor time available, between the same two instants, from the aggregate `cpu` line of `/proc/stat` | one end of the window never ran |
+| `peak_rss_bytes` | the highest `VmHWM` llama-server reached over every sample `rss-samples.tsv` holds | the sampler wrote no file, or its column moved |
+| `model_load_ms` | milliseconds between the two lines llama-server brackets its own model load with | llama.cpp renamed a line, or logged without timestamps |
+
+**What the last three are for, one question each.** `cpu_busy_pct` separates a
+shard that was short of processor from one that was waiting: the cgroup ran 3.99
+of 4 processors the one time anyone measured it by hand (run `32672629352`,
+2026-08-23), so the expected reading is at or near 100 and a **drop** is the
+signal. `peak_rss_bytes` answers what a qualification cannot - whether a
+candidate model can be *served* on the runner's 16 GB at `n_ctx` 8192 with
+headroom - and until it existed a run either survived or the runner killed it.
+`model_load_ms` is the fixed cost `run.shard_size` exists to amortise.
+
+**Read against `/proc/stat`, not against a cgroup file.** Two cgroup files this
+repository has read are absent on a GitHub-hosted runner:
+`/sys/fs/cgroup/memory.peak` printed `unavailable` on every shard of run
+`32869125768`, and `/sys/fs/cgroup/cpu.max` printed nothing at all in run
+`32672629352`. `/sys/fs/cgroup/cpu.stat` is readable and reports the same thing
+`/proc/stat` does - `usage_usec 34944000` against 3,429 busy ticks, 34.94 s
+against 34.29 s on one probe - because both count the whole machine since boot.
+So either needs two reads and a difference, and `/proc/stat` carries idle in the
+same line, which makes the denominator free.
+
+**The `/proc/stat` pair proves its own window.** Measured 2026-08-30 on a
+GitHub-hosted `ubuntu-latest`: two reads 20 s apart differ by **7,991 ticks**
+against the 8,000 that 20 seconds of 4 processors at 100 Hz has to be - 0.11
+percent. That is the check no hand-written fixture can pass, and it is why
+`backend/tests/test_contracts.py` parses a real capture.
+
+**First readings, run `2026-08-29-3`, four shards** (from the `runtime-log-*`
+artifacts of run `33274853468`, before the cells existed to hold them):
+model load **3,789.5 / 3,820.3 / 4,158.0 / 3,797.6 ms** - so a 9B opens in about
+four seconds, which is **1.1 to 1.5 percent** of the 284-447 s fixed cost a
+worker pays. The fixed cost is somewhere else. Peak `VmHWM` **12.57, 12.65,
+12.94 and 13.16 GiB** against the runner's 16 GB, so the worst shard left 2.84
+GiB. `cpu_busy_pct` has no reading yet: every committed row predates the cell.
 
 **How to read it.** The query is in
 [How the figures here are taken](#how-the-figures-here-are-taken) above. Sort a
@@ -4902,7 +4939,7 @@ to justify a design decision.
 | HHEM scoring seconds per item on CPU | **measured on a laptop 2026-08-29** | 4.278 to 4.815 s a pass over 117 real pairs, depending on the geometry ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). The runner figure is the row above. |
 | Whether a wider grader window scores more truthfully or only differently | **the direction is measured; the truth is not** | slicing costs a 3-window article 0.40 of its faithfulness score against reading it whole, and a whole-article pass is 11 percent cheaper ([Which way the grader's length bias runs](#which-way-the-graders-length-bias-runs)). Which of the two numbers is right needs ground truth, and **0 of 60** drawn rows carry a human label. `evaluation.chunk_words` stays at 900 until they do. |
 | Whether 1-2 bit quantisation changes the fit | unevaluated | open question 4 in the plan-doc |
-| A `work` job's true memory peak | **not readable; the instrument prints a placeholder** | every shard of run `32869125768` wrote `cgroup_memory_peak_bytes=unavailable`, because `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner. Read the job's own cgroup path out of `/proc/self/cgroup` and take `memory.peak` from there, or fall back to the lowest `MemAvailable` in `/proc/meminfo` over the job. The RSS sampler's 14.39 GiB high point is a resident set, not a demand ([Eight work shards](#eight-work-shards)). |
+| A `work` job's true memory peak | **measured, and now a committed cell** | `/sys/fs/cgroup/memory.peak` does not exist on a GitHub-hosted runner, so `cgroup_memory_peak_bytes` printed `unavailable` on every shard of run `32869125768` and the instrument was a placeholder. The RSS sampler was the readable one all along: from 2026-08-30 every `work` shard files its highest `VmHWM` as `peak_rss_bytes` in `state/runtime-counters.csv` ([The instrument Trigger A reads](#the-instrument-trigger-a-reads)). It is a resident set and not a demand, which is the honest bound: 13.16 GiB at the worst of four shards against 16 GB. |
 | **Whether the configured model obeys an injection the sanitizer has already defused** | **no live evidence; the one attempt returned no summary** | the `exfiltration-via-url` question this row used to ask - "sanitizer gap or model gap" - is **closed, and its prescribed 8B replay is struck**. The sanitizer stripped all 19 markers across all five fixtures, `markers_present` was empty on every canary in run `33016222069`, and the gate failed on `replied: false` ([The fifth canary was never exercised](#the-fifth-canary-was-never-exercised)). The replay is cancelled because `sanitize()` runs before the prompt is built, so it would return the same answer under every model while costing about 95 minutes and a second 5 GB cache entry. What is genuinely open is narrower: land the canary failure code, then re-run the canary arm alone against the configured 9B - five calls, no corpus freeze, no repeats. |
 | Whether the configured summarizer is better or worse than the retired Qwen3-8B-Q4_K_M | **no comparison was ever run** | a cache-safe replay of one frozen corpus through both models, at least `validation_articles` common successful pairs, full attempted denominators, paired metric spread, and a pre-registered blind human selector. The 0.7149 mean hhem above is one model on one corpus and is not a delta. |
 

@@ -4,6 +4,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Appended `cpu_busy_pct`, the share of every processor second the host spent busy over the job; `peak_rss_bytes`, llama-server's own high-water mark; and `model_load_ms`, the time the server took to open the weights.",
+      "version": "2026-08-30",
+      "why": "The row said what the server counted and how long the job took, and nothing about the machine that did it. Three questions had no committed answer. A shard that reads the prompt 2.30x slower than its sibling in the same run is either short of processor or waiting on something else, and only a busy figure separates those - the cgroup ran 3.99 of 4 processors when it was last measured by hand, so the reading is expected at or near 100 and a drop is the signal. Whether a candidate model fits the runner's 16 GB at `n_ctx` 8192 was answered by whether the run survived; a qualification proves a model is fast enough and faithful enough and proves nothing about what it holds. And model load is the fixed cost `run.shard_size` exists to amortise, which cannot be sized against a number nobody kept."
+    },
+    {
       "change": "Appended `job_seconds`, the shard job's own clock up to this scrape, and `cpu_model`, the processor the host drew.",
       "version": "2026-08-29",
       "why": "The truncation cap reverts when the slowest work job passes 110 minutes on two of three scheduled runs, and no committed file carried a job's clock - only the GitHub jobs API did, and it drops a job record when the run ages out. A rollback rule that reads an instrument outside the repository is checked by hand or not at all. The CPU model lands in the same row because this project has measured a 3.1x swing in read throughput between hosts, so a clock without the part it was taken on cannot be compared with the next run's (Rule #10). Both are one fact about one work job, which is exactly this row's grain; the run manifest is one row per run and a run draws up to eight hosts."
@@ -16,6 +21,20 @@
   ],
   "description": "One `work` shard, one run, one row.",
   "properties": {
+    "cpu_busy_pct": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The share of every processor second the host spent busy between the job's first step and this scrape, from the aggregate `cpu` line of /proc/stat. The cgroup ran 3.99 of 4 processors the one time it was measured by hand, so the reading is expected at or near 100 and a DROP is the signal - it says the shard spent the job waiting rather than computing. Above 100 means the two readings disagree about the window, never that the host found a fifth processor.",
+      "title": "Cpu Busy Pct"
+    },
     "cpu_model": {
       "anyOf": [
         {
@@ -50,6 +69,20 @@
       "default": null,
       "description": "Seconds from the shard job's first step to this scrape. It is a floor on the wall-clock the GitHub jobs API reports and never a ceiling: the steps after the scrape - the ledger push, two log summaries and the artifact uploads - are outside it.",
       "title": "Job Seconds"
+    },
+    "model_load_ms": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "number"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "Milliseconds from llama-server saying it is loading the weights to saying they are loaded, read off its own log stamps. Model load is the fixed cost `run.shard_size` exists to amortise, so it is one figure per shard and never one per item.",
+      "title": "Model Load Ms"
     },
     "n_busy_slots_per_decode": {
       "anyOf": [
@@ -92,6 +125,20 @@
       "default": null,
       "description": "The longest sequence the server saw, prompt plus generation. Says how close the day came to `n_ctx`.",
       "title": "N Tokens Max"
+    },
+    "peak_rss_bytes": {
+      "anyOf": [
+        {
+          "minimum": 0,
+          "type": "integer"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "description": "The highest `VmHWM` llama-server reached, over every sample this shard took. It answers what a qualification cannot: whether a candidate model can be SERVED on the runner's 16 GB at `n_ctx` 8192 with headroom left. Until this cell, a run either survived or the runner killed it.",
+      "title": "Peak Rss Bytes"
     },
     "prompt_seconds_total": {
       "anyOf": [
@@ -187,7 +234,7 @@
       "title": "Tokens Predicted Total"
     },
     "version": {
-      "default": "2026-08-29",
+      "default": "2026-08-30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -202,5 +249,5 @@
   ],
   "title": "RuntimeCountersRow",
   "type": "object",
-  "version": "2026-08-29"
+  "version": "2026-08-30"
 }

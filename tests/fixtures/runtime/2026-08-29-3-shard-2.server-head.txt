@@ -1,0 +1,40 @@
+0.00.007.999 I cmn  common_param: common_params_print_info: verbosity = 3 (adjust with the `-lv N` CLI arg)
+0.00.008.406 W srv  llama_server: -----------------
+0.00.008.411 W srv  llama_server: CORS is set to allow all origins ('*') and no API key is set
+0.00.008.411 W srv  llama_server: this can be a security risk (cross-origin attacks)
+0.00.008.412 W srv  llama_server: more info: https://github.com/ggml-org/llama.cpp/pull/25655
+0.00.008.412 W srv  llama_server: -----------------
+0.00.009.678 I srv    load_model: loading model 'backend/models/Qwen3.5-9B-Q4_K_M.gguf'
+0.03.317.755 I cmn          init: llama threadpool init, n_threads = 4
+0.04.163.033 I srv    load_model: initializing, n_slots = 1, n_ctx_slot = 8192, kv_unified = 'false'
+0.04.167.704 I srv  llama_server: model loaded
+0.04.167.719 I srv  llama_server: listening on http://127.0.0.1:8080
+0.04.167.720 W srv  llama_server: NOTICE: server default port will be changed to :9931 in a future release
+0.04.167.721 W srv  llama_server:         ref: https://github.com/ggml-org/llama.cpp/pull/26508
+1.18.633.681 I slot get_availabl: id  0 | task -1 | selected slot by LRU, t_last = -1
+1.18.634.023 I slot launch_slot_: id  0 | task 0 | processing task, is_child = 0
+2.04.158.970 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =    512, progress = 0.28, t =  45.52 s / 11.25 tokens per second
+2.41.418.298 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =    922, progress = 0.51, t =  82.78 s / 11.14 tokens per second
+3.14.947.589 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   1291, progress = 0.72, t = 116.31 s / 11.10 tokens per second
+4.01.251.685 I slot print_timing: id  0 | task 0 | prompt processing, n_tokens =   1799, progress = 1.00, t = 162.62 s / 11.06 tokens per second
+4.26.089.779 I slot print_timing: id  0 | task 0 | n_gen =    100, tg =   4.08 t/s, tg_3s =   4.12 t/s
+4.29.219.316 I slot print_timing: id  0 | task 0 | n_gen =    113, tg =   4.09 t/s, tg_3s =   4.15 t/s
+4.32.354.116 I slot print_timing: id  0 | task 0 | n_gen =    126, tg =   4.09 t/s, tg_3s =   4.15 t/s
+4.35.496.468 I slot print_timing: id  0 | task 0 | n_gen =    139, tg =   4.10 t/s, tg_3s =   4.14 t/s
+4.38.596.095 I slot print_timing: id  0 | task 0 | n_gen =    151, tg =   4.08 t/s, tg_3s =   3.87 t/s
+4.41.734.681 I slot print_timing: id  0 | task 0 | n_gen =    164, tg =   4.08 t/s, tg_3s =   4.14 t/s
+4.44.851.653 I slot print_timing: id  0 | task 0 | n_gen =    177, tg =   4.09 t/s, tg_3s =   4.17 t/s
+4.47.992.938 I slot print_timing: id  0 | task 0 | n_gen =    190, tg =   4.09 t/s, tg_3s =   4.14 t/s
+4.51.155.220 I slot print_timing: id  0 | task 0 | n_gen =    203, tg =   4.09 t/s, tg_3s =   4.11 t/s
+4.54.202.315 I slot print_timing: id  0 | task 0 | n_gen =    215, tg =   4.09 t/s, tg_3s =   3.94 t/s
+4.57.335.563 I slot print_timing: id  0 | task 0 | n_gen =    228, tg =   4.09 t/s, tg_3s =   4.15 t/s
+5.00.466.404 I slot print_timing: id  0 | task 0 | n_gen =    241, tg =   4.09 t/s, tg_3s =   4.15 t/s
+5.03.614.685 I slot print_timing: id  0 | task 0 | n_gen =    254, tg =   4.09 t/s, tg_3s =   4.13 t/s
+5.06.801.382 I slot print_timing: id  0 | task 0 | n_gen =    267, tg =   4.09 t/s, tg_3s =   4.08 t/s
+5.09.859.585 I slot print_timing: id  0 | task 0 | n_gen =    279, tg =   4.09 t/s, tg_3s =   3.92 t/s
+5.10.340.023 I slot print_timing: id  0 | task 0 | prompt eval time =  163192.46 ms /  1803 tokens (   90.51 ms per token,    11.05 tokens per second)
+5.10.340.035 I slot print_timing: id  0 | task 0 |        eval time =   68513.50 ms /   281 tokens (  244.69 ms per token,     4.09 tokens per second)
+5.10.340.037 I slot print_timing: id  0 | task 0 |       total time =  231705.96 ms /  2084 tokens
+5.10.340.043 I slot print_timing: id  0 | task 0 |    graphs reused =        279
+5.10.340.517 I slot      release: id  0 | task 0 | stop processing: n_tokens = 2083, truncated = 0
+5.11.712.162 I slot get_availabl: id  0 | task -1 | selected slot by LCP similarity, f_sim_best = 0.559 (> 0.100 thold), f_keep = 0.452

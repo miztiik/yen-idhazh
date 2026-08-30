@@ -271,8 +271,15 @@ RUNTIME_LOG_LINES: Final = (
 )
 RSS_SAMPLE_SECONDS: Final = 15
 RSS_SAMPLE_FILE: Final = "rss-samples.tsv"
+SERVER_LOG_FILE: Final = "llama-server.log"
 MEMORY_PEAK_FILE: Final = "memory-peak.txt"
 CGROUP_PEAK_PATH: Final = "/sys/fs/cgroup/memory.peak"
+#: The one reading that has to be taken at both ends of the job. `/proc/stat`
+#: counts since boot, so a single read is mostly the minutes the runner spent
+#: booting. `/proc/stat` rather than a cgroup file because two cgroup files this
+#: repository has read - `memory.peak` and `cpu.max` - are absent on a
+#: GitHub-hosted runner, and `/proc/stat` is on every Linux there is.
+CPU_STAT_READING: Final = "awk '/^cpu / { print }' /proc/stat"
 # llama-server's own loopback counters, read once at job end. The two series are
 # named because they are the two a run is read by: the busy-slot average says
 # whether batching ever happened, and the high watermark says how close the day
@@ -358,7 +365,7 @@ COUNTERS_FLAG: Final = "--counters-file"
 # well as the model time, and read at the counters step - which is the only step
 # that writes a committed row at shard grain.
 CLOCK_STEP: Final = "Stamp the shard clock and the host"
-CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL")
+CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 # Neither of the work job's two steps may fail the shard. See the comment above
 # them in the workflow for which loss is the cheaper one. `BaseLoader` keeps
 # every scalar a string, so the value to compare is the word, not the boolean.
@@ -3076,10 +3083,10 @@ def test_the_servers_own_counters_outlive_the_job_that_read_them() -> None:
 
     assert COUNTERS_COMMAND in script, f"{where} must commit the snapshot, not only log it"
     assert f'--date "{SUBSTITUTED_DATE}"' in script
-    # This shard's own snapshot, the file the same step just wrote, and the two
+    # This shard's own snapshot, the file the same step just wrote, and the five
     # facts about the job rather than about the server. The step's line
     # continuations are folded first, the way bash reads them.
-    assert shlex.split(script.replace("\\\n", " "))[-10:] == [
+    assert shlex.split(script.replace("\\\n", " "))[-18:] == [
         "--shard",
         SUBSTITUTED_SHARD,
         "--shards",
@@ -3090,6 +3097,14 @@ def test_the_servers_own_counters_outlive_the_job_that_read_them() -> None:
         "${JOB_STARTED_AT:-}",
         "--cpu-model",
         "${CPU_MODEL:-}",
+        "--cpu-stat-at-start",
+        "${CPU_STAT_AT_START:-}",
+        "--cpu-stat-at-end",
+        "${CPU_STAT_AT_END:-}",
+        "--rss-samples-file",
+        RSS_SAMPLE_FILE,
+        "--server-log",
+        SERVER_LOG_FILE,
     ]
     # A body that came back empty still writes a row. A shard whose server was
     # already gone and a shard that never ran are different facts, and pooling a
@@ -3143,6 +3158,42 @@ def test_the_shard_clock_is_stamped_before_the_job_spends_anything() -> None:
         assert f"${{{variable}:-}}" in counters, (
             f"{COUNTERS_STEP} must read {variable}, and must not break when it is unset"
         )
+
+
+def test_the_shard_says_what_the_machine_did_and_not_only_what_the_server_did() -> None:
+    """The Oracle for row 8: three facts about the host, from files anyone can re-read.
+
+    A shard read the prompt 2.30x slower than its sibling in the same run, and
+    nothing said whether it was short of processor or waiting on something else.
+    Nothing said how close a 16 GB runner came to its limit either, or what the
+    weights cost to open - the fixed cost `run.shard_size` exists to amortise.
+
+    Each reading is taken from a file the job already keeps and the runtime
+    artifact already uploads, so the number in the ledger can be checked against
+    the bytes it came from for as long as that artifact lives.
+    """
+    workflow = _load_workflows()["digest.yml"]
+
+    stamp = _script(_step(workflow, "work", "name", CLOCK_STEP), f"digest.yml/work/{CLOCK_STEP}")
+    assert CPU_STAT_READING in stamp, (
+        f"{CLOCK_STEP} must read the processor counters before the job spends anything"
+    )
+
+    where = f"digest.yml/work/{COUNTERS_STEP}"
+    counters = _script(_step(workflow, "work", "name", COUNTERS_STEP), where)
+    assert f"CPU_STAT_AT_END=$({CPU_STAT_READING}" in counters, (
+        f"{where} must read the processor counters again, or the window has one end"
+    )
+    for name in (RSS_SAMPLE_FILE, SERVER_LOG_FILE):
+        assert f" {name}" in counters, f"{where} must hand the row {name}"
+
+    # Both files are already uploaded, so nothing new is produced for this and
+    # the raw bytes behind three cells outlive the job by the artifact's two days.
+    upload = _step(workflow, "work", "name", "Upload runtime log")
+    path = _mapping(upload.get("with"), "work runtime-log upload 'with'").get("path")
+    assert isinstance(path, str), "work runtime-log upload path must be a string"
+    for name in (RSS_SAMPLE_FILE, SERVER_LOG_FILE):
+        assert name in path.splitlines(), f"the runtime artifact must carry {name}"
 
 
 # --- The qualification arm (Row #10) ----------------------------------------
