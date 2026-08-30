@@ -744,7 +744,7 @@ and the plot answer out of one decision. A window that dropped nothing prints no
 sentence at all. A chart that drops points without saying so is a chart that
 under-reports its own gaps.
 
-**Two charts carry a pointer readout, and it is not an SVG `<title>`.** The
+**Three charts carry a pointer readout, and it is not an SVG `<title>`.** The
 compression scatter and the throughput candle each get a plain absolutely
 positioned `<div>` inside the chart card, **pinned to the top of the plot and
 never to the pointer** - a readout under a thumb is a readout nobody reads. One
@@ -766,15 +766,56 @@ whole no-JavaScript answer. The candle's readout is `caption()` unchanged, the
 same sentence its `<title>` already carried, so there is one sentence about a
 day and not two.
 
-Only these two charts get it. `FailurePanels`, `StageTimings` and the run-health
-strip each already print their headline in type, and three readouts across a
-three-up row is three things moving at once.
+**The stage-timing chart takes the third, and it is a strip below the plot
+rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
+121px over a 220px plot - 40 to 55 percent of the chart it was explaining - so
+this one is laid out under the plot where it cannot cover a mark at any width,
+and `chart.readout_max_share` bounds it at a third of the plot so it cannot
+become a paragraph beside a chart being glanced at. `FailurePanels` and the
+run-health strip still get none: each prints its headline in type and neither
+has a per-day point to land on.
+
+**That strip is the legend as well.** The legend already printed the newest day's
+four numbers and a sentence under it said which day they were, which is the
+readout's resting state written out longhand. One strip prints a date and four
+values, opens on the newest day, and follows a pointer or an arrow key; the row
+order is still fixed by the newest day, because a legend that re-sorts under the
+eye as the pointer moves is a legend nobody can read. Nothing is hidden until a
+pointer arrives, so the no-JavaScript answer is the page as it prerenders.
 
 **Stage timings are one trend chart, not a list per day.** Four polylines over a
-calendar x axis, oldest on the left, sharing the run strip's own sparse-label
-arithmetic. The old block was one group of four bars per day - about 150 rows at
-a 30-day window, and no trend - and "is it getting slower" is the only question
-the section is asked.
+calendar x axis, oldest on the left, with a mark at every point and a date under
+every column the density allows. The old block was one group of four bars per
+day - about 150 rows at a 30-day window, and no trend - and "is it getting
+slower" is the only question the section is asked.
+
+**The x axis prints a date per column, thinned to `chart.tick_density`.** It used
+to print one string for the whole span - `24-29 Aug 2026`, measured on the built
+page 2026-08-30 - which is the run strip's sparse-label arithmetic, and that
+arithmetic is right for a strip of 16px squares and wrong for a 760px plot. Six
+labels over thirty days puts every mark within three columns of a date; one
+label over six days put a spike nowhere at all. The first and last day are always
+among them, evenly spaced indices fill the rest, and the year is printed once and
+then only where it changes. `dayTicks` in
+[frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
+owns it, so the throughput candle beside it labels its axis the same way.
+
+**Every point on it carries a mark.** A filled dot is a measured time and an open
+dot on the baseline is a measured zero; a day a stage was never timed on has
+neither, and the note under the chart counts it. Before 2026-08-30 the chart drew
+0 marks across 4 polylines, so there was nothing to aim a pointer at and nothing
+for an arrow key to land on.
+
+**Its columns are the window the operator set, not the days that carry a row.**
+The chart used to build its own calendar from the first and last dated row it
+held, so a control reading 30 days sat above a plot drawing 6. Two spans on one
+page cannot be compared, which is the question the operator came for, and it is
+the same defect the window control was built to remove - `windowOfDays` returns
+exactly N days whatever the ledger holds, for the same reason. So the chart takes
+the shared `TimeWindow` and draws `daysInWindow` of it; a day inside the window
+with no row is a gap the notes already name, and a row outside the window is not
+drawn. A window with no timings in it at all says so and offers the widening,
+rather than drawing an empty frame.
 
 **Its y axis is decades, and that is where the domain rule has its threshold.**
 The padded, `.nice()`, non-zero-anchored linear domain above stands for series
@@ -1395,7 +1436,11 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | An SVG `<title>` as the chart tooltip | It does not fire on touch, carries a delay nobody chose, cannot be styled, is not keyboard-reachable, and does not survive a screenshot pasted into an issue. It stays as the accessible name. | Jony |
 | A readout pinned to the pointer | A readout under a thumb is a readout nobody reads. | Jony |
 | A tab stop on every data point | The committed ledger draws 2,541 of them. A 2,541-stop tab order is a trap, not access. | Jony |
-| A readout on `FailurePanels`, `StageTimings` or the run-health strip | Each already prints its headline in type, and three readouts across a three-up row is three things moving at once. | Jony |
+| A readout on `FailurePanels` or the run-health strip | Each prints its headline in type and neither has a per-day point to land on. | Jony |
+| A readout on `StageTimings` - reversed 2026-08-30 | It was refused because the chart "already prints its headline in type", and the headline it printed was the newest day. The chart had no per-day label and no mark, so the other twenty-nine days could not be read at all. The strip replaces the legend rather than joining it, so the count of things that move on the card is still one. | Susan, over Jony's 2026-08-25 ruling |
+| A floating readout box over the stage-timing plot | Measured 2026-08-29 at 88 to 121px over a 220px plot: 40 to 55 percent of the chart it explains. A strip below the plot cannot occlude at any width, so there is nothing left for a dodge rule to solve. | Jony |
+| Re-sorting the readout rows to the hovered day | The rows are the legend. A legend that re-orders under the eye as the pointer moves cannot be read, and the colour swatch already matches the line. | Jony |
+| Labelling only the first and last day of the timing axis | That is what it did. It is what makes a spike unattributable to a date. | Owner, 2026-08-30 |
 | A charting library for the readout | There is none on this surface and this adds none. One action beside `observeWidth`. | Jony, Rule #8 |
 
 ## See also
