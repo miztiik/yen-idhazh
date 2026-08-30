@@ -150,7 +150,7 @@ function verdictOf(
 ): string {
 	const cost =
 		minutes === null
-			? `No router time was written down in the last ${days} days`
+			? `No router time is on record for these ${days} days`
 			: `The median day spends ${minutes.toFixed(1)} router minutes per chart, ` +
 				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
 				`${trim(thresholds.minutesTarget)} that retires the arm`;

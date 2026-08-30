@@ -206,7 +206,6 @@
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 				Columns are the day's items, split by where each one stopped. Lines are each stage's failure
 				share on the right axis, so a high rate on a short column reads as the thin sample it is.
-				{window.start} to {window.end}.
 			</p>
 		</div>
 		{#if selectedCode}
@@ -400,8 +399,8 @@
 
 		{#if anyLowSample}
 			<p class="mt-2 text-[0.75rem] text-text-tertiary" data-failure-low-sample>
-				A stage fewer than {minAttempts} items reached prints its counts and no rate, and its line stops
-				there. A share over a handful of items is arithmetic, not a measurement.
+				A stage fewer than {minAttempts} items reached prints its counts and no rate, and its line
+				stops there.
 			</p>
 		{/if}
 	{/if}

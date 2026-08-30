@@ -359,7 +359,7 @@
 		"Latest run's size. It is the committed payload tree, not the published site: the site is larger, it is what the cap measures, and idhazh site-weight prints its runway after every build.";
 	const sizeNote = $derived.by(() => {
 		if (payloadBytes === null) {
-			return `No run has recorded a size yet, so there is nothing to hold against the 1 GB Pages cap. Over ${windowDays} days.`;
+			return 'No run has recorded a size yet, so there is nothing to hold against the 1 GB Pages cap.';
 		}
 		if (runway === null) {
 			return `${TREE} ${sizeDelta} No day in these ${windowDays} days grew the tree over an article it published, so there is no rate and no runway.`;
@@ -658,7 +658,7 @@
 			height={SKYLINE.height}
 			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
 			role="img"
-			aria-label="Charts published each day over {windowDays} days, {skyline.total} in all, busiest day {skyline.busiest}"
+			aria-label="Charts published each day over {windowDays} days, {skyline.total} in all, {skyline.busiest} on the busiest day"
 			data-published-days={skyline.bars.length}
 			data-published-total={skyline.total}
 		>
@@ -736,7 +736,7 @@
 					</p>
 				{:else if windowedCost.empty}
 					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="router-cost">
-						No router time was written down in these {windowDays} days.
+						No router time is on record for these {windowDays} days.
 					</p>
 				{:else}
 					{#key windowDays}
@@ -756,7 +756,7 @@
 	<div data-windowed="site-cost-per-item" data-window-days={windowDays}>
 		<Panel
 			title="What one more article costs"
-			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Megabytes a day was the item ceiling wearing a size label - a day gains six times as much when it publishes six times as many articles. This is the part a change to a payload can move. Over {windowDays} days."
+			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days."
 		>
 			{#if perArticle.empty}
 				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
@@ -811,14 +811,14 @@
 	{#if data.glance.mixSvg}
 		<Panel
 			title="What is failing, by stage"
-			note="Stacked, so the height of a column is the day's total and the bands are what made it up. Grouped bars would answer how big each stage is and lose the total, and the total is half the question. A quiet day and a clean day look different here, which they would not on a percentage scale."
+			note="One column is one day. Its height is that day's failures, and the bands are the stages they stopped at."
 		>
 			<Chart
 				svg={data.glance.mixSvg}
 				option={failureMix(failureSeriesFor(data.telemetryRows)).option}
 				width={760}
 				height={220}
-				label="Failures per day by stage"
+				label="Failures per day by stage. One column is one day, its height is that day's failures, and the bands are the stages they stopped at - so a quiet day and a clean day do not draw alike."
 			/>
 		</Panel>
 	{/if}
@@ -826,7 +826,7 @@
 	<div data-windowed="run-health" data-window-days={windowDays}>
 		<Panel
 			title="Run health"
-			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. Skipped items are not counted against a run - an article we already published is skipped by design."
+			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. A skipped item does not count against a run - an article we already published is skipped by design."
 		>
 			{#if data.grid.length === 0}
 				<p class="text-[0.9375rem] text-text-secondary" data-grid="empty">
@@ -836,8 +836,8 @@
 				<!-- A different fact from the one above, so a different sentence: the
 				     ledger answered, and the answer was nothing in this span. -->
 				<p class="text-[0.9375rem] text-text-secondary" data-grid="outside-window">
-					No run recorded a manifest in the last {windowDays} days. Widen the window to reach
-					further back.
+					No run recorded a manifest in these {windowDays} days. Widen the window to look further
+					back.
 				</p>
 			{:else}
 				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -935,14 +935,12 @@
 		{/if}
 
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-intro>
-			The last {cuts.days} days, {cuts.articles}
+			The last {cuts.days} days, {grouped(cuts.articles)}
 			{cuts.articles === 1 ? 'article' : 'articles'} between them. An article longer than the cap
 			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
-			many articles that cost each source - not by the share, because a source with two articles and
-			one cut would otherwise lead the table. A source can carry several feeds, so this list and
-			"Feeds that failed" below do not name the same things. It follows the length of the window
-			above, not where a pan leaves it: the days it reads always end on the newest day the ledger
-			holds.
+			many articles that cost each source. A source can carry several feeds, so this list and
+			"Feeds that failed" below do not name the same things. Panning does not move these days:
+			they always end on the newest day the ledger holds.
 		</p>
 
 		{#if !cuts.measured}
@@ -951,7 +949,7 @@
 			</p>
 		{:else if cuts.rows.length === 0}
 			<p class="mt-4 text-[0.9375rem] text-text-secondary" data-source-cuts="none">
-				No article was cut short in the last {cuts.days} days.
+				No article was cut short in these {cuts.days} days.
 			</p>
 		{:else}
 			<div class="mt-3">
@@ -972,14 +970,12 @@
 
 	<h2 class="console-h2">Feeds that failed</h2>
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-window-exempt="feeds">
-		Every feed's result is written down every run. A feed that answered with nothing counts as a
-		failure - an empty answer costs the digest the same articles a refused one does. A source
-		whose <code>robots.txt</code> says no does not: honouring it is the pipeline working. A feed
-		is rested after {data.quarantineAfter} failures in a row, and the count beside each feed is
-		that run of failures - the number the pipeline itself rests on, not every failure it has ever
-		had. That count does not follow the window above, because a windowed recount would disagree
-		with the rest the pipeline actually performed, and two numbers for one decision is worse than
-		one long count. The strip of days beside it does follow the window.
+		The pipeline rests a feed after {data.quarantineAfter} failures in a row. The count beside
+		each feed is that run of failures, read over every run on record - it does not follow the
+		window above, because the pipeline rested on the whole count and not on a windowed one. The
+		strip of days beside it does follow the window. A feed that answered with nothing counts as a
+		failure: an empty answer costs the digest the same articles a refusal does. A source whose
+		<code>robots.txt</code> says no does not.
 	</p>
 
 	{#if data.feedRuns === 0}
@@ -999,7 +995,7 @@
 		>
 			<p class="feeds-note">
 				Nearest to a rest first, then by how much has gone wrong in total. Each strip is one
-				square a day, oldest to newest, over the last {windowDays} days.
+				square a day, oldest to newest, over these {windowDays} days.
 			</p>
 
 			<ol class="feed-rows" data-feeds="table">
@@ -1078,7 +1074,7 @@
 				</div>
 			{:else}
 				<p class="feeds-note" data-feed-strip-empty>
-					No run was recorded in these {windowDays} days, so there is no strip to draw.
+					The pipeline read no feed in these {windowDays} days, so there is no strip to draw.
 				</p>
 			{/if}
 
@@ -1101,7 +1097,7 @@
 
 	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
 		<p class="mt-10 text-[0.9375rem] text-text-secondary" data-model="empty">
-			Nothing has been summarised yet. This fills as days publish.
+			The model has not summarised anything yet. This fills as days publish.
 		</p>
 	{:else}
 		<div data-model-section>
@@ -1142,8 +1138,7 @@
 				>
 					Every figure is {newestModelDay.date}, the newest day either ledger holds. Each line is
 					the {windowDays} days ending there, and a dashed rule across one is a day the model
-					changed. Like the source table above, it follows the length of the window and not where
-					a pan leaves it.
+					changed.
 				</p>
 
 				<div class="auto-grid mt-4" style="--auto-grid-min: {CARD_MIN_PX}px" data-model-cards>
@@ -1244,7 +1239,7 @@
 								label="Router minutes per chart"
 								valueText={arm.minutes === null ? '-' : arm.minutes.toFixed(1)}
 								targetText="Retired above {thresholds.minutesTarget}, on the median day."
-								emptyNote="No router time was written down in these {windowDays} days."
+								emptyNote="No router time is on record for these {windowDays} days."
 							/>
 							<Sparkline
 								marks={arm.minutesTrend}
@@ -1291,12 +1286,11 @@
 		<details class="console-disclosure mt-4" data-charts="daily">
 			<summary class="console-summary" data-charts-toggle>Show the daily figures</summary>
 			<p class="mt-3 text-[0.8125rem] text-text-tertiary">
-				One row per day, newest first. Reached is every item the router looked at. Asked the model
-				is the part it sent a request for: an item whose own numbers cannot fill a chart is
-				answered without one. Charts drafted is what the model asked for, and charts published is
-				what survived the checks that run after it answers. A dash means no router time was
-				written down, so there is no rate to divide, and zero reached means nothing committed says
-				what the router did - it never ran, or its manifest is older than these counts.
+				One row per day, newest first. Reached is every item the router looked at, asked the model
+				is the part it sent a request for, charts drafted is what the model returned, and charts
+				published is what survived the checks after it. A dash means no router time is on record,
+				so there is no rate to divide. Zero reached means nothing committed says what the router
+				did: it never ran, or its manifest is older than these counts.
 			</p>
 			<div class="console-table mt-3" data-charts="table">
 				<table class="w-full text-[0.8125rem]">
