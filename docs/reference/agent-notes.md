@@ -1385,13 +1385,23 @@ the variable protects the shell you remember to set it in and nothing else.
   `shellcheck` and `bundle-gate` stay unwrapped - serialising a gate that
   finishes in seconds only adds waiting. A blocked caller prints the holder's
   pid, worktree, command and held-for seconds every 30 s, so "what is running?"
-  is answered without asking anybody.
+  is answered without asking anybody. **The held-for figure counts from the
+  second the lock was won.** Until 2026-08-30 the record carried the second the
+  caller started, so a caller that had queued five minutes for the lock was
+  reported to the next waiter as having held it for five minutes - one worktree
+  read another's one-second-old lock as "held for 324 s".
 - **It cannot fail your gate, by design.** A lock whose pid is gone is
   reclaimed and the reclaim is logged; a lock past `--stale-after` (7,200 s,
   which is 6.6x the longest gate measured here) is reclaimed whatever its pid
   says; and a caller that waits out `--timeout` runs the command unlocked rather
   than returning an error. A scheduling aid that can manufacture a red gate is
-  worse than the contention it removes.
+  worse than the contention it removes. **A create the operating system refuses
+  is part of that promise, and was not until 2026-08-30.** On Windows a name
+  whose last handle is closing is "delete pending", and every create on it is
+  refused with access denied rather than with "it already exists" - measured
+  that day, 20 of 50 rounds at 20 callers on one lock ended with a traceback out
+  of the create and a non-zero exit. A lost create is now a lost create,
+  whichever of the two the operating system says.
 - **CI never takes it.** The tool reads the `CI` variable a GitHub runner sets
   and runs the command straight through, so a runner - one job alone on its own
   machine - behaves exactly as it did before. Any test that drives the tool must
