@@ -15,7 +15,7 @@ whole day's census afterwards.
 
 The row carries:
 
-`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap`
+`version, date, run_id, item_id, url_key, canonical_url, vertical, source_id, stage, outcome, code, http_status, source_chars, source_words, summary_words, detail, fetch_ms, extract_ms, summarize_ms, prefill_ms, decode_ms, input_tokens, output_tokens, cached_tokens, source_words_before_cap, shard`
 
 The file is append-only and never pruned. The 30-day window is a read-side
 parameter. Monthly shards follow `state/seen/` and `state/feed-health/`.
@@ -44,7 +44,7 @@ endings, `utf-8`, no quoting beyond what `csv` needs.
 `from_csv_row()` reads `""` back as `None`. There is no sentinel number and no
 `NULL` literal, because both of those get averaged by accident one day.
 
-The 25 columns, in file order:
+The 26 columns, in file order:
 
 | Column | Type | Present when | What it answers |
 | --- | --- | --- | --- |
@@ -73,6 +73,7 @@ The 25 columns, in file order:
 | `output_tokens` | int | when the runtime reports it | tokens written |
 | `cached_tokens` | int | when the runtime reports it | prompt tokens reused instead of read |
 | `source_words_before_cap` | int | once extract ran, from 2026-08-28 | how long the body was before the cap cut it |
+| `shard` | int | a worker wrote the row, from 2026-08-30 | which of the run's workers produced it |
 
 **The row is a census, not an error log.** Successes and failures share one file
 because a rate needs its denominator beside its numerator.
@@ -126,6 +127,34 @@ The cell is empty on every row a run wrote before 2026-08-28, and empty again on
 any row whose article payload predates `Article.source_word_count` (2026-08-26).
 Empty means the run never measured it. Nothing recomputes it later, because the
 body it would have to count is gone.
+
+## Which worker wrote the row
+
+A run splits into as many as eight `work` jobs, each on its own disposable
+machine. `shard` is the number `cli.shard_of` gave the job that produced this
+row. `state/runtime-counters.csv` carries `shard` and `shards` for the same run,
+so `(run_id, shard)` joins the two files: the cells here say what the work cost,
+and the row there says which host paid it.
+
+The column exists because the hosts are not alike. Measured over the seven runs
+in `state/runtime-counters.csv` on 2026-08-30, the fastest shard of a run read
+the prompt between **1.10x and 4.19x** faster than the slowest shard of the same
+run. The worst was run `2026-08-27-2`, where eight shards ranged from 9.75 to
+40.89 prompt tokens a second on one day. Pooled over the run that difference
+disappears, and until this column existed pooling was the only read available -
+so a slow day and a slow machine looked the same.
+
+Only a worker writes it. `cli.stage_record` stamps its own number on every row
+it files, which is the one moment the number is known. `cli.stage_assemble` runs
+once for the whole day, so the census rows it adds - the items no worker reached
+- leave the cell empty rather than naming a machine that may never have started.
+An empty cell means no worker claimed the row, and it is also what every row
+written before 2026-08-30 holds. **It is never shard 0.**
+
+`shard` is not in the published projection
+([../publishing/telemetry-series.md](../publishing/telemetry-series.md)). Which
+machine ran an item is an operator's question, and the page that asks it reads
+`state/` at build time rather than fetching it in the browser.
 
 ## Stages and outcomes
 

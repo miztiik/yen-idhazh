@@ -58,13 +58,22 @@ def classify_item(
     summary: Summary | None,
     date: str,
     run_id: str,
+    shard: int | None = None,
 ) -> ItemHealthRow:
-    """Return the one terminal row for this planned item in this run."""
+    """Return the one terminal row for this planned item in this run.
+
+    `shard` is the worker that produced the payloads, and it is optional because
+    only one of the two callers has one. A worker knows its own number; assemble
+    runs once for the whole day and cannot know which machine an item was for, so
+    the rows it adds leave the cell empty rather than naming a shard that may
+    never have started.
+    """
     if article is None:
         return _row(
             planned=planned,
             date=date,
             run_id=run_id,
+            shard=shard,
             stage=ItemStage.PLAN,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.NOT_ATTEMPTED,
@@ -76,6 +85,7 @@ def classify_item(
             planned=planned,
             date=date,
             run_id=run_id,
+            shard=shard,
             stage=stage,
             outcome=ItemOutcome.FAILED,
             code=code,
@@ -92,6 +102,7 @@ def classify_item(
                 planned=planned,
                 date=date,
                 run_id=run_id,
+                shard=shard,
                 stage=ItemStage.PUBLISH,
                 outcome=ItemOutcome.OK,
                 code=article.failure_code,
@@ -103,6 +114,7 @@ def classify_item(
             planned=planned,
             date=date,
             run_id=run_id,
+            shard=shard,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=FailureCode.UNKNOWN,
@@ -118,6 +130,7 @@ def classify_item(
             planned=planned,
             date=date,
             run_id=run_id,
+            shard=shard,
             stage=ItemStage.SUMMARIZE,
             outcome=ItemOutcome.FAILED,
             code=code,
@@ -138,6 +151,7 @@ def classify_item(
         planned=planned,
         date=date,
         run_id=run_id,
+        shard=shard,
         stage=ItemStage.PUBLISH,
         outcome=ItemOutcome.OK,
         code=article.failure_code,
@@ -163,6 +177,7 @@ def _row(
     run_id: str,
     stage: ItemStage,
     outcome: ItemOutcome,
+    shard: int | None = None,
     code: FailureCode | None = None,
     http_status: int | None = None,
     source_chars: int | None = None,
@@ -205,6 +220,7 @@ def _row(
         output_tokens=output_tokens,
         cached_tokens=cached_tokens,
         source_words_before_cap=source_words_before_cap,
+        shard=shard,
     )
 
 
