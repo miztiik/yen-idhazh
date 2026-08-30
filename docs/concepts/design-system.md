@@ -359,9 +359,10 @@ is already being printed.
 
 `Article length, words`. **Sentence case, a comma, the unit in lower case, and
 no full stop.** `Sources cut short most often` shipped `Longest article, words`
-first, and the compression chart's two axes followed it on 2026-08-29. Three
-labels naming a quantity and its unit the same way is a form, so it is written
-down here rather than copied a fourth time by eye.
+first, and the compression chart's two axes followed it on 2026-08-29. That
+column became a range plot on 2026-08-30 and its axis carries the same form.
+Three labels naming a quantity and its unit the same way is a form, so it is
+written down here rather than copied a fourth time by eye.
 
 - **The quantity, then the unit.** `Summary length, words` - never `Summary
   length (words)` and never `words`. A bracket reads as a footnote, and a label
@@ -438,34 +439,52 @@ a verdict the page never measured.
 
 ## What the cap cost, by source
 
-`Sources cut short most often` is one table of ten rows, and it is the only
-place on the site that names a source next to a number about that source. It
-exists for one decision: **whether raising the truncation cap would actually
+`Sources cut short most often` is one row per source, ten of them, and it is the
+only place on the site that names a source next to a number about that source.
+It exists for one decision: **whether raising the truncation cap would actually
 reach a source's articles.**
 
-| Header | What it prints |
+It is a horizontal range plot on a log word-length axis. One row per source, the
+shortest, middle and longest article that source published drawn as a track, and
+a dashed rule at each cut point across every row. Everything right of the widest
+rule is where the cap bites.
+
+| Part | What it says |
 | --- | --- |
-| `Source` | the source id, as the ledger spells it |
-| `Cut short` | articles this source lost text on |
-| `Articles` | articles it published in the window - the denominator |
-| `Share cut` | whole percent, or a dash under `console.min_attempts_for_rate` |
-| `Longest article, words` | the longest article it published, before the cut |
+| the row label | the source id, as the ledger spells it |
+| the line under it | `17 of 38 cut` - articles it lost text on, over articles it published |
+| the track | shortest to longest article, with a dot at the middle one |
+| the emphasised span | the part of that range past the widest cut point |
+| a dashed rule | where a cut fell, read off the rows that were cut, and dated where the window holds more than one |
 
-Five rulings hold it, all Jony's, 2026-08-29:
+Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
 
+- **The cap is on the chart.** This is the whole defect the plot fixes. Five
+  columns of numbers were unreadable because the single number they all had to
+  be compared against appeared nowhere in the section. Susan, 2026-08-30.
+- **The rule comes off the rows, never off `extract.truncation_cap_tokens`.** A
+  window can hold rows a run wrote under an older cap, and the setting is one
+  number: over the committed ledger a thirty-day window holds cuts at 1,923
+  words and at 3,846, and the file says only 3,846. A rule from the file also
+  draws in a window where nothing was cut. Fowler, 2026-08-30.
 - **It sorts by count, never by rate.** Measured over the committed ledger the
   shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
   puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
-  seventeen that cost the digest its articles. The sort order is the ranking,
-  which is also why **no row is tinted**: the confidence ramp means good, watch
-  and bad about a summary, and a source at 55 percent is not broken, it publishes
-  long articles.
+  seventeen that cost the digest its articles. `Share cut` was dropped as a
+  column on 2026-08-30 for the same reason it was never the sort key. What a
+  reader loses is the share as a number; both counts are still on the row.
+- **No row is tinted.** The order is the ranking. The confidence ramp means
+  good, watch and bad about a summary, and a source at 55 percent is not broken,
+  it publishes long articles. The rule itself is drawn in tertiary text colour
+  rather than the low band: a red vertical would say the cap is a fault, and the
+  cap is a setting somebody chose.
 - **Ten rows and no `Show more`.** The worst seven hold 69 of 153 cuts, 45
   percent; past ten the tail is sources with a single cut in a week, and a
   control that reveals rows nobody acts on does nothing.
-- **The longest article is the whole article, cut or not.** A column that read
-  the longest *cut* article would answer a question about the cap with a number
-  the cap produced.
+- **The track is the whole article, cut or not.** A track drawn over the cut
+  articles alone would answer a question about the cap with a set the cap
+  produced, and it would hide how short the rest of the source's articles are -
+  which is the part that says whether the cap is the problem.
 - **No ledger or config name reaches it.** Not `truncation_flagged`, not
   `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
 - **The two empty states say different things.** `Nothing has recorded an
@@ -475,11 +494,17 @@ Five rulings hold it, all Jony's, 2026-08-29:
 
 Rejected here: the cut share on the run-health strip (a 16px square has no room
 for a number, and it answers "did it work" rather than "what did it read"); a
-histogram of article lengths (the engineer's chart - the scatter already shows
-that distribution along its x axis); a gauge, dial, donut or progress bar (six
-percent on a dial is one pixel of arc); a before-and-after of a cap change on
-this page (two caps over two different article sets is two measurements, not a
-trend, and that claim belongs in
+histogram of article lengths (the engineer's chart - it answers what the corpus
+looks like, and this section exists to answer whether raising the cap would
+reach a source); a linear length axis (the lengths span more than two decades,
+and linear crushes every short source onto the left edge - Carmack, 2026-08-30);
+keeping the table and printing the cap in the intro sentence (recorded as the
+fallback if the plot overran; it answers "how far past the cap" by subtraction
+rather than by looking - Susan, 2026-08-30); tinting rows by share cut (a source
+at 55 percent is not broken, so the tint would invent a fault); a gauge, dial,
+donut or progress bar (six percent on a dial is one pixel of arc); a
+before-and-after of a cap change on this page (two caps over two different
+article sets is two measurements, not a trend, and that claim belongs in
 [../reference/measurements.md](../reference/measurements.md)); and a table
 component shared with `Feeds that failed` (an abstraction for two call sites -
 reversed on 2026-08-29, when the count reached four; the shape is the ranked

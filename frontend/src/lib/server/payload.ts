@@ -405,6 +405,25 @@ export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 	return found;
 }
 
+/** Articles each published day carries, from the day payload itself.
+ *
+ * The denominator of the site's per-article cost, and it is read from the same
+ * tree the numerator is: `site_bytes` measures `frontend/public/digest/`, and
+ * so does this. Taking the count off a run manifest instead would divide the
+ * bytes of one tree by somebody else's articles the first time a run planned
+ * items it did not publish - which is the lesson
+ * `backend/idhazh/retention.py` already wrote down about its own pairing.
+ */
+export function publishedItems(root: string = DIGEST_ROOT): Map<string, number> {
+	const found = new Map<string, number>();
+	for (const date of publishedDates(root)) {
+		const day = loadDay(date, root);
+		if (day === null) continue;
+		found.set(date, day.items.length);
+	}
+	return found;
+}
+
 /** What one published day put on a page: its items, and the charts among them. */
 export interface DayVisuals {
 	/** Every item the day published. The denominator of the arm's coverage rule. */

@@ -40,6 +40,18 @@ export interface UiConfig {
 /** What the console needs to say whether a run went well. */
 export interface RunConfig {
 	success_floor_pct: number;
+	/** The most articles one run may publish. The console divides the site's
+	 * headroom by this rather than by an average of the days on disk: a quiet
+	 * day is not evidence the next one will be quiet, and a runway has to be the
+	 * worst case to be worth printing (Rule #10). */
+	safety_ceiling_per_run: number;
+}
+
+/** What the console needs to say how much room the site has left. */
+export interface RetentionConfig {
+	/** Where the build starts warning, below the platform's own ceiling.
+	 * `backend/idhazh/retention.py` reads the same number. */
+	site_budget_mb: number;
 }
 
 /** What the console needs to say how close a feed is to being rested. */
@@ -71,6 +83,8 @@ export interface ConsoleConfig {
 	chart_height: number;
 	chart_width: number;
 	failure_list_max: number;
+	/** How many summaries the band section names before the tail sentence. */
+	band_outlier_rows: number;
 	/** The span the chart arm's retirement rule is stated over. Under it the
 	 * section prints the rule's own span and no median. */
 	chart_arm_rule_days: number;
@@ -153,7 +167,8 @@ const DEFAULTS: UiConfig = {
 	archive_page_size: 25
 };
 
-const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70 };
+const RUN_DEFAULTS: RunConfig = { success_floor_pct: 70, safety_ceiling_per_run: 160 };
+const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
@@ -176,6 +191,7 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	chart_height: 180,
 	chart_width: 600,
 	failure_list_max: 25,
+	band_outlier_rows: 10,
 	chart_arm_rule_days: 14,
 	chart_arm_minutes_target: 6,
 	chart_arm_coverage_pct: 5
@@ -224,6 +240,7 @@ const MOTION_DEFAULTS: MotionConfig = {
 interface RawConfig {
 	ui?: Partial<UiConfig>;
 	run?: Partial<RunConfig>;
+	retention?: Partial<RetentionConfig>;
 	collect?: Partial<CollectConfig>;
 	summarize?: Partial<SummarizeConfig>;
 	console?: Partial<ConsoleConfig>;
@@ -283,6 +300,10 @@ export function uiConfig(): UiConfig {
 
 export function runConfig(): RunConfig {
 	return { ...RUN_DEFAULTS, ...(raw().run ?? {}) };
+}
+
+export function retentionConfig(): RetentionConfig {
+	return { ...RETENTION_DEFAULTS, ...(raw().retention ?? {}) };
 }
 
 export function collectConfig(): CollectConfig {

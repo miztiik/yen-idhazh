@@ -1158,6 +1158,16 @@ class ConsoleConfig(Model):
             "compression chart 9000 pixels down the page."
         ),
     )
+    band_outlier_rows: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "How many summaries the console names as furthest from the length the "
+            "prompt asked for. Capped, with the tail stated in a sentence, because the "
+            "list exists to be acted on and the far tail is a one-word miss nobody "
+            "chases. Ten, matching the source-cut table beside it."
+        ),
+    )
     chart_arm_rule_days: int = Field(
         default=14,
         ge=1,
@@ -1491,6 +1501,23 @@ class AppConfig(Contract):
                 "The two limits are now markers on bars and the span is what decides "
                 "whether a median is printed at all. Additive with defaults, so a "
                 "config written before today still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-30T20:00",
+            change=(
+                "console.band_outlier_rows added, defaulting to 10. The shape is "
+                "`ConsoleConfig`, which this document and `AppearanceConfig` share, so "
+                "both schemas moved together."
+            ),
+            why=(
+                "The console's compression scatter became a per-day split plus a list "
+                "of the summaries furthest from the length the prompt asked for, and a "
+                "list that is capped needs the cap where an operator can move it. The "
+                "scatter drew 2,740 marks in one colour, measured 2026-08-30, which "
+                "rendered the dense middle as a block and hid the outliers - the only "
+                "marks on it anybody could act on. Additive with a default, so a config "
+                "written before today still validates (section 11)."
             ),
         ),
         ChangelogEntry(

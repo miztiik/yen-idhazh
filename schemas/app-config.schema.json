@@ -177,6 +177,13 @@
       "additionalProperties": false,
       "description": "Knobs for the operator console's time viewport.",
       "properties": {
+        "band_outlier_rows": {
+          "default": 10,
+          "description": "How many summaries the console names as furthest from the length the prompt asked for. Capped, with the tail stated in a sentence, because the list exists to be acted on and the far tail is a one-word miss nobody chases. Ten, matching the source-cut table beside it.",
+          "minimum": 1,
+          "title": "Band Outlier Rows",
+          "type": "integer"
+        },
         "chart_arm_coverage_pct": {
           "default": 5.0,
           "description": "The share of a day's published items that must carry a chart, in whole percent. Below this on the median day the arm is retired: an arm that reaches almost nothing is paying for a capability the digest does not use.",
@@ -1484,6 +1491,11 @@
       "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
       "version": "2026-08-30T21:15",
       "why": "The chart arm is the only console section with a written decision rule in its own prose, and all three numbers in that rule were constants in a TypeScript module - so the one section that states a threshold was the one section an operator could not move a threshold on (Rule #6). The two limits are now markers on bars and the span is what decides whether a median is printed at all. Additive with defaults, so a config written before today still validates (section 11)."
+    },
+    {
+      "change": "console.band_outlier_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
+      "version": "2026-08-30T20:00",
+      "why": "The console's compression scatter became a per-day split plus a list of the summaries furthest from the length the prompt asked for, and a list that is capped needs the cap where an operator can move it. The scatter drew 2,740 marks in one colour, measured 2026-08-30, which rendered the dense middle as a block and hid the outliers - the only marks on it anybody could act on. Additive with a default, so a config written before today still validates (section 11)."
     },
     {
       "change": "observability.tracing_enabled added, defaulting to false.",

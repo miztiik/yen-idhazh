@@ -223,11 +223,13 @@ plus three days of the heaviest of those plus the 64-byte noise floor, and it is
 meant to expire
 ([../reference/measurements.md](../reference/measurements.md#the-console-ceiling-is-a-tripwire-and-it-is-priced-in-published-days)).
 
-**When `/console/` fires, do not raise it.** The page grows because the
-compression scatter inlines a point for every row the ledger has ever held. The
-answer is to window that seed and publish the older points through the telemetry
-projection, in one change - a windowed seed on its own empties the plot behind
-the window, which is a lie
+**When `/console/` fires, do not raise it.** The page grows with what it inlines,
+and the answer is always to stop inlining what the first paint does not need
+rather than to buy days. Both halves of the last one have shipped: the seed is
+windowed and the older points come through the telemetry projection since
+2026-08-29, and the compression scatter that put one mark on the page per article
+became a per-day count of three bins on 2026-08-30. So the ceiling is due a
+re-derivation against a page that no longer grows a mark an item, not a digit
 ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-console-ceiling-is-a-tripwire-and-what-to-do-when-it-fires)).
 
 ## The browser suite
@@ -242,12 +244,15 @@ npm run build:canary
 npm run test:browser
 ```
 
-127 tests in 11 files (2026-08-27), one of which skips itself. The failure
-panels are held by a pair of tests, one for a window of a single day and one for
-a window of several, so exactly one of the pair applies to whatever the fixture
-holds. Twelve of them are pure-function tests over `frontend/src/lib/charts/`,
-run in Node by the same runner. There is no separate frontend unit-test runner,
-so a pure module proves itself here.
+317 tests in 27 files (2026-08-30), and nothing skips itself any more. The
+failure surface has a file of its own, `console-failure.spec.ts`, split by what
+the fixture can reach: the canary records no failure at all, so the two facts
+that need one - a denominator walked down the pipeline, and a rate withheld
+under `console.min_attempts_for_rate` - are driven as pure functions, and every
+state the fixture does reach is driven in the browser through the controls an
+operator has. A hundred and four of them are pure-function tests over
+`frontend/src/lib/charts/`, run in Node by the same runner. There is no separate
+frontend unit-test runner, so a pure module proves itself here.
 
 **A component with no call site proves itself here too.** A shared component
 lands before the sections that render it, so the build tree-shakes it away and
@@ -270,7 +275,8 @@ the skip fires, and the suite reports green. Read the skip against a fact the
 fixture owns instead - the window the console publishes in an attribute, the
 number of days the corpus carries - and then assert the selector matched, with
 `await expect(locator, 'why this must exist').toHaveCount(n)`. Measured on
-2026-08-27 by renaming `data-panel` in `FailurePanels.svelte`: the count guard
+2026-08-27 by renaming the attribute the failure panels carried then -
+`data-panel`, gone since the three panels became one chart: the count guard
 reported `1 skipped` and exit 0, and the same test with the assertion reported
 `1 failed` and exit 1, naming the attribute and the count it expected. A skip is
 right only when the environment genuinely varies. It is never right for a

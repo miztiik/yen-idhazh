@@ -40,6 +40,7 @@
     "watchlist_max_entities": 24
   },
   "console": {
+    "band_outlier_rows": 6,
     "chart_arm_coverage_pct": 5.0,
     "chart_arm_minutes_target": 6.0,
     "chart_arm_rule_days": 14,
