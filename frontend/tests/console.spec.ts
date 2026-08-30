@@ -721,7 +721,7 @@ test('a stage colour is categorical, never a health band', () => {
 });
 
 test('reading and writing are drawn as separate candles per day', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	await expect(page.getByText('Model tokens per second')).toBeVisible();
 
@@ -744,7 +744,7 @@ test('reading and writing are drawn as separate candles per day', async ({ page 
 });
 
 test('a candle carries its spread and its runs without a mouse', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const newest = page.locator('[data-candle="write"][data-date="2026-08-20"]');
 	const caption = await newest.locator('title').textContent();
@@ -757,7 +757,7 @@ test('a candle carries its spread and its runs without a mouse', async ({ page }
 });
 
 test('writing draws slower than reading, on one shared scale', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const medians = async (series: string) =>
 		page
@@ -774,7 +774,7 @@ test('writing draws slower than reading, on one shared scale', async ({ page }) 
 });
 
 test('the chart points at the write-up rather than restating it', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const link = page.getByRole('link', { name: 'why the range is wide' });
 	await expect(link).toHaveAttribute(
@@ -784,7 +784,7 @@ test('the chart points at the write-up rather than restating it', async ({ page 
 });
 
 test('the throughput chart draws in the pixels it occupies', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const svg = page.locator('[data-throughput="chart"] svg');
 	// A viewBox is a scale factor, not a unit. Where the two disagree the chart
@@ -806,7 +806,7 @@ test('the throughput chart draws in the pixels it occupies', async ({ page }) =>
 });
 
 test('the throughput axis covers the rates drawn, not zero to the fastest', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const ticks = await page
 		.locator('[data-throughput-tick]')
@@ -934,7 +934,7 @@ test('an unplaceable row is counted and never silently dropped', () => {
 });
 
 test('the candle reads out its day and every series at that column', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const readout = page.locator('[data-readout="throughput"]');
 	// The strip rests on the newest day rather than opening blank, so it never
@@ -1071,11 +1071,16 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
-	await expect(page.getByRole('heading', { name: 'What the model did' })).toBeVisible();
 	// The daily rows are behind a disclosure now, so what has to survive is the
 	// control that reaches them - not the table itself.
 	await expect(page.locator('[data-charts="daily"]')).toBeVisible();
 	await expect(page.locator('[data-charts-verdict]')).toBeVisible();
+
+	// And the same on the route the model section moved to, which has its own
+	// empty states and its own band above them.
+	await page.goto('/console/model/');
+	await expect(page.getByRole('heading', { name: 'What the model did' })).toBeVisible();
+	await expect(page.locator('[data-console-band]')).toBeVisible();
 
 	expect(errors).toEqual([]);
 	expect(missing).toEqual([]);
@@ -1377,7 +1382,7 @@ async function openDailyFigures(page: Page) {
 }
 
 test('every model cell equals what the day committed', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 	await openDailyFigures(page);
 
 	const dates = await page
@@ -1398,7 +1403,7 @@ test('every model cell equals what the day committed', async ({ page }) => {
 test('a day the scorer never reached prints dashes, and still prints its speed', async ({
 	page
 }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 	await openDailyFigures(page);
 
 	// The attack day is the only day the fixture scored, so the day before it is
@@ -1427,7 +1432,7 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 });
 
 test('nothing under the heading is a score or an internal column name', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 	// Opened, so the scan below reads the cards AND the rows. A closed disclosure
 	// keeps its rows out of `innerText`, and a scan that cannot see half the
 	// section is a scan that passes for the wrong reason.
@@ -1478,7 +1483,7 @@ test('nothing under the heading is a score or an internal column name', async ({
 });
 
 test('the candle stays first inside the section, above the table', async ({ page }) => {
-	await page.goto('/console/');
+	await page.goto('/console/model/');
 
 	const order = await page
 		.locator('[data-model-section] [data-throughput="chart"], [data-model-section] [data-model="table"]')

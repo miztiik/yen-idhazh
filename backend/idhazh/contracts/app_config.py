@@ -1311,13 +1311,18 @@ class PageWeightConfig(Model):
     weight is a function of source alone and their ceiling is the heaviest build
     plus the 64-byte noise floor. `/archive/` grows, but only by one day link a
     day since it stopped inlining the day payloads, so its ceiling carries a year
-    of that growth as measured headroom. `/console/` grows far faster - about 60
-    gzipped bytes a published item, so 36,504 to 43,745 bytes a mature day
-    measured 2026-08-29 - so its ceiling carries three days rather than a year
-    and expires by design. What a page that renders a day cannot have is a fixed
+    of that growth as measured headroom. The three `/console/` routes grow with
+    the ledger their panels read, so each ceiling carries a measured few days and
+    expires by design. What a page that renders a day cannot have is a fixed
     ceiling at all: the only way under one is to publish fewer items, which is
     capping the news rather than catching a regression, so `/` and `/<date>/` are
     counted and reported and never failed.
+
+    **A surface that splits into routes takes a ceiling per route.** One number
+    covering three surfaces still fails when any of them grows, and then cannot
+    say which one did - so the operator raises the shared number and the
+    regression lands under it. Sizing them separately is what makes the split
+    worth having.
     """
 
     ceilings_bytes: dict[str, int] = Field(
@@ -1330,10 +1335,12 @@ class PageWeightConfig(Model):
             "object does not name is measured and reported by the gate but not failed. "
             "A route earns a ceiling when its growth is priced: /404 and /evals/ grow "
             "only when the source does, /archive/ grows by one day link a day so its "
-            "ceiling carries a measured year of that, and /console/ grows with the "
-            "ledger its charts read so its ceiling carries a measured three days and is "
-            "meant to expire. A page that renders a day is never capped, because the "
-            "only way under such a ceiling is to publish less."
+            "ceiling carries a measured year of that, and each of the three /console/ "
+            "routes grows with the ledger its own panels read so each carries a "
+            "measured few days and is meant to expire. One surface split across "
+            "several routes takes one key per route, or a blown budget cannot name "
+            "which route blew it. A page that renders a day is never capped, because "
+            "the only way under such a ceiling is to publish less."
         ),
     )
 
@@ -1485,6 +1492,30 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31",
+            change=(
+                "page_weight.ceilings_bytes gained /console/model/ at 18,682 and "
+                "/console/machine/ at 6,899 in config/idhazh.json, and /console/ moved "
+                "from 259,908 to 250,643. PageWeightConfig now says a surface that "
+                "splits into routes takes a ceiling per route. No field moved."
+            ),
+            why=(
+                "The console became three prerendered routes, and one ceiling covering "
+                "three surfaces cannot say which of them blew a budget - which is the "
+                "decisive argument for routes over tabs, so the split is not finished "
+                "until the ceilings follow it. The gate already fails a ceiling that "
+                "names no route in the build; a route that names no ceiling is only "
+                "reported, so two new surfaces would have grown unwatched. All three "
+                "numbers are re-derived rather than carried over: heaviest of five "
+                "builds, plus seven published days priced by removing a real one, plus "
+                "the 64-byte noise floor, measured 2026-08-31 (measurements.md). "
+                "/console/ came down because its model panels moved to a route of their "
+                "own. Committed values only - the model default stays empty, the shape "
+                "and the validation are unchanged, and every older config still "
+                "validates, so no read-side migration (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30T21:15",
             change=(

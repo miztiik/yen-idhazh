@@ -1,14 +1,15 @@
 <script lang="ts">
-	/** The operator's page. Not a reader's.
+	/** The operator's page, and the first of the console's three routes.
 	 *
-	 * It answers seven questions and refuses to answer any others: did the runs
-	 * work, which feeds are broken, how long each stage took, what the model did
-	 * to the day's own articles, what the truncation cap is costing and which
-	 * sources it is costing it to, how big the site is getting, and whether the
-	 * chart arm earns its router minutes. Every count is read from the committed
-	 * ledger. The only arithmetic is one committed count divided by another, and
-	 * that is deliberate: a stored rate can disagree with the counts printed
-	 * beside it.
+	 * It answers one question and refuses the others: did the pipeline work. Did
+	 * the runs finish, which feeds are broken, how long each stage took, what the
+	 * truncation cap is costing and to which sources, and whether the chart arm
+	 * earns its router minutes. What the model wrote is on `/console/model/` and
+	 * the hardware under it is on `/console/machine/`.
+	 *
+	 * Every count is read from the committed ledger. The only arithmetic is one
+	 * committed count divided by another, and that is deliberate: a stored rate
+	 * can disagree with the counts printed beside it.
 	 *
 	 * The run grid stays static. The telemetry viewport and the timing trend are
 	 * hand-written SVG, so the console still reads with JavaScript off.
@@ -32,10 +33,11 @@
 		type TimeWindow
 	} from '$lib/charts/viewport';
 	import StageTimings from '$lib/components/StageTimings.svelte';
+	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
+	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
-	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
 	import { shortDate } from '$lib/format';
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
@@ -44,22 +46,21 @@
 		failureMix,
 		publishedSkyline,
 		runHealth,
-		PAGES_CAP_BYTES,
 		siteCost,
-		siteRunway,
 		sizeGain,
 		type SkylineBar
 	} from '$lib/charts/glance';
 	import Sparkline from '$lib/components/Sparkline.svelte';
-	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
-	import type { FeedDayOutcome, Health, ModelDay } from './+page.server';
+	import type { FeedDayOutcome, Health } from './+page.server';
 
 	let { data } = $props();
 
-	/** Where the operator's choice of window is kept between visits. */
+	/** Where the operator's choice of window is kept between visits. It is the
+	 * same key all three console routes read, so the span follows him across the
+	 * strip rather than resetting on every click. */
 	const WINDOW_KEY = 'idhazh:console-window';
 
 	const presets = $derived(data.console.window_presets);
@@ -173,8 +174,18 @@
 	/** Articles per published day, as a map, so the cost arithmetic reads it the
 	 * same way the server did. */
 	const articles = $derived(new Map(Object.entries(data.publishedItems)));
-	const windowedSize = $derived(sizeGain(data.manifests.filter((run) => inWindow(run.date))));
 	const perArticle = $derived(siteCost(data.manifests, articles, viewport));
+	/** What the tree gained over the window, in megabytes.
+	 *
+	 * It is here rather than in the band because it is a rate and the band is
+	 * not windowed. A share is what this used to print, and from the 13,595 bytes
+	 * of the oldest committed manifest it read +73,933 percent. */
+	const windowedSize = $derived(sizeGain(data.manifests.filter((run) => inWindow(run.date))));
+	const sizeDelta = $derived(
+		windowedSize === null
+			? `No second measurement in these ${windowDays} days.`
+			: `${windowedSize >= 0 ? 'Up' : 'Down'} ${(Math.abs(windowedSize) / 1024 / 1024).toFixed(1)} MB over ${windowDays} days.`
+	);
 	/** One bar a day, over the window the control set. The card's own count is
 	 * the same window summed, so a reader can check the number against the
 	 * picture - which an all-time total under a thirty-day strip could not do. */
@@ -273,92 +284,12 @@
 		return () => observer.disconnect();
 	});
 
-	function mb(value: number): string {
-		return `${(value / 1024 / 1024).toFixed(1)} MB`;
-	}
-
 	/** Whole bytes with thousands separators. The per-article cost is a
 	 * four-digit number, so a rounded kilobyte would hide the whole range the
 	 * chart is drawn over. */
 	function bytes(value: number): string {
 		return `${Math.round(value).toLocaleString('en-GB')} B`;
 	}
-
-	/** A count of days a person can act on. Under ten it keeps a decimal,
-	 * because "0 days" and "0.4 days" are different answers. */
-	function days(value: number): string {
-		const whole = Math.round(value);
-		return whole >= 10 ? whole.toLocaleString('en-GB') : value.toFixed(1);
-	}
-
-	/** How much of the site's one hard limit is spent.
-	 *
-	 * `site_bytes` is the committed payload tree and the cap is measured on the
-	 * built bundle, which is larger - so this fraction is a floor on the real
-	 * one, never the whole of it. The card says so in words rather than leaving
-	 * the reader to find `backend/idhazh/contracts/run_manifest.py`.
-	 *
-	 * Null where no run has recorded a size. Null is not zero: a tree nobody
-	 * measured is not an empty tree, and `0.0 MB` beside a 1 GB cap reads as a
-	 * site with all of its room left.
-	 */
-	const payloadBytes = $derived(data.manifests[0]?.siteBytes ?? null);
-	const capFraction = $derived(payloadBytes === null ? null : payloadBytes / PAGES_CAP_BYTES);
-
-	/** Published days of room left, at the cost this window measured.
-	 *
-	 * Windowed, because it is a rate: the median article cost of the last seven
-	 * days and of the last ninety are different claims about the future, and a
-	 * runway that did not move with the span would be one of them wearing the
-	 * other's label.
-	 */
-	const runway = $derived(
-		payloadBytes === null
-			? null
-			: siteRunway(
-					payloadBytes,
-					perArticle.median,
-					data.itemCeiling,
-					data.siteBudgetMb * 1024 * 1024,
-					PAGES_CAP_BYTES
-				)
-	);
-
-	/** What the window added, in the unit the card's own number is in.
-	 *
-	 * A share is what this used to print, and from the 13,595 bytes of the oldest
-	 * committed manifest it read +73,933 percent - and green, on a card where
-	 * growth is the thing being watched. */
-	const sizeDelta = $derived.by(() => {
-		if (windowedSize === null) return `No second measurement in these ${windowDays} days.`;
-		return `${windowedSize >= 0 ? 'Up' : 'Down'} ${mb(Math.abs(windowedSize))} over ${windowDays} days.`;
-	});
-
-	/** The card takes the hue of what it means. The ceiling is 1 GB (Rule #2), so
-	 * three quarters of it is a warning and nine tenths is a fault. */
-	const sizeTone = $derived.by(() => {
-		if (capFraction === null) return 'neutral' as const;
-		if (capFraction >= 0.9) return 'bad' as const;
-		if (capFraction >= 0.75) return 'warn' as const;
-		return 'neutral' as const;
-	});
-
-	/** What the size card says under its number.
-	 *
-	 * Three states and they are three different facts: nothing measured, measured
-	 * but not growing, and growing at a rate a runway can be divided out of.
-	 */
-	const TREE =
-		"Latest run's size. It is the committed payload tree, not the published site: the site is larger, it is what the cap measures, and idhazh site-weight prints its runway after every build.";
-	const sizeNote = $derived.by(() => {
-		if (payloadBytes === null) {
-			return 'No run has recorded a size yet, so there is nothing to hold against the 1 GB Pages cap.';
-		}
-		if (runway === null) {
-			return `${TREE} ${sizeDelta} No day in these ${windowDays} days grew the tree over an article it published, so there is no rate and no runway.`;
-		}
-		return `${TREE} ${sizeDelta} At ${bytes(perArticle.median ?? 0)} an article, ${data.itemCeiling} articles a day would fill this tree to 1 GB in about ${days(runway.toCap)} published days.`;
-	});
 
 	/** The same window the server drew with. Both sides derive it from the rows
 	 * rather than passing it, so the hydrated chart cannot disagree with the one
@@ -378,264 +309,42 @@
 	function minutes(value: number | null): string {
 		return value === null ? '-' : value.toFixed(1);
 	}
-
-	/** A count of today's items, or a dash where the ledger holds no answer.
-	 *
-	 * Null is not zero. A day the scorer never ran on has summaries nobody
-	 * counted, and a zero there would say the model wrote nothing.
-	 */
-	function count(value: number | null): string {
-		return value === null ? '-' : String(value);
-	}
-
-	function percent(value: number | null): string {
-		return value === null ? '-' : `${value}%`;
-	}
-
-	/** Whole units, never a decimal, and never a zero that was really work.
-	 *
-	 * A measurement that rounds away prints `<1`. Rounded to `0` it would say the
-	 * model ran for nothing, which is the one reading the number cannot support.
-	 */
-	function whole(ms: number | null, per: number): string {
-		if (ms === null) return '-';
-		const value = Math.round(ms / per);
-		return value === 0 && ms > 0 ? '<1' : String(value);
-	}
-
-	/** Every column of the model table, in the order it is printed.
-	 *
-	 * The label and the sentence under it live together, so a column cannot be
-	 * added without saying in plain words what it counts.
-	 */
-	const COLUMNS: { key: string; label: string; line: string }[] = [
-		{ key: 'summaries', label: 'Summaries today', line: '' },
-		{
-			key: 'not-sure',
-			label: 'Marked "not sure"',
-			line: "How many of today's summaries we told you not to trust."
-		},
-		{
-			key: 'unsupported',
-			label: 'Numbers not in the article',
-			line: 'The summary had a figure. The article did not.'
-		},
-		{
-			key: 'hedge',
-			label: '"Maybe" told as fact',
-			line: 'The article said it might have happened. The summary said it did.'
-		},
-		{
-			key: 'part',
-			label: 'Article read only in part',
-			line: 'The article was too long, so the machine read the start and stopped.'
-		},
-		{
-			key: 'part-pct',
-			label: 'Read only in part, as a percent',
-			line: "The same articles, against the day's own count, so a busy day and a quiet one compare."
-		},
-		{
-			key: 'copied',
-			label: 'Copied, not rewritten',
-			line: 'How much of a normal summary is lifted word for word.'
-		},
-		{
-			key: 'per-item',
-			label: 'Time to write one',
-			line: 'How long the machine takes on one article. The second figure is the articles it read only the start of.'
-		},
-		{ key: 'minutes', label: 'Model minutes', line: '' },
-		{
-			key: 'too-long',
-			label: 'Too long to send',
-			line: 'The article and the instructions together did not fit, so the machine was never asked.'
-		},
-		{ key: 'failed', label: 'Failed', line: '' }
-	];
-
-	/** One day's printed cells, in the order `COLUMNS` names them.
-	 *
-	 * Built here rather than spelled out in the markup so a header and its column
-	 * cannot drift apart, which is the way a table starts lying.
-	 */
-	function cells(day: ModelDay): { key: string; text: string; aside?: string }[] {
-		return [
-			{ key: 'summaries', text: count(day.summaries) },
-			{ key: 'not-sure', text: count(day.notSure) },
-			{ key: 'unsupported', text: count(day.unsupportedNumbers) },
-			{ key: 'hedge', text: count(day.hedgeDropped) },
-			{ key: 'part', text: count(day.readInPart) },
-			{ key: 'part-pct', text: percent(day.readInPartPct) },
-			{ key: 'copied', text: percent(day.copiedPct) },
-			// The second figure is only carried where the day cut something, because
-			// a dash under every other day would be a column of absences pretending
-			// to be a split.
-			{
-				key: 'per-item',
-				text: whole(day.perItemMs, 1000),
-				...(day.perItemCutMs === null
-					? {}
-					: { aside: `${whole(day.perItemCutMs, 1000)} when cut short` })
-			},
-			{ key: 'minutes', text: whole(day.totalMs, 60_000) },
-			{ key: 'too-long', text: count(day.refusedForLength) },
-			{ key: 'failed', text: count(day.failed) }
-		];
-	}
-
-	/** What each column counts, day by day.
-	 *
-	 * Keyed the same way `cells` is, so a card's line and the figure above it
-	 * cannot come from two different columns. A day the ledger has no answer for
-	 * arrives as null and is left out of the line rather than drawn as a zero,
-	 * which is the same rule the cells follow.
-	 */
-	const SERIES: Record<string, (day: ModelDay) => number | null> = {
-		summaries: (day) => day.summaries,
-		'not-sure': (day) => day.notSure,
-		unsupported: (day) => day.unsupportedNumbers,
-		hedge: (day) => day.hedgeDropped,
-		part: (day) => day.readInPart,
-		'part-pct': (day) => day.readInPartPct,
-		copied: (day) => day.copiedPct,
-		'per-item': (day) => day.perItemMs,
-		minutes: (day) => day.totalMs,
-		'too-long': (day) => day.refusedForLength,
-		failed: (day) => day.failed
-	};
-
-	/** The card grid's minimum column, and the room a card leaves inside it.
-	 *
-	 * A line drawn wider than that overflows the narrowest card the grid can
-	 * make. The pad is `--space-4`, which the card spends on each side.
-	 */
-	const CARD_MIN_PX = 220;
-	const CARD_PAD_PX = 16;
-	const SPARK_WIDTH_PX = CARD_MIN_PX - CARD_PAD_PX * 2;
-
-	/** Every day the model worked, newest first, with the dividers taken out. */
-	const modelDays = $derived(data.modelWork.flatMap((row) => (row.kind === 'day' ? [row.day] : [])));
-	/** The newest day either ledger holds. Every card's figure is this day. */
-	const newestModelDay = $derived(modelDays[0] ?? null);
-	/** Every day the model changed, read from the rows the table draws its
-	 * dividers from. One source, so a rule on a card and a divider in the table
-	 * cannot disagree about when the ground moved. */
-	const modelSwaps = $derived(data.modelWork.flatMap((row) => (row.kind === 'swap' ? [row] : [])));
-
-	/** The days the cards' lines cover, oldest first.
-	 *
-	 * It follows the length of the window above and ends on the newest day the
-	 * ledger holds, never where a pan leaves it - the same rule the source table
-	 * follows, and the one that makes a rebuild of an old tree draw what that
-	 * tree drew. Nothing is fetched: every day is already on the page.
-	 */
-	const modelSpan = $derived(
-		windowOfDays(
-			modelDays.map((day) => day.date),
-			data.today,
-			windowDays,
-			data.console.today_anchor
-		)
-	);
-	const modelWindow = $derived(
-		[...modelDays.filter((day) => day.date >= modelSpan.start && day.date <= modelSpan.end)].reverse()
-	);
-
-	/** One card's drawn points, and the swap rules that land on them.
-	 *
-	 * The dates ride along with the values because the two are filtered together:
-	 * a rule has to sit on the point that carries it and not on the day beside
-	 * it. A swap on the oldest drawn point draws nothing - there is nothing to
-	 * its left to have changed from.
-	 */
-	function trendFor(key: string): {
-		marks: SparklineMarks;
-		rules: { at: number; label: string }[];
-	} {
-		const read = SERIES[key];
-		const values: number[] = [];
-		const dates: string[] = [];
-		for (const day of modelWindow) {
-			const value = read(day);
-			if (value === null) continue;
-			values.push(value);
-			dates.push(day.date);
-		}
-		const marks = sparklineMarks(values);
-		if (marks.empty) return { marks, rules: [] };
-		const rules = modelSwaps.flatMap((swap) => {
-			const at = dates.findIndex((date) => date >= swap.date);
-			if (at < 1) return [];
-			return [
-				{
-					at: at / (dates.length - 1),
-					label: `The model changed to ${swap.model} on ${swap.date}.`
-				}
-			];
-		});
-		return { marks, rules };
-	}
-
-	/** What a quality figure is out of, printed beside it.
-	 *
-	 * On a table row the day's count sat one column away. A card has no row, so
-	 * it carries its own denominator or it invites a trend that is not there.
-	 * The two cut figures divide by the rows their own flag still answers for,
-	 * which can read lower than the day's summaries and is the point of carrying
-	 * it separately.
-	 */
-	function outOf(key: string, day: ModelDay): string | null {
-		const summaries = (of: number) => `of ${of} ${of === 1 ? 'summary' : 'summaries'}`;
-		if (['not-sure', 'unsupported', 'hedge', 'copied'].includes(key)) {
-			return day.summaries === null ? null : summaries(day.summaries);
-		}
-		if (['part', 'part-pct'].includes(key)) {
-			return day.readInPartOf === null ? null : summaries(day.readInPartOf);
-		}
-		return null;
-	}
-
-	/** The eleven cards, in the order `COLUMNS` names them.
-	 *
-	 * Built off `cells` for the same reason the table's body is: a label and the
-	 * figure under it cannot drift apart if one list produces both.
-	 */
-	const cards = $derived.by(() => {
-		const day = newestModelDay;
-		if (day === null) return [];
-		return cells(day).map((cell, index) => ({
-			key: cell.key,
-			label: COLUMNS[index].label,
-			line: COLUMNS[index].line,
-			value: cell.text,
-			note: cell.aside ?? outOf(cell.key, day),
-			trend: trendFor(cell.key)
-		}));
-	});
 </script>
 
 <svelte:head>
-	<title>Console &mdash; {data.ui.site_title}</title>
+	<title>Console: Pipelines &mdash; {data.ui.site_title}</title>
 	<meta name="robots" content="noindex" />
 </svelte:head>
 
-<section class="py-6" data-surface="operator">
+<section class="py-6" data-surface="operator" data-console-route="pipelines">
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
 	<p class="mt-1 text-[0.9375rem] text-text-secondary">
 		What the pipeline cost and how well it did, per day, from the committed ledger.
 	</p>
 
-	<!-- The window sits above everything it governs, so it is read before the
-	     first chart rather than found underneath one. -->
-	<WindowControl
-		days={windowDays}
-		{presets}
-		{monthsFor}
-		busy={fetching}
-		{ready}
-		onChange={show}
-	/>
+	<!-- The band stands on all three routes and carries the window control, so
+	     the control is above everything it governs rather than under the first
+	     chart that obeys it. -->
+	<ConsoleBand band={data.band}>
+		{#snippet window()}
+			<WindowControl
+				days={windowDays}
+				{presets}
+				{monthsFor}
+				busy={fetching}
+				{ready}
+				onChange={show}
+			/>
+		{/snippet}
+	</ConsoleBand>
+	<ConsoleNav routes={data.routes} active="pipelines" />
+
+	<!-- One sentence, no chart. It is what stops this route hiding the panel on
+	     another route that explains its own numbers. -->
+	<p class="console-carry" data-console-carry="model">
+		{data.carries.pipelines}
+		<a class="carry-link" href="{base}/console/model/">Model &rarr;</a>
+	</p>
 
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
@@ -676,27 +385,10 @@
 			tone="info"
 			trend={skyline.empty ? null : publishedBars}
 		/>
-		<!-- Half windowed, on purpose. The size is a level and the operator wants
-		     today's, whatever span he is looking at; only the movement and the
-		     runway under it are rates, and a rate has to say what it is over. -->
-		{#key windowDays}
-			<KpiCard
-				label="Site size"
-				value={payloadBytes === null ? '-' : mb(payloadBytes)}
-				track={capFraction === null
-					? null
-					: {
-							fraction: capFraction,
-							caption: `${Math.round(
-								(PAGES_CAP_BYTES - (payloadBytes ?? 0)) / 1024 / 1024
-							).toLocaleString('en-GB')} MB left of the 1 GB Pages cap`
-						}}
-				note={sizeNote}
-				tone={sizeTone}
-				windowed="site-size-movement"
-				{windowDays}
-			/>
-		{/key}
+		<!-- No site-size card here. The band above states the level, the share of
+		     the 1 GB cap and the runway, and it states them on all three routes;
+		     one page may not state one figure twice. What is left below is the
+		     windowed per-article cost, which is the rate under that runway. -->
 		{#if data.glance.healthSvg}
 			<figure class="panel" data-glance-chart="runs">
 				<figcaption class="text-[0.75rem] text-text-tertiary">Did the runs finish?</figcaption>
@@ -717,7 +409,7 @@
 	<div data-windowed="site-cost-per-item" data-window-days={windowDays}>
 		<Panel
 			title="What one more article costs"
-			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days."
+			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days. {sizeDelta}"
 		>
 			{#if perArticle.empty}
 				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
@@ -1056,125 +748,6 @@
 		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
-	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
-		<p class="mt-10 text-[0.9375rem] text-text-secondary" data-model="empty">
-			The model has not summarised anything yet. This fills as days publish.
-		</p>
-	{:else}
-		<div data-model-section>
-			<h2 class="console-h2">What the model did</h2>
-			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-				Every figure is that day's own articles, measured the day it ran. The articles change
-				every day, so a dip can be the news rather than the model. Fixed benchmark figures are
-				not here - they are in the
-				<a href={data.measurementsReference} class="text-accent hover:underline" rel="noreferrer"
-					>measurements write-up</a
-				>.
-			</p>
-
-<!-- Always rendered, empty window included. The chart owns its own empty
-		     state, the way the stage-timing trend above it does, so a window with
-		     nothing in it says so instead of taking the heading away with it. -->
-		<ThroughputTrend
-			days={data.throughputDays}
-			height={data.console.chart_height}
-			width={data.console.chart_width}
-			reference={data.throughputReference}
-			tickDensity={data.chart.tick_density}
-			readoutMaxShare={data.chart.readout_max_share}
-		/>
-
-			{#if newestModelDay !== null}
-				<!-- Eleven measures, eleven cards. A wide table is the one shape that
-				     cannot answer "did it get worse": a trend is a vertical scan, and
-				     every column beside the one being scanned is a different quantity.
-				     No card is tinted - `Copied, not rewritten` at 12 percent has no
-				     agreed threshold, and a tint would invent one and publish it. -->
-				<p
-					class="mt-4 text-[0.8125rem] text-text-tertiary"
-					data-model-cards-note
-					data-model-newest={newestModelDay.date}
-					data-windowed="model-cards"
-					data-window-days={windowDays}
-				>
-					Every figure is {newestModelDay.date}, the newest day either ledger holds. Each line is
-					the {windowDays} days ending there, and a dashed rule across one is a day the model
-					changed.
-				</p>
-
-				<div class="auto-grid mt-4" style="--auto-grid-min: {CARD_MIN_PX}px" data-model-cards>
-					{#each cards as card (card.key)}
-						<KpiCard label={card.label} value={card.value} note={card.note} line={card.line}>
-							{#snippet trend()}
-								<Sparkline
-									marks={card.trend.marks}
-									rules={card.trend.rules}
-									width={SPARK_WIDTH_PX}
-									height={data.chart.sparkline_height_px}
-									label="{card.label}, over the {windowDays} days ending {newestModelDay?.date}"
-								/>
-							{/snippet}
-						</KpiCard>
-					{/each}
-				</div>
-			{/if}
-
-			{#if data.modelWork.length > 0}
-				<!-- The rows behind the shape, on demand - the same trade the failed-item
-				     list makes. Nothing is deleted and nothing needs a script: a closed
-				     disclosure is complete in the prerendered document, and opening it
-				     costs no fetch. -->
-				<details class="console-disclosure mt-4" data-model-table-control>
-					<summary class="console-summary">Show the daily figures</summary>
-					<div class="console-table mt-3" data-model="table">
-						<table class="w-full text-[0.8125rem]">
-							<thead class="text-text-tertiary">
-								<tr class="border-b border-rule">
-									<th class="py-2 pe-4 text-start align-bottom font-normal">Day</th>
-									{#each COLUMNS as column (column.key)}
-										<th class="py-2 ps-4 text-end align-bottom font-normal">
-											<!-- The label alone. The sentence that used to hang under it is on
-											     the card now, where there is room for it. -->
-											<span class="ms-auto block max-w-[10rem]">{column.label}</span>
-										</th>
-									{/each}
-								</tr>
-							</thead>
-							<tbody>
-								{#each data.modelWork as row (row.kind === 'swap' ? `swap ${row.date}` : row.day.date)}
-									{#if row.kind === 'swap'}
-										<!-- A date and an id. An arrow or a delta here would claim the swap
-										     caused whatever moved, and no committed figure says that. -->
-										<tr class="border-b border-rule" data-model-swap={row.date}>
-											<td colspan={COLUMNS.length + 1} class="py-2 text-[0.75rem] text-text-tertiary">
-												{row.date} - {row.model}
-											</td>
-										</tr>
-									{:else}
-										<tr class="border-b border-rule" data-model-day={row.day.date}>
-											<td class="py-2 pe-4">{row.day.date}</td>
-											{#each cells(row.day) as cell (cell.key)}
-												<td class="py-2 ps-4 text-end tabular-nums" data-model-cell={cell.key}>
-													{cell.text}
-													{#if cell.aside}
-														<span
-															class="mt-0.5 block text-[0.6875rem] text-text-tertiary"
-															data-model-aside={cell.key}>{cell.aside}</span
-														>
-													{/if}
-												</td>
-											{/each}
-										</tr>
-									{/if}
-								{/each}
-							</tbody>
-						</table>
-					</div>
-				</details>
-			{/if}
-		</div>
-	{/if}
-
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Charts drawn for articles</h2>
 		<div data-windowed="chart-arm" data-window-days={windowDays}>
@@ -1294,25 +867,9 @@
 </section>
 
 <style>
-/* The console is instrumentation, so it takes tint and elevation and no
-   display face, no gradient and no illustration. What it was missing was an
-   edge: headings and tables on bare background give the eye nothing to group
-   by, and every section ends up weighing the same as every other. */
-.console-h2 {
-margin-top: var(--space-8);
-font-size: var(--text-lg);
-font-weight: 600;
-color: var(--color-text);
-}
-
-.console-table {
-overflow-x: auto;
-padding: var(--space-4);
-border: 1px solid var(--color-rule);
-border-radius: var(--radius-lg);
-background: var(--color-surface);
-box-shadow: var(--shadow-sm);
-}
+/* Route-specific only. The shapes every console route shares - the h2, the
+   framed table, the disclosure, the carry sentence - are in app.css, so three
+   routes cannot drift into three identities that merely agree today. */
 
 /* Two figures, side by side where there is room and stacked where there is
    not. The rule names both, so reading one without the other answers half a
@@ -1329,51 +886,6 @@ display: flex;
 flex-direction: column;
 gap: var(--space-2);
 min-inline-size: 0;
-}
-
-/* The rows are on demand, and the control that opens them is a native
-   disclosure - so it works with no script, takes keyboard focus for free, and
-   says which state it is in without a second label. */
-.console-panel,
-.console-disclosure {
-padding: var(--space-4);
-border: 1px solid var(--color-rule);
-border-radius: var(--radius-lg);
-background: var(--color-surface);
-box-shadow: var(--shadow-sm);
-}
-
-.console-summary {
-cursor: pointer;
-min-block-size: 1.75rem;
-font-size: var(--text-sm);
-line-height: var(--leading-sm);
-color: var(--color-accent);
-}
-
-.console-summary:focus-visible {
-outline: 2px solid var(--color-accent);
-outline-offset: 2px;
-border-radius: var(--radius-sm);
-}
-
-/* The table brings its own frame everywhere else on the page. Inside the
-   disclosure it would be a box in a box. */
-.console-disclosure .console-table {
-padding: 0;
-border: 0;
-border-radius: 0;
-background: none;
-box-shadow: none;
-}
-
-/* The header row stays put while the body scrolls, which is what makes a
-   thirty-row table readable without a second glance at the top. */
-.console-table :global(thead th) {
-position: sticky;
-top: 0;
-z-index: 1;
-background: var(--color-surface);
 }
 
 .feeds-note {

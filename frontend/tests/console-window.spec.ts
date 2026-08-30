@@ -126,10 +126,8 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'chart-arm',
 		'failure-rate',
 		'feed-outcomes',
-		'model-cards',
 		'run-health',
 		'site-cost-per-item',
-		'site-size-movement',
 		'source-cuts',
 		'telemetry-viewport'
 	]);
@@ -139,6 +137,32 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		const surfaces = await windowed(page);
 		expect(surfaces.length, 'a surface stopped declaring itself windowed').toBe(found.length);
 		for (const surface of surfaces) {
+			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
+			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
+				`${preset} days`
+			);
+		}
+	}
+});
+
+test('THE ORACLE: the Model route obeys the same control over its own surfaces', async ({
+	page
+}) => {
+	// The measure cards left /console/ for /console/model/ on 2026-08-30, and a
+	// windowed surface on a route with its own copy of the control is exactly
+	// where two windows start to disagree. Same oracle, same loop, other route.
+	await page.goto('/console/model/');
+	await hydrated(page);
+
+	const found = await windowed(page);
+	expect(
+		found.map((surface) => surface.name).sort(),
+		'the model route publishes no windowed surfaces, so the oracle asserts nothing'
+	).toEqual(['model-cards']);
+
+	for (const preset of PRESETS) {
+		await setWindow(page, preset);
+		for (const surface of await windowed(page)) {
 			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
 			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
 				`${preset} days`
@@ -226,13 +250,16 @@ test('two surfaces do not follow the window, and each says so', async ({ page })
 	await expect(feeds).toContainText('does not follow the window');
 	await expect(feeds).not.toHaveAttribute('data-window-days', /.*/);
 
-	// The site size is a level, not a rate. The number stays absolute at every
-	// preset; only the movement under it moves.
-	const size = page.locator('[data-windowed="site-size-movement"]');
-	const before = await size.locator('.kpi-value').textContent();
+	// The site size is a level, not a rate, and since 2026-08-30 it is in the
+	// standing band - which is not windowed at all, because that band stands on
+	// all three console routes and a figure that moved with a control on one of
+	// them would read as three different sites. So the whole sentence holds at
+	// every preset, not only the number in it.
+	const size = page.locator('[data-band-size]');
+	const before = ((await size.textContent()) ?? '').trim();
 	await setWindow(page, 7);
-	await expect(size.locator('.kpi-value')).toHaveText((before ?? '').trim());
-	await expect(size).toContainText("Latest run's size");
+	await expect(size).toHaveText(before);
+	await expect(size).toContainText('committed payload tree, not the published site');
 });
 
 test('the prerendered page opens on the configured window, whatever was stored', async ({

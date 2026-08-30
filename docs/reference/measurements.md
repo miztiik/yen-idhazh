@@ -1693,6 +1693,93 @@ exist yet. And the fix is not this row's: bounding `state/scores.csv` is the
 retention row's work, and this section is the measurement that says the page
 needs it inside 16 published days rather than inside a quarter.
 
+#### Three console routes, three ceilings, and a day priced on each (2026-08-31)
+
+Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-08-31. Tree: `feat/the-console-becomes-three-routes` merged up to
+`origin/main` at `fb67faf`, ten published days, 3,544 scored rows, 4,632
+telemetry rows. Method: `npm run build` then
+`gzipSync(readFileSync(page), { level: 9 }).length`, which is the byte the gate
+itself takes.
+
+**Five builds of the same tree, heaviest per route, never a mean:**
+
+| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 115,825 | 115,825 | 115,827 | 115,829 | 115,820 | **115,829** | 9 |
+| `/console/model/` | 13,503 | 13,501 | 13,501 | 13,508 | 13,498 | **13,508** | 10 |
+| `/console/machine/` | 5,329 | 5,327 | 5,327 | 5,328 | 5,328 | **5,329** | 2 |
+
+The spread is 9, 10 and 2 bytes on routes of 115,829, 13,508 and 5,329 - well
+inside the 64-byte noise floor every other ceiling on this site carries.
+
+**A published day was priced by removing a real one**, the same method the
+2026-08-29 section used and for the same reason a clone scan cannot be used:
+2026-08-25 was dropped from `state/scores.csv`, `state/item-health/`,
+`state/feed-health/`, `frontend/public/telemetry/` and its own directory under
+`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT`, and the tree rebuilt. That is 724 scored rows, 1,000 item-health
+rows, 828 feed-health rows, 1,000 telemetry rows and 29 files of published day.
+The day dropped is neither the newest nor the oldest, so the window anchor never
+moves. Paired against build 1, which is the same source and the same command:
+
+| Route | ten days | without 2026-08-25 | cost of that day |
+| --- | ---: | ---: | ---: |
+| `/console/` | 115,825 | 96,575 | **19,250** |
+| `/console/model/` | 13,503 | 12,773 | **730** |
+| `/console/machine/` | 5,329 | 5,332 | **0** (-3, inside the 9-byte spread) |
+
+**`/console/machine/` costs zero, and that is the useful reading.** It renders no
+ledger at all today, so a 20 percent cut to every ledger the console reads moved
+it three bytes the wrong way, which is build noise - and that is also the control
+saying the root redirection itself is not a variable.
+
+**The Model route grows per published day, not per item.** It inlines one row a
+day from `modelWork` and one from `throughputDays`, and no per-item array. At 730
+bytes a day against `/console/`'s 19,250 it is 3.8 percent of the Pipelines cost,
+and that ratio is the point of the split: the term that grows is almost all on
+one route, and now only one ceiling has to carry it.
+
+The ceilings follow the method already written down for `/console/` - heaviest of
+five builds, plus seven mature published days, plus the 64-byte build noise
+floor:
+
+```text
+/console/          115,829 + 7 x 19,250 + 64 = 250,643
+/console/model/     13,508 + 7 x    730 + 64 =  18,682
+/console/machine/    5,329 + 3 x    502 + 64 =   6,899
+```
+
+**Machine's allowance is not days, because a day costs it nothing.** What varies
+on that route is the band's three sentences, the strip's three worst states and
+its own carry - 502 characters of ledger-derived text, read off the built page -
+so the allowance is three publishes' worth of rewriting every one of them,
+502 x 3 = 1,506. That is a bound on text length rather than a measured growth,
+and gzip never charges a whole byte a character in a document this compressible,
+so it is a strict over-estimate. It is labelled as one.
+
+**Every one of the three gates is tighter than the single one it replaces.** The
+regression a console ceiling exists to catch is a day payload inlined by a
+layout, measured 2026-08-26 at 313,300 gzipped bytes. The slack here is 134,814,
+5,174 and 1,570 bytes, so that regression is 2.32x, 60.6x and 199.6x the slack -
+and `/console/` alone is 250,643 against the 259,908 it replaces, on a page that
+lost its model panels to a route of its own. A single key over three surfaces
+would fail without saying which surface failed, which is the decisive argument
+for routes over tabs and the reason there are three keys.
+
+**What each ceiling buys, in publishes.** Seven published days on `/console/` and
+on `/console/model/`; three publishes' worth of complete text rewriting on
+`/console/machine/`. All three are meant to expire. Rows 13 to 19 of the
+observability plan add panels to every one of them, and each of those rows
+re-derives the ceiling it crosses and records what the bytes bought - it never
+cuts a panel to stay under a number (owner ruling, 2026-08-31).
+
+**The lazy chart chunk did not move.** `DIuPWcXJ.js`, 585,481 raw and 197,561
+gzipped bytes, byte for byte what it measured before the split, against the
+200,000 escalate trigger. No new echarts type was registered and none was needed.
+The one larger lazy chunk in the build is the assist encoder at 901,929 raw and
+234,135 gzipped, which is a different artifact and carries no chart trigger.
+
 ### Days to the 1 GB Pages ceiling
 
 **This section divided by the wrong tree until 2026-08-27, and both of its

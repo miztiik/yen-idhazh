@@ -32,6 +32,17 @@ commit as its parent. Always name the start-point and take your own worktree:
 git worktree add <absolute path> -b <branch> origin/main
 ```
 
+**`origin/main` moves under you without you fetching, because every worktree
+shares one `.git`.** A sibling agent's `git fetch` updates the ref for all of
+them. On 2026-08-31 a merge was taken against an `origin/main` of eleven
+commits, and twenty minutes later `git log <base>..origin/main` listed twelve -
+so a file the merge had auto-merged cleanly now read as though the merge had
+DELETED a paragraph `main` holds, which is exactly what a bad merge looks like.
+It was not one; the twelfth commit simply arrived afterwards. Re-run
+`git rev-parse origin/main` before you diff against it, and re-`fetch` and
+re-`merge` immediately before you push rather than assuming the tree you tested
+is the tree you are merging into.
+
 **Neither `git status` nor the commit output reveals that contamination**, because
 it is in the branch's parent, not in the index. `git status --porcelain` showed
 one staged file and `git commit` reported "1 file changed" - both true, both
@@ -1134,6 +1145,24 @@ the variable protects the shell you remember to set it in and nothing else.
   `Network.setCacheDisabled`), or the second reload is served from memory.
   Expect `vite preview` to die with an unhandled `ENOENT` when a file it is
   streaming disappears; that is the server, not the page.
+- **`vite build --outDir <other>` does NOT move the site. `adapter-static`
+  writes `build/` whatever vite is told**, so a second arm built "somewhere
+  else" silently overwrites the arm you were about to measure. On 2026-08-31 an
+  empty-ledger control asked for `build-empty`, and `build-empty` was never
+  created while `build/` quietly became the control - which is only visible if
+  you check the output rather than the exit code. Rebuild the real site straight
+  afterwards, and never take a bundle-gate reading on a tree you did not build
+  in that same step.
+- **A `route.abort()` or `route.fulfill(404)` arm that intercepted NOTHING is a
+  null result, not a pass.** The console routes inline their whole seed and
+  fetch nothing at runtime but a font, so on 2026-08-31 a degraded arm over
+  `**/telemetry/**` reported zero errors with an intercept count of zero on all
+  three routes - a clean pass that tested nothing. Print the count and refuse to
+  read the arm at zero. The honest degraded arm for a build-time surface is the
+  root-override one: copy `state/` and `frontend/public/` to `TEMP`, truncate
+  every CSV to its header line, point `STATE_ROOT`, `TELEMETRY_ROOT` and
+  `DIGEST_ROOT` at the copy, and rebuild. With an empty seed the runtime fetch
+  then does fire, and the intercept count comes back at one.
 
 ## Measuring with the committed encoder
 
