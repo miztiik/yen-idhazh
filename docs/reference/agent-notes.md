@@ -793,6 +793,14 @@ dependency nothing in the change touched.
   .toHaveCount(1)` rather than a skip whenever the fixture is supposed to
   provide the thing. A skip is right only when the environment genuinely varies;
   it is never right for a selector you control.
+- **A CSS length read back off `style` is the browser's serialisation, not the
+  string you wrote.** A bar drawn at `inline-size: 100.0000%` reads back as
+  `100%`, because the engine drops trailing zeros; every other row in the same
+  list, at `52.9412%`, round-trips unchanged. So a Playwright assertion
+  comparing the style STRING fails on exactly one row - the full bar - which
+  reads like a bug in the one case the arithmetic cannot get wrong. Observed
+  2026-08-30 on the console's ranked bars. Compare the number:
+  `parseFloat(node.style.inlineSize)` against `Number(expected.toFixed(4))`.
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
   `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
   then shows progress dots and an exit code and nothing else, which reads like
