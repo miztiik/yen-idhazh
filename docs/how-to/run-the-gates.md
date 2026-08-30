@@ -1,6 +1,6 @@
 # Run the Gates
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 Set up a machine, then run every check `CLAUDE.md` section 9 asks for before a
 merge. This page owns the project's actual gate commands; the neutral PR
@@ -106,6 +106,16 @@ cap it fails. **Point it at anything else and the suite fails**, because the tre
 is read back off `pages.yml`'s own upload step. It measures nothing until the
 site is built, so run it after `npm run build`, and a run that reports zero files
 fails rather than passes.
+
+It prints three more lines and none of them fails anything. `by directory` is the
+top-level children of `build/` largest first, so a directory that grew can be
+named instead of guessed at from one moving total. `rate` is bytes per published
+item, which is the unit that holds still - a rate per day moves by a factor of
+six across days that published 731 items and 117. `runway` divides the headroom
+by that rate at `run.safety_ceiling_per_run` items a day and prints the answer in
+published days, to the alarm point and to the cap. **The size on the line above
+is a level, and no level has a date in it.** A tree carrying no day payloads
+prints `runway: unknown` rather than a comfortable number.
 
 `bundle-gate` does three things. It asserts no encoder lands on the first-load
 path, it compares every route's first-load JavaScript against the weight

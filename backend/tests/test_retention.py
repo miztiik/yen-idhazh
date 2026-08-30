@@ -7,6 +7,8 @@ wrong rather than the way it goes right.
 
 from __future__ import annotations
 
+import json
+import logging
 from datetime import date
 from pathlib import Path
 
@@ -20,8 +22,13 @@ from idhazh.retention import (
     SiteSize,
     budget_alarm,
     cap_breach,
+    count_published_items,
     cutoff,
+    daily_growth_bytes,
+    days_to_alarm,
+    days_to_cap,
     headroom_mb,
+    heaviest_directories,
     measure,
     over_budget,
     over_cap,
@@ -141,6 +148,142 @@ def test_the_alarm_speaks_only_when_over_budget(tmp_path: Path) -> None:
 def test_headroom_is_measured_against_the_hard_cap(tmp_path: Path) -> None:
     root = site(tmp_path, {"2026-08-21": ["a.webp"]})
     assert headroom_mb(measure(root)) == pytest.approx(PAGES_HARD_CAP_MB, abs=1)
+
+
+# --- A level is not a date -----------------------------------------------------
+
+#: The item ceiling in force, `run.safety_ceiling_per_run` in config/idhazh.json.
+#: Spelled out here so the arithmetic below is readable rather than looked up.
+ITEMS_PER_DAY = 160
+
+
+def sized_tree(root: Path, weights: dict[str, int]) -> Path:
+    """A built tree whose files weigh exactly what they are told to."""
+    for relative, count in weights.items():
+        target = root / relative
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(b"x" * count)
+    return root
+
+
+def staged_days(root: Path, days: dict[str, int]) -> Path:
+    """Day payloads where the built tree keeps them, carrying a stated item count."""
+    for day, count in days.items():
+        payload = root / "digest" / day.replace("-", "/") / "digest.json"
+        payload.parent.mkdir(parents=True, exist_ok=True)
+        payload.write_text(
+            json.dumps({"date": day, "items": [{"item_id": str(n)} for n in range(count)]}),
+            encoding="utf-8",
+        )
+    return root
+
+
+def test_the_split_sums_to_the_total_and_names_what_grew(tmp_path: Path) -> None:
+    """One sum cannot say whether the visuals grew or the telemetry did.
+
+    The sum has to be exact. A split that loses bytes somewhere would name the
+    wrong directory on the day somebody used it to decide what to cut.
+    """
+    root = sized_tree(
+        tmp_path / "build",
+        {
+            "index.html": 900,
+            "_app/immutable/chunk.js": 40_000,
+            "digest/2026/08/21/digest.json": 5_000,
+            "digest/2026/08/22/digest.json": 7_000,
+            "console/index.html": 9_000,
+        },
+    )
+    size = measure(root)
+
+    assert sum(size.by_directory.values()) == size.bytes_used
+    assert size.by_directory == {
+        "_app": 40_000,
+        "console": 9_000,
+        "digest": 12_000,
+        "index.html": 900,
+    }
+    assert size.files == 5
+    assert heaviest_directories(size, limit=2) == [("_app", 40_000), ("digest", 12_000)]
+
+
+def test_published_items_are_counted_from_the_tree_that_was_measured(tmp_path: Path) -> None:
+    """Bytes and items have to come from one corpus, or the rate divides two."""
+    root = staged_days(tmp_path / "build", {"2026-08-21": 3, "2026-08-22": 5})
+    assert count_published_items(root) == 8
+    assert count_published_items(tmp_path / "never-built") == 0
+
+
+def test_the_runway_is_headroom_over_the_marginal_rate(tmp_path: Path) -> None:
+    """The row's whole point. A megabyte figure is a level, and no level has a date in it.
+
+    Every expected value here is computed from the fixture rather than read back
+    off the code, so the test fails if the arithmetic changes shape.
+    """
+    weight = 6 * BYTES_PER_MB
+    root = sized_tree(tmp_path / "build", {"index.html": weight})
+    size = measure(root, published_items=300)
+
+    per_item = weight / 300
+    rate = per_item * ITEMS_PER_DAY
+    assert size.bytes_per_published_item == pytest.approx(per_item)
+    assert daily_growth_bytes(size, ITEMS_PER_DAY) == pytest.approx(rate)
+
+    to_cap = (PAGES_HARD_CAP_MB - 6) * BYTES_PER_MB / rate
+    assert days_to_cap(size, ITEMS_PER_DAY) == pytest.approx(to_cap)
+
+    config = RetentionConfig()
+    to_alarm = (config.site_budget_mb - 6) * BYTES_PER_MB / rate
+    assert days_to_alarm(size, config, ITEMS_PER_DAY) == pytest.approx(to_alarm)
+    assert to_alarm < to_cap, "the alarm has to arrive before the wall or it buys nothing"
+
+
+def test_a_runway_from_nothing_raises_rather_than_reading_as_forever(tmp_path: Path) -> None:
+    """Zero published items divides into infinite runway, which reads as safety.
+
+    Same defect as the green light on the wrong tree: the comfortable answer is
+    the one an absent build produces, so the absent build must not produce one.
+    """
+    empty = measure(tmp_path / "never-built")
+    assert empty.files == 0
+
+    with pytest.raises(ValueError):
+        _ = empty.bytes_per_published_item
+    with pytest.raises(ValueError):
+        days_to_cap(empty, ITEMS_PER_DAY)
+    with pytest.raises(ValueError):
+        days_to_alarm(empty, RetentionConfig(), ITEMS_PER_DAY)
+
+    real = measure(sized_tree(tmp_path / "build", {"index.html": 1_000}), published_items=10)
+    with pytest.raises(ValueError):
+        days_to_cap(real, 0)
+
+
+def test_the_step_reports_the_rate_and_the_runway(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """What a person reads off the run: which directory, how fast, and until when."""
+    root = staged_days(tmp_path / "build", {"2026-08-21": 200, "2026-08-22": 200})
+    sized_tree(root, {"_app/immutable/chunk.js": 4 * BYTES_PER_MB})
+
+    with caplog.at_level(logging.INFO):
+        assert stage_site_weight(root, RetentionConfig(), items_per_day=ITEMS_PER_DAY) == 0
+
+    printed = caplog.text
+    assert "site-weight by directory: _app" in printed, "a growing directory has to be named"
+    assert "B per published item over 400 items" in printed
+    assert "published days to the 800 MB alarm point" in printed
+    assert "MB Pages cap" in printed
+
+
+def test_a_tree_with_no_day_payloads_says_unknown_rather_than_a_comfortable_number(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """Reporting, not a gate: it still passes, and it refuses to invent a date."""
+    tree = built_site(tmp_path / "build", 3)
+    with caplog.at_level(logging.INFO):
+        assert stage_site_weight(tree, RetentionConfig(), items_per_day=ITEMS_PER_DAY) == 0
+    assert "site-weight runway: unknown" in caplog.text
 
 
 # --- The alarm has to be able to fire ---------------------------------------
