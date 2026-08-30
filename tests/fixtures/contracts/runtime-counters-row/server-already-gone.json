@@ -1,10 +1,13 @@
 {
+  "cpu_busy_pct": null,
   "cpu_model": null,
   "date": "2026-08-26",
   "job_seconds": null,
+  "model_load_ms": null,
   "n_busy_slots_per_decode": null,
   "n_decode_total": null,
   "n_tokens_max": null,
+  "peak_rss_bytes": null,
   "prompt_seconds_total": null,
   "prompt_tokens_cached_total": null,
   "prompt_tokens_total": null,
