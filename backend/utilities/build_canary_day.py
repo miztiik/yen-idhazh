@@ -72,6 +72,14 @@ HISTORY_DAYS = 19
 #: manifest requires, and a run of zeroes cannot be mistaken for a commit.
 FIXTURE_SHA = "0" * 40
 
+#: What the committed payload tree measured on the oldest day the fixture holds.
+SITE_BYTES_FIRST_DAY = 54_230
+#: What one more fixture day adds to it. A tree that measures the same on every
+#: day makes the console's per-article cost zero, and zero reads as free rather
+#: than as unmeasured - so the fixture has to grow for the chart to have a rate
+#: at all.
+SITE_BYTES_PER_DAY = 11_000
+
 # Two items carry a real visual, so the browser suite exercises the picture path
 # rather than proving it safe by never serving one. The specs are ours, not a
 # model's - this file tests the surface, not the router.
@@ -423,6 +431,18 @@ def build(target: Path, evaluation: EvaluationConfig) -> DigestDay:
     return day
 
 
+def _site_bytes(date: str) -> int:
+    """The payload tree as it stood on that fixture day.
+
+    Every run of one day reports the same figure, the way a real day does: the
+    site is one thing measured once per run, and the console reads the last of
+    them.
+    """
+    first = calendar_date.fromisoformat(DATE) - timedelta(days=HISTORY_DAYS)
+    elapsed = (calendar_date.fromisoformat(date) - first).days
+    return SITE_BYTES_FIRST_DAY + max(0, elapsed) * SITE_BYTES_PER_DAY
+
+
 def _record(
     date: str,
     n: int,
@@ -465,7 +485,7 @@ def _record(
         items_prefiltered=prefiltered,
         charts_drafted=charts_drafted,
         route_ms=route_ms,
-        site_bytes=54_230,
+        site_bytes=_site_bytes(date),
         site_files=4,
     )
 
