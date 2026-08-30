@@ -40,13 +40,14 @@
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
 		failureMix,
-		publishedTrend,
+		publishedSkyline,
 		routerCost,
 		runHealth,
 		ROUTER_MINUTES_TARGET,
 		RULE_WINDOW_DAYS,
 		siteGrowth,
-		sizeTrend
+		sizeTrend,
+		type SkylineBar
 	} from '$lib/charts/glance';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
@@ -156,6 +157,20 @@
 	const windowedSize = $derived(
 		sizeTrend(data.manifests.filter((run) => inWindow(run.date)), windowDays)
 	);
+	/** One bar a day, over the window the control set. The card's own count is
+	 * the same window summed, so a reader can check the number against the
+	 * picture - which an all-time total under a thirty-day strip could not do. */
+	const skyline = $derived(publishedSkyline(data.charts, viewport));
+
+	/** The card's trend slot, in CSS pixels. */
+	const SKYLINE = { width: 220, height: 34 };
+
+	/** A day that published one chart against a busiest of forty is a fortieth
+	 * of the box, which draws as nothing at all. A hairline floor keeps a quiet
+	 * day distinguishable from a day no run happened on. */
+	function barHeight(bar: SkylineBar): number {
+		return bar.published === 0 ? 0 : Math.max(1, bar.height * SKYLINE.height);
+	}
 
 	/** The days every feed strip is drawn over. One axis for the whole list, so
 	 * two feeds can be read against each other: a feed broken since Tuesday and a
@@ -183,12 +198,14 @@
 
 	let strip = $state<HTMLDivElement | null>(null);
 
-	// The same three tokens the confidence bands use. A run that went well and a
-	// summary that scored well should not be two different greens.
+	// The fill ramp, not the band ramp. The band tokens are text colours and a
+	// 16px solid is not text: at text weight the light theme drew olive and
+	// brick. tokens.css carries both ramps and design-system.md the band a fill
+	// has to land in.
 	const COLOUR: Record<Health, string> = {
-		green: 'var(--band-high)',
-		amber: 'var(--band-medium)',
-		red: 'var(--band-low)'
+		green: 'var(--fill-high)',
+		amber: 'var(--fill-medium)',
+		red: 'var(--fill-low)'
 	};
 
 	const KEY = $derived([
@@ -197,8 +214,10 @@
 		{ health: 'red' as Health, text: `failed, or under ${data.floorPct}% published` }
 	]);
 
-	const totalRuns = $derived(data.grid.reduce((count, day) => count + day.squares.length, 0));
-	const axis = $derived(axisLabels(data.grid.map((day) => day.date)));
+	/** The strip reads the page's window, like every other windowed section. */
+	const windowGrid = $derived(data.grid.filter((day) => inWindow(day.date)));
+	const windowRuns = $derived(windowGrid.reduce((count, day) => count + day.squares.length, 0));
+	const axis = $derived(axisLabels(windowGrid.map((day) => day.date)));
 
 	/** A label is placed inside its column, not laid out by it, so the widest
 	 * date on the axis cannot push a single day track out of step. */
@@ -224,7 +243,7 @@
 	 * is what keeps the prerendered strip drawing at the fixed pair rather than
 	 * at zero. */
 	let stripWidth = $state<number | null>(null);
-	const strip_ = $derived(cellFor(stripWidth, data.grid.length));
+	const strip_ = $derived(cellFor(stripWidth, windowGrid.length));
 
 	$effect(() => {
 		const node = strip;
@@ -394,8 +413,6 @@
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
 	<p class="mt-1 text-[0.9375rem] text-text-secondary">
 		What the pipeline cost and how well it did, per day, from the committed ledger.
-		{data.totalRows} scored {data.totalRows === 1 ? 'item' : 'items'} on record.
-		{data.itemHealthRows} item-health {data.itemHealthRows === 1 ? 'row' : 'rows'} on record.
 	</p>
 
 	<!-- The window sits above everything it governs, so it is read before the
@@ -412,15 +429,41 @@
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
+	<!-- Bars, not a line: a count per day is a discrete quantity, and a line
+	     between two days claims a value for the hours in between that nobody
+	     counted. Drawn as markup rather than by the engine, so it is complete
+	     before any script runs and follows the window with one drawing. -->
+	{#snippet publishedBars()}
+		<svg
+			class="block"
+			width={SKYLINE.width}
+			height={SKYLINE.height}
+			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
+			role="img"
+			aria-label="Charts published each day over {windowDays} days, {skyline.total} in all, busiest day {skyline.busiest}"
+			data-published-days={skyline.bars.length}
+			data-published-total={skyline.total}
+		>
+			{#each skyline.bars as bar (bar.date)}
+				<rect
+					x={(bar.x * SKYLINE.width).toFixed(2)}
+					width={(bar.width * SKYLINE.width).toFixed(2)}
+					y={(SKYLINE.height - barHeight(bar)).toFixed(2)}
+					height={barHeight(bar).toFixed(2)}
+					fill="var(--chart-3)"
+					data-published-bar={bar.date}
+					data-published={bar.published}
+				/>
+			{/each}
+		</svg>
+	{/snippet}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<KpiCard
 			label="Charts published"
-			value={String(data.charts.reduce((sum, day) => sum + day.published, 0))}
-			note="over the days on record"
+			value={String(skyline.total)}
+			note="in these {windowDays} days"
 			tone="info"
-			movement={data.glance.publishedMovement}
-			trendSvg={data.glance.publishedSvg}
-			trendOption={publishedTrend(data.charts).option}
+			trend={skyline.empty ? null : publishedBars}
 		/>
 		<!-- Half windowed, on purpose. The size is a level and the operator wants
 		     today's, whatever span he is looking at; only the movement under it is
@@ -517,79 +560,91 @@
 		</Panel>
 	{/if}
 
-	<h2 class="console-h2">Run health</h2>
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		One column per day, oldest to newest, one square per recorded run with run 1 at the bottom.
-		Skipped items are not counted against a run - an article we already published is skipped by
-		design.
-	</p>
-
-	{#if totalRuns === 0}
-		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-grid="empty">
-			No run has recorded a manifest yet. The strip fills as runs publish.
-		</p>
-	{:else}
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<div
-			class="mt-4 overflow-x-auto pb-1"
-			role="region"
-			tabindex="0"
-			aria-label="Run health history, oldest to newest"
-			bind:this={strip}
-			data-run-history
+	<div data-windowed="run-health" data-window-days={windowDays}>
+		<Panel
+			title="Run health"
+			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. Skipped items are not counted against a run - an article we already published is skipped by design."
 		>
-			<div
-				class="grid w-max min-w-full items-end justify-end"
-				style="grid-template-columns: repeat({data.grid.length}, {strip_.cell}px); gap: {strip_.gap}px"
-				data-grid="days"
-			>
-				{#each data.grid as day, index (day.date)}
-					<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
-					     upward, while the DOM keeps reading run 1 first. -->
+			{#if data.grid.length === 0}
+				<p class="text-[0.9375rem] text-text-secondary" data-grid="empty">
+					No run has recorded a manifest yet. The strip fills as runs publish.
+				</p>
+			{:else if windowRuns === 0}
+				<!-- A different fact from the one above, so a different sentence: the
+				     ledger answered, and the answer was nothing in this span. -->
+				<p class="text-[0.9375rem] text-text-secondary" data-grid="outside-window">
+					No run recorded a manifest in the last {windowDays} days. Widen the window to reach
+					further back.
+				</p>
+			{:else}
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<div
+					class="overflow-x-auto pb-1"
+					role="region"
+					tabindex="0"
+					aria-label="Run health history for the last {windowDays} days, oldest to newest"
+					bind:this={strip}
+					data-run-history
+				>
+					<!-- Left-anchored, and that is not the same question as where an
+					     overflowing strip opens. `today_anchor` governs the scroll
+					     position; a strip with room to spare simply starts where every
+					     other axis on the page starts, so a day keeps the place the
+					     operator last saw it in as the window fills. -->
 					<div
-						class="flex flex-col-reverse justify-start"
-						style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
-						data-day={day.date}
+						class="grid w-max min-w-full items-end justify-start"
+						style="grid-template-columns: repeat({windowGrid.length}, {strip_.cell}px); gap: {strip_.gap}px"
+						data-grid="days"
 					>
-						{#each day.squares as square (square.runId)}
-							<span
-								class="rounded-sm"
-								style="width: {strip_.cell}px; height: {strip_.cell}px; background: {COLOUR[
-									square.health
-								]}"
-								title={square.label}
-								aria-label={square.label}
-								data-health={square.health}
-								role="img"
-							></span>
+						{#each windowGrid as day, index (day.date)}
+							<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
+							     upward, while the DOM keeps reading run 1 first. -->
+							<div
+								class="flex flex-col-reverse justify-start"
+								style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
+								data-day={day.date}
+							>
+								{#each day.squares as square (square.runId)}
+									<span
+										class="rounded-sm"
+										style="width: {strip_.cell}px; height: {strip_.cell}px; background: {COLOUR[
+											square.health
+										]}"
+										title={square.label}
+										aria-label={square.label}
+										data-health={square.health}
+										role="img"
+									></span>
+								{/each}
+							</div>
+						{/each}
+
+						{#each axis as label (label.column)}
+							<div class="relative h-4" style="grid-row: 2; grid-column: {label.column}">
+								<span
+									class="absolute top-0 whitespace-nowrap text-[0.625rem] leading-4 tabular-nums text-text-tertiary"
+									style={ANCHOR[label.align]}
+									data-axis-label={label.column}
+								>
+									{label.text}
+								</span>
+							</div>
 						{/each}
 					</div>
-				{/each}
+				</div>
 
-				{#each axis as label (label.column)}
-					<div class="relative h-4" style="grid-row: 2; grid-column: {label.column}">
-						<span
-							class="absolute top-0 whitespace-nowrap text-[0.625rem] leading-4 tabular-nums text-text-tertiary"
-							style={ANCHOR[label.align]}
-							data-axis-label={label.column}
-						>
-							{label.text}
-						</span>
-					</div>
-				{/each}
-			</div>
-		</div>
-
-		<ul class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-			{#each KEY as entry (entry.health)}
-				<li class="flex items-center gap-2">
-					<span class="size-3 shrink-0 rounded-sm" style="background: {COLOUR[entry.health]}"
-					></span>
-					{entry.text}
-				</li>
-			{/each}
-		</ul>
-	{/if}
+				<ul class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
+					{#each KEY as entry (entry.health)}
+						<li class="flex items-center gap-2">
+							<span class="size-3 shrink-0 rounded-sm" style="background: {COLOUR[entry.health]}"
+							></span>
+							{entry.text}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Panel>
+	</div>
 
 	<Viewport
 		{rows}

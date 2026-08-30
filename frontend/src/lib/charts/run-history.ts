@@ -45,7 +45,9 @@ const GAP_SHARE = GAP_PX / CELL_PX;
 export interface StripMetrics {
 	cell: number;
 	gap: number;
-	/** What the strip will actually occupy, so a caller can centre or pad it. */
+	/** What the strip will actually occupy, so a caller can tell an underfull
+	 * strip from a full one. Not an offset: the strip anchors left and the spare
+	 * room is on the right, so nothing has to be computed to place it. */
 	width: number;
 }
 

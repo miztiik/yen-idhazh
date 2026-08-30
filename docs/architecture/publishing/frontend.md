@@ -522,13 +522,39 @@ it and not again. The arithmetic lives in
 [frontend/src/lib/charts/run-history.ts](../../../frontend/src/lib/charts/run-history.ts)
 so it can be tested without a browser.
 
-**Overflow opens on the newest edge.** The strip is a native horizontal scroll
-region - focusable, labelled, and pannable with the arrow keys, with no buttons
-and no chart dependency. A history shorter than the viewport aligns right, so
-the newest run is in the same place whether there are three days or three
-hundred. JavaScript sets the initial scroll to the newest edge once, on the
-first animation frame after mount, and never again: after that the position
-belongs to the operator.
+**The strip starts on the left, and the spare room is on the right.** Until
+2026-08-30 a history shorter than its frame was pushed to the right edge, on the
+argument that the newest run should sit in one place whatever the day count.
+Re-measured on 2026-08-30 after merging `origin/main`, at 1440px over the
+committed ledger, on this tree with the one alignment declaration flipped back:
+its ten days draw 421px inside a 1326px frame, so right-anchored they leave
+905px of empty page on the left - the strip uses 32 percent of its own row,
+which reads as one that failed to draw rather than as one with room to spare.
+Left-anchored the same ten days start at the frame's own left edge, 0px in, and
+the 905px of room falls on the right. The argument for the right edge is the
+thing that broke it: the ledger went from nine days to ten while this change was
+being merged, so a right-anchored strip slid every column one place left and a
+run the operator had looked at yesterday was somewhere else today. Left-anchored,
+a day keeps its place and the empty room is on the side the days that have not
+happened yet belong to.
+
+**Where an overflowing strip OPENS is a different question, and it is the one
+`console.today_anchor` answers.** The two were one line of layout for a while
+and they are not the same fact: the anchor is a scroll position, and the
+alignment above is where the columns sit inside a frame that is wider than they
+are. The strip is a native horizontal scroll region - focusable, labelled, and
+pannable with the arrow keys, with no buttons and no chart dependency.
+JavaScript sets the initial scroll to the newest edge once, on the first
+animation frame after mount, and never again: after that the position belongs to
+the operator.
+
+**The strip is a panel, and it follows the page's window.** It draws the days
+inside the span the window control holds, states that span in its own note and
+in its accessible label, and carries `data-windowed="run-health"` like every
+other windowed section. A window that reaches no run says so in its own sentence
+rather than showing an empty grid, and that sentence is not the one an empty
+ledger gets - "no run recorded a manifest in the last N days" and "no run has
+recorded a manifest yet" are different facts.
 
 Three colours, and the boundaries are read from config rather than chosen by the page:
 
@@ -539,6 +565,15 @@ Three colours, and the boundaries are read from config rather than chosen by the
 | Red | The run failed, or its success rate fell below `run.success_floor_pct` |
 
 **The red threshold is the same knob CI uses to decide whether a run opens an issue.** A red square and an open issue can never disagree, because there is one number and both read it.
+
+**The squares are painted from the fill ramp, not the confidence ramp.** A 16px
+solid is not type, and until 2026-08-30 it was painted in colours that are:
+measured against the panel's surface, `--band-medium` is 5.43:1 and `--band-low`
+6.12:1, which is text weight, and on screen they read as olive and brick. The
+band tokens stay text colours because four other surfaces read them as type;
+`--fill-high`, `--fill-medium` and `--fill-low` are the parallel set, and
+[../../concepts/design-system.md](../../concepts/design-system.md) owns the band
+a fill value has to land in.
 
 **A skipped item is not a failure.** An article already published, or one a feed repeated, is skipped by design, so the rate is over what was *attempted*. Counting skips would paint a healthy day amber for doing its job.
 
@@ -642,6 +677,23 @@ section working with no script at all. It follows the window's *length* rather
 than where a pan leaves it, and the section says so: the days it reads always
 end on the newest day the ledger holds.
 
+`Charts published` used to draw a smoothed line over a fixed fourteen days,
+under a control reading thirty. It is one bar a day over the control's own
+window now, and the count above the bars is that same window summed, so a
+reader adding up the columns gets the number the card printed. Bars rather than
+a line, because a count per day is a discrete quantity and a line between two
+days claims a value for the hours in between that nobody counted. The strip is
+markup rather than an engine drawing: it is complete before any script runs,
+and it follows the control with one drawing instead of a server-drawn seed and
+a client redraw that can disagree about the span. A window that published
+nothing prints the count and no strip at all, because thirty bars of zero is an
+empty plot area and a card is still a card without one.
+
+The page intro carried two counts of rows on record until 2026-08-30 - scored
+items, and item-health rows. Both only ever grow, so neither could indicate a
+state, and nothing on the page or off it acted on either. They are gone, and
+their server-side computation went with them in the same commit.
+
 **The prerendered seed carries that same window, and no more.** The server used
 to concatenate every committed month and inline all of it, so the console
 document grew for as long as the pipeline ran - a reader downloaded four months
@@ -728,12 +780,43 @@ failed, so the payload workstream cannot fail a build over an ordinary publish
 
 The item-health viewport has three parts, in this order:
 
-- **Failure panels**: fetch, extract and summarize failure rates as separate bars. **The rate is printed in type under each stage name** - `16% failed, 126 of 800.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **The y domain is fixed at 0 to 100%.** Scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **A window holding one day draws no chart at all**: a chart of one value is a rectangle, and the sentence is the panel. Thin denominators use outlined bars below `console.min_attempts_for_rate`, explained once under the row rather than once per bar. Colour is spent only on a failure.
+- **Failure rate against volume**: one chart. Per-day columns of the day's items, split by where each one stopped - finished, then fetch, extract and summarize failures in the categorical ramp - so the height of a column IS the volume. Each stage's failure share is a line on a right-hand axis **fixed at 0 to 100%**: scaled to the window's own maximum, a single day in view normalised its bar to itself, so a 12% rate and a 90% one both filled the panel. **Every rate is printed in type with its denominator in the same sentence** - `16% failed, 672 of the 4,273 that reached it.` - because an SVG `<title>` does not fire on touch and does not survive the screenshot an operator pastes into an issue. **A stage under `console.min_attempts_for_rate` prints its counts and no rate at all**, and its line breaks over any day that thin: the same knob decides the source-cut share, so two shares on one page cannot disagree about when a denominator is too small. An empty window says so rather than drawing a column of zeroes, because a column of zeroes reads as a run that went badly.
 - **Compression scatter**: article length against summary length on a log x axis with decade ticks and the eight steps between them, summary words labelled on a y axis of their own, the `summarize.bands` step function drawn once as a shaded target zone, a distinct mark for an article the run cut short, and one dashed vertical per cut length in view saying where the cut falls. One chart, hand-written SVG. Two things it used to do: carry a second `uplot` canvas underneath drawing the same dataset with neither the band reference nor the truncation mark, which is two drawings of one dataset that disagree; and draw the band reference as one vertical line per point, which measured 1166 nodes on 2026-08-25 for a fact that has one value per configured band. The zone is one `<path>` at any point count, and `summary words` moved off the bottom row, where it was printed beside the x axis title of the variable it is not.
 - **Failed item list**: the rows behind the shape, **capped at `console.failure_list_max` with a `Show 25 more` button**, and stating its own scope - `Showing 25 of 214 failed items in this window.` A panel chip filters it, because after a spike the operator needs rows, and a new window or a new chip resets the cap because it is a new question. Uncapped it measured 7824px against 800 rows and put the compression chart at document y=9105. It sits last for the same reason: it is the only child that can outgrow the screen, so it cannot sit between two charts.
 
 Measured 2026-08-24 on the committed ledger: the console document went from
 11552px to 4878px.
+
+**A stage's denominator is what the stage before it let through, never the
+day.** An item that died at fetch never reached extract, so counting it in
+extract's denominator understates every stage after the first. The projection
+carries the funnel already: one row per planned item per run, holding the stage
+that item ended at, so `series.ts` walks the pipeline order once per day and
+each stage's `reached` is the one before it minus that one's failures. A row
+that never left `plan` is in the day and in no stage's denominator. Measured
+2026-08-30 over the 4,273 rows of the committed projection: 672 items died at
+fetch, 437 at extract and 19 at summarize, so extract reads 10.2 percent against
+the day's 4,273 and 12.1 percent against the 3,601 that actually reached it, and
+summarize reads 0.4 against 0.6. The three panels divided by the day and were
+wrong about two stages of three.
+
+**Three panels became one chart because a rate on its own cannot be acted on.**
+A stage that failed both of the two items it was given drew the same full bar as
+an outage, and the number that tells them apart - the denominator - was the one
+number the panel did not print. Volume and rate are one question, so they are
+one picture: the column says how much work there was and the line says how much
+of it failed. The split also cost every panel its width: three charts side by
+side measured 164px each in a 624px column, and `font-size="10"` reached the
+screen at 4.5px in one of them (measured 2026-08-25). That 164px is the number
+`console-frame.spec.ts` forbids, and the three-up row was the surface it was
+written against - so the chart that replaces it is a `<figure>`, which is what
+that check scans. Ruled by Susan (Craft and Delight) and Jony (UI/UX) on the
+console signal review, 2026-08-30.
+
+Two alternatives were rejected there. **Keeping three panels and adding
+sparklines** leaves the split, which is the defect rather than the content
+(Jony). **A single headline failure rate for the whole pipeline** hides which
+stage failed, and which stage failed is the actionable half (Susan).
 
 **Where the cut falls is a line on the scatter, and its value comes from the
 rows.** The cut is a value on the x axis and nothing else, so it is a dashed
@@ -796,8 +879,10 @@ rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
 this one is laid out under the plot where it cannot cover a mark at any width,
 and `chart.readout_max_share` bounds it at a third of the plot so it cannot
 become a paragraph beside a chart being glanced at. `FailurePanels` and the
-run-health strip still get none: each prints its headline in type and neither
-has a per-day point to land on.
+run-health strip still get none. The run-health strip has no per-day point to
+land on. The failure chart has one per stage per day, but it prints every
+stage's rate and its denominator in type under the plot at all times, so a
+readout there would only repeat a sentence that is never hidden.
 
 **That strip is the legend as well.** The legend already printed the newest day's
 four numbers and a sentence under it said which day they were, which is the
@@ -1491,7 +1576,7 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | Grouping a day that ran to a single topic | One heading over the whole page states what the page already says, and it puts items behind a link that leads back to the same list. | Jony |
 | A failure bar scaled to the window's own maximum | With one day in view the bar normalises to itself, so a 12% failure rate and a 90% one both fill the panel. | Jony |
 | A failure rate carried only by an SVG `<title>` | A tooltip does not fire on touch and does not survive the screenshot an operator pastes into an issue. | Jony |
-| A bar chart for a window holding one day | A chart of a single value is a rectangle. The number is the panel. | Jony |
+| Suppressing the failure chart for a window holding one day | It was right when the panel drew one bar per stage: a chart of a single value is a rectangle. The column carries the volume now, so one day is one column and still says how much work there was. Only a window holding nothing at all draws no chart. | Jony |
 | Rendering every failed row in the window | 800 rows measured 7824px and pushed the compression chart to document y=9105. The rows are on demand. | Jony |
 | A virtual-scrolling failure table | A dependency and a scroll-position bug for something a cap and a button already solve. | Jony |
 | A per-day stacked bar list for stage timings | Thirty days is about 150 rows and no trend, and the trend is the only question the section is asked. | Jony |
@@ -1514,7 +1599,7 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | An SVG `<title>` as the chart tooltip | It does not fire on touch, carries a delay nobody chose, cannot be styled, is not keyboard-reachable, and does not survive a screenshot pasted into an issue. It stays as the accessible name. | Jony |
 | A readout pinned to the pointer | A readout under a thumb is a readout nobody reads. | Jony |
 | A tab stop on every data point | The committed ledger draws 2,541 of them. A 2,541-stop tab order is a trap, not access. | Jony |
-| A readout on `FailurePanels` or the run-health strip | Each prints its headline in type and neither has a per-day point to land on. | Jony |
+| A readout on `FailurePanels` or the run-health strip | The run-health strip has no per-day point to land on, and the failure chart already prints every stage's rate and its denominator in type under the plot at all times. | Jony |
 | A readout on `StageTimings` - reversed 2026-08-30 | It was refused because the chart "already prints its headline in type", and the headline it printed was the newest day. The chart had no per-day label and no mark, so the other twenty-nine days could not be read at all. The strip replaces the legend rather than joining it, so the count of things that move on the card is still one. | Susan, over Jony's 2026-08-25 ruling |
 | A floating readout box over the stage-timing plot | Measured 2026-08-29 at 88 to 121px over a 220px plot: 40 to 55 percent of the chart it explains. A strip below the plot cannot occlude at any width, so there is nothing left for a dodge rule to solve. | Jony |
 | Re-sorting the readout rows to the hovered day | The rows are the legend. A legend that re-orders under the eye as the pointer moves cannot be read, and the colour swatch already matches the line. | Jony |

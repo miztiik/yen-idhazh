@@ -10,7 +10,6 @@ import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
 import {
 	failureMix,
-	publishedTrend,
 	routerCost,
 	runHealth,
 	siteGrowth,
@@ -500,7 +499,9 @@ export async function load() {
 						end: mixDates[mixDates.length - 1]
 					})
 				);
-	const published = publishedTrend(charts);
+	// The published skyline is not drawn here. It is markup over `charts`, which
+	// already crosses, so the page renders it at prerender time and redraws it
+	// from the same array when the window moves - one drawing, not two.
 	const size = sizeTrend(
 		manifests.filter((run) => inSeed(run.date)),
 		console.default_window_days
@@ -531,8 +532,6 @@ export async function load() {
 			costBand: cost.empty ? null : cost.band,
 			growthSvg: await draw(growth, 760, 220),
 			mixSvg: await draw(mix, 760, 220),
-			publishedSvg: await draw(published, 220, 34),
-			publishedMovement: published.empty ? null : published.movement,
 			// No `sizeMovement` beside it: the size card recomputes its own movement
 			// from the manifests on the page, because the window can move and this
 			// number cannot. The drawn seed still crosses, as the shape a reader
@@ -551,8 +550,6 @@ export async function load() {
 		// Printed where the diagram would have been. A panel that is simply absent
 		// says nothing about which of the two nothings happened.
 		flowNote: flow.reason,
-		totalRows: rows.length,
-		itemHealthRows: itemRows.length,
 		grid,
 		floorPct,
 		quarantineAfter,
