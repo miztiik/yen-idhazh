@@ -159,7 +159,9 @@ async function cutFacts(page: Page) {
 	const more = (await page.locator('[data-source-cuts-more]').innerText()).replace(/\s+/g, ' ');
 	const cost = (await page.locator('[data-source-cuts-cost]').innerText()).replace(/\s+/g, ' ');
 	return {
-		articles: Number(/, (\d+) articles between them/.exec(intro)?.[1]),
+		// Thousands are grouped in the sentence, so the comma is stripped rather
+		// than the digits before it being read as the whole count.
+		articles: Number(/, ([\d,]+) articles between them/.exec(intro)?.[1]?.replace(/,/g, '')),
 		tailSources: Number(/(\d+) more sources/.exec(more)?.[1]),
 		cut: Number(/(\d+) articles were cut short/.exec(cost)?.[1])
 	};
@@ -192,7 +194,7 @@ test('the source table follows the window, and drops what falls outside it', asy
 	// as six articles and a share over six is not a rate. `\s+` rather than a
 	// space: the sentence wraps in the template, and a regex reads the raw text.
 	await expect(page.locator('[data-windowed="source-cuts"]')).toContainText(
-		/\d+\s+articles between/
+		/[\d,]+\s+articles between/
 	);
 });
 

@@ -243,15 +243,15 @@
 	     when it has nothing; a chart that simply vanishes beside one that
 	     explains itself reads as a chart that broke. -->
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-throughput="empty">
-		Nothing was measured in this window. Widen the window to look further back.
+		We measured nothing in this window. Widen the window to look further back.
 	</p>
 {:else}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		<em>Read</em> is the model taking an article in, <em>write</em> is it producing the summary. Writing
+		<em>Read</em> is the model taking an article in, <em>write</em> is it producing the summary. Write
 		is slower because it goes one token at a time. Each candle is one day: the line spans the slowest
 		and fastest item, the box is the middle half, and the tick is the median. The axis starts at the
 		slowest rate drawn, not at zero. A wide candle is a mixed day, not a fault -
-		<a href={reference} class="text-accent hover:underline" rel="noreferrer">why the spread is wide</a
+		<a href={reference} class="text-accent hover:underline" rel="noreferrer">why the range is wide</a
 		>.
 	</p>
 
@@ -427,7 +427,7 @@
 				     axis until 2026-08-25, which invited a reader to correlate it with a
 				     rate it shares no unit with. -->
 				<li class="flex items-center gap-2" data-series="reused">
-					prompt reused
+					prompt tokens reused
 					<span class="tabular-nums text-text-secondary">{newest.cacheHitPct.toFixed(0)}%</span>
 				</li>
 				<!-- Only where a rule was actually drawn. A key to a mark that is not on

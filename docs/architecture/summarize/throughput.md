@@ -181,7 +181,7 @@ and every other figure are under
 - **Check prompt reuse before blaming the model.** The read rate is computed
   over the tokens the machine actually read. If prompt reuse jumps, the read
   rate moves without the model changing at all. The figure is in the legend
-  under `prompt reused`; it is a cache statistic and is not drawn.
+  under `prompt tokens reused`; it is a cache statistic and is not drawn.
 - **Check the host before blaming anything.** The runner host moves the read
   rate further than any knob we set. Measured 2026-08-24 across eight `work`
   jobs, the read rate clustered at about 11, 14 and 37 tok/s - a 3.4x span with
