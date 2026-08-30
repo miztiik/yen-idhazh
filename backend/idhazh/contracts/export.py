@@ -34,6 +34,7 @@ from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import Taxonomy
+from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow
 from idhazh.contracts.validation_row import ValidationRow
 from idhazh.contracts.watchlist import Watchlist
 
@@ -63,6 +64,7 @@ CONTRACTS: Final[tuple[type[Contract], ...]] = (
     Sources,
     Summary,
     Taxonomy,
+    TelemetryAggregateRow,
     ValidationRow,
     Watchlist,
 )

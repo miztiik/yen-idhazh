@@ -307,12 +307,24 @@ RUNTIME_CANDIDATES: Final = frozenset(
 # stage, in the strings they pass, and in whether they can rebuild what they
 # commit, which is what makes the retry behaviour executable by a test instead
 # of only greppable in YAML.
+#
+# Keyed by a label rather than by a job, because the assemble job commits twice:
+# the day, and then the telemetry months the fold took out of full grain. The
+# second one has to come after the first (see the workflow's own comment), so
+# they cannot be one call.
 COMMIT_SCRIPT: Final = SCRIPTS_DIR / "commit-and-push.sh"
 COMMIT_SCRIPT_CALL: Final = ("bash", ".github/scripts/commit-and-push.sh")
+COMMIT_JOBS: Final = {
+    "plan": "plan",
+    "work": "work",
+    "assemble": "assemble",
+    "fold": "assemble",
+}
 COMMIT_STEPS: Final = {
     "plan": "Commit what the plan saw",
     "work": "Commit what this shard measured",
     "assemble": "Commit the day",
+    "fold": "Commit the folded telemetry",
 }
 COMMIT_BASE_ENV: Final = frozenset(
     {"COMMIT_MESSAGE", "NOTHING_STAGED_MESSAGE", "PUSH_FAILED_MESSAGE"}
@@ -325,6 +337,7 @@ COMMIT_SCRIPT_ENV: Final = {
     "work": COMMIT_BASE_ENV,
     "assemble": COMMIT_BASE_ENV
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
+    "fold": COMMIT_BASE_ENV,
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
@@ -336,7 +349,16 @@ COMMIT_STAGED_PATHS: Final = {
         "state",
         "corpus",
     ],
+    # `state` whole, and deliberately not the two directories the fold touches:
+    # `state/telemetry-aggregate/` does not exist in a fresh checkout, and
+    # `git add` on a path that is not there aborts the whole step.
+    "fold": ["state"],
 }
+# The step that folds an out-of-window month before the step above commits it.
+# It runs after the day's own commit, so a fold that loses its push costs one
+# run's bytes and never a published day.
+FOLD_STEP: Final = "Fold an out-of-window telemetry shard into its daily aggregate"
+FOLD_COMMAND: Final = "python -m idhazh prune-telemetry"
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
@@ -802,15 +824,16 @@ def _substitute(text: str) -> str:
     return re.sub(r"\$\{\{(.*?)\}\}", resolve, text, flags=re.DOTALL)
 
 
-def _commit_call(job_name: str) -> tuple[list[str], dict[str, str]]:
-    """The paths and the strings one daily job hands the shared commit script."""
+def _commit_call(label: str) -> tuple[list[str], dict[str, str]]:
+    """The paths and the strings one daily commit step hands the shared script."""
     workflow = _load_workflows()["digest.yml"]
-    step = _step(workflow, job_name, "name", COMMIT_STEPS[job_name])
-    command = shlex.split(_script(step, f"job {job_name} commit step"))
+    job_name = COMMIT_JOBS[label]
+    step = _step(workflow, job_name, "name", COMMIT_STEPS[label])
+    command = shlex.split(_script(step, f"job {job_name} commit step {label}"))
     assert tuple(command[:2]) == COMMIT_SCRIPT_CALL, (
-        f"job {job_name} must commit through {COMMIT_SCRIPT_CALL[1]}"
+        f"{label} must commit through {COMMIT_SCRIPT_CALL[1]}"
     )
-    declared = _mapping(step.get("env"), f"job {job_name} commit env")
+    declared = _mapping(step.get("env"), f"job {job_name} commit env {label}")
     settings = {name: _substitute(str(value)) for name, value in declared.items()}
     return command[2:], settings
 
@@ -1587,6 +1610,8 @@ def test_both_daily_commit_steps_run_the_one_shared_script() -> None:
     assert plan != assemble
     assert plan["COMMIT_MESSAGE"] == f"plan: {SUBSTITUTED_DATE}"
     assert assemble["COMMIT_MESSAGE"] == f"digest: {SUBSTITUTED_DATE}"
+    # And the fold says a third thing, in the same job as the day's own commit.
+    assert _commit_call("fold")[1]["COMMIT_MESSAGE"] != assemble["COMMIT_MESSAGE"]
 
 
 def test_only_assemble_rebuilds_and_it_rebuilds_with_its_own_publish_command() -> None:
@@ -1678,6 +1703,32 @@ def test_the_harvest_runs_where_the_article_text_still_is() -> None:
         < names.index(HARVEST_STEP)
         < names.index(COMMIT_STEPS["assemble"])
     )
+
+
+def test_the_telemetry_fold_runs_only_once_the_day_is_committed() -> None:
+    """A fold that ran first could delete a month from a tree nothing pushed.
+
+    The fold unlinks a committed file. Run before the day's own commit, a lost
+    push would hand `state/item-health` back to origin's tip and rebuild against
+    it, so the deletion would silently un-happen while the aggregate it wrote
+    stayed - and the next run would fold a shard that had already been folded.
+    Behind the commit, the worst it can cost is one run's worth of bytes.
+
+    Neither step may fail the job. What assemble owes a reader is the published
+    day, and a thirteen-month-old month file must never be what stops one.
+    """
+    workflow = _load_workflows()["digest.yml"]
+    names = [step.get("name") for step in _steps(workflow, "assemble")]
+    fold = _step(workflow, "assemble", "name", FOLD_STEP)
+
+    assert FOLD_COMMAND in _script(fold, "assemble fold step")
+    assert names.index(COMMIT_STEPS["assemble"]) < names.index(FOLD_STEP)
+    assert names.index(FOLD_STEP) < names.index(COMMIT_STEPS["fold"])
+    for step_name in (FOLD_STEP, COMMIT_STEPS["fold"]):
+        step = _step(workflow, "assemble", "name", step_name)
+        assert step.get("continue-on-error") == TOLERATED, (
+            f"{step_name} must never be what costs a reader the day"
+        )
 
 
 def test_the_corpus_is_committed_but_never_rebuilt() -> None:
@@ -1889,7 +1940,10 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
     # Closed-world, because a publish step that swallowed its own failure would
     # publish nothing and report success. The one that was already here is
     # assemble's routes download: `route` is allowed to produce no artifact at
-    # all, and every item then publishes with no picture.
+    # all, and every item then publishes with no picture. The two fold steps join
+    # it for the harvest's reason: they run after the day is committed and touch
+    # only months past `observability.keep_months`, so the most a failure costs is
+    # one run's worth of bytes and the next run folds the same month again.
     tolerant = {
         (job_name, step.get("name") or step.get("uses"))
         for job_name in _mapping(workflow.get("jobs"), "jobs")
@@ -1900,6 +1954,8 @@ def test_a_ledger_that_will_not_push_cannot_cost_the_day_a_worker() -> None:
         *(("work", name) for name in WORK_LEDGER_STEPS),
         ("assemble", "actions/download-artifact@v8"),
         ("assemble", HARVEST_STEP),
+        ("assemble", FOLD_STEP),
+        ("assemble", COMMIT_STEPS["fold"]),
     }
 
 
