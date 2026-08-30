@@ -143,6 +143,13 @@
       "additionalProperties": false,
       "description": "Knobs for the operator console's time viewport.",
       "properties": {
+        "band_outlier_rows": {
+          "default": 10,
+          "description": "How many summaries the console names as furthest from the length the prompt asked for. Capped, with the tail stated in a sentence, because the list exists to be acted on and the far tail is a one-word miss nobody chases. Ten, matching the source-cut table beside it.",
+          "minimum": 1,
+          "title": "Band Outlier Rows",
+          "type": "integer"
+        },
         "chart_height": {
           "default": 180,
           "minimum": 120,
@@ -485,6 +492,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.band_outlier_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
+      "version": "2026-08-30T20:00",
+      "why": "The console now names the summaries furthest from the length the prompt asked for, in place of a scatter that drew 2,740 marks in one colour. A capped list needs its cap where an operator can move it. Additive with a default, so an appearance file written before today still validates (section 11)."
+    },
+    {
       "change": "chart.readout_max_share added, defaulting to 0.33: the widest the readout strip under a plot may be, as a share of that plot.",
       "version": "2026-08-30",
       "why": "The stage-timing chart gained a readout, and a readout needs a bound somebody can move without editing a component. Measured 2026-08-29, the floating box this replaces covered 88 to 121px of a 220px plot - 40 to 55 percent of the chart it was explaining. Additive with a default, so an appearance file written before today still validates (section 11)."
@@ -530,7 +542,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-08-30",
+      "default": "2026-08-30T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -538,5 +550,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-08-30"
+  "version": "2026-08-30T20:00"
 }

@@ -19,6 +19,7 @@
     "width_px": 760
   },
   "console": {
+    "band_outlier_rows": 10,
     "chart_height": 180,
     "chart_width": 600,
     "default_window_days": 30,

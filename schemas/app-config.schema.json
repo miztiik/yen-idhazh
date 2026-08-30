@@ -177,6 +177,13 @@
       "additionalProperties": false,
       "description": "Knobs for the operator console's time viewport.",
       "properties": {
+        "band_outlier_rows": {
+          "default": 10,
+          "description": "How many summaries the console names as furthest from the length the prompt asked for. Capped, with the tail stated in a sentence, because the list exists to be acted on and the far tail is a one-word miss nobody chases. Ten, matching the source-cut table beside it.",
+          "minimum": 1,
+          "title": "Band Outlier Rows",
+          "type": "integer"
+        },
         "chart_height": {
           "default": 180,
           "minimum": 120,
@@ -1459,6 +1466,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.band_outlier_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
+      "version": "2026-08-30T20:00",
+      "why": "The console's compression scatter became a per-day split plus a list of the summaries furthest from the length the prompt asked for, and a list that is capped needs the cap where an operator can move it. The scatter drew 2,740 marks in one colour, measured 2026-08-30, which rendered the dense middle as a block and hid the outliers - the only marks on it anybody could act on. Additive with a default, so a config written before today still validates (section 11)."
+    },
+    {
       "change": "observability.tracing_enabled added, defaulting to false.",
       "version": "2026-08-30T18:00",
       "why": "A work shard can now build a span tree, which is the one thing the three ledgers cannot hold: a start instant, a parent, and a step too small to earn a column. The robots read nests inside the fetch, and the prompt render and the reply parse sit either side of the model call, so a slow item finally says which of the five it was slow in. It is the only switch in this block that is off unconfigured, because it is the only instrument nothing reads: no page renders a span, no gate consults one, and a trace is evidence where a ledger row is the record (CLAUDE.md section 1b). Off is also what keeps CI clean - a publish job that could fail on a third party's availability is a worse job."
@@ -1767,7 +1779,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-30T18:00",
+      "default": "2026-08-30T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1781,5 +1793,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-30T18:00"
+  "version": "2026-08-30T20:00"
 }

@@ -357,6 +357,21 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-30T20:00",
+            change=(
+                "console.band_outlier_rows added, defaulting to 10. The shape is "
+                "`ConsoleConfig`, which this document and `AppConfig` share, so both "
+                "schemas moved together."
+            ),
+            why=(
+                "The console now names the summaries furthest from the length the "
+                "prompt asked for, in place of a scatter that drew 2,740 marks in one "
+                "colour. A capped list needs its cap where an operator can move it. "
+                "Additive with a default, so an appearance file written before today "
+                "still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-30",
             change=(
                 "chart.readout_max_share added, defaulting to 0.33: the widest the "
