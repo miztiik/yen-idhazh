@@ -160,7 +160,7 @@
 
 	{#if failures.length === 0}
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			Panel chips and the ledger above filter this list. It names items, not article text.
+			The code chips and the ledger above filter this list. It names items, not article text.
 		</p>
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-failure-list="empty">
 			No failed item is in this window.
@@ -174,7 +174,7 @@
 				{grouped(failures.length)}
 				{scope} in this window.
 			{/if}
-			Panel chips and the ledger above filter this list. It names items, not article text.
+			The code chips and the ledger above filter this list. It names items, not article text.
 		</p>
 		<div class="mt-3 overflow-x-auto" data-failure-list="rows">
 			<table class="w-full text-[0.8125rem]">

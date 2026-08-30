@@ -298,14 +298,13 @@
 
 {#if ordered.length === 0}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-timing="empty">
-		Nothing was timed in these {calendar.length}
+		We timed nothing in these {calendar.length}
 		{plural(calendar.length)}. Widen the window to look further back.
 	</p>
 {:else}
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		Median per item, each day. Each gridline is ten times the one below, so the same slowdown looks
-		the same at 40 ms and at 100 s. Median, not mean: one slow host would otherwise describe the
-		whole day.
+		the same at 40 ms and at 100 s.
 	</p>
 
 	<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-timing="chart">

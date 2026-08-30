@@ -135,7 +135,7 @@ test.describe('the arithmetic behind the two bars', () => {
 		const arm = chartArm([day('2026-08-01')], THRESHOLDS, WIDE);
 		expect(arm.minutes).toBeNull();
 		expect(arm.coverage).toBeNull();
-		expect(arm.verdict).toContain('No router time was written down');
+		expect(arm.verdict).toContain('No router time is on record');
 		expect(arm.verdict).toContain('no day published anything to put a chart on');
 	});
 

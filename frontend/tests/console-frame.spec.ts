@@ -109,6 +109,60 @@ test.describe('the console frame', () => {
 		expect(narrow, 'these charts are too narrow to read a value off').toEqual([]);
 	});
 
+	test('THE ORACLE: every chart still names itself for anyone who cannot see it', async ({
+		page
+	}) => {
+		// Visible prose on this page is cut on purpose. An accessible description
+		// is not: a chart whose only description was the paragraph above it goes
+		// silent for a screen reader the moment that paragraph is trimmed, and
+		// nothing in a screenshot or a byte gate would show it.
+		await page.setViewportSize(DESKTOP);
+		await page.goto('/console/');
+		await page.waitForTimeout(800);
+
+		const charts = await page.evaluate(() => {
+			const describe = (node: Element): string => {
+				const own = node.getAttribute('aria-label')?.trim();
+				if (own) return own;
+				const ids = node.getAttribute('aria-describedby');
+				if (ids) {
+					const text = ids
+						.split(/\s+/)
+						.map((id) => document.getElementById(id)?.textContent?.trim() ?? '')
+						.join(' ')
+						.trim();
+					if (text) return text;
+				}
+				// A wrapper carries it for the server-drawn charts, where the engine
+				// owns the element inside and would overwrite an attribute on it.
+				return node.closest('[aria-label]')?.getAttribute('aria-label')?.trim() ?? '';
+			};
+
+			return [...document.querySelectorAll('[data-surface="operator"] svg')]
+				.filter((svg) => svg.closest('[aria-hidden="true"]') === null)
+				.filter((svg) => svg.getBoundingClientRect().width > 0)
+				.map((svg) => {
+					const owner = svg.closest(
+						'[data-glance-chart], [data-console-panel], [data-windowed], figure, section'
+					);
+					return {
+						where:
+							owner?.getAttribute('data-glance-chart') ??
+							owner?.getAttribute('data-console-panel') ??
+							owner?.getAttribute('data-windowed') ??
+							'unnamed',
+						description: describe(svg)
+					};
+				});
+		});
+
+		expect(charts.length, 'no chart found - the scan is broken').toBeGreaterThan(6);
+		expect(
+			charts.filter((c) => c.description === ''),
+			'these charts carry no accessible description'
+		).toEqual([]);
+	});
+
 	test('the page is one column of panels, not a wall of headings', async ({ page }) => {
 		await page.setViewportSize(DESKTOP);
 		await page.goto('/console/');
