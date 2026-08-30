@@ -35,7 +35,7 @@ Every colour, space, radius, shadow, font, easing and duration is a CSS custom p
 - **Type** - `--text-xs` to `--text-3xl`, each paired with its own `--leading-*`. A size without a leading is half a decision.
 - **Radius** - five steps. Panel language needs a bigger corner than a chip does.
 - **Elevation** - `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-panel`, plus `--color-surface-raised` and `--color-surface-sunken`. A page with one surface colour is a page where nothing is in front of anything.
-- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
+- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; the **fill ramp**, `--fill-high` / `--fill-medium` / `--fill-low`, which is the same three meanings weighted to be filled rather than read; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
 - **Tints** - `--tint-accent`, `--tint-info`, `--tint-good`, `--tint-warn`, `--tint-bad`, `--tint-neutral`. A panel takes the hue of what it means, at 7 to 9 percent in light and roughly double that in dark.
 - **Gradients** - `--gradient-brand`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
 - **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config.md](config.md)).
@@ -55,6 +55,45 @@ stops so no existing chart changed colour when the ramp widened.
 nothing, so elevation there is a raised surface colour plus a hairline; every
 tint is re-tuned rather than reused at the same alpha, because the same alpha
 over a dark ground is invisible.
+
+### A fill is not a text colour
+
+The confidence ramp is a text colour. `--band-high`, `--band-medium` and
+`--band-low` are read as type - on a status chip, in a table cell, on a card -
+so they are weighted for reading, and a 16px solid painted in one of them reads
+as ink rather than as a state. Measured 2026-08-30 against `--color-surface` in
+the light theme they run 5.02:1, 5.43:1 and 6.12:1, and the console's run strip
+drawn in them read as olive and brick. `--fill-high`, `--fill-medium` and
+`--fill-low` are the parallel set: the same three meanings, weighted to be
+filled. In light they are `#2e9e63`, `#c08200` and `#e0523a`, reading 3.39:1,
+3.26:1 and 3.86:1 - clear of the surface, and clear of text weight. In the dark
+theme the two ramps agree today, because a fill there is lighter than its ground
+and the band values were already at fill weight.
+
+The band a fill value has to land in, measured against `--color-surface`:
+
+| Theme | Bound | Where it comes from |
+| --- | --- | --- |
+| Both | at least 3:1 | WCAG 2.2 SC 1.4.11. A graphical object that carries meaning has to be distinguishable from what it sits on, or the shape itself is not there. |
+| Light | under 4.5:1 | WCAG 2.2 SC 1.4.3 makes 4.5:1 the *minimum* for normal text, so a colour at or above it is a text-weight colour. That is the defect the ramp removes. |
+| Dark | under 9:1 | On a dark ground a fill is lighter than its ground and can never become ink, so the light ceiling does not apply. This bound is a measured tripwire instead: the loudest dark fill reads 7.94:1, and 9 fails `--color-text` at 14.93:1 and pure white at 17.62:1. |
+
+[../../frontend/tests/console-run-health.spec.ts](../../frontend/tests/console-run-health.spec.ts)
+computes those ratios itself, from the WCAG relative-luminance formula written
+out in that file. It is one surface's oracle over the tokens that surface uses,
+not an audit sweep, and it adds no dependency - accessibility audit tooling
+stays a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
+
+Every ratio in this section is **arithmetic over the committed hex values**, not
+a sample: the same two colours give the same number on every machine, so the
+spread is zero by construction and the date is the date the values were chosen.
+That is why the oracle can assert an exact bound rather than a tolerance.
+
+Rejected: lightening the band tokens themselves, which would fail text contrast
+on every surface that reads them as type; and drawing a fill as the band token
+at reduced opacity, because opacity over a tinted surface gives a different
+colour on every surface and so cannot be checked once. Authority: Jony,
+2026-08-30.
 
 **A scale is not a colour, and does not live in a theme block.** Space, type,
 radius and motion are declared once in their own `:root` block outside both
