@@ -143,7 +143,8 @@ test.describe('the eleven measures, as cards', () => {
 
 		await page.goto('/console/');
 		for (const column of ruled) {
-			const line = page.locator(`${card(column.label)} [data-kpi-line]`);			if (column.line === '') {
+			const line = page.locator(`${card(column.label)} [data-kpi-line]`);
+			if (column.line === '') {
 				// Three of them carry no sentence, and an empty paragraph under those
 				// three would be three cards taller than they mean anything.
 				await expect(line, `${column.label} invented a sentence`).toHaveCount(0);
