@@ -39,6 +39,22 @@ class Summary(Contract):
     __schema_stem__: ClassVar[str] = "summary"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-30T20:00",
+            change="attempt says in its description that it is a constant, not a measurement.",
+            why=(
+                "The description read 'A low-band summary is retried on the smaller "
+                "model', which describes a retry the pipeline does not do. summarize "
+                "takes attempt as a keyword defaulting to 1 and no caller passes "
+                "anything else, so the column is 1 everywhere: measured 2026-08-30, "
+                "3,113 of 3,113 rows of state/scores.csv carry 1. A reader who "
+                "believed the old sentence would have read a column of 1s as evidence "
+                "that a retry almost never fires, which is a measurement the data "
+                "cannot support. No field was added, removed or retyped and no payload "
+                "was rewritten; the generated schema moves because a description is "
+                "part of it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-27",
             change="failure_code may now carry copied_source or leaked_address.",
             why=(
@@ -136,7 +152,18 @@ class Summary(Contract):
         description="The ModelRef id from config. The full ref lives in the manifest."
     )
     attempt: int = Field(
-        default=1, ge=1, description="A low-band summary is retried on the smaller model."
+        default=1,
+        ge=1,
+        description=(
+            "Which summarize attempt wrote this payload. A count, not a duration - 1 "
+            "is the first try. It is 1 on every payload and every ledger row ever "
+            "written: 3,113 of 3,113 rows of state/scores.csv on 2026-08-30. "
+            "summarize() takes it as a keyword defaulting to 1 and no caller passes "
+            "anything else, because no retry budget exists yet. Nothing reads it "
+            "today. It is kept for the retry budget it is named for, so read it as a "
+            "constant that is reserved and never as a measurement of how often a "
+            "summary is redone."
+        ),
     )
     source_truncated: bool = False
     input_tokens: int = Field(default=0, ge=0)
