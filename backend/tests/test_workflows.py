@@ -393,8 +393,14 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 # every scalar a string, so the value to compare is the word, not the boolean.
 WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
 TOLERATED: Final = "true"
-COMMIT_IDENTITY: Final = (
-    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
+#: Every file that configures git before a job commits. A runner carries no
+#: identity of its own, so each of these has to set one, and two copies of a
+#: name drift in silence unless something reads both.
+#: `.invalid` is reserved by RFC 2606, so the address can never route anywhere.
+GIT_IDENTITY_SOURCES: Final = (
+    SCRIPTS_DIR / "commit-and-push.sh",
+    WORKFLOWS_DIR / "prune.yml",
 )
 # What a `${{ }}` expression stands in for when a test runs the real call site
 # outside Actions. `day_dir` is the digest date as a path, which is what lets the
@@ -2114,6 +2120,28 @@ def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
 
     assert set(COMMIT_STAGED_PATHS["work"]) <= set(refreshed)
+
+
+def test_every_committing_job_configures_the_same_identity() -> None:
+    """The pipeline commits as itself, and it says so in one voice.
+
+    A hosted runner carries no git identity, so a job that commits has to set
+    one or `git commit` refuses. Two files set it and only one of them is
+    executed by a test, so the other could drift to a different name and nothing
+    would notice until a reader wondered who two different authors were.
+    """
+    found = {
+        path.name: (
+            re.search(r'git config user\.name "([^"]+)"', read_text(path)),
+            re.search(r'git config user\.email "([^"]+)"', read_text(path)),
+        )
+        for path in GIT_IDENTITY_SOURCES
+    }
+
+    for name, (author, address) in found.items():
+        assert author is not None, f"{name} commits, so it must set user.name"
+        assert address is not None, f"{name} commits, so it must set user.email"
+        assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
 
 
 @requires_bash
