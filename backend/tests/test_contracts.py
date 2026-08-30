@@ -50,6 +50,7 @@ from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
+from idhazh.contracts.summary import Summary
 from idhazh.contracts.taxonomy import LifecycleStatus, Taxonomy
 from idhazh.contracts.watchlist import Watchlist
 from idhazh.fingerprint import text_digest
@@ -1172,6 +1173,50 @@ def test_hhem_delta_is_rebuilt_not_trusted() -> None:
     payload = mutate(CONTRACT_FIXTURES_DIR / "eval-row" / "high.json", hhem_delta=0.9)
     with pytest.raises(ValueError, match="hhem_delta"):
         EvalRow.model_validate(payload)
+
+
+#: The four columns the owner refused to delete on 2026-08-30, and the two things
+#: each description has to carry. Every one of them is a cell a reader cannot
+#: interpret from its value: a constant that looks like a count, a derived cell
+#: that looks like a measurement, a flag that changed meaning on a fixed date, and
+#: a timing that is not on the path it sits beside. Each entry is
+#: (model, field, unit phrases, reader phrases) and one phrase from each group has
+#: to appear, so a later edit cannot quietly strip the unit or the reader back out.
+KEPT_COLUMNS: tuple[tuple[type[Contract], str, tuple[str, ...], tuple[str, ...]], ...] = (
+    (Summary, "attempt", ("A count, not a duration",), ("Nothing reads it",)),
+    (EvalRow, "score_ms", ("Milliseconds",), ("observability.sample_rate",)),
+    (EvalRow, "hhem_delta", ("0-to-1 faithfulness scale",), ("no band reads it",)),
+    (EvalRow, "truncation_flagged", ("True when",), ("model-work.ts",)),
+)
+
+
+@pytest.mark.parametrize(("model", "field", "units", "readers"), KEPT_COLUMNS)
+def test_a_kept_column_says_what_it_holds_and_who_reads_it(
+    model: type[Contract], field: str, units: tuple[str, ...], readers: tuple[str, ...]
+) -> None:
+    """A column kept for history still has to explain itself.
+
+    The owner asked what two of these four meant, which is what a description
+    that is not doing its job looks like. A test that only checks the field
+    exists would have passed on every one of them.
+    """
+    described = model.model_fields[field].description or ""
+    assert described.strip(), f"{model.__name__}.{field} carries no description"
+    assert any(unit in described for unit in units), (
+        f"{model.__name__}.{field} does not say what its value is measured in"
+    )
+    assert any(reader in described for reader in readers), (
+        f"{model.__name__}.{field} does not say who reads it"
+    )
+
+
+def test_every_kept_column_reaches_its_generated_schema() -> None:
+    """A description a reader never sees is a comment. These are read by people."""
+    for model, field, units, readers in KEPT_COLUMNS:
+        schema = json.loads(read_text(SCHEMAS_DIR / f"{model.__schema_stem__}.schema.json"))
+        described = schema["properties"][field]["description"]
+        assert any(unit in described for unit in units)
+        assert any(reader in described for reader in readers)
 
 
 def test_the_model_cannot_have_read_more_words_than_the_article_holds() -> None:

@@ -44,6 +44,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "attempt says in its description that it is a constant, not a measurement.",
+      "version": "2026-08-30T20:00",
+      "why": "The description read 'A low-band summary is retried on the smaller model', which describes a retry the pipeline does not do. summarize takes attempt as a keyword defaulting to 1 and no caller passes anything else, so the column is 1 everywhere: measured 2026-08-30, 3,113 of 3,113 rows of state/scores.csv carry 1. A reader who believed the old sentence would have read a column of 1s as evidence that a retry almost never fires, which is a measurement the data cannot support. No field was added, removed or retyped and no payload was rewritten; the generated schema moves because a description is part of it."
+    },
+    {
       "change": "failure_code may now carry copied_source or leaked_address.",
       "version": "2026-08-27",
       "why": "Summarize refuses two more replies: one that copies the source instead of summarizing it, and one that carries an address into our own words. No field on this payload changed, but the failure vocabulary is inlined into this schema, so the generated file's bytes move and the change is stamped here rather than left to the drift gate to announce. Additive - a payload written before today names none of the new values and still validates."
@@ -83,7 +88,7 @@
   "properties": {
     "attempt": {
       "default": 1,
-      "description": "A low-band summary is retried on the smaller model.",
+      "description": "Which summarize attempt wrote this payload. A count, not a duration - 1 is the first try. It is 1 on every payload and every ledger row ever written: 3,113 of 3,113 rows of state/scores.csv on 2026-08-30. summarize() takes it as a keyword defaulting to 1 and no caller passes anything else, because no retry budget exists yet. Nothing reads it today. It is kept for the retry budget it is named for, so read it as a constant that is reserved and never as a measurement of how often a summary is redone.",
       "minimum": 1,
       "title": "Attempt",
       "type": "integer"
@@ -251,7 +256,7 @@
       "type": "string"
     },
     "version": {
-      "default": "2026-08-27",
+      "default": "2026-08-30T20:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -268,5 +273,5 @@
   ],
   "title": "Summary",
   "type": "object",
-  "version": "2026-08-27"
+  "version": "2026-08-30T20:00"
 }

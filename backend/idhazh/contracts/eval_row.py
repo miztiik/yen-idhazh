@@ -68,6 +68,27 @@ class EvalRow(Contract):
     __schema_stem__: ClassVar[str] = "eval-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-30T20:00",
+            change=(
+                "hhem_delta, truncation_flagged and score_ms each say what they hold "
+                "and how to read them. No column was added, removed or retyped."
+            ),
+            why=(
+                "The owner had to ask what two of these columns meant, which is the "
+                "definition of a description not doing its job, and each of the three "
+                "carries a trap a reader cannot see from the cell. hhem_delta is "
+                "derived and recomputed on read, so it is not an independent "
+                "measurement, and the window geometry moves it by more than the whole "
+                "medium band. truncation_flagged means one thing before "
+                "2026-08-29T09:00 and another after, so a query without the version "
+                "branch reads two facts as one. score_ms is off the critical path and "
+                "exists to size the census-versus-sample decision, which "
+                "observability.sample_rate now implements. The generated schema moves "
+                "because a description is part of it; every committed row still "
+                "validates unchanged."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-29T09:00",
             change=(
                 "truncation_flagged is Article.truncated - whether extract cut the "
@@ -259,14 +280,47 @@ class EvalRow(Contract):
         ),
     )
     hhem_delta: Score = Field(
-        description="hhem - hhem_full. The cost of truncation, invisible unless both are scored."
+        description=(
+            "hhem minus hhem_full, on the same 0-to-1 faithfulness scale. Derived, "
+            "never independent: _delta_is_rebuilt_not_trusted recomputes it from the "
+            "two scores on every read and raises if the stored cell disagrees, so it "
+            "carries no information the two scores beside it do not. It is 0.0 on an "
+            "article nobody cut, by construction - both scores read the same text and "
+            "the scorer is deterministic - and 2,945 of the 2,945 uncut rows that "
+            "carry both word counts are exactly 0.0 (measured 2026-08-30). It is "
+            "non-zero on 3 of all 3,113 committed rows, because a row stamped before "
+            "2026-08-27T20:30 scored one text twice and almost no article is cut. "
+            "Recorded only - no band reads it, and nothing on the published site "
+            "prints it. Read it with the confound stated: measured 2026-08-29, a "
+            "3-window article scores 0.40 lower than the same article read whole, "
+            "against bands at 0.80 and 0.50, so the window geometry alone is wider "
+            "than the whole medium band and this number mixes the cost of the cut "
+            "with the cost of the slicing. Until that settles it is not the cost of "
+            "truncation on its own. See docs/concepts/evaluation.md."
+        )
     )
     truncation_flagged: bool = Field(
         description=(
-            "Extract cut the article body before the model read it - Article.truncated, "
-            "not a score. On a row stamped before 2026-08-29T09:00 this column holds a "
-            "different fact: hhem_delta above a configured gap, which is unknown rather "
-            "than False about the cut. Read it only on rows stamped from 2026-08-28."
+            "True when extract cut the article body before the model read it - "
+            "Article.truncated, a fact from the stage that did the cutting, not a "
+            "score. That is what the name always promised and what the column holds "
+            "from 2026-08-29T09:00. A row stamped earlier holds a DIFFERENT fact: "
+            "hhem_delta above a configured gap, which is the distance between two "
+            "faithfulness scores and says nothing about a cut. Measured 2026-08-30 "
+            "over all 3,113 committed rows of state/scores.csv, which are exact "
+            "counts over a committed file and carry no spread. Of the 2,683 rows on "
+            "the old side of the boundary it is true on 0 of the 22 genuinely cut "
+            "rows, and true on exactly 1 row, which read 748 words of a 748-word "
+            "article and was never cut. Of the 430 rows on the new side, 4 were cut "
+            "and all 4 are flagged, and the flag agrees with the word counts on 430 "
+            "of 430. Prefer the pair source_word_count > source_seen_word_count for "
+            "any new reader: it is true exactly when the body was cut, on every row "
+            "carrying both, with no version branch to get wrong. The pair has one "
+            "hole of its own, and it prints as a hole - 142 of the 3,113 rows carry a "
+            "null source_word_count, 4.6 percent, every one of them on the old side, "
+            "and unknown is printed as unknown rather than as uncut. Its one reader "
+            "is frontend/src/lib/server/model-work.ts, which counts it only over rows "
+            "stamped from CUT_FLAG_MEANS_A_CUT_FROM."
         )
     )
     coverage: Score = Field(
@@ -344,8 +398,21 @@ class EvalRow(Contract):
         default=0,
         ge=0,
         description=(
-            "How long the faithfulness scorer took on this item. It decides whether the "
-            "scorer can stay a census or has to become a sample."
+            "Milliseconds the faithfulness scorer spent on THIS one item, after the "
+            "summary was already written. Not on the critical path of the published "
+            "words: no digest sentence waits on it, and a run with the scorer off "
+            "publishes the same text. The shard clock does wait on it, and that is "
+            "the decision this column exists to size - whether the scorer stays a "
+            "census or becomes a sample. observability.sample_rate is the knob that "
+            "decision produced, so this is the instrument behind that knob and not a "
+            "stage timing to tune. Measured 2026-08-30 over all 3,113 committed rows "
+            "of state/scores.csv: median 2,763 ms an item, 95th percentile 14,814 ms, "
+            "longest 51,587 ms. Per run, the heaviest of the 25 committed runs spent "
+            "859.7 s scoring 149 items - 14.3 minutes spread over that run's shards, "
+            "so at today's volume of about 150 items a day the census is affordable "
+            "and a rate below 1.0 is insurance rather than a rescue. Zero on the 10 "
+            "rows written before the column existed, and those read as unmeasured "
+            "rather than as instant."
         ),
     )
 
