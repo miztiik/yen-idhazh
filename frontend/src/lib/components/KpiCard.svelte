@@ -25,6 +25,7 @@
 		label,
 		value,
 		note = null,
+		line = null,
 		tone = 'neutral',
 		movement = null,
 		track = null,
@@ -38,6 +39,11 @@
 		/** Already formatted. The card never does arithmetic on a number. */
 		value: string;
 		note?: string | null;
+		/** What the figure means, in one sentence, under everything else.
+		 *
+		 * A table header has room for a label and nothing else, so an explanation
+		 * put there is a paragraph in a column. A card has a body. */
+		line?: string | null;
 		tone?: 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 		/** Signed share, e.g. 0.12 for up 12 percent. Null prints nothing. */
 		movement?: number | null;
@@ -46,7 +52,11 @@
 		 * the caption is required, because a bar with no named limit says only
 		 * that a bar exists. */
 		track?: { fraction: number; caption: string } | null;
-		/** A trend drawn as markup, in the card's own trend slot. */
+		/** A trend drawn as markup, in the card's own trend slot.
+		 *
+		 * Eleven engine-backed sparklines is eleven chart instances and a lazy chunk
+		 * on a page that already renders complete without one, so a grid of cards
+		 * takes this one and it wins where both are given. */
 		trend?: Snippet | null;
 		trendSvg?: string | null;
 		trendOption?: EChartsOption | null;
@@ -69,8 +79,8 @@
 	data-windowed={windowed}
 	data-window-days={windowDays}
 >
-	<p class="kpi-label">{label}</p>
-	<p class="kpi-value tabular-nums">{value}</p>
+	<p class="kpi-label" data-kpi-label>{label}</p>
+	<p class="kpi-value tabular-nums" data-kpi-value>{value}</p>
 	{#if track}
 		<div
 			class="kpi-track"
@@ -90,12 +100,15 @@
 			<Chart svg={trendSvg} option={trendOption} width={220} height={34} label="{label}, recent trend" />
 		</div>
 	{/if}
-	<p class="kpi-foot">
-		{#if movement !== null}
-			<span class="kpi-move" data-direction={arrow}>{percent}</span>
-		{/if}
-		{#if note}<span class="kpi-note">{note}</span>{/if}
-	</p>
+	{#if movement !== null || note}
+		<p class="kpi-foot">
+			{#if movement !== null}
+				<span class="kpi-move" data-direction={arrow}>{percent}</span>
+			{/if}
+			{#if note}<span class="kpi-note" data-kpi-note>{note}</span>{/if}
+		</p>
+	{/if}
+	{#if line}<p class="kpi-line" data-kpi-line>{line}</p>{/if}
 </div>
 
 <style>
@@ -185,6 +198,15 @@
 		margin: 0;
 		font-size: var(--text-xs);
 		color: var(--color-text-tertiary);
+	}
+
+	/* Last and quietest. The figure is what the operator came for; this is what
+	   they read once, the first time. */
+	.kpi-line {
+		margin: 0;
+		font-size: var(--text-xs);
+		line-height: 1.45;
+		color: var(--color-text-secondary);
 	}
 
 	.kpi-move[data-direction='up'] {
