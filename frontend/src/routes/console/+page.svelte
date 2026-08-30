@@ -172,12 +172,14 @@
 
 	let strip = $state<HTMLDivElement | null>(null);
 
-	// The same three tokens the confidence bands use. A run that went well and a
-	// summary that scored well should not be two different greens.
+	// The fill ramp, not the band ramp. The band tokens are text colours and a
+	// 16px solid is not text: at text weight the light theme drew olive and
+	// brick. tokens.css carries both ramps and design-system.md the band a fill
+	// has to land in.
 	const COLOUR: Record<Health, string> = {
-		green: 'var(--band-high)',
-		amber: 'var(--band-medium)',
-		red: 'var(--band-low)'
+		green: 'var(--fill-high)',
+		amber: 'var(--fill-medium)',
+		red: 'var(--fill-low)'
 	};
 
 	const KEY = $derived([
@@ -186,8 +188,10 @@
 		{ health: 'red' as Health, text: `failed, or under ${data.floorPct}% published` }
 	]);
 
-	const totalRuns = $derived(data.grid.reduce((count, day) => count + day.squares.length, 0));
-	const axis = $derived(axisLabels(data.grid.map((day) => day.date)));
+	/** The strip reads the page's window, like every other windowed section. */
+	const windowGrid = $derived(data.grid.filter((day) => inWindow(day.date)));
+	const windowRuns = $derived(windowGrid.reduce((count, day) => count + day.squares.length, 0));
+	const axis = $derived(axisLabels(windowGrid.map((day) => day.date)));
 
 	/** A label is placed inside its column, not laid out by it, so the widest
 	 * date on the axis cannot push a single day track out of step. */
@@ -213,7 +217,7 @@
 	 * is what keeps the prerendered strip drawing at the fixed pair rather than
 	 * at zero. */
 	let stripWidth = $state<number | null>(null);
-	const strip_ = $derived(cellFor(stripWidth, data.grid.length));
+	const strip_ = $derived(cellFor(stripWidth, windowGrid.length));
 
 	$effect(() => {
 		const node = strip;
@@ -530,79 +534,91 @@
 		</Panel>
 	{/if}
 
-	<h2 class="console-h2">Run health</h2>
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-		One column per day, oldest to newest, one square per recorded run with run 1 at the bottom.
-		Skipped items are not counted against a run - an article we already published is skipped by
-		design.
-	</p>
-
-	{#if totalRuns === 0}
-		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-grid="empty">
-			No run has recorded a manifest yet. The strip fills as runs publish.
-		</p>
-	{:else}
-		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
-		<div
-			class="mt-4 overflow-x-auto pb-1"
-			role="region"
-			tabindex="0"
-			aria-label="Run health history, oldest to newest"
-			bind:this={strip}
-			data-run-history
+	<div data-windowed="run-health" data-window-days={windowDays}>
+		<Panel
+			title="Run health"
+			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. Skipped items are not counted against a run - an article we already published is skipped by design."
 		>
-			<div
-				class="grid w-max min-w-full items-end justify-end"
-				style="grid-template-columns: repeat({data.grid.length}, {strip_.cell}px); gap: {strip_.gap}px"
-				data-grid="days"
-			>
-				{#each data.grid as day, index (day.date)}
-					<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
-					     upward, while the DOM keeps reading run 1 first. -->
+			{#if data.grid.length === 0}
+				<p class="text-[0.9375rem] text-text-secondary" data-grid="empty">
+					No run has recorded a manifest yet. The strip fills as runs publish.
+				</p>
+			{:else if windowRuns === 0}
+				<!-- A different fact from the one above, so a different sentence: the
+				     ledger answered, and the answer was nothing in this span. -->
+				<p class="text-[0.9375rem] text-text-secondary" data-grid="outside-window">
+					No run recorded a manifest in the last {windowDays} days. Widen the window to reach
+					further back.
+				</p>
+			{:else}
+				<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+				<div
+					class="overflow-x-auto pb-1"
+					role="region"
+					tabindex="0"
+					aria-label="Run health history for the last {windowDays} days, oldest to newest"
+					bind:this={strip}
+					data-run-history
+				>
+					<!-- Left-anchored, and that is not the same question as where an
+					     overflowing strip opens. `today_anchor` governs the scroll
+					     position; a strip with room to spare simply starts where every
+					     other axis on the page starts, so a day keeps the place the
+					     operator last saw it in as the window fills. -->
 					<div
-						class="flex flex-col-reverse justify-start"
-						style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
-						data-day={day.date}
+						class="grid w-max min-w-full items-end justify-start"
+						style="grid-template-columns: repeat({windowGrid.length}, {strip_.cell}px); gap: {strip_.gap}px"
+						data-grid="days"
 					>
-						{#each day.squares as square (square.runId)}
-							<span
-								class="rounded-sm"
-								style="width: {strip_.cell}px; height: {strip_.cell}px; background: {COLOUR[
-									square.health
-								]}"
-								title={square.label}
-								aria-label={square.label}
-								data-health={square.health}
-								role="img"
-							></span>
+						{#each windowGrid as day, index (day.date)}
+							<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
+							     upward, while the DOM keeps reading run 1 first. -->
+							<div
+								class="flex flex-col-reverse justify-start"
+								style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
+								data-day={day.date}
+							>
+								{#each day.squares as square (square.runId)}
+									<span
+										class="rounded-sm"
+										style="width: {strip_.cell}px; height: {strip_.cell}px; background: {COLOUR[
+											square.health
+										]}"
+										title={square.label}
+										aria-label={square.label}
+										data-health={square.health}
+										role="img"
+									></span>
+								{/each}
+							</div>
+						{/each}
+
+						{#each axis as label (label.column)}
+							<div class="relative h-4" style="grid-row: 2; grid-column: {label.column}">
+								<span
+									class="absolute top-0 whitespace-nowrap text-[0.625rem] leading-4 tabular-nums text-text-tertiary"
+									style={ANCHOR[label.align]}
+									data-axis-label={label.column}
+								>
+									{label.text}
+								</span>
+							</div>
 						{/each}
 					</div>
-				{/each}
+				</div>
 
-				{#each axis as label (label.column)}
-					<div class="relative h-4" style="grid-row: 2; grid-column: {label.column}">
-						<span
-							class="absolute top-0 whitespace-nowrap text-[0.625rem] leading-4 tabular-nums text-text-tertiary"
-							style={ANCHOR[label.align]}
-							data-axis-label={label.column}
-						>
-							{label.text}
-						</span>
-					</div>
-				{/each}
-			</div>
-		</div>
-
-		<ul class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-			{#each KEY as entry (entry.health)}
-				<li class="flex items-center gap-2">
-					<span class="size-3 shrink-0 rounded-sm" style="background: {COLOUR[entry.health]}"
-					></span>
-					{entry.text}
-				</li>
-			{/each}
-		</ul>
-	{/if}
+				<ul class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
+					{#each KEY as entry (entry.health)}
+						<li class="flex items-center gap-2">
+							<span class="size-3 shrink-0 rounded-sm" style="background: {COLOUR[entry.health]}"
+							></span>
+							{entry.text}
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Panel>
+	</div>
 
 	<Viewport
 		{rows}
