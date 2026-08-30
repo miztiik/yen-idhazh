@@ -716,6 +716,110 @@ class LoggingConfig(Model):
     level: LogLevel = LogLevel.INFO
 
 
+class ObservabilityConfig(Model):
+    """What the pipeline records about itself, and what an operator may switch off.
+
+    Three switches rather than one master switch. Collection, scoring and
+    publishing fail in different ways and a reader has to behave differently for
+    each of them, so one switch would leave nobody able to say which instrument
+    went dark.
+
+    **The item-health census is not on this list and must never be added to it.**
+    Every rate this project publishes divides by that census, so switching it off
+    would not thin a measurement - it would make every other measurement
+    unreadable. A rate printed without its denominator beside it is the exact
+    defect the census exists to prevent.
+
+    An instrument that did not run writes an EMPTY cell, never a zero. A switch
+    here decides whether a row is written at all; it never changes the shape of a
+    row, so a month file stays readable across a day somebody turned something
+    off.
+    """
+
+    evaluation_enabled: bool = Field(
+        default=True,
+        description=(
+            "Whether the faithfulness scorer runs. False writes no row to "
+            "state/scores.csv, so for those days the eval dashboard and the console's "
+            "score panels list nothing and each item bands from the model-free "
+            "counterweights instead. The digest still publishes. `--no-faithfulness` "
+            "is the same switch for one invocation and overrides this; no flag turns "
+            "it back on."
+        ),
+    )
+    telemetry_publish: bool = Field(
+        default=True,
+        description=(
+            "Whether a run copies its item-health rows into "
+            "frontend/public/telemetry/<YYYY-MM>.csv. False leaves that month file at "
+            "whatever the last publishing run wrote, so every console chart ends on "
+            "that date and the page says which day it read to. Nothing is lost: "
+            "state/item-health/ still holds every row, so switching it back on "
+            "republishes the gap."
+        ),
+    )
+    runtime_counters_scrape: bool = Field(
+        default=True,
+        description=(
+            "Whether a work shard reads llama-server's GET /metrics before it stops "
+            "the server. False writes no row to state/runtime-counters.csv for that "
+            "shard, so context headroom, reading against writing, cache hits and the "
+            "shard clock all read as ABSENT for the run rather than as zero. Nothing "
+            "else about the run changes - the counters are read after the last item "
+            "is summarized."
+        ),
+    )
+    sample_rate: float = Field(
+        default=1.0,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The fraction of RUNS whose scorer runs - never the fraction of items. A "
+            "run scores every item or none, so a day's rows are never a partial "
+            "sample of that day and a per-day rate stays honest. Below 1.0 most days "
+            "write no eval row and the console's score panels thin to the sampled "
+            "days. Not a switch: `evaluation_enabled` is the way to say off, and a "
+            "rate of zero is refused so the two can never disagree about it."
+        ),
+    )
+    keep_months: int = Field(
+        default=13,
+        ge=1,
+        description=(
+            "How many months of ledger stay at full grain before a month is "
+            "downsampled to one row per (date, stage). Past this point a reader loses "
+            "the per-item detail - the console's failure list offers no rows for those "
+            "months - and keeps every daily total, so a year-over-year comparison "
+            "still works. Thirteen, so a whole year plus the month being written is "
+            "always readable in full."
+        ),
+    )
+    hard_delete_after_months: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "Months after which a downsampled month file is removed outright. Null "
+            "means never, and never is the default: console.max_window_days is 366, so "
+            "a shard has to stay readable for a year, and an aggregate costs about "
+            "219 KB a year. Set it and a window reaching past it shows nothing for "
+            "those days rather than a thinner series. It must sit above keep_months, "
+            "or a month would be deleted before it was ever downsampled."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _the_two_thresholds_are_ordered(self) -> Self:
+        if (
+            self.hard_delete_after_months is not None
+            and self.hard_delete_after_months <= self.keep_months
+        ):
+            raise ValueError(
+                "observability.hard_delete_after_months must sit above keep_months, "
+                "or a month is deleted before it is ever downsampled"
+            )
+        return self
+
+
 class FinetuneConfig(Model):
     """The training corpus and the schedules that maintain it.
 
@@ -1297,6 +1401,31 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30T14:00",
+            change=(
+                "The observability block added: evaluation_enabled, telemetry_publish, "
+                "runtime_counters_scrape, sample_rate, keep_months and "
+                "hard_delete_after_months."
+            ),
+            why=(
+                "The pipeline had no way to turn a measurement off or to thin one, so "
+                "every instrument was all-or-nothing at the command line and nothing at "
+                "all in config (Rule #6). Three switches rather than one, because "
+                "collection, scoring and publishing fail differently: state/scores.csv "
+                "empties when the scorer will not load, the published telemetry file "
+                "stops when a run does not publish, and state/runtime-counters.csv is "
+                "silent when llama-server was gone before it was read. One master switch "
+                "would leave a reader unable to say which of the three went dark. "
+                "sample_rate is a rate over RUNS and is refused at zero, because a "
+                "second way to say off is how two ways of saying it end up disagreeing. "
+                "The item-health census is deliberately absent and the model says so: it "
+                "is the denominator under every rate, so switching it off would make "
+                "every other measurement unreadable rather than cheaper. Additive with "
+                "defaults that reproduce today's behaviour exactly, so an older config "
+                "still validates and no read-side migration is needed (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30",
             change=(
@@ -2075,6 +2204,7 @@ class AppConfig(Contract):
     page_weight: PageWeightConfig = Field(default_factory=PageWeightConfig)
     finetune: FinetuneConfig = Field(default_factory=FinetuneConfig)
     logging: LoggingConfig = Field(default_factory=LoggingConfig)
+    observability: ObservabilityConfig = Field(default_factory=ObservabilityConfig)
 
     @model_validator(mode="after")
     def _the_ask_sits_inside_the_gate(self) -> Self:
