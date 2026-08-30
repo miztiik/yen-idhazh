@@ -157,6 +157,98 @@ body {
 	box-shadow: var(--shadow-panel);
 }
 
+/* --- Console chrome ------------------------------------------------------
+   The console is three routes now, and decision 7 of the split is that their
+   identity is identical - type scale, space scale, radius, elevation, frame
+   width, both ramps. Scoped copies in three page components would be three
+   identities that happen to agree today, so the shared shapes live here and
+   each route's own <style> block keeps only what is route-specific.
+
+   The console is instrumentation, so it takes tint and elevation and no
+   display face, no gradient and no illustration. What it was missing was an
+   edge: headings and tables on bare background give the eye nothing to group
+   by, and every section ends up weighing the same as every other. */
+.console-h2 {
+	margin-top: var(--space-8);
+	font-size: var(--text-lg);
+	line-height: var(--leading-lg);
+	font-weight: 600;
+	color: var(--color-text);
+}
+
+.console-table {
+	overflow-x: auto;
+	padding: var(--space-4);
+	border: 1px solid var(--color-rule);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	box-shadow: var(--shadow-sm);
+}
+
+/* The rows are on demand, and the control that opens them is a native
+   disclosure - so it works with no script, takes keyboard focus for free, and
+   says which state it is in without a second label. */
+.console-panel,
+.console-disclosure {
+	padding: var(--space-4);
+	border: 1px solid var(--color-rule);
+	border-radius: var(--radius-lg);
+	background: var(--color-surface);
+	box-shadow: var(--shadow-sm);
+}
+
+.console-summary {
+	cursor: pointer;
+	min-block-size: 1.75rem;
+	font-size: var(--text-sm);
+	line-height: var(--leading-sm);
+	color: var(--color-accent);
+}
+
+.console-summary:focus-visible {
+	outline: 2px solid var(--color-accent);
+	outline-offset: 2px;
+	border-radius: var(--radius-sm);
+}
+
+/* The table brings its own frame everywhere else on the page. Inside the
+   disclosure it would be a box in a box. */
+.console-disclosure .console-table {
+	padding: 0;
+	border: 0;
+	border-radius: 0;
+	background: none;
+	box-shadow: none;
+}
+
+/* The header row stays put while the body scrolls, which is what makes a
+   thirty-row table readable without a second glance at the top. */
+.console-table thead th {
+	position: sticky;
+	top: 0;
+	z-index: 1;
+	background: var(--color-surface);
+}
+
+/* One sentence pointing at the panel another route owns. Not a chart and not a
+   card: it is a signpost, and a signpost that looks like a figure gets read as
+   one. */
+.console-carry {
+	margin-top: var(--space-4);
+	font-size: var(--text-sm);
+	line-height: var(--leading-sm);
+	color: var(--color-text-secondary);
+}
+
+.console-carry .carry-link {
+	color: var(--color-accent);
+	white-space: nowrap;
+}
+
+.console-carry .carry-link:hover {
+	text-decoration: underline;
+}
+
 :focus-visible {
 	outline: 2px solid var(--color-focus);
 	outline-offset: 2px;
