@@ -1740,7 +1740,7 @@ why a fixed byte number could not hold them while the page carried the corpus
 | `/<date>/<topic>/` | 395,866 | 395,867 | 395,869 | 3 | not capped |
 
 Each ceiling is the heaviest observed build plus 64 bytes, and the 64 is the
-noise floor already derived in `frontend/bundle-baseline.json`. **A ceiling
+noise floor derived under First-load JavaScript per route. **A ceiling
 inside its own noise floor is a coin toss, not a measurement**: the range above
 is up to 8 bytes over three builds because SvelteKit stamps a version string
 into the markup and different digits compress differently, so a ceiling set at
@@ -1944,7 +1944,7 @@ above it and gzip charges less for a repeat. So the arithmetic is:
 ```text
   3,033  heaviest of five builds
 + 4,456  a year of ordinary publishing, measured
-+    64  the build noise floor already derived in bundle-baseline.json
++    64  the build noise floor derived below
 = 7,553
 ```
 
@@ -2118,7 +2118,7 @@ The arithmetic is then:
 ```text
   170,281  heaviest of five builds
 + 131,235  three mature published days at 43,745, the heaviest measured
-+      64  the build noise floor already derived in bundle-baseline.json
++      64  the build noise floor derived below
 = 301,580
 ```
 
@@ -2918,6 +2918,15 @@ working range stops being a guard.
 
 ## First-load JavaScript per route
 
+**Retired 2026-08-30.** The gate these numbers fed - a per-route ratchet against
+`frontend/bundle-baseline.json` - was deleted along with that file. It had no
+requirement behind it, could not be read on a developer box inside its own
+64-byte tolerance, and made every branch re-record a number its own change had
+not moved. The derivation below is kept as the record of what was measured and
+why 64 bytes was the noise floor; nothing reads it now. See
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
+
+
 Hardware: Intel Core i7-1265U, Windows. Date: 2026-08-25. Method: `npm run
 build`, then `frontend/scripts/bundle-gate.mjs` gzips each module a route
 declares `rel="modulepreload"` at level 9 and sums them - per file, never over a
@@ -2926,7 +2935,7 @@ the bundler reorders the preloads, and it would under-report the wire cost. The
 script is the gate, so the number quoted is the number that fails a build.
 
 **The per-route bytes are deliberately not copied here.** They live in
-[frontend/bundle-baseline.json](../../frontend/bundle-baseline.json), one record
+`frontend/bundle-baseline.json` (deleted 2026-08-30), one record
 per route class carrying the byte count, the date it was measured and a sentence
 saying what those bytes buy. Two copies of one number are free to drift
 (Rule #4), and the copy the gate reads is the one that decides a build. The

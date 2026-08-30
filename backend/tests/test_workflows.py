@@ -939,6 +939,18 @@ def _git(repo: Path, env: dict[str, str], *args: str) -> str:
     return completed.stdout
 
 
+def _transient(_directory: str, names: list[str]) -> set[str]:
+    """Lock files git's own background maintenance leaves in a template.
+
+    A template is copied once per test and several xdist workers copy the same
+    one at the same time. git maintenance can create and delete
+    objects/maintenance.lock between copytree listing a directory and
+    reading it, which fails the copy with a file that was never part of the
+    template anyway.
+    """
+    return {name for name in names if name.endswith('.lock')}
+
+
 def _write(path: Path, text: str) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(text, encoding="ascii", newline="\n")
@@ -1017,7 +1029,7 @@ def _scripted_origin(
     if unbuilt:
         _seed_scripted_origin(root, staged_paths)
     origin = tmp_path / "origin.git"
-    shutil.copytree(root / "origin.git", origin)
+    shutil.copytree(root / "origin.git", origin, ignore=_transient)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -1103,7 +1115,7 @@ def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path
     if unbuilt:
         _seed_digest_origin(root, date)
     origin = tmp_path / "origin.git"
-    shutil.copytree(root / "origin.git", origin)
+    shutil.copytree(root / "origin.git", origin, ignore=_transient)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -1483,7 +1495,7 @@ PUBLISHING_SITE_JOBS: Final = (
 
 
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
-def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
+def test_the_build_gates_the_publish_and_the_weight_gate_runs_after_it(
     filename: str, job_name: str, commit_step: str
 ) -> None:
     """Two severities, and only one of them may cost a reader the day.
@@ -1492,11 +1504,12 @@ def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
     fails here instead of in a reader's browser. That day is broken and must not
     publish, so the build runs before the commit.
 
-    `npm run bundle-gate` compares each page against a weight we recorded
-    ourselves. A page over it still reads correctly - what grew is the document,
-    not the meaning - and stopping the publish for that throws away the day and
-    the two to three hours that built it. So it runs after the commit, and stays
-    fatal: the job goes red until somebody re-measures the ceiling.
+    `npm run bundle-gate` holds each capped page under the ceiling somebody
+    priced for it. A page over it still reads correctly - what grew is the
+    document, not the meaning - and stopping the publish for that throws away
+    the day and the two to three hours that built it. So it runs after the
+    commit, and stays fatal: the job goes red until somebody re-prices the
+    ceiling.
     """
     steps = _steps(_load_workflows()[filename], job_name)
     names = [step.get("name") for step in steps]
@@ -1519,23 +1532,22 @@ def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
         "npm ci" in str(step.get("run", "")) for step in before_build
     ), "the site must be installed before it is built"
     assert built < commit, "a payload the build rejects must never reach a reader"
-    assert commit < gate, "a page over its recorded weight loses the ceiling, not the day"
-    assert "continue-on-error" not in steps[gate], "the ratchet publishes the day; it still fails"
+    assert commit < gate, "a page over its ceiling loses the ceiling, not the day"
+    assert "continue-on-error" not in steps[gate], "the gate publishes the day; it still fails"
 
 
 @pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
-def test_the_weight_ratchet_reads_a_build_of_the_tree_that_was_pushed(
+def test_the_weight_gate_reads_a_build_of_the_tree_that_was_pushed(
     filename: str, job_name: str, commit_step: str
 ) -> None:
-    """One tree's pages may not be weighed against another tree's records.
+    """One tree's pages may not be weighed against another tree's ceilings.
 
     `commit-and-push.sh` rebases when the push loses a race, and that brings
     main's tip into the checkout - its frontend source and its
-    `bundle-baseline.json` with it. `frontend/build` still holds the build made
-    before the commit, so the gate reads records the build it measures never
-    saw. Run 33270983446 failed exactly there: `/console/` 746 B under a record
-    that arrived with the rebase, while the build was 5 B off the record its own
-    source carried, on a day that had already published and deployed.
+    `config/idhazh.json` ceilings with it. `frontend/build` still holds the
+    build made before the commit, so the gate would read limits the build it
+    measures never saw. Run 33270983446 failed exactly that way, on a day that
+    had already published and deployed.
 
     So a build sits after every commit step in the job, and the gate reads that
     one. `npm ci` is deliberately not repeated with it: the lockfile moves far
