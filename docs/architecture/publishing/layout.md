@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -306,6 +306,26 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 
 **`site-weight` did not move.** The 1 GB Pages cap is the platform's limit, not our record of our own bytes, and past it the deploy fails whatever we do - so refusing to publish is the honest answer there and it still runs before the commit.
 
+### The size instrument printed a level, and a level has no date in it (2026-08-30)
+
+`site-weight` printed a megabyte figure and a headroom figure. Both are levels. **Neither is a rate, so neither could answer the only question anyone asks a size instrument: when does this stop working?** The date existed - it was worked out by hand in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling) three separate times, and got the wrong answer twice - while the step that had all the inputs printed two numbers that could not produce it.
+
+Three things were added and none of them fails a build.
+
+**`by_directory` - the top-level children of `build/`.** One total cannot say whether the visuals grew or the telemetry did, so the day the total moves is the day somebody starts guessing. The split is asserted to sum exactly to the total, because a split that quietly loses bytes names the wrong directory on the one occasion it is used to decide what to cut.
+
+**`bytes_per_published_item` - the unit that holds still.** A rate per day is not stable here: measured 2026-08-29, the day rate moved by a factor of six across seven mature days, because two of them published 117 and 212 items where the ones behind them published 731. The per-item figure over the same days was 24,378 bytes, spread 23,066 to 26,538. So the day rate is derived - per-item times `run.safety_ceiling_per_run`, the ceiling in force - rather than averaged over whichever days happen to be on disk. That is a worst-case day by construction, which is what a runway needs (Rule #10).
+
+**`days_to_alarm` and `days_to_cap` - the runway.** Headroom divided by that rate, in published days rather than calendar days. It is printed on every run, including the runs that are nowhere near either line, because the day the alarm fires is not the day anybody wanted to first learn the date.
+
+**The count comes from the tree that was measured, and that is not a detail.** Items are read from the day payloads staged under `build/digest/`, never from `frontend/public/digest/` and never from a run manifest. Bytes and items have to come from one corpus or the rate divides a numerator by somebody else's denominator - which is exactly the shape of the defect in the section above, one level down.
+
+**It reports and it gates nothing new.** `npm run bundle-gate` already fails a build on a crossed per-route ceiling, and `cap_breach` already fails one past the platform's. A third gate would be a third thing to keep green for coverage that already exists. A gate on one directory's share was rejected outright: the cap is on the whole tree, and one directory's share of it is not a date.
+
+**A runway from nothing raises rather than returning a comfortable number.** Zero published items divides into an infinite runway, and an infinite runway reads exactly like a healthy site - the same failure as the green light on the wrong tree, one function along. So the per-item property raises on an empty tree, the CLI checks before it asks, and a tree carrying no day payloads prints `runway: unknown` instead. The zero-file tree still fails outright, as it already did.
+
+**What it printed the first time, 2026-08-30 at `76cdc72`:** 141.1 MB in 311 files, 883 MB of headroom, 48,457 B a published item, 7.39 MB a published day, and **119 published days to the cap**. The rate is an average over the whole tree, so it charges the on-device encoder and the JavaScript bundle - 46.5 percent of the site, and neither of them grows with a day - to every future item. **That makes the printed runway a floor: at least 119 days, and about 223 once the fixed directories are taken out.** It prints the conservative one on purpose, and `by_directory` is on the same output so a reader can do that subtraction rather than take the floor as the answer. Full working in [../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling).
+
 ## Rejected alternatives
 
 | Option | Why rejected |
@@ -320,6 +340,8 @@ The recorded arithmetic had the same units error and it is corrected in [../../r
 | base64 vectors inside the index JSON | 322.55 gzipped bytes an item against 249.82 - 22.5 percent more - and it charges every browsing visitor the vectors as well. |
 | HTTP range requests into the vector file | One request per result, against a static host that has to answer each one. The whole file already transfers compressed. |
 | A summary, source or band on an index entry | Measured 2026-08-26: 6.35 times the entry, and a month at the observed rate goes from 518 KB to 3.21 MB. A result renders from the day payload it names instead. |
+| A gate that fails on one directory's share of the site | The cap is on the whole tree. One directory's share does not yield a date, and a second weight gate is a second thing to keep green beside `bundle-gate`, which already fails on a crossed page ceiling. |
+| A day rate averaged over the days on disk | It moved by a factor of six across seven mature days measured 2026-08-29, because the item counts did. Bytes per published item over the same days held inside 23,066 to 26,538. |
 | Moving the vectors out of the day payload into a sibling committed file | A persisted-contract change that buys no bytes. `extra="forbid"` means a `DigestDay` without `embeddings` rejects all 2,237 committed items, so the price is a read-side migration forever or a rewrite of every day - and the block already reaches no browser. See [The vectors are projected out, not moved out](#the-vectors-are-projected-out-not-moved-out-2026-08-27). |
 | Staging the day payload whole and narrowing only the prerendered pages | Measured 2026-08-27: the staged tree is 6,976,807 bytes of the 146,696,452-byte site, and leaving it whole gives back 3,356,432 of the 18,631,599 this change saved. Same two files open, one of the two edits skipped. |
 | A positional vector index instead of a byte offset | Every reader then has to count how many entries above it were skipped, and an off-by-one decodes cleanly and ranks nonsense. |

@@ -29,11 +29,22 @@ Three rules the prune obeys, each one a way this goes wrong otherwise:
   error.
 - **A fuse.** An off-by-one in a date parse must not eat the archive, so no run
   may delete more than a configured number of files.
+
+**A level is not a date, and only a date answers the ceiling question.** The
+alarm used to print one megabyte figure and one headroom figure, and neither is
+a rate, so neither says when. What says when is bytes per published item times
+the items a day may publish, divided into the headroom. Three things follow from
+that and they are the rest of this module: `by_directory`, so a directory that
+grew can be named rather than inferred from one moving sum;
+`bytes_per_published_item`, because a rate over whole days moves when the item
+mix moves and a rate over items does not; and `days_to_alarm` and `days_to_cap`,
+which are the answer the question was always asking for.
 """
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+import json
+from dataclasses import dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Final
@@ -47,23 +58,88 @@ PAGES_HARD_CAP_MB: Final = 1024
 
 _VISUAL_SUFFIXES: Final[frozenset[str]] = frozenset({".png", ".webp", ".jpg", ".jpeg", ".svg"})
 
+#: Where the built tree keeps the day payloads, relative to the tree root.
+_STAGED_DIGEST_DIRNAME: Final = "digest"
+
 
 @dataclass(frozen=True, slots=True)
 class SiteSize:
     bytes_used: int
     files: int
+    #: Bytes under each top-level child of the measured tree, largest first when
+    #: read back through `heaviest_directories`. One sum cannot say whether the
+    #: visuals grew or the telemetry did; this can.
+    by_directory: dict[str, int] = field(default_factory=dict)
+    #: Items the same tree carries. Counted from the measured tree and never
+    #: from a second one - that pairing is the whole lesson of this module.
+    published_items: int = 0
 
     @property
     def megabytes(self) -> float:
         return self.bytes_used / BYTES_PER_MB
 
+    @property
+    def bytes_per_published_item(self) -> float:
+        """The stable unit. A day rate moves when the item mix moves; this does not.
 
-def measure(root: Path) -> SiteSize:
+        Measured 2026-08-29 over seven mature days: 24,378 bytes an item, spread
+        23,066 to 26,538, while the day rate moved by a factor of six across the
+        same days because two of them published 117 and 212 items where the ones
+        behind them published 731.
+
+        It raises on nothing published rather than returning zero. Zero is the
+        number that makes an empty tree read as a site that will never grow.
+        """
+        if self.published_items <= 0:
+            raise ValueError(
+                "no published items in the measured tree, so there is no rate and "
+                "no runway. A rate of zero reads as a site that never grows"
+            )
+        return self.bytes_used / self.published_items
+
+
+def measure(root: Path, *, published_items: int = 0) -> SiteSize:
     """Recorded every run from the first one, long before any policy exists."""
     if not root.exists():
         return SiteSize(0, 0)
-    files = [path for path in root.rglob("*") if path.is_file()]
-    return SiteSize(sum(path.stat().st_size for path in files), len(files))
+    by_directory: dict[str, int] = {}
+    files = 0
+    for child in sorted(root.iterdir()):
+        if child.is_file():
+            by_directory[child.name] = child.stat().st_size
+            files += 1
+        elif child.is_dir():
+            inside = [path for path in child.rglob("*") if path.is_file()]
+            by_directory[child.name] = sum(path.stat().st_size for path in inside)
+            files += len(inside)
+    return SiteSize(sum(by_directory.values()), files, by_directory, published_items)
+
+
+def count_published_items(root: Path) -> int:
+    """Items across every day payload staged into the measured tree.
+
+    Read from the built tree rather than from `frontend/public/digest/` or from a
+    run manifest, because bytes and items have to come from one corpus. The two
+    trees are eighteen times apart and a prune would move one before the other,
+    so a rate taken across them divides a numerator by somebody else's
+    denominator.
+    """
+    staged = root / _STAGED_DIGEST_DIRNAME
+    if not staged.is_dir():
+        return 0
+    total = 0
+    for payload in sorted(staged.rglob("digest.json")):
+        day = json.loads(payload.read_text(encoding="utf-8"))
+        items = day.get("items")
+        if isinstance(items, list):
+            total += len(items)
+    return total
+
+
+def heaviest_directories(size: SiteSize, limit: int = 0) -> list[tuple[str, int]]:
+    """Top-level children largest first, so the line names what grew."""
+    ordered = sorted(size.by_directory.items(), key=lambda entry: (-entry[1], entry[0]))
+    return ordered if limit <= 0 else ordered[:limit]
 
 
 def over_budget(size: SiteSize, config: RetentionConfig) -> bool:
@@ -83,6 +159,30 @@ def over_cap(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> bool:
 
 def headroom_mb(size: SiteSize, *, cap_mb: int = PAGES_HARD_CAP_MB) -> float:
     return cap_mb - size.megabytes
+
+
+def daily_growth_bytes(size: SiteSize, items_per_day: int) -> float:
+    """What one more published day costs, at the item ceiling in force.
+
+    `items_per_day` is `run.safety_ceiling_per_run` and not an average of the
+    days on disk. A day that published 117 items is not evidence that the next
+    one will; the ceiling is the most a day is allowed to cost, which is the
+    figure a worst-case runway needs (Rule #10).
+    """
+    if items_per_day <= 0:
+        raise ValueError("a day that may publish no items has no growth rate and no runway")
+    return size.bytes_per_published_item * items_per_day
+
+
+def days_to_alarm(size: SiteSize, config: RetentionConfig, items_per_day: int) -> float:
+    """Published days from here to the alarm point. Negative once it is behind us."""
+    left = (config.site_budget_mb - size.megabytes) * BYTES_PER_MB
+    return left / daily_growth_bytes(size, items_per_day)
+
+
+def days_to_cap(size: SiteSize, items_per_day: int, *, cap_mb: int = PAGES_HARD_CAP_MB) -> float:
+    """Published days from here to the platform ceiling. The runway."""
+    return headroom_mb(size, cap_mb=cap_mb) * BYTES_PER_MB / daily_growth_bytes(size, items_per_day)
 
 
 def budget_alarm(
