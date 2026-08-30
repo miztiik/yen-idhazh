@@ -12,10 +12,26 @@ Execute per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md): o
 | Why this plan exists | The project has three committed instrument ledgers and renders one of them. `state/runtime-counters.csv` holds 29 rows and no page reads a single cell, so for four days every throughput number this project quoted was taken on hardware whose read speed varied 2.30x inside one run with no surface on which anyone could notice. Separately, the pipeline has no span-level view, no cost view, no percentile view, no CPU or memory reading, and no way to turn measurement off or thin it. |
 | Hard scope - in | A new `observability` config block with three toggles and one sample rate; run-level sampling of the faithfulness scorer; a retention prune with a date threshold; the site-size estimator; the `drift.yml` silent-pass fix; a `shard` column on `ItemHealthRow`; three new cells on `RuntimeCountersRow`; Langfuse instrumentation behind a toggle with a no-text guard; the `/console/` route split into three; every panel and chart named in rows 13-18; the counterfactual cost panel and the CLAUDE.md amendment it requires. |
 | Hard scope - out | The reader-facing digest, archive, `/evals/` and `/404`. OpenTelemetry adopted directly (rejected; see row 9 - Langfuse's own SDK carries it). Any LLM-graded quality metric (CLAUDE.md section 0a). Publishing any prompt or completion body anywhere (Rule #11). Deleting `attempt`, `hhem_delta`, `compression` or `truncation_flagged` - the owner refused all four on 2026-08-30. |
-| ESCALATE triggers | (a) The lazy chart chunk exceeding 200,000 B gzipped - it stands at 197,561 B, so ONE new echarts registration crosses it and every chart in this plan is designed to avoid one. (b) Any Langfuse span attribute carrying article text, at any point, for any reason - stop the row. (c) A published telemetry column being added; nothing here needs one and a proposal to add one is a separate decision. (d) A route document exceeding its re-derived ceiling by more than 20 percent. |
+| ESCALATE triggers | (a) The lazy chart chunk exceeding 200,000 B gzipped - it stands at 197,561 B, so ONE new echarts registration crosses it and every chart in this plan is designed to avoid one. (b) Any Langfuse span attribute carrying article text, at any point, for any reason - stop the row. (c) A published telemetry column being added; nothing here needs one and a proposal to add one is a separate decision. **A crossed page-weight ceiling is NOT an escalate trigger and never was - see the byte ruling below.** |
 | Chosen strategy | Keep the ledgers as the record and add the four facts they lack. Split the page by layer so each layer can be sized and read on its own. Give every threshold a drawn marker, every figure its denominator, and every panel a sentence saying what to read off it. |
 | Owner exceptions | **Cost in currency ships**, over Rule #10 and over the section 0a "Actions minutes are free" reasoning, by owner decision 2026-08-30 under CLAUDE.md section 0. It is framed as a counterfactual against an operator-set rate, never as a bill. Row 10 amends the contract in the same commit, which is what section 0 requires. |
 | Execution | autonomous orchestrator per [docs/how-to/execute-a-plan.md](../docs/how-to/execute-a-plan.md). Parallel N = 4. |
+
+### The byte ruling - owner, 2026-08-31
+
+**No approved feature in this plan is removed, deferred or shrunk because of a page-weight ceiling or a byte budget. If a ceiling binds, the ceiling is re-derived and the reason recorded. The feature ships.**
+
+This is an owner decision under CLAUDE.md section 0 and it overrides the byte instinct every persona on this project has. It applies to every remaining row.
+
+What it does and does not change:
+
+| Still true | Now settled |
+| --- | --- |
+| Rule #2's **1 GB Pages cap** is a platform limit, not a preference. It is not waivable by this ruling, and nothing here comes close to it - the site sits at 141.1 MB with 119 published days of runway at the measured rate. | `page_weight.ceilings_bytes` for `/console/`, `/console/model/` and `/console/machine/` is a **ratchet, not a budget**. A crossed ceiling means re-measure and re-record the number, with the reason, in the same commit. It never means cut a panel. |
+| The **lazy chart chunk** trigger stands, and it is not a byte argument. It stands because a new echarts registration is a design decision about the chart vocabulary, and every chart in this plan was chosen to need none. If a row genuinely needs a new chart type, that is a design question to raise - not a size question. | The `/console/` ceiling was re-derived **tighter** by PR #298, from 301,580 B to **259,908 B**. Three routes plus the panels in rows 13-19 will not fit under a number derived from one route. Expect to raise it, and record what it bought. |
+| Rule #10 still binds: every re-derived ceiling carries the hardware, the date and the spread, taken from **five builds, heaviest per route**, never a mean. | `/console/` is `noindex` and operator-facing. It is not on any reader's critical path, so transfer size there costs a reader nothing. |
+
+**The rejected alternative, recorded because it is what would otherwise have happened by default:** shrink or defer a panel to stay under a recorded number. That is how a console becomes six vetoes and no demand - the failure Susan was added to this project to prevent, and the one measured on 2026-08-28 as a page using 40.6 percent of a 1536px screen. Authority: owner, 2026-08-31.
 
 ### Owner decisions, 2026-08-30
 
