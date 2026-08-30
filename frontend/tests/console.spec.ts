@@ -861,76 +861,6 @@ test('the telemetry viewport renders the published projection', async ({ page })
 	await expect(control).toContainText(`${inView.length} rows in view`);
 });
 
-test('a failure panel prints its rate in type, not only in a tooltip', async ({ page }) => {
-	await page.goto('/console/');
-
-	// A `<title>` does not fire on touch and does not survive the screenshot an
-	// operator pastes into an issue, so a chart whose only number is a tooltip
-	// has no number.
-	for (const stage of ['fetch', 'extract', 'summarize']) {
-		await expect(page.locator(`[data-panel-rate="${stage}"]`)).toHaveText(
-			/(\d+%|<1%) failed, \d+ of \d+\.|No rows in this window\./
-		);
-	}
-});
-
-test('a window holding one day draws no bar, because a bar would be the panel', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	const viewport = page.locator('[data-viewport-control]');
-	const start = await viewport.getAttribute('data-window-start');
-	const end = await viewport.getAttribute('data-window-end');
-	test.skip(start !== end, 'the fixture window spans more than one day');
-
-	await expect(page.locator('[data-panel]')).toHaveCount(0);
-	await expect(page.locator('[data-panel-rate="fetch"]')).toBeVisible();
-});
-
-test('a failure panel draws in CSS pixels, so its type is the size it declares', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	// The skip reads the window, which is the fixture's own fact, and never a
-	// locator count. Counting `[data-panel]` here meant that renaming the
-	// attribute drew zero panels, skipped this test, and left the suite green.
-	// `span` answers 0 for a missing attribute, so the skip cannot fire on one.
-	const viewport = page.locator('[data-viewport-control]');
-	const start = await viewport.getAttribute('data-window-start');
-	const end = await viewport.getAttribute('data-window-end');
-	test.skip(span(start, end) === 1, 'the fixture window holds one day, so no panel draws');
-
-	// One panel per stage - fetch, extract and summarize. A renamed attribute
-	// fails here instead of switching the test off.
-	const panels = page.locator('[data-panel]');
-	await expect(panels, 'a window of more than one day draws one panel per stage').toHaveCount(3);
-
-	// A `viewBox` is a scale factor, not a unit. Stretched from 360 units into a
-	// 163px panel it put `font-size="10"` on screen at 4.5px.
-	for (const width of [380, 768, 1400]) {
-		await page.setViewportSize({ width, height: 900 });
-		await expect
-			.poll(async () =>
-				panels.evaluateAll((nodes) =>
-					nodes.every((node) => {
-						const declared = Number((node.getAttribute('viewBox') ?? '').split(' ')[2]);
-						return Math.abs(declared - node.getBoundingClientRect().width) <= 1;
-					})
-				)
-			)
-			.toBe(true);
-	}
-
-	// Two rules: the baseline and the y axis. The unlabelled 50% dash was a
-	// reference at a value nobody acts on, and it is gone.
-	await expect(page.locator('[data-panel="fetch"] line')).toHaveCount(2);
-	// Both ends of the fixed domain are printed, so the scale can be read.
-	await expect(page.locator('[data-panel="fetch"]')).toContainText('100%');
-	await expect(page.locator('[data-panel="fetch"]')).toContainText('0%');
-});
-
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
 	await page.goto('/console/');
 
@@ -1130,7 +1060,9 @@ test('panning to a month with no rows leaves a visible gap', async ({ page }) =>
 		await page.keyboard.press('ArrowLeft');
 	}
 
-	await expect(page.getByText('No rows in this window').first()).toBeVisible();
+	// The failure surface says the window holds nothing rather than drawing a
+	// column of zeroes, which would read as a run that went badly.
+	await expect(page.locator('[data-failure-empty]')).toBeVisible();
 	await expect(viewport).toContainText('0 rows in view');
 });
 

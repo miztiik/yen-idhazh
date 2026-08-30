@@ -378,9 +378,22 @@ export interface ThroughputDay {
 	model: string | null;
 }
 
+/** One stage's day: what reached it, what died there, and how big the day was.
+ *
+ * `reached` is the denominator, and it is not the day. An item that died at
+ * fetch never reached extract, so dividing extract's failures by the day's
+ * items understates every stage after the first. Measured 2026-08-30 over the
+ * 4,167 rows of the committed projection: extract reads 10.4 percent against
+ * the day and 12.3 percent against the 3,499 items that got as far as extract.
+ *
+ * `planned` is the day itself, repeated on all three stages, and it is the
+ * height of the day's column. Keeping both means a rate and a volume can be
+ * drawn on one chart without either one being recomputed from the other.
+ */
 export interface StageFailureDay {
 	date: string;
-	attempts: number;
+	planned: number;
+	reached: number;
 	failures: number;
 	rate: number | null;
 	codes: Record<string, number>;
@@ -485,25 +498,36 @@ export function failureSeries(rows: TelemetryRow[], window: TimeWindow): StageFa
 	for (const row of rowsInWindow(rows, window)) {
 		byDate.set(row.date, [...(byDate.get(row.date) ?? []), row]);
 	}
-	return FAILURE_STAGES.map((stage) => ({
-		stage,
-		label: stage,
-		days: daysInWindow(window).map((date) => {
-			const group = byDate.get(date) ?? [];
+	// One pass per day, down the pipeline order, because each stage's denominator
+	// is whatever the stage before it let through.
+	const perDay = daysInWindow(window).map((date) => {
+		const group = byDate.get(date) ?? [];
+		// A row that never left `plan` was never fetched, so it belongs to no
+		// stage's denominator - only to the day's size.
+		let reached = group.filter((row) => row.stage !== 'plan').length;
+		return FAILURE_STAGES.map((stage) => {
 			const failures = group.filter((row) => row.outcome === 'failed' && row.stage === stage);
 			const codes: Record<string, number> = {};
 			for (const row of failures) {
 				const key = row.code || 'unknown';
 				codes[key] = (codes[key] ?? 0) + 1;
 			}
-			return {
+			const day: StageFailureDay = {
 				date,
-				attempts: group.length,
+				planned: group.length,
+				reached,
 				failures: failures.length,
-				rate: group.length === 0 ? null : failures.length / group.length,
+				rate: reached === 0 ? null : failures.length / reached,
 				codes
 			};
-		})
+			reached -= failures.length;
+			return day;
+		});
+	});
+	return FAILURE_STAGES.map((stage, index) => ({
+		stage,
+		label: stage,
+		days: perDay.map((day) => day[index])
 	}));
 }
 

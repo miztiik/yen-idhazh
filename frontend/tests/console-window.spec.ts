@@ -123,6 +123,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'the page publishes no windowed surfaces, so the oracle asserts nothing'
 	).toEqual([
 		'band-distance',
+		'failure-rate',
 		'router-cost',
 		'run-health',
 		'site-size-movement',
