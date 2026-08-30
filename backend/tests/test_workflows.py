@@ -1681,6 +1681,46 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
     )
 
 
+def test_future_text_defaults_to_lf_and_webfonts_are_binary() -> None:
+    """Ask Git itself, so this test cannot disagree with attribute matching."""
+    paths = (
+        "future.unknown",
+        "frontend/static/fonts/LICENSE",
+        "frontend/static/manifest.webmanifest",
+        "frontend/static/fonts/inter-latin-variable.woff2",
+    )
+    answered = subprocess.run(
+        ["git", "check-attr", "text", "eol", "binary", "--", *paths],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+
+    assert answered == [
+        "future.unknown: text: auto",
+        "future.unknown: eol: lf",
+        "future.unknown: binary: unspecified",
+        "frontend/static/fonts/LICENSE: text: auto",
+        "frontend/static/fonts/LICENSE: eol: lf",
+        "frontend/static/fonts/LICENSE: binary: unspecified",
+        "frontend/static/manifest.webmanifest: text: auto",
+        "frontend/static/manifest.webmanifest: eol: lf",
+        "frontend/static/manifest.webmanifest: binary: unspecified",
+        "frontend/static/fonts/inter-latin-variable.woff2: text: unset",
+        "frontend/static/fonts/inter-latin-variable.woff2: eol: lf",
+        "frontend/static/fonts/inter-latin-variable.woff2: binary: set",
+    ]
+
+
+def test_vscode_creates_only_lf_text_without_shared_personal_settings() -> None:
+    """One shared editor setting prevents the Windows default at its source."""
+    raw = (REPO_ROOT / ".vscode" / "settings.json").read_bytes()
+
+    assert b"\r" not in raw
+    assert json.loads(raw) == {"files.eol": "\n"}
+
+
 def test_the_harvest_runs_where_the_article_text_still_is() -> None:
     """A corpus built anywhere else is a corpus of nothing.
 

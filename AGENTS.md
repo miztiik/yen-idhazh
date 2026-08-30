@@ -21,6 +21,7 @@ Before any non-trivial work in this repo:
 3. Route new documentation by [`docs/reference/documentation-structure.md`](docs/reference/documentation-structure.md).
 4. For plan execution, follow [`docs/how-to/execute-a-plan.md`](docs/how-to/execute-a-plan.md); it owns the parallel-dispatch mechanics.
 5. Before claiming a change is done, run [`docs/how-to/run-the-gates.md`](docs/how-to/run-the-gates.md).
+6. Write new and generated text with LF before the first test. Git normalises at `git add`, which is too late for tests that read the working file. See [`docs/reference/agent-notes.md`](docs/reference/agent-notes.md).
 
 Seven persona advisors live in [`.github/agents/`](.github/agents/), each at a distinct altitude: Reader, Editor, Jony (UI/UX), Susan (Craft & Delight), Andre (AI/LLM), Fowler (Architecture & Engineering), Carmack (Engine & Runtime). Jony rules what survives on the page; Susan rules whether what survived is good enough to ship. A veto must name what the reader loses.
 
