@@ -1389,6 +1389,90 @@ def test_the_gates_job_lints_the_shell_it_ships() -> None:
     assert list(SCRIPTS_DIR.glob("*.sh")), "the gate reads a glob, so it needs something to read"
 
 
+#: A change, and whether the canary build and the browser suite have to pay for
+#: it. The last three are the trap the allow-list exists to avoid: a backend
+#: module the canary day is built through, and a fixture the attack text is read
+#: from, can all move a published page without touching `frontend/`.
+BROWSER_SCOPE_CASES: Final = (
+    ("frontend/src/routes/console/+page.svelte", True),
+    ("config/idhazh.json", True),
+    ("backend/idhazh/contracts/item_health.py", True),
+    ("backend/utilities/build_canary_day.py", True),
+    ("backend/idhazh/sanitize.py", True),
+    ("tests/fixtures/canaries/fake-system-delimiter.json", True),
+    ("docs/reference/measurements.md", False),
+    ("backend/tests/test_discover.py", False),
+    ("backend/idhazh/discover.py", False),
+    ("TODO/some-plan.md", False),
+)
+
+
+def _browser_scope(tmp_path: Path, changed: Sequence[str], event: str = "pull_request") -> str:
+    """Run the shipped filter over a real two-commit history and read its answer."""
+    env = _isolated_env(tmp_path)
+    root = tmp_path / "repo"
+    root.mkdir()
+    _git(root, env, "init", "--quiet", "--initial-branch=main")
+    _write(root / "seed.txt", "seed\n")
+    _git(root, env, "add", "seed.txt")
+    _git(root, env, "commit", "--quiet", "-m", "seed")
+    base = _git(root, env, "rev-parse", "HEAD").strip()
+    for name in changed:
+        _write(root / name, "changed\n")
+        _git(root, env, "add", name)
+    _git(root, env, "commit", "--quiet", "-m", "change")
+    head = _git(root, env, "rev-parse", "HEAD").strip()
+
+    shell = _bash()
+    assert shell is not None
+    completed = subprocess.run(
+        [shell, (SCRIPTS_DIR / "browser-suite-needed.sh").as_posix()],
+        cwd=root,
+        env={**env, "EVENT": event, "BASE": base, "HEAD": head},
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+    assert completed.returncode == 0, completed.stderr
+    return completed.stdout.strip()
+
+
+@requires_bash
+@pytest.mark.parametrize(("changed", "needed"), BROWSER_SCOPE_CASES)
+def test_the_browser_half_is_skipped_only_for_a_change_that_cannot_reach_a_page(
+    changed: str, needed: bool, tmp_path: Path
+) -> None:
+    """The filter is executed, not read.
+
+    A copy of the pattern in this file would agree with itself forever while the
+    shipped script skipped a change that breaks a published page. So the test
+    builds a real two-commit history, runs the script the workflow runs, and
+    reads the line it writes to `$GITHUB_OUTPUT`.
+    """
+    assert _browser_scope(tmp_path, [changed]) == f"browser={str(needed).lower()}"
+
+
+@requires_bash
+def test_one_reaching_path_in_a_mixed_change_still_buys_the_browser_suite(
+    tmp_path: Path,
+) -> None:
+    """A pull request is a set, not one file. Docs beside a frontend edit is the
+    ordinary shape of this repo's changes, and the frontend edit decides.
+    """
+    mixed = ["docs/reference/measurements.md", "frontend/src/routes/+page.svelte"]
+    assert _browser_scope(tmp_path, mixed) == "browser=true"
+
+
+@requires_bash
+def test_a_push_to_main_never_consults_the_list(tmp_path: Path) -> None:
+    """The allow-list is a wager that nobody forgot a path. The merge commit is
+    where that wager is settled, so it does not apply there - a pull request the
+    list was wrong about reddens `main` within minutes instead of reaching a
+    reader.
+    """
+    assert _browser_scope(tmp_path, ["docs/x.md"], event="push") == "browser=true"
+
+
 #: Every job that builds the site and then commits what it built, named with the
 #: step that publishes. Both jobs write a day payload the build can reject, so
 #: both carry the same two-severity order.
