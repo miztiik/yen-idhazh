@@ -58,6 +58,25 @@ git worktree add <absolute path> -b <branch> origin/main
 git apply --3way .tmp_mine.patch
 ```
 
+**A `git worktree add` the terminal kills leaves a directory that is not a
+worktree.** On 2026-08-30 the checkout was cut at 69 percent of 697 files. The
+directory existed and held most of the tree, `git rev-parse` inside it said
+`not a git repository`, and `git worktree list` did not mention it at all - so
+the usual `git worktree remove` has nothing to remove and the branch name is
+already taken. Clean up all three pieces, then retry from a detached script:
+
+```powershell
+Remove-Item -LiteralPath <path> -Recurse -Force
+git worktree prune
+git branch -D <branch>
+```
+
+The checkout is slow enough to hit the idle kill on a repository this size, so
+run it the way every other long child is run - `Start-Process pwsh -WindowStyle
+Hidden` writing a sentinel (see [PowerShell](#powershell)). Check
+`Test-Path <path>\.git` afterwards; the progress lines reaching 100 percent do
+not mean the `.git` file was written.
+
 **Branch first, before the first edit - not after the work is done.** A session
 on 2026-08-28/29 built a 35-file change entirely uncommitted in the shared
 checkout. Nothing was lost, but three things happened while it sat there: the
@@ -961,6 +980,13 @@ the variable protects the shell you remember to set it in and nothing else.
   name and runs it successfully, doing the wrong thing. Observed 2026-08-29,
   found only because the launcher printed a `PWD=` line from the previous run.
   Write launcher scripts with the editor's file tool, never from a here-string.
+- **`python -c` with a multi-line string is the same trap, and it fails
+  silently.** `& python -c "` followed by several lines of Python exits 1 and
+  writes a zero-byte file even with `*> out.txt` on it, so it reads exactly like
+  the interpreter crashing on the import you were checking. Observed twice on
+  2026-08-30 introspecting an installed package. Write the snippet to a `.py`
+  file with the editor's file tool and run the file; a single-line `python -c`
+  with semicolons works but stops being readable at about three statements.
 - **A command that IDLES is killed at 16 to 45 seconds, exit 1, no output.**
   `Start-Sleep`, `Wait-Process -Timeout` and any `while` loop that sleeps between
   probes all return instantly with an empty result. A loop that PRINTS something
@@ -976,6 +1002,21 @@ the variable protects the shell you remember to set it in and nothing else.
   sentinel and read the sentinel; never infer a pass from an empty log. For the
   same reason, do not chain two long redirects in one call (`ruff > a; mypy > b`
   returned no output and neither file existed afterwards). One long child a call.
+- **A log that stops growing is NOT a stalled process.** `*>> $log` from a
+  detached script buffers, so the file sits at the same size for minutes while
+  the child works. On 2026-08-30 a healthy `pytest` run was killed twice for
+  looking frozen at 94 percent; the whole suite is 1,599 tests and 579 s, and
+  `backend/tests/test_workflows.py` alone spends minutes in `git` subprocesses
+  with nothing to print. Ask the process, not the file:
+
+  ```powershell
+  Get-CimInstance Win32_Process -Filter "Name='python.exe'" |
+    Where-Object CommandLine -like '*<your worktree>*' |
+    Select-Object ProcessId, UserModeTime
+  ```
+
+  `UserModeTime` is in 100-ns units, so it climbing between two samples means
+  work is happening. Only a value that does not move is a stall.
 - **A killed command is indeterminate in both directions.** The same kill left
   `gh pr create` having done nothing at all, and left `git push -u` having pushed
   the branch and skipped only the `--set-upstream`. Neither the exit code nor the

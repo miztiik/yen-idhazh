@@ -87,6 +87,38 @@ faithfulness = [
     # every worker died before summarizing a single article.
     "transformers>=4.46,<5",
 ]
+# The hosted span viewer, and ONLY the hosted one. Nothing in the default path
+# imports it: `observability.tracing_enabled` writes a JSON line per span to
+# backend/var/traces/ with the standard library, and this extra is what a
+# developer adds when he also wants the tree drawn on a Langfuse host he named
+# in the environment. CI installs neither the extra nor a key.
+#
+# Measured 2026-08-30 on Windows 11, Python 3.14.2, into three clean venvs
+# holding only pip: 32,656,612 installed bytes, identical on all three, and
+# 258.1 s / 249.8 s / 274.7 s wall clock (n=3, mean 260.9 s, spread 24.9 s;
+# taken while the test suite was running on the same box, so read it as an
+# upper bound).
+#
+# On top of `.[dev]` it adds 11 distributions and replaces none -
+# `pip install --dry-run --report`, same date. Six are OpenTelemetry:
+# langfuse 4.14.4 is built on it and requires -api, -sdk and
+# -exporter-otlp-proto-http, which drag in -proto, -exporter-otlp-proto-common
+# and -semantic-conventions. The other five are backoff, wrapt, requests,
+# googleapis-common-protos and langfuse itself. Its pydantic floor is `>=2,<3`,
+# which our `>=2.12` already satisfies, and it does not touch `tokenizers` - so
+# this is not a repeat of `.[faithfulness]`, which downgraded `tokenizers` and
+# broke `mypy` with import errors CI never saw.
+#
+# 32.7 MB is 45x PyYAML's 728,341 bytes and 94 percent of shellcheck-py's
+# 34,782,285, for a viewer no gate reads and no page renders. Which is the whole
+# argument for an extra rather than a dev dependency (Rule #8): a contributor
+# running `pip install -e ".[dev]"` pays none of it.
+#
+# Beneficiary: the nested span view - a robots read inside a fetch, and a prompt
+# render and a reply parse either side of the model call.
+langfuse = [
+    "langfuse>=4.14,<5",
+]
 
 [project.scripts]
 idhazh = "idhazh.cli:main"
@@ -130,6 +162,14 @@ enable_error_code = ["redundant-expr", "truthy-bool", "ignore-without-code"]
 # type stubs of their own.
 [[tool.mypy.overrides]]
 module = ["diffusers.*", "feedparser.*", "onnxruntime.*", "torch.*", "trafilatura.*", "transformers.*", "vl_convert.*"]
+ignore_missing_imports = true
+
+# `langfuse` is an optional extra, so CI type-checks without it installed and
+# would otherwise fail on the import inside `telemetry.langfuse_sink`. It DOES
+# ship py.typed (measured against 4.14.4, 2026-08-30), so a developer who
+# installs the extra gets the real types and this entry does nothing.
+[[tool.mypy.overrides]]
+module = ["langfuse.*"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
