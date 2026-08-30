@@ -1,0 +1,12 @@
+{
+  "date": "2025-07-14",
+  "failed": 8,
+  "items": 8,
+  "max_ms": null,
+  "p50_ms": null,
+  "p90_ms": null,
+  "stage": "plan",
+  "sum_ms": null,
+  "timed": 0,
+  "version": "2026-08-30T20:00"
+}

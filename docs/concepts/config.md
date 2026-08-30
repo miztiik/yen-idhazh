@@ -375,6 +375,29 @@ readable for a year, and the downsampled aggregate costs roughly 219 KB a year.
 Set it, and it must sit above `keep_months`, or a month would be deleted before
 it was ever downsampled; the contract refuses the pair otherwise.
 
+**What `keep_months` actually governs is `state/item-health/`, and nothing
+else.** Past the window a month is folded to one row per `(date, stage)` in
+`state/telemetry-aggregate/<YYYY-MM>.csv` and the full-grain shard is deleted, by
+`idhazh prune-telemetry` in the assemble job - after the day is committed, never
+before it. What survives is every count and every timing total; what goes is the
+per-item detail, which is what the console's failure list offers and no rate
+needs. Folding the committed `state/item-health/2026-08.csv` on 2026-08-30 turned
+4,167 rows and 1,270,452 bytes into 24 rows and 1,531 bytes - **829.8 times
+smaller**, and 93,136 bytes a year against the shard's 77,285,830.
+
+The 219 KB a year the `hard_delete_after_months` description quotes was an
+estimate at five stages and 120 bytes a row. Measured it is **63.8 bytes a row
+over four stages**, because `plan` wrote no row in that month - so 93 KB a year,
+2.4 times cheaper than the estimate. The description keeps the estimate's
+conclusion, which the measurement only strengthens.
+
+The two ledgers the fold does not reach are named here rather than left to be
+discovered. `state/seen/` was 5,166,315 bytes on 2026-08-30 - 54 percent of
+`state/` - and `state/scores.csv` was 2,359,230, against `state/item-health/`'s
+1,270,452. Neither is a month shard, and neither has a `stage`, so both need a
+retention decision of their own. See
+[../architecture/publishing/layout.md](../architecture/publishing/layout.md#what-bounds-the-committed-state-tree).
+
 ## Reader surface
 
 `ui.items_per_topic` is how many of a topic's stories the all-topics page shows

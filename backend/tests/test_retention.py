@@ -3,19 +3,31 @@
 The prune is the most dangerous code in this repository - it is the only thing
 that deletes a published byte - so the tests are written around the ways it goes
 wrong rather than the way it goes right.
+
+The telemetry fold at the foot of this file is the second thing that deletes,
+and its oracle is stricter for it: the totals recomputed from the aggregate have
+to equal the totals recomputed from the shard it replaced, read straight off the
+CSV text rather than through the code being checked.
 """
 
 from __future__ import annotations
 
+import csv
+import hashlib
+import io
 import json
 import logging
 from datetime import date
 from pathlib import Path
+from typing import Final
 
 import pytest
 
-from idhazh.cli import main, stage_site_weight
-from idhazh.contracts.app_config import RetentionConfig
+from idhazh import ledger
+from idhazh.cli import main, stage_prune_telemetry, stage_site_weight
+from idhazh.contracts.app_config import ObservabilityConfig, RetentionConfig
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 from idhazh.retention import (
     BYTES_PER_MB,
     PAGES_HARD_CAP_MB,
@@ -27,12 +39,16 @@ from idhazh.retention import (
     daily_growth_bytes,
     days_to_alarm,
     days_to_cap,
+    fold_month,
     headroom_mb,
     heaviest_directories,
     measure,
+    month_shards,
+    oldest_month_kept,
     over_budget,
     over_cap,
     prune,
+    prune_telemetry,
     visuals_older_than,
 )
 
@@ -449,3 +465,345 @@ def test_a_directory_that_is_not_a_date_is_left_alone(tmp_path: Path) -> None:
     config = RetentionConfig(image_months=1, dry_run=False)
     assert prune(tmp_path, config, date(2026, 8, 21)).deleted == 0
     assert (stray / "logo.svg").exists()
+
+
+# --- The telemetry fold ------------------------------------------------------
+
+#: The day the fold is run against in every test below, and the twenty months of
+#: history it is run over. Twenty rather than thirteen so both sides of the
+#: threshold carry several months: at `keep_months` 13 the fold takes seven and
+#: leaves thirteen, and a threshold off by one shows up as a shard on the wrong
+#: side rather than as an empty result.
+TODAY: Final = date(2026, 8, 30)
+HISTORY_MONTHS: Final = 20
+#: How far down the pipeline each terminal stage got, so a row carries the clocks
+#: an item that really stopped there would have carried and no others.
+STAGES_REACHED: Final = {
+    ItemStage.PLAN: (),
+    ItemStage.FETCH: ("fetch_ms",),
+    ItemStage.EXTRACT: ("fetch_ms", "extract_ms"),
+    ItemStage.SUMMARIZE: ("fetch_ms", "extract_ms", "summarize_ms"),
+    ItemStage.PUBLISH: ("fetch_ms", "extract_ms", "summarize_ms"),
+}
+CLOCK_MS: Final = {"fetch_ms": 900, "extract_ms": 1_400, "summarize_ms": 62_000}
+#: A failure code each stage really produces. `plan` is a refusal and `publish`
+#: is the census's one unambiguous success, so the two ends differ.
+STAGE_FAILURE: Final = {
+    ItemStage.PLAN: FailureCode.NOT_ATTEMPTED,
+    ItemStage.FETCH: FailureCode.HTTP_SERVER_ERROR,
+    ItemStage.EXTRACT: FailureCode.PAYWALLED,
+    ItemStage.SUMMARIZE: FailureCode.BAD_SHAPE,
+    ItemStage.PUBLISH: None,
+}
+
+
+def months_back(today: date, count: int) -> list[str]:
+    """`YYYY-MM` stems, oldest first, ending on the month `today` sits in."""
+    total = today.year * 12 + (today.month - 1)
+    return [
+        f"{(total - offset) // 12:04d}-{(total - offset) % 12 + 1:02d}"
+        for offset in reversed(range(count))
+    ]
+
+
+def health_row(*, day: str, run: int, number: int, stage: ItemStage) -> ItemHealthRow:
+    """One census row, shaped the way the contract's own validators demand."""
+    code = STAGE_FAILURE[stage]
+    # A slower item every third one, so a percentile has something to separate.
+    stretch = 1 + (number % 3)
+    reached = STAGES_REACHED[stage]
+
+    def clock(name: str) -> int | None:
+        return CLOCK_MS[name] * stretch if name in reached else None
+
+    return ItemHealthRow(
+        version=ItemHealthRow.schema_version(),
+        date=day,
+        run_id=f"{day}-{run}",
+        item_id=f"ai-{number:04d}",
+        url_key=hashlib.sha256(f"{day}-{number}".encode("ascii")).hexdigest(),
+        canonical_url=f"https://example.test/{day}/{number}",
+        vertical="ai",
+        source_id="example",
+        stage=stage,
+        outcome=ItemOutcome.OK if code is None else ItemOutcome.FAILED,
+        code=code,
+        fetch_ms=clock("fetch_ms"),
+        extract_ms=clock("extract_ms"),
+        summarize_ms=clock("summarize_ms"),
+    )
+
+
+def item_health_history(state_dir: Path, months: list[str]) -> None:
+    """A real item-health shard per month, written through the real appender."""
+    for index, month in enumerate(months):
+        for day_of_month in (4, 17):
+            day = f"{month}-{day_of_month:02d}"
+            rows = [
+                health_row(day=day, run=1, number=index * 100 + position, stage=stage)
+                for position, stage in enumerate(ItemStage)
+            ]
+            # A second run of the same day, so the fold meets the repeated
+            # `(date, run_id, item_id)` keys the committed ledger really carries.
+            rows.append(
+                health_row(day=day, run=2, number=index * 100 + 50, stage=ItemStage.PUBLISH)
+            )
+            ledger.append_item_health(state_dir, day, rows)
+
+
+def totals_from_shard(text: str) -> dict[tuple[str, str], tuple[int, int, int]]:
+    """Rows, failures and total milliseconds per (date, stage), read off the CSV.
+
+    Recomputed here from the raw text rather than by calling `fold_month`, so the
+    oracle cannot pass by agreeing with the code it is checking.
+    """
+    totals: dict[tuple[str, str], tuple[int, int, int]] = {}
+    for row in csv.DictReader(io.StringIO(text)):
+        key = (row["date"], row["stage"])
+        rows, failures, elapsed = totals.get(key, (0, 0, 0))
+        spent = sum(
+            int(row[name]) for name in ("fetch_ms", "extract_ms", "summarize_ms") if row[name]
+        )
+        totals[key] = (rows + 1, failures + (row["outcome"] != "ok"), elapsed + spent)
+    return totals
+
+
+def totals_from_aggregate(
+    rows: list[TelemetryAggregateRow],
+) -> dict[tuple[str, str], tuple[int, int, int]]:
+    return {
+        (row.date, row.stage.value): (row.items, row.failed, row.sum_ms or 0) for row in rows
+    }
+
+
+def a_state_tree(tmp_path: Path) -> Path:
+    state = tmp_path / "state"
+    item_health_history(state, months_back(TODAY, HISTORY_MONTHS))
+    return state
+
+
+def test_the_fold_keeps_thirteen_months_at_full_grain(tmp_path: Path) -> None:
+    """Every shard inside the window is byte-identical, and every shard outside is gone."""
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig()
+    before = {
+        path.stem: path.read_bytes() for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
+    }
+    assert len(before) == HISTORY_MONTHS
+
+    result = prune_telemetry(state, config, TODAY)
+
+    kept = oldest_month_kept(TODAY, config.keep_months)
+    assert kept == "2025-08", "thirteen months ending in August 2026 starts in August 2025"
+    assert list(result.folded) == sorted(stem for stem in before if stem < kept)
+    assert len(result.folded) == HISTORY_MONTHS - config.keep_months
+    for stem, bytes_before in before.items():
+        shard = ledger.item_health_path(state, f"{stem}-01")
+        if stem < kept:
+            assert not shard.exists(), f"{stem} is past the window and must be gone"
+        else:
+            assert shard.read_bytes() == bytes_before, f"{stem} is inside the window"
+
+
+def test_the_fold_loses_no_total(tmp_path: Path) -> None:
+    """The grain changes; the answer does not. A fold that loses a total is a failed fold."""
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig()
+    kept = oldest_month_kept(TODAY, config.keep_months)
+    doomed = {
+        path.stem: path.read_text(encoding="utf-8")
+        for path in month_shards(state / ledger.ITEM_HEALTH_DIRNAME)
+        if path.stem < kept
+    }
+    assert doomed, "the fixture has to reach past the window or this proves nothing"
+
+    prune_telemetry(state, config, TODAY)
+
+    for stem, text in doomed.items():
+        folded = ledger.load_telemetry_aggregate(ledger.telemetry_aggregate_path(state, stem))
+        assert totals_from_aggregate(folded) == totals_from_shard(text), (
+            f"{stem} lost a total in the fold"
+        )
+
+
+def test_the_fold_keeps_a_repeated_row_rather_than_deciding_for_a_reader(
+    tmp_path: Path,
+) -> None:
+    """The committed ledger carries repeated keys, and the fold reproduces them.
+
+    Run `2026-08-29-3` really did leave 212 item-health rows for 168 items.
+    Collapsing them at fold time would make the aggregate disagree with the file
+    it replaced, and nobody could then say which of the two was right.
+    """
+    day = "2024-01-04"
+    state = tmp_path / "state"
+    rows = [health_row(day=day, run=run, number=7, stage=ItemStage.PUBLISH) for run in (1, 2)]
+    ledger.append_item_health(state, day, rows)
+
+    folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+
+    assert [row.items for row in folded] == [2]
+    assert folded[0].timed == 2
+    slowest = folded[0].max_ms
+    assert slowest is not None
+    assert folded[0].sum_ms == 2 * slowest, "both copies of one item, added"
+
+
+def test_a_group_that_timed_nothing_says_so_rather_than_saying_zero(tmp_path: Path) -> None:
+    """An instrument that did not run writes an empty cell. Empty is not zero."""
+    day = "2024-01-04"
+    state = tmp_path / "state"
+    ledger.append_item_health(state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PLAN)])
+
+    folded = fold_month(ledger.load_item_health_shard(ledger.item_health_path(state, day)))
+
+    assert [row.stage for row in folded] == [ItemStage.PLAN]
+    assert folded[0].items == 1
+    assert folded[0].timed == 0
+    assert (folded[0].p50_ms, folded[0].p90_ms, folded[0].max_ms, folded[0].sum_ms) == (
+        None,
+        None,
+        None,
+        None,
+    )
+    assert folded[0].csv_row()["p50_ms"] == ""
+
+
+def test_a_percentile_is_a_number_some_item_really_took(tmp_path: Path) -> None:
+    """Nearest rank, never interpolation. An invented millisecond count cannot be checked."""
+    assert percentile([5], 0.5) == 5
+    assert percentile([5], 0.9) == 5
+    assert percentile([1, 2, 3, 4], 0.5) == 2
+    assert percentile([1, 2, 3, 4], 0.9) == 4
+    assert percentile(list(range(1, 11)), 0.9) == 9
+    with pytest.raises(ValueError):
+        percentile([], 0.5)
+
+
+def test_a_dry_run_changes_nothing_on_disk(tmp_path: Path) -> None:
+    state = a_state_tree(tmp_path)
+    before = {
+        path.relative_to(state).as_posix(): path.read_bytes() for path in sorted(state.rglob("*.csv"))
+    }
+
+    result = prune_telemetry(state, ObservabilityConfig(), TODAY, dry_run=True)
+
+    after = {
+        path.relative_to(state).as_posix(): path.read_bytes() for path in sorted(state.rglob("*.csv"))
+    }
+    assert result.dry_run is True
+    assert result.folded, "it still has to report what it would have done"
+    assert result.rows_folded > 0
+    assert after == before
+    assert not (state / ledger.TELEMETRY_AGGREGATE_DIRNAME).exists()
+
+
+def test_the_aggregate_is_kept_forever_unless_somebody_asks_for_the_bytes_back(
+    tmp_path: Path,
+) -> None:
+    """`console.max_window_days` is 366, so a shard has to answer for a year.
+
+    Running the fold twenty times over must never remove an aggregate while
+    `hard_delete_after_months` is null, which is what ships.
+    """
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig()
+    assert config.hard_delete_after_months is None
+
+    first = prune_telemetry(state, config, TODAY)
+    written = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+    again = prune_telemetry(state, config, TODAY)
+
+    assert written == sorted(first.folded)
+    assert again.folded == (), "the shards are gone, so a second fold has nothing to do"
+    assert again.hard_deleted == ()
+    assert (
+        sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+        == written
+    )
+
+
+def test_a_hard_delete_takes_the_aggregate_only_after_the_fold_has_had_it(
+    tmp_path: Path,
+) -> None:
+    """The escape hatch, for the day the owner wants the bytes back.
+
+    The config refuses a threshold at or below `keep_months`, so a month is
+    always folded before it can be deleted - this proves the deletion happens at
+    the threshold the config does allow.
+    """
+    state = a_state_tree(tmp_path)
+    config = ObservabilityConfig(hard_delete_after_months=16)
+    prune_telemetry(state, ObservabilityConfig(), TODAY)
+    before = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+
+    result = prune_telemetry(state, config, TODAY)
+
+    boundary = oldest_month_kept(TODAY, 16)
+    assert sorted(result.hard_deleted) == [stem for stem in before if stem < boundary]
+    assert result.hard_deleted, "a threshold inside the fixture has to remove something"
+    left = sorted(path.stem for path in month_shards(state / ledger.TELEMETRY_AGGREGATE_DIRNAME))
+    assert left == [stem for stem in before if stem >= boundary]
+
+
+def test_the_window_is_counted_in_months_and_not_in_thirty_day_steps() -> None:
+    """A month file is kept or dropped whole, so the arithmetic is in months."""
+    assert oldest_month_kept(date(2026, 8, 30), 13) == "2025-08"
+    assert oldest_month_kept(date(2026, 8, 1), 13) == "2025-08"
+    assert oldest_month_kept(date(2026, 1, 15), 13) == "2025-01"
+    assert oldest_month_kept(date(2026, 1, 15), 1) == "2026-01"
+    assert oldest_month_kept(date(2026, 12, 31), 24) == "2025-01"
+    with pytest.raises(ValueError):
+        oldest_month_kept(date(2026, 8, 30), 0)
+
+
+def test_a_file_that_is_not_a_month_shard_is_never_a_candidate(tmp_path: Path) -> None:
+    """A directory this deletes from names what it recognises, never the rest."""
+    directory = tmp_path / "state" / ledger.ITEM_HEALTH_DIRNAME
+    directory.mkdir(parents=True)
+    for name in ("2025-01.csv", "notes.csv", "2025-1.csv", "2025-13.csv", "README.md"):
+        (directory / name).write_text("header\n", encoding="utf-8")
+
+    assert [path.name for path in month_shards(directory)] == ["2025-01.csv"]
+
+
+def test_an_empty_state_tree_folds_nothing_and_says_so(tmp_path: Path) -> None:
+    """A fresh clone has no history, and no history is not an error."""
+    result = prune_telemetry(tmp_path / "state", ObservabilityConfig(), TODAY)
+    assert result.changed is False
+    assert result.rows_folded == 0
+
+
+def test_the_stage_reports_what_it_folded(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    """What a person reads off the run: which months went, and how many rows they held."""
+    state = a_state_tree(tmp_path)
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_telemetry(
+                observability=ObservabilityConfig(), today=TODAY, state_dir=state
+            )
+            == 0
+        )
+    assert "telemetry fold:" in caplog.text
+    assert "2025-07" in caplog.text
+
+
+def test_the_stage_says_so_when_every_month_is_still_at_full_grain(
+    tmp_path: Path, caplog: pytest.LogCaptureFixture
+) -> None:
+    state = tmp_path / "state"
+    day = f"{TODAY:%Y-%m}-04"
+    ledger.append_item_health(
+        state, day, [health_row(day=day, run=1, number=1, stage=ItemStage.PUBLISH)]
+    )
+    with caplog.at_level(logging.INFO):
+        assert (
+            stage_prune_telemetry(
+                observability=ObservabilityConfig(), today=TODAY, state_dir=state
+            )
+            == 0
+        )
+    assert "every month is still at full grain" in caplog.text
+    assert ledger.item_health_path(state, day).exists()

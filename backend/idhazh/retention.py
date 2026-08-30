@@ -39,6 +39,17 @@ grew can be named rather than inferred from one moving sum;
 `bytes_per_published_item`, because a rate over whole days moves when the item
 mix moves and a rate over items does not; and `days_to_alarm` and `days_to_cap`,
 which are the answer the question was always asking for.
+
+**The telemetry fold is the third thing here, and it deletes nothing a reader
+can reach.** `state/item-health/` is the census, and it grew at a measured
+211,742 bytes a published day on 2026-08-30 with nothing bounding it.
+`observability.keep_months` is where a month stops being kept item by item: past
+it the month is folded to one row per (date, stage) and the full-grain shard is
+deleted. It is thirteen months because `console.max_window_days` is 366, so a
+shard has to answer for a year and a month of it is still being written. The
+aggregate is kept forever by default, because a downsampled year costs
+kilobytes and deleting it would make a year-over-year comparison unanswerable -
+`observability.hard_delete_after_months` is the escape hatch and is null.
 """
 
 from __future__ import annotations
@@ -49,7 +60,10 @@ from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Final
 
-from idhazh.contracts.app_config import RetentionConfig
+from idhazh import ledger
+from idhazh.contracts.app_config import ObservabilityConfig, RetentionConfig
+from idhazh.contracts.item_health import ItemHealthRow, ItemOutcome, ItemStage
+from idhazh.contracts.telemetry_aggregate import TelemetryAggregateRow, percentile
 
 BYTES_PER_MB: Final = 1024 * 1024
 #: The platform's own hard ceiling. Not a knob: it is a property of the host,
@@ -278,3 +292,170 @@ def prune(root: Path, config: RetentionConfig, today: date) -> PruneResult:
     for path in allowed:
         path.unlink(missing_ok=True)
     return PruneResult(len(candidates), len(allowed), False, fuse_tripped)
+
+
+# --- The telemetry fold ------------------------------------------------------
+
+
+def oldest_month_kept(today: date, months: int) -> str:
+    """The oldest `YYYY-MM` stem that still stays at full grain.
+
+    Counted in months rather than in thirty-day steps, because the thing being
+    kept is a month file and a month is not thirty days. `months` counts the
+    month being written as one of them, so 13 on any day of August 2026 keeps
+    `2025-08` through `2026-08` - a whole year of complete months plus the
+    partial one.
+    """
+    if months < 1:
+        raise ValueError("keeping fewer than one month would delete the month being written")
+    total = today.year * 12 + (today.month - 1) - (months - 1)
+    return f"{total // 12:04d}-{total % 12 + 1:02d}"
+
+
+def month_shards(directory: Path) -> list[Path]:
+    """Every `<YYYY-MM>.csv` in a ledger directory, oldest first.
+
+    Anything else in there is left alone. A directory this walks is one a prune
+    deletes from, so it names what it recognises rather than deleting what it
+    does not.
+    """
+    if not directory.is_dir():
+        return []
+    found = [path for path in directory.glob("*.csv") if _is_month_stem(path.stem)]
+    return sorted(found, key=lambda path: path.stem)
+
+
+def _is_month_stem(stem: str) -> bool:
+    if len(stem) != 7 or stem[4] != "-":
+        return False
+    try:
+        datetime.strptime(stem, "%Y-%m").replace(tzinfo=UTC)
+    except ValueError:
+        return False
+    return True
+
+
+def _elapsed_ms(row: ItemHealthRow) -> int | None:
+    """What one item spent in the pipeline, or nothing if it was never timed.
+
+    The three stage clocks added together rather than the one clock belonging to
+    the row's terminal stage: an item that reached `publish` was fetched,
+    extracted and summarized, and the figure a reader wants for it is what the
+    whole item cost. An item that stopped at `fetch` has only the one clock, and
+    adding it to nothing gives that clock back.
+    """
+    parts = [row.fetch_ms, row.extract_ms, row.summarize_ms]
+    timed = [value for value in parts if value is not None]
+    return sum(timed) if timed else None
+
+
+def fold_month(rows: list[ItemHealthRow]) -> list[TelemetryAggregateRow]:
+    """One month of full-grain rows, as one row per (date, stage).
+
+    Ordered by date and then by the stage's own pipeline order, so the file a
+    reader opens reads down the funnel rather than down the alphabet.
+    """
+    grouped: dict[tuple[str, ItemStage], list[ItemHealthRow]] = {}
+    for row in rows:
+        grouped.setdefault((row.date, row.stage), []).append(row)
+
+    order = list(ItemStage)
+    folded: list[TelemetryAggregateRow] = []
+    for day, stage in sorted(grouped, key=lambda key: (key[0], order.index(key[1]))):
+        members = grouped[(day, stage)]
+        elapsed = sorted(
+            value for value in (_elapsed_ms(member) for member in members) if value is not None
+        )
+        folded.append(
+            TelemetryAggregateRow(
+                version=TelemetryAggregateRow.schema_version(),
+                date=day,
+                stage=stage,
+                items=len(members),
+                failed=sum(1 for member in members if member.outcome is not ItemOutcome.OK),
+                timed=len(elapsed),
+                p50_ms=percentile(elapsed, 0.5) if elapsed else None,
+                p90_ms=percentile(elapsed, 0.9) if elapsed else None,
+                max_ms=elapsed[-1] if elapsed else None,
+                sum_ms=sum(elapsed) if elapsed else None,
+            )
+        )
+    return folded
+
+
+@dataclass(frozen=True, slots=True)
+class TelemetryPruneResult:
+    """What one fold did, in the words a log line needs."""
+
+    folded: tuple[str, ...]
+    rows_folded: int
+    aggregate_rows: int
+    hard_deleted: tuple[str, ...]
+    dry_run: bool
+
+    @property
+    def changed(self) -> bool:
+        return bool(self.folded or self.hard_deleted)
+
+
+def prune_telemetry(
+    state_dir: Path,
+    config: ObservabilityConfig,
+    today: date,
+    *,
+    dry_run: bool = False,
+) -> TelemetryPruneResult:
+    """Fold every out-of-window item-health month, then delete the shard it came from.
+
+    Order matters and it is the whole safety argument: the aggregate is written
+    and read back before the full-grain shard is unlinked, so a fold that cannot
+    be written leaves the shard exactly where it was. Nothing is deleted on the
+    strength of a write nobody checked.
+
+    `hard_delete_after_months` is applied last and defaults to null, which means
+    an aggregate is kept forever. Set, it must sit above `keep_months`, which the
+    config contract enforces - so a month is never deleted before it is folded.
+    """
+    keep_from = oldest_month_kept(today, config.keep_months)
+    folded: list[str] = []
+    rows_folded = 0
+    aggregate_rows = 0
+
+    for shard in month_shards(state_dir / ledger.ITEM_HEALTH_DIRNAME):
+        if shard.stem >= keep_from:
+            continue
+        rows = ledger.load_item_health_shard(shard)
+        summary = fold_month(rows)
+        folded.append(shard.stem)
+        rows_folded += len(rows)
+        aggregate_rows += len(summary)
+        if dry_run:
+            continue
+        target = ledger.telemetry_aggregate_path(state_dir, shard.stem)
+        ledger.write_telemetry_aggregate(target, summary)
+        # Read back before the shard goes. A fold nobody verified is a deletion
+        # nobody can undo.
+        if ledger.load_telemetry_aggregate(target) != summary:
+            raise ValueError(
+                f"{ledger.telemetry_aggregate_relpath(shard.stem)} did not read back as it "
+                f"was written, so {shard.name} stays"
+            )
+        shard.unlink()
+
+    hard_deleted: list[str] = []
+    if config.hard_delete_after_months is not None:
+        delete_from = oldest_month_kept(today, config.hard_delete_after_months)
+        for aggregate in month_shards(state_dir / ledger.TELEMETRY_AGGREGATE_DIRNAME):
+            if aggregate.stem >= delete_from:
+                continue
+            hard_deleted.append(aggregate.stem)
+            if not dry_run:
+                aggregate.unlink()
+
+    return TelemetryPruneResult(
+        folded=tuple(folded),
+        rows_folded=rows_folded,
+        aggregate_rows=aggregate_rows,
+        hard_deleted=tuple(hard_deleted),
+        dry_run=dry_run,
+    )
