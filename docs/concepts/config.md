@@ -358,6 +358,9 @@ a third time.
 every item or none, so a sampled day's rows are never a partial sample of that
 day and a per-day rate stays honest. Zero is refused because `evaluation_enabled`
 already says off, and two ways of saying off is how the two end up disagreeing.
+The draw itself - a digest of the run id, recorded on the run manifest - is
+described once, in
+[../concepts/evaluation.md](evaluation.md#the-scorer-is-sampled-by-run-and-nothing-else-is).
 
 `hard_delete_after_months` defaults to null - never - and that is a decision
 rather than an omission. `console.max_window_days` is 366, so a shard has to stay

@@ -56,6 +56,7 @@ from idhazh.contracts.app_config import (
     EvaluationConfig,
     ExtractConfig,
     InferenceConfig,
+    ObservabilityConfig,
     RetentionConfig,
     RunConfig,
 )
@@ -92,7 +93,7 @@ from idhazh.contracts.validation_row import (
     ValidationVerdict,
 )
 from idhazh.embed import DIMENSIONS, DTYPE, EMBEDDER_ID, ONNX_RELPATH, Embedder, text_for
-from idhazh.evals import evidence, golden, metrics, qualify, score, validation, writer
+from idhazh.evals import evidence, golden, metrics, qualify, sampling, score, validation, writer
 from idhazh.evals.hhem import (
     HHEM_REVISION,
     HHEM_SCORER_ID,
@@ -2247,6 +2248,11 @@ def stage_assemble(
     # by a later step in this same job, and `idhazh site-weight` measures it
     # there. See docs/architecture/publishing/layout.md.
     site_bytes, site_files = assemble.site_size(PUBLIC_ROOT)
+    observability = settings.app.observability
+    # The instrument that actually wrote this run's rows. No rows means no
+    # instrument, which is what tells a run that was switched off or not drawn
+    # apart from one whose weights would not load.
+    instruments = sorted({row.scorer_version for row in rows})
     manifest = assemble.build_manifest(
         plan=plan,
         day=day,
@@ -2264,6 +2270,11 @@ def stage_assemble(
         site_files=site_files,
         item_health_rows=item_health_rows,
         routes=routes,
+        evaluation_enabled=observability.evaluation_enabled,
+        evaluation_sample_rate=observability.sample_rate,
+        # The plan's own id, because that is the string the work shards hashed.
+        evaluation_sampled=sampling.run_is_sampled(plan.run_id, observability.sample_rate),
+        scorer_version=instruments[0] if len(instruments) == 1 else None,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(LEDGER, rows)
@@ -2652,6 +2663,34 @@ def _scorer(enabled: bool) -> object | None:
     return scorer
 
 
+def _scores_this_run(
+    observability: ObservabilityConfig, *, run_id: str, flag_allows: bool
+) -> bool:
+    """Whether the work stage should load a scorer for this run at all.
+
+    Three things have to agree. `observability.evaluation_enabled` is the
+    standing decision and is the default; `--no-faithfulness` overrides it for
+    one invocation, because a flag beats a file and no flag turns the scorer
+    back on; and at a rate below one the run has to be drawn.
+
+    The draw is per run, so it is taken here rather than inside the item loop -
+    a run scores everything or nothing (`evals/sampling.py`).
+    """
+    if not observability.evaluation_enabled:
+        LOG.info("faithfulness scoring is off in config")
+        return False
+    if not flag_allows:
+        return False
+    if not sampling.run_is_sampled(run_id, observability.sample_rate):
+        LOG.info(
+            "run not drawn for scoring run_id=%s sample_rate=%s",
+            run_id,
+            observability.sample_rate,
+        )
+        return False
+    return True
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="idhazh", description=__doc__)
     parser.add_argument(
@@ -2921,10 +2960,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 
     if args.stage in ("work", "run"):
+        work_plan = _load_plan(date)
         stage_work(
-            _load_plan(date),
+            work_plan,
             settings=settings,
-            scorer=_scorer(not args.no_faithfulness),
+            scorer=_scorer(
+                _scores_this_run(
+                    settings.app.observability,
+                    run_id=work_plan.run_id,
+                    flag_allows=not args.no_faithfulness,
+                )
+            ),
             shard=args.shard,
             shards=args.shards,
             fetcher=read_url,
