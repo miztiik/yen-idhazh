@@ -78,6 +78,23 @@ The rule above binds **colour that encodes meaning**. Read as a general ban on c
 
 The line is drawn by the question "would a reader be wrong about a fact if this were grey?" A gradient on the site header fails that question, so it is decoration. A gradient running red at the bad end of a chart passes it, so it is semantic and is refused - a reader would read the hue as the verdict.
 
+### A label's shape says whether it can be tapped
+
+> **An outline means you can act on it. A tinted fill means it is telling you something.**
+
+The reading page carries both, one line apart, and without this rule the second one to ship would have had to invent a look:
+
+| | Outlined | Tinted fill |
+| --- | --- | --- |
+| Example | the topic pill row above a day | a lens chip on an item's eyebrow |
+| Type | link or button | `<span>`, never focusable |
+| Size | `--text-sm`, tap-height | `--text-xs`, no minimum height |
+| Carries | a name and a count | a name only |
+
+**One tint for every member of a label family, not one per member.** A lens chip uses `--tint-accent` whatever the topic is: the word carries the category and the colour carries only "this is a topic". Six hues to say what six words already say would collide with the confidence ramp and the chart ramp, and a `war` chip in a warn hue would read as a severity we never assigned. The seventh lens then arrives with its slot already filled and needs no colour decision - which is the point.
+
+A tinted label is decorative under the rule above, because it repeats a word that is already there. It stays decorative only while it carries the word; a tinted chip carrying an icon alone would be semantic colour with no second signal, and is refused.
+
 ## Sufficiency is a gate, not a taste
 
 A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.
