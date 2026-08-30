@@ -50,6 +50,7 @@
 		type SkylineBar
 	} from '$lib/charts/glance';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
+	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
 	import type { FeedDayOutcome, Health, ModelDay } from './+page.server';
@@ -299,16 +300,6 @@
 
 	function percent(value: number | null): string {
 		return value === null ? '-' : `${value}%`;
-	}
-
-	/** A word count with its thousands grouped, or a dash where none was taken.
-	 *
-	 * Null is the state this exists for: a run before 2026-08-28 measured no
-	 * length at all, and printing that as `0` would say the source publishes
-	 * nothing - which is the opposite of what the column is asked.
-	 */
-	function words(value: number | null): string {
-		return value === null ? '-' : grouped(value);
 	}
 
 	/** Whole units, never a decimal, and never a zero that was really work.
@@ -657,7 +648,20 @@
 
 	<div data-windowed="source-cuts" data-window-days={cuts.days}>
 		<h2 class="console-h2">Sources cut short most often</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+
+		{#if cuts.cost}
+			<!-- What the next move of the cap would buy, and the first line of the
+			     section rather than the last. A count of cut articles says the cap
+			     fired; how much it removed says whether raising it is worth
+			     anything, and the n is what makes it a measurement. -->
+			<p class="mt-2 text-[0.9375rem] text-text-secondary" data-source-cuts-cost>
+				{cuts.cost.n} articles were cut short. Half of them lost more than {grouped(
+					cuts.cost.median
+				)} words each, and the longest lost {grouped(cuts.cost.max)}.
+			</p>
+		{/if}
+
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-intro>
 			The last {cuts.days} days, {cuts.articles}
 			{cuts.articles === 1 ? 'article' : 'articles'} between them. An article longer than the cap
 			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
@@ -677,52 +681,17 @@
 				No article was cut short in the last {cuts.days} days.
 			</p>
 		{:else}
-			<div class="console-table mt-3" data-source-cuts="table">
-				<table class="w-full text-[0.8125rem]">
-					<thead class="text-text-tertiary">
-						<tr class="border-b border-rule">
-							<th class="py-2 text-start font-normal">Source</th>
-							<th class="py-2 text-end font-normal">Cut short</th>
-							<th class="py-2 text-end font-normal">Articles</th>
-							<th class="py-2 text-end font-normal">Share cut</th>
-							<!-- A length ending where a count ends reads as one more count. The
-							     gap is what says this column measures something else. -->
-							<th class="py-2 ps-6 text-end font-normal">Longest article, words</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each cuts.rows as source (source.sourceId)}
-							<tr class="border-b border-rule" data-source-cut={source.sourceId}>
-								<td class="py-2">{source.sourceId}</td>
-								<td class="py-2 text-end tabular-nums" data-source-cell="cut">{source.cut}</td>
-								<td class="py-2 text-end tabular-nums" data-source-cell="articles"
-									>{source.articles}</td
-								>
-								<td class="py-2 text-end tabular-nums" data-source-cell="share"
-									>{percent(source.sharePct)}</td
-								>
-								<td class="py-2 ps-6 text-end tabular-nums" data-source-cell="longest"
-									>{words(source.longestWords)}</td
-								>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+			<div class="mt-3">
+				<SourceCutRange
+					rows={cuts.rows}
+					caps={cuts.caps}
+					width={data.console.chart_width}
+				/>
 			</div>
 
 			{#if cuts.moreSources > 0}
 				<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-source-cuts-more>
 					{cuts.moreSources} more sources had {cuts.moreCuts} cuts between them.
-				</p>
-			{/if}
-			{#if cuts.cost}
-				<!-- What the next move of the cap would buy. A count of cut articles says
-				     the cap fired; how much it removed says whether raising it is worth
-				     anything, and the n is what makes it a measurement. -->
-				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-cost>
-					{cuts.cost.n} articles were cut short. Half of them lost more than {grouped(
-						cuts.cost.median
-					)} words each, and the longest lost {grouped(cuts.cost.max)}.
 				</p>
 			{/if}
 		{/if}
