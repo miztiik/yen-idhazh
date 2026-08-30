@@ -716,23 +716,28 @@ that cannot commit has done its work for nothing. Protecting `main` is possible,
 but only after the direct pushes in those two workflows are redesigned or
 explicitly exempted.
 
-**`allow_auto_merge` was turned on anyway on 2026-08-31, and what it buys is
-narrower than the name suggests.** The setting was off on the argument that
-GitHub's auto-merge needs branch protection. That argument is half right: with
-nothing required, GitHub calls a green pull request `CLEAN` and refuses to queue
-it - `gh pr merge --auto` answers `Pull request is in clean status` and the
-merge has to be asked for again. What the setting does buy is the case that
-actually costs time here, which is a pull request that is NOT yet green:
-`gh pr merge <n> --squash --delete-branch --auto` on a pull request whose checks
-are still running queues the merge, and it lands the moment they pass rather
-than when somebody next looks. That removes the wait this repository really
-pays, because a branch is opened and merged in the same session.
+**`allow_auto_merge` was turned on on 2026-08-31, and on its own it buys
+nothing. Measured, not assumed.** The setting was off on the argument that
+GitHub's auto-merge needs branch protection, and that argument is right.
+`gh pr merge 303 --squash --delete-branch --auto` was run against a pull request
+whose four checks were still in flight: it **exited 0 and queued nothing**.
+`autoMergeRequest` read `null` and `mergeStateStatus` read `UNSTABLE`, with
+`rulesets` empty and `branches/main/protection` answering 404. A zero exit code
+is not evidence here - read `autoMergeRequest` through the GraphQL API instead.
 
-The remaining half - a green pull request that still needs one command - needs
-either a ruleset requiring the `gates` and `site` checks with
-`github-actions[bot]` on its bypass list, or the redesign above. Neither has
-been done, and a ruleset that forgets the bypass stops the digest publishing,
-so it is written here as the next step rather than taken quietly.
+The reason is that auto-merge queues a merge behind something that BLOCKS it.
+With no required status check nothing blocks, so there is nothing to queue
+behind, and GitHub declines rather than waiting for checks it was never told to
+care about.
+
+**What would make it work, and what that costs.** A repository ruleset on `main`
+requiring the `gates` and `site` checks, with `github-actions[bot]` on its
+bypass list. The bypass is load-bearing: `digest.yml` and `validate.yml` push
+state commits straight to `main` with the job's own token - the eval ledger, the
+seen-URL store, feed health, the digest payload - and a ruleset that forgets it
+stops the digest publishing that night. The setting stays on because it is free
+and is the half that cannot break anything; the ruleset is written here as the
+next step rather than taken quietly.
 
 **A squash commit takes its message from the pull request, not from the branch
 commits.** `squash_merge_commit_message` was `COMMIT_MESSAGES` until 2026-08-25.
