@@ -126,6 +126,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'chart-arm',
 		'failure-rate',
 		'feed-outcomes',
+		'model-cards',
 		'router-cost',
 		'run-health',
 		'site-cost-per-item',

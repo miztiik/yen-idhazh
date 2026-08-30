@@ -71,6 +71,17 @@ export interface ModelDay {
 	 * article mix on the run rather than anything the cap did.
 	 */
 	readInPartPct: number | null;
+	/** The summaries the two figures above are out of.
+	 *
+	 * The share's own denominator, carried rather than inferred. In a table it
+	 * sat one column away on the same row; on a card there is no row, and a share
+	 * whose denominator is off the screen invites a trend that is not there.
+	 *
+	 * It is the rows the flag still answers for, never the day's whole ledger, so
+	 * it can read lower than `summaries` on a day holding rows from both sides of
+	 * `CUT_FLAG_MEANS_A_CUT_FROM`. Null wherever `readInPart` is.
+	 */
+	readInPartOf: number | null;
 	/** Median share of a summary lifted word for word, as whole percent. */
 	copiedPct: number | null;
 	/** Median milliseconds the model spent writing one summary. */
@@ -180,6 +191,7 @@ function day(
 		// the articles.
 		readInPartPct:
 			readInPart === null ? null : Math.round((readInPart / cutKnown.length) * 100),
+		readInPartOf: readInPart === null ? null : cutKnown.length,
 		copiedPct: share === null ? null : Math.round(share * 100),
 		perItemMs: median(times),
 		perItemCutMs: median(summarizeMs(health.filter(wasCut))),
