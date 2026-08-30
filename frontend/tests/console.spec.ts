@@ -1293,25 +1293,41 @@ test('a mark reads out on the keyboard, and the readout closes on Escape', async
 	);
 });
 
-test('the candle reads out the sentence its title already carried', async ({ page }) => {
+test('the candle reads out its day and every series at that column', async ({ page }) => {
 	await page.goto('/console/');
 
 	const readout = page.locator('[data-readout="throughput"]');
-	await expect(readout).toHaveCount(0);
+	// The strip rests on the newest day rather than opening blank, so it never
+	// appears under the pointer and pushes the marks it explains out from under
+	// it. That is the stage-timing chart's rule, applied here unchanged.
+	await expect(readout).toHaveCount(1);
+	await expect(readout.locator('[data-readout-day]')).toContainText('the newest day');
 
 	const plot = page.locator('[data-throughput="chart"] svg');
-	await plot.focus();
-	await expect(readout).toHaveCount(1);
+	await plot.evaluate((node: SVGSVGElement) => node.focus());
 
-	// Decision: reuse `caption()` verbatim. The readout and the `<title>` are the
-	// same words, so there is one sentence about a day and not two.
-	const title = await page
-		.locator('[data-candle="read"][data-date="2026-08-19"] title')
-		.textContent();
-	await expect(readout).toContainText((title ?? '').trim());
+	// The readout carried `caption()` verbatim until 2026-08-30, on the rule that
+	// one day gets one sentence. The strip is now capped at a share of the plot,
+	// and the per-run list in `caption()` is the one clause that grows with the
+	// day's run count - four wrapped lines of it is not a readout. The `<title>`
+	// keeps every word; the strip keeps the median and the extent per series.
+	await expect(readout.locator('[data-readout-day]')).toHaveText(/^\d+ \w+ \d{4}$/);
+
+	// One row per series drawn, read against write off one hover rather than two.
+	const rows = await readout
+		.locator('[data-series-readout]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => (node.getAttribute('data-series-readout') ?? '').trim())
+		);
+	expect(rows).toEqual(['read', 'write']);
+	for (const series of rows) {
+		await expect(readout.locator(`[data-series-readout="${series}"] dd`).last()).toHaveText(
+			/^[\d.]+ \([\d.]+-[\d.]+\)$/
+		);
+	}
 
 	await expect(page.locator('[data-readout-hint="throughput"]')).toHaveText(
-		'Keyboard: Left and Right step through the days. Escape closes.'
+		'Point at a day to read it. Left and Right step through the days, Escape returns to the newest.'
 	);
 });
 
