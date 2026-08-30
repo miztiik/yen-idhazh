@@ -702,8 +702,11 @@
 
 	<StageTimings
 		days={data.timingDays}
+		span={viewport}
 		height={data.console.chart_height}
 		width={data.console.chart_width}
+		tickDensity={data.chart.tick_density}
+		readoutMaxShare={data.chart.readout_max_share}
 	/>
 
 	{#if data.modelWork.length === 0 && data.throughputDays.length === 0}
