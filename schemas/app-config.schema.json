@@ -177,6 +177,35 @@
       "additionalProperties": false,
       "description": "Knobs for the operator console's time viewport.",
       "properties": {
+        "band_outlier_rows": {
+          "default": 10,
+          "description": "How many summaries the console names as furthest from the length the prompt asked for. Capped, with the tail stated in a sentence, because the list exists to be acted on and the far tail is a one-word miss nobody chases. Ten, matching the source-cut table beside it.",
+          "minimum": 1,
+          "title": "Band Outlier Rows",
+          "type": "integer"
+        },
+        "chart_arm_coverage_pct": {
+          "default": 5.0,
+          "description": "The share of a day's published items that must carry a chart, in whole percent. Below this on the median day the arm is retired: an arm that reaches almost nothing is paying for a capability the digest does not use.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 100.0,
+          "title": "Chart Arm Coverage Pct",
+          "type": "number"
+        },
+        "chart_arm_minutes_target": {
+          "default": 6.0,
+          "description": "Router minutes per published chart above which the median day retires the chart arm. Drawn as a marker on the bar, never as a subtraction the reader performs.",
+          "exclusiveMinimum": 0.0,
+          "title": "Chart Arm Minutes Target",
+          "type": "number"
+        },
+        "chart_arm_rule_days": {
+          "default": 14,
+          "description": "The span the chart arm's retirement rule is stated over. A median taken over any other span is the same figure with a different meaning and nothing on the page to say which one is being read, so under this many days the section prints the rule's own span and no number at all.",
+          "minimum": 1,
+          "title": "Chart Arm Rule Days",
+          "type": "integer"
+        },
         "chart_height": {
           "default": 180,
           "minimum": 120,
@@ -1459,6 +1488,16 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
+      "version": "2026-08-30T21:15",
+      "why": "The chart arm is the only console section with a written decision rule in its own prose, and all three numbers in that rule were constants in a TypeScript module - so the one section that states a threshold was the one section an operator could not move a threshold on (Rule #6). The two limits are now markers on bars and the span is what decides whether a median is printed at all. Additive with defaults, so a config written before today still validates (section 11)."
+    },
+    {
+      "change": "console.band_outlier_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
+      "version": "2026-08-30T20:00",
+      "why": "The console's compression scatter became a per-day split plus a list of the summaries furthest from the length the prompt asked for, and a list that is capped needs the cap where an operator can move it. The scatter drew 2,740 marks in one colour, measured 2026-08-30, which rendered the dense middle as a block and hid the outliers - the only marks on it anybody could act on. Additive with a default, so a config written before today still validates (section 11)."
+    },
+    {
       "change": "observability.tracing_enabled added, defaulting to false.",
       "version": "2026-08-30T18:00",
       "why": "A work shard can now build a span tree, which is the one thing the three ledgers cannot hold: a start instant, a parent, and a step too small to earn a column. The robots read nests inside the fetch, and the prompt render and the reply parse sit either side of the model call, so a slow item finally says which of the five it was slow in. It is the only switch in this block that is off unconfigured, because it is the only instrument nothing reads: no page renders a span, no gate consults one, and a trace is evidence where a ledger row is the record (CLAUDE.md section 1b). Off is also what keeps CI clean - a publish job that could fail on a third party's availability is a worse job."
@@ -1767,7 +1806,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-30T18:00",
+      "default": "2026-08-30T21:15",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1781,5 +1820,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-30T18:00"
+  "version": "2026-08-30T21:15"
 }

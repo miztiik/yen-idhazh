@@ -405,23 +405,55 @@ export function loadManifests(root: string = DIGEST_ROOT): RunSummary[] {
 	return found;
 }
 
-/** Charts a reader can actually see on each published day.
+/** Articles each published day carries, from the day payload itself.
+ *
+ * The denominator of the site's per-article cost, and it is read from the same
+ * tree the numerator is: `site_bytes` measures `frontend/public/digest/`, and
+ * so does this. Taking the count off a run manifest instead would divide the
+ * bytes of one tree by somebody else's articles the first time a run planned
+ * items it did not publish - which is the lesson
+ * `backend/idhazh/retention.py` already wrote down about its own pairing.
+ */
+export function publishedItems(root: string = DIGEST_ROOT): Map<string, number> {
+	const found = new Map<string, number>();
+	for (const date of publishedDates(root)) {
+		const day = loadDay(date, root);
+		if (day === null) continue;
+		found.set(date, day.items.length);
+	}
+	return found;
+}
+
+/** What one published day put on a page: its items, and the charts among them. */
+export interface DayVisuals {
+	/** Every item the day published. The denominator of the arm's coverage rule. */
+	items: number;
+	/** Charts a reader can actually see. */
+	charts: number;
+}
+
+/** Charts a reader can actually see on each published day, and what they are of.
  *
  * Counted from the day payload rather than from the manifest, because the
  * manifest records what the router decided and this records what survived to
  * the page. A chart whose render failed, and a diagram, are both visuals and
  * neither is a published chart.
+ *
+ * The item count rides along rather than costing a second pass: the arm's
+ * second threshold is a share of what the day published, and the day payload is
+ * already open here.
  */
-export function publishedCharts(root: string = DIGEST_ROOT): Map<string, number> {
-	const found = new Map<string, number>();
+export function publishedCharts(root: string = DIGEST_ROOT): Map<string, DayVisuals> {
+	const found = new Map<string, DayVisuals>();
 	for (const date of publishedDates(root)) {
 		const day = loadDay(date, root);
 		if (day === null) continue;
-		found.set(
-			date,
-			day.items.filter((item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered')
-				.length
-		);
+		found.set(date, {
+			items: day.items.length,
+			charts: day.items.filter(
+				(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
+			).length
+		});
 	}
 	return found;
 }

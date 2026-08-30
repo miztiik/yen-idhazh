@@ -15,7 +15,7 @@
 	 */
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { axisLabels, cellFor, type LabelAlign } from '$lib/charts/run-history';
+	import { axisLabels, cellFor, denseCellFor, ROW_STRIP_PX, type LabelAlign } from '$lib/charts/run-history';
 	import {
 		datesIn,
 		failureSeries,
@@ -35,23 +35,29 @@
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
+	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
+	import { shortDate } from '$lib/format';
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
+		chartArm,
 		failureMix,
-		publishedTrend,
+		publishedSkyline,
 		routerCost,
 		runHealth,
-		ROUTER_MINUTES_TARGET,
-		RULE_WINDOW_DAYS,
-		siteGrowth,
-		sizeTrend
+		PAGES_CAP_BYTES,
+		siteCost,
+		siteRunway,
+		sizeGain,
+		type SkylineBar
 	} from '$lib/charts/glance';
+	import Sparkline from '$lib/components/Sparkline.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
+	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
-	import type { Health, ModelDay } from './+page.server';
+	import type { FeedDayOutcome, Health, ModelDay } from './+page.server';
 
 	let { data } = $props();
 
@@ -152,10 +158,69 @@
 		data.sourceCutsByWindow.find((table) => table.days === windowDays) ??
 			data.sourceCutsByWindow[0]
 	);
-	const windowedCost = $derived(routerCost(data.charts.filter((day) => inWindow(day.date))));
-	const windowedSize = $derived(
-		sizeTrend(data.manifests.filter((run) => inWindow(run.date)), windowDays)
+	const windowedCost = $derived(
+		routerCost(
+			data.charts.filter((day) => inWindow(day.date)),
+			data.console.chart_arm_minutes_target
+		)
 	);
+	/** The chart arm's own rule, read from config rather than written into a
+	 * component. An operator moves a threshold in `config/appearance.json`. */
+	const thresholds = $derived({
+		ruleDays: data.console.chart_arm_rule_days,
+		minutesTarget: data.console.chart_arm_minutes_target,
+		coveragePct: data.console.chart_arm_coverage_pct
+	});
+	const arm = $derived(
+		chartArm(
+			data.charts.filter((day) => inWindow(day.date)),
+			thresholds,
+			windowDays
+		)
+	);
+	/** Articles per published day, as a map, so the cost arithmetic reads it the
+	 * same way the server did. */
+	const articles = $derived(new Map(Object.entries(data.publishedItems)));
+	const windowedSize = $derived(sizeGain(data.manifests.filter((run) => inWindow(run.date))));
+	const perArticle = $derived(siteCost(data.manifests, articles, viewport));
+	/** One bar a day, over the window the control set. The card's own count is
+	 * the same window summed, so a reader can check the number against the
+	 * picture - which an all-time total under a thirty-day strip could not do. */
+	const skyline = $derived(publishedSkyline(data.charts, viewport));
+
+	/** The card's trend slot, in CSS pixels. */
+	const SKYLINE = { width: 220, height: 34 };
+
+	/** A day that published one chart against a busiest of forty is a fortieth
+	 * of the box, which draws as nothing at all. A hairline floor keeps a quiet
+	 * day distinguishable from a day no run happened on. */
+	function barHeight(bar: SkylineBar): number {
+		return bar.published === 0 ? 0 : Math.max(1, bar.height * SKYLINE.height);
+	}
+
+	/** The days every feed strip is drawn over. One axis for the whole list, so
+	 * two feeds can be read against each other: a feed broken since Tuesday and a
+	 * feed flaky all month draw the same picture on two different axes. */
+	const stripDates = $derived(data.feedDates.filter(inWindow));
+	/** Fixed rather than measured. Twenty strips each watching their own width is
+	 * twenty observers, and the room a list row has is a layout decision the
+	 * server can make as well as the browser can. */
+	const stripCell = $derived(denseCellFor(ROW_STRIP_PX, stripDates.length));
+	const stripAxis = $derived(axisLabels(stripDates));
+	const strips = $derived(
+		new Map(
+			data.feeds.map((feed) => [feed.feedId, new Map(feed.days.map((day) => [day.date, day]))])
+		)
+	);
+
+	/** What a square means, in words. Colour is one signal and never the only
+	 * one, and the two that are not a verdict take no band colour at all. */
+	const FEED_KEY: { outcome: FeedDayOutcome; text: string }[] = [
+		{ outcome: 'answered', text: 'answered' },
+		{ outcome: 'failed', text: 'failed, or answered with nothing' },
+		{ outcome: 'refused', text: 'politely refused' },
+		{ outcome: 'resting', text: 'not asked - resting' }
+	];
 
 	let strip = $state<HTMLDivElement | null>(null);
 
@@ -216,18 +281,91 @@
 		return () => observer.disconnect();
 	});
 
-	function mb(bytes: number): string {
-		return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	function mb(value: number): string {
+		return `${(value / 1024 / 1024).toFixed(1)} MB`;
 	}
+
+	/** Whole bytes with thousands separators. The per-article cost is a
+	 * four-digit number, so a rounded kilobyte would hide the whole range the
+	 * chart is drawn over. */
+	function bytes(value: number): string {
+		return `${Math.round(value).toLocaleString('en-GB')} B`;
+	}
+
+	/** A count of days a person can act on. Under ten it keeps a decimal,
+	 * because "0 days" and "0.4 days" are different answers. */
+	function days(value: number): string {
+		const whole = Math.round(value);
+		return whole >= 10 ? whole.toLocaleString('en-GB') : value.toFixed(1);
+	}
+
+	/** How much of the site's one hard limit is spent.
+	 *
+	 * `site_bytes` is the committed payload tree and the cap is measured on the
+	 * built bundle, which is larger - so this fraction is a floor on the real
+	 * one, never the whole of it. The card says so in words rather than leaving
+	 * the reader to find `backend/idhazh/contracts/run_manifest.py`.
+	 *
+	 * Null where no run has recorded a size. Null is not zero: a tree nobody
+	 * measured is not an empty tree, and `0.0 MB` beside a 1 GB cap reads as a
+	 * site with all of its room left.
+	 */
+	const payloadBytes = $derived(data.manifests[0]?.siteBytes ?? null);
+	const capFraction = $derived(payloadBytes === null ? null : payloadBytes / PAGES_CAP_BYTES);
+
+	/** Published days of room left, at the cost this window measured.
+	 *
+	 * Windowed, because it is a rate: the median article cost of the last seven
+	 * days and of the last ninety are different claims about the future, and a
+	 * runway that did not move with the span would be one of them wearing the
+	 * other's label.
+	 */
+	const runway = $derived(
+		payloadBytes === null
+			? null
+			: siteRunway(
+					payloadBytes,
+					perArticle.median,
+					data.itemCeiling,
+					data.siteBudgetMb * 1024 * 1024,
+					PAGES_CAP_BYTES
+				)
+	);
+
+	/** What the window added, in the unit the card's own number is in.
+	 *
+	 * A share is what this used to print, and from the 13,595 bytes of the oldest
+	 * committed manifest it read +73,933 percent - and green, on a card where
+	 * growth is the thing being watched. */
+	const sizeDelta = $derived.by(() => {
+		if (windowedSize === null) return `No second measurement in these ${windowDays} days.`;
+		return `${windowedSize >= 0 ? 'Up' : 'Down'} ${mb(Math.abs(windowedSize))} over ${windowDays} days.`;
+	});
 
 	/** The card takes the hue of what it means. The ceiling is 1 GB (Rule #2), so
 	 * three quarters of it is a warning and nine tenths is a fault. */
-	const SITE_CEILING = 1024 * 1024 * 1024;
 	const sizeTone = $derived.by(() => {
-		const bytes = data.manifests[0]?.siteBytes ?? 0;
-		if (bytes >= SITE_CEILING * 0.9) return 'bad' as const;
-		if (bytes >= SITE_CEILING * 0.75) return 'warn' as const;
+		if (capFraction === null) return 'neutral' as const;
+		if (capFraction >= 0.9) return 'bad' as const;
+		if (capFraction >= 0.75) return 'warn' as const;
 		return 'neutral' as const;
+	});
+
+	/** What the size card says under its number.
+	 *
+	 * Three states and they are three different facts: nothing measured, measured
+	 * but not growing, and growing at a rate a runway can be divided out of.
+	 */
+	const TREE =
+		"Latest run's size. It is the committed payload tree, not the published site: the site is larger, it is what the cap measures, and idhazh site-weight prints its runway after every build.";
+	const sizeNote = $derived.by(() => {
+		if (payloadBytes === null) {
+			return `No run has recorded a size yet, so there is nothing to hold against the 1 GB Pages cap. Over ${windowDays} days.`;
+		}
+		if (runway === null) {
+			return `${TREE} ${sizeDelta} No day in these ${windowDays} days grew the tree over an article it published, so there is no rate and no runway.`;
+		}
+		return `${TREE} ${sizeDelta} At ${bytes(perArticle.median ?? 0)} an article, ${data.itemCeiling} articles a day would fill this tree to 1 GB in about ${days(runway.toCap)} published days.`;
 	});
 
 	/** The same window the server drew with. Both sides derive it from the rows
@@ -260,16 +398,6 @@
 
 	function percent(value: number | null): string {
 		return value === null ? '-' : `${value}%`;
-	}
-
-	/** A word count with its thousands grouped, or a dash where none was taken.
-	 *
-	 * Null is the state this exists for: a run before 2026-08-28 measured no
-	 * length at all, and printing that as `0` would say the source publishes
-	 * nothing - which is the opposite of what the column is asked.
-	 */
-	function words(value: number | null): string {
-		return value === null ? '-' : grouped(value);
 	}
 
 	/** Whole units, never a decimal, and never a zero that was really work.
@@ -504,8 +632,6 @@
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
 	<p class="mt-1 text-[0.9375rem] text-text-secondary">
 		What the pipeline cost and how well it did, per day, from the committed ledger.
-		{data.totalRows} scored {data.totalRows === 1 ? 'item' : 'items'} on record.
-		{data.itemHealthRows} item-health {data.itemHealthRows === 1 ? 'row' : 'rows'} on record.
 	</p>
 
 	<!-- The window sits above everything it governs, so it is read before the
@@ -522,30 +648,61 @@
 	<!-- Six questions, six shapes. A different chart per question is the point:
 	     one shape repeated is what made this page read as a single instrument. -->
 	<h2 class="console-h2">At a glance</h2>
+	<!-- Bars, not a line: a count per day is a discrete quantity, and a line
+	     between two days claims a value for the hours in between that nobody
+	     counted. Drawn as markup rather than by the engine, so it is complete
+	     before any script runs and follows the window with one drawing. -->
+	{#snippet publishedBars()}
+		<svg
+			class="block"
+			width={SKYLINE.width}
+			height={SKYLINE.height}
+			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
+			role="img"
+			aria-label="Charts published each day over {windowDays} days, {skyline.total} in all, busiest day {skyline.busiest}"
+			data-published-days={skyline.bars.length}
+			data-published-total={skyline.total}
+		>
+			{#each skyline.bars as bar (bar.date)}
+				<rect
+					x={(bar.x * SKYLINE.width).toFixed(2)}
+					width={(bar.width * SKYLINE.width).toFixed(2)}
+					y={(SKYLINE.height - barHeight(bar)).toFixed(2)}
+					height={barHeight(bar).toFixed(2)}
+					fill="var(--chart-3)"
+					data-published-bar={bar.date}
+					data-published={bar.published}
+				/>
+			{/each}
+		</svg>
+	{/snippet}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<KpiCard
 			label="Charts published"
-			value={String(data.charts.reduce((sum, day) => sum + day.published, 0))}
-			note="over the days on record"
+			value={String(skyline.total)}
+			note="in these {windowDays} days"
 			tone="info"
-			movement={data.glance.publishedMovement}
-			trendSvg={data.glance.publishedSvg}
-			trendOption={publishedTrend(data.charts).option}
+			trend={skyline.empty ? null : publishedBars}
 		/>
 		<!-- Half windowed, on purpose. The size is a level and the operator wants
-		     today's, whatever span he is looking at; only the movement under it is
-		     a rate, and a rate has to say what it is over. -->
+		     today's, whatever span he is looking at; only the movement and the
+		     runway under it are rates, and a rate has to say what it is over. -->
 		{#key windowDays}
 			<KpiCard
 				label="Site size"
-				value={mb(data.manifests[0]?.siteBytes ?? 0)}
-				note="1 GB ceiling. Latest run's size; movement over {windowDays} days."
+				value={payloadBytes === null ? '-' : mb(payloadBytes)}
+				track={capFraction === null
+					? null
+					: {
+							fraction: capFraction,
+							caption: `${Math.round(
+								(PAGES_CAP_BYTES - (payloadBytes ?? 0)) / 1024 / 1024
+							).toLocaleString('en-GB')} MB left of the 1 GB Pages cap`
+						}}
+				note={sizeNote}
 				tone={sizeTone}
 				windowed="site-size-movement"
 				{windowDays}
-				movement={windowedSize.empty ? null : windowedSize.movement}
-				trendSvg={windowedSize.empty ? null : data.glance.sizeSvg}
-				trendOption={windowedSize.empty ? null : windowedSize.option}
 			/>
 		{/key}
 		{#if data.glance.healthSvg}
@@ -568,15 +725,15 @@
 				data-window-days={windowDays}
 			>
 				<figcaption class="text-[0.75rem] text-text-tertiary">
-					Router minutes per published chart, against the {ROUTER_MINUTES_TARGET} that retires the
+					Router minutes per published chart, against the {thresholds.minutesTarget} that retires the
 					arm. Over {windowDays} days.
 				</figcaption>
-				{#if windowDays < RULE_WINDOW_DAYS}
+				{#if windowDays < thresholds.ruleDays}
 					<!-- A median of the wrong span is worse than no median: it is the
 					     same figure with a different meaning and nothing on the page to
 					     say which one is being read. -->
 					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-too-narrow="router-cost">
-						The rule reads {RULE_WINDOW_DAYS} days. Widen the window to see it.
+						The rule reads {thresholds.ruleDays} days. Widen the window to see it.
 					</p>
 				{:else if windowedCost.empty}
 					<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="router-cost">
@@ -597,20 +754,60 @@
 		{/if}
 	</div>
 
-	{#if data.glance.growthSvg}
+	<div data-windowed="site-cost-per-item" data-window-days={windowDays}>
 		<Panel
-			title="Where the site's size came from"
-			note="Megabytes added or removed each day, starting from the oldest day on record. The ceiling is a rate problem, not a level problem, so what matters is which days added what."
+			title="What one more article costs"
+			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Megabytes a day was the item ceiling wearing a size label - a day gains six times as much when it publishes six times as many articles. This is the part a change to a payload can move. Over {windowDays} days."
 		>
-			<Chart
-				svg={data.glance.growthSvg}
-				option={siteGrowth(data.manifests).option}
-				width={760}
-				height={220}
-				label="Megabytes added or removed each day"
-			/>
+			{#if perArticle.empty}
+				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
+					No day in these {windowDays} days both published an article and recorded a size, so there is
+					no cost to divide.
+				</p>
+			{:else}
+				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-cost-summary>
+					{#if perArticle.spread === null}
+						One published day in these {windowDays} days, at {bytes(perArticle.median ?? 0)} an article.
+						One day is not a spread, so no day is flagged.
+					{:else}
+						Median {bytes(perArticle.median ?? 0)} an article, give or take {bytes(
+							perArticle.spread ?? 0
+						)}.
+						{perArticle.days.filter((day) => day.flagged).length} of {perArticle.days.length} days fall outside
+						that.
+					{/if}
+				</p>
+				{#if data.glance.perArticleSvg}
+					{#key windowDays}
+						<Chart
+							svg={data.glance.perArticleSvg}
+							option={perArticle.option}
+							width={760}
+							height={220}
+							label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
+						/>
+					{/key}
+				{/if}
+				<!-- The values, as text. It is what a chart owes anybody who cannot
+				     see it, and it is also the only honest way to check the flags:
+				     a chart that flags by eye cannot be tested, and the browser suite
+				     recomputes the band from exactly these numbers. -->
+				<ul class="sr-only" data-cost-days>
+					{#each perArticle.days as day (day.date)}
+						<li
+							data-cost-day={day.date}
+							data-cost-bytes={Math.round(day.bytesPerItem)}
+							data-cost-flagged={String(day.flagged)}
+						>
+							{day.date}: {bytes(day.bytesPerItem)} an article{day.flagged
+								? ', outside the band'
+								: ''}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		</Panel>
-	{/if}
+	</div>
 
 	{#if data.glance.mixSvg}
 		<Panel
@@ -718,13 +915,27 @@
 		window={viewport}
 		config={data.console}
 		bands={data.summarizeBands}
+		tickDensity={data.chart.tick_density}
 		onPan={pan}
 		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>
 
 	<div data-windowed="source-cuts" data-window-days={cuts.days}>
 		<h2 class="console-h2">Sources cut short most often</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+
+		{#if cuts.cost}
+			<!-- What the next move of the cap would buy, and the first line of the
+			     section rather than the last. A count of cut articles says the cap
+			     fired; how much it removed says whether raising it is worth
+			     anything, and the n is what makes it a measurement. -->
+			<p class="mt-2 text-[0.9375rem] text-text-secondary" data-source-cuts-cost>
+				{cuts.cost.n} articles were cut short. Half of them lost more than {grouped(
+					cuts.cost.median
+				)} words each, and the longest lost {grouped(cuts.cost.max)}.
+			</p>
+		{/if}
+
+		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-intro>
 			The last {cuts.days} days, {cuts.articles}
 			{cuts.articles === 1 ? 'article' : 'articles'} between them. An article longer than the cap
 			is read from the start and stopped there, so the end never reaches the machine. Sorted by how
@@ -744,52 +955,17 @@
 				No article was cut short in the last {cuts.days} days.
 			</p>
 		{:else}
-			<div class="console-table mt-3" data-source-cuts="table">
-				<table class="w-full text-[0.8125rem]">
-					<thead class="text-text-tertiary">
-						<tr class="border-b border-rule">
-							<th class="py-2 text-start font-normal">Source</th>
-							<th class="py-2 text-end font-normal">Cut short</th>
-							<th class="py-2 text-end font-normal">Articles</th>
-							<th class="py-2 text-end font-normal">Share cut</th>
-							<!-- A length ending where a count ends reads as one more count. The
-							     gap is what says this column measures something else. -->
-							<th class="py-2 ps-6 text-end font-normal">Longest article, words</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each cuts.rows as source (source.sourceId)}
-							<tr class="border-b border-rule" data-source-cut={source.sourceId}>
-								<td class="py-2">{source.sourceId}</td>
-								<td class="py-2 text-end tabular-nums" data-source-cell="cut">{source.cut}</td>
-								<td class="py-2 text-end tabular-nums" data-source-cell="articles"
-									>{source.articles}</td
-								>
-								<td class="py-2 text-end tabular-nums" data-source-cell="share"
-									>{percent(source.sharePct)}</td
-								>
-								<td class="py-2 ps-6 text-end tabular-nums" data-source-cell="longest"
-									>{words(source.longestWords)}</td
-								>
-							</tr>
-						{/each}
-					</tbody>
-				</table>
+			<div class="mt-3">
+				<SourceCutRange
+					rows={cuts.rows}
+					caps={cuts.caps}
+					width={data.console.chart_width}
+				/>
 			</div>
 
 			{#if cuts.moreSources > 0}
 				<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-source-cuts-more>
 					{cuts.moreSources} more sources had {cuts.moreCuts} cuts between them.
-				</p>
-			{/if}
-			{#if cuts.cost}
-				<!-- What the next move of the cap would buy. A count of cut articles says
-				     the cap fired; how much it removed says whether raising it is worth
-				     anything, and the n is what makes it a measurement. -->
-				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-source-cuts-cost>
-					{cuts.cost.n} articles were cut short. Half of them lost more than {grouped(
-						cuts.cost.median
-					)} words each, and the longest lost {grouped(cuts.cost.max)}.
 				</p>
 			{/if}
 		{/if}
@@ -800,9 +976,11 @@
 		Every feed's result is written down every run. A feed that answered with nothing counts as a
 		failure - an empty answer costs the digest the same articles a refused one does. A source
 		whose <code>robots.txt</code> says no does not: honouring it is the pipeline working. A feed
-		is rested after {data.quarantineAfter} failures. This section does not follow the window
-		above: it counts every run on record, because that is what the pipeline counted when it
-		decided to rest a feed, and two numbers for one decision is worse than one long count.
+		is rested after {data.quarantineAfter} failures in a row, and the count beside each feed is
+		that run of failures - the number the pipeline itself rests on, not every failure it has ever
+		had. That count does not follow the window above, because a windowed recount would disagree
+		with the rest the pipeline actually performed, and two numbers for one decision is worse than
+		one long count. The strip of days beside it does follow the window.
 	</p>
 
 	{#if data.feedRuns === 0}
@@ -815,36 +993,101 @@
 			{data.feedRuns === 1 ? 'run' : 'runs'}.
 		</p>
 	{:else}
-		<div class="console-table mt-3" data-feeds="table">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule">
-						<th class="py-2 text-start font-normal">Feed</th>
-						<th class="py-2 text-end font-normal">Failed</th>
-						<th class="py-2 text-end font-normal">Asked</th>
-						<!-- A number ending at the same pixel a sentence begins reads as one
-						     word. The gap is what separates the count from the reason. -->
-						<th class="py-2 ps-6 text-start font-normal">Last result</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.feeds as feed (feed.feedId)}
-						<tr class="border-b border-rule" data-feed={feed.feedId}>
-							<td class="py-2">
-								{feed.feedId}
-								{#if feed.nearQuarantine}
-									<span class="ms-2 text-[0.6875rem] text-band-low" data-rested>rested</span>
-								{/if}
-							</td>
-							<td class="py-2 text-end tabular-nums">{feed.failures}</td>
-							<td class="py-2 text-end tabular-nums">{feed.attempts}</td>
-							<td class="py-2 ps-6 text-text-secondary" data-feed-result>
-								{feed.lastResult}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
-							</td>
-						</tr>
+		<div
+			class="console-table mt-3"
+			data-windowed="feed-outcomes"
+			data-window-days={windowDays}
+		>
+			<p class="feeds-note">
+				Nearest to a rest first, then by how much has gone wrong in total. Each strip is one
+				square a day, oldest to newest, over the last {windowDays} days.
+			</p>
+
+			<ol class="feed-rows" data-feeds="table">
+				{#each data.feeds as feed (feed.feedId)}
+					<!-- The streak and the track length are published because they are what
+					     the marker is drawn from. A check that re-reads the bar's own
+					     numbers off the page cannot be fooled by a bar drawn to the wrong
+					     scale, which is the failure worth catching here: nothing about it
+					     looks broken. -->
+					<li
+						class="feed-row"
+						data-feed={feed.feedId}
+						data-feed-resting={feed.resting ? 'yes' : null}
+						data-feed-streak={feed.streak}
+						data-feed-failures={feed.failures}
+						data-feed-track={feed.marks.track}
+					>
+						<p class="feed-name">
+							<span>{feed.feedId}</span>
+							{#if feed.resting}
+								<span class="feed-rested" data-rested>rested</span>
+							{/if}
+						</p>
+
+						<div class="feed-bar" data-feed-cell="bar">
+							<TargetBar
+								marks={feed.marks}
+								label="Failures in a row"
+								valueText={feed.streak === 1 ? '1 failure' : `${feed.streak} failures`}
+								targetText="rested at {data.quarantineAfter} in a row"
+								emptyNote="Nothing has asked this feed yet."
+								tone="health"
+							/>
+						</div>
+
+						{#if stripDates.length > 0}
+							<div
+								class="feed-strip"
+								data-feed-strip={feed.feedId}
+								style="grid-template-columns: repeat({stripDates.length}, {stripCell.cell}px); gap: {stripCell.gap}px"
+							>
+								{#each stripDates as date (date)}
+									{@const day = strips.get(feed.feedId)?.get(date) ?? null}
+									<span
+										class="feed-square"
+										style="block-size: {stripCell.cell}px"
+										data-feed-day={date}
+										data-feed-outcome={day ? day.outcome : 'none'}
+										title={day ? day.label : `${shortDate(date)}: nothing on record.`}
+										aria-label="{feed.feedId} on {day
+											? day.label
+											: `${shortDate(date)}: nothing on record.`}"
+										role="img"
+									></span>
+								{/each}
+							</div>
+						{/if}
+
+						<p class="feed-result" data-feed-result>
+							{feed.lastResult}{feed.lastDetail ? ` - ${feed.lastDetail}` : ''}
+						</p>
+					</li>
+				{/each}
+			</ol>
+
+			{#if stripDates.length > 0}
+				<div
+					class="feed-axis"
+					style="inline-size: {stripCell.width}px; grid-template-columns: repeat({stripDates.length}, {stripCell.cell}px); gap: {stripCell.gap}px"
+				>
+					{#each stripAxis as label (label.column)}
+						<div class="feed-axis-slot" style="grid-column: {label.column}">
+							<span style={ANCHOR[label.align]} data-feed-axis={label.column}>{label.text}</span>
+						</div>
 					{/each}
-				</tbody>
-			</table>
+				</div>
+			{:else}
+				<p class="feeds-note" data-feed-strip-empty>
+					No run was recorded in these {windowDays} days, so there is no strip to draw.
+				</p>
+			{/if}
+
+			<ul class="feed-key">
+				{#each FEED_KEY as entry (entry.outcome)}
+					<li><span class="feed-square" data-feed-outcome={entry.outcome}></span>{entry.text}</li>
+				{/each}
+			</ul>
 		</div>
 	{/if}
 
@@ -977,54 +1220,59 @@
 		</div>
 	{/if}
 
-	{#if data.manifests.length > 0}
-		<h2 class="console-h2">Runs and site size</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			Run-level facts live in the manifest, never in an item row. Planned and failed are summed
-			across the day's runs; the site size is the last run's measurement, not their total. The
-			site has a 1 GB ceiling; this is the number that says how close it is.
-		</p>
-		<div class="console-table mt-3">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule">
-						<th class="py-2 text-start font-normal">Day</th>
-						<th class="py-2 text-end font-normal">Runs</th>
-						<th class="py-2 text-end font-normal">Planned</th>
-						<th class="py-2 text-end font-normal">Failed</th>
-						<th class="py-2 text-end font-normal">Site</th>
-						<th class="py-2 text-end font-normal">Files</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.manifests as run (run.date)}
-						<tr class="border-b border-rule">
-							<td class="py-2">{run.date}</td>
-							<td class="py-2 text-end tabular-nums">{run.runs}</td>
-							<td class="py-2 text-end tabular-nums">{run.planned}</td>
-							<td class="py-2 text-end tabular-nums">{run.failed}</td>
-							<td class="py-2 text-end tabular-nums">{mb(run.siteBytes)}</td>
-							<td class="py-2 text-end tabular-nums">{run.siteFiles}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
-	{/if}
-
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Charts drawn for articles</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			What the router cost and what it published, one row per day, newest first. Reached is every
-			item the router looked at. Asked the model is the part it sent a request for: an item whose
-			own numbers cannot fill a chart is answered without one. Charts drafted is what the model
-			asked for, and charts published is what survived the checks that run after it answers. A
-			dash means no router time was written down, so there is no rate to divide, and zero
-			reached means nothing committed says what the router did - it never ran, or its manifest
-			is older than these counts. Over 14 days with the chart-only gate on, the arm is retired
-			if the median day spends more than 6 router minutes per published chart, or puts a chart
-			on fewer than 5% of the items it published.
-		</p>
+		<div data-windowed="chart-arm" data-window-days={windowDays}>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+				Over {thresholds.ruleDays} days with the chart-only gate on, the arm is retired if the
+				median day spends more than {thresholds.minutesTarget} router minutes per published chart,
+				or puts a chart on fewer than {thresholds.coveragePct}% of the items it published. Over
+				{windowDays} days.
+			</p>
+			<div class="console-panel mt-3" data-charts="arm">
+				{#if arm.narrow}
+					<!-- The rule is stated over its own span, and a median of any other
+					     span is the same figure with a different meaning. -->
+					<p class="text-[0.9375rem] text-text-secondary" data-window-too-narrow="chart-arm">
+						The rule reads {thresholds.ruleDays} days. Widen the window to see it.
+					</p>
+				{:else}
+					<p class="text-[0.9375rem] text-text" data-charts-verdict>{arm.verdict}</p>
+					<div class="arm-figures">
+						<div class="arm-figure" data-arm-figure="minutes">
+							<TargetBar
+								marks={arm.minutesMarks}
+								label="Router minutes per chart"
+								valueText={arm.minutes === null ? '-' : arm.minutes.toFixed(1)}
+								targetText="Retired above {thresholds.minutesTarget}, on the median day."
+								emptyNote="No router time was written down in these {windowDays} days."
+							/>
+							<Sparkline
+								marks={arm.minutesTrend}
+								width={220}
+								height={30}
+								label="Router minutes per chart, day by day, over {arm.minutesDays} measured days"
+							/>
+						</div>
+						<div class="arm-figure" data-arm-figure="coverage">
+							<TargetBar
+								marks={arm.coverageMarks}
+								label="Published items with a chart"
+								valueText={arm.coverage === null ? '-' : `${Math.round(arm.coverage)}%`}
+								targetText="Retired below {thresholds.coveragePct}%, on the median day."
+								emptyNote="No day in these {windowDays} days published anything to put a chart on."
+							/>
+							<Sparkline
+								marks={arm.coverageTrend}
+								width={220}
+								height={30}
+								label="Share of published items carrying a chart, day by day, over {arm.coverageDays} measured days"
+							/>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
 		{#if data.flowSvg}
 			<div class="panel mt-4" data-flow="chart">
 				<Chart
@@ -1038,40 +1286,56 @@
 		{:else if data.flowNote}
 			<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
 		{/if}
-		<div class="console-table mt-3" data-charts="table">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule">
-						<th class="py-2 text-start font-normal">Day</th>
-						<th class="py-2 text-end font-normal">Reached</th>
-						<th class="py-2 text-end font-normal">Asked the model</th>
-						<th class="py-2 text-end font-normal">Charts drafted</th>
-						<th class="py-2 text-end font-normal">Charts published</th>
-						<th class="py-2 text-end font-normal">Router minutes</th>
-						<th class="py-2 text-end font-normal">Minutes per chart</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.charts as day (day.date)}
-						<tr class="border-b border-rule" data-chart-day={day.date}>
-							<td class="py-2">{day.date}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="reached">{day.reached}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="asked">{day.asked}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="drafted">{day.drafted}</td>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="published"
-								>{day.published}</td
-							>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
-								>{minutes(day.routerMinutes)}</td
-							>
-							<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
-								>{minutes(day.minutesPerChart)}</td
-							>
+		<!-- A native disclosure, not a button and a block: the console is complete
+		     before any script runs, and a button would leave the rows unreachable
+		     with JavaScript off. -->
+		<details class="console-disclosure mt-4" data-charts="daily">
+			<summary class="console-summary" data-charts-toggle>Show the daily figures</summary>
+			<p class="mt-3 text-[0.8125rem] text-text-tertiary">
+				One row per day, newest first. Reached is every item the router looked at. Asked the model
+				is the part it sent a request for: an item whose own numbers cannot fill a chart is
+				answered without one. Charts drafted is what the model asked for, and charts published is
+				what survived the checks that run after it answers. A dash means no router time was
+				written down, so there is no rate to divide, and zero reached means nothing committed says
+				what the router did - it never ran, or its manifest is older than these counts.
+			</p>
+			<div class="console-table mt-3" data-charts="table">
+				<table class="w-full text-[0.8125rem]">
+					<thead class="text-text-tertiary">
+						<tr class="border-b border-rule">
+							<th class="py-2 text-start font-normal">Day</th>
+							<th class="py-2 text-end font-normal">Reached</th>
+							<th class="py-2 text-end font-normal">Asked the model</th>
+							<th class="py-2 text-end font-normal">Charts drafted</th>
+							<th class="py-2 text-end font-normal">Charts published</th>
+							<th class="py-2 text-end font-normal">Items published</th>
+							<th class="py-2 text-end font-normal">Router minutes</th>
+							<th class="py-2 text-end font-normal">Minutes per chart</th>
 						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+					</thead>
+					<tbody>
+						{#each data.charts as day (day.date)}
+							<tr class="border-b border-rule" data-chart-day={day.date}>
+								<td class="py-2">{day.date}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="reached">{day.reached}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="asked">{day.asked}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="drafted">{day.drafted}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="published"
+									>{day.published}</td
+								>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="items">{day.items}</td>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
+									>{minutes(day.routerMinutes)}</td
+								>
+								<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
+									>{minutes(day.minutesPerChart)}</td
+								>
+							</tr>
+						{/each}
+					</tbody>
+				</table>
+			</div>
+		</details>
 	{/if}
 </section>
 
@@ -1096,18 +1360,27 @@ background: var(--color-surface);
 box-shadow: var(--shadow-sm);
 }
 
-/* The header row stays put while the body scrolls, which is what makes a
-   thirty-row table readable without a second glance at the top. */
-.console-table :global(thead th) {
-position: sticky;
-top: 0;
-z-index: 1;
-background: var(--color-surface);
+/* Two figures, side by side where there is room and stacked where there is
+   not. The rule names both, so reading one without the other answers half a
+   question. */
+.arm-figures {
+display: grid;
+grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+gap: var(--space-6);
+margin-block-start: var(--space-4);
+}
+
+.arm-figure {
+display: flex;
+flex-direction: column;
+gap: var(--space-2);
+min-inline-size: 0;
 }
 
 /* The rows are on demand, and the control that opens them is a native
    disclosure - so it works with no script, takes keyboard focus for free, and
    says which state it is in without a second label. */
+.console-panel,
 .console-disclosure {
 padding: var(--space-4);
 border: 1px solid var(--color-rule);
@@ -1138,5 +1411,186 @@ border: 0;
 border-radius: 0;
 background: none;
 box-shadow: none;
+}
+
+/* The header row stays put while the body scrolls, which is what makes a
+   thirty-row table readable without a second glance at the top. */
+.console-table :global(thead th) {
+position: sticky;
+top: 0;
+z-index: 1;
+background: var(--color-surface);
+}
+
+.feeds-note {
+margin: 0 0 var(--space-3);
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+/* One column set for the whole list, borrowed by every row, so a feed with a
+   two-digit count does not get a shorter bar than a feed with a one-digit one.
+   The same reason the ranked list does it. */
+.feed-rows {
+display: grid;
+grid-template-columns: minmax(8rem, 1fr) minmax(11rem, 1.4fr) auto;
+column-gap: var(--space-4);
+margin: 0;
+padding: 0;
+list-style: none;
+}
+
+.feed-row {
+grid-column: 1 / -1;
+display: grid;
+grid-template-columns: subgrid;
+grid-template-areas: 'name bar strip' 'result bar strip';
+align-items: center;
+padding-block: var(--space-2);
+border-block-end: 1px solid var(--color-rule);
+}
+
+.feed-row:last-child {
+border-block-end: 0;
+}
+
+.feed-name {
+grid-area: name;
+display: flex;
+align-items: center;
+gap: var(--space-2);
+margin: 0;
+font-size: var(--text-sm);
+line-height: var(--leading-sm);
+color: var(--color-text);
+overflow-wrap: anywhere;
+}
+
+/* The word, not the colour. A rested feed is the one thing on this list an
+   operator has to act on, so it is written out. */
+.feed-rested {
+padding-inline: var(--space-2);
+border-radius: var(--radius-full);
+background: var(--tint-bad);
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-secondary);
+white-space: nowrap;
+}
+
+/* The only human-readable cause on the page, and it is never traded for a
+   glyph. It keeps its own line rather than becoming a caption on the bar. */
+.feed-result {
+grid-area: result;
+margin: 0;
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-secondary);
+}
+
+.feed-bar {
+grid-area: bar;
+min-inline-size: 0;
+}
+
+.feed-strip,
+.feed-axis {
+display: grid;
+}
+
+.feed-strip {
+grid-area: strip;
+}
+
+.feed-square {
+display: block;
+border-radius: 2px;
+background: transparent;
+}
+
+/* Quarantine is a health fact and every square carries its own sentence as
+   well, so this is one of the two places a verdict ramp is the honest colour.
+   The FILL ramp, the same one the run strip above uses: a square this small is
+   a solid, not type, and the band tokens are weighted to be read as type. The
+   two states that are not a verdict take no verdict colour at all. */
+.feed-square[data-feed-outcome='answered'] {
+background: var(--fill-high);
+}
+
+.feed-square[data-feed-outcome='failed'] {
+background: var(--fill-low);
+}
+
+.feed-square[data-feed-outcome='refused'] {
+background: var(--tint-neutral);
+box-shadow: inset 0 0 0 1px var(--color-rule);
+}
+
+.feed-square[data-feed-outcome='resting'] {
+box-shadow: inset 0 0 0 1px var(--color-rule);
+}
+
+/* Flush with the strips above it: the strip column is the last one, so it ends
+   at the same edge the list does. */
+.feed-axis {
+margin-block-start: var(--space-2);
+margin-inline-start: auto;
+}
+
+.feed-axis-slot {
+position: relative;
+block-size: 1rem;
+}
+
+.feed-axis-slot span {
+position: absolute;
+top: 0;
+white-space: nowrap;
+font-size: 0.625rem;
+line-height: 1rem;
+font-variant-numeric: tabular-nums;
+color: var(--color-text-tertiary);
+}
+
+.feed-key {
+display: flex;
+flex-wrap: wrap;
+gap: var(--space-2) var(--space-5);
+margin: var(--space-4) 0 0;
+padding: 0;
+list-style: none;
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+.feed-key li {
+display: flex;
+align-items: center;
+gap: var(--space-2);
+}
+
+.feed-key .feed-square {
+inline-size: 12px;
+block-size: 12px;
+flex-shrink: 0;
+}
+
+/* The console frame is wide, and three columns on a laptop half-window crush
+   the bar the row exists to show. Below that everything stacks. */
+@media (max-width: 48rem) {
+.feed-rows {
+grid-template-columns: minmax(0, 1fr);
+}
+
+.feed-row {
+grid-template-areas: 'name' 'bar' 'strip' 'result';
+row-gap: var(--space-2);
+}
+
+.feed-axis {
+margin-inline-start: 0;
+}
 }
 </style>
