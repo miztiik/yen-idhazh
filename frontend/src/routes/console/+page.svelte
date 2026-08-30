@@ -34,7 +34,6 @@
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
-	import Sparkline from '$lib/components/Sparkline.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
 	import { shortDate } from '$lib/format';
