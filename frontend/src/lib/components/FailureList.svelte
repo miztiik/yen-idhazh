@@ -20,6 +20,7 @@
 		failedRows,
 		failureLedger,
 		failureRowKey,
+		grouped,
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import { sparklineMarks } from '$lib/charts/sparkline';
@@ -82,7 +83,7 @@
 			row: {
 				label: cause.code,
 				status: cause.stage,
-				value: `${cause.count} ${failureWord(cause.count)}`,
+				value: `${grouped(cause.count)} ${failureWord(cause.count)}`,
 				context:
 					`sources hit: ${cause.sources} of ${ledger.sourcesSeen}` +
 					` - ${occurrence(cause.lastAgo)}`
@@ -108,9 +109,9 @@
 	const remaining = $derived(Math.max(failures.length - page.length, 0));
 	const scope = $derived(
 		selectedCause
-			? `${selectedCause} failures`
+			? `${selectedCause} ${failureWord(failures.length)}`
 			: selectedCode
-				? `${selectedCode} failures`
+				? `${selectedCode} ${failureWord(failures.length)}`
 				: `failed ${failures.length === 1 ? 'item' : 'items'}`
 	);
 </script>
@@ -126,7 +127,7 @@
 		<RankedList
 			caption="Failure causes in this window, most failures first"
 			{ranked}
-			maxText="{ranked.max} {failureWord(ranked.max)}"
+			maxText="{grouped(ranked.max)} {failureWord(ranked.max)}"
 			measured={ledger.rows > 0}
 			unmeasuredNote="Nothing was recorded in this window."
 			emptyNote="No item failed in this window."
@@ -167,10 +168,10 @@
 	{:else}
 		<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-failure-scope>
 			{#if remaining > 0}
-				Showing {page.length} of {failures.length}
+				Showing {grouped(page.length)} of {grouped(failures.length)}
 				{scope} in this window.
 			{:else}
-				{failures.length}
+				{grouped(failures.length)}
 				{scope} in this window.
 			{/if}
 			Panel chips and the ledger above filter this list. It names items, not article text.
