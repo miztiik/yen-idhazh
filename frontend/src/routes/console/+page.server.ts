@@ -46,7 +46,7 @@ export type Health = 'green' | 'amber' | 'red';
 
 // The page prints these; the derivation is server-only, so the shape crosses
 // as a type and the ledger reader never reaches a browser bundle.
-export type { ModelDay, ModelRow, SourceCut, SourceCuts } from '$lib/server/model-work';
+export type { CapPoint, LengthRange, ModelDay, ModelRow, SourceCut, SourceCuts } from '$lib/server/model-work';
 
 export interface RunSquare {
 	runId: string;
@@ -561,7 +561,6 @@ export async function load() {
 		sourceCutsByWindow: console.window_presets.map((days) =>
 			sourceCuts(itemRows, {
 				days,
-				minAttempts: console.min_attempts_for_rate,
 				limit: SOURCE_CUT_ROWS
 			})
 		),
