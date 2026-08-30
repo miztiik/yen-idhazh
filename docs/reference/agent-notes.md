@@ -1345,6 +1345,68 @@ the variable protects the shell you remember to set it in and nothing else.
   imports - if the newest commit named there is the one that deleted it, the
   green check is already stale.
 
+## Two heavy gates on one box turn a green commit red
+
+- **The symptom arrives long before the cause: a backend suite that costs 10.1x
+  what CI charges for it, and a browser suite that fails on a commit CI has
+  already passed.** Measured 2026-08-30 on one Windows 11 developer machine, 12
+  logical CPUs, 31.8 GiB RAM. The same 1,675 tests ran in 62.68 s in CI and
+  630.55 s here, and eight local runs that day spanned 452.13 to 1,098.04 s.
+  Three browser suites started at once took 5.3, 5.5 and 8.0 min against 3.6 to
+  4.0 min alone, and the 8.0 min run reported 11 failures, the first of them a
+  three-minute timeout in `search.spec.ts` - on specs byte-identical to
+  `origin/main`, on a commit CI had passed. Nothing was broken.
+- **The cause is that nothing coordinates the gates.** Several agents work in
+  their own worktrees on one machine and each starts `pytest`, `npm run build`
+  or `npm run test:browser` the moment it is ready. During the three overlapping
+  suites the host sat at 98 to 100 percent CPU with the disk at or below 2
+  percent and at least 6.3 GiB of memory free, and fell to 30 percent as soon as
+  they exited. It is the cores. It is not paging and it is not the disk.
+- **`backend/utilities/gate_lock.py` runs one of those three at a time.** It
+  takes a lock file in the user temp directory, runs the command you gave it,
+  and releases. Wrap the gate itself, not the shell around it:
+
+  ```powershell
+  python backend/utilities/gate_lock.py -- python -m pytest
+  python backend/utilities/gate_lock.py -- npm run build
+  python backend/utilities/gate_lock.py -- npm run test:browser
+  ```
+
+  It imports nothing from `idhazh` and reads no configuration, so any supported
+  Python runs it from a fresh clone. `ruff`, `mypy`, `svelte-check`,
+  `shellcheck` and `bundle-gate` stay unwrapped - serialising a gate that
+  finishes in seconds only adds waiting. A blocked caller prints the holder's
+  pid, worktree, command and held-for seconds every 30 s, so "what is running?"
+  is answered without asking anybody.
+- **It cannot fail your gate, by design.** A lock whose pid is gone is
+  reclaimed and the reclaim is logged; a lock past `--stale-after` (7,200 s,
+  which is 6.6x the longest gate measured here) is reclaimed whatever its pid
+  says; and a caller that waits out `--timeout` runs the command unlocked rather
+  than returning an error. A scheduling aid that can manufacture a red gate is
+  worse than the contention it removes.
+- **CI never takes it.** The tool reads the `CI` variable a GitHub runner sets
+  and runs the command straight through, so a runner - one job alone on its own
+  machine - behaves exactly as it did before. Any test that drives the tool must
+  clear `CI` from the child environment, or it measures the carve-out instead of
+  the lock.
+- **`os.kill(pid, 0)` is not a liveness probe on Windows.** CPython routes every
+  signal except the two console events to `TerminateProcess`, so the textbook
+  probe can kill the process it was only asking about. Measured 2026-08-30 on
+  CPython 3.14.2 the child did survive it - but this repository supports 3.12
+  through 3.14 and a tool that guards other people's test runs may not rest on
+  which one somebody installed. `gate_lock.pid_alive` calls `OpenProcess` and
+  then `WaitForSingleObject` on Windows instead, and there is a second trap
+  inside that one: **`OpenProcess` still opens a handle for a process that has
+  already exited**, for as long as anything holds a handle to it, so the open on
+  its own reads a dead process as alive. Only the wait separates them - 258
+  (`WAIT_TIMEOUT`) is running, 0 is exited.
+- **Windows will not start `npm` from a bare name.** `subprocess.run(["npm",
+  ...])` raises `FileNotFoundError`, because the loader appends `.exe` and never
+  `.CMD`, while the identical call runs from the full path `shutil.which("npm")`
+  returns (`C:\Program Files\nodejs\npm.CMD` here). Measured 2026-08-30.
+  Resolving with `shutil.which` also keeps the run off a shell, so nothing in
+  the command line is ever read as a shell operator.
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.
