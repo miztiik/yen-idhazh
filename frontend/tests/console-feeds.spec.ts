@@ -357,6 +357,14 @@ test('every square carries a sentence, not only a colour', async ({ page }) => {
  * is also what proves the colour arrives through a custom property. */
 const THEMES = ['light', 'dark'] as const;
 
+/** The two outcomes that ARE a verdict, and the rung each one takes. Anything
+ * this returns null for is not a verdict and may wear no ramp colour at all. */
+function rungOf(outcome: string): 'high' | 'low' | null {
+	if (outcome === 'answered') return 'high';
+	if (outcome === 'failed') return 'low';
+	return null;
+}
+
 for (const theme of THEMES) {
 	test(`the squares are painted from the fill ramp, ${theme}`, async ({ page }) => {
 		await page.addInitScript(`localStorage.setItem('idhazh:theme', '${theme}')`);
@@ -375,41 +383,62 @@ for (const theme of THEMES) {
 				probe.style.backgroundColor = expression;
 				return getComputedStyle(probe).backgroundColor;
 			};
-			const painted = (outcome: string) => {
-				const node = document.querySelector(
-					`[data-feed-strip] [data-feed-outcome="${outcome}"]`
-				);
-				return node === null ? null : getComputedStyle(node).backgroundColor;
-			};
-			const out = {
-				fillHigh: resolved('var(--fill-high)'),
-				fillLow: resolved('var(--fill-low)'),
-				bandHigh: resolved('var(--band-high)'),
-				bandLow: resolved('var(--band-low)'),
-				answered: painted('answered'),
-				failed: painted('failed')
-			};
+			const fill = { high: resolved('var(--fill-high)'), low: resolved('var(--fill-low)') };
+			const band = { high: resolved('var(--band-high)'), low: resolved('var(--band-low)') };
 			probe.remove();
-			return out;
+			const painted = [...document.querySelectorAll('[data-feed-strip] [data-feed-outcome]')].map(
+				(node) => ({
+					outcome: node.getAttribute('data-feed-outcome') ?? '',
+					paint: getComputedStyle(node).backgroundColor
+				})
+			);
+			return { fill, band, painted };
 		});
 
-		expect(seen.answered, 'no answered square was drawn').not.toBeNull();
-		expect(seen.failed, 'no failed square was drawn').not.toBeNull();
-		expect(seen.answered, 'an answered square is not painted --fill-high').toBe(seen.fillHigh);
-		expect(seen.failed, 'a failed square is not painted --fill-low').toBe(seen.fillLow);
+		expect(seen.painted.length, 'no square was drawn').toBeGreaterThan(0);
+
+		// Every outcome the LEDGER can produce is asserted, rather than a pair
+		// this row hoped for: the canary lists only feeds that failed at least
+		// once, and its one feed with a clean read also has two empty ones on the
+		// same day, so no listed feed there can draw an answered square.
+		const verdicts = seen.painted.filter((square) => rungOf(square.outcome) !== null);
+		expect(
+			verdicts.length,
+			`no verdict square was drawn, so this asserts nothing - outcomes seen: ${JSON.stringify([
+				...new Set(seen.painted.map((square) => square.outcome))
+			])}`
+		).toBeGreaterThan(0);
+
+		for (const square of verdicts) {
+			const rung = rungOf(square.outcome) as 'high' | 'low';
+			expect(square.paint, `a ${square.outcome} square is not painted --fill-${rung}`).toBe(
+				seen.fill[rung]
+			);
+		}
+
+		// The other half of the ruling: a polite refusal and a day nobody asked
+		// are not verdicts, so they wear neither ramp.
+		for (const square of seen.painted.filter((item) => rungOf(item.outcome) === null)) {
+			expect(
+				[seen.fill.high, seen.fill.low, seen.band.high, seen.band.low],
+				`a ${square.outcome} square is wearing a verdict colour`
+			).not.toContain(square.paint);
+		}
 
 		if (theme === 'light') {
-			// The bite. Put the band tokens back and these two fail; in the dark
-			// theme they could not, because the two ramps agree there by design.
-			expect(seen.fillHigh, 'the light theme ramps are identical, so this proves nothing').not.toBe(
-				seen.bandHigh
-			);
-			expect(seen.answered, 'an answered square is still on the text-weight ramp').not.toBe(
-				seen.bandHigh
-			);
-			expect(seen.failed, 'a failed square is still on the text-weight ramp').not.toBe(
-				seen.bandLow
-			);
+			// The bite. Put the band tokens back and this fails; in the dark theme
+			// it could not, because the two ramps agree there by design.
+			expect(
+				seen.fill.low,
+				'the light theme ramps are identical, so this proves nothing'
+			).not.toBe(seen.band.low);
+			for (const square of verdicts) {
+				const rung = rungOf(square.outcome) as 'high' | 'low';
+				expect(
+					square.paint,
+					`a ${square.outcome} square is still on the text-weight ramp`
+				).not.toBe(seen.band[rung]);
+			}
 		}
 	});
 }
