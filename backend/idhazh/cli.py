@@ -1957,6 +1957,12 @@ def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int
     An item whose summary is not written yet was interrupted rather than failed,
     and this ledger has no way to correct a row once it is in.
 
+    Each row is stamped with this worker's own `shard`, which is the only moment
+    the number is known: `stage_assemble` runs once for the whole day and cannot
+    say which machine an item was for, so the rows it adds leave the cell empty.
+    `state/runtime-counters.csv` carries the same number at the run grain, and
+    the pair is what lets a per-item rate be read against the host that ran it.
+
     Returns the item-health rows and the eval rows that landed.
     """
     items_dir = _run_dir(plan.date) / "items"
@@ -1975,6 +1981,7 @@ def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int
                 summary=payload.summary,
                 date=plan.date,
                 run_id=plan.run_id,
+                shard=shard,
             )
         )
         if payload.eval_path.exists():

@@ -126,6 +126,24 @@ class ItemHealthRow(Contract):
     __schema_stem__: ClassVar[str] = "item-health-row"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-30",
+            change="Added nullable shard at the end of the row.",
+            why=(
+                "A run splits into as many as eight workers on eight different hosts, "
+                "and they are not alike: over the seven runs in "
+                "state/runtime-counters.csv on 2026-08-30, the fastest shard of a run "
+                "read the prompt between 1.10x and 4.19x faster than the slowest shard "
+                "of the same run. Nothing on this row said which worker produced it, so "
+                "the only figure available was pooled over the run, which averages away "
+                "exactly that difference - a slow day and a slow machine looked the "
+                "same. state/runtime-counters.csv already carries shard at the run "
+                "grain, so the same cell here is what lets the two ledgers join. "
+                "Appended at the end and nullable, so a row an earlier run wrote still "
+                "reads - and an empty cell means no worker claimed the row, never "
+                "shard 0."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-28",
             change="Added nullable source_words_before_cap at the end of the row.",
             why=(
@@ -248,6 +266,19 @@ class ItemHealthRow(Contract):
             "nothing else. A count, never the text. Null before 2026-08-28."
         ),
     )
+    shard: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "Which worker of the run produced this row, numbered the way cli.shard_of "
+            "numbers them. state/runtime-counters.csv carries the same number at the "
+            "run grain, so a per-shard rate can be read against the machine that ran "
+            "it. Null means no worker claimed the row: assemble writes the day's "
+            "census from one job and cannot know which machine an item was for, and "
+            "every row written before 2026-08-30 predates the column. Never read an "
+            "empty cell as shard 0."
+        ),
+    )
 
     @property
     def counts_against_source(self) -> bool:
@@ -310,6 +341,7 @@ class ItemHealthRow(Contract):
             "output_tokens",
             "cached_tokens",
             "source_words_before_cap",
+            "shard",
         )
         for name in optional_fields:
             if payload[name] == "":
