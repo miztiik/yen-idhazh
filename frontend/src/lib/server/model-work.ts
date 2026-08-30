@@ -278,8 +278,27 @@ export function wasCut(row: Record<string, string>): boolean {
  */
 interface Article {
 	sourceId: string;
+	/** The day the kept row was written. It dates the cut point, never the
+	 * article: two runs of one day read the same body. */
+	date: string;
 	before: number | null;
 	after: number | null;
+}
+
+/** The spread of one source's article lengths, in words.
+ *
+ * Three numbers rather than an average. The reason a source is on this list is
+ * its long tail, and a mean length hides exactly that: two sources averaging
+ * 1,400 words are a different problem when one of them never passes 2,000 and
+ * the other reaches 30,000.
+ *
+ * Taken over the articles a run measured before the cut. A row that recorded no
+ * length is left out rather than counted as an article of no length.
+ */
+export interface LengthRange {
+	min: number;
+	median: number;
+	max: number;
 }
 
 /** What the cap cost one source over the window. */
@@ -289,15 +308,12 @@ export interface SourceCut {
 	cut: number;
 	/** Articles this source published, cut or not. The denominator. */
 	articles: number;
-	/** Whole percent, or null under `min_attempts_for_rate`. */
-	sharePct: number | null;
-	/** The longest article this source published, before the cut.
+	/** Where this source's measured articles sit on the length axis.
 	 *
-	 * Null where no row recorded one. A zero here would say the source publishes
-	 * nothing, and the whole point of the column is to answer whether a bigger
-	 * cap would reach this source's articles.
+	 * Always present: a source reaches this list only by having a cut article,
+	 * and a cut is two recorded lengths compared, so at least one length exists.
 	 */
-	longestWords: number | null;
+	lengths: LengthRange;
 }
 
 /** What the cut removed, over the articles it removed anything from. */
@@ -305,6 +321,17 @@ export interface CutCost {
 	n: number;
 	median: number;
 	max: number;
+}
+
+/** One cut point, and the days it was the cut in force.
+ *
+ * The same shape `capsInView` produces for the compression plot, so one label
+ * writer serves both drawings.
+ */
+export interface CapPoint {
+	words: number;
+	first: string;
+	last: string;
 }
 
 /** The source table, and the two sentences under it. */
@@ -321,6 +348,20 @@ export interface SourceCuts {
 	 */
 	measured: boolean;
 	cost: CutCost | null;
+	/** Where the cut fell, read off the articles that were cut.
+	 *
+	 * One entry per distinct post-cap length in the window, oldest first - the
+	 * same rule `capsInView` reads the compression plot's lines by, so the two
+	 * drawings of one fact cannot disagree. A window can span a change to
+	 * `extract.truncation_cap_tokens`, and over the committed ledger a thirty-day
+	 * one does: rows cut at 1,923 words sit beside rows cut at 3,846.
+	 *
+	 * Derived from the same two cells `cutWords` compares and never from the
+	 * setting behind them. The direction that matters is the other one - a
+	 * setting-derived rule draws even when nothing in the window was cut at all,
+	 * and this one cannot.
+	 */
+	caps: CapPoint[];
 	days: number;
 	/** Every article in the window, cut or not.
 	 *
@@ -354,7 +395,7 @@ export const SOURCE_CUT_ROWS = 10;
  */
 export function sourceCuts(
 	health: Record<string, string>[],
-	options: { days: number; minAttempts: number; limit: number }
+	options: { days: number; limit: number }
 ): SourceCuts {
 	const dates = health.map((row) => row.date ?? '').filter((date) => date !== '');
 	const newest = dates.length === 0 ? '' : dates.reduce((a, b) => (a > b ? a : b));
@@ -372,12 +413,18 @@ export function sourceCuts(
 		const before = measured(row.source_words_before_cap);
 		const held = articles.get(key);
 		if (held === undefined) {
-			articles.set(key, { sourceId, before, after: measured(row.source_words) });
+			articles.set(key, {
+				sourceId,
+				date: row.date ?? '',
+				before,
+				after: measured(row.source_words)
+			});
 			continue;
 		}
 		if (before !== null && (held.before === null || before > held.before)) {
 			held.before = before;
 			held.after = measured(row.source_words);
+			held.date = row.date ?? '';
 		}
 	}
 
@@ -401,14 +448,7 @@ export function sourceCuts(
 			sourceId,
 			cut: cut.length,
 			articles: group.length,
-			// A share over four articles is not a measurement. The same knob the
-			// failure panels read, so two shares on one page cannot disagree about
-			// when a denominator is too small to divide by.
-			sharePct:
-				group.length < options.minAttempts
-					? null
-					: Math.round((cut.length / group.length) * 100),
-			longestWords: lengths.length === 0 ? null : Math.max(...lengths)
+			lengths: spread(lengths)
 		});
 	}
 
@@ -430,8 +470,51 @@ export function sourceCuts(
 						median: sorted[Math.floor(sorted.length / 2)],
 						max: sorted[sorted.length - 1]
 					},
+		// Over every article in the window, including the sources the list did not
+		// reach: the cut point is a fact about the window, not about ten rows.
+		caps: capPoints([...articles.values()]),
 		days: options.days,
 		articles: articles.size
+	};
+}
+
+/** One entry per distinct post-cap length among the cut articles, oldest first.
+ *
+ * The body of `capsInView`, over the articles rather than over the compression
+ * plot's points. It lives here rather than being imported because this module
+ * imports nothing at runtime.
+ */
+function capPoints(articles: Article[]): CapPoint[] {
+	const spans = new Map<number, { first: string; last: string }>();
+	for (const article of articles) {
+		if (cutWords(article.before, article.after) === null) continue;
+		const words = article.after as number;
+		const span = spans.get(words);
+		if (span === undefined) {
+			spans.set(words, { first: article.date, last: article.date });
+			continue;
+		}
+		if (article.date < span.first) span.first = article.date;
+		if (article.date > span.last) span.last = article.date;
+	}
+	return [...spans.entries()]
+		.map(([words, span]) => ({ words, first: span.first, last: span.last }))
+		.sort((a, b) => a.first.localeCompare(b.first) || a.words - b.words);
+}
+
+/** The shortest, the middle and the longest of a set of lengths.
+ *
+ * The median is rounded to a whole word. Two middles averaged can land on a
+ * half, and the console prints no decimal anywhere - half a word is not a
+ * length anybody can act on.
+ */
+function spread(values: number[]): LengthRange {
+	const sorted = [...values].sort((a, b) => a - b);
+	const middle = median(sorted);
+	return {
+		min: sorted[0] ?? 0,
+		median: middle === null ? 0 : Math.round(middle),
+		max: sorted[sorted.length - 1] ?? 0
 	};
 }
 

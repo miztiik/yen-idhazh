@@ -138,8 +138,11 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 
 /** The three numbers the source section prints about its own window. */
 async function cutFacts(page: Page) {
+	// Named, not positional. The cost sentence sits above this one now, and a
+	// `p` picked by order silently reads whichever paragraph moved into first
+	// place rather than failing.
 	const intro = (
-		await page.locator('[data-windowed="source-cuts"] p').first().innerText()
+		await page.locator('[data-source-cuts-intro]').innerText()
 	).replace(/\s+/g, ' ');
 	const more = (await page.locator('[data-source-cuts-more]').innerText()).replace(/\s+/g, ' ');
 	const cost = (await page.locator('[data-source-cuts-cost]').innerText()).replace(/\s+/g, ' ');

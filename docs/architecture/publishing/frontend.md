@@ -646,11 +646,11 @@ Three surfaces do not simply follow the span, and each says so on the page:
 
 `Sources cut short most often` used to hard-code seven days. It follows the
 control now, and the section prints its own denominator, which at seven days
-runs as low as six articles. Its table is aggregated once per preset at build
-time - four tables of ten rows costs less than one fetch, and it keeps the
-section working with no script at all. It follows the window's *length* rather
-than where a pan leaves it, and the section says so: the days it reads always
-end on the newest day the ledger holds.
+runs as low as six articles. Its rows are aggregated once per preset at build
+time - four sets of ten costs less than one fetch, and it keeps the section
+working with no script at all. It follows the window's *length* rather than
+where a pan leaves it, and the section says so: the days it reads always end on
+the newest day the ledger holds.
 
 **The prerendered seed carries that same window, and no more.** The server used
 to concatenate every committed month and inline all of it, so the console
@@ -1107,7 +1107,7 @@ about it, and each one is on the surface that already owns its grain.
 | `Time to write one`, second figure | the model table | one day | `state/item-health/` |
 | `Too long to send` | the model table | one day | `state/item-health/` |
 | `n read only in part` | the run square's own label | one run | `state/item-health/` |
-| `Sources cut short most often` | its own table | one source, 7 days | `state/item-health/` |
+| `Sources cut short most often` | its own range plot | one source, the open window | `state/item-health/` |
 
 **The run grain is a clause on a label and never a published figure.** Measured
 2026-08-29 over the 19 committed runs, the count is 1 to 12 articles of 160 to
@@ -1124,15 +1124,53 @@ because a share whose numerator and denominator answer different questions is
 not a share. Both are null - a dash, never a zero - on a day made only of older
 rows.
 
-**The source table is aggregated on the server and ships ten rows.** Seven days
-of the committed ledger is a few thousand rows, and this page inlines whatever
-it is handed, so the browser never sees the rows the table was made from. The
-window ends on the newest day the ledger holds rather than on the build clock,
-so rebuilding an old tree prints what that tree said rather than an empty table.
-The 7 days and the 10 rows are constants in
+**The source section is a range plot, and the cap is a rule across it.** It was
+five columns of numbers, and the one number every column had to be read against
+- where the cut falls - appeared nowhere in the section. One row per source now,
+on a log word-length axis, with the shortest, middle and longest article that
+source published drawn as a track, and a dashed rule at the cut point across
+every row. The part of a track right of the rule is where the cap bites, and the
+distance is the text the machine never read. The axis is a log one because the
+lengths span more than two decades: a 400-word note and a 9,000-word feature sit
+on the same plot, and a linear axis puts every short source on the left edge.
+
+**One rule per cut point, not one rule.** `caps` is one entry per distinct
+post-cap length among the window's cut articles, oldest first - the same rule
+`capsInView` reads the compression plot's lines by, so two drawings of one fact
+cannot disagree. A thirty-day window over the committed ledger holds two of
+them, 1,923 words and 3,846, because the cap moved on 29 August. Past the widest
+of them an article lost text whichever cut was in force, so the emphasised span
+starts there and says the strong thing; the narrower rule is drawn with its own
+dates, so the move is visible rather than averaged away.
+
+**The rule is read off the rows and never off the setting.** Every cut point
+comes off the `source_words` cell a run wrote after its own cap fired. Two
+things break if the page reads `extract.truncation_cap_tokens` instead. The
+setting is one number, so a window spanning a change draws one rule where the
+rows say two - measured on this tree the file says 5,000 tokens, which is 3,846
+words, and half the window's cut rows sit at 1,923. And a rule from the file
+draws even in a window where nothing was cut at all, which a derived one cannot.
+[frontend/tests/console-sources.spec.ts](../../../frontend/tests/console-sources.spec.ts)
+holds it with a pair of calls over rows cut at two different lengths: no
+constant satisfies both.
+
+**Two columns went, and what a reader loses is named.** `Share cut` is gone: it
+was dashed below `console.min_attempts_for_rate`, it was explicitly not the sort
+key, and a rate ranking was already ruled wrong here. What is lost is the share
+as a number - a source at 55 percent and one at 12 percent now read the same
+until their two counts are compared, and both counts are on the row.
+`Cut short` and `Articles` are gone as columns and are the row's own label,
+`17 of 38 cut`, which keeps the count sort and puts the denominator beside the
+track it describes. Authority: Susan, 2026-08-30.
+
+**Aggregated on the server, ten rows per preset.** A window of the committed
+ledger is a few thousand rows, and this page inlines whatever it is handed, so
+the browser never sees the rows the plot was made from. The window ends on the
+newest day the ledger holds rather than on the build clock, so rebuilding an old
+tree draws what that tree said rather than an empty plot. The 10 rows are a
+constant in
 [frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)
-and not config knobs, because the table's own first sentence states the number -
-a knob there is a way to make the copy lie.
+and not a config knob, because a knob there is a way to make the copy lie.
 
 **A cut is two cells of one row compared, and never a count against the cap.**
 `source_words_before_cap > source_words` is the whole test
