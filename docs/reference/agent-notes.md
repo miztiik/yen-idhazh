@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -1069,6 +1069,11 @@ the variable protects the shell you remember to set it in and nothing else.
   pattern written for `PIP_EXIT` also fires on `ENSUREPIP_EXIT` and the run
   reads as finished while it is still going. Anchor the pattern and pick names
   that are not substrings of each other.
+- **The launch itself can silently not happen.** On 2026-08-30 a
+  `Start-Process pwsh -WindowStyle Hidden ...` returned with no error, no child
+  appeared, and the missing gate read as a slow one for two polls. `Test-Path`
+  the log file before reading it: false means the script never started, and the
+  answer is to send the launch again rather than to keep polling.
 - **Write every long gate to a uniquely named file and read the file back.**
   `... *> "$env:TEMP\yi_<row>_pytest.txt"`, then read that file. The terminal
   pane shows whoever spoke last, which may not be you.

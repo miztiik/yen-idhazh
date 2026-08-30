@@ -8,12 +8,14 @@ from __future__ import annotations
 
 import csv
 import json
+import logging
+import re
 from pathlib import Path
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
 
-from idhazh import config, extract, ledger, summarize, telemetry
+from idhazh import cli, config, extract, ledger, summarize, telemetry
 from idhazh.contracts.article import Article, ArticleStatus
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.feed_health import FetchOutcome
@@ -706,3 +708,59 @@ def test_every_migrated_item_health_row_leaves_the_shard_empty() -> None:
         predates = [record for record in rows if record["version"] < "2026-08-30"]
         assert predates, f"{relpath} holds no row older than the column, so nothing was migrated"
         assert {record["shard"] for record in predates} == {""}
+
+
+# --- The event envelope ------------------------------------------------------
+
+
+def test_a_summarize_failure_logs_the_envelope_the_helper_built(
+    caplog: pytest.LogCaptureFixture,
+) -> None:
+    """A captured stream is the fixture, so the record is what gets asserted.
+
+    Every event is a plain serializable payload, which is what lets a test read
+    back what a stage logged with no mocks and no network (Rule #7). Asserting
+    the whole key set matters more than any one value: the point of the helper
+    is that a second emitter cannot ship a different set.
+    """
+    with caplog.at_level(logging.WARNING, logger="idhazh"):
+        cli._log_no_reply(
+            article(),
+            model_id="qwen3.5-9b-q4_k_m",
+            code=FailureCode.MODEL_UNREACHABLE,
+            error=OSError("connection refused"),
+            run_id="2026-08-21-1",
+        )
+
+    assert len(caplog.records) == 1
+    envelope = json.loads(caplog.records[0].getMessage())
+
+    assert sorted(envelope) == ["ctx", "data", "level", "name", "run", "src", "ts", "v"]
+    assert re.fullmatch(r"[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z", envelope["ts"])
+    assert envelope["src"] == ItemStage.SUMMARIZE.value
+    assert envelope["v"] == telemetry.ENVELOPE_VERSION
+    assert envelope["run"] == "2026-08-21-1"
+    assert envelope["name"] == telemetry.EventName.ITEM_SUMMARIZE_FAILED.value
+    assert envelope["level"] == telemetry.EventLevel.WARNING.value
+    assert envelope["ctx"] == {
+        "item_id": article().item_id,
+        "source_id": article().source_id,
+        "model_id": "qwen3.5-9b-q4_k_m",
+    }
+    assert envelope["data"] == {
+        "failure_code": FailureCode.MODEL_UNREACHABLE.value,
+        "error_type": "OSError",
+    }
+
+
+def test_the_concept_page_names_no_event_the_code_cannot_emit() -> None:
+    """The page listed 20 names and one of them had an emitter.
+
+    So the list read as a promise, and nothing told a reader which names fire.
+    This is the check that stops the page and the vocabulary drifting apart
+    again, in either direction.
+    """
+    page = (REPO_ROOT / "docs" / "concepts" / "telemetry.md").read_text(encoding="utf-8")
+    named = set(re.findall(r"`((?:run|stage|item)\.[a-z.]+)`", page))
+
+    assert named == {name.value for name in telemetry.EventName}
