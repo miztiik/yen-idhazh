@@ -163,7 +163,7 @@ function writeItemHealthCanary() {
 	 * zero: a source whose lengths are all empty publishes articles nobody
 	 * measured, not articles of no length.
 	 */
-	const article = (rowDate, run, source, index, before, after) =>
+	const article = (rowDate, run, source, index, before, after, summaryWords = 60) =>
 		line({
 			version: '2026-08-29T09:00',
 			date: rowDate,
@@ -177,7 +177,7 @@ function writeItemHealthCanary() {
 			outcome: 'ok',
 			source_chars: after * 6,
 			source_words: after,
-			summary_words: 60,
+			summary_words: summaryWords,
 			source_words_before_cap: before
 		});
 
@@ -209,6 +209,17 @@ function writeItemHealthCanary() {
 					// longer than anything the source was cut at. A column that took the
 					// largest `source_words` would print 30,000 and mean nothing by it.
 					rows.push(article(sourceDay, 1, source, index, '', 30000));
+					continue;
+				}
+				if (source === 'cut-k' && index === articles - 1) {
+					// The one summary that ran PAST its band. Every other row this fixture
+					// writes lands inside its band or short of it, so without this the
+					// third state of the day's split is a state the suite cannot reach and
+					// an implementation that never says "too long" passes every assertion.
+					// 404 words asks for 50 to 90, so 260 is 170 words past - the widest
+					// miss in the fixture either way, which is what puts it top of the
+					// outlier list.
+					rows.push(article(sourceDay, 1, source, index, 400 + index, 400 + index, 260));
 					continue;
 				}
 				rows.push(article(sourceDay, 1, source, index, 400 + index, 400 + index));

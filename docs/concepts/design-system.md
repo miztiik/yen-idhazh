@@ -488,15 +488,17 @@ Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
 
 Rejected here: the cut share on the run-health strip (a 16px square has no room
 for a number, and it answers "did it work" rather than "what did it read"); a
-linear length axis (the lengths span more than two decades, and linear crushes
-every short source onto the left edge - Carmack, 2026-08-30); keeping the table
-and printing the cap in the intro sentence (recorded as the fallback if the
-plot overran; it answers "how far past the cap" by subtraction rather than by
-looking - Susan, 2026-08-30); tinting rows by share cut (a source at 55 percent
-is not broken, so the tint would invent a fault); a gauge, dial, donut or
-progress bar (six percent on a dial is one pixel of arc); a before-and-after of
-a cap change on this page (two caps over two different article sets is two
-measurements, not a trend, and that claim belongs in
+histogram of article lengths (the engineer's chart - it answers what the corpus
+looks like, and this section exists to answer whether raising the cap would
+reach a source); a linear length axis (the lengths span more than two decades,
+and linear crushes every short source onto the left edge - Carmack, 2026-08-30);
+keeping the table and printing the cap in the intro sentence (recorded as the
+fallback if the plot overran; it answers "how far past the cap" by subtraction
+rather than by looking - Susan, 2026-08-30); tinting rows by share cut (a source
+at 55 percent is not broken, so the tint would invent a fault); a gauge, dial,
+donut or progress bar (six percent on a dial is one pixel of arc); a
+before-and-after of a cap change on this page (two caps over two different
+article sets is two measurements, not a trend, and that claim belongs in
 [../reference/measurements.md](../reference/measurements.md)); and a table
 component shared with `Feeds that failed` (an abstraction for two call sites -
 reversed on 2026-08-29, when the count reached four; the shape is the ranked

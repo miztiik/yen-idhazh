@@ -83,6 +83,8 @@ export interface ConsoleConfig {
 	chart_height: number;
 	chart_width: number;
 	failure_list_max: number;
+	/** How many summaries the band section names before the tail sentence. */
+	band_outlier_rows: number;
 }
 
 /** What on-device archive search reads, keeps and shows. */
@@ -181,7 +183,8 @@ const CONSOLE_DEFAULTS: ConsoleConfig = {
 	min_attempts_for_rate: 5,
 	chart_height: 180,
 	chart_width: 600,
-	failure_list_max: 25
+	failure_list_max: 25,
+	band_outlier_rows: 10
 };
 const ASSIST_DEFAULTS: AssistConfig = {
 	similarity_floor: 0.35,
