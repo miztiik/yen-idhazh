@@ -29,10 +29,10 @@ playwright/.cache/
 .DS_Store
 Thumbs.db
 
-# Per-developer editor settings, not repo policy. Nothing here changes what the
-# pipeline or the site does, and an untracked copy otherwise shows up in every
-# `git status` as noise a reader has to re-triage.
-.vscode/
+# New VS Code text uses the repository's LF policy. Every other editor setting
+# remains per-developer state and stays out of `git status`.
+.vscode/*
+!.vscode/settings.json
 
 # Local inference weights. Multi-gigabyte GGUF files - Qwen3-4B-Q4_K_M is
 # 2.4 GB and Qwen3-8B-Q4_K_M is 4.8 GB - against a 100 MB per-file ceiling on
