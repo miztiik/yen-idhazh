@@ -1181,6 +1181,22 @@ jobs:
           bash .github/scripts/commit-and-push.sh
           state
 
+      # The commit steps above rebase when the push loses a race, and the
+      # rebuild there rewrites the day against the tip that won. `frontend/build`
+      # still holds the build made before any of that, so the gate below would
+      # weigh one tree's pages against another tree's records. Run 33270983446
+      # failed exactly there: /console/ read 746 B under a record that arrived
+      # with the rebase, while the build it measured was 5 B off the record its
+      # own source carried. The day was fine and had already published.
+      #
+      # `npm ci` is deliberately not repeated. frontend/package-lock.json moved
+      # 8 times in 60 days against about 8 frontend source commits a day, so a
+      # reinstall would delete node_modules on every run to cover the rarer of
+      # the two. The build alone is 17 s and writes only gitignored output.
+      - name: Rebuild the site against the tree that was pushed
+        working-directory: frontend
+        run: npm run build
+
       # The other severity, and the reason it is down here. A page heavier than
       # the weight recorded for it in config/idhazh.json still reads correctly:
       # what grew is the document, not the meaning. Losing the day for it also
@@ -1190,9 +1206,8 @@ jobs:
       # It stays fatal. The job goes red, main's next CI goes red with it, and
       # somebody re-measures the ceiling - one line in config/idhazh.json.
       #
-      # It reads the build made above, in both positions: nothing rebuilds the
-      # site after `Commit the day` rebuilds the day against origin's new tip.
-      # That is why the old order bought less than it read like.
+      # It reads the rebuild above, so its numbers describe the tree that was
+      # pushed rather than the one this job started from.
       - name: Bundle gate - encoder, first-load weight, page ceilings
         working-directory: frontend
         run: npm run bundle-gate
