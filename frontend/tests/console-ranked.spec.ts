@@ -347,7 +347,7 @@ test.describe('the ranked list, rendered', () => {
 	test('nothing recorded and nothing found say different things', async ({ page }) => {
 		const notes = {
 			unmeasuredNote: 'Nothing has recorded an article length yet.',
-			emptyNote: 'No article was cut short in the last 7 days.'
+			emptyNote: 'No article was cut short in these 7 days.'
 		};
 
 		await show(page, draw({ caption: 'c', ranked: rank([], 10), maxText: '-', measured: false, ...notes }));

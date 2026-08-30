@@ -361,7 +361,7 @@
 				maxText="{grouped(ranked.max)} words outside the band"
 				measured={placed.length > 0}
 				unmeasuredNote="Nothing in this window recorded both an article length and a summary length."
-				emptyNote="Every summary in the last {windowDays} days landed inside its band."
+				emptyNote="Every summary in these {windowDays} days landed inside its band."
 				{tail}
 			/>
 		</div>

@@ -776,7 +776,7 @@ test('writing draws slower than reading, on one shared scale', async ({ page }) 
 test('the chart points at the write-up rather than restating it', async ({ page }) => {
 	await page.goto('/console/');
 
-	const link = page.getByRole('link', { name: 'why the spread is wide' });
+	const link = page.getByRole('link', { name: 'why the range is wide' });
 	await expect(link).toHaveAttribute(
 		'href',
 		'https://github.com/miztiik/yen-idhazh/blob/main/docs/architecture/summarize/throughput.md'

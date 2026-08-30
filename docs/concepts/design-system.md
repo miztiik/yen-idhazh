@@ -355,6 +355,46 @@ reads with, so the count is zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
 is already being printed.
 
+### A section keeps the sentence that decides and loses the sentence that narrates
+
+Twelve rows rewrote this page on 2026-08-30, each writing its own headings,
+intros, readouts and empty states. Twelve hands write twelve voices, so one pass
+reads the whole page at the end and settles it against `CLAUDE.md` section 0b.
+
+What survives is decided once:
+
+- **A sentence that names a threshold, a denominator, a cost or an
+  empty-state reason is kept.** Several of the console's decision rules are
+  written nowhere else. Owner, 2026-08-30.
+- **A sentence that says what the chart is, or argues for the shape it took, is
+  cut.** The heading already names the subject, and the case against a rejected
+  chart type belongs in the code comment that rejected it. Owner, 2026-08-30.
+- **Prose cut from the page goes into the chart's accessible description**, so a
+  screen-reader user is never left with less than a sighted one. Jony.
+
+Three habits are what that pass actually caught, and they are the ones to check
+in any new section:
+
+- **One name for one span.** A count inside the window reads `in these 30 days`;
+  a section states its own span as `Over 30 days.` The page carried four
+  phrasings for one window - `in these N days`, `in the last N days`, `over the
+  last N days` and `The last N days` - and wrote the same instruction as `Widen
+  the window to look further back` in one section and `reach further back` in
+  the next.
+- **One name for one control.** `Failure rate against volume` stopped being
+  three panels, and the list under it still told the operator that `Panel chips`
+  filtered it. A name taken from a component outlives the component.
+- **A number says what it is out of, on the same line.** `prompt reused 51%` did
+  not, and the figure is a share of prompt tokens, so it reads `prompt tokens
+  reused` now. This is the one clause of section 0b a reviewer can check
+  mechanically, which is why it catches what the others miss.
+
+**Say it once per screen.** `Sources cut short most often` and the `What the
+model did` cards both explained that they follow the window's length rather than
+a pan, and `Failure rate against volume` printed the same date span the viewport
+heading a few lines above it had already printed. A fact stated twice on one
+screen reads as two facts.
+
 ### Eleven measures are eleven cards, and the rows are one control away
 
 The eleven above shipped as eleven columns of one table until 2026-08-30, and
@@ -458,7 +498,7 @@ Six rules hold them:
   rows are missing and nothing else.
 - **The two empty states say different things.** `Nothing has recorded an
   article length yet.` means the ledger cannot answer. `No article was cut short
-  in the last 7 days.` means it answered no. Reading the first as the second is
+  in these 7 days.` means it answered no. Reading the first as the second is
   the same mistake as reading a null as a zero.
 - **No row is tinted.** The order is the ranking. A word beside the name carries
   a status where a row has one, because colour is one signal and never the only
@@ -534,7 +574,7 @@ Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
   `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
 - **The two empty states say different things.** `Nothing has recorded an
   article length yet.` means the ledger cannot answer; `No article was cut short
-  in the last 7 days.` means it answered no. Reading the first as the second is
+  in these 7 days.` means it answered no. Reading the first as the second is
   the same mistake as reading a null as a zero.
 
 Rejected here: the cut share on the run-health strip (a 16px square has no room
