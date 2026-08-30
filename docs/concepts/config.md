@@ -25,6 +25,7 @@ Knobs, by the surface they tune:
 - **Retention** - the image age window, the dry-run switch, the deletion fuse, and the published-site alarm point ([../architecture/publishing/layout.md](../architecture/publishing/layout.md)). `retention.site_budget_mb` is read by `idhazh site-weight`, which runs after the site is built and measures the built bundle - never the committed payload tree, which is a different tree eighteen times smaller.
 - **Drift** - the alert thresholds and the schedule ([evaluation.md](evaluation.md)).
 - **Logging** - the level, and nothing else ([telemetry.md](telemetry.md)).
+- **Observability** - which instruments run, how often the scorer runs, and how long a ledger stays at full grain ([telemetry.md](telemetry.md)).
 - **Console** - the telemetry viewport's default window, today anchor, pan step,
   zoom factor, minimum denominator for rate bars, and chart height.
 
@@ -317,6 +318,52 @@ rather than the page.
 step to the next preset instead of scaling the span, because a free span is the
 thing the presets exist to prevent. The knob is still in the contract, and
 retiring it is a removal with a read-side migration behind it (section 11).
+
+## Observability surface
+
+`observability` is the block that decides which instruments run at all:
+
+| Knob | Default | What it switches off |
+| --- | --- | --- |
+| `evaluation_enabled` | `true` | The faithfulness scorer, and so every row in `state/scores.csv`. |
+| `telemetry_publish` | `true` | The copy into `frontend/public/telemetry/<YYYY-MM>.csv`. |
+| `runtime_counters_scrape` | `true` | The llama-server `GET /metrics` read, and so every row in `state/runtime-counters.csv`. |
+| `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
+| `keep_months` | `13` | Nothing. It is where a month stops being kept at full grain. |
+| `hard_delete_after_months` | `null` | Nothing by default. Null means a downsampled month is never removed. |
+
+**Three switches and not one master switch.** Collection, scoring and publishing
+fail in different ways: the score ledger empties when the scorer will not load,
+the published telemetry file stops when a run does not publish, and the counters
+file is silent when llama-server was gone before it was read. Under one switch a
+reader sees three absences and cannot say which instrument went dark, so cannot
+say whether to fix the model, the publish step or the server.
+
+**The item-health census is not on that list and is not going to be.** Every
+rate the console and the dashboard print divides by it, so switching it off does
+not thin a measurement - it makes every other measurement unreadable. A failure
+rate with no denominator beside it is the defect the census exists to prevent. A
+contract test asserts the switch list holds exactly three names, so adding a
+fourth has to be argued for rather than typed.
+
+**An instrument that did not run writes an empty cell, never a zero.** A switch
+here decides whether a row is written; it never changes the shape of a row. The
+rule is stated twice already - in `RuntimeCountersRow.csv_row` ("Empty is not
+zero") and in the degrade rules of
+[../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)
+("`<1`, never `0`") - and this block is bound by both rather than restating them
+a third time.
+
+**`sample_rate` is a rate over runs, and it is refused at zero.** A run scores
+every item or none, so a sampled day's rows are never a partial sample of that
+day and a per-day rate stays honest. Zero is refused because `evaluation_enabled`
+already says off, and two ways of saying off is how the two end up disagreeing.
+
+`hard_delete_after_months` defaults to null - never - and that is a decision
+rather than an omission. `console.max_window_days` is 366, so a shard has to stay
+readable for a year, and the downsampled aggregate costs roughly 219 KB a year.
+Set it, and it must sit above `keep_months`, or a month would be deleted before
+it was ever downsampled; the contract refuses the pair otherwise.
 
 ## Reader surface
 
