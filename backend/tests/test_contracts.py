@@ -30,6 +30,7 @@ from idhazh.contracts.app_config import (
     AppConfig,
     ConsoleConfig,
     EvaluationConfig,
+    ObservabilityConfig,
     PageWeightConfig,
 )
 from idhazh.contracts.article import Article
@@ -315,6 +316,69 @@ def test_the_committed_reject_ceiling_leaves_the_brief_gate_a_live_band() -> Non
     evaluation = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).evaluation
     assert evaluation.verbatim_reject_ceiling == 0.75
     assert evaluation.brief_compression_ceiling == 0.5
+
+
+def test_a_fresh_clone_measures_itself_and_the_committed_config_agrees() -> None:
+    """Every instrument is on unconfigured, and the committed file did not turn one off.
+
+    Written as an agreement between two configs rather than as three literals: a
+    default that is asserted by value is a test that fails the day somebody
+    legitimately changes it, which teaches people to edit the test.
+    """
+    committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
+    fresh = AppConfig.model_validate({"models": committed.models.model_dump()})
+
+    assert fresh.observability == committed.observability
+    assert fresh.observability.evaluation_enabled
+    assert fresh.observability.telemetry_publish
+    assert fresh.observability.runtime_counters_scrape
+
+
+def test_the_item_health_census_is_not_switchable() -> None:
+    """The denominator under every rate this project publishes has no off switch.
+
+    Turning the census off would not thin a measurement, it would make every
+    other measurement unreadable - a failure rate with no denominator beside it
+    is the exact defect the census exists to prevent. The guard is the switch
+    list itself, so adding a fourth boolean fails here and has to be argued for.
+    """
+    switches = {
+        name
+        for name, field in ObservabilityConfig.model_fields.items()
+        if field.annotation is bool
+    }
+    assert switches == {"evaluation_enabled", "telemetry_publish", "runtime_counters_scrape"}
+    assert "census" in (ObservabilityConfig.__doc__ or "")
+
+
+def test_a_sample_rate_of_zero_is_refused_because_the_toggle_already_says_off() -> None:
+    """Two ways to say off is how two ways of saying it end up disagreeing."""
+    for refused in (0.0, -0.1, 1.1):
+        with pytest.raises(ValidationError):
+            ObservabilityConfig(sample_rate=refused)
+    assert ObservabilityConfig(sample_rate=1.0).sample_rate == 1.0
+
+
+def test_a_month_may_not_be_deleted_before_it_has_been_downsampled() -> None:
+    keep = ObservabilityConfig().keep_months
+    for early in (keep, keep - 1):
+        with pytest.raises(ValidationError, match="hard_delete_after_months"):
+            ObservabilityConfig(hard_delete_after_months=early)
+    assert ObservabilityConfig(hard_delete_after_months=keep + 1) is not None
+
+
+def test_never_hard_deleting_is_the_default_a_reader_gets() -> None:
+    """`console.max_window_days` is 366, so a shard has to survive a year of asking."""
+    fresh = ObservabilityConfig()
+    assert fresh.hard_delete_after_months is None
+    assert fresh.keep_months * 30 > ConsoleConfig().max_window_days
+
+
+def test_a_config_written_before_observability_existed_still_reads() -> None:
+    """Section 11's release blocker: yesterday's file has no such key at all."""
+    payload = json.loads(read_text(CONFIG_DIR / "idhazh.json"))
+    del payload["observability"]
+    assert AppConfig.model_validate(payload).observability == ObservabilityConfig()
 
 
 def test_the_committed_config_carries_the_capped_routes() -> None:
