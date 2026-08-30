@@ -1418,6 +1418,18 @@ the variable protects the shell you remember to set it in and nothing else.
   it reproduced the CI failure exactly, in one command, and it needs a separate
   `--cache-dir` or it fights the ordinary run for the cache.
 
+- **A new CLI flag anywhere under `backend/` can fail a test in a file you have
+  never opened, and only the full suite finds it.**
+  `test_summarize.py::test_exactly_one_function_spells_a_llama_server_flag`
+  holds a closed-world set of the files allowed to spell an inference-server
+  flag, and it searches every `backend/**/*.py` for the quoted flag string. A
+  `--poll` on this lock - a name the server also uses - failed it at 84 percent
+  of the suite after `ruff`, `mypy`, the targeted file and the whole first CI
+  round had all passed. Rename off that namespace (`--retry-every` here); a
+  longer flag with the same prefix does not match, because the test looks for
+  the closing quote too. Before adding any flag, run
+  `git grep -n '"--<your flag>"' -- backend`.
+
 ## See also
 
 - [../how-to/run-the-gates.md](../how-to/run-the-gates.md) - the commands these traps interfere with.
