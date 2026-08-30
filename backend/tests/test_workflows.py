@@ -355,10 +355,10 @@ COMMIT_STAGED_PATHS: Final = {
     "fold": ["state"],
 }
 # The step that folds an out-of-window month before the step above commits it.
-# It runs after the day's own commit, so a fold that loses its push costs one
-# run's bytes and never a published day.
-FOLD_STEP: Final = "Fold an out-of-window telemetry shard into its daily aggregate"
-FOLD_COMMAND: Final = "python -m idhazh prune-telemetry"
+# It runs after the day's own commit, so a retirement that loses its push costs
+# one run's bytes and never a published day.
+FOLD_STEP: Final = "Retire the ledger shards the pipeline no longer reads"
+FOLD_COMMAND: Final = "python -m idhazh prune-state"
 # The step that fills the two ledgers the step above commits, and the two things
 # that decide which items are this shard's.
 RECORD_STEP: Final = "Record what this shard measured"
