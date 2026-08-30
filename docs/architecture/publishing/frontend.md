@@ -652,6 +652,23 @@ section working with no script at all. It follows the window's *length* rather
 than where a pan leaves it, and the section says so: the days it reads always
 end on the newest day the ledger holds.
 
+`Charts published` used to draw a smoothed line over a fixed fourteen days,
+under a control reading thirty. It is one bar a day over the control's own
+window now, and the count above the bars is that same window summed, so a
+reader adding up the columns gets the number the card printed. Bars rather than
+a line, because a count per day is a discrete quantity and a line between two
+days claims a value for the hours in between that nobody counted. The strip is
+markup rather than an engine drawing: it is complete before any script runs,
+and it follows the control with one drawing instead of a server-drawn seed and
+a client redraw that can disagree about the span. A window that published
+nothing prints the count and no strip at all, because thirty bars of zero is an
+empty plot area and a card is still a card without one.
+
+The page intro carried two counts of rows on record until 2026-08-30 - scored
+items, and item-health rows. Both only ever grow, so neither could indicate a
+state, and nothing on the page or off it acted on either. They are gone, and
+their server-side computation went with them in the same commit.
+
 **The prerendered seed carries that same window, and no more.** The server used
 to concatenate every committed month and inline all of it, so the console
 document grew for as long as the pipeline ran - a reader downloaded four months
