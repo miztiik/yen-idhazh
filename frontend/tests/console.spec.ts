@@ -611,17 +611,48 @@ test('the timing legend is sorted by the newest day, tallest first', async ({ pa
 	expect(entries[0].stage).toBe('summarize');
 });
 
+/** What the timing chart drew for one stage, read off the chart itself.
+ *
+ * The notes under the plot count days, and the chart draws the window the page
+ * is set to rather than the days that happen to carry a row. So a count typed
+ * into a test here would have to be re-typed every time a preset moved or the
+ * fixture grew, and it would go stale silently. The plot publishes the span it
+ * drew, and it draws one mark for every day it has a number for - a filled dot
+ * for a measured time, an open dot for a measured zero - so the days it timed
+ * nothing on are the difference between the two.
+ */
+async function drewFor(
+	page: Page,
+	stage: string
+): Promise<{ days: number; filled: number; zeros: number; blank: number }> {
+	const plot = page.locator('[data-timing="plot"]');
+	const days = Number(await plot.getAttribute('data-timing-days'));
+	expect(days, 'the chart must publish the span it drew').toBeGreaterThan(0);
+	const { filled, zeros } = await plot.evaluate(
+		(svg, key) => ({
+			filled: svg.querySelectorAll(`circle[data-stage-mark="${key}"]`).length,
+			zeros: svg.querySelectorAll(`circle[data-stage-zero="${key}"]`).length
+		}),
+		stage
+	);
+	return { days, filled, zeros, blank: days - filled - zeros };
+}
+
 test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }) => {
 	await page.goto('/console/');
 
-	// The canary scores one day of the three, so `score` has a number on that
-	// day and none on the other two. A zero clamped onto a log axis would draw
-	// the line falling to the bottom of the plot, which says the stage got a
-	// thousand times faster. The chart breaks the line and names the loss.
+	// The canary scores one day, so `score` has a number on that day and none on
+	// the rest of the window. A zero clamped onto a log axis would draw the line
+	// falling to the bottom of the plot, which says the stage got a thousand times
+	// faster. The chart breaks the line and names the loss.
 	await expect(page.locator('[data-stage-mark="score"]')).not.toHaveCount(0);
 	const note = page.locator('[data-timing-note="score"]');
-	await expect(note, 'score is timed on one day of three, so it owes a note').toHaveCount(1);
-	await expect(note).toHaveText('We timed no score work on 2 of the 3 days. The line breaks there.');
+	await expect(note, 'score is not timed on every day, so it owes a note').toHaveCount(1);
+	const score = await drewFor(page, 'score');
+	expect(score.blank, 'the fixture leaves score no gap to name').toBeGreaterThan(0);
+	await expect(note).toHaveText(
+		`We timed no score work on ${score.blank} of the ${score.days} days. The line breaks there.`
+	);
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
 		const floor = Math.max(
@@ -677,21 +708,34 @@ test('a timing nobody took, a timing of zero and a partly timed day read apart',
 
 	const extract = page.locator('[data-timing-note="extract"]');
 	await expect(extract, 'the measured zero is named in type').toHaveCount(1);
+	const drewExtract = await drewFor(page, 'extract');
 	await expect(extract).toHaveText(
-		'extract took under 1 ms per item on 1 day, which is faster than we can time. ' +
+		`We timed no extract work on ${drewExtract.blank} of the ${drewExtract.days} days. ` +
+			'The line breaks there. ' +
+			`extract took under 1 ms per item on ${drewExtract.zeros} ` +
+			`${drewExtract.zeros === 1 ? 'day' : 'days'}, which is faster than we can time. ` +
 			'The open dot on the baseline marks it.'
 	);
 
 	// Both facts about summarize, one paragraph, absence first.
 	const summarize = page.locator('[data-timing-note="summarize"]');
 	await expect(summarize, 'summarize has a blank day and a part-timed day').toHaveCount(1);
+	const drewSummarize = await drewFor(page, 'summarize');
 	await expect(summarize).toHaveText(
-		'We timed no summarize work on 1 of the 3 days. The line breaks there. ' +
+		`We timed no summarize work on ${drewSummarize.blank} of the ${drewSummarize.days} days. ` +
+			'The line breaks there. ' +
 			'We timed 4 of the 5 items for summarize on 1 day. The line is the items we timed.'
 	);
 
-	// A stage timed in full every day of the window has nothing to explain.
-	await expect(page.locator('[data-timing-note="fetch"]')).toHaveCount(0);
+	// A note says only what happened. fetch was timed in full on every day it ran,
+	// so its note names the days it did not run and stops - no measured zero it
+	// never had, no partly timed day it never had.
+	const drewFetch = await drewFor(page, 'fetch');
+	expect(drewFetch.zeros, 'fetch has no measured zero to name').toBe(0);
+	await expect(page.locator('[data-timing-note="fetch"]')).toHaveText(
+		`We timed no fetch work on ${drewFetch.blank} of the ${drewFetch.days} days. ` +
+			'The line breaks there.'
+	);
 
 	// One place, not two. The legend used to print `no data` for the same
 	// absence a paragraph under it also named.
@@ -1179,25 +1223,41 @@ test('a mark reads out on the keyboard, and the readout closes on Escape', async
 	);
 });
 
-test('the candle reads out the sentence its title already carried', async ({ page }) => {
+test('the candle reads out its day and every series at that column', async ({ page }) => {
 	await page.goto('/console/');
 
 	const readout = page.locator('[data-readout="throughput"]');
-	await expect(readout).toHaveCount(0);
+	// The strip rests on the newest day rather than opening blank, so it never
+	// appears under the pointer and pushes the marks it explains out from under
+	// it. That is the stage-timing chart's rule, applied here unchanged.
+	await expect(readout).toHaveCount(1);
+	await expect(readout.locator('[data-readout-day]')).toContainText('the newest day');
 
 	const plot = page.locator('[data-throughput="chart"] svg');
-	await plot.focus();
-	await expect(readout).toHaveCount(1);
+	await plot.evaluate((node: SVGSVGElement) => node.focus());
 
-	// Decision: reuse `caption()` verbatim. The readout and the `<title>` are the
-	// same words, so there is one sentence about a day and not two.
-	const title = await page
-		.locator('[data-candle="read"][data-date="2026-08-19"] title')
-		.textContent();
-	await expect(readout).toContainText((title ?? '').trim());
+	// The readout carried `caption()` verbatim until 2026-08-30, on the rule that
+	// one day gets one sentence. The strip is now capped at a share of the plot,
+	// and the per-run list in `caption()` is the one clause that grows with the
+	// day's run count - four wrapped lines of it is not a readout. The `<title>`
+	// keeps every word; the strip keeps the median and the extent per series.
+	await expect(readout.locator('[data-readout-day]')).toHaveText(/^\d+ \w+ \d{4}$/);
+
+	// One row per series drawn, read against write off one hover rather than two.
+	const rows = await readout
+		.locator('[data-series-readout]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => (node.getAttribute('data-series-readout') ?? '').trim())
+		);
+	expect(rows).toEqual(['read', 'write']);
+	for (const series of rows) {
+		await expect(readout.locator(`[data-series-readout="${series}"] dd`).last()).toHaveText(
+			/^[\d.]+ \([\d.]+-[\d.]+\)$/
+		);
+	}
 
 	await expect(page.locator('[data-readout-hint="throughput"]')).toHaveText(
-		'Keyboard: Left and Right step through the days. Escape closes.'
+		'Point at a day to read it. Left and Right step through the days, Escape returns to the newest.'
 	);
 });
 
