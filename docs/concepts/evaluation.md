@@ -636,6 +636,29 @@ Two design consequences:
 
 A drift detector that has never fired has not been shown to work; it is tested by replaying the set against a deliberately degraded input and confirming the alert fires.
 
+### A review that compared nothing is not a clean review
+
+`compare()` walks the domains a window holds. An empty window holds none, so it
+returns no findings - and no findings is what a healthy corpus returns too. The
+review step read those two opposite facts through one `if`, printed "no drift
+across 0 recent and 0 baseline rows", and exited 0.
+
+The consequence is the reason this is written down rather than fixed quietly.
+Drift detection is the only automated instrument watching for slow extraction
+failure. Turn the scorer off for a week, and the watchman reported all clear
+every day, under a green check nobody opens.
+
+So the two facts now have two exit codes. Before any finding is read, the step
+checks both windows against `drift.min_window_rows` and fails when either side
+is thin, naming the side and its count - "nothing was compared" is a different
+repair from "no drift", and the operator has to know which one arrived. An
+absent `state/scores.csv` fails the same way, for the same reason.
+
+The floor is 20 rows. It is sized against the ledger rather than picked round:
+measured 2026-08-30 over the 3,113 rows committed to `state/scores.csv`, the
+lightest full day holds 117 and the heaviest 731. A seven-day recent window
+holding under 20 rows is a stopped instrument, not a quiet week.
+
 ### Current drift implementation gap
 
 `drift.yml` currently compares windows in the live eval ledger. It does not

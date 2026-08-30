@@ -17,6 +17,11 @@ arithmetic rather than by picking a round number:
   faithfulness staying flat or rising *while* its median source length falls
   sharply. Either signal alone is noisy; together they are the definition of
   "the score is happily rewarding a summary of chrome".
+- **"Nothing to compare" and "no drift" are different facts.** `compare` cannot
+  tell them apart - it walks the domains a window holds, and an empty window
+  holds none, so it returns nothing to say. `shortfall` is the separate check
+  that names an empty side, and the caller turns that sentence into a failing
+  exit code.
 """
 
 from __future__ import annotations
@@ -162,3 +167,25 @@ def failure_rate(succeeded: int, attempted: int) -> float:
 def extraction_is_rotting(succeeded: int, attempted: int) -> bool:
     """A host that keeps failing extraction has changed shape, not gone quiet."""
     return failure_rate(succeeded, attempted) > FAILURE_RATE_MAX
+
+
+def shortfall(
+    recent: Sequence[Observation], baseline: Sequence[Observation], minimum: int
+) -> str | None:
+    """Why this pair of windows could not be compared, or None when it could.
+
+    `compare` returns no findings for an empty window, and no findings reads as
+    "no drift" at every call site that has ever existed. Those are opposite
+    facts: turn the scorer off for a week and the only automated watchman for
+    slow extraction failure reports all clear, every day, under a green check.
+
+    The sentence names the side that was thin and its count, because "nothing to
+    compare" is a different repair from "no drift" and the operator has to know
+    which one arrived.
+    """
+    thin = [
+        f"the {side} window holds {len(rows)} of the {minimum} rows a comparison needs"
+        for side, rows in (("recent", recent), ("baseline", baseline))
+        if len(rows) < minimum
+    ]
+    return "; ".join(thin) if thin else None
