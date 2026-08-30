@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -35,7 +35,7 @@ Every colour, space, radius, shadow, font, easing and duration is a CSS custom p
 - **Type** - `--text-xs` to `--text-3xl`, each paired with its own `--leading-*`. A size without a leading is half a decision.
 - **Radius** - five steps. Panel language needs a bigger corner than a chip does.
 - **Elevation** - `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-panel`, plus `--color-surface-raised` and `--color-surface-sunken`. A page with one surface colour is a page where nothing is in front of anything.
-- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
+- **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; the **fill ramp**, `--fill-high` / `--fill-medium` / `--fill-low`, which is the same three meanings weighted to be filled rather than read; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
 - **Tints** - `--tint-accent`, `--tint-info`, `--tint-good`, `--tint-warn`, `--tint-bad`, `--tint-neutral`. A panel takes the hue of what it means, at 7 to 9 percent in light and roughly double that in dark.
 - **Gradients** - `--gradient-brand`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
 - **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config.md](config.md)).
@@ -55,6 +55,45 @@ stops so no existing chart changed colour when the ramp widened.
 nothing, so elevation there is a raised surface colour plus a hairline; every
 tint is re-tuned rather than reused at the same alpha, because the same alpha
 over a dark ground is invisible.
+
+### A fill is not a text colour
+
+The confidence ramp is a text colour. `--band-high`, `--band-medium` and
+`--band-low` are read as type - on a status chip, in a table cell, on a card -
+so they are weighted for reading, and a 16px solid painted in one of them reads
+as ink rather than as a state. Measured 2026-08-30 against `--color-surface` in
+the light theme they run 5.02:1, 5.43:1 and 6.12:1, and the console's run strip
+drawn in them read as olive and brick. `--fill-high`, `--fill-medium` and
+`--fill-low` are the parallel set: the same three meanings, weighted to be
+filled. In light they are `#2e9e63`, `#c08200` and `#e0523a`, reading 3.39:1,
+3.26:1 and 3.86:1 - clear of the surface, and clear of text weight. In the dark
+theme the two ramps agree today, because a fill there is lighter than its ground
+and the band values were already at fill weight.
+
+The band a fill value has to land in, measured against `--color-surface`:
+
+| Theme | Bound | Where it comes from |
+| --- | --- | --- |
+| Both | at least 3:1 | WCAG 2.2 SC 1.4.11. A graphical object that carries meaning has to be distinguishable from what it sits on, or the shape itself is not there. |
+| Light | under 4.5:1 | WCAG 2.2 SC 1.4.3 makes 4.5:1 the *minimum* for normal text, so a colour at or above it is a text-weight colour. That is the defect the ramp removes. |
+| Dark | under 9:1 | On a dark ground a fill is lighter than its ground and can never become ink, so the light ceiling does not apply. This bound is a measured tripwire instead: the loudest dark fill reads 7.94:1, and 9 fails `--color-text` at 14.93:1 and pure white at 17.62:1. |
+
+[../../frontend/tests/console-run-health.spec.ts](../../frontend/tests/console-run-health.spec.ts)
+computes those ratios itself, from the WCAG relative-luminance formula written
+out in that file. It is one surface's oracle over the tokens that surface uses,
+not an audit sweep, and it adds no dependency - accessibility audit tooling
+stays a project non-goal ([../../CLAUDE.md](../../CLAUDE.md) section 0a).
+
+Every ratio in this section is **arithmetic over the committed hex values**, not
+a sample: the same two colours give the same number on every machine, so the
+spread is zero by construction and the date is the date the values were chosen.
+That is why the oracle can assert an exact bound rather than a tolerance.
+
+Rejected: lightening the band tokens themselves, which would fail text contrast
+on every surface that reads them as type; and drawing a fill as the band token
+at reduced opacity, because opacity over a tinted surface gives a different
+colour on every surface and so cannot be checked once. Authority: Jony,
+2026-08-30.
 
 **A scale is not a colour, and does not live in a theme block.** Space, type,
 radius and motion are declared once in their own `:root` block outside both
@@ -94,6 +133,12 @@ The reading page carries both, one line apart, and without this rule the second 
 **One tint for every member of a label family, not one per member.** A lens chip uses `--tint-accent` whatever the topic is: the word carries the category and the colour carries only "this is a topic". Six hues to say what six words already say would collide with the confidence ramp and the chart ramp, and a `war` chip in a warn hue would read as a severity we never assigned. The seventh lens then arrives with its slot already filled and needs no colour decision - which is the point.
 
 A tinted label is decorative under the rule above, because it repeats a word that is already there. It stays decorative only while it carries the word; a tinted chip carrying an icon alone would be semantic colour with no second signal, and is refused.
+
+### Content on demand is a `<details>`, not a button
+
+A section that leads with a shape and keeps its rows behind a control uses a native `<details>` and `<summary>`. Every page here is prerendered and complete before a script runs, so a button plus a conditional block does not hide the rows - it deletes them for a reader with no script, and the section then makes a claim the reader cannot check. The element is also keyboard-reachable for free and says which state it is in without a second label.
+
+The other shape is different and stays: `Show N more` on the failed-item list and the day list is a button that extends a list already on the page. Nothing behind it is hidden, so nothing is lost when the button is dead.
 
 ## Sufficiency is a gate, not a taste
 
@@ -310,13 +355,99 @@ reads with, so the count is zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
 is already being printed.
 
+### A section keeps the sentence that decides and loses the sentence that narrates
+
+Twelve rows rewrote this page on 2026-08-30, each writing its own headings,
+intros, readouts and empty states. Twelve hands write twelve voices, so one pass
+reads the whole page at the end and settles it against `CLAUDE.md` section 0b.
+
+What survives is decided once:
+
+- **A sentence that names a threshold, a denominator, a cost or an
+  empty-state reason is kept.** Several of the console's decision rules are
+  written nowhere else. Owner, 2026-08-30.
+- **A sentence that says what the chart is, or argues for the shape it took, is
+  cut.** The heading already names the subject, and the case against a rejected
+  chart type belongs in the code comment that rejected it. Owner, 2026-08-30.
+- **Prose cut from the page goes into the chart's accessible description**, so a
+  screen-reader user is never left with less than a sighted one. Jony.
+
+Three habits are what that pass actually caught, and they are the ones to check
+in any new section:
+
+- **One name for one span.** A count inside the window reads `in these 30 days`;
+  a section states its own span as `Over 30 days.` The page carried four
+  phrasings for one window - `in these N days`, `in the last N days`, `over the
+  last N days` and `The last N days` - and wrote the same instruction as `Widen
+  the window to look further back` in one section and `reach further back` in
+  the next.
+- **One name for one control.** `Failure rate against volume` stopped being
+  three panels, and the list under it still told the operator that `Panel chips`
+  filtered it. A name taken from a component outlives the component.
+- **A number says what it is out of, on the same line.** `prompt reused 51%` did
+  not, and the figure is a share of prompt tokens, so it reads `prompt tokens
+  reused` now. This is the one clause of section 0b a reviewer can check
+  mechanically, which is why it catches what the others miss.
+
+**Say it once per screen.** `Sources cut short most often` and the `What the
+model did` cards both explained that they follow the window's length rather than
+a pan, and `Failure rate against volume` printed the same date span the viewport
+heading a few lines above it had already printed. A fact stated twice on one
+screen reads as two facts.
+
+### Eleven measures are eleven cards, and the rows are one control away
+
+The eleven above shipped as eleven columns of one table until 2026-08-30, and
+that shape could not answer the question an operator brings to it. **Did it get
+worse is a vertical scan**, and in a wide table every column beside the one being
+scanned is a different quantity - a count, a percent, a second, a minute. At a
+thirty-day window it was 330 numbers under eleven header paragraphs.
+
+So the section leads with eleven cards on one `auto-fit minmax(220px, 1fr)`
+grid, and each card carries the same five things:
+
+- **The label, verbatim.** The copy above is protected; the shape was the defect
+  and the words were not. `frontend/tests/console-model.spec.ts` compares the
+  rendered labels byte for byte against the page's own `COLUMNS` and against the
+  table on this page, so a paraphrase fails the build rather than a review.
+- **The newest day's figure**, at reading size. Which day that is is printed
+  once above the grid, not eleven times.
+- **A line over the window**, drawn as markup by `Sparkline`. Eleven
+  engine-backed sparklines would be eleven chart instances and a lazy chunk on a
+  page that renders complete without one.
+- **What it is out of**, for the six quality figures. On a table row the day's
+  count sat one column away; a card has no row, so it carries its own
+  denominator or it invites a trend that is not there.
+- **Its sentence**, moved out of the header into the body where there is room
+  for it.
+
+**A day the model changed draws a dashed rule across every line**, at the first
+drawn point on the new model, from the same rows the daily table draws its
+dividers from. Whether a swap moved anything is the question the table could not
+answer at all. The rule carries a date and an id and nothing else - an arrow or
+a delta across it would claim the swap caused whatever the line then did, and no
+committed figure says that.
+
+**No card is tinted.** `Copied, not rewritten` reads about 12 percent and nobody
+has agreed what a bad number would be, so a tint there would invent a threshold
+and publish it. The health ramp is lent to a threshold somebody agreed to, and
+to nothing else.
+
+**The daily table stays, below, behind a `Show the daily figures` control.**
+Nothing is deleted: after a card moves, the rows are what say which day. It is a
+native disclosure, so the rows are in the prerendered document either way,
+opening it costs no fetch, and the whole section works with no script at all.
+The dash-not-zero rule, the `<1` rule and the version-stamped share are
+unchanged by any of this.
+
 ### An axis title and a column header take one form
 
 `Article length, words`. **Sentence case, a comma, the unit in lower case, and
 no full stop.** `Sources cut short most often` shipped `Longest article, words`
-first, and the compression chart's two axes followed it on 2026-08-29. Three
-labels naming a quantity and its unit the same way is a form, so it is written
-down here rather than copied a fourth time by eye.
+first, and the compression chart's two axes followed it on 2026-08-29. That
+column became a range plot on 2026-08-30 and its axis carries the same form.
+Three labels naming a quantity and its unit the same way is a form, so it is
+written down here rather than copied a fourth time by eye.
 
 - **The quantity, then the unit.** `Summary length, words` - never `Summary
   length (words)` and never `words`. A bracket reads as a footnote, and a label
@@ -367,7 +498,7 @@ Six rules hold them:
   rows are missing and nothing else.
 - **The two empty states say different things.** `Nothing has recorded an
   article length yet.` means the ledger cannot answer. `No article was cut short
-  in the last 7 days.` means it answered no. Reading the first as the second is
+  in these 7 days.` means it answered no. Reading the first as the second is
   the same mistake as reading a null as a zero.
 - **No row is tinted.** The order is the ranking. A word beside the name carries
   a status where a row has one, because colour is one signal and never the only
@@ -393,48 +524,72 @@ a verdict the page never measured.
 
 ## What the cap cost, by source
 
-`Sources cut short most often` is one table of ten rows, and it is the only
-place on the site that names a source next to a number about that source. It
-exists for one decision: **whether raising the truncation cap would actually
+`Sources cut short most often` is one row per source, ten of them, and it is the
+only place on the site that names a source next to a number about that source.
+It exists for one decision: **whether raising the truncation cap would actually
 reach a source's articles.**
 
-| Header | What it prints |
+It is a horizontal range plot on a log word-length axis. One row per source, the
+shortest, middle and longest article that source published drawn as a track, and
+a dashed rule at each cut point across every row. Everything right of the widest
+rule is where the cap bites.
+
+| Part | What it says |
 | --- | --- |
-| `Source` | the source id, as the ledger spells it |
-| `Cut short` | articles this source lost text on |
-| `Articles` | articles it published in the window - the denominator |
-| `Share cut` | whole percent, or a dash under `console.min_attempts_for_rate` |
-| `Longest article, words` | the longest article it published, before the cut |
+| the row label | the source id, as the ledger spells it |
+| the line under it | `17 of 38 cut` - articles it lost text on, over articles it published |
+| the track | shortest to longest article, with a dot at the middle one |
+| the emphasised span | the part of that range past the widest cut point |
+| a dashed rule | where a cut fell, read off the rows that were cut, and dated where the window holds more than one |
 
-Five rulings hold it, all Jony's, 2026-08-29:
+Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
 
+- **The cap is on the chart.** This is the whole defect the plot fixes. Five
+  columns of numbers were unreadable because the single number they all had to
+  be compared against appeared nowhere in the section. Susan, 2026-08-30.
+- **The rule comes off the rows, never off `extract.truncation_cap_tokens`.** A
+  window can hold rows a run wrote under an older cap, and the setting is one
+  number: over the committed ledger a thirty-day window holds cuts at 1,923
+  words and at 3,846, and the file says only 3,846. A rule from the file also
+  draws in a window where nothing was cut. Fowler, 2026-08-30.
 - **It sorts by count, never by rate.** Measured over the committed ledger the
   shares run 3 to 67 percent on denominators of 6 to 38 articles, so a rate sort
   puts a source with 4 cuts of 6 above one with 17 of 38 - and it is the
-  seventeen that cost the digest its articles. The sort order is the ranking,
-  which is also why **no row is tinted**: the confidence ramp means good, watch
-  and bad about a summary, and a source at 55 percent is not broken, it publishes
-  long articles.
+  seventeen that cost the digest its articles. `Share cut` was dropped as a
+  column on 2026-08-30 for the same reason it was never the sort key. What a
+  reader loses is the share as a number; both counts are still on the row.
+- **No row is tinted.** The order is the ranking. The confidence ramp means
+  good, watch and bad about a summary, and a source at 55 percent is not broken,
+  it publishes long articles. The rule itself is drawn in tertiary text colour
+  rather than the low band: a red vertical would say the cap is a fault, and the
+  cap is a setting somebody chose.
 - **Ten rows and no `Show more`.** The worst seven hold 69 of 153 cuts, 45
   percent; past ten the tail is sources with a single cut in a week, and a
   control that reveals rows nobody acts on does nothing.
-- **The longest article is the whole article, cut or not.** A column that read
-  the longest *cut* article would answer a question about the cap with a number
-  the cap produced.
+- **The track is the whole article, cut or not.** A track drawn over the cut
+  articles alone would answer a question about the cap with a set the cap
+  produced, and it would hide how short the rest of the source's articles are -
+  which is the part that says whether the cap is the problem.
 - **No ledger or config name reaches it.** Not `truncation_flagged`, not
   `source_words_before_cap`, not `truncation_cap_tokens`, not `Truncated`.
 - **The two empty states say different things.** `Nothing has recorded an
   article length yet.` means the ledger cannot answer; `No article was cut short
-  in the last 7 days.` means it answered no. Reading the first as the second is
+  in these 7 days.` means it answered no. Reading the first as the second is
   the same mistake as reading a null as a zero.
 
 Rejected here: the cut share on the run-health strip (a 16px square has no room
 for a number, and it answers "did it work" rather than "what did it read"); a
-histogram of article lengths (the engineer's chart - the scatter already shows
-that distribution along its x axis); a gauge, dial, donut or progress bar (six
-percent on a dial is one pixel of arc); a before-and-after of a cap change on
-this page (two caps over two different article sets is two measurements, not a
-trend, and that claim belongs in
+histogram of article lengths (the engineer's chart - it answers what the corpus
+looks like, and this section exists to answer whether raising the cap would
+reach a source); a linear length axis (the lengths span more than two decades,
+and linear crushes every short source onto the left edge - Carmack, 2026-08-30);
+keeping the table and printing the cap in the intro sentence (recorded as the
+fallback if the plot overran; it answers "how far past the cap" by subtraction
+rather than by looking - Susan, 2026-08-30); tinting rows by share cut (a source
+at 55 percent is not broken, so the tint would invent a fault); a gauge, dial,
+donut or progress bar (six percent on a dial is one pixel of arc); a
+before-and-after of a cap change on this page (two caps over two different
+article sets is two measurements, not a trend, and that claim belongs in
 [../reference/measurements.md](../reference/measurements.md)); and a table
 component shared with `Feeds that failed` (an abstraction for two call sites -
 reversed on 2026-08-29, when the count reached four; the shape is the ranked
@@ -456,17 +611,40 @@ to them.
 **The refusal of a shared table component was reversed on 2026-08-29, and the
 reason it was right at the time is the reason it is wrong now.** It was refused
 as "an abstraction for two call sites", which is a good rule: a component built
-for two callers usually fits neither and has to be argued with by both. The
-count is four - the compression outliers, the failed feeds, the failure ledger
-ranked by cause, and the chart-arm's two thresholds - and one of those did not
-exist when the refusal was written. What the refusal protected against was a
-generic `Table`, and that is still refused: the console's problem was never
-table markup, it was that a table is the wrong shape for "which one is worst",
-and a generic table would make the wrong shape cheaper to produce. What landed
-instead is a shape with an opinion - one order, one divisor, one tail sentence,
-two empty states - which is the opposite kind of abstraction. Authority: Fowler
+for two callers usually fits neither and has to be argued with by both. Counted
+again on 2026-08-30 once every section had landed, the three components draw
+**nine times across five sections**: `RankedList` twice, in the band-distance
+outliers and the failure ledger; `TargetBar` three times, on the feed
+quarantine countdown and the chart arm's two thresholds; and `Sparkline` four
+times, in the failure ledger, `What the model did` and the chart arm. Two of
+those sections did not exist when the refusal was written. What the refusal
+protected against was a generic `Table`, and that is still refused: the
+console's problem was never table markup, it was that a table is the wrong
+shape for "which one is worst", and a generic table would make the wrong shape
+cheaper to produce. What landed instead is a shape with an opinion - one order,
+one divisor, one tail sentence, two empty states - which is the opposite kind
+of abstraction. Authority: Fowler
 ([../../.github/agents/fowler.agent.md](../../.github/agents/fowler.agent.md))
 on the reversal, Susan on the shape, 2026-08-29.
+
+**The refusal to window `Sources cut short most often` was reversed on
+2026-08-30, and it turns on one word: hidden.** The section read a fixed seven
+days, and widening it was refused because a span the reader cannot see makes
+the section's own sentence lie - `17 of 38 cut` over a span nobody names is a
+count with no denominator in time, and a number in a config file is exactly
+that kind of unseen span. What changed is that the span stopped being unseen.
+One control at the top of the page holds it, all four presets are on the screen
+at once, and every windowed section states the span it read in its own sentence
+and in its accessible description. A control the operator is looking at cannot
+make the sentence lie, so long as the sentence reads the same window the query
+reads - and `frontend/tests/console-window.spec.ts` asserts exactly that, for
+every surface that declares itself windowed. The section prints its own
+denominator too, which at seven days runs as low as six articles, so the
+narrowest window says how thin it is instead of hiding it. The rejected
+alternative was leaving the seven days fixed while every other section followed
+the control: two spans on one page is the defect the shared window exists to
+remove, and the section that disagreed would be the one nobody checked.
+Authority: Susan on the reversal, Fowler on recording it, 2026-08-30.
 
 **The geometry was pulled out of the two chart helpers rather than copied.**
 `sparkline.ts` and `targetbar.ts` already owned the rules - the track is the

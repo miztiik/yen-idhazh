@@ -33,6 +33,7 @@ from idhazh.contracts.app_config import (
     ObservabilityConfig,
     PageWeightConfig,
 )
+from idhazh.contracts.appearance_config import ChartConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import Contract
 from idhazh.contracts.digest_day import DigestDay
@@ -297,6 +298,19 @@ def test_the_console_window_presets_are_a_knob_the_frontend_agrees_with() -> Non
     assert [int(part) for part in mirrored.group(1).split(",")] == ConsoleConfig().window_presets
 
 
+def test_the_readout_cap_is_a_knob_the_frontend_agrees_with() -> None:
+    """The same two-copies problem again, in the chart block.
+
+    The cap is applied in the browser, off the frontend's own copy. Let the two
+    drift and the browser test asserts one number while the contract bounds a
+    different one, which is a gate that passes for the wrong reason.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"readout_max_share:\s*([\d.]+)", reader)
+    assert mirrored is not None, "the frontend chart defaults dropped readout_max_share"
+    assert float(mirrored.group(1)) == ChartConfig().readout_max_share
+
+
 def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
     """The one edit that would silence a gate instead of tightening it.
 
@@ -412,7 +426,9 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
     same shape for the same reason - the regression a page ceiling exists to
     catch on this route is a day payload inlined by a layout, which cost 313,300
     gzipped bytes when it last happened, so a ceiling more than that above the
-    page could never see it land again.
+    page could never see it land again. The page measured 120,026 gzipped bytes
+    at the close of the console-signal plan on 2026-08-30, so the bound is
+    433,000 and the committed ceiling is 259,908.
     """
     committed = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json"))
     ceilings = committed.page_weight.ceilings_bytes
@@ -424,8 +440,8 @@ def test_the_committed_config_carries_the_capped_routes() -> None:
         "the archive ceiling is back above the weight of the payloads row #4 removed - "
         "a ceiling that high never fires again"
     )
-    assert ceilings["/console/"] < 482_000, (
-        "the console ceiling is above the 170,281 the page measured plus the 313,300 a "
+    assert ceilings["/console/"] < 433_000, (
+        "the console ceiling is above the 120,026 the page measured plus the 313,300 a "
         "day payload cost when a layout last inlined one - a ceiling that high cannot "
         "catch the one regression this route has actually had"
     )

@@ -121,7 +121,18 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 	expect(
 		found.map((surface) => surface.name).sort(),
 		'the page publishes no windowed surfaces, so the oracle asserts nothing'
-	).toEqual(['router-cost', 'site-size-movement', 'source-cuts', 'telemetry-viewport']);
+	).toEqual([
+		'band-distance',
+		'chart-arm',
+		'failure-rate',
+		'feed-outcomes',
+		'model-cards',
+		'run-health',
+		'site-cost-per-item',
+		'site-size-movement',
+		'source-cuts',
+		'telemetry-viewport'
+	]);
 
 	for (const preset of PRESETS) {
 		await setWindow(page, preset);
@@ -138,13 +149,18 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 
 /** The three numbers the source section prints about its own window. */
 async function cutFacts(page: Page) {
+	// Named, not positional. The cost sentence sits above this one now, and a
+	// `p` picked by order silently reads whichever paragraph moved into first
+	// place rather than failing.
 	const intro = (
-		await page.locator('[data-windowed="source-cuts"] p').first().innerText()
+		await page.locator('[data-source-cuts-intro]').innerText()
 	).replace(/\s+/g, ' ');
 	const more = (await page.locator('[data-source-cuts-more]').innerText()).replace(/\s+/g, ' ');
 	const cost = (await page.locator('[data-source-cuts-cost]').innerText()).replace(/\s+/g, ' ');
 	return {
-		articles: Number(/, (\d+) articles between them/.exec(intro)?.[1]),
+		// Thousands are grouped in the sentence, so the comma is stripped rather
+		// than the digits before it being read as the whole count.
+		articles: Number(/, ([\d,]+) articles between them/.exec(intro)?.[1]?.replace(/,/g, '')),
 		tailSources: Number(/(\d+) more sources/.exec(more)?.[1]),
 		cut: Number(/(\d+) articles were cut short/.exec(cost)?.[1])
 	};
@@ -177,7 +193,7 @@ test('the source table follows the window, and drops what falls outside it', asy
 	// as six articles and a share over six is not a rate. `\s+` rather than a
 	// space: the sentence wraps in the template, and a regex reads the raw text.
 	await expect(page.locator('[data-windowed="source-cuts"]')).toContainText(
-		/\d+\s+articles between/
+		/[\d,]+\s+articles between/
 	);
 });
 
@@ -185,17 +201,17 @@ test('a rule stated over 14 days prints no median in a 7-day window', async ({ p
 	await page.goto('/console/');
 	await hydrated(page);
 
-	const card = page.locator('[data-windowed="router-cost"]');
+	const section = page.locator('[data-windowed="chart-arm"]');
 	await setWindow(page, RULE_DAYS);
-	await expect(card.locator('[data-window-too-narrow="router-cost"]')).toHaveCount(0);
+	await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveCount(0);
 
 	await setWindow(page, 7);
 	// The exact sentence, because a median of the wrong span is the same figure
 	// with a different meaning and nothing on the page to say which one it is.
-	await expect(card.locator('[data-window-too-narrow="router-cost"]')).toHaveText(
+	await expect(section.locator('[data-window-too-narrow="chart-arm"]')).toHaveText(
 		'The rule reads 14 days. Widen the window to see it.'
 	);
-	await expect(card.locator('svg')).toHaveCount(0);
+	await expect(section.locator('[data-charts-verdict]')).toHaveCount(0);
 });
 
 test('two surfaces do not follow the window, and each says so', async ({ page }) => {
@@ -203,7 +219,9 @@ test('two surfaces do not follow the window, and each says so', async ({ page })
 	await hydrated(page);
 
 	// A windowed quarantine count would disagree with the resting the pipeline
-	// actually performed, so the feed table counts every run and states it.
+	// actually performed, so the feed count reads every run and states it. The
+	// strip of days beside it does follow the window, and is a separate node -
+	// which is why this locator is the paragraph and not the section.
 	const feeds = page.locator('[data-window-exempt="feeds"]');
 	await expect(feeds).toContainText('does not follow the window');
 	await expect(feeds).not.toHaveAttribute('data-window-days', /.*/);

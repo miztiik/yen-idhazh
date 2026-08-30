@@ -2,23 +2,14 @@ import { expect, test, type Page } from '@playwright/test';
 import { readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 import {
-	capLabel,
-	capsInView,
 	compressionView,
 	grouped,
-	parseTelemetryCsv,
 	placeRow,
-	type CompressionPoint,
 	type TelemetryRow
 } from '../src/lib/charts/series';
 import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
-import {
-	CUT_FLAG_MEANS_A_CUT_FROM,
-	modelWork,
-	sourceCuts,
-	SOURCE_CUT_ROWS
-} from '../src/lib/server/model-work';
+import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
 
 /**
@@ -27,9 +18,11 @@ import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/paylo
  * It runs against the canary build, whose fixtures carry one run of each colour
  * and one feed of each kind the page has to tell apart. The canary build writes
  * the item-health ledger because the console reads timing medians from it, and
- * the score ledger because the compression plot reads its marks from that. The
- * failed-item list is the section with nothing to show, which proves the page
- * keeps rendering when one of its sources holds nothing.
+ * the score ledger because the model table counts its rows. The failed-item
+ * list is the section with nothing to show, which proves the page keeps
+ * rendering when one of its sources holds nothing.
+ *
+ * The band section has its own file, `console-compression.spec.ts`.
  *
  * See `backend/utilities/build_canary_day.py` for the fixture.
  */
@@ -70,13 +63,6 @@ const DEFAULT_WINDOW_DAYS = (
 		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
 	) as { console?: { default_window_days?: number } }
 ).console?.default_window_days ?? 30;
-
-/** The fewest articles a source needs before a share of them means anything. */
-const MIN_ATTEMPTS_FOR_RATE = (
-	JSON.parse(
-		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-	) as { console?: { min_attempts_for_rate?: number } }
-).console?.min_attempts_for_rate ?? 5;
 
 /** A telemetry corpus deliberately longer than the window, for the seed tests.
  *
@@ -126,6 +112,11 @@ interface Box {
 	bottom: number;
 }
 
+/** Wide enough that the run strip cannot fill its frame at any day count the
+ * window admits, because `cellFor` caps a day column. That is what lets an
+ * alignment test assert on spare room without depending on today's ledger. */
+const UNDERFULL_VIEWPORT = { width: 1680, height: 900 };
+
 /** `DOMRect` does not survive the wire, so only the numbers cross it. */
 const TO_BOX = (nodes: Element[]): Box[] =>
 	nodes.map((node) => {
@@ -167,73 +158,6 @@ function scoredItems(): number {
 	return raw.trim().split('\n').length - 1;
 }
 
-/** The canary's own telemetry projection - the file the page fetches.
- *
- * The compression plot draws from these rows, so its oracle reads them. It used
- * to read `state/scores.csv`, which the plot no longer touches: an oracle over
- * a file the page has stopped reading passes while the page draws something
- * else entirely.
- */
-function telemetryProjection(): TelemetryRow[] {
-	const dir = join(CANARY, 'state', 'telemetry');
-	return readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => parseTelemetryCsv(readFileSync(join(dir, name), 'utf8')));
-}
-
-/** The rows the plot is about: an item that reached a reader.
- *
- * One entry per article per day, not per row. A re-run writes a second row for
- * an article an earlier run already published, and the run that read the most
- * of it is the one the plot draws. Recomputed here rather than imported, so an
- * implementation that counted rows would fail against this instead of moving
- * the oracle with it.
- */
-function publishedRows(): TelemetryRow[] {
-	const perArticle = new Map<string, TelemetryRow>();
-	for (const row of telemetryProjection()) {
-		if (row.stage !== 'publish' || row.outcome !== 'ok') continue;
-		const key = `${row.date}-${row.item_id}`;
-		const held = perArticle.get(key);
-		if (held === undefined || articleWords(row) > articleWords(held)) perArticle.set(key, row);
-	}
-	return [...perArticle.values()];
-}
-
-/** The article's own length: before the cap where a run wrote one down, and
- * what survived where it did not. Recomputed here rather than imported, so a
- * reading that changed in the page would not change under the test with it. */
-function articleWords(row: TelemetryRow): number {
-	return row.source_words_before_cap ?? row.source_words ?? 0;
-}
-
-/** The rows the compression plot can place: both lengths written down. */
-function plottedRows(): TelemetryRow[] {
-	return publishedRows().filter(
-		(row) => articleWords(row) > 0 && (row.summary_words ?? 0) > 0
-	);
-}
-
-/** The rows that recorded no article length at all, so they have no x. */
-function noLengthRows(): TelemetryRow[] {
-	return publishedRows().filter((row) => articleWords(row) <= 0);
-}
-
-/** The articles the cap cut: the body before it was longer than what survived.
- *
- * Two cells of one row and nothing else. It used to be a flag read through the
- * ledger stamp that changed the flag's meaning; the projection needs no stamp,
- * because a comparison of two lengths has only ever meant one thing.
- */
-function cutRows(): TelemetryRow[] {
-	return plottedRows().filter(
-		(row) =>
-			row.source_words_before_cap !== null &&
-			row.source_words !== null &&
-			row.source_words_before_cap > row.source_words
-	);
-}
-
 /** How many days a telemetry viewport window covers, ends included. */
 function span(start: string | null, end: string | null): number {
 	if (!start || !end) return 0;
@@ -242,21 +166,6 @@ function span(start: string | null, end: string | null): number {
 			86_400_000 +
 		1
 	);
-}
-
-/** The oracle rows the page's own open window holds.
- *
- * The window is read off the page rather than recomputed, so a fixture that
- * grows a day past the window moves the count with it. Comparing a chart drawn
- * over a window against a corpus is how a test starts passing on the wrong
- * number.
- */
-async function inOpenWindow(page: Page, rows: TelemetryRow[]): Promise<TelemetryRow[]> {
-	const control = page.locator('[data-viewport-control]');
-	const start = (await control.getAttribute('data-window-start')) ?? '';
-	const end = (await control.getAttribute('data-window-end')) ?? '';
-	expect(start, 'the page published no window, so the filter below drops everything').not.toBe('');
-	return rows.filter((row) => row.date >= start && row.date <= end);
 }
 
 /** Every request the page made that came back missing. */
@@ -394,14 +303,32 @@ test('no two date labels print on top of each other', async ({ page }) => {
 	}
 });
 
-test('a short history sits at the newest edge, never adrift on the left', async ({ page }) => {
+test('a short history starts at the left edge and grows right', async ({ page }) => {
+	// Where an OVERFLOWING strip opens and where an UNDERFULL one sits are two
+	// questions, and `today_anchor` only answers the first. Anchored right, the
+	// whole strip slid left by a column every time a day was published, so a run
+	// an operator had looked at yesterday was somewhere else today. Anchored
+	// left, a day keeps its place and the empty room is on the side where the
+	// days that have not happened yet belong.
+	//
+	// Wide on purpose. `cellFor` caps a day column, so past a frame width the
+	// strip CANNOT fill its room whatever the ledger holds - which is what makes
+	// the premise below a property of the layout rather than of today's data.
+	await page.setViewportSize(UNDERFULL_VIEWPORT);
 	await page.goto('/console/');
 
 	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
 	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
 
-	expect(Math.abs(strip.right - columns[columns.length - 1].right)).toBeLessThan(2);
-	expect(columns[0].x - strip.x).toBeGreaterThan(1);
+	// The premise: fewer days than the strip has room for. Without it the test
+	// passes on a full strip, where left and right alignment are the same thing.
+	const drawn = columns[columns.length - 1].right - columns[0].x;
+	expect(drawn, 'the strip is full, so alignment cannot be told apart').toBeLessThan(
+		strip.width - 2
+	);
+
+	expect(Math.abs(columns[0].x - strip.x)).toBeLessThan(2);
+	expect(strip.right - columns[columns.length - 1].right).toBeGreaterThan(1);
 });
 
 test('on a phone the strip scrolls, and opens on the newest run', async ({ page }) => {
@@ -536,7 +463,10 @@ test('a feed past the quarantine count is marked rested', async ({ page }) => {
 	await expect(flaky.locator('[data-rested]')).toHaveCount(1);
 	await expect(page.locator('[data-feed="canary-gone"] [data-rested]')).toHaveCount(0);
 
-	// Worst first. An operator reading top-down reads the biggest problem first.
+	// Nearest to a rest first. `canary-flaky` has failed every run it was asked,
+	// `canary-empty` answered once before its two blank runs, and `canary-gone`
+	// has one failure. The full ordering rule is held in console-feeds.spec.ts,
+	// against the page's own published streaks rather than against this list.
 	const named = await page
 		.locator('[data-feed]')
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-feed')));
@@ -611,17 +541,48 @@ test('the timing legend is sorted by the newest day, tallest first', async ({ pa
 	expect(entries[0].stage).toBe('summarize');
 });
 
+/** What the timing chart drew for one stage, read off the chart itself.
+ *
+ * The notes under the plot count days, and the chart draws the window the page
+ * is set to rather than the days that happen to carry a row. So a count typed
+ * into a test here would have to be re-typed every time a preset moved or the
+ * fixture grew, and it would go stale silently. The plot publishes the span it
+ * drew, and it draws one mark for every day it has a number for - a filled dot
+ * for a measured time, an open dot for a measured zero - so the days it timed
+ * nothing on are the difference between the two.
+ */
+async function drewFor(
+	page: Page,
+	stage: string
+): Promise<{ days: number; filled: number; zeros: number; blank: number }> {
+	const plot = page.locator('[data-timing="plot"]');
+	const days = Number(await plot.getAttribute('data-timing-days'));
+	expect(days, 'the chart must publish the span it drew').toBeGreaterThan(0);
+	const { filled, zeros } = await plot.evaluate(
+		(svg, key) => ({
+			filled: svg.querySelectorAll(`circle[data-stage-mark="${key}"]`).length,
+			zeros: svg.querySelectorAll(`circle[data-stage-zero="${key}"]`).length
+		}),
+		stage
+	);
+	return { days, filled, zeros, blank: days - filled - zeros };
+}
+
 test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }) => {
 	await page.goto('/console/');
 
-	// The canary scores one day of the three, so `score` has a number on that
-	// day and none on the other two. A zero clamped onto a log axis would draw
-	// the line falling to the bottom of the plot, which says the stage got a
-	// thousand times faster. The chart breaks the line and names the loss.
+	// The canary scores one day, so `score` has a number on that day and none on
+	// the rest of the window. A zero clamped onto a log axis would draw the line
+	// falling to the bottom of the plot, which says the stage got a thousand times
+	// faster. The chart breaks the line and names the loss.
 	await expect(page.locator('[data-stage-mark="score"]')).not.toHaveCount(0);
 	const note = page.locator('[data-timing-note="score"]');
-	await expect(note, 'score is timed on one day of three, so it owes a note').toHaveCount(1);
-	await expect(note).toHaveText('We timed no score work on 2 of the 3 days. The line breaks there.');
+	await expect(note, 'score is not timed on every day, so it owes a note').toHaveCount(1);
+	const score = await drewFor(page, 'score');
+	expect(score.blank, 'the fixture leaves score no gap to name').toBeGreaterThan(0);
+	await expect(note).toHaveText(
+		`We timed no score work on ${score.blank} of the ${score.days} days. The line breaks there.`
+	);
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
 		const floor = Math.max(
@@ -677,21 +638,34 @@ test('a timing nobody took, a timing of zero and a partly timed day read apart',
 
 	const extract = page.locator('[data-timing-note="extract"]');
 	await expect(extract, 'the measured zero is named in type').toHaveCount(1);
+	const drewExtract = await drewFor(page, 'extract');
 	await expect(extract).toHaveText(
-		'extract took under 1 ms per item on 1 day, which is faster than we can time. ' +
+		`We timed no extract work on ${drewExtract.blank} of the ${drewExtract.days} days. ` +
+			'The line breaks there. ' +
+			`extract took under 1 ms per item on ${drewExtract.zeros} ` +
+			`${drewExtract.zeros === 1 ? 'day' : 'days'}, which is faster than we can time. ` +
 			'The open dot on the baseline marks it.'
 	);
 
 	// Both facts about summarize, one paragraph, absence first.
 	const summarize = page.locator('[data-timing-note="summarize"]');
 	await expect(summarize, 'summarize has a blank day and a part-timed day').toHaveCount(1);
+	const drewSummarize = await drewFor(page, 'summarize');
 	await expect(summarize).toHaveText(
-		'We timed no summarize work on 1 of the 3 days. The line breaks there. ' +
+		`We timed no summarize work on ${drewSummarize.blank} of the ${drewSummarize.days} days. ` +
+			'The line breaks there. ' +
 			'We timed 4 of the 5 items for summarize on 1 day. The line is the items we timed.'
 	);
 
-	// A stage timed in full every day of the window has nothing to explain.
-	await expect(page.locator('[data-timing-note="fetch"]')).toHaveCount(0);
+	// A note says only what happened. fetch was timed in full on every day it ran,
+	// so its note names the days it did not run and stops - no measured zero it
+	// never had, no partly timed day it never had.
+	const drewFetch = await drewFor(page, 'fetch');
+	expect(drewFetch.zeros, 'fetch has no measured zero to name').toBe(0);
+	await expect(page.locator('[data-timing-note="fetch"]')).toHaveText(
+		`We timed no fetch work on ${drewFetch.blank} of the ${drewFetch.days} days. ` +
+			'The line breaks there.'
+	);
 
 	// One place, not two. The legend used to print `no data` for the same
 	// absence a paragraph under it also named.
@@ -802,7 +776,7 @@ test('writing draws slower than reading, on one shared scale', async ({ page }) 
 test('the chart points at the write-up rather than restating it', async ({ page }) => {
 	await page.goto('/console/');
 
-	const link = page.getByRole('link', { name: 'why the spread is wide' });
+	const link = page.getByRole('link', { name: 'why the range is wide' });
 	await expect(link).toHaveAttribute(
 		'href',
 		'https://github.com/miztiik/yen-idhazh/blob/main/docs/architecture/summarize/throughput.md'
@@ -859,7 +833,7 @@ test('the telemetry viewport renders the published projection', async ({ page })
 
 	await expect(page.locator('[data-viewport-control]')).toBeVisible();
 	await expect(page.locator('[data-failure-panels]')).toBeVisible();
-	await expect(page.locator('[data-compression]')).toBeVisible();
+	await expect(page.locator('[data-band-distance]')).toBeVisible();
 
 	// Counted off the projection the page reads, over the window the page says it
 	// is showing. It was `11 rows in view` until the fixture grew the rows the
@@ -878,76 +852,6 @@ test('the telemetry viewport renders the published projection', async ({ page })
 	await expect(control).toContainText(`${inView.length} rows in view`);
 });
 
-test('a failure panel prints its rate in type, not only in a tooltip', async ({ page }) => {
-	await page.goto('/console/');
-
-	// A `<title>` does not fire on touch and does not survive the screenshot an
-	// operator pastes into an issue, so a chart whose only number is a tooltip
-	// has no number.
-	for (const stage of ['fetch', 'extract', 'summarize']) {
-		await expect(page.locator(`[data-panel-rate="${stage}"]`)).toHaveText(
-			/(\d+%|<1%) failed, \d+ of \d+\.|No rows in this window\./
-		);
-	}
-});
-
-test('a window holding one day draws no bar, because a bar would be the panel', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	const viewport = page.locator('[data-viewport-control]');
-	const start = await viewport.getAttribute('data-window-start');
-	const end = await viewport.getAttribute('data-window-end');
-	test.skip(start !== end, 'the fixture window spans more than one day');
-
-	await expect(page.locator('[data-panel]')).toHaveCount(0);
-	await expect(page.locator('[data-panel-rate="fetch"]')).toBeVisible();
-});
-
-test('a failure panel draws in CSS pixels, so its type is the size it declares', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	// The skip reads the window, which is the fixture's own fact, and never a
-	// locator count. Counting `[data-panel]` here meant that renaming the
-	// attribute drew zero panels, skipped this test, and left the suite green.
-	// `span` answers 0 for a missing attribute, so the skip cannot fire on one.
-	const viewport = page.locator('[data-viewport-control]');
-	const start = await viewport.getAttribute('data-window-start');
-	const end = await viewport.getAttribute('data-window-end');
-	test.skip(span(start, end) === 1, 'the fixture window holds one day, so no panel draws');
-
-	// One panel per stage - fetch, extract and summarize. A renamed attribute
-	// fails here instead of switching the test off.
-	const panels = page.locator('[data-panel]');
-	await expect(panels, 'a window of more than one day draws one panel per stage').toHaveCount(3);
-
-	// A `viewBox` is a scale factor, not a unit. Stretched from 360 units into a
-	// 163px panel it put `font-size="10"` on screen at 4.5px.
-	for (const width of [380, 768, 1400]) {
-		await page.setViewportSize({ width, height: 900 });
-		await expect
-			.poll(async () =>
-				panels.evaluateAll((nodes) =>
-					nodes.every((node) => {
-						const declared = Number((node.getAttribute('viewBox') ?? '').split(' ')[2]);
-						return Math.abs(declared - node.getBoundingClientRect().width) <= 1;
-					})
-				)
-			)
-			.toBe(true);
-	}
-
-	// Two rules: the baseline and the y axis. The unlabelled 50% dash was a
-	// reference at a value nobody acts on, and it is gone.
-	await expect(page.locator('[data-panel="fetch"] line')).toHaveCount(2);
-	// Both ends of the fixed domain are printed, so the scale can be read.
-	await expect(page.locator('[data-panel="fetch"]')).toContainText('100%');
-	await expect(page.locator('[data-panel="fetch"]')).toContainText('0%');
-});
-
 test('the failed-item list is capped, states its scope, and offers the rest', async ({ page }) => {
 	await page.goto('/console/');
 
@@ -961,186 +865,6 @@ test('the failed-item list is capped, states its scope, and offers the rest', as
 	// Whatever the fixture holds, the list never renders more than the cap.
 	expect(await rows.count()).toBeLessThanOrEqual(FAILURE_LIST_MAX);
 	await expect(page.locator('[data-failure-scope]')).toContainText('in this window.');
-});
-
-test('the compression view draws the data once', async ({ page }) => {
-	await page.goto('/console/');
-
-	// A second plot under the first drew strictly less - no band reference and
-	// no truncation mark - which is two drawings of one dataset that disagree.
-	const chart = page.locator('[data-compression]');
-	await expect(chart.locator('svg')).toHaveCount(1);
-	await expect(chart.locator('canvas')).toHaveCount(0);
-
-	// The band reference is one step outline across the whole axis, so it costs
-	// the same handful of nodes at seven points and at eleven hundred. It used
-	// to be one vertical line per point: 1166 of them on the committed ledger,
-	// measured 2026-08-25.
-	expect(await chart.locator('svg path').count()).toBeLessThanOrEqual(4);
-
-	// Both arms stay asserted. The canary window now holds scored items, and
-	// this test also runs against a window that holds none.
-	const marks = await chart.locator('svg circle, svg rect').count();
-	if (marks === 0) {
-		await expect(chart).toContainText('No scored items in this window');
-	} else {
-		await expect(chart.locator('[data-band-zone]')).toHaveCount(1);
-	}
-});
-
-test('the compression view draws every article it can place, and marks only the ones the cap cut', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	// The state that had no coverage at all while the canary day carried no
-	// scored item: marks instead of a sentence, a zone behind them, and more
-	// than one decade under them.
-	const chart = page.locator('[data-compression]');
-	await expect(chart).not.toContainText('No scored items in this window');
-
-	const placeable = await inOpenWindow(page, plottedRows());
-	const cut = await inOpenWindow(page, cutRows());
-
-	const dots = await chart.locator('svg circle').count();
-	const diamonds = await chart.locator('svg rect').count();
-	expect(dots).toBeGreaterThan(0);
-	// Every row the plot can place reaches it, and no row it cannot does. A
-	// filter that dropped one either way would still leave a chart that looks
-	// right.
-	expect(dots + diamonds).toBe(placeable.length);
-	// And the plot is drawn from the published projection, not from every row of
-	// it: the fixture holds rows this predicate throws away, and it holds one
-	// article two runs both wrote a row for, so a plot that drew the whole file
-	// would land on a different number here.
-	expect(
-		placeable.length,
-		'the fixture holds only one row an article, so the filter cannot be seen to fire'
-	).toBeLessThan((await inOpenWindow(page, telemetryProjection())).length);
-
-	// A diamond says the cap cut this article, which the projection carries as
-	// its pre-cap length standing above its post-cap one. The fixture holds
-	// articles on both sides of that, so the count below is evidence rather than
-	// an absence, and an unconditional diamond fails it in both directions.
-	expect(cut.length, 'the fixture cut nothing, so the mark cannot be seen to fire').toBeGreaterThan(
-		0
-	);
-	expect(cut.length, 'the fixture cut everything, so a diamond on every row would pass').toBeLessThan(
-		placeable.length
-	);
-	expect(diamonds, 'a diamond is drawn for an article the cap cut, and for nothing else').toBe(
-		cut.length
-	);
-
-	await expect(chart.locator('[data-band-zone]')).toHaveCount(1);
-
-	// A log axis labelled at one decade is a linear axis with an odd label on
-	// it. The y ticks, the cap labels and the two axis titles carry their own
-	// attributes, so what is left is the decades.
-	const decades = await chart
-		.locator('svg text:not([data-tick="y"]):not([data-axis]):not([data-cap-label])')
-		.evaluateAll((nodes) =>
-			nodes
-				.map((node) => (node.textContent ?? '').trim())
-				.filter((text) => /^10*$/.test(text))
-		);
-	expect(new Set(decades).size).toBeGreaterThan(1);
-});
-
-test('the cap line comes from the cut points in view, and a window with none draws none', () => {
-	// A fixture window built here rather than read off the canary: the canary is
-	// one day, and the fact under test is what happens when a window straddles
-	// two cap settings. A thirty-day window can, which is the whole reason the
-	// line is read off the rows instead of off `extract.truncation_cap_tokens`.
-	const point = (
-		date: string,
-		id: string,
-		full: number,
-		seen: number,
-		cut: boolean
-	): CompressionPoint => ({
-		date,
-		item_id: id,
-		source_words: full,
-		source_seen_words: seen,
-		summary_words: 120,
-		truncation_flagged: cut
-	});
-
-	const two = capsInView([
-		point('2026-08-26', 'a', 4120, 1923, true),
-		point('2026-08-27', 'b', 5200, 1923, true),
-		point('2026-08-28', 'c', 9000, 3846, true),
-		point('2026-08-28', 'd', 812, 812, false)
-	]);
-	// One line per distinct post-cap length, oldest first, and never one per
-	// cut article - four cut rows at two settings are two lines.
-	expect(two.map((cap) => cap.words)).toEqual([1923, 3846]);
-	// Each label names its own value and its own end of the handover.
-	expect(capLabel(two, 0)).toBe('cut at 1,923 words (to 27 Aug)');
-	expect(capLabel(two, 1)).toBe('cut at 3,846 words (from 28 Aug)');
-
-	// One cap over the whole window needs no date. It is the cut, throughout.
-	const one = capsInView([point('2026-08-28', 'c', 9000, 3846, true)]);
-	expect(one.map((cap) => cap.words)).toEqual([3846]);
-	expect(capLabel(one, 0)).toBe('cut at 3,846 words');
-
-	// The half a config-derived line fails. Nothing in view was cut, so there is
-	// no cut to draw - a line read off the knob draws one anyway and claims a cut
-	// the day never made.
-	expect(capsInView([point('2026-08-28', 'd', 812, 812, false)])).toEqual([]);
-	// A cut row with no recorded post-cap length has no x to sit at either.
-	expect(capsInView([point('2026-08-28', 'e', 4120, 0, true)])).toEqual([]);
-});
-
-test('a dashed line is drawn for every cut length the window holds, and for no other', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	const chart = page.locator('[data-compression]');
-	const caps = [...new Set((await inOpenWindow(page, cutRows())).map((row) => row.source_words))]
-		.filter((value): value is number => value !== null && value > 0)
-		.sort((a, b) => a - b);
-
-	await expect(
-		chart.locator('[data-cap-line]'),
-		'one dashed line per distinct cut length in view, and never one more'
-	).toHaveCount(caps.length);
-	// A line drawn from the knob would stand here whatever the rows held.
-	await expect(chart.locator('svg line[stroke-dasharray="3 3"]')).toHaveCount(caps.length);
-
-	for (const value of caps) {
-		await expect(chart.locator(`[data-cap-line="${value}"]`)).toHaveCount(1);
-		await expect(chart.locator(`[data-cap-label="${value}"]`)).toContainText(grouped(value));
-	}
-});
-
-test('the plot says how many articles it could not place, and the count is the rows', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	// The count and the sentence out of one reading, either way round. Drawing
-	// the plot from the telemetry projection closed the gap this sentence used to
-	// declare: an article that published has a length, so nothing is dropped and
-	// the sentence stays off the page. It reads the rows rather than a constant,
-	// so a fixture that ever holds one again turns it back on and pins its number.
-	const dropped = (await inOpenWindow(page, noLengthRows())).length;
-	const sentence = page.locator('[data-compression-note="not-plotted"]');
-
-	if (dropped === 0) {
-		await expect(sentence).toHaveCount(0);
-	} else {
-		await expect(sentence).toHaveText(
-			`${dropped} articles in this window recorded no length before the cut, so they are not plotted.`
-		);
-	}
-
-	// And the rows really did all get placed, rather than the plot being empty.
-	await expect(page.locator('[data-compression] svg circle, [data-compression] svg rect')).not.toHaveCount(
-		0
-	);
 });
 
 test('an unplaceable row is counted and never silently dropped', () => {
@@ -1209,159 +933,42 @@ test('an unplaceable row is counted and never silently dropped', () => {
 	expect(placeRow(row({})).kind).toBe('point');
 });
 
-test('a mark reads out on the keyboard, and the readout closes on Escape', async ({ page }) => {
-	await page.goto('/console/');
-
-	const readout = page.locator('[data-readout="compression"]');
-	await expect(readout).toHaveCount(0);
-
-	// Focus reaches the series, not the points. A tab stop per point would be a
-	// two-and-a-half-thousand-stop tab order.
-	const plot = page.locator('[data-compression] svg');
-	await expect(plot).toHaveAttribute('tabindex', '0');
-	await plot.focus();
-	await expect(readout).toHaveCount(1);
-
-	const first = (await readout.innerText()).trim();
-	const viewport = page.locator('[data-viewport-control]');
-	const before = await viewport.getAttribute('data-window-start');
-	await page.keyboard.press('ArrowRight');
-	await expect(readout).not.toHaveText(first);
-	// The scatter sits inside the viewport control, which pans on the same two
-	// arrows. One step through the marks must not also move the window under
-	// them - it did, and the readout ended up pointing at a mark that had gone.
-	await expect(viewport, 'stepping a mark also panned the window').toHaveAttribute(
-		'data-window-start',
-		before ?? ''
-	);
-	// The numbers are in type, in the reader's words, and never a column name.
-	await expect(readout).toContainText(/\d+ \w+ - /);
-	await expect(readout).toContainText(
-		/Article [\d,]+ words(, cut to [\d,]+)?\. Summary [\d,]+ words\./
-	);
-
-	await page.keyboard.press('Escape');
-	await expect(readout).toHaveCount(0);
-
-	// And the hint that says so, under the chart it belongs to.
-	await expect(page.locator('[data-readout-hint="compression"]')).toHaveText(
-		'Keyboard: Left and Right step through the days. Escape closes.'
-	);
-});
-
-test('the candle reads out the sentence its title already carried', async ({ page }) => {
+test('the candle reads out its day and every series at that column', async ({ page }) => {
 	await page.goto('/console/');
 
 	const readout = page.locator('[data-readout="throughput"]');
-	await expect(readout).toHaveCount(0);
+	// The strip rests on the newest day rather than opening blank, so it never
+	// appears under the pointer and pushes the marks it explains out from under
+	// it. That is the stage-timing chart's rule, applied here unchanged.
+	await expect(readout).toHaveCount(1);
+	await expect(readout.locator('[data-readout-day]')).toContainText('the newest day');
 
 	const plot = page.locator('[data-throughput="chart"] svg');
-	await plot.focus();
-	await expect(readout).toHaveCount(1);
+	await plot.evaluate((node: SVGSVGElement) => node.focus());
 
-	// Decision: reuse `caption()` verbatim. The readout and the `<title>` are the
-	// same words, so there is one sentence about a day and not two.
-	const title = await page
-		.locator('[data-candle="read"][data-date="2026-08-19"] title')
-		.textContent();
-	await expect(readout).toContainText((title ?? '').trim());
+	// The readout carried `caption()` verbatim until 2026-08-30, on the rule that
+	// one day gets one sentence. The strip is now capped at a share of the plot,
+	// and the per-run list in `caption()` is the one clause that grows with the
+	// day's run count - four wrapped lines of it is not a readout. The `<title>`
+	// keeps every word; the strip keeps the median and the extent per series.
+	await expect(readout.locator('[data-readout-day]')).toHaveText(/^\d+ \w+ \d{4}$/);
+
+	// One row per series drawn, read against write off one hover rather than two.
+	const rows = await readout
+		.locator('[data-series-readout]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => (node.getAttribute('data-series-readout') ?? '').trim())
+		);
+	expect(rows).toEqual(['read', 'write']);
+	for (const series of rows) {
+		await expect(readout.locator(`[data-series-readout="${series}"] dd`).last()).toHaveText(
+			/^[\d.]+ \([\d.]+-[\d.]+\)$/
+		);
+	}
 
 	await expect(page.locator('[data-readout-hint="throughput"]')).toHaveText(
-		'Keyboard: Left and Right step through the days. Escape closes.'
+		'Point at a day to read it. Left and Right step through the days, Escape returns to the newest.'
 	);
-});
-
-test.describe('under a thumb', () => {
-	test.use({ hasTouch: true });
-
-	test('a tap reads out, and lifting the thumb does not blank it', async ({ page }) => {
-		await page.goto('/console/');
-
-		const plot = page.locator('[data-compression] svg');
-		// A tap lands in the viewport, not in the document, and this chart is a long
-		// way down the console. Tapping an unscrolled box taps whatever is on screen
-		// at that y, which is not this chart.
-		await plot.scrollIntoViewIfNeeded();
-		const box = await plot.boundingBox();
-		expect(box, 'the plot has no box, so the tap below would land nowhere').not.toBeNull();
-		const at = box as { x: number; y: number; width: number; height: number };
-
-		// An SVG `<title>` needs a hover, so on a phone the numbers in it did not
-		// exist. This is the whole reason the readout is not a `<title>`.
-		await page.touchscreen.tap(at.x + at.width * 0.6, at.y + at.height * 0.5);
-
-		const readout = page.locator('[data-readout="compression"]');
-		await expect(readout, 'a tap must leave the numbers on screen after the lift').toHaveCount(1);
-		await expect(readout).toContainText('Article');
-	});
-});
-
-test('a window holding no scored item says so rather than drawing an empty plot', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	const chart = page.locator('[data-compression]');
-	await expect(chart.locator('svg circle, svg rect')).not.toHaveCount(0);
-
-	// The empty state is reached the way a reader reaches it: by panning off the
-	// days that have rows. The fixture always has rows, so this is where that
-	// rendering is still proved.
-	const viewport = page.locator('[data-viewport-control]');
-	await viewport.focus();
-	for (let index = 0; index < 8; index += 1) {
-		await page.keyboard.press('ArrowLeft');
-	}
-
-	await expect(chart).toContainText('No scored items in this window');
-	await expect(chart.locator('svg circle, svg rect')).toHaveCount(0);
-	await expect(chart.locator('[data-band-zone]')).toHaveCount(0);
-});
-
-test('the compression chart draws in CSS pixels, and labels its own y axis', async ({ page }) => {
-	for (const width of [380, 768, 1400]) {
-		await page.setViewportSize({ width, height: 900 });
-		await page.goto('/console/');
-
-		// A viewBox is a scale factor, not a unit. One that disagrees with the
-		// rendered width puts `font-size="10"` on screen at some other size.
-		await expect
-			.poll(async () =>
-				page.locator('[data-compression] svg').evaluate((node) => {
-					const declared = Number((node.getAttribute('viewBox') ?? '').split(/\s+/)[2]);
-					return Math.abs(node.getBoundingClientRect().width - declared);
-				})
-			)
-			.toBeLessThan(1);
-	}
-
-	// The y axis title used to be printed on the bottom row beside the x axis
-	// title, which is what made the chart read as unfinished rather than ugly.
-	const [title] = await page.locator('[data-compression] [data-axis="y"]').evaluateAll(TO_BOX);
-	const [across] = await page.locator('[data-compression] [data-axis="x"]').evaluateAll(TO_BOX);
-	expect(title.bottom).toBeLessThan(across.y);
-	// Rotated, so it runs along the axis it names rather than across it.
-	expect(title.height).toBeGreaterThan(title.width);
-
-	// The left margin holds both the title and the tick numbers. It is narrow,
-	// so the two overlapping is a real failure rather than a theoretical one.
-	const ticks = await page.locator('[data-compression] [data-tick="y"]').evaluateAll(TO_BOX);
-	expect(ticks.length).toBeGreaterThan(1);
-	for (const tick of ticks) expect(tick.x).toBeGreaterThanOrEqual(title.right);
-});
-
-test('the compression axis titles say what the heading says', async ({ page }) => {
-	await page.goto('/console/');
-
-	const chart = page.locator('[data-compression]');
-	await expect(chart.locator('[data-axis="x"]')).toHaveText('Article length, words');
-	await expect(chart.locator('[data-axis="y"]')).toHaveText('Summary length, words');
-
-	// The axis used to read "source words", which is how the ledger spells the
-	// column, not how a reader says it. Nothing here may name a column again.
-	for (const text of await chart.locator('[data-axis]').allTextContents()) {
-		expect(text).not.toMatch(/source|_/i);
-	}
 });
 
 test('the reading path and the console carry no chart library', () => {
@@ -1444,7 +1051,9 @@ test('panning to a month with no rows leaves a visible gap', async ({ page }) =>
 		await page.keyboard.press('ArrowLeft');
 	}
 
-	await expect(page.getByText('No rows in this window').first()).toBeVisible();
+	// The failure surface says the window holds nothing rather than drawing a
+	// column of zeroes, which would read as a run that went badly.
+	await expect(page.locator('[data-failure-empty]')).toBeVisible();
 	await expect(viewport).toContainText('0 rows in view');
 });
 
@@ -1463,7 +1072,10 @@ test('an empty section costs the page that section, never the page', async ({ pa
 	await expect(page.locator('[data-grid="days"]')).toBeVisible();
 	await expect(page.locator('[data-feeds="table"]')).toBeVisible();
 	await expect(page.getByRole('heading', { name: 'What the model did' })).toBeVisible();
-	await expect(page.locator('[data-charts="table"]')).toBeVisible();
+	// The daily rows are behind a disclosure now, so what has to survive is the
+	// control that reaches them - not the table itself.
+	await expect(page.locator('[data-charts="daily"]')).toBeVisible();
+	await expect(page.locator('[data-charts-verdict]')).toBeVisible();
 
 	expect(errors).toEqual([]);
 	expect(missing).toEqual([]);
@@ -1519,6 +1131,20 @@ test('the days the seed drops stay on disk for a pan to reach', () => {
 	expect(older.every((row) => !seededIds.has(row.item_id))).toBe(true);
 });
 
+/** Open the daily figures.
+ *
+ * The rows are on demand: the section leads with the two figures its own
+ * retirement rule names and keeps the seven daily columns behind a native
+ * disclosure. `page.evaluate` rather than a click, because the integrated
+ * browser is a hidden page and a click waits for an element to be stable.
+ */
+async function openDailyCharts(page: Page) {
+	await page.locator('[data-charts="daily"]').evaluate((node) => {
+		(node as HTMLDetailsElement).open = true;
+	});
+	await expect(page.locator('[data-charts="table"]')).toBeVisible();
+}
+
 /** What the fixture's own files say the Charts table has to print for a day.
  *
  * Derived here from `run.json` and `digest.json` rather than typed as constants,
@@ -1557,6 +1183,9 @@ function chartCells(date: string): Record<string, string> {
 		asked: String(sum((run) => run.items_routed ?? 0)),
 		drafted: String(sum((run) => run.charts_drafted ?? 0)),
 		published: String(published),
+		// The denominator of the arm's coverage rule, and the reason a share of no
+		// articles is printed as an absence rather than as zero percent.
+		items: String(items.length),
 		minutes: printed(minutes),
 		'per-chart': printed(minutes === null || published === 0 ? null : minutes / published)
 	};
@@ -1564,6 +1193,7 @@ function chartCells(date: string): Record<string, string> {
 
 test('every chart cell equals what the day committed', async ({ page }) => {
 	await page.goto('/console/');
+	await openDailyCharts(page);
 
 	const dates = await page
 		.locator('[data-chart-day]')
@@ -1588,6 +1218,7 @@ test('the measured day prints rates, and the day with no router prints dashes', 
 	page
 }) => {
 	await page.goto('/console/');
+	await openDailyCharts(page);
 
 	// The attack day is the one the fixture gives router counts to. Asserting it
 	// is not all zeros is what stops the oracle above passing on an empty table.
@@ -1611,6 +1242,7 @@ test('the measured day prints rates, and the day with no router prints dashes', 
 
 test('a diagram is a visual and is not a published chart', async ({ page }) => {
 	await page.goto('/console/');
+	await openDailyCharts(page);
 
 	const [year, month, day] = DAY.split('-');
 	const items = (
@@ -1734,8 +1366,19 @@ function modelCells(date: string): Record<string, string> {
 	};
 }
 
+/** The daily figures sit behind a disclosure now; the cards above them lead.
+ *
+ * Opening it is a reader's own action, so a test that reads a cell takes it
+ * too. `console-model.spec.ts` owns the cards and the control itself.
+ */
+async function openDailyFigures(page: Page) {
+	await page.locator('[data-model-table-control] > summary').click();
+	await expect(page.locator('[data-model="table"]')).toBeVisible();
+}
+
 test('every model cell equals what the day committed', async ({ page }) => {
 	await page.goto('/console/');
+	await openDailyFigures(page);
 
 	const dates = await page
 		.locator('[data-model-day]')
@@ -1756,6 +1399,7 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 	page
 }) => {
 	await page.goto('/console/');
+	await openDailyFigures(page);
 
 	// The attack day is the only day the fixture scored, so the day before it is
 	// the scorer-off state: the model wrote summaries and nothing measured them.
@@ -1784,6 +1428,10 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 
 test('nothing under the heading is a score or an internal column name', async ({ page }) => {
 	await page.goto('/console/');
+	// Opened, so the scan below reads the cards AND the rows. A closed disclosure
+	// keeps its rows out of `innerText`, and a scan that cannot see half the
+	// section is a scan that passes for the wrong reason.
+	await openDailyFigures(page);
 
 	const section = await page.locator('[data-model-section]').innerText();
 
@@ -2107,259 +1755,5 @@ test('the plot reads the cut off two lengths, so no ledger stamp can change what
 	const older = placeRow(row(null, 880));
 	expect(older.kind === 'point' && older.point.source_words).toBe(880);
 	expect(older.kind === 'point' && 'source_seen_words' in older.point).toBe(false);
-});
-
-/** What the canary's own item-health rows say the source table has to print.
- *
- * Recomputed here from the CSV rather than typed as constants, and deliberately
- * not through the page's own module: the oracle is that a printed cell equals
- * the value a second, independent reading of the ledger produces.
- *
- * The window ends on the newest day the ledger holds, so a fixture that grows a
- * day moves this with it instead of going stale. Its length is the page's own -
- * the section follows the window control, so a length chosen here would be
- * asserting against a table nobody is looking at.
- */
-function sourceTable(days: number): {
-	rows: { sourceId: string; cut: number; articles: number; share: string; longest: string }[];
-	moreSources: number;
-	moreCuts: number;
-	losses: number[];
-} {
-	const dir = join(CANARY, 'state', 'item-health');
-	const all = readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(dir, name)).rows);
-	const newest = all.map((row) => row.date).sort().at(-1) as string;
-	const first = new Date(
-		new Date(`${newest}T00:00:00Z`).getTime() - (days - 1) * 86_400_000
-	)
-		.toISOString()
-		.slice(0, 10);
-
-	// One entry per article, not per row: a run writes a row for every item it
-	// plans, so counting rows counts a re-run twice.
-	const articles = new Map<string, { source: string; before: number | null; after: number | null }>();
-	for (const row of all) {
-		if (row.date < first || row.date > newest) continue;
-		const cell = (name: string) => (row[name] === '' ? null : Number(row[name]));
-		const key = `${row.source_id}/${row.url_key}`;
-		const held = articles.get(key);
-		const before = cell('source_words_before_cap');
-		if (held === undefined) {
-			articles.set(key, { source: row.source_id, before, after: cell('source_words') });
-		} else if (before !== null && (held.before === null || before > held.before)) {
-			held.before = before;
-			held.after = cell('source_words');
-		}
-	}
-
-	const bySource = new Map<string, { before: number | null; after: number | null }[]>();
-	for (const entry of articles.values()) {
-		bySource.set(entry.source, [...(bySource.get(entry.source) ?? []), entry]);
-	}
-
-	const losses: number[] = [];
-	const found = [];
-	for (const [sourceId, group] of bySource) {
-		const cut = group
-			.map((a) => (a.before !== null && a.after !== null && a.before > a.after ? a.before - a.after : null))
-			.filter((n): n is number => n !== null);
-		if (cut.length === 0) continue;
-		losses.push(...cut);
-		const lengths = group.map((a) => a.before).filter((n): n is number => n !== null);
-		found.push({
-			sourceId,
-			cut: cut.length,
-			articles: group.length,
-			share:
-				group.length < MIN_ATTEMPTS_FOR_RATE
-					? '-'
-					: `${Math.round((cut.length / group.length) * 100)}%`,
-			longest: lengths.length === 0 ? '-' : grouped(Math.max(...lengths))
-		});
-	}
-	found.sort((a, b) => b.cut - a.cut || a.sourceId.localeCompare(b.sourceId));
-	const rest = found.slice(SOURCE_CUT_ROWS);
-	return {
-		rows: found.slice(0, SOURCE_CUT_ROWS),
-		moreSources: rest.length,
-		moreCuts: rest.reduce((total, source) => total + source.cut, 0),
-		losses: losses.sort((a, b) => a - b)
-	};
-}
-
-test('the source table names every source the cap cut, and no other', async ({ page }) => {
-	await page.goto('/console/');
-
-	// The window is the page's own. The section follows the shared control, so a
-	// number picked here would be an oracle over a table nobody is shown.
-	// `console-window.spec.ts` drives the control and proves the contents move.
-	const days = Number(
-		await page.locator('[data-windowed="source-cuts"]').getAttribute('data-window-days')
-	);
-	expect(days, 'the section publishes no window, so the oracle below spans nothing').toBeGreaterThan(
-		0
-	);
-	const expected = sourceTable(days);
-	// The fixture has to hold more than the table prints, or the sort, the cap
-	// and the sentence under it are all asserted against nothing.
-	expect(expected.rows.length, 'the fixture cuts fewer sources than the table prints').toBe(
-		SOURCE_CUT_ROWS
-	);
-	expect(expected.moreSources, 'the fixture never overflows, so the sentence is untested').toBeGreaterThan(0);
-
-	const named = await page
-		.locator('[data-source-cut]')
-		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-source-cut') ?? ''));
-	// One row per source with at least one cut article, worst first. A source
-	// that lost nothing is not here, and neither is one whose only cut fell
-	// outside the window.
-	expect(named).toEqual(expected.rows.map((source) => source.sourceId));
-	expect(named).not.toContain('no-length');
-
-	for (const source of expected.rows) {
-		const row = page.locator(`[data-source-cut="${source.sourceId}"]`);
-		await expect(row.locator('[data-source-cell="cut"]')).toHaveText(String(source.cut));
-		await expect(row.locator('[data-source-cell="articles"]')).toHaveText(String(source.articles));
-		await expect(row.locator('[data-source-cell="share"]')).toHaveText(source.share);
-		await expect(row.locator('[data-source-cell="longest"]')).toHaveText(source.longest);
-	}
-
-	await expect(page.locator('[data-source-cuts-more]')).toHaveText(
-		`${expected.moreSources} more sources had ${expected.moreCuts} cuts between them.`
-	);
-});
-
-test('the source table counts articles, not rows, and reads its lengths off the right cell', async ({
-	page
-}) => {
-	await page.goto('/console/');
-
-	// One of this source's articles was written by two runs. A row count says
-	// eight; the table's own sentence says articles, and it published seven.
-	const dir = join(CANARY, 'state', 'item-health');
-	const rows = readdirSync(dir)
-		.filter((name) => name.endsWith('.csv'))
-		.flatMap((name) => readCsv(join(dir, name)).rows)
-		.filter((row) => row.source_id === 'cut-a');
-	expect(rows.length, 'no article is written twice, so the count below proves nothing').toBe(8);
-	await expect(page.locator('[data-source-cut="cut-a"] [data-source-cell="articles"]')).toHaveText(
-		'7'
-	);
-
-	// Its longest article was never cut. A column that read the longest cut
-	// article would print 6,123 here.
-	await expect(page.locator('[data-source-cut="cut-a"] [data-source-cell="longest"]')).toHaveText(
-		'9,000'
-	);
-
-	// And this one's longest surviving body sits on a row that recorded no
-	// length before the cut. Reading `source_words` would print 30,000; the
-	// question is how long the article was, and that row never answered it.
-	await expect(page.locator('[data-source-cut="cut-b"] [data-source-cell="longest"]')).toHaveText(
-		'5,423'
-	);
-});
-
-test('a share nothing supports prints a dash, never a percentage', async ({ page }) => {
-	await page.goto('/console/');
-
-	// Four articles is under `console.min_attempts_for_rate`, so there is no
-	// share to print. The count and the denominator are still measurements and
-	// still print.
-	const thin = page.locator('[data-source-cut="cut-c"]');
-	await expect(thin, 'the fixture lost its thin source, so the dash is untested').toHaveCount(1);
-	await expect(thin.locator('[data-source-cell="articles"]')).toHaveText('4');
-	expect(4).toBeLessThan(MIN_ATTEMPTS_FOR_RATE);
-	await expect(thin.locator('[data-source-cell="share"]')).toHaveText('-');
-	await expect(thin.locator('[data-source-cell="cut"]')).toHaveText('4');
-
-	// And a source over the floor does print one, which is what stops this
-	// passing on a column of dashes.
-	await expect(
-		page.locator('[data-source-cut="cut-a"] [data-source-cell="share"]')
-	).toHaveText('86%');
-});
-
-test('what the cut cost is printed with the number of articles behind it', async ({ page }) => {
-	await page.goto('/console/');
-
-	const days = Number(
-		await page.locator('[data-windowed="source-cuts"]').getAttribute('data-window-days')
-	);
-	const { losses } = sourceTable(days);
-	const median = losses[Math.floor(losses.length / 2)];
-	const max = losses[losses.length - 1];
-	// A median equal to its own maximum is one number printed twice. The fixture
-	// loses a different amount from every article so the two are two facts.
-	expect(median).toBeLessThan(max);
-
-	await expect(page.locator('[data-source-cuts-cost]')).toHaveText(
-		`${losses.length} articles were cut short. Half of them lost more than ${grouped(median)} words each, and the longest lost ${grouped(max)}.`
-	);
-});
-
-test('a source whose lengths were never recorded is absent, and reads as unknown', () => {
-	// The state the whole `-` rule exists for, driven straight at the reader
-	// because the table cannot reach it: a source is listed only because a row
-	// recorded a length before the cut, so a source with only empty cells and a
-	// source on the table are two different sets by construction.
-	const migrated = (source: string, index: number) => ({
-		date: '2026-08-28',
-		source_id: source,
-		url_key: `${source}-${index}`,
-		source_words: '5000',
-		source_words_before_cap: ''
-	});
-
-	// Seven days here is this test's own window, not the page's. The function
-	// takes the span it is given, and these rows all sit on one day.
-	const nothing = sourceCuts([migrated('a', 0), migrated('a', 1)], {
-		days: 7,
-		minAttempts: MIN_ATTEMPTS_FOR_RATE,
-		limit: SOURCE_CUT_ROWS
-	});
-	// Not listed with a zero. Zero cuts and no measurement are different facts,
-	// and the zero is the one nobody checks.
-	expect(nothing.rows).toEqual([]);
-	// And the page says which of the two it is: nothing recorded a length here,
-	// so the table is not empty - it cannot answer yet.
-	expect(nothing.measured).toBe(false);
-	expect(nothing.cost).toBeNull();
-
-	// One row of that source now records a length, and it was cut. The source
-	// arrives, and the longest article is the one length on record - never the
-	// 5,000-word body beside it that nobody measured before the cut.
-	const some = sourceCuts(
-		[
-			migrated('a', 0),
-			{
-				date: '2026-08-28',
-				source_id: 'a',
-				url_key: 'a-1',
-				source_words: '1923',
-				source_words_before_cap: '2612'
-			}
-		],
-		{ days: 7, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
-	);
-	expect(some.measured).toBe(true);
-	expect(some.rows).toHaveLength(1);
-	expect(some.rows[0].cut).toBe(1);
-	expect(some.rows[0].articles).toBe(2);
-	// Two articles is under the floor, so there is no share to print.
-	expect(some.rows[0].sharePct).toBeNull();
-	expect(some.rows[0].longestWords).toBe(2612);
-	expect(some.cost).toEqual({ n: 1, median: 689, max: 689 });
-
-	// Empty is not zero on the other cell either: a row with no surviving length
-	// is not an article cut to nothing.
-	expect(
-		sourceCuts(
-			[{ date: '2026-08-28', source_id: 'a', url_key: 'a-0', source_words: '', source_words_before_cap: '2612' }],
-			{ days: 7, minAttempts: MIN_ATTEMPTS_FOR_RATE, limit: SOURCE_CUT_ROWS }
-		).rows
-	).toEqual([]);
 });
 

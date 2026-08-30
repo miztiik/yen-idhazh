@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import copy
 import csv
 import datetime
 import hashlib
@@ -13,8 +14,9 @@ import shlex
 import shutil
 import subprocess
 import sys
+import tempfile
 import tomllib
-from collections.abc import Mapping, Sequence
+from collections.abc import Iterator, Mapping, Sequence
 from pathlib import Path
 from typing import Final, cast
 
@@ -393,8 +395,14 @@ CLOCK_VARIABLES: Final = ("JOB_STARTED_AT", "CPU_MODEL", "CPU_STAT_AT_START")
 # every scalar a string, so the value to compare is the word, not the boolean.
 WORK_LEDGER_STEPS: Final = (RECORD_STEP, COUNTERS_STEP, COMMIT_STEPS["work"])
 TOLERATED: Final = "true"
-COMMIT_IDENTITY: Final = (
-    "github-actions[bot] <41898282+github-actions[bot]@users.noreply.github.com>"
+COMMIT_IDENTITY: Final = "yen-idhazh pipeline <pipeline@yen-idhazh.invalid>"
+#: Every file that configures git before a job commits. A runner carries no
+#: identity of its own, so each of these has to set one, and two copies of a
+#: name drift in silence unless something reads both.
+#: `.invalid` is reserved by RFC 2606, so the address can never route anywhere.
+GIT_IDENTITY_SOURCES: Final = (
+    SCRIPTS_DIR / "commit-and-push.sh",
+    WORKFLOWS_DIR / "prune.yml",
 )
 # What a `${{ }}` expression stands in for when a test runs the real call site
 # outside Actions. `day_dir` is the digest date as a path, which is what lets the
@@ -442,7 +450,21 @@ RACED_ITEM_ID: Final = "energy-0000000001"
 RACED_ASSET: Final = f"digest/{SUBSTITUTED_DATE.replace('-', '/')}/{RACED_ITEM_ID}.svg"
 
 
-def _load_workflows() -> dict[str, dict[str, object]]:
+_PARSED_WORKFLOWS: dict[str, dict[str, object]] | None = None
+
+
+def _parsed_workflows() -> dict[str, dict[str, object]]:
+    """Every workflow in the repository, read and parsed once for the whole session.
+
+    152,564 bytes of YAML through PyYAML's pure-Python loader, and this file
+    asks for it 104 times a run - 64.0 s of a 351.1 s run, measured 2026-08-30
+    on Windows 11, 12 logical CPUs. Nothing rewrites a workflow while the suite
+    is running, so no two of those parses can disagree.
+    """
+    global _PARSED_WORKFLOWS
+    if _PARSED_WORKFLOWS is not None:
+        return _PARSED_WORKFLOWS
+
     paths = sorted((*WORKFLOWS_DIR.glob("*.yml"), *WORKFLOWS_DIR.glob("*.yaml")))
     assert {path.name for path in paths} == set(EXPECTED_WORKFLOWS)
 
@@ -451,7 +473,19 @@ def _load_workflows() -> dict[str, dict[str, object]]:
         document = yaml.load(read_text(path), Loader=yaml.BaseLoader)
         assert isinstance(document, dict), f"{path.name} must contain a YAML mapping"
         workflows[path.name] = cast(dict[str, object], document)
+    _PARSED_WORKFLOWS = workflows
     return workflows
+
+
+def _load_workflows() -> dict[str, dict[str, object]]:
+    """This caller's own copy of the parsed workflows.
+
+    Copied rather than shared, because a caller that edited one would be editing
+    what every later test reads - and that failure is order-dependent, so the
+    file would pass alone and fail in the full suite. The copy costs 0.7 ms
+    against the 111 ms parse it stands in for (2026-08-30, same box).
+    """
+    return copy.deepcopy(_parsed_workflows())
 
 
 def _triggers(workflow: dict[str, object]) -> dict[str, object]:
@@ -920,14 +954,42 @@ def _seed_ledger(staged: str) -> str:
     return staged if staged.endswith(".csv") else f"{staged}/ledger.csv"
 
 
-def _scripted_origin(
-    tmp_path: Path, env: dict[str, str], staged_paths: Sequence[str]
-) -> tuple[Path, Path]:
-    """A bare origin holding one commit, plus the clone a job would check out."""
-    origin = tmp_path / "origin.git"
-    _git(tmp_path, env, "init", "--bare", "-b", "main", str(origin))
-    seed = tmp_path / "seed"
-    _git(tmp_path, env, "clone", str(origin), str(seed))
+#: Where a built origin lives, keyed by what it holds. A template is built once
+#: and copied per test, so the git processes behind the first commit are paid by
+#: the session rather than by every test that starts from the same one.
+_ORIGIN_TEMPLATES: Final[dict[tuple[str, ...], Path]] = {}
+
+
+@pytest.fixture(scope="session", autouse=True)
+def _discard_origin_templates() -> Iterator[None]:
+    """Delete the built origins once the last test that copies one has run."""
+    yield
+    for root in _ORIGIN_TEMPLATES.values():
+        shutil.rmtree(root, ignore_errors=True)
+    _ORIGIN_TEMPLATES.clear()
+
+
+def _template(key: tuple[str, ...]) -> tuple[Path, bool]:
+    """The directory this template lives in, and whether it still has to be filled.
+
+    Outside any test's `tmp_path`, because one build serves the whole session -
+    and `tmp_path` is removed with the test that owned it.
+    """
+    root = _ORIGIN_TEMPLATES.get(key)
+    if root is not None:
+        return root, False
+    root = Path(tempfile.mkdtemp(prefix="yen-idhazh-origin-"))
+    _ORIGIN_TEMPLATES[key] = root
+    return root, True
+
+
+def _seed_scripted_origin(root: Path, staged_paths: Sequence[str]) -> None:
+    """Build the bare origin every commit test starts from, in one template directory."""
+    env = _isolated_env(root)
+    origin = root / "origin.git"
+    _git(root, env, "init", "--bare", "-b", "main", str(origin))
+    seed = root / "seed"
+    _git(root, env, "clone", str(origin), str(seed))
     for index, staged in enumerate(staged_paths):
         _write(seed / _seed_ledger(staged), f"header\nrow-{index}\n")
     _write(seed / "docs" / "unrelated.md", "seed\n")
@@ -939,6 +1001,23 @@ def _scripted_origin(
     _git(seed, env, "add", ".gitattributes", "docs", "runner-noise.txt", *staged_paths)
     _git(seed, env, "commit", "-m", "seed")
     _git(seed, env, "push", "-u", "origin", "main")
+
+
+def _scripted_origin(
+    tmp_path: Path, env: dict[str, str], staged_paths: Sequence[str]
+) -> tuple[Path, Path]:
+    """A bare origin holding one commit, plus the clone a job would check out.
+
+    Nine tests want the same first commit and building it costs six git
+    processes, so it is built once for the session and copied here. Every test
+    still gets a repository of its own: the copy is the one it pushes to,
+    rebases and rewrites, and nothing ever writes to what was copied.
+    """
+    root, unbuilt = _template(("scripted", *staged_paths))
+    if unbuilt:
+        _seed_scripted_origin(root, staged_paths)
+    origin = tmp_path / "origin.git"
+    shutil.copytree(root / "origin.git", origin)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -994,16 +1073,13 @@ def _rebuild(repo: Path, env: dict[str, str], date: str, items: Sequence[str]) -
     )
 
 
-def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path, Path]:
-    """An origin carrying a published day, plus the clone the assemble job runs in.
-
-    The day is written by the same producer the loop reruns, so nothing here is
-    a hand-made fixture of what that producer emits.
-    """
-    origin = tmp_path / "origin.git"
-    _git(tmp_path, env, "init", "--bare", "-b", "main", str(origin))
-    seed = tmp_path / "seed"
-    _git(tmp_path, env, "clone", str(origin), str(seed))
+def _seed_digest_origin(root: Path, date: str) -> None:
+    """Build the origin carrying one published day, in one template directory."""
+    env = _isolated_env(root)
+    origin = root / "origin.git"
+    _git(root, env, "init", "--bare", "-b", "main", str(origin))
+    seed = root / "seed"
+    _git(root, env, "clone", str(origin), str(seed))
     _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
     _write(seed / "docs" / "unrelated.md", "seed\n")
     # The corpus seed, exactly as a real checkout carries it. Without it
@@ -1014,6 +1090,20 @@ def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path
     _git(seed, env, "add", ".gitattributes", "docs", *COMMIT_STAGED_PATHS["assemble"])
     _git(seed, env, "commit", "-m", f"digest: {date}")
     _git(seed, env, "push", "-u", "origin", "main")
+
+
+def _digest_origin(tmp_path: Path, env: dict[str, str], date: str) -> tuple[Path, Path]:
+    """An origin carrying a published day, plus the clone the assemble job runs in.
+
+    The day is written by the same producer the loop reruns, so nothing here is
+    a hand-made fixture of what that producer emits. It is written once for the
+    session and copied here, for the reason `_scripted_origin` gives.
+    """
+    root, unbuilt = _template(("digest", date))
+    if unbuilt:
+        _seed_digest_origin(root, date)
+    origin = tmp_path / "origin.git"
+    shutil.copytree(root / "origin.git", origin)
     runner = tmp_path / "runner"
     _git(tmp_path, env, "clone", str(origin), str(runner))
     return origin, runner
@@ -1090,6 +1180,49 @@ def test_workflow_names_and_trigger_classes_are_pinned() -> None:
         workflow = workflows[filename]
         assert workflow.get("name") == display_name
         assert set(_triggers(workflow)) == trigger_classes
+
+
+def test_the_parse_this_file_pays_once_is_never_shared_with_a_test() -> None:
+    """The hazard of paying for setup once: a test that edits what the next one reads.
+
+    The workflows are parsed once a session, so a shared document would carry a
+    mutation into every test that ran after it - and that failure is
+    order-dependent, which means the file would pass alone and fail in the full
+    suite. A caller gets a copy instead, and this is what says so.
+    """
+    first, second = _load_workflows(), _load_workflows()
+
+    assert first == second
+    assert first is not second
+    assert first["digest.yml"] is not second["digest.yml"]
+
+    first["digest.yml"]["name"] = "edited by a test"
+
+    assert _load_workflows()["digest.yml"]["name"] == EXPECTED_WORKFLOWS["digest.yml"][0]
+
+
+def test_two_tests_that_start_from_one_origin_cannot_reach_each_other(tmp_path: Path) -> None:
+    """The same hazard, one directory down: the scripted origin is built once too.
+
+    A push into one test's origin must be invisible to the next test that starts
+    from the same first commit, or every commit test after the first would be
+    running against a repository somebody else had already moved.
+    """
+    staged_paths = COMMIT_STAGED_PATHS["plan"]
+    env = _isolated_env(tmp_path)
+    first, second = tmp_path / "first", tmp_path / "second"
+    first.mkdir()
+    second.mkdir()
+    _, runner = _scripted_origin(first, env, staged_paths)
+    _write(runner / "docs" / "unrelated.md", "the first test pushed this\n")
+    _git(runner, env, "add", "docs")
+    _git(runner, env, "commit", "-m", "the first test")
+    _git(runner, env, "push", "origin", "main")
+
+    other_origin, other_runner = _scripted_origin(second, env, staged_paths)
+
+    assert _git(other_origin, env, "log", "-1", "--format=%s").strip() == "seed"
+    assert (other_runner / "docs" / "unrelated.md").read_text(encoding="ascii") == "seed\n"
 
 
 def test_content_refresh_runs_at_the_five_approved_utc_hours() -> None:
@@ -1304,6 +1437,50 @@ def test_the_build_gates_the_publish_and_the_weight_ratchet_runs_after_it(
     assert built < commit, "a payload the build rejects must never reach a reader"
     assert commit < gate, "a page over its recorded weight loses the ceiling, not the day"
     assert "continue-on-error" not in steps[gate], "the ratchet publishes the day; it still fails"
+
+
+@pytest.mark.parametrize(("filename", "job_name", "commit_step"), PUBLISHING_SITE_JOBS)
+def test_the_weight_ratchet_reads_a_build_of_the_tree_that_was_pushed(
+    filename: str, job_name: str, commit_step: str
+) -> None:
+    """One tree's pages may not be weighed against another tree's records.
+
+    `commit-and-push.sh` rebases when the push loses a race, and that brings
+    main's tip into the checkout - its frontend source and its
+    `bundle-baseline.json` with it. `frontend/build` still holds the build made
+    before the commit, so the gate reads records the build it measures never
+    saw. Run 33270983446 failed exactly there: `/console/` 746 B under a record
+    that arrived with the rebase, while the build was 5 B off the record its own
+    source carried, on a day that had already published and deployed.
+
+    So a build sits after every commit step in the job, and the gate reads that
+    one. `npm ci` is deliberately not repeated with it: the lockfile moves far
+    more rarely than the source, and a reinstall would delete `node_modules` on
+    every run to cover the rarer of the two.
+    """
+    steps = _steps(_load_workflows()[filename], job_name)
+    names = [step.get("name") for step in steps]
+    builds = [
+        index for index, step in enumerate(steps) if "npm run build" in str(step.get("run", ""))
+    ]
+    commits = [
+        index
+        for index, step in enumerate(steps)
+        if COMMIT_SCRIPT_CALL[1] in str(step.get("run", ""))
+    ]
+    gate = next(
+        index
+        for index, step in enumerate(steps)
+        if "npm run bundle-gate" in str(step.get("run", ""))
+    )
+
+    assert names.index(commit_step) in commits, "the publishing step runs the shared commit script"
+    rebuilt = [index for index in builds if index > max(commits)]
+    assert rebuilt, "the gate must read a build made after the last commit, not before it"
+    assert max(rebuilt) < gate, "the rebuild is what the gate reads, so it comes first"
+    assert "continue-on-error" not in steps[rebuilt[0]], (
+        "a rebuild that fails quietly leaves the gate reading the stale build again"
+    )
 
 
 #: Every job that builds the site, and so every job that can grow it past the cap.
@@ -1681,6 +1858,46 @@ def test_the_append_only_ledgers_union_and_the_public_projection_does_not() -> N
     )
 
 
+def test_future_text_defaults_to_lf_and_webfonts_are_binary() -> None:
+    """Ask Git itself, so this test cannot disagree with attribute matching."""
+    paths = (
+        "future.unknown",
+        "frontend/static/fonts/LICENSE",
+        "frontend/static/manifest.webmanifest",
+        "frontend/static/fonts/inter-latin-variable.woff2",
+    )
+    answered = subprocess.run(
+        ["git", "check-attr", "text", "eol", "binary", "--", *paths],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        check=True,
+    ).stdout.splitlines()
+
+    assert answered == [
+        "future.unknown: text: auto",
+        "future.unknown: eol: lf",
+        "future.unknown: binary: unspecified",
+        "frontend/static/fonts/LICENSE: text: auto",
+        "frontend/static/fonts/LICENSE: eol: lf",
+        "frontend/static/fonts/LICENSE: binary: unspecified",
+        "frontend/static/manifest.webmanifest: text: auto",
+        "frontend/static/manifest.webmanifest: eol: lf",
+        "frontend/static/manifest.webmanifest: binary: unspecified",
+        "frontend/static/fonts/inter-latin-variable.woff2: text: unset",
+        "frontend/static/fonts/inter-latin-variable.woff2: eol: lf",
+        "frontend/static/fonts/inter-latin-variable.woff2: binary: set",
+    ]
+
+
+def test_vscode_creates_only_lf_text_without_shared_personal_settings() -> None:
+    """One shared editor setting prevents the Windows default at its source."""
+    raw = (REPO_ROOT / ".vscode" / "settings.json").read_bytes()
+
+    assert b"\r" not in raw
+    assert json.loads(raw) == {"files.eol": "\n"}
+
+
 def test_the_harvest_runs_where_the_article_text_still_is() -> None:
     """A corpus built anywhere else is a corpus of nothing.
 
@@ -2030,6 +2247,28 @@ def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
     refreshed = _commit_call("assemble")[1]["REFRESH_PATHS"].split()
 
     assert set(COMMIT_STAGED_PATHS["work"]) <= set(refreshed)
+
+
+def test_every_committing_job_configures_the_same_identity() -> None:
+    """The pipeline commits as itself, and it says so in one voice.
+
+    A hosted runner carries no git identity, so a job that commits has to set
+    one or `git commit` refuses. Two files set it and only one of them is
+    executed by a test, so the other could drift to a different name and nothing
+    would notice until a reader wondered who two different authors were.
+    """
+    found = {
+        path.name: (
+            re.search(r'git config user\.name "([^"]+)"', read_text(path)),
+            re.search(r'git config user\.email "([^"]+)"', read_text(path)),
+        )
+        for path in GIT_IDENTITY_SOURCES
+    }
+
+    for name, (author, address) in found.items():
+        assert author is not None, f"{name} commits, so it must set user.name"
+        assert address is not None, f"{name} commits, so it must set user.email"
+        assert f"{author.group(1)} <{address.group(1)}>" == COMMIT_IDENTITY
 
 
 @requires_bash

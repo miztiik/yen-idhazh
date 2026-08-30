@@ -254,6 +254,19 @@ class ChartConfig(Model):
             "critical information intact while still answering 'what is that bar'."
         ),
     )
+    readout_max_share: float = Field(
+        default=0.33,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "The widest the readout strip under a plot may be, as a share of that "
+            "plot. The strip sits below the plot rather than over it, so it cannot "
+            "cover a mark at any width; the cap is what stops it becoming a paragraph "
+            "beside a chart a reader is glancing at. Measured 2026-08-29, the floating "
+            "box this replaced covered 88 to 121px of a 220px plot - 40 to 55 percent "
+            "of the chart it was explaining."
+        ),
+    )
     palette: ChartPalette = Field(
         default=ChartPalette.CATEGORICAL,
         description="Which ramp a chart draws from. Never the confidence ramp.",
@@ -343,6 +356,53 @@ class AppearanceConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30T21:15",
+            change=(
+                "console.chart_arm_rule_days, console.chart_arm_minutes_target and "
+                "console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 "
+                "minutes and 5 percent. The shape is `ConsoleConfig`, which this "
+                "document and `AppConfig` share, so both schemas moved together."
+            ),
+            why=(
+                "The chart arm section now leads with the two figures its retirement "
+                "rule names, each as a bar with the limit drawn on it. A limit a "
+                "component hardcodes is one an operator cannot move (Rule #6), and "
+                "these three were constants in a TypeScript module. Additive with "
+                "defaults, so an appearance file written before today still validates "
+                "(section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-30T20:00",
+            change=(
+                "console.band_outlier_rows added, defaulting to 10. The shape is "
+                "`ConsoleConfig`, which this document and `AppConfig` share, so both "
+                "schemas moved together."
+            ),
+            why=(
+                "The console now names the summaries furthest from the length the "
+                "prompt asked for, in place of a scatter that drew 2,740 marks in one "
+                "colour. A capped list needs its cap where an operator can move it. "
+                "Additive with a default, so an appearance file written before today "
+                "still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-30",
+            change=(
+                "chart.readout_max_share added, defaulting to 0.33: the widest the "
+                "readout strip under a plot may be, as a share of that plot."
+            ),
+            why=(
+                "The stage-timing chart gained a readout, and a readout needs a bound "
+                "somebody can move without editing a component. Measured 2026-08-29, "
+                "the floating box this replaces covered 88 to 121px of a 220px plot - "
+                "40 to 55 percent of the chart it was explaining. Additive with a "
+                "default, so an appearance file written before today still validates "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-29T22:00",
             change=(

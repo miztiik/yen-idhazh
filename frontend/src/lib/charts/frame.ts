@@ -19,6 +19,8 @@
 import { extent } from 'd3-array';
 import { scaleLinear, scaleLog } from 'd3-scale';
 
+import { dayMonth, shortDate } from '../format';
+
 export interface Margin {
 	top: number;
 	right: number;
@@ -139,6 +141,79 @@ export function chartWidth(measured: number | null, fallback: number): number {
 	return measured !== null && measured > 0 ? Math.round(measured) : fallback;
 }
 
+/** One column of a day axis that carries a date. */
+export interface DayTick {
+	/** 0-based column, counted along the dates the chart drew. */
+	index: number;
+	date: string;
+	text: string;
+	anchor: 'start' | 'middle' | 'end';
+}
+
+/** Which columns of a day axis carry a date, and what each one says.
+ *
+ * `density` is `chart.tick_density`: the most labels the axis may carry. Fewer
+ * days than that and every day is labelled; more, and the labels spread evenly
+ * with the first and last day always among them.
+ *
+ * The rule this replaces labelled the two endpoints and nothing between them,
+ * so a spike in the middle of a month could not be attributed to a date without
+ * counting columns with a finger. Six labels over thirty days puts every mark
+ * within three columns of a date.
+ */
+export function dayTicks(dates: readonly string[], density: number): DayTick[] {
+	const days = dates.length;
+	if (days === 0) return [];
+	const wanted = Math.max(1, Math.min(days, Math.floor(density)));
+	if (wanted === 1) {
+		return [{ index: 0, date: dates[0], text: shortDate(dates[0]), anchor: 'middle' }];
+	}
+	const ticks: DayTick[] = [];
+	// The year is printed once and then only where it changes, so a month of
+	// columns does not carry four digits that never move.
+	let carried = '';
+	for (let n = 0; n < wanted; n += 1) {
+		const index = Math.round((n * (days - 1)) / (wanted - 1));
+		const date = dates[index];
+		ticks.push({
+			index,
+			date,
+			text: date.slice(0, 4) === carried ? dayMonth(date) : shortDate(date),
+			anchor: n === 0 ? 'start' : n === wanted - 1 ? 'end' : 'middle'
+		});
+		carried = date.slice(0, 4);
+	}
+	return ticks;
+}
+
+/** Where a day's column sits, in the chart's own pixels.
+ *
+ * `pad` is the room a mark needs on each side so the oldest and the newest day
+ * sit inside the plot rather than straddling its edge - a candle needs half its
+ * own width, a dot needs its radius, a bare polyline needs none. One column is
+ * drawn at the centre, because a single day at the left edge reads as the start
+ * of a series that is not there.
+ */
+export function dayColumnX(index: number, columns: number, box: Frame, pad = 0): number {
+	const left = box.left + pad;
+	const right = Math.max(left, box.right - pad);
+	if (columns <= 1) return (left + right) / 2;
+	return left + (index * (right - left)) / (columns - 1);
+}
+
+/** How wide the readout strip under a plot may be, as an inline style.
+ *
+ * The strip sits below the plot, so it cannot cover a mark whatever its width.
+ * The cap is what stops it becoming a paragraph: a reader glancing at a chart
+ * reads a short column of values, not a block of prose. `share` is
+ * `chart.readout_max_share`, and it is a share of the plot rather than a pixel
+ * count so the cap holds at every window width.
+ */
+export function readoutCapStyle(share: number): string {
+	const capped = Math.min(1, Math.max(0, share));
+	return `max-width: ${(capped * 100).toFixed(2)}%`;
+}
+
 /** Report an element's own width, now and whenever it changes.
  *
  * A Svelte action, so a chart writes `use:observeWidth={...}` and never reads
@@ -163,6 +238,36 @@ export interface ReadoutMark {
 	/** The sentences to print, in order. The first is the label, the rest the
 	 * numbers. A chart that already builds a sentence passes that sentence. */
 	lines: string[];
+}
+
+/** One row of a readout strip: a series, what it read, and the line's colour. */
+export interface ReadoutRow {
+	label: string;
+	value: string;
+	/** The series colour, so the strip is also the legend and one fact is drawn
+	 * once. Empty where the chart has no colour to lend. */
+	colour: string;
+}
+
+/** One column of a day chart, as the strip under it prints it. */
+export interface DayReadout {
+	/** The column's x in the chart's own pixels. */
+	x: number;
+	/** The date, already written the way a reader reads it. */
+	date: string;
+	rows: ReadoutRow[];
+}
+
+/** The action's marks, built from the strip's own rows.
+ *
+ * The strip draws the rows and the action announces the sentences, so both come
+ * from one array and cannot disagree about what a column said.
+ */
+export function readoutMarks(columns: readonly DayReadout[]): ReadoutMark[] {
+	return columns.map((column) => ({
+		x: column.x,
+		lines: [column.date, ...column.rows.map((row) => `${row.label} ${row.value}`)]
+	}));
 }
 
 export interface ReadoutOptions {

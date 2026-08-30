@@ -1158,6 +1158,46 @@ class ConsoleConfig(Model):
             "compression chart 9000 pixels down the page."
         ),
     )
+    band_outlier_rows: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "How many summaries the console names as furthest from the length the "
+            "prompt asked for. Capped, with the tail stated in a sentence, because the "
+            "list exists to be acted on and the far tail is a one-word miss nobody "
+            "chases. Ten, matching the source-cut table beside it."
+        ),
+    )
+    chart_arm_rule_days: int = Field(
+        default=14,
+        ge=1,
+        description=(
+            "The span the chart arm's retirement rule is stated over. A median taken "
+            "over any other span is the same figure with a different meaning and "
+            "nothing on the page to say which one is being read, so under this many "
+            "days the section prints the rule's own span and no number at all."
+        ),
+    )
+    chart_arm_minutes_target: float = Field(
+        default=6.0,
+        gt=0.0,
+        description=(
+            "Router minutes per published chart above which the median day retires "
+            "the chart arm. Drawn as a marker on the bar, never as a subtraction the "
+            "reader performs."
+        ),
+    )
+    chart_arm_coverage_pct: float = Field(
+        default=5.0,
+        gt=0.0,
+        le=100.0,
+        description=(
+            "The share of a day's published items that must carry a chart, in whole "
+            "percent. Below this on the median day the arm is retired: an arm that "
+            "reaches almost nothing is paying for a capability the digest does not "
+            "use."
+        ),
+    )
 
     @model_validator(mode="after")
     def _window_bounds_are_ordered(self) -> Self:
@@ -1179,6 +1219,13 @@ class ConsoleConfig(Model):
         if outside:
             raise ValueError(
                 "console.window_presets must lie between min_window_days and max_window_days"
+            )
+        # A rule no preset can reach is a rule the page can never print. The
+        # section would show the widen-the-window notice at every setting of the
+        # control, which reads as a broken surface rather than as a narrow one.
+        if max(self.window_presets) < self.chart_arm_rule_days:
+            raise ValueError(
+                "console.window_presets must offer a span of at least chart_arm_rule_days"
             )
         return self
 
@@ -1438,6 +1485,41 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-30T21:15",
+            change=(
+                "console.chart_arm_rule_days, console.chart_arm_minutes_target and "
+                "console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 "
+                "minutes and 5 percent. The shape is `ConsoleConfig`, which this "
+                "document and `AppearanceConfig` share, so both schemas moved together."
+            ),
+            why=(
+                "The chart arm is the only console section with a written decision rule "
+                "in its own prose, and all three numbers in that rule were constants in "
+                "a TypeScript module - so the one section that states a threshold was "
+                "the one section an operator could not move a threshold on (Rule #6). "
+                "The two limits are now markers on bars and the span is what decides "
+                "whether a median is printed at all. Additive with defaults, so a "
+                "config written before today still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-30T20:00",
+            change=(
+                "console.band_outlier_rows added, defaulting to 10. The shape is "
+                "`ConsoleConfig`, which this document and `AppearanceConfig` share, so "
+                "both schemas moved together."
+            ),
+            why=(
+                "The console's compression scatter became a per-day split plus a list "
+                "of the summaries furthest from the length the prompt asked for, and a "
+                "list that is capped needs the cap where an operator can move it. The "
+                "scatter drew 2,740 marks in one colour, measured 2026-08-30, which "
+                "rendered the dense middle as a block and hid the outliers - the only "
+                "marks on it anybody could act on. Additive with a default, so a config "
+                "written before today still validates (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30T18:00",
             change="observability.tracing_enabled added, defaulting to false.",

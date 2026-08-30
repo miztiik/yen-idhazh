@@ -1,5 +1,5 @@
 import { dayMonth } from '../format';
-import { daysInWindow, type TimeWindow } from './viewport';
+import { daysBetween, daysInWindow, type TimeWindow } from './viewport';
 
 /** The published projection's header, in `PUBLIC_COLUMNS` order.
  *
@@ -52,11 +52,6 @@ export interface CompressionPoint {
 	source_seen_words?: number;
 	summary_words: number;
 	truncation_flagged: boolean;
-}
-
-/** What the model was given. An article nobody cut was given in full. */
-export function seenWords(point: CompressionPoint): number {
-	return point.source_seen_words ?? point.source_words;
 }
 
 /** One day's rows that the plot could not place, and how many.
@@ -184,38 +179,15 @@ export interface CapLine {
 	last: string;
 }
 
-/** Where the cut falls, read off the points that were cut.
- *
- * One entry per distinct post-cap length among the cut points in view, oldest
- * first. Derived from the rows and never from `extract.truncation_cap_tokens`:
- * a thirty-day window can hold two settings, so a line drawn from the setting
- * is a claim about a config file rather than about the articles on the plot.
- * The direction that matters is the other one - a config-derived line draws
- * when nothing in view was cut at all, and this one cannot.
- */
-export function capsInView(points: readonly CompressionPoint[]): CapLine[] {
-	const spans = new Map<number, { first: string; last: string }>();
-	for (const point of points) {
-		const seen = seenWords(point);
-		if (!point.truncation_flagged || seen <= 0) continue;
-		const span = spans.get(seen);
-		if (span === undefined) {
-			spans.set(seen, { first: point.date, last: point.date });
-			continue;
-		}
-		if (point.date < span.first) span.first = point.date;
-		if (point.date > span.last) span.last = point.date;
-	}
-	return [...spans.entries()]
-		.map(([words, span]) => ({ words, first: span.first, last: span.last }))
-		.sort((a, b) => a.first.localeCompare(b.first) || a.words - b.words);
-}
-
 /** What one cap line says about itself.
  *
  * A lone cap needs no date at all - it is the cut, over the whole window. Where
  * there are several the labels read as a handover: the oldest names the last
  * day it applied, and each later one names the first day it did.
+ *
+ * The source-cut range plot is the only caller. The compression scatter was the
+ * other one and this row retired it, along with `capsInView` and `seenWords`;
+ * the range plot derives its own cut points in `capPoints`.
  */
 export function capLabel(caps: readonly CapLine[], index: number): string {
 	const cap = caps[index];
@@ -236,6 +208,141 @@ export interface SummaryBand {
 	min_source_words: number;
 	target_words_min: number;
 	target_words_max: number;
+}
+
+/** Where a summary landed against the band its own article asks for. */
+export type BandPlace = 'inside' | 'short' | 'long';
+
+/** One article placed against that band.
+ *
+ * The question the section asks is how far from the target a summary landed, so
+ * the distance is what it ranks on. The two lengths ride along because the
+ * outlier list prints them, not because anything is ordered by them.
+ */
+export interface BandPlacement {
+	date: string;
+	item_id: string;
+	source_words: number;
+	summary_words: number;
+	place: BandPlace;
+	/** Words from the nearer bound of the band. Zero inside it. */
+	distance: number;
+	band: SummaryBand;
+}
+
+/** One day's three-way split. */
+export interface BandDay {
+	date: string;
+	inside: number;
+	short: number;
+	long: number;
+	/** The three above, summed. A column whose parts do not reach the day's own
+	 * count of placeable summaries is mis-binning articles. */
+	items: number;
+}
+
+/** The band an article of this length was written to.
+ *
+ * The longest band the article reaches, which is how `SummarizeConfig.band_for`
+ * reads the same ladder on the producing side. Two readings of one ladder would
+ * put an article in one band on the page and another in the prompt, and nothing
+ * on screen would look wrong.
+ */
+export function bandFor(bands: readonly SummaryBand[], sourceWords: number): SummaryBand | null {
+	if (bands.length === 0) return null;
+	let chosen = bands[0];
+	for (const band of bands) {
+		if (sourceWords >= band.min_source_words) chosen = band;
+	}
+	return chosen;
+}
+
+export function placeInBand(
+	point: CompressionPoint,
+	bands: readonly SummaryBand[]
+): BandPlacement | null {
+	const band = bandFor(bands, point.source_words);
+	if (band === null) return null;
+	const short = point.summary_words < band.target_words_min;
+	const long = point.summary_words > band.target_words_max;
+	return {
+		date: point.date,
+		item_id: point.item_id,
+		source_words: point.source_words,
+		summary_words: point.summary_words,
+		place: short ? 'short' : long ? 'long' : 'inside',
+		distance: short
+			? band.target_words_min - point.summary_words
+			: long
+				? point.summary_words - band.target_words_max
+				: 0,
+		band
+	};
+}
+
+/** Every article the window holds that a band can be read for. */
+export function bandPlacements(
+	points: readonly CompressionPoint[],
+	bands: readonly SummaryBand[],
+	window: TimeWindow
+): BandPlacement[] {
+	const placed: BandPlacement[] = [];
+	for (const point of rowsInWindow([...points], window)) {
+		const one = placeInBand(point, bands);
+		if (one !== null) placed.push(one);
+	}
+	return placed;
+}
+
+/** The three-way split, one column a day, across the whole window.
+ *
+ * Every day the window covers gets a column, including a day nothing published.
+ * A chart drawn only over the days that have rows closes the gap a missed day
+ * left, and a missed day is a fact the operator came here to see.
+ */
+export function bandSplit(placed: readonly BandPlacement[], window: TimeWindow): BandDay[] {
+	const byDate = new Map<string, BandDay>();
+	for (const date of daysInWindow(window)) {
+		byDate.set(date, { date, inside: 0, short: 0, long: 0, items: 0 });
+	}
+	for (const one of placed) {
+		const day = byDate.get(one.date);
+		if (day === undefined) continue;
+		day[one.place] += 1;
+		day.items += 1;
+	}
+	return [...byDate.values()];
+}
+
+/** The articles furthest outside their band, worst first.
+ *
+ * Ranked by distance, never by date. The longer article breaks a tie, then the
+ * date and the id, so two equal misses cannot swap places between builds and
+ * move the prerendered page for no reason.
+ */
+export function bandOutliers(placed: readonly BandPlacement[]): BandPlacement[] {
+	return placed
+		.filter((one) => one.place !== 'inside')
+		.sort(
+			(a, b) =>
+				b.distance - a.distance ||
+				b.source_words - a.source_words ||
+				a.date.localeCompare(b.date) ||
+				a.item_id.localeCompare(b.item_id)
+		);
+}
+
+/** The article lengths one band covers, as a reader says them.
+ *
+ * Read off the ladder rather than the band, because a band records only the
+ * length it starts at - the length it stops at is the next rung's floor, and
+ * the last rung has no ceiling at all.
+ */
+export function bandSpan(bands: readonly SummaryBand[], index: number): string {
+	const next = bands[index + 1];
+	if (next === undefined) return `${grouped(bands[index].min_source_words)} and over`;
+	if (index === 0) return `under ${grouped(next.min_source_words)}`;
+	return `${grouped(bands[index].min_source_words)} to ${grouped(next.min_source_words - 1)}`;
 }
 
 /** One stage's day: the median, and the counts behind it.
@@ -299,9 +406,22 @@ export interface ThroughputDay {
 	model: string | null;
 }
 
+/** One stage's day: what reached it, what died there, and how big the day was.
+ *
+ * `reached` is the denominator, and it is not the day. An item that died at
+ * fetch never reached extract, so dividing extract's failures by the day's
+ * items understates every stage after the first. Measured 2026-08-30 over the
+ * 4,167 rows of the committed projection: extract reads 10.4 percent against
+ * the day and 12.3 percent against the 3,499 items that got as far as extract.
+ *
+ * `planned` is the day itself, repeated on all three stages, and it is the
+ * height of the day's column. Keeping both means a rate and a volume can be
+ * drawn on one chart without either one being recomputed from the other.
+ */
 export interface StageFailureDay {
 	date: string;
-	attempts: number;
+	planned: number;
+	reached: number;
 	failures: number;
 	rate: number | null;
 	codes: Record<string, number>;
@@ -406,31 +526,210 @@ export function failureSeries(rows: TelemetryRow[], window: TimeWindow): StageFa
 	for (const row of rowsInWindow(rows, window)) {
 		byDate.set(row.date, [...(byDate.get(row.date) ?? []), row]);
 	}
-	return FAILURE_STAGES.map((stage) => ({
-		stage,
-		label: stage,
-		days: daysInWindow(window).map((date) => {
-			const group = byDate.get(date) ?? [];
+	// One pass per day, down the pipeline order, because each stage's denominator
+	// is whatever the stage before it let through.
+	const perDay = daysInWindow(window).map((date) => {
+		const group = byDate.get(date) ?? [];
+		// A row that never left `plan` was never fetched, so it belongs to no
+		// stage's denominator - only to the day's size.
+		let reached = group.filter((row) => row.stage !== 'plan').length;
+		return FAILURE_STAGES.map((stage) => {
 			const failures = group.filter((row) => row.outcome === 'failed' && row.stage === stage);
 			const codes: Record<string, number> = {};
 			for (const row of failures) {
 				const key = row.code || 'unknown';
 				codes[key] = (codes[key] ?? 0) + 1;
 			}
-			return {
+			const day: StageFailureDay = {
 				date,
-				attempts: group.length,
+				planned: group.length,
+				reached,
 				failures: failures.length,
-				rate: group.length === 0 ? null : failures.length / group.length,
+				rate: reached === 0 ? null : failures.length / reached,
 				codes
 			};
-		})
+			reached -= failures.length;
+			return day;
+		});
+	});
+	return FAILURE_STAGES.map((stage, index) => ({
+		stage,
+		label: stage,
+		days: perDay.map((day) => day[index])
 	}));
 }
 
-export function failedRows(rows: TelemetryRow[], window: TimeWindow, code: string | null): TelemetryRow[] {
+export function failedRows(
+	rows: TelemetryRow[],
+	window: TimeWindow,
+	code: string | null,
+	cause: string | null = null
+): TelemetryRow[] {
 	return rowsInWindow(rows, window)
 		.filter((row) => row.outcome === 'failed')
 		.filter((row) => code === null || row.code === code)
+		.filter((row) => cause === null || causeKey(row) === cause)
 		.sort((a, b) => b.date.localeCompare(a.date) || a.item_id.localeCompare(b.item_id));
+}
+
+/** A stage and a code, which is the pair an operator acts on.
+ *
+ * An empty code reads as `unknown` here and nowhere else, so the ledger and the
+ * rows behind it can never disagree about which cause a row belongs to.
+ */
+export function causeKey(row: TelemetryRow): string {
+	return `${row.stage}/${row.code || 'unknown'}`;
+}
+
+/** A key for one drawn row of the failed-item list.
+ *
+ * The index is in it because a run writes a row per stage for an item, so a run
+ * and an item together repeat. A keyed each over a repeated key throws, the
+ * update is abandoned part-way, and the rows already on screen stay - which
+ * reads as a filter letting foreign causes through rather than as an error.
+ * Measured 2026-08-30 against the committed projection: selecting
+ * `extract/paywalled` left `fetch/http_client_error` rows in the table.
+ */
+export function failureRowKey(row: TelemetryRow, index: number): string {
+	return `${index}-${row.run_id}-${row.item_id}-${row.stage}-${row.code}`;
+}
+
+/** One cause of failure, and everything the ledger prints about it. */
+export interface FailureCause {
+	/** `stage/code`. What a selected row hands back, and what `failedRows`
+	 * filters on. */
+	key: string;
+	stage: string;
+	code: string;
+	count: number;
+	/** One count per day of the window, oldest first, so the trend line and the
+	 * count beside it are read off the same rows. */
+	daily: number[];
+	/** Distinct sources this cause reached. */
+	sources: number;
+	/** The newest day it fired. */
+	last: string;
+	/** Days between that and the window's end. Zero is the newest day in view.
+	 * Measured against the window rather than against the clock, because this
+	 * page is prerendered and a build-time "today" goes stale on the shelf. */
+	lastAgo: number;
+}
+
+export interface FailureLedger {
+	causes: FailureCause[];
+	/** Every failed row in the window. The causes' counts sum to exactly this. */
+	failed: number;
+	/** Distinct sources with any row in the window, failed or not. This is the
+	 * denominator breadth is read against: one cause on 1 of 47 sources is a
+	 * site that changed its markup, and the same count on 40 of 47 is the
+	 * extractor. */
+	sourcesSeen: number;
+	/** Rows of any kind in the window. Zero means the ledger cannot answer,
+	 * which is a different fact from nothing having failed. */
+	rows: number;
+}
+
+/** Failures grouped by cause, over one window.
+ *
+ * Uncapped on purpose. The cap is a display choice, and a ledger that dropped
+ * its tail here would report a sum smaller than the rows it is drawn from.
+ */
+export function failureLedger(rows: TelemetryRow[], window: TimeWindow): FailureLedger {
+	const inWindow = rowsInWindow(rows, window);
+	const days = daysInWindow(window);
+	const slot = new Map(days.map((date, index) => [date, index]));
+	const sourcesSeen = new Set<string>();
+
+	interface Held {
+		stage: string;
+		code: string;
+		count: number;
+		daily: number[];
+		sources: Set<string>;
+		last: string;
+	}
+	const held = new Map<string, Held>();
+
+	let failed = 0;
+	for (const row of inWindow) {
+		if (row.source_id) sourcesSeen.add(row.source_id);
+		if (row.outcome !== 'failed') continue;
+		failed += 1;
+		const key = causeKey(row);
+		let cause = held.get(key);
+		if (cause === undefined) {
+			cause = {
+				stage: row.stage,
+				code: row.code || 'unknown',
+				count: 0,
+				daily: days.map(() => 0),
+				sources: new Set<string>(),
+				last: row.date
+			};
+			held.set(key, cause);
+		}
+		cause.count += 1;
+		const index = slot.get(row.date);
+		if (index !== undefined) cause.daily[index] += 1;
+		if (row.source_id) cause.sources.add(row.source_id);
+		if (row.date > cause.last) cause.last = row.date;
+	}
+
+	return {
+		causes: [...held.entries()].map(([key, cause]) => ({
+			key,
+			stage: cause.stage,
+			code: cause.code,
+			count: cause.count,
+			daily: cause.daily,
+			sources: cause.sources.size,
+			last: cause.last,
+			lastAgo: daysBetween(cause.last, window.end) - 1
+		})),
+		failed,
+		sourcesSeen: sourcesSeen.size,
+		rows: inWindow.length
+	};
+}
+
+/** Where one source's row of the length range plot sits, in chart pixels. */
+export interface RangeMarks {
+	/** The shortest, the middle and the longest article of that source. */
+	x0: number;
+	xMid: number;
+	x1: number;
+	/** Where the text past the cut point starts, held inside the row's own span.
+	 *
+	 * Equal to `x1` where nothing this source published reached the cut point,
+	 * so the emphasised segment has no length and draws nothing.
+	 */
+	xCut: number;
+	/** True where the longest article ran past the cut point. */
+	past: boolean;
+}
+
+/** One row of the length range plot, placed.
+ *
+ * Pure arithmetic over a scale somebody else built, so the plot's geometry can
+ * be checked in Node against an identity scale. The clamp is the part worth
+ * having in one place: a cut point left of a source's shortest article would
+ * otherwise draw the emphasised segment starting outside the track it belongs
+ * to, which reads as text lost from an article that is not on the row.
+ */
+export function rangeMarks(
+	range: { min: number; median: number; max: number },
+	capWords: number | null,
+	scale: (words: number) => number
+): RangeMarks {
+	const x0 = scale(range.min);
+	const xMid = scale(range.median);
+	const x1 = scale(range.max);
+	const past = capWords !== null && range.max > capWords;
+	return {
+		x0,
+		xMid,
+		x1,
+		xCut: past ? Math.min(x1, Math.max(x0, scale(capWords as number))) : x1,
+		past
+	};
 }

@@ -6,21 +6,22 @@
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
-	import CompressionScatter from './CompressionScatter.svelte';
+	import BandDistance from './BandDistance.svelte';
 	import FailureList from './FailureList.svelte';
 	import FailurePanels from './FailurePanels.svelte';
 
 	/** The item-telemetry surfaces, over the window the page is holding.
 	 *
 	 * The window is not owned here any more. It belongs to the page, because the
-	 * source table and the router-cost card read the same one, and a window owned
-	 * by the widget furthest down the page cannot be read by anything above it.
+	 * source table and the chart arm read the same one, and a window owned by the
+	 * widget furthest down the page cannot be read by anything above it.
 	 */
 	let {
 		rows,
 		window: viewport,
 		config,
 		bands,
+		tickDensity,
 		onPan,
 		onStep
 	}: {
@@ -32,8 +33,11 @@
 			chart_width: number;
 			min_attempts_for_rate: number;
 			failure_list_max: number;
+			band_outlier_rows: number;
 		};
 		bands: SummaryBand[];
+		/** The most date labels a day axis may carry - `chart.tick_density`. */
+		tickDensity: number;
 		/** Move the window by this many days, keeping its span. */
 		onPan: (days: number) => void;
 		/** Widen (`1`) or narrow (`-1`) to the next preset. */
@@ -43,9 +47,10 @@
 	let selectedCode = $state<string | null>(null);
 	const visibleRows = $derived(rowsInWindow(rows, viewport));
 	const windowDays = $derived(daysBetween(viewport.start, viewport.end));
-	// The plot reads the rows on the page rather than a list of its own. A month
-	// the operator pans to is fetched once and both surfaces gain it together, so
-	// the scatter and the failure panels can never describe different days.
+	// The columns read the rows on the page rather than a list of their own. A
+	// month the operator pans to is fetched once and both surfaces gain it
+	// together, so the split and the failure panels can never describe different
+	// days.
 	const compression = $derived(compressionView(rows));
 
 	function keydown(event: KeyboardEvent) {
@@ -123,13 +128,15 @@
 				{selectedCode}
 				onSelect={(code) => (selectedCode = code)}
 			/>
-			<CompressionScatter
+			<BandDistance
 				points={compression.points}
 				viewport={viewport}
 				{bands}
 				unplotted={compression.unplotted}
 				height={config.chart_height}
 				width={config.chart_width}
+				{tickDensity}
+				outlierRows={config.band_outlier_rows}
 			/>
 			<FailureList
 				{rows}

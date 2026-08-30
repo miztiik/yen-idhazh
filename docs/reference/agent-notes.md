@@ -296,18 +296,21 @@ An untracked plan-doc cannot be deleted by a pull request, and there is nothing
 to repoint - but its findings still have to reach `docs/`, which is the half
 that matters.
 
-**Line endings are pinned, so do not hand-normalise.** `.gitattributes` sets
-`text eol=lf` on every authored file type. A tool that writes CRLF is normalised
-when git stores the blob. A blanket normalise pass rewrites files you never
-touched and produces a phantom diff of hundreds of lines.
+**Line endings are pinned, so do not hand-normalise.** `.gitattributes` defaults
+every path to `text=auto eol=lf`, then marks known binary formats explicitly.
+Future text types therefore use LF without another extension rule, while binary
+bytes stay untouched. A blanket normalise pass rewrites files you never touched
+and produces a phantom diff of hundreds of lines.
 
 **That normalisation happens at `git add`, and the gates run before it.**
 `test_repo_text_is_ascii_and_lf` in `backend/tests/test_contracts.py` reads the
 WORKING-TREE bytes of every file under `schemas/`, `config/` and the fixture
 directories, and asserts `b"\r\n" not in raw`. A new JSON file authored on
 Windows lands CRLF, so the test fails on a file you just wrote and the
-`.gitattributes` entry that covers it does nothing until the blob is stored.
-Write new files LF explicitly:
+`.gitattributes` rule does nothing until the blob is stored. The shared VS Code
+setting and `.editorconfig` make normal editor writes LF. File tools, generated
+output and PowerShell can bypass both, so write new files LF explicitly before
+the first test:
 
 ```powershell
 [System.IO.File]::WriteAllText($path, ($text -replace "`r`n", "`n"), [System.Text.UTF8Encoding]::new($false))
@@ -790,6 +793,14 @@ dependency nothing in the change touched.
   .toHaveCount(1)` rather than a skip whenever the fixture is supposed to
   provide the thing. A skip is right only when the environment genuinely varies;
   it is never right for a selector you control.
+- **A CSS length read back off `style` is the browser's serialisation, not the
+  string you wrote.** A bar drawn at `inline-size: 100.0000%` reads back as
+  `100%`, because the engine drops trailing zeros; every other row in the same
+  list, at `52.9412%`, round-trips unchanged. So a Playwright assertion
+  comparing the style STRING fails on exactly one row - the full bar - which
+  reads like a bug in the one case the arithmetic cannot get wrong. Observed
+  2026-08-30 on the console's ranked bars. Compare the number:
+  `parseFloat(node.style.inlineSize)` against `Number(expected.toFixed(4))`.
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
   `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
   then shows progress dots and an exit code and nothing else, which reads like
@@ -1341,6 +1352,101 @@ the variable protects the shell you remember to set it in and nothing else.
   `git log --oneline -S '<name>' origin/main` for each symbol the branch newly
   imports - if the newest commit named there is the one that deleted it, the
   green check is already stale.
+
+## Two heavy gates on one box turn a green commit red
+
+- **The symptom arrives long before the cause: a backend suite that costs 10.1x
+  what CI charges for it, and a browser suite that fails on a commit CI has
+  already passed.** Measured 2026-08-30 on one Windows 11 developer machine, 12
+  logical CPUs, 31.8 GiB RAM. The same 1,675 tests ran in 62.68 s in CI and
+  630.55 s here, and eight local runs that day spanned 452.13 to 1,098.04 s.
+  Three browser suites started at once took 5.3, 5.5 and 8.0 min against 3.6 to
+  4.0 min alone, and the 8.0 min run reported 11 failures, the first of them a
+  three-minute timeout in `search.spec.ts` - on specs byte-identical to
+  `origin/main`, on a commit CI had passed. Nothing was broken.
+- **The cause is that nothing coordinates the gates.** Several agents work in
+  their own worktrees on one machine and each starts `pytest`, `npm run build`
+  or `npm run test:browser` the moment it is ready. During the three overlapping
+  suites the host sat at 98 to 100 percent CPU with the disk at or below 2
+  percent and at least 6.3 GiB of memory free, and fell to 30 percent as soon as
+  they exited. It is the cores. It is not paging and it is not the disk.
+- **`backend/utilities/gate_lock.py` runs one of those three at a time.** It
+  takes a lock file in the user temp directory, runs the command you gave it,
+  and releases. Wrap the gate itself, not the shell around it:
+
+  ```powershell
+  python backend/utilities/gate_lock.py -- python -m pytest
+  python backend/utilities/gate_lock.py -- npm run build
+  python backend/utilities/gate_lock.py -- npm run test:browser
+  ```
+
+  It imports nothing from `idhazh` and reads no configuration, so any supported
+  Python runs it from a fresh clone. `ruff`, `mypy`, `svelte-check`,
+  `shellcheck` and `bundle-gate` stay unwrapped - serialising a gate that
+  finishes in seconds only adds waiting. A blocked caller prints the holder's
+  pid, worktree, command and held-for seconds every 30 s, so "what is running?"
+  is answered without asking anybody. **The held-for figure counts from the
+  second the lock was won.** Until 2026-08-30 the record carried the second the
+  caller started, so a caller that had queued five minutes for the lock was
+  reported to the next waiter as having held it for five minutes - one worktree
+  read another's one-second-old lock as "held for 324 s".
+- **It cannot fail your gate, by design.** A lock whose pid is gone is
+  reclaimed and the reclaim is logged; a lock past `--stale-after` (7,200 s,
+  which is 6.6x the longest gate measured here) is reclaimed whatever its pid
+  says; and a caller that waits out `--timeout` runs the command unlocked rather
+  than returning an error. A scheduling aid that can manufacture a red gate is
+  worse than the contention it removes. **A create the operating system refuses
+  is part of that promise, and was not until 2026-08-30.** On Windows a name
+  whose last handle is closing is "delete pending", and every create on it is
+  refused with access denied rather than with "it already exists" - measured
+  that day, 36 of 50 rounds at 20 callers on one lock had a caller die with a
+  traceback out of the create and a non-zero exit, 61 callers of 1,000. A lost
+  create is now a lost create, whichever of the two the operating system says.
+- **CI never takes it.** The tool reads the `CI` variable a GitHub runner sets
+  and runs the command straight through, so a runner - one job alone on its own
+  machine - behaves exactly as it did before. Any test that drives the tool must
+  clear `CI` from the child environment, or it measures the carve-out instead of
+  the lock.
+- **`os.kill(pid, 0)` is not a liveness probe on Windows.** CPython routes every
+  signal except the two console events to `TerminateProcess`, so the textbook
+  probe can kill the process it was only asking about. Measured 2026-08-30 on
+  CPython 3.14.2 the child did survive it - but this repository supports 3.12
+  through 3.14 and a tool that guards other people's test runs may not rest on
+  which one somebody installed. `gate_lock.pid_alive` calls `OpenProcess` and
+  then `WaitForSingleObject` on Windows instead, and there is a second trap
+  inside that one: **`OpenProcess` still opens a handle for a process that has
+  already exited**, for as long as anything holds a handle to it, so the open on
+  its own reads a dead process as alive. Only the wait separates them - 258
+  (`WAIT_TIMEOUT`) is running, 0 is exited.
+- **Windows will not start `npm` from a bare name.** `subprocess.run(["npm",
+  ...])` raises `FileNotFoundError`, because the loader appends `.exe` and never
+  `.CMD`, while the identical call runs from the full path `shutil.which("npm")`
+  returns (`C:\Program Files\nodejs\npm.CMD` here). Measured 2026-08-30.
+  Resolving with `shutil.which` also keeps the run off a shell, so nothing in
+  the command line is ever read as a shell operator.
+- **`mypy` only checks the platform branch you are standing on, so a green local
+  type gate says nothing about the other one.** It skips a block guarded by
+  `if sys.platform == "win32":` when it is not running on Windows, and CI runs
+  on Linux - so the Windows half of any platform split is checked by your
+  machine alone, and the POSIX half by CI alone. Worse, the narrowing is
+  statement-only: `os.O_BINARY if sys.platform == "win32" else 0` passed on
+  Windows and failed CI with `Module has no attribute "O_BINARY"`, while the
+  same test written as an `if`/`else` block passes both. Run
+  `mypy --platform linux` before you push anything with a `sys.platform` in it -
+  it reproduced the CI failure exactly, in one command, and it needs a separate
+  `--cache-dir` or it fights the ordinary run for the cache.
+
+- **A new CLI flag anywhere under `backend/` can fail a test in a file you have
+  never opened, and only the full suite finds it.**
+  `test_summarize.py::test_exactly_one_function_spells_a_llama_server_flag`
+  holds a closed-world set of the files allowed to spell an inference-server
+  flag, and it searches every `backend/**/*.py` for the quoted flag string. A
+  `--poll` on this lock - a name the server also uses - failed it at 84 percent
+  of the suite after `ruff`, `mypy`, the targeted file and the whole first CI
+  round had all passed. Rename off that namespace (`--retry-every` here); a
+  longer flag with the same prefix does not match, because the test looks for
+  the closing quote too. Before adding any flag, run
+  `git grep -n '"--<your flag>"' -- backend`.
 
 ## See also
 

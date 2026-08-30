@@ -13,11 +13,16 @@
     "height_px": 220,
     "hover_readout": true,
     "palette": "categorical",
+    "readout_max_share": 0.33,
     "sparkline_height_px": 36,
     "tick_density": 6,
     "width_px": 760
   },
   "console": {
+    "band_outlier_rows": 10,
+    "chart_arm_coverage_pct": 5.0,
+    "chart_arm_minutes_target": 6.0,
+    "chart_arm_rule_days": 14,
     "chart_height": 220,
     "chart_width": 760,
     "default_window_days": 30,
