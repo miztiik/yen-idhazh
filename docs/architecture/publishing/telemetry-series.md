@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -151,6 +151,16 @@ was too long, so the machine read the start and stopped" from a cell that never
 said that. The writer was fixed on 2026-08-29 and the ceiling deleted with it;
 the column now carries `Article.truncated`.
 
+**Re-measured 2026-08-30, and the fix is now proven on committed rows rather
+than argued.** The ledger has grown to 3,113 rows and 430 of them are stamped
+`2026-08-29T09:00`, on the new side of the boundary. Over those 430: 4 articles
+were genuinely cut, all 4 are flagged, and the flag agrees with the word-count
+pair on **430 of 430**. Over the 2,683 older rows nothing moved - still 0 of 22,
+still the one 748-of-748 row - because those rows were never rewritten. The
+whole-ledger count of flagged rows is now 5, and reading it as one number is
+exactly the mistake the version branch exists to stop: 4 of the 5 are right and
+1 is the old defect.
+
 Restamping the older rows to today would delete the branch instead of writing
 it, and is refused: the stamp is the only marker of which rows predate the
 change, and [../contracts/schemas.md](../contracts/schemas.md) keeps a migrated
@@ -176,12 +186,11 @@ summarize stage. Everything else prints as absence rather than as zero:
   over two article sets is two measurements, not a trend.
 - **A column changed meaning**: the cell it feeds prints `-` on every day whose
   rows all predate the change. Unknown, not zero. Those rows measured something
-  else, and a zero would say the thing never happened. Every committed row is
-  currently stamped before `2026-08-28`, so every day reads `-` under `Article
-  read only in part`. The count returns on its own once a run stamps a row on
-  the new side of the boundary; nothing has to be edited for that to happen.
-  `EvalRow` is stamped `2026-08-29T09:00` from the commit that made the column
-  mean a cut, so the next run writes rows on the new side.
+  else, and a zero would say the thing never happened. **The count has now
+  returned on its own**, which is what this rule was written to allow: 430
+  committed rows are stamped `2026-08-29T09:00`, so the days those rows cover
+  print a number under `Article read only in part` and every earlier day still
+  reads `-`. Nothing was edited to make that happen.
 
 ## The compression plot leaves items out and does not say so
 
@@ -193,9 +202,12 @@ drops any row whose `source_word_count` is not a positive number.
 
 The drop is correct. `extract` discards the pre-cap body, so a truncated row
 written before the ledger recorded a pre-cap length has no full length anywhere,
-and the ledger now says null rather than guessing one. Measured 2026-08-28 over
-the 2,683 committed rows: 142 carry a null, which is 5.3 percent of the ledger,
-and the plot draws the other 2,541.
+and the ledger now says null rather than guessing one. Measured 2026-08-30 over
+all 3,113 committed rows: **142** carry a null and the plot draws the other
+**2,971**. The 142 is not growing - it is the same 142 counted on 2026-08-28,
+when it was 5.3 percent of a 2,683-row ledger and is now 4.6 percent of a
+3,113-row one. Every one of them predates the 2026-08-27T21:00 writer fix, so
+the hole is a fixed set of old rows that a longer ledger keeps diluting.
 
 What is wrong is the silence. The plot shrinks by 142 marks and says nothing, so
 a reader counting marks gets a smaller corpus than the page's own "items on
