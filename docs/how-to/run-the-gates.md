@@ -11,6 +11,37 @@ Counts and file numbers below were taken on 2026-08-24 and move as the repo
 grows. Treat them as a "did the command do roughly what I expected" check, not
 as a target.
 
+## Run the fast three locally and let CI run the rest
+
+**CI is the authoritative arm and it is faster than your machine by between six
+and fifteen times.** The `gates` job finishes the whole backend suite in about
+90 seconds on a clean runner; the same suite on a developer box shared with
+other agents has measured 8 to 45 minutes. It also runs on Linux, on the merge
+candidate, alone on a machine - three things a local run cannot reproduce.
+
+So the default before pushing is the three checks that fail fast and cannot be
+delegated, because they tell you the branch is wrong before CI has finished
+installing:
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check .
+.\.venv\Scripts\python.exe -m mypy
+.\.venv\Scripts\python.exe -m pytest backend/tests/test_<the module you changed>.py
+```
+
+Under a minute. Then push and read CI.
+
+**Run the full local suite when you cannot push, or when you are about to merge
+and want the answer now.** The commands are below and none of them is going
+away. What changed on 2026-08-30 is which one is the default: blocking on a
+25-minute local suite before every push, for a change CI clears in 90 seconds,
+was the single largest cost in the console-signal plan.
+
+Two exceptions where local is still the only arm. A published-site change needs
+the browser smoke in `CLAUDE.md` section 12, which is a real browser on your
+machine. And a change to a workflow's own shell needs `shellcheck`, which is
+seconds either way.
+
 ## Set up the backend environment
 
 Python 3.12, 3.13 or 3.14. CI installs 3.12.
@@ -138,39 +169,6 @@ none of it is yours. Running it across the repo produces a large diff that has
 nothing to do with your change. Format only the files you author, or leave
 formatting alone.
 
-### If you touched the span tree, run the suite twice
-
-`observability.tracing_enabled` is false in the committed config, so the plain
-`pytest` above is the OFF run. The ON run is the same suite against a config
-with the toggle flipped:
-
-```powershell
-$c = Get-Content config/idhazh.json -Raw
-$c.Replace('"tracing_enabled": false', '"tracing_enabled": true') | Set-Content config/idhazh.json -NoNewline
-.\.venv\Scripts\python.exe -m pytest `
-  --deselect "backend/tests/test_contracts.py::test_a_fresh_clone_measures_itself_and_the_committed_config_agrees" `
-  --deselect "backend/tests/test_spans.py::test_tracing_off_writes_nothing_at_all"
-$c | Set-Content config/idhazh.json -NoNewline
-```
-
-**Those two are deselected because they are assertions ABOUT the committed
-file**, not about runtime behaviour: one says a fresh clone and the committed
-config agree, the other says the committed default writes no trace. Flipping the
-file makes both false by construction, and the same two would fail if you
-flipped `evaluation_enabled` instead. Every other test must pass unchanged.
-
-The point is the doctrine, not the coverage: a trace is evidence and the ledgers
-are the record
-([../concepts/telemetry.md](../concepts/telemetry.md#logs-are-not-the-record)),
-so no test may read a span to decide anything, and a test whose outcome moves
-between the two runs means one does.
-
-Measured 2026-08-30 (Windows 11, Python 3.14.2, five sibling agents on the box):
-1,599 passed in 534.8 s off, 1,597 passed and 2 deselected in 451.1 s on. The ON
-run writes to `backend/var/traces/`, which is gitignored, so `git status` is
-clean afterwards - and the restore line above is what keeps the config from
-being committed flipped.
-
 ## The frontend gates
 
 Run from `frontend/`.
@@ -205,31 +203,17 @@ is a level, and no level has a date in it.** A tree carrying no day payloads
 prints `runway: unknown` rather than a comfortable number.
 
 `bundle-gate` does two things. It asserts no encoder lands on the first-load
-path, and it holds every route
-named in `config/idhazh.json` under the gzip ceiling set there.
+path, and it holds every route named in `config/idhazh.json` under the gzip
+ceiling set there.
 
-**That comparison is a two-sided ratchet, not a budget.** A route that grew past
-the recorded weight fails, and so does one that shrank past it - an unclaimed
-saving left in the record is slack the next regression lands inside. The
-tolerance is 64 bytes either way, derived in
-[../reference/measurements.md](../reference/measurements.md) from the spread over
-four builds of one tree. The gate prints every route on a pass, with its delta,
-so the numbers are visible before anybody has a reason to look at them.
-
-When it fails on a weight, the change is four steps and the gate has already
-written most of it:
-
-1. `npm run build`, then `npm run bundle-gate`.
-2. Paste the replacement line it printed into `frontend/bundle-baseline.json`.
-3. Write the `why` in one sentence naming the beneficiary feature. It is
-   required, and an empty one fails the gate - so a new route fails twice before
-   it passes, which is the friction doing its job.
-4. Commit the code change and the baseline edit together. The reviewer's job is
-   then one sentence, not a byte diff.
-
-Nothing writes that file but a person. There is no `--update` flag and no
-environment variable that skips the check, because a gate whose own tooling
-updates its baseline cannot fail.
+**A third check was deleted on 2026-08-30**: a per-route first-load JavaScript
+ratchet against `frontend/bundle-baseline.json`, at 64 bytes either way. It had
+no requirement behind it, a local build could not reproduce CI's inside its own
+tolerance, and its record was one file every branch had to rewrite. The
+reasoning is in
+[../architecture/publishing/frontend.md](../architecture/publishing/frontend.md#the-bundle-gate-checks-two-promises-and-used-to-check-three).
+If you are reading an older commit that fails on a route weight, that is why it
+is gone rather than something you need to re-record.
 
 **The page ceiling is one-sided, and it bounds the document rather than the
 script.** `page_weight.ceilings_bytes` in `config/idhazh.json` gives the largest
@@ -270,7 +254,7 @@ from every ledger it reads and rebuilding cost 19,974, 17,335 and 8,705 gzipped
 bytes over 1,000, 872 and 480 published telemetry rows - 18.1 to 20.0 bytes a
 row. So 259,908 is the heaviest of five builds plus seven days at the heaviest
 day on record plus the 64-byte noise floor, and it is meant to expire
-([../reference/measurements.md](../reference/measurements.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
+([../reference/measurements.md](../archive/measurements-2026-08.md#the-console-ceiling-re-derived-at-the-close-of-the-console-signal-plan-2026-08-30)).
 
 **When `/console/` fires, do not raise it. Turn `console.default_window_days`
 down.** The page grows with what it inlines, and the answer is always to stop
