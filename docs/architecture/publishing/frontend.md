@@ -641,7 +641,7 @@ Three surfaces do not simply follow the span, and each says so on the page:
 | Surface | What it does | Why |
 | --- | --- | --- |
 | `Feeds that failed` | Counts every run on record | A windowed count would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. |
-| `Site size` | Absolute number always; only the movement is windowed | The size is a level and the operator wants today's whatever span he is reading. Only the movement is a rate, and a rate has to say what it is over. |
+| `Site size` | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
 | `Router minutes per chart` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
 `Sources cut short most often` used to hard-code seven days. It follows the
@@ -1171,8 +1171,127 @@ cap line - it is `Article length against summary length`, which is the string
 the chart's own accessible name already used. `Charts` on a page of six charts
 reads as "the charts" rather than as the router's output, so it is `Charts drawn
 for articles`. `Runs` sat four headings below `Run health` and neither name said
-which was which; it is `Runs and site size`, which is what its columns are. No
-doc anchor and no test selector read any of the three.
+which was which; it became `Runs and site size`, which is what its columns were.
+No doc anchor and no test selector read any of the three. `Runs and site size`
+is itself gone since 2026-08-30 - two nouns joined by "and" is two sections, and
+the section below says where each half went.
+
+## The site's size is a rate, and the level beside it says which tree
+
+The console asks one size question - is the site going to outgrow the 1 GB Pages
+cap - and until 2026-08-30 it answered with two levels and no date. A waterfall
+drew megabytes added per day, and a table drew the running total. Neither says
+when.
+
+**The waterfall drew the item ceiling and called it site growth.** Measured
+2026-08-30 over the ten committed manifests, a day's gain ran 0.04 MB to 2.82 MB
+while the day published 4 articles or 731. Divided by the articles, the same ten
+days sit between 2,478 and 4,542 bytes. The first series moves when the feeds
+have a busy morning; the second moves when somebody changes what a payload
+carries, which is the only thing anybody can act on. So the chart is
+`What one more article costs`, in bytes of payload tree per published article,
+and it follows the page's window.
+
+**A day outside one standard deviation of the window's median is marked, and the
+rule is the whole of the marking.** The band is taken about the median rather
+than about the mean: the line drawn on the chart is the median, and a band whose
+centre and whose width came from two different statistics is asymmetric about
+its own centre for no reason a reader can see. One published day in the window
+reports no spread at all rather than a spread of zero, which would call that day
+perfectly typical of itself. The values are published as text beside the chart -
+that is what a chart owes anybody who cannot see it, and it is also the only way
+the flags can be checked: `frontend/tests/console-site-size.spec.ts` recomputes
+the band from exactly those numbers and fails if the marks disagree.
+
+**The window bounds what is drawn and never what is differenced.** A day's cost
+is its own bytes minus the previous manifest's, so the oldest day on screen
+still reads against the day before it. Differenced against zero it would report
+the whole tree as one day's work, and the window would invent an outlier every
+time it moved.
+
+**The `Site size` card carries the level, a track against the cap, the window's
+delta and a runway.** The runway is the arithmetic
+[../../../backend/idhazh/retention.py](../../../backend/idhazh/retention.py)
+already runs: headroom divided by one published day's growth, where a day's
+growth is the per-article cost times `run.safety_ceiling_per_run`. The item
+ceiling and not an average of the days on disk - a day that published 97
+articles is no evidence the next one will, and a runway has to be the worst case
+to be worth printing (Rule #10). Where the window measured no growth there is no
+rate, so the card says there is no runway instead of printing a date.
+
+**The delta is megabytes and not a percentage, and that was a measurement.** The
+oldest committed manifest recorded 13,595 bytes, so a share taken from there read
+`+73,933%` on 2026-08-30 - true, unreadable, and painted green by the card's
+own up-is-good rule, which is the wrong verdict on a site size as well as one
+nobody asked for. `Up 9.6 MB over 30 days` is the same fact in the unit the
+number above it is already in.
+
+**The card names the tree it measured, and this is the one thing it cannot fix
+itself.** `site_bytes` in a run manifest is `frontend/public/digest/`, and the
+Pages cap is measured on the built bundle, which also carries every prerendered
+page and the on-device model. Measured 2026-08-30 on Intel Core i7-1265U,
+Windows 11 10.0.26200, node v24.12.0, one build:
+
+| | Bytes | Files | Per published article | Runway to the 1 GB cap |
+| --- | --- | --- | --- | --- |
+| Committed payload tree | 10,067,711 | 161 | 2,478 to 4,542, median about 3,200 | about 2,000 published days |
+| Built bundle | 149,733,563 | 334 | 47,519 cumulative, about 21,000 marginal | 122 published days |
+
+The bundle is **14.87 times larger**, and it was eighteen times larger on
+2026-08-27 ([the run-manifest changelog](../../../backend/idhazh/contracts/run_manifest.py)),
+so the multiple itself is not stable. The card's sentence is therefore written
+caveat-first: it says the number is the committed payload tree and not the
+published site, that the site is what the cap measures, and that
+`idhazh site-weight` prints the runway that binds - and only then that
+`160 articles a day would fill this tree to 1 GB in about N published days`. It
+never says "the site" has N days, because it does not know that. Measured
+2026-08-30 the card read 2,038 published days and `site-weight` read 122, which
+is the size of the gap the wording exists to keep visible
+([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
+
+**What the deleted table was for, and where each column went.** `Runs`,
+`Planned` and `Failed` were per-day run counts, and all three are already on the
+run strip four headings above - `Planned` rides the run square's own label as
+`N of M succeeded`, which is where run-level facts live. `Site` is the card.
+`Files` is gone with no replacement: it was the count of files under the payload
+tree, and the question it answered - did the tree grow because we published more
+or because pages got heavier - is the question the per-article chart now answers
+directly.
+
+### Design rationale
+
+**The plan that ordered this row asked for a runway and assumed the console
+could measure the tree the cap measures. It cannot, and that was found by
+measuring rather than by reading.** The row's stated basis was 24,378 bytes an
+article, spread 23,066 to 26,538, which is the built bundle's cumulative average
+from `idhazh site-weight`. The console reads run manifests, and the same
+arithmetic over those gives 2,478 to 4,542 bytes an article - a different tree,
+roughly seven times smaller per article and thirteen times smaller in total.
+
+Three options were weighed:
+
+| # | Option | Outcome |
+| --- | --- | --- |
+| 1 | Print the runway from the payload tree against the cap and call it the site's | Rejected on the measurement. It reads about 2,000 published days where `site-weight` reads 122 - out by a factor of sixteen, and a fabricated date is worse than the level it replaced. |
+| 2 | Add `built_site_bytes` to the run manifest | Rejected here, not on merit. It is a persisted-contract change, which is `CLAUDE.md` section 6 Level 5 and pauses work. It is the change that would make the console's runway exact, and it is recorded here so the next person does not have to rediscover it. |
+| 3 | Print the runway of the tree the console has, and name that tree inside the sentence | Taken. Every clause on the card is true and checkable, the direction of the error is stated, and the instrument that measures the other tree is named. |
+
+A fourth was considered and dropped without a table row: a measured
+payload-to-site multiple held in `config/`. The two trees do not scale together
+- `frontend/static/assist/` is 45,328,441 bytes and does not grow with articles
+at all - so one multiplier is not just stale-prone, it is structurally wrong.
+The measured multiple was 14.87 on 2026-08-30 and eighteen three days earlier,
+which is the evidence.
+
+**The track reads about one percent full, and that is the honest picture.** It
+fails the "does it use the screen it is on" sufficiency check
+([../../concepts/design-system.md](../../concepts/design-system.md)) in the sense
+that a nearly-empty bar carries little information, and it ships anyway: the
+caption prints the room left as a number beside it - `1,014 MB left of the 1 GB
+Pages cap` - and the fill has a 2px minimum so a level far under its limit still
+reads as a measurement rather than as an empty control. The alternative -
+rescaling the track to make the bar look busy - is a chart that lies about how
+much room is left.
 
 ## The bundle gate is a regression detector, not a performance budget
 

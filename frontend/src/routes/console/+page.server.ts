@@ -12,8 +12,7 @@ import {
 	publishedTrend,
 	routerCost,
 	runHealth,
-	siteGrowth,
-	sizeTrend
+	siteCost
 } from '$lib/charts/glance';
 import { renderToSvg } from '$lib/server/chart-render';
 import {
@@ -23,13 +22,14 @@ import {
 	wasCut,
 	SOURCE_CUT_ROWS
 } from '$lib/server/model-work';
-import { chartConfig, collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import { chartConfig, collectConfig, consoleConfig, retentionConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
 	feedResults,
 	itemHealthRows,
 	loadManifests,
 	publishedCharts,
+	publishedItems,
 	telemetryMonths,
 	telemetryRows,
 	TELEMETRY_ROOT,
@@ -357,6 +357,8 @@ export async function load() {
 	const { rows } = evalRows();
 	const itemRows = itemHealthRows().rows;
 	const floorPct = runConfig().success_floor_pct;
+	const itemCeiling = runConfig().safety_ceiling_per_run;
+	const siteBudgetMb = retentionConfig().site_budget_mb;
 	const quarantineAfter = collectConfig().quarantine_after_failures;
 	const console = consoleConfig();
 	const summarize = summarizeConfig();
@@ -483,7 +485,8 @@ export async function load() {
 	// before any script runs; the client rebuilds the same option to hydrate.
 	const runsDonut = runHealth(manifests);
 	const cost = routerCost(charts.filter((day) => inSeed(day.date)));
-	const growth = siteGrowth(manifests);
+	const articles = publishedItems();
+	const perArticle = siteCost(manifests, articles, seed);
 	const mixDates = datesIn(publicRows);
 	const mix =
 		mixDates.length === 0
@@ -495,10 +498,6 @@ export async function load() {
 					})
 				);
 	const published = publishedTrend(charts);
-	const size = sizeTrend(
-		manifests.filter((run) => inSeed(run.date)),
-		console.default_window_days
-	);
 	const draw = async (
 		chart: { option: import('echarts').EChartsOption; empty: boolean },
 		width: number,
@@ -516,6 +515,11 @@ export async function load() {
 		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/measurements.md`,
 		modelWork: modelWork(rows, itemRows),
 		manifests,
+		// Articles per published day, read from the same tree `site_bytes` measures.
+		// The denominator of the console's per-article cost, and the numerator's own
+		// corpus - a count taken from anywhere else divides one tree's bytes by
+		// another tree's articles.
+		publishedItems: Object.fromEntries(articles),
 		charts,
 		glance: {
 			healthSvg: await draw(runsDonut, 260, 200),
@@ -523,15 +527,12 @@ export async function load() {
 			healthTotal: runsDonut.total,
 			costSvg: await draw(cost, 460, 40),
 			costBand: cost.empty ? null : cost.band,
-			growthSvg: await draw(growth, 760, 220),
+			perArticleSvg: await draw(perArticle, 760, 220),
 			mixSvg: await draw(mix, 760, 220),
 			publishedSvg: await draw(published, 220, 34),
-			publishedMovement: published.empty ? null : published.movement,
-			// No `sizeMovement` beside it: the size card recomputes its own movement
-			// from the manifests on the page, because the window can move and this
-			// number cannot. The drawn seed still crosses, as the shape a reader
-			// with no script keeps.
-			sizeSvg: await draw(size, 220, 34)
+			publishedMovement: published.empty ? null : published.movement
+			// No size chart and no size movement beside it: both follow the window,
+			// and the page recomputes them from the manifests it already carries.
 		},
 		// Drawn here, so the shape is on the page before any script runs and stays
 		// there if none ever does. Colour leaves as a custom-property reference, so
@@ -549,6 +550,8 @@ export async function load() {
 		itemHealthRows: itemRows.length,
 		grid,
 		floorPct,
+		itemCeiling,
+		siteBudgetMb,
 		quarantineAfter,
 		feeds: trouble(results, quarantineAfter),
 		feedsChecked: new Set(results.map((row) => row.feedId)).size,

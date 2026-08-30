@@ -43,8 +43,10 @@
 		runHealth,
 		ROUTER_MINUTES_TARGET,
 		RULE_WINDOW_DAYS,
-		siteGrowth,
-		sizeTrend
+		PAGES_CAP_BYTES,
+		siteCost,
+		siteRunway,
+		sizeGain
 	} from '$lib/charts/glance';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
@@ -151,9 +153,11 @@
 			data.sourceCutsByWindow[0]
 	);
 	const windowedCost = $derived(routerCost(data.charts.filter((day) => inWindow(day.date))));
-	const windowedSize = $derived(
-		sizeTrend(data.manifests.filter((run) => inWindow(run.date)), windowDays)
-	);
+	/** Articles per published day, as a map, so the cost arithmetic reads it the
+	 * same way the server did. */
+	const articles = $derived(new Map(Object.entries(data.publishedItems)));
+	const windowedSize = $derived(sizeGain(data.manifests.filter((run) => inWindow(run.date))));
+	const perArticle = $derived(siteCost(data.manifests, articles, viewport));
 
 	let strip = $state<HTMLDivElement | null>(null);
 
@@ -214,18 +218,91 @@
 		return () => observer.disconnect();
 	});
 
-	function mb(bytes: number): string {
-		return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+	function mb(value: number): string {
+		return `${(value / 1024 / 1024).toFixed(1)} MB`;
 	}
+
+	/** Whole bytes with thousands separators. The per-article cost is a
+	 * four-digit number, so a rounded kilobyte would hide the whole range the
+	 * chart is drawn over. */
+	function bytes(value: number): string {
+		return `${Math.round(value).toLocaleString('en-GB')} B`;
+	}
+
+	/** A count of days a person can act on. Under ten it keeps a decimal,
+	 * because "0 days" and "0.4 days" are different answers. */
+	function days(value: number): string {
+		const whole = Math.round(value);
+		return whole >= 10 ? whole.toLocaleString('en-GB') : value.toFixed(1);
+	}
+
+	/** How much of the site's one hard limit is spent.
+	 *
+	 * `site_bytes` is the committed payload tree and the cap is measured on the
+	 * built bundle, which is larger - so this fraction is a floor on the real
+	 * one, never the whole of it. The card says so in words rather than leaving
+	 * the reader to find `backend/idhazh/contracts/run_manifest.py`.
+	 *
+	 * Null where no run has recorded a size. Null is not zero: a tree nobody
+	 * measured is not an empty tree, and `0.0 MB` beside a 1 GB cap reads as a
+	 * site with all of its room left.
+	 */
+	const payloadBytes = $derived(data.manifests[0]?.siteBytes ?? null);
+	const capFraction = $derived(payloadBytes === null ? null : payloadBytes / PAGES_CAP_BYTES);
+
+	/** Published days of room left, at the cost this window measured.
+	 *
+	 * Windowed, because it is a rate: the median article cost of the last seven
+	 * days and of the last ninety are different claims about the future, and a
+	 * runway that did not move with the span would be one of them wearing the
+	 * other's label.
+	 */
+	const runway = $derived(
+		payloadBytes === null
+			? null
+			: siteRunway(
+					payloadBytes,
+					perArticle.median,
+					data.itemCeiling,
+					data.siteBudgetMb * 1024 * 1024,
+					PAGES_CAP_BYTES
+				)
+	);
+
+	/** What the window added, in the unit the card's own number is in.
+	 *
+	 * A share is what this used to print, and from the 13,595 bytes of the oldest
+	 * committed manifest it read +73,933 percent - and green, on a card where
+	 * growth is the thing being watched. */
+	const sizeDelta = $derived.by(() => {
+		if (windowedSize === null) return `No second measurement in these ${windowDays} days.`;
+		return `${windowedSize >= 0 ? 'Up' : 'Down'} ${mb(Math.abs(windowedSize))} over ${windowDays} days.`;
+	});
 
 	/** The card takes the hue of what it means. The ceiling is 1 GB (Rule #2), so
 	 * three quarters of it is a warning and nine tenths is a fault. */
-	const SITE_CEILING = 1024 * 1024 * 1024;
 	const sizeTone = $derived.by(() => {
-		const bytes = data.manifests[0]?.siteBytes ?? 0;
-		if (bytes >= SITE_CEILING * 0.9) return 'bad' as const;
-		if (bytes >= SITE_CEILING * 0.75) return 'warn' as const;
+		if (capFraction === null) return 'neutral' as const;
+		if (capFraction >= 0.9) return 'bad' as const;
+		if (capFraction >= 0.75) return 'warn' as const;
 		return 'neutral' as const;
+	});
+
+	/** What the size card says under its number.
+	 *
+	 * Three states and they are three different facts: nothing measured, measured
+	 * but not growing, and growing at a rate a runway can be divided out of.
+	 */
+	const TREE =
+		"Latest run's size. It is the committed payload tree, not the published site: the site is larger, it is what the cap measures, and idhazh site-weight prints its runway after every build.";
+	const sizeNote = $derived.by(() => {
+		if (payloadBytes === null) {
+			return `No run has recorded a size yet, so there is nothing to hold against the 1 GB Pages cap. Over ${windowDays} days.`;
+		}
+		if (runway === null) {
+			return `${TREE} ${sizeDelta} No day in these ${windowDays} days grew the tree over an article it published, so there is no rate and no runway.`;
+		}
+		return `${TREE} ${sizeDelta} At ${bytes(perArticle.median ?? 0)} an article, ${data.itemCeiling} articles a day would fill this tree to 1 GB in about ${days(runway.toCap)} published days.`;
 	});
 
 	/** The same window the server drew with. Both sides derive it from the rows
@@ -401,19 +478,24 @@
 			trendOption={publishedTrend(data.charts).option}
 		/>
 		<!-- Half windowed, on purpose. The size is a level and the operator wants
-		     today's, whatever span he is looking at; only the movement under it is
-		     a rate, and a rate has to say what it is over. -->
+		     today's, whatever span he is looking at; only the movement and the
+		     runway under it are rates, and a rate has to say what it is over. -->
 		{#key windowDays}
 			<KpiCard
 				label="Site size"
-				value={mb(data.manifests[0]?.siteBytes ?? 0)}
-				note="1 GB ceiling. Latest run's size; movement over {windowDays} days."
+				value={payloadBytes === null ? '-' : mb(payloadBytes)}
+				track={capFraction === null
+					? null
+					: {
+							fraction: capFraction,
+							caption: `${Math.round(
+								(PAGES_CAP_BYTES - (payloadBytes ?? 0)) / 1024 / 1024
+							).toLocaleString('en-GB')} MB left of the 1 GB Pages cap`
+						}}
+				note={sizeNote}
 				tone={sizeTone}
 				windowed="site-size-movement"
 				{windowDays}
-				movement={windowedSize.empty ? null : windowedSize.movement}
-				trendSvg={windowedSize.empty ? null : data.glance.sizeSvg}
-				trendOption={windowedSize.empty ? null : windowedSize.option}
 			/>
 		{/key}
 		{#if data.glance.healthSvg}
@@ -465,20 +547,60 @@
 		{/if}
 	</div>
 
-	{#if data.glance.growthSvg}
+	<div data-windowed="site-cost-per-item" data-window-days={windowDays}>
 		<Panel
-			title="Where the site's size came from"
-			note="Megabytes added or removed each day, starting from the oldest day on record. The ceiling is a rate problem, not a level problem, so what matters is which days added what."
+			title="What one more article costs"
+			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Megabytes a day was the item ceiling wearing a size label - a day gains six times as much when it publishes six times as many articles. This is the part a change to a payload can move. Over {windowDays} days."
 		>
-			<Chart
-				svg={data.glance.growthSvg}
-				option={siteGrowth(data.manifests).option}
-				width={760}
-				height={220}
-				label="Megabytes added or removed each day"
-			/>
+			{#if perArticle.empty}
+				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
+					No day in these {windowDays} days both published an article and recorded a size, so there is
+					no cost to divide.
+				</p>
+			{:else}
+				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-cost-summary>
+					{#if perArticle.spread === null}
+						One published day in these {windowDays} days, at {bytes(perArticle.median ?? 0)} an article.
+						One day is not a spread, so no day is flagged.
+					{:else}
+						Median {bytes(perArticle.median ?? 0)} an article, give or take {bytes(
+							perArticle.spread ?? 0
+						)}.
+						{perArticle.days.filter((day) => day.flagged).length} of {perArticle.days.length} days fall outside
+						that.
+					{/if}
+				</p>
+				{#if data.glance.perArticleSvg}
+					{#key windowDays}
+						<Chart
+							svg={data.glance.perArticleSvg}
+							option={perArticle.option}
+							width={760}
+							height={220}
+							label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
+						/>
+					{/key}
+				{/if}
+				<!-- The values, as text. It is what a chart owes anybody who cannot
+				     see it, and it is also the only honest way to check the flags:
+				     a chart that flags by eye cannot be tested, and the browser suite
+				     recomputes the band from exactly these numbers. -->
+				<ul class="sr-only" data-cost-days>
+					{#each perArticle.days as day (day.date)}
+						<li
+							data-cost-day={day.date}
+							data-cost-bytes={Math.round(day.bytesPerItem)}
+							data-cost-flagged={String(day.flagged)}
+						>
+							{day.date}: {bytes(day.bytesPerItem)} an article{day.flagged
+								? ', outside the band'
+								: ''}
+						</li>
+					{/each}
+				</ul>
+			{/if}
 		</Panel>
-	{/if}
+	</div>
 
 	{#if data.glance.mixSvg}
 		<Panel
@@ -807,41 +929,6 @@
 					</table>
 				</div>
 			{/if}
-		</div>
-	{/if}
-
-	{#if data.manifests.length > 0}
-		<h2 class="console-h2">Runs and site size</h2>
-		<p class="mt-1 text-[0.8125rem] text-text-tertiary">
-			Run-level facts live in the manifest, never in an item row. Planned and failed are summed
-			across the day's runs; the site size is the last run's measurement, not their total. The
-			site has a 1 GB ceiling; this is the number that says how close it is.
-		</p>
-		<div class="console-table mt-3">
-			<table class="w-full text-[0.8125rem]">
-				<thead class="text-text-tertiary">
-					<tr class="border-b border-rule">
-						<th class="py-2 text-start font-normal">Day</th>
-						<th class="py-2 text-end font-normal">Runs</th>
-						<th class="py-2 text-end font-normal">Planned</th>
-						<th class="py-2 text-end font-normal">Failed</th>
-						<th class="py-2 text-end font-normal">Site</th>
-						<th class="py-2 text-end font-normal">Files</th>
-					</tr>
-				</thead>
-				<tbody>
-					{#each data.manifests as run (run.date)}
-						<tr class="border-b border-rule">
-							<td class="py-2">{run.date}</td>
-							<td class="py-2 text-end tabular-nums">{run.runs}</td>
-							<td class="py-2 text-end tabular-nums">{run.planned}</td>
-							<td class="py-2 text-end tabular-nums">{run.failed}</td>
-							<td class="py-2 text-end tabular-nums">{mb(run.siteBytes)}</td>
-							<td class="py-2 text-end tabular-nums">{run.siteFiles}</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
 		</div>
 	{/if}
 
