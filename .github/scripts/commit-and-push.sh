@@ -136,8 +136,8 @@ spare_the_published_assets() {
   git ls-tree -r --name-only "$tip" -- "$@" | "${DROP_RACED[@]}" || return 1
 }
 
-git config user.name "github-actions[bot]"
-git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+git config user.name "yen-idhazh pipeline"
+git config user.email "pipeline@yen-idhazh.invalid"
 git add "$@"
 if git diff --cached --quiet; then
   echo "$NOTHING_STAGED_MESSAGE"

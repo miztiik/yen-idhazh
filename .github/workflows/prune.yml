@@ -135,8 +135,8 @@ jobs:
           KEEP_DAYS: ${{ steps.due.outputs.keep_days }}
         run: |
           set -euo pipefail
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git config user.name "yen-idhazh pipeline"
+          git config user.email "pipeline@yen-idhazh.invalid"
 
           # The newest commit at or before the boundary. `--first-parent` so a
           # merged branch's own commits cannot be picked as the boundary.
