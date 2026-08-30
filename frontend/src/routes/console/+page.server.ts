@@ -7,6 +7,7 @@ import type {
 import { datesIn, failureSeries } from '$lib/charts/series';
 import { windowOfDays } from '$lib/charts/viewport';
 import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
+import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
 import {
 	failureMix,
 	publishedTrend,
@@ -23,6 +24,17 @@ import {
 	wasCut,
 	SOURCE_CUT_ROWS
 } from '$lib/server/model-work';
+import {
+	chronological,
+	failing,
+	feedDays,
+	resting,
+	resultLabel,
+	skipped,
+	streak,
+	type FeedDay,
+	type FeedDayOutcome
+} from '$lib/feed-health';
 import { chartConfig, collectConfig, consoleConfig, runConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import {
 	evalRows,
@@ -65,11 +77,23 @@ export interface FeedTrouble {
 	feedId: string;
 	attempts: number;
 	failures: number;
+	/** Failures in a row, ending at the newest read. This is the number the
+	 * pipeline quarantines on, so it is the number the page prints. */
+	streak: number;
 	lastResult: string;
 	lastDetail: string;
 	lastDate: string;
-	nearQuarantine: boolean;
+	/** The pipeline's own decision, recomputed by its own rule. */
+	resting: boolean;
+	/** Where the fill ends and where the rest threshold sits. Drawn here, so the
+	 * bar is on the page before any script runs and the browser never has to
+	 * agree with it. */
+	marks: TargetMarks;
+	/** One entry per day this feed has a record on, oldest first. */
+	days: FeedDay[];
 }
+
+export type { FeedDay, FeedDayOutcome };
 
 /** What one day's chart arm cost and what it produced.
  *
@@ -283,68 +307,50 @@ function cutsByRun(rows: Record<string, string>[]): Map<string, number> {
 	return new Map([...seen].map(([runId, keys]) => [runId, keys.size]));
 }
 
-/** The same rule as `FeedHealthRow.failing` in the contract.
- *
- * A feed that answered with nothing counts as failing: an empty answer and a
- * refused one cost the digest the same articles. A robots refusal does not -
- * that source said no, and honouring it is the pipeline working correctly.
- *
- * See `backend/idhazh/contracts/feed_health.py`, which is the source of truth.
- */
-const FAILING_OUTCOMES = new Set(['blocked', 'permanent', 'transient']);
-
-function failing(row: FeedResult): boolean {
-	if (row.outcome === 'ok') return row.items === 0;
-	return FAILING_OUTCOMES.has(row.outcome);
-}
-
-/** What to print in the last-result cell.
- *
- * The ledger's own word for a feed that answered 200 with no entries is `ok`,
- * because that is what the fetch did. Printing it puts `ok` on the same row as
- * a count of fourteen failures, and the eye takes the word over the number.
- * The row has to say which of the two it means.
- */
-function resultLabel(row: FeedResult): string {
-	if (row.outcome === 'ok' && row.items === 0) return 'answered with nothing';
-	return row.outcome;
-}
-
-/** Every feed that failed at least once, worst first.
+/** Every feed that failed at least once, closest to a rest first.
  *
  * A feed with a clean record is not listed. The operator came here to find what
  * is broken, and a list that names all seventy sources hides the four that are.
+ *
+ * Ranked by how near the rest is, then by how much has gone wrong in total. A
+ * feed four failures into a five-failure rule is one run from being dropped; a
+ * feed with twelve failures spread over a month and answering today is not, and
+ * a total-failure sort put the second one on top.
  */
 function trouble(rows: FeedResult[], quarantineAfter: number): FeedTrouble[] {
 	const byFeed = new Map<string, FeedResult[]>();
 	for (const row of rows) {
-		// A skipped feed was never asked, so it can neither pass nor fail.
-		if (row.outcome === 'skipped') continue;
 		byFeed.set(row.feedId, [...(byFeed.get(row.feedId) ?? []), row]);
 	}
 
 	const found: FeedTrouble[] = [];
 	for (const [feedId, group] of byFeed) {
-		const failures = group.filter(failing);
+		// A skipped feed was never asked, so it can neither pass nor fail. It still
+		// has to stay in `ordered`, because the rest it records is what lets the
+		// quarantine lift.
+		const ordered = chronological(group);
+		const asked = ordered.filter((row) => !skipped(row));
+		const failures = asked.filter(failing);
 		if (failures.length === 0) continue;
-		// Date alone does not order five runs of one day, and a stable sort then
-		// makes "last result" whichever row the shard happened to carry last. The
-		// run id breaks the tie, so the cell means the newest read and not an
-		// arbitrary one.
-		const newest = [...group]
-			.sort((a, b) => a.date.localeCompare(b.date) || a.runId.localeCompare(b.runId))
-			.at(-1) as FeedResult;
+		const newest = asked.at(-1) as FeedResult;
+		const inARow = streak(ordered);
 		found.push({
 			feedId,
-			attempts: group.length,
+			attempts: asked.length,
 			failures: failures.length,
+			streak: inARow,
 			lastResult: resultLabel(newest),
 			lastDetail: newest.detail,
 			lastDate: newest.date,
-			nearQuarantine: failures.length >= quarantineAfter
+			resting: resting(ordered, quarantineAfter),
+			// Fewer is better, so the fill runs from nothing to the rest and past it.
+			marks: targetMarks(inARow, quarantineAfter, 'lower-is-better'),
+			days: feedDays(ordered)
 		});
 	}
-	return found.sort((a, b) => b.failures - a.failures || a.feedId.localeCompare(b.feedId));
+	return found.sort(
+		(a, b) => b.streak - a.streak || b.failures - a.failures || a.feedId.localeCompare(b.feedId)
+	);
 }
 
 /** The console reads the committed ledger and nothing else.
@@ -551,6 +557,10 @@ export async function load() {
 		floorPct,
 		quarantineAfter,
 		feeds: trouble(results, quarantineAfter),
+		// One date axis for every feed's strip, so two rows can be read against each
+		// other. A per-feed axis would put each strip on its own days, and "broken
+		// since Tuesday" and "flaky all month" would draw the same picture.
+		feedDates: [...new Set(results.map((row) => row.date))].sort(),
 		feedsChecked: new Set(results.map((row) => row.feedId)).size,
 		feedRuns: new Set(results.map((row) => row.runId)).size,
 		// Ten rows and the two sentences under them, aggregated here rather than in

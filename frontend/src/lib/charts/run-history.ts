@@ -67,6 +67,35 @@ export function cellFor(available: number | null, days: number): StripMetrics {
 	return { cell, gap, width: days * (cell + gap) };
 }
 
+/** The room a strip gets when it sits inside a row rather than across a page. */
+export const ROW_STRIP_PX = 240;
+
+/** Small enough to fit ninety days in a list row, big enough to still be a
+ * square rather than a tick. */
+const DENSE_MIN = 3;
+
+/** No taller than the target bar it sits beside. A strip drawn larger than the
+ * bar would read as the more important of the two, and it is not. */
+const DENSE_MAX = 14;
+
+/** A strip that has to fit the room it is given, however many days that is.
+ *
+ * `cellFor` grows a strip into a page-wide frame and never goes below the pair
+ * it has always used, because that strip scrolls when it runs out of room. A
+ * strip inside a list row cannot scroll - twenty scrollbars in one column is
+ * not a list - so this one shrinks instead, and stops where a square stops
+ * being visible rather than where it stops being comfortable.
+ */
+export function denseCellFor(available: number, days: number): StripMetrics {
+	if (available <= 0 || days <= 0) return { cell: DENSE_MIN, gap: 1, width: 0 };
+	const raw = Math.floor(available / (days * (1 + GAP_SHARE)));
+	const cell = Math.max(DENSE_MIN, Math.min(DENSE_MAX, raw));
+	const gap = Math.max(1, Math.round(cell * GAP_SHARE));
+	// Every column but the last carries a gap after it. Counting a trailing one
+	// would put the axis a gap to the right of the squares it labels.
+	return { cell, gap, width: days * cell + Math.max(0, days - 1) * gap };
+}
+
 /** A label a week apart, because a week is the cadence an operator counts in. */
 const WEEK = 7;
 
