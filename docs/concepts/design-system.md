@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-30
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -309,6 +309,51 @@ a truncation cap of 2,500 tokens no prompt can reach the window the machine
 reads with, so the count is zero by arithmetic rather than by luck. It is on the
 page so that the day the cap moves, the number that says the move went too far
 is already being printed.
+
+### Eleven measures are eleven cards, and the rows are one control away
+
+The eleven above shipped as eleven columns of one table until 2026-08-30, and
+that shape could not answer the question an operator brings to it. **Did it get
+worse is a vertical scan**, and in a wide table every column beside the one being
+scanned is a different quantity - a count, a percent, a second, a minute. At a
+thirty-day window it was 330 numbers under eleven header paragraphs.
+
+So the section leads with eleven cards on one `auto-fit minmax(220px, 1fr)`
+grid, and each card carries the same five things:
+
+- **The label, verbatim.** The copy above is protected; the shape was the defect
+  and the words were not. `frontend/tests/console-model.spec.ts` compares the
+  rendered labels byte for byte against the page's own `COLUMNS` and against the
+  table on this page, so a paraphrase fails the build rather than a review.
+- **The newest day's figure**, at reading size. Which day that is is printed
+  once above the grid, not eleven times.
+- **A line over the window**, drawn as markup by `Sparkline`. Eleven
+  engine-backed sparklines would be eleven chart instances and a lazy chunk on a
+  page that renders complete without one.
+- **What it is out of**, for the six quality figures. On a table row the day's
+  count sat one column away; a card has no row, so it carries its own
+  denominator or it invites a trend that is not there.
+- **Its sentence**, moved out of the header into the body where there is room
+  for it.
+
+**A day the model changed draws a dashed rule across every line**, at the first
+drawn point on the new model, from the same rows the daily table draws its
+dividers from. Whether a swap moved anything is the question the table could not
+answer at all. The rule carries a date and an id and nothing else - an arrow or
+a delta across it would claim the swap caused whatever the line then did, and no
+committed figure says that.
+
+**No card is tinted.** `Copied, not rewritten` reads about 12 percent and nobody
+has agreed what a bad number would be, so a tint there would invent a threshold
+and publish it. The health ramp is lent to a threshold somebody agreed to, and
+to nothing else.
+
+**The daily table stays, below, behind a `Show the daily figures` control.**
+Nothing is deleted: after a card moves, the rows are what say which day. It is a
+native disclosure, so the rows are in the prerendered document either way,
+opening it costs no fetch, and the whole section works with no script at all.
+The dash-not-zero rule, the `<1` rule and the version-stamped share are
+unchanged by any of this.
 
 ### An axis title and a column header take one form
 

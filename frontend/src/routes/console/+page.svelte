@@ -34,6 +34,8 @@
 	import StageTimings from '$lib/components/StageTimings.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
 	import Panel from '$lib/components/Panel.svelte';
+	import Sparkline from '$lib/components/Sparkline.svelte';
+	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
@@ -357,6 +359,136 @@
 			{ key: 'failed', text: count(day.failed) }
 		];
 	}
+
+	/** What each column counts, day by day.
+	 *
+	 * Keyed the same way `cells` is, so a card's line and the figure above it
+	 * cannot come from two different columns. A day the ledger has no answer for
+	 * arrives as null and is left out of the line rather than drawn as a zero,
+	 * which is the same rule the cells follow.
+	 */
+	const SERIES: Record<string, (day: ModelDay) => number | null> = {
+		summaries: (day) => day.summaries,
+		'not-sure': (day) => day.notSure,
+		unsupported: (day) => day.unsupportedNumbers,
+		hedge: (day) => day.hedgeDropped,
+		part: (day) => day.readInPart,
+		'part-pct': (day) => day.readInPartPct,
+		copied: (day) => day.copiedPct,
+		'per-item': (day) => day.perItemMs,
+		minutes: (day) => day.totalMs,
+		'too-long': (day) => day.refusedForLength,
+		failed: (day) => day.failed
+	};
+
+	/** The card grid's minimum column, and the room a card leaves inside it.
+	 *
+	 * A line drawn wider than that overflows the narrowest card the grid can
+	 * make. The pad is `--space-4`, which the card spends on each side.
+	 */
+	const CARD_MIN_PX = 220;
+	const CARD_PAD_PX = 16;
+	const SPARK_WIDTH_PX = CARD_MIN_PX - CARD_PAD_PX * 2;
+
+	/** Every day the model worked, newest first, with the dividers taken out. */
+	const modelDays = $derived(data.modelWork.flatMap((row) => (row.kind === 'day' ? [row.day] : [])));
+	/** The newest day either ledger holds. Every card's figure is this day. */
+	const newestModelDay = $derived(modelDays[0] ?? null);
+	/** Every day the model changed, read from the rows the table draws its
+	 * dividers from. One source, so a rule on a card and a divider in the table
+	 * cannot disagree about when the ground moved. */
+	const modelSwaps = $derived(data.modelWork.flatMap((row) => (row.kind === 'swap' ? [row] : [])));
+
+	/** The days the cards' lines cover, oldest first.
+	 *
+	 * It follows the length of the window above and ends on the newest day the
+	 * ledger holds, never where a pan leaves it - the same rule the source table
+	 * follows, and the one that makes a rebuild of an old tree draw what that
+	 * tree drew. Nothing is fetched: every day is already on the page.
+	 */
+	const modelSpan = $derived(
+		windowOfDays(
+			modelDays.map((day) => day.date),
+			data.today,
+			windowDays,
+			data.console.today_anchor
+		)
+	);
+	const modelWindow = $derived(
+		[...modelDays.filter((day) => day.date >= modelSpan.start && day.date <= modelSpan.end)].reverse()
+	);
+
+	/** One card's drawn points, and the swap rules that land on them.
+	 *
+	 * The dates ride along with the values because the two are filtered together:
+	 * a rule has to sit on the point that carries it and not on the day beside
+	 * it. A swap on the oldest drawn point draws nothing - there is nothing to
+	 * its left to have changed from.
+	 */
+	function trendFor(key: string): {
+		marks: SparklineMarks;
+		rules: { at: number; label: string }[];
+	} {
+		const read = SERIES[key];
+		const values: number[] = [];
+		const dates: string[] = [];
+		for (const day of modelWindow) {
+			const value = read(day);
+			if (value === null) continue;
+			values.push(value);
+			dates.push(day.date);
+		}
+		const marks = sparklineMarks(values);
+		if (marks.empty) return { marks, rules: [] };
+		const rules = modelSwaps.flatMap((swap) => {
+			const at = dates.findIndex((date) => date >= swap.date);
+			if (at < 1) return [];
+			return [
+				{
+					at: at / (dates.length - 1),
+					label: `The model changed to ${swap.model} on ${swap.date}.`
+				}
+			];
+		});
+		return { marks, rules };
+	}
+
+	/** What a quality figure is out of, printed beside it.
+	 *
+	 * On a table row the day's count sat one column away. A card has no row, so
+	 * it carries its own denominator or it invites a trend that is not there.
+	 * The two cut figures divide by the rows their own flag still answers for,
+	 * which can read lower than the day's summaries and is the point of carrying
+	 * it separately.
+	 */
+	function outOf(key: string, day: ModelDay): string | null {
+		const summaries = (of: number) => `of ${of} ${of === 1 ? 'summary' : 'summaries'}`;
+		if (['not-sure', 'unsupported', 'hedge', 'copied'].includes(key)) {
+			return day.summaries === null ? null : summaries(day.summaries);
+		}
+		if (['part', 'part-pct'].includes(key)) {
+			return day.readInPartOf === null ? null : summaries(day.readInPartOf);
+		}
+		return null;
+	}
+
+	/** The eleven cards, in the order `COLUMNS` names them.
+	 *
+	 * Built off `cells` for the same reason the table's body is: a label and the
+	 * figure under it cannot drift apart if one list produces both.
+	 */
+	const cards = $derived.by(() => {
+		const day = newestModelDay;
+		if (day === null) return [];
+		return cells(day).map((cell, index) => ({
+			key: cell.key,
+			label: COLUMNS[index].label,
+			line: COLUMNS[index].line,
+			value: cell.text,
+			note: cell.aside ?? outOf(cell.key, day),
+			trend: trendFor(cell.key)
+		}));
+	});
 </script>
 
 <svelte:head>
@@ -737,59 +869,94 @@
 			readoutMaxShare={data.chart.readout_max_share}
 		/>
 
-			{#if data.modelWork.length > 0}
-				<div class="console-table mt-6" data-model="table">
-					<table class="w-full text-[0.8125rem]">
-						<thead class="text-text-tertiary">
-							<tr class="border-b border-rule">
-								<th class="py-2 pe-4 text-start align-bottom font-normal">Day</th>
-								{#each COLUMNS as column (column.key)}
-									<th class="py-2 ps-4 text-end align-bottom font-normal">
-										<!-- The sentence is bounded rather than left to the column, so a
-										     nine-column table wraps its explanations instead of growing
-										     past the width an operator can read. -->
-										<span class="ms-auto block max-w-[10rem]">
-											{column.label}
-											{#if column.line}
-												<span class="mt-0.5 block text-[0.6875rem] leading-snug"
-													>{column.line}</span
-												>
-											{/if}
-										</span>
-									</th>
-								{/each}
-							</tr>
-						</thead>
-						<tbody>
-							{#each data.modelWork as row (row.kind === 'swap' ? `swap ${row.date}` : row.day.date)}
-								{#if row.kind === 'swap'}
-									<!-- A date and an id. An arrow or a delta here would claim the swap
-									     caused whatever moved, and no committed figure says that. -->
-									<tr class="border-b border-rule" data-model-swap={row.date}>
-										<td colspan={COLUMNS.length + 1} class="py-2 text-[0.75rem] text-text-tertiary">
-											{row.date} - {row.model}
-										</td>
-									</tr>
-								{:else}
-									<tr class="border-b border-rule" data-model-day={row.day.date}>
-										<td class="py-2 pe-4">{row.day.date}</td>
-										{#each cells(row.day) as cell (cell.key)}
-											<td class="py-2 ps-4 text-end tabular-nums" data-model-cell={cell.key}>
-												{cell.text}
-												{#if cell.aside}
-													<span
-														class="mt-0.5 block text-[0.6875rem] text-text-tertiary"
-														data-model-aside={cell.key}>{cell.aside}</span
-													>
-												{/if}
-											</td>
-										{/each}
-									</tr>
-								{/if}
-							{/each}
-						</tbody>
-					</table>
+			{#if newestModelDay !== null}
+				<!-- Eleven measures, eleven cards. A wide table is the one shape that
+				     cannot answer "did it get worse": a trend is a vertical scan, and
+				     every column beside the one being scanned is a different quantity.
+				     No card is tinted - `Copied, not rewritten` at 12 percent has no
+				     agreed threshold, and a tint would invent one and publish it. -->
+				<p
+					class="mt-4 text-[0.8125rem] text-text-tertiary"
+					data-model-cards-note
+					data-model-newest={newestModelDay.date}
+					data-windowed="model-cards"
+					data-window-days={windowDays}
+				>
+					Every figure is {newestModelDay.date}, the newest day either ledger holds. Each line is
+					the {windowDays} days ending there, and a dashed rule across one is a day the model
+					changed. Like the source table above, it follows the length of the window and not where
+					a pan leaves it.
+				</p>
+
+				<div class="auto-grid mt-4" style="--auto-grid-min: {CARD_MIN_PX}px" data-model-cards>
+					{#each cards as card (card.key)}
+						<KpiCard label={card.label} value={card.value} note={card.note} line={card.line}>
+							{#snippet trend()}
+								<Sparkline
+									marks={card.trend.marks}
+									rules={card.trend.rules}
+									width={SPARK_WIDTH_PX}
+									height={data.chart.sparkline_height_px}
+									label="{card.label}, over the {windowDays} days ending {newestModelDay?.date}"
+								/>
+							{/snippet}
+						</KpiCard>
+					{/each}
 				</div>
+			{/if}
+
+			{#if data.modelWork.length > 0}
+				<!-- The rows behind the shape, on demand - the same trade the failed-item
+				     list makes. Nothing is deleted and nothing needs a script: a closed
+				     disclosure is complete in the prerendered document, and opening it
+				     costs no fetch. -->
+				<details class="model-details" data-model-table-control>
+					<summary class="model-summary">Show the daily figures</summary>
+					<div class="console-table mt-3" data-model="table">
+						<table class="w-full text-[0.8125rem]">
+							<thead class="text-text-tertiary">
+								<tr class="border-b border-rule">
+									<th class="py-2 pe-4 text-start align-bottom font-normal">Day</th>
+									{#each COLUMNS as column (column.key)}
+										<th class="py-2 ps-4 text-end align-bottom font-normal">
+											<!-- The label alone. The sentence that used to hang under it is on
+											     the card now, where there is room for it. -->
+											<span class="ms-auto block max-w-[10rem]">{column.label}</span>
+										</th>
+									{/each}
+								</tr>
+							</thead>
+							<tbody>
+								{#each data.modelWork as row (row.kind === 'swap' ? `swap ${row.date}` : row.day.date)}
+									{#if row.kind === 'swap'}
+										<!-- A date and an id. An arrow or a delta here would claim the swap
+										     caused whatever moved, and no committed figure says that. -->
+										<tr class="border-b border-rule" data-model-swap={row.date}>
+											<td colspan={COLUMNS.length + 1} class="py-2 text-[0.75rem] text-text-tertiary">
+												{row.date} - {row.model}
+											</td>
+										</tr>
+									{:else}
+										<tr class="border-b border-rule" data-model-day={row.day.date}>
+											<td class="py-2 pe-4">{row.day.date}</td>
+											{#each cells(row.day) as cell (cell.key)}
+												<td class="py-2 ps-4 text-end tabular-nums" data-model-cell={cell.key}>
+													{cell.text}
+													{#if cell.aside}
+														<span
+															class="mt-0.5 block text-[0.6875rem] text-text-tertiary"
+															data-model-aside={cell.key}>{cell.aside}</span
+														>
+													{/if}
+												</td>
+											{/each}
+										</tr>
+									{/if}
+								{/each}
+							</tbody>
+						</table>
+					</div>
+				</details>
 			{/if}
 		</div>
 	{/if}
@@ -920,5 +1087,25 @@ position: sticky;
 top: 0;
 z-index: 1;
 background: var(--color-surface);
+}
+
+/* A disclosure, not a button and not a state. It works with no script, the
+   rows are in the document either way, and the browser already says whether it
+   is open to anyone who cannot see it. */
+.model-details {
+margin-top: var(--space-6);
+}
+
+.model-summary {
+display: flex;
+align-items: center;
+min-height: 2.75rem;
+cursor: pointer;
+font-size: var(--text-sm);
+color: var(--color-accent);
+}
+
+.model-summary:hover {
+text-decoration: underline;
 }
 </style>

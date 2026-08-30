@@ -1794,8 +1794,19 @@ function modelCells(date: string): Record<string, string> {
 	};
 }
 
+/** The daily figures sit behind a disclosure now; the cards above them lead.
+ *
+ * Opening it is a reader's own action, so a test that reads a cell takes it
+ * too. `console-model.spec.ts` owns the cards and the control itself.
+ */
+async function openDailyFigures(page: Page) {
+	await page.locator('[data-model-table-control] > summary').click();
+	await expect(page.locator('[data-model="table"]')).toBeVisible();
+}
+
 test('every model cell equals what the day committed', async ({ page }) => {
 	await page.goto('/console/');
+	await openDailyFigures(page);
 
 	const dates = await page
 		.locator('[data-model-day]')
@@ -1816,6 +1827,7 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 	page
 }) => {
 	await page.goto('/console/');
+	await openDailyFigures(page);
 
 	// The attack day is the only day the fixture scored, so the day before it is
 	// the scorer-off state: the model wrote summaries and nothing measured them.
@@ -1844,6 +1856,10 @@ test('a day the scorer never reached prints dashes, and still prints its speed',
 
 test('nothing under the heading is a score or an internal column name', async ({ page }) => {
 	await page.goto('/console/');
+	// Opened, so the scan below reads the cards AND the rows. A closed disclosure
+	// keeps its rows out of `innerText`, and a scan that cannot see half the
+	// section is a scan that passes for the wrong reason.
+	await openDailyFigures(page);
 
 	const section = await page.locator('[data-model-section]').innerText();
 
