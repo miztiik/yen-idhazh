@@ -1,3 +1,4 @@
+import { dayMonth } from '../format';
 import { daysInWindow, type TimeWindow } from './viewport';
 
 /** The published projection's header, in `PUBLIC_COLUMNS` order.
