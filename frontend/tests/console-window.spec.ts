@@ -126,6 +126,7 @@ test('THE ORACLE: every windowed surface reports the day count the control does'
 		'feed-outcomes',
 		'router-cost',
 		'run-health',
+		'site-cost-per-item',
 		'site-size-movement',
 		'source-cuts',
 		'telemetry-viewport'
