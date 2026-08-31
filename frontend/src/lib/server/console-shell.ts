@@ -73,9 +73,9 @@ export interface ConsoleBandFacts {
 		capFraction: number | null;
 		/** Megabytes left under the cap. */
 		leftMb: number | null;
-		/** Published days to the cap, at the cost the whole record measured. */
-		daysToCap: number | null;
-		/** Published days the runway was measured over. */
+		/** Articles to the cap, at the cost the whole record measured. */
+		articlesToCap: number | null;
+		/** Published days the per-article cost was measured over. */
 		measuredDays: number;
 		sentence: string;
 	};
@@ -118,10 +118,17 @@ function mb(bytes: number): string {
 	return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
 }
 
-/** Whole days where there are enough of them to be worth a whole number. */
-function days(value: number): string {
-	const whole = Math.round(value);
-	return whole >= 10 ? whole.toLocaleString('en-GB') : value.toFixed(1);
+/** A count at the precision its basis supports.
+ *
+ * The rate under the runway is a median whose spread is near a fifth of itself,
+ * so the trailing digits of a six-figure answer are noise. Three significant
+ * figures leaves a small answer exact and stops a large one claiming a hundred
+ * articles of accuracy nothing measured (Rule #10).
+ */
+function roughly(value: number): string {
+	if (value <= 0) return '0';
+	const scale = 10 ** Math.max(0, Math.floor(Math.log10(value)) - 2);
+	return (Math.round(value / scale) * scale).toLocaleString('en-GB');
 }
 
 /** The same rule the run strip colours a square by, and the same floor CI opens
@@ -259,7 +266,6 @@ export function consoleShell(): ConsoleShell {
 	const manifests = loadManifests();
 	const newest = manifests[0] ?? null;
 	const floorPct = runConfig().success_floor_pct;
-	const itemCeiling = runConfig().safety_ceiling_per_run;
 	const budgetBytes = retentionConfig().site_budget_mb * 1024 * 1024;
 	const feeds = feedTrouble(feedResults(), collectConfig().quarantine_after_failures);
 
@@ -344,8 +350,7 @@ export function consoleShell(): ConsoleShell {
 	// when a control on one route moved would read as three different sites.
 	const bytes = newest?.siteBytes ?? null;
 	const cost = siteCost(manifests, publishedItems(), null);
-	const runway =
-		bytes === null ? null : siteRunway(bytes, cost.median, itemCeiling, budgetBytes);
+	const runway = bytes === null ? null : siteRunway(bytes, cost.median, budgetBytes);
 	const capFraction = bytes === null ? null : bytes / PAGES_CAP_BYTES;
 	// The level says which tree it measured before it says anything else about
 	// it. `site_bytes` is the committed payload tree and the cap is measured on
@@ -358,7 +363,7 @@ export function consoleShell(): ConsoleShell {
 			? 'No run has recorded a size yet, so there is nothing to hold against the 1 GB Pages cap.'
 			: runway === null
 				? `${mb(bytes)} of the 1 GB Pages cap. ${TREE} No published day grew the tree over an article it published, so there is no rate and no runway.`
-				: `${mb(bytes)} of the 1 GB Pages cap. ${TREE} At ${Math.round(cost.median ?? 0).toLocaleString('en-GB')} B an article over ${plural(cost.days.length, 'published day', 'published days')}, ${itemCeiling} articles a day fills it in about ${days(runway.toCap)} more.`;
+				: `${mb(bytes)} of the 1 GB Pages cap. ${TREE} At ${Math.round(cost.median ?? 0).toLocaleString('en-GB')} B an article over ${plural(cost.days.length, 'published day', 'published days')}, that is room for about ${roughly(runway.toCap)} more articles.`;
 
 	// --- The three carries --------------------------------------------------
 	// One sentence each, no chart. They are what stops a route hiding the panel
@@ -379,7 +384,7 @@ export function consoleShell(): ConsoleShell {
 				bytes,
 				capFraction,
 				leftMb: bytes === null ? null : (PAGES_CAP_BYTES - bytes) / 1024 / 1024,
-				daysToCap: runway?.toCap ?? null,
+				articlesToCap: runway?.toCap ?? null,
 				measuredDays: cost.days.length,
 				sentence: sizeSentence
 			}
