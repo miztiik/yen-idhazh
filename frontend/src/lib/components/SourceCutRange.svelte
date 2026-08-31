@@ -20,6 +20,7 @@
 		frame,
 		logAxis,
 		observeWidth,
+		tickAnchor,
 		type Margin
 	} from '$lib/charts/frame';
 	import { capLabel, grouped, rangeMarks } from '$lib/charts/series';
@@ -142,7 +143,7 @@
 				/>
 			{/each}
 
-			{#each xAxis.ticks as tick (tick)}
+			{#each xAxis.ticks as tick, index (tick)}
 				<line
 					x1={px(xAxis.scale(tick))}
 					x2={px(xAxis.scale(tick))}
@@ -150,10 +151,13 @@
 					y2={box.bottom + 5}
 					stroke="var(--color-text-tertiary)"
 				/>
+				<!-- The end decades sit ON the plot edges, so a centred label there hangs
+				     half its width outside the frame and the `svg` cuts it: measured
+				     2026-08-31 at 1440, `10,000` lost 3.2px off its right. -->
 				<text
 					x={px(xAxis.scale(tick))}
 					y={box.bottom + 17}
-					text-anchor="middle"
+					text-anchor={tickAnchor(index, xAxis.ticks.length)}
 					fill="var(--color-text-tertiary)"
 					font-size="10"
 					data-tick="x"

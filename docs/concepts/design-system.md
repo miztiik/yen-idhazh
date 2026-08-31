@@ -730,6 +730,54 @@ written down here rather than copied a fourth time by eye.
 Where each figure is read from is in
 [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md).
 
+### A date axis is thinned by measurement, and a dropped date keeps its mark
+
+One helper: `dayTicks` in
+[../../frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts).
+Every hand-written date axis on the console calls it - the stage timings, the
+throughput candles, the band columns, the failure panel, the run lengths and
+both run strips through `axisLabels`. There were four rules before 2026-08-31
+and three of them thinned by a count.
+
+**A count cannot hold at two widths.** `chart.tick_density` picks the columns
+that carry a tick mark, and then the labels are measured against the room the
+plot actually has and dropped in whole steps until no two of them touch. So the
+knob is a **ceiling and never a target**: it can take a label away and it can no
+longer force one on. Measured 2026-08-31 on the built console at 390px, before
+this rule: `Summary length against the length asked for` drew `2 Aug 2026` and
+`8 Aug` 13.6px on top of each other, `Time per item, by stage` 7.4px,
+`Model tokens per second per day` 26.1px and `Summary length per run` 1.9px.
+
+The width comes from the string rather than from the element, because the axis
+is decided on the server where there is no text engine to ask. `LABEL_ADVANCE_EM`
+is 0.58, which is ten percent over the widest character measured at
+`font-size="10"` in Chromium on 2026-08-31 - `20 Aug 2026` is 55.83px over 11
+characters and `18 Aug` is 31.53px over 6. It is deliberately over: an estimate
+under the truth lets two labels touch, and an estimate over it only drops one
+label the axis could have carried.
+
+**A dropped label keeps its tick mark.** A reader counting columns needs the
+grid even where the date is gone, so the marks come from the ceiling and only
+the dates thin.
+
+**The end labels anchor inwards.** The first and last tick of any axis sit ON
+the plot edges, so a centred label there hangs half its own width outside the
+frame and an `svg` cuts what hangs. Measured 2026-08-31 at 1440,
+`What the cap cost, by source` drew `10,000` 3.2px past its own `svg` and read
+`10,00`. `tickAnchor` is the rule and it binds a value axis as well as a date
+one.
+
+Two console axes are drawn by the engine rather than by us, and the engine owns
+where its labels go - `hideOverlap` is its own measured rule and it is left to
+do that job. What they take from here is the date grammar: `2026-08-25` is how
+the ledger spells a day and it is not how a page says one.
+
+The oracle is geometric and reads the page rather than the rule. At 1440, 768
+and 390 it collects the box of every element carrying `data-day-axis` and
+asserts that no two on one axis overlap and that none is drawn outside the `svg`
+that would clip it -
+[../../frontend/tests/console-axis.spec.ts](../../frontend/tests/console-axis.spec.ts).
+
 ## Ranked by magnitude, in one shape
 
 The operator asks the same question of most of this page: which one is worst.

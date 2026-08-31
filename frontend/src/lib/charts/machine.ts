@@ -18,6 +18,7 @@
 
 import type { EChartsOption } from 'echarts';
 import type { RunCounters, ShardCounters } from '$lib/server/runtime-counters';
+import { dayMonth } from '../format';
 import type { DayReadout } from './frame';
 import { percentOf } from './rank';
 import { grouped } from './series';
@@ -370,7 +371,9 @@ export function cacheByDay(runs: readonly RunCounters[]): CacheDay[] {
  */
 export function cacheChart(days: readonly CacheDay[], shape: StackShape = 'bars') {
 	return stacked(
-		days.map((day) => day.date),
+		// The same date grammar the hand-written axes print. `2026-08-25` is how
+		// the ledger spells a day, and a ledger spelling is not a label.
+		days.map((day) => dayMonth(day.date)),
 		[
 			{ label: 'Read', token: '--chart-1', values: days.map((day) => day.read) },
 			{ label: 'Served from cache', token: '--chart-3', values: days.map((day) => day.cached) }
