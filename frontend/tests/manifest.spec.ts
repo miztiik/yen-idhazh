@@ -1,4 +1,4 @@
-import { expect, test, type Locator } from '@playwright/test';
+import { expect, test } from '@playwright/test';
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
@@ -139,54 +139,51 @@ test.describe('the browser chrome follows the page', () => {
 		}
 	});
 
-	test('the page ships a media-scoped tag for each theme, before any script runs', async ({
+	test('the page ships one unconditional theme-color tag, before any script runs', async ({
 		page
 	}) => {
-		await page.goto('/');
-		// These are what an installed window reads at launch, and a script has not
-		// necessarily run by then. One per theme, or the chrome is wrong for
-		// whichever one is not covered.
-		const tags = await page.evaluate(() =>
-			[...document.querySelectorAll<HTMLMetaElement>('meta[name="theme-color"][media]')].map(
-				(t) => ({ media: t.media, content: t.content })
-			)
-		);
-		expect(tags).toHaveLength(2);
-		expect(tags.map((t) => t.content)).not.toContain('');
-		expect(tags[0].content).not.toBe(tags[1].content);
+		// Read off the served bytes rather than the live DOM: an installed window
+		// reads this at launch, and by the time a script has run the question has
+		// already been answered. One tag and no media query, because the page is
+		// dark whatever the system prefers - a tag scoped to the system
+		// preference would be wrong for every reader whose system says light and
+		// who has chosen nothing.
+		const html = await (await page.request.get('/')).text();
+		const tags = [...html.matchAll(/<meta[^>]*name="theme-color"[^>]*>/g)].map((m) => m[0]);
+		expect(tags).toHaveLength(1);
+		expect(tags[0], 'the chrome asks the system again').not.toContain('media=');
+		expect(tags[0].toLowerCase()).toContain('#0b0e14');
 	});
 
 	test('a manual theme choice repaints the chrome', async ({ page }) => {
 		await page.goto('/');
 
-		const theme = page.getByRole('group', { name: 'Theme' });
-		// `paintBrowserChrome` in lib/theme.ts writes this tag, and only a click
+		// `paintBrowserChrome` in lib/theme.ts rewrites this tag, and only a click
 		// reaches it: mount reads the stored choice and paints nothing. So the page
 		// offers no DOM change that means "hydrated", and any fixed wait before the
-		// click is a guess. This test used to click 250 ms after `goto`; before
-		// hydration that click lands on a button with no handler, both reads come
-		// back equal, and the failure reads as a broken theme rather than a race.
-		const chrome = page.locator('meta[name="theme-color"]:not([media])');
+		// click is a guess.
+		const chrome = page.locator('meta[name="theme-color"]');
+		const button = page.getByRole('button', { name: /Switch to the .* theme/ });
 
-		// Picking a theme is idempotent, so a click that lands early costs nothing
-		// and the next one answers. `pick` sets `choice` and calls `apply` in the
-		// same tick, and `aria-pressed` renders after both - so the attribute
-		// turning true means the tag is already written.
-		const choose = async (button: Locator): Promise<string> => {
+		// Clicking is what proves hydration, so poll on the label flipping rather
+		// than on a timer. Before hydration the click lands on a button with no
+		// handler and the label stays where it was.
+		const flip = async (): Promise<string> => {
+			const before = await button.getAttribute('aria-label');
 			await expect
 				.poll(async () => {
 					await button.click();
-					return await button.getAttribute('aria-pressed');
+					return await button.getAttribute('aria-label');
 				})
-				.toBe('true');
+				.not.toBe(before);
 			return (await chrome.getAttribute('content'))?.trim() ?? '';
 		};
 
-		const dark = await choose(theme.getByRole('button', { name: 'Dark', exact: true }));
-		expect(dark, 'dark left the chrome unpainted').toBeTruthy();
-
-		const light = await choose(theme.getByRole('button', { name: 'Light', exact: true }));
+		const light = await flip();
 		expect(light, 'light left the chrome unpainted').toBeTruthy();
+
+		const dark = await flip();
+		expect(dark, 'dark left the chrome unpainted').toBeTruthy();
 		expect(light).not.toBe(dark);
 	});
 });

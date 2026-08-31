@@ -99,9 +99,11 @@
 		<p class="kpi-track-caption" data-kpi-caption={label}>{track.caption}</p>
 	{/if}
 	{#if trend}
-		<div class="kpi-trend">{@render trend()}</div>
+		<div class="kpi-trend" data-readout-none="a card's direction line, too small to hold a strip">
+			{@render trend()}
+		</div>
 	{:else if trendSvg && trendOption}
-		<div class="kpi-trend">
+		<div class="kpi-trend" data-readout-none="a card's direction line, too small to hold a strip">
 			<Chart svg={trendSvg} option={trendOption} width={220} height={34} label="{label}, recent trend" />
 		</div>
 	{/if}

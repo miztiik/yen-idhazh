@@ -19,7 +19,7 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from idhazh.contracts.app_config import AppConfig
+from idhazh.contracts.app_config import AppConfig, ThemeChoice
 from idhazh.contracts.appearance_config import (
     DARK_CONFIDENCE_RAMP,
     FRAME_CONSOLE_MIN_PX,
@@ -37,6 +37,17 @@ from idhazh.contracts.appearance_config import (
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 APPEARANCE_PATH = REPO_ROOT / "config" / "appearance.json"
+
+
+def committed_app_config() -> AppConfig:
+    """`AppConfig` has one block with no default, so `{}` is not a document.
+
+    There is no honest default for "which weights", and a wrong guess would
+    silently run the wrong model.
+    """
+    return AppConfig.model_validate(
+        json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
+    )
 
 
 def test_the_committed_file_validates() -> None:
@@ -186,11 +197,48 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
     assert resolved.console.chart_width >= 240
 
 
+def test_the_default_theme_is_the_one_root_carries() -> None:
+    """A fresh clone is served dark, because `:root` in tokens.css is dark.
+
+    The knob and the first painted frame have to name the same theme. If this
+    ever says `light` again, a page paints dark and the config says otherwise.
+    """
+    assert AppearanceConfig.model_validate({}).digest.theme_default is ThemeChoice.DARK
+    assert committed_app_config().ui.theme_default is ThemeChoice.DARK
+
+
+def test_system_is_no_longer_a_theme_anyone_can_choose() -> None:
+    """It was the absence of a choice, and nothing asks the device any more."""
+    assert [choice.value for choice in ThemeChoice] == ["light", "dark"]
+
+
+def test_a_config_that_still_says_system_reads_as_dark() -> None:
+    """The read-side migration (section 11).
+
+    A file written before 2026-08-31 names a member the enum no longer has. It
+    still has to load, and the only honest reading of "follow the device" once
+    nothing asks the device is the base theme.
+    """
+    assert (
+        AppearanceConfig.model_validate({"digest": {"theme_default": "system"}}).digest.theme_default
+        is ThemeChoice.DARK
+    )
+    legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
+    legacy["ui"]["theme_default"] = "system"
+    assert AppConfig.model_validate(legacy).ui.theme_default is ThemeChoice.DARK
+
+
+def test_a_theme_that_never_existed_is_still_refused() -> None:
+    """The migration reads one legacy value, not any string that arrives."""
+    with pytest.raises(ValidationError):
+        AppearanceConfig.model_validate({"digest": {"theme_default": "sepia"}})
+
+
 def test_the_schema_is_generated_and_stamped() -> None:
     schema = AppearanceConfig.json_schema()
     assert schema["$id"] == "appearance-config.schema.json"
-    assert schema["version"] == "2026-08-31T23:55"
-    assert schema["changelog"][0]["version"] == "2026-08-31T23:55"
+    assert schema["version"] == "2026-08-31T23:56"
+    assert schema["changelog"][0]["version"] == "2026-08-31T23:56"
     for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
         assert block in schema["properties"], f"{block} missing from the generated schema"
 
@@ -240,8 +288,10 @@ def test_the_committed_movement_pair_is_what_tokens_css_declares() -> None:
         json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))
     ).theme
     tokens = (REPO_ROOT / "frontend" / "src" / "styles" / "tokens.css").read_text(encoding="utf-8")
-    dark_at = tokens.index("[data-theme='dark']")
-    for block, start, end in (("light", 0, dark_at), ("dark", dark_at, len(tokens))):
+    # Dark is the base block and light is the override that follows it, so the
+    # light selector is the boundary between the two.
+    light_at = tokens.index("[data-theme='light']")
+    for block, start, end in (("dark", 0, light_at), ("light", light_at, len(tokens))):
         for name in ("good", "bad"):
             declared = re.search(
                 rf"--movement-{name}:\s*(#[0-9a-f]{{6}});", tokens[start:end]

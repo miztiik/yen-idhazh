@@ -65,17 +65,19 @@ const css = `/* Generated from config/appearance.json by scripts/build-frame-css
 	--dur-base: ${base}ms;
 }
 
-/* The movement pair, one value per theme. Imported after tokens.css, so these
-   win over the committed defaults there at the same specificity. */
+/* The movement pair, one value per theme, in the order tokens.css declares
+   them: dark is the base, light is the override, and source order is what makes
+   a chosen light theme win. Imported after tokens.css, so these beat the
+   committed defaults there at the same specificity. */
 :root,
-[data-theme='light'] {
-	--movement-good: ${theme.movement_good_light};
-	--movement-bad: ${theme.movement_bad_light};
-}
-
 [data-theme='dark'] {
 	--movement-good: ${theme.movement_good_dark};
 	--movement-bad: ${theme.movement_bad_dark};
+}
+
+[data-theme='light'] {
+	--movement-good: ${theme.movement_good_light};
+	--movement-bad: ${theme.movement_bad_light};
 }
 `;
 

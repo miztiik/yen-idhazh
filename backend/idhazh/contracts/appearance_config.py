@@ -444,7 +444,7 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
-            version="2026-08-31T23:55",
+            version="2026-08-31T23:56",
             change=(
                 "theme.movement_good_light, theme.movement_bad_light, "
                 "theme.movement_good_dark and theme.movement_bad_dark added, "
@@ -465,6 +465,27 @@ class AppearanceConfig(Contract):
                 "44.2 percent saturation against 66 and 70.6 in light - and both "
                 "clear 4.5:1 as text on their own surface. Additive with defaults, so "
                 "an appearance file written before today still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-31T23:55",
+            change=(
+                "ThemeChoice lost its `system` member and digest.theme_default now "
+                "defaults to `dark`; the committed file repeats it. The shape is "
+                "`UiConfig`, which this document and `AppConfig` share, so both schemas "
+                "moved together. Breaking: the enum is narrower. The read-side "
+                "migration is a before-validator on `UiConfig.theme_default` that reads "
+                "`system` as `dark`, so an appearance file written before today still "
+                "loads."
+            ),
+            why=(
+                "The site now starts dark and light is an opt-in stored choice, so the "
+                "three-state theme control became one button with two states (owner "
+                "decision, 2026-08-31). `system` was never a theme - it was the absence "
+                "of a choice - and nothing asks the device any more. Leaving the member "
+                "in would let an operator set a value no surface can honour. `dark` is "
+                "the value `:root` carries in tokens.css, so this knob and the first "
+                "painted frame now agree."
             ),
         ),
         ChangelogEntry(

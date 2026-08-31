@@ -25,7 +25,7 @@ import { REPO_ROOT } from './payload';
 
 export interface UiConfig {
 	sections: string[];
-	theme_default: 'system' | 'light' | 'dark';
+	theme_default: 'light' | 'dark';
 	visual_side: 'above' | 'leading' | 'trailing';
 	source_mark: boolean;
 	show_filter: boolean;
@@ -204,7 +204,7 @@ export interface MotionConfig {
 
 const DEFAULTS: UiConfig = {
 	sections: ['notice', 'topics', 'items'],
-	theme_default: 'system',
+	theme_default: 'dark',
 	visual_side: 'above',
 	source_mark: true,
 	show_filter: true,
