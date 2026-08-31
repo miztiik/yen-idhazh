@@ -6,9 +6,11 @@
  * fixture rows here in the test, never off the module's own output - otherwise
  * the assertion only proves the module agrees with itself.
  *
- * Pure functions and committed ledgers only. No browser, no SvelteKit alias, no
- * `$app` import: a spec that reaches one fails the whole suite at load rather
- * than failing one test.
+ * Pure functions and committed ledgers only, in every section but the last. No
+ * browser, no SvelteKit alias, no `$app` import: a spec that reaches one fails
+ * the whole suite at load rather than failing one test. The last section drives
+ * a browser, because what it measures is where the board's strings landed on a
+ * phone, and no amount of arithmetic answers that.
  */
 
 import { expect, test } from '@playwright/test';
@@ -434,5 +436,231 @@ test.describe('the module cannot reach a browser', () => {
 		// `STATE_ROOT` at a copy. A path built any other way reads the real ledger
 		// anyway, and the canary silently measures the wrong tree.
 		expect(source).toContain("join(STATE_ROOT, 'runtime-counters.csv')");
+	});
+});
+
+// ---------------------------------------------------------------------------
+// The board on a phone
+//
+// The rest of this file is arithmetic and needs no browser. This last section
+// does, because what it measures is geometry: how many lines a string was drawn
+// over, how wide the box that held it was, and whether two of them landed on the
+// same pixels. None of that can be read off the module, and none of it can be
+// reasoned about from the CSS - a two-column grid holding five children puts the
+// last three wherever the auto-placement algorithm decides, and only a browser
+// says where that is.
+// ---------------------------------------------------------------------------
+
+/** How few characters a line may hold before the box it is in is too narrow.
+ *
+ * The declared bound the row asks for: a text node of `n` characters may take at
+ * most `ceil(n / 12)` lines. Twelve is well under what any string in a card
+ * actually gets - measured 2026-09-01 at 360px, the widest line in a card holds
+ * about 48 characters - so the rule fires on a squeezed box and never on an
+ * ordinary wrap.
+ *
+ * What it is written against, measured 2026-09-01 at 360px on the build before
+ * this row: `1 h 28 m` was drawn over four lines in a 20px box, one character to
+ * a line; `of the 150-minute timeout - 59 percent` took six lines in 41px;
+ * `prompt tokens a second` took three lines in 45px; and `Shard 2 job clock`
+ * took three lines in 36px.
+ */
+const AT_LEAST_CHARS_A_LINE = 12;
+
+const PHONE = { width: 360, height: 800 };
+const DESKTOP = { width: 1440, height: 1000 };
+
+/** Every visible text node in the board, with the lines it was drawn over and
+ * the rectangles it was drawn in. */
+const READ_BOARD = () => {
+	const board = document.querySelector('[data-shard-board]');
+	if (board === null) return null;
+
+	const boxes: {
+		text: string;
+		lines: number;
+		width: number;
+		inCard: boolean;
+		rects: { x: number; y: number; w: number; h: number }[];
+	}[] = [];
+	const walker = document.createTreeWalker(board, NodeFilter.SHOW_TEXT);
+	let node: Node | null;
+	while ((node = walker.nextNode()) !== null) {
+		const text = (node.textContent ?? '').replace(/\s+/g, ' ').trim();
+		const parent = node.parentElement;
+		if (text === '' || parent === null) continue;
+		// The screen-reader list repeats every figure as one sentence. It is not
+		// drawn, so it has no geometry to check.
+		if (parent.closest('.sr-only') !== null) continue;
+		const range = document.createRange();
+		range.selectNodeContents(node);
+		const rects = [...range.getClientRects()].filter((r) => r.width > 0 && r.height > 0);
+		if (rects.length === 0) continue;
+		boxes.push({
+			text,
+			// Distinct tops, not raw rect count: one line reports two rectangles
+			// when an inline element splits it.
+			lines: new Set(rects.map((r) => Math.round(r.top))).size,
+			width: Math.round(range.getBoundingClientRect().width),
+			inCard: parent.closest('[data-shard-row]') !== null,
+			rects: rects.map((r) => ({
+				x: Math.round(r.x),
+				y: Math.round(r.y),
+				w: Math.round(r.width),
+				h: Math.round(r.height)
+			}))
+		});
+	}
+
+	const rows = [...board.querySelectorAll('[data-shard-row]')].map((row) => {
+		const clock = row.querySelector('[data-shard-cell="clock"]');
+		const bar = clock?.querySelector('[data-target-bar]') ?? null;
+		return {
+			shard: row.getAttribute('data-shard-row') ?? '',
+			figures: [...row.querySelectorAll('[data-shard-figure]')].map((cell) => ({
+				name: cell.getAttribute('data-shard-figure') ?? '',
+				value: (cell.textContent ?? '').replace(/\s+/g, ' ').trim(),
+				named: (() => {
+					const label = row.querySelector(
+						`[data-shard-name="${cell.getAttribute('data-shard-figure')}"]`
+					);
+					if (label === null) return '';
+					const drawn = label.getBoundingClientRect();
+					if (drawn.width < 1 || drawn.height < 1) return '';
+					return (label.textContent ?? '').replace(/\s+/g, ' ').trim();
+				})()
+			})),
+			// The bar prints its own name at every width, so it needs no cell
+			// label - but it still has to be printed, not just declared.
+			clockName: bar?.getAttribute('data-target-bar') ?? '',
+			clockPrinted: (clock?.textContent ?? '').replace(/\s+/g, ' ').trim(),
+			clockValue: (
+				clock?.querySelector('[data-target-cell="value"]')?.textContent ?? ''
+			).trim()
+		};
+	});
+
+	const wide = [board, ...board.querySelectorAll('[data-shard-row]')]
+		.map((el) => ({
+			what: el.getAttribute('data-shard-row') ?? 'board',
+			scroll: el.scrollWidth,
+			client: el.clientWidth
+		}))
+		.filter((el) => el.scroll > el.client + 1);
+
+	return { boxes, rows, wide, spelled: board.querySelectorAll('[data-shard-values] li').length };
+};
+
+test.describe('the shard board survives a phone', () => {
+	test('THE ORACLE: at 360px no string in the board is squeezed onto more lines than it has characters for', async ({
+		page
+	}) => {
+		await page.setViewportSize(PHONE);
+		await page.goto('/console/machine/');
+		await page.evaluate(() => document.fonts.ready.then(() => true));
+		const board = await page.evaluate(READ_BOARD);
+
+		expect(board, 'no shard board on the page').not.toBeNull();
+		expect(board!.boxes.length, 'the board drew no text - the scan is broken').toBeGreaterThan(10);
+		expect(board!.rows.length, 'the board drew no shard').toBeGreaterThan(0);
+
+		const squeezed = board!.boxes
+			.map((box) => ({
+				box,
+				// A string in the note is prose broken up by inline elements, so one
+				// wrap can land inside it without the box being narrow. A string in a
+				// card owns its whole line and gets no such allowance.
+				allowed: Math.ceil(box.text.length / AT_LEAST_CHARS_A_LINE) + (box.inCard ? 0 : 1)
+			}))
+			.filter((one) => one.box.lines > one.allowed)
+			.map(
+				(one) =>
+					`"${one.box.text}" took ${one.box.lines} lines in ${one.box.width}px, and ${one.allowed} is its bound`
+			);
+
+		expect(squeezed, 'these strings were drawn in a box too narrow to read them in').toEqual([]);
+	});
+
+	test('every value on a phone carries a name a reader can see', async ({ page }) => {
+		// The head is the only thing naming a column on a desktop, and it is gone
+		// below the breakpoint. A value whose only name went with it is a number
+		// nobody can act on.
+		await page.setViewportSize(PHONE);
+		await page.goto('/console/machine/');
+		await page.evaluate(() => document.fonts.ready.then(() => true));
+		const board = await page.evaluate(READ_BOARD);
+
+		const orphans: string[] = [];
+		for (const row of board!.rows) {
+			expect(row.figures.length, `shard ${row.shard} drew no figure`).toBeGreaterThan(3);
+			for (const figure of row.figures) {
+				if (figure.named === '') orphans.push(`shard ${row.shard}: ${figure.name} = ${figure.value}`);
+			}
+			expect(row.clockName, `shard ${row.shard}: the job clock has no name`).not.toBe('');
+			expect(
+				row.clockPrinted,
+				`shard ${row.shard}: the job clock's name is declared but not printed`
+			).toContain(row.clockName);
+		}
+
+		expect(orphans, 'these values are drawn with no visible name beside them').toEqual([]);
+		// And the one reading a screen reader gets is still whole.
+		expect(board!.spelled).toBe(board!.rows.length);
+	});
+
+	test('the board holds the same figures at 360 as it holds at 1440', async ({ page }) => {
+		// A smaller table is a table. A table with a column dropped to make it fit
+		// is a different instrument, and the phone would answer a question the
+		// desktop does not.
+		await page.setViewportSize(DESKTOP);
+		await page.goto('/console/machine/');
+		await page.evaluate(() => document.fonts.ready.then(() => true));
+		const wide = await page.evaluate(READ_BOARD);
+
+		await page.setViewportSize(PHONE);
+		await page.goto('/console/machine/');
+		await page.evaluate(() => document.fonts.ready.then(() => true));
+		const narrow = await page.evaluate(READ_BOARD);
+
+		const figures = (board: NonNullable<typeof wide>) =>
+			board.rows.map((row) => ({
+				shard: row.shard,
+				clockValue: row.clockValue,
+				figures: row.figures.map((figure) => `${figure.name}=${figure.value}`)
+			}));
+
+		expect(figures(narrow!)).toEqual(figures(wide!));
+	});
+
+	test('nothing in the board scrolls sideways at 360, and no two strings share a pixel', async ({
+		page
+	}) => {
+		await page.setViewportSize(PHONE);
+		await page.goto('/console/machine/');
+		await page.evaluate(() => document.fonts.ready.then(() => true));
+		const board = await page.evaluate(READ_BOARD);
+
+		expect(board!.wide, 'these parts of the board are wider than the room they have').toEqual([]);
+
+		// Per drawn line, not per bounding box: a string that wraps has a box
+		// covering its neighbours on every line it touches, and comparing those
+		// reports an overlap on every ordinary paragraph.
+		const collisions: string[] = [];
+		for (let a = 0; a < board!.boxes.length; a += 1) {
+			for (let b = a + 1; b < board!.boxes.length; b += 1) {
+				for (const one of board!.boxes[a].rects) {
+					for (const other of board!.boxes[b].rects) {
+						const across = Math.min(one.x + one.w, other.x + other.w) - Math.max(one.x, other.x);
+						const down = Math.min(one.y + one.h, other.y + other.h) - Math.max(one.y, other.y);
+						if (across > 1 && down > 1) {
+							collisions.push(
+								`"${board!.boxes[a].text}" over "${board!.boxes[b].text}" by ${across}x${down}px`
+							);
+						}
+					}
+				}
+			}
+		}
+		expect(collisions, 'these strings are drawn on top of each other').toEqual([]);
 	});
 });
