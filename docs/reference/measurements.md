@@ -1,6 +1,6 @@
 # Measurements
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 Every number this project's design rests on, with the hardware it was taken on,
 the date, and the spread. Rule #10 in one page: **an unmeasured number is
@@ -2453,6 +2453,63 @@ Against the assemble job's 20-minute timeout that is **0.1 percent of the
 budget** (Rule #2). Five runs a day spend about five seconds a day on it at the
 ceiling. The payloads it reads are the same ones assemble already opens, so the
 cost is a second parse rather than a second download.
+
+## How fast archive search slides under a frozen label set
+
+The 60-query label set was pooled on 2026-08-26 and nothing has been added to it
+since. Every published day adds right answers no labeller judged, and the metric
+counts each of them as a wrong answer, so `recall@10` falls for a reason that is
+not a ranking regression. This is how fast.
+
+Hardware: Intel Core i7-1265U, Windows 11, 12 logical CPUs, CPython 3.14.2,
+`onnxruntime` 1.29.0, alone on the machine. Date: 2026-08-31, at commit
+`fb6a65a`. Method: one forward pass per query through the committed encoder,
+shared by every row; then `retrieval.evaluate` over the committed day payloads
+restricted to the days up to and including each date. Same queries, same labels,
+same ranking code, same run - only the corpus moves. 80.2 s of wall clock for
+the whole table plus the four decomposition arms.
+
+| Archive through | Items | Carrying a vector | reachable recall@10 | +/- se |
+| --- | ---: | ---: | ---: | ---: |
+| 2026-08-21 | 4 | 4 | 1.00000 | 0.00000 |
+| 2026-08-22 | 14 | 14 | 1.00000 | 0.00000 |
+| 2026-08-23 | 161 | 161 | 0.96970 | 0.03030 |
+| 2026-08-24 | 892 | 891 | 0.89200 | 0.02250 |
+| 2026-08-25 | 1,616 | 1,614 | 0.80254 | 0.03093 |
+| 2026-08-26 | 2,237 | 2,235 | **0.75571** | 0.03731 |
+| 2026-08-27 | 2,571 | 2,569 | 0.73583 | 0.03839 |
+| 2026-08-28 | 2,688 | 2,686 | 0.73398 | 0.03858 |
+| 2026-08-29 | 3,054 | 3,052 | 0.71126 | 0.03969 |
+| 2026-08-30 | 3,485 | 3,483 | 0.69163 | 0.04092 |
+| 2026-08-31 | 3,596 | 3,594 | **0.68978** | 0.04124 |
+
+**The 2026-08-26 row is the check that this series is sound.** It reads 0.75571
+over 2,237 items, and the measurement recorded on that corpus in
+[../concepts/evaluation.md](../concepts/evaluation.md) reads 0.756 over 2,237
+items. A series taken today reproduces a number taken five days ago on the same
+corpus, which is what a deterministic instrument is supposed to do.
+
+**The first five rows are not the rate.** An archive of 4 items scores 1.000
+because there is nothing for a right answer to lose a slot to. The slope only
+means something once the label set is closed, from 2026-08-27 on:
+
+| Fit | Slope | Points |
+| --- | ---: | ---: |
+| Whole series, per published day | -0.03584 | 11 |
+| Whole series, per published item | -0.00008912 | 11 |
+| **From 2026-08-27, per published day** | **-0.01345** | 5 |
+| **From 2026-08-27, per published item** | **-0.00004793** | 5 |
+
+**Read the per-item slope, and convert.** A published day is not a fixed size -
+the eleven days range from 4 items to 731 - so the per-day figure carries
+whatever the last five days happened to publish. Those five published 1,359
+items, 272 a day; the eleven-day archive averages 327 a day. **So 0.01 of recall
+costs about 209 published items, which is between 0.6 and 0.8 of a published
+day.**
+
+That is what sets the expiry on `assist.recall_min`. The bar is 0.61 against a
+reading of 0.690, which is 0.080 of room, which is **1,660 published items - six
+days at the rate the last five ran, five at the archive's mean.**
 
 ## The published ledger
 
