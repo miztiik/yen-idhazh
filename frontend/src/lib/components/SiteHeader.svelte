@@ -7,10 +7,10 @@
 
 <header class="flex items-baseline justify-between gap-4 py-5">
 	<div>
-		<a href={base || '/'} class="wordmark text-[1.25rem] font-semibold tracking-tight">
+		<a href={base || '/'} class="wordmark text-xl font-semibold tracking-tight">
 			{title}
 		</a>
-		<p class="mt-0.5 text-[0.8125rem] text-text-tertiary">{tagline}</p>
+		<p class="mt-0.5 text-sm text-text-tertiary">{tagline}</p>
 	</div>
 	<ThemeToggle />
 </header>

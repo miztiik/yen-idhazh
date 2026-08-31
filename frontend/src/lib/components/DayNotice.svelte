@@ -23,11 +23,11 @@
 </script>
 
 <section class="border-b border-rule py-5" aria-label="About today">
-	<h1 class="text-[0.8125rem] tracking-wide text-text-tertiary uppercase">
+	<h1 class="text-sm tracking-wide text-text-tertiary uppercase">
 		{longDate(day.date)}
 	</h1>
 
-	<p class="mt-1 text-[0.9375rem] text-text-secondary">
+	<p class="mt-1 text-base text-text-secondary">
 		{#if day.items.length === 0}
 			No stories today.
 		{:else}

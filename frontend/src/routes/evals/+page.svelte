@@ -11,8 +11,8 @@
 </svelte:head>
 
 <section class="py-6">
-	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Scores moved</h1>
-	<p class="mt-1 text-[0.9375rem] text-text-secondary">
+	<h1 class="text-xl font-semibold text-text">Scores moved</h1>
+	<p class="mt-1 text-base text-text-secondary">
 		The score view now lives on the console. If your browser does not move you there,
 		use this link.
 	</p>

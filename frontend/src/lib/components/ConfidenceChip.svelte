@@ -30,7 +30,7 @@
 		<!-- Aligned to the first line, not to the block: a sentence wraps on a phone.
 		     The mark carries the band's own hue, so shape and colour say the same
 		     thing and neither has to be read alone. -->
-		<span class="mt-[0.15em]" style="color: {copy.token}" aria-hidden="true">
+		<span class="mt-0.5" style="color: {copy.token}" aria-hidden="true">
 			<Icon id={MARK[band]} size={14} />
 		</span>
 		<span style={band === 'low' ? `color: ${copy.token}` : undefined}>{sentence}</span>

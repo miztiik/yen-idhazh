@@ -56,9 +56,7 @@
 		     its own is decoration. The line then earns its place only when it has
 		     the one thing left to say. A topic is one of those things. -->
 		{#if showVertical || read || lenses.length}
-			<p
-				class="mb-1 flex items-center gap-2 text-[0.75rem] tracking-wide text-text-tertiary uppercase"
-			>
+			<p class="mb-1 flex items-center gap-2 text-xs tracking-wide text-text-tertiary uppercase">
 				{#if showVertical || read}
 					<span
 						class="inline-block h-1.5 w-1.5 rounded-full border border-current"
@@ -74,7 +72,7 @@
 
 		<svelte:element
 			this={`h${level}`}
-			class="measure mb-2 text-[1.375rem] leading-[1.25] tracking-[-0.011em]"
+			class="measure mb-2 text-xl"
 			class:font-semibold={!read}
 			class:font-normal={read}
 			class:text-text={!read}
@@ -83,9 +81,9 @@
 			{item.title}
 		</svelte:element>
 
-		<p class="measure text-[1.0625rem] leading-[1.6] text-text">{item.summary}</p>
+		<p class="measure text-lg text-text">{item.summary}</p>
 		{#if item.reader_note}
-			<p class="measure mt-2 text-[0.9375rem] leading-[1.55] text-text-secondary">
+			<p class="measure mt-2 text-base text-text-secondary">
 				{item.reader_note}
 			</p>
 		{/if}

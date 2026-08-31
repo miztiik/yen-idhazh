@@ -108,20 +108,20 @@
 </svelte:head>
 
 <section class="py-6">
-	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Archive</h1>
-	<p class="mt-1 text-[0.9375rem] text-text-secondary" data-archive-scope>
+	<h1 class="text-xl font-semibold text-text">Archive</h1>
+	<p class="mt-1 text-base text-text-secondary" data-archive-scope>
 		{plural(data.days.length, 'day', 'days')}, {plural(data.stories, 'story', 'stories')}.
 		{retention}
 	</p>
 
 	{#if data.days.length === 0}
-		<p class="mt-8 text-[0.9375rem] text-text-secondary">Nothing has been published yet.</p>
+		<p class="mt-8 text-base text-text-secondary">Nothing has been published yet.</p>
 	{:else}
 		<nav class="mt-4 flex flex-wrap gap-x-4 gap-y-2" aria-label="Published days" data-day-row>
 			{#each data.days as entry (entry.date)}
 				<a
 					href="{base}/{entry.date}/"
-					class="text-[0.8125rem] text-accent hover:underline"
+					class="text-sm text-accent hover:underline"
 					title={longDate(entry.date)}
 				>
 					{shortDate(entry.date)}
@@ -130,14 +130,14 @@
 		</nav>
 
 		<div class="mt-8 flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
-			<h2 class="text-[1.0625rem] font-semibold text-text">
+			<h2 class="text-lg font-semibold text-text">
 				{showingResults ? 'Search results' : 'Stories'}
 			</h2>
 			{#if showingResults}
 				<button
 					type="button"
 					onclick={() => onResults(null)}
-					class="text-[0.8125rem] text-accent hover:underline"
+					class="text-sm text-accent hover:underline"
 					data-search-clear
 				>
 					Show all stories
@@ -146,25 +146,25 @@
 		</div>
 
 		<noscript>
-			<p class="mt-1 text-[0.9375rem] text-text-secondary">
+			<p class="mt-1 text-base text-text-secondary">
 				The story list needs JavaScript. The days above work without it.
 			</p>
 		</noscript>
 
 		{#if results !== null && results.hits.length === 0}
 			<p
-				class="mt-1 text-[0.9375rem] text-text-secondary"
+				class="mt-1 text-base text-text-secondary"
 				data-search-empty
 			>{`No story from ${results.scope} is close to that.`}</p>
 		{/if}
 
 		{#if status === 'unavailable' && !showingResults}
-			<p class="mt-1 text-[0.9375rem] text-text-secondary" data-story-list="unavailable">
+			<p class="mt-1 text-base text-text-secondary" data-story-list="unavailable">
 				The story list could not be loaded. Open a day above to read it.
 			</p>
 		{:else if showingResults && results !== null}
 			<p
-				class="mt-1 text-[0.8125rem] text-text-tertiary"
+				class="mt-1 text-sm text-text-tertiary"
 				data-story-scope
 			>{countSentence}</p>
 			<ul class="mt-3" data-story-list="rows">
@@ -183,8 +183,8 @@
 							/>
 						{:else}
 							<p class="border-b border-rule py-3">
-								<a {href} class="text-[1.0625rem] text-accent hover:underline">{hit.entry.title}</a>
-								<span class="mt-1 block text-[0.8125rem] text-text-tertiary">
+								<a {href} class="text-lg text-accent hover:underline">{hit.entry.title}</a>
+								<span class="mt-1 block text-sm text-text-tertiary">
 									{shortDate(hit.entry.date)} &mdash; {data.verticalNames[hit.entry.vertical] ??
 										hit.entry.vertical}
 								</span>
@@ -194,7 +194,7 @@
 				{/each}
 			</ul>
 		{:else if listed.length > 0}
-			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-story-scope>
+			<p class="mt-1 text-sm text-text-tertiary" data-story-scope>
 				Showing {listed.length} of {reachable}, newest first.
 			</p>
 			<!-- The one list on the site that goes multi-column. It is a scan
@@ -207,11 +207,11 @@
 					<li class="border-b border-rule py-3" data-story-date={entry.date}>
 						<a
 							href="{base}/{entry.date}/#{entry.item_id}"
-							class="text-[1.0625rem] text-accent hover:underline"
+							class="text-lg text-accent hover:underline"
 						>
 							{entry.title}
 						</a>
-						<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+						<p class="mt-1 text-sm text-text-tertiary">
 							{shortDate(entry.date)} &mdash; {data.verticalNames[entry.vertical] ?? entry.vertical}
 						</p>
 					</li>
@@ -223,14 +223,14 @@
 					type="button"
 					onclick={showMore}
 					disabled={status === 'loading'}
-					class="min-h-11 w-full py-6 text-[0.9375rem] text-accent hover:underline"
+					class="min-h-11 w-full py-6 text-base text-accent hover:underline"
 					data-story-more
 				>
 					Show {Math.min(page, remaining)} more
 				</button>
 			{/if}
 		{:else if status === 'loading'}
-			<p class="mt-1 text-[0.9375rem] text-text-secondary">Loading the stories.</p>
+			<p class="mt-1 text-base text-text-secondary">Loading the stories.</p>
 		{/if}
 	{/if}
 

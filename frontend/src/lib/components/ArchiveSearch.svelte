@@ -251,11 +251,11 @@
 					bind:value={query}
 					type="search"
 					placeholder="What are you looking for?"
-					class="flex-1 rounded-[--radius-md] border border-rule bg-surface px-3 py-2"
+					class="flex-1 rounded-md border border-rule bg-surface px-3 py-2"
 				/>
 				<button
 					type="submit"
-					class="inline-flex items-center gap-1.5 rounded-[--radius-md] border border-rule px-3 py-2 hover:text-ink"
+					class="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-2 hover:text-ink"
 				>
 					<Icon id="search" size={14} />
 					Search
@@ -263,7 +263,7 @@
 			</form>
 		{/if}
 
-		<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-search-state>
+		<p class="mt-2 text-sm text-text-tertiary" data-search-state>
 			{stateSentence}
 			{#if phase.name === 'working'}
 				<button
@@ -287,7 +287,7 @@
 		</p>
 
 		{#if phase.name !== 'blocked'}
-			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-search-scope>{scopeSentence}</p>
+			<p class="mt-1 text-sm text-text-tertiary" data-search-scope>{scopeSentence}</p>
 		{/if}
 	</section>
 {/if}
