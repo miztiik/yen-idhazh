@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -55,6 +55,40 @@ stops so no existing chart changed colour when the ramp widened.
 nothing, so elevation there is a raised surface colour plus a hairline; every
 tint is re-tuned rather than reused at the same alpha, because the same alpha
 over a dark ground is invisible.
+
+### The reading item is a surface, and it does not float
+
+An item is a card on the page ground: `--color-surface`, `--radius-lg`, a 1px
+hairline, and **no shadow at rest**. `--shadow-md` and an accent border arrive
+together on `:hover` and on `:focus-within`, so a reader who never touches a
+pointer gets the same feedback from the keyboard.
+
+**Nothing lifts.** The title is a heading, not a link, so a rise would promise a
+click the card does not answer - and it would promise it on every row of a day
+that published 621 items at its largest in the last six (2026-08-26, measured
+2026-08-31 on the committed payloads; the six days run 111 to 621). Elevation on
+hover says "these lines belong together"; a lift says "click me", and only one of
+those is true.
+
+**The hairline is the separation, in both themes, and on dark it takes
+`--color-rule-strong`.** The surface lift alone is 1.08:1 in light and 1.10:1 in
+dark, which is not an edge in either. Against the page ground, `--color-rule`
+reads 1.16:1 in light and 1.36:1 in dark; `--color-rule-strong` reads 1.36:1 and
+1.77:1. Dark is the branch `--item-edge` takes when the document names no theme
+and light is named explicitly, so the item stays right whichever theme is the
+base. Every ratio here is arithmetic over the committed hex values, so the
+spread is zero by construction and the date is the date the values were chosen;
+[../../frontend/tests/item-card.spec.ts](../../frontend/tests/item-card.spec.ts)
+recomputes them from the live document.
+
+**This reverses a rule that never bound.** The item carried "hairline rules
+rather than cards: seventeen boxes of chrome on a page whose product is prose is
+chrome winning" from the day it was written. It named what was removed and never
+what the reader gave up, so under
+[../agents/guardrails.md](../agents/guardrails.md) it was not a ruling. It cost
+four things: figure and ground on the whole reading surface, the container an
+item's chart needed, an anchor a top-of-page list could point at, and any hover
+or focus feedback at all. Authority: Susan, 2026-08-31.
 
 ### A fill is not a text colour
 
@@ -216,8 +250,8 @@ A surface that fails one of these ships only with a `## Design rationale` entry 
 
 There is almost no motion here, and that is the correct amount. This is a page a reader skims, not a thing they operate.
 
-- **`transform` + `opacity` only.** Never animate a layout-triggering property.
-- **`prefers-reduced-motion` is a hard kill-switch** - a media query that zeroes durations.
+- **`transform` and `opacity`, plus the paint-only properties.** A colour, a border colour and a shadow change without moving anything, so they may ease - `RankedList`, the topic pills and the theme control already do. Never animate a layout-triggering property.
+- **`prefers-reduced-motion` is a hard kill-switch** - a media query that zeroes durations, and removes a transform an interaction brings on rather than making it instant. A zeroed duration shortens a movement; it does not remove one, so a 2px rise on hover becomes a jump in one frame and a reader who asked for stillness still sees it move. The reset names the elements that take an interaction rather than every element, because a transform that **positions** something - a rotated axis title, a chart readout centred on its own width - is not motion and a blanket reset drops both on the floor.
 - The whole named set: `fadeIn` (content arriving), `shimmer` (skeleton while a payload parses), `toastIn` (the rare notice). Anything beyond these needs an argument.
 
 There is no network in the loop, so **there is no excuse for a spinner.**
