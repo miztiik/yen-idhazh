@@ -9,3 +9,16 @@
 	--dur-fast: 120ms;
 	--dur-base: 200ms;
 }
+
+/* The movement pair, one value per theme. Imported after tokens.css, so these
+   win over the committed defaults there at the same specificity. */
+:root,
+[data-theme='light'] {
+	--movement-good: #2f6f5e;
+	--movement-bad: #96453a;
+}
+
+[data-theme='dark'] {
+	--movement-good: #7fc9ae;
+	--movement-bad: #e3a396;
+}

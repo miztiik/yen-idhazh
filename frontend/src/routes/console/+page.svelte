@@ -39,6 +39,8 @@
 	import Panel from '$lib/components/Panel.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { shortDate } from '$lib/format';
+	import { movementVerdict } from '$lib/charts/theme';
+	import type { TargetSense } from '$lib/charts/targetbar';
 	import Chart from '$lib/charts/Chart.svelte';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
@@ -401,6 +403,28 @@
 				/>
 			{/each}
 		</svg>
+	{/snippet}
+
+	<!-- Which way a chart-arm figure has moved across the window it draws.
+
+	     The polarity comes off the bar's own marks, so the delta and the target
+	     marker above it read one declaration: fewer router minutes is better and
+	     a wider chart share is better, and neither is decided here. -->
+	{#snippet armMove(change: number | null, sense: TargetSense, figure: string)}
+		{#if change !== null}
+			{@const verdict = movementVerdict(change, sense)}
+			<p class="arm-move" data-arm-move={figure}>
+				<span
+					class="arm-move-value"
+					data-movement={change.toFixed(4)}
+					data-polarity={sense}
+					data-movement-verdict={verdict}
+					data-movement-paint="color"
+					>{change >= 0 ? '+' : ''}{Math.round(change * 100)}%</span
+				>
+				across this window
+			</p>
+		{/if}
 	{/snippet}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
 		<KpiCard
@@ -821,6 +845,7 @@
 								height={30}
 								label="Router minutes per chart, day by day, over {arm.minutesDays} measured days"
 							/>
+							{@render armMove(arm.minutesTrend.movement, arm.minutesMarks.sense, 'minutes')}
 						</div>
 						<div class="arm-figure" data-arm-figure="coverage">
 							<TargetBar
@@ -836,6 +861,7 @@
 								height={30}
 								label="Share of published items carrying a chart, day by day, over {arm.coverageDays} measured days"
 							/>
+							{@render armMove(arm.coverageTrend.movement, arm.coverageMarks.sense, 'coverage')}
 						</div>
 					</div>
 				{/if}
@@ -926,6 +952,27 @@ display: flex;
 flex-direction: column;
 gap: var(--space-2);
 min-inline-size: 0;
+}
+
+/* The movement pair, never the confidence ramp: a window in which the router
+   got 3 percent slower is not a broken run, and painting it in --band-low is
+   how an operator learns to ignore --band-low. The sign is printed beside the
+   colour, so the hue is never the only signal. */
+.arm-move {
+margin: 0;
+font-size: var(--text-xs);
+line-height: var(--leading-xs);
+color: var(--color-text-tertiary);
+}
+
+.arm-move-value[data-movement-verdict='good'] {
+color: var(--movement-good);
+}
+.arm-move-value[data-movement-verdict='bad'] {
+color: var(--movement-bad);
+}
+.arm-move-value[data-movement-verdict='neutral'] {
+color: var(--color-text-secondary);
 }
 
 .feeds-note {

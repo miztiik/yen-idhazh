@@ -124,3 +124,37 @@ export function resolveSentinels<T>(option: T, root?: Element): T {
 
 /** Exported for the test that proves no sentinel survives into a built page. */
 export const SENTINEL_PATTERN = /#ff00[0-9a-f]{2}/i;
+
+/** Which direction is the good one for a measure. A property of the MEASURE,
+ * declared where the measure is defined and never at the paint site: a
+ * component that decides its own polarity is how two cards come to disagree
+ * about whether down is good. */
+export type Polarity = 'lower-is-better' | 'higher-is-better';
+
+/** The same, plus the honest third answer. `Summary length` and
+ * `Copied, not rewritten` have no agreed direction - a shorter summary is what
+ * a smaller model was picked for, and more copying is not obviously worse than
+ * more invention. A movement on one of those is a fact, not a verdict. */
+export type MovementPolarity = Polarity | 'no-agreed-direction';
+
+export type MovementVerdict = 'good' | 'bad' | 'neutral';
+
+/** Did this number go the right way.
+ *
+ * The one helper. Sign alone is the defect it removes: a fall in time per
+ * summary is an improvement and used to read red, because the card painted the
+ * minus sign rather than what the minus sign meant.
+ *
+ * Zero is neutral on every measure. Nothing moved, so there is no direction to
+ * be right about, and painting a flat figure good would make good mean
+ * "measured".
+ */
+export function movementVerdict(
+	change: number | null,
+	polarity: MovementPolarity
+): MovementVerdict {
+	if (change === null || !Number.isFinite(change) || change === 0) return 'neutral';
+	if (polarity === 'no-agreed-direction') return 'neutral';
+	const rising = change > 0;
+	return rising === (polarity === 'higher-is-better') ? 'good' : 'bad';
+}

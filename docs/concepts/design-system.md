@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -99,6 +99,55 @@ colour on every surface and so cannot be checked once. Authority: Jony,
 radius and motion are declared once in their own `:root` block outside both
 themes. A scale left inside a theme block reads as something a theme could
 change, and the next theme has to restate it or lose it.
+
+### Movement colour reads the measure, not the sign
+
+`--movement-good` and `--movement-bad` say a number went the way we wanted.
+They are the third semantic pair, after the confidence ramp and the fill ramp,
+and they exist because a sign is not a verdict: **a fall in `Time to write one`
+is the machine getting faster, and a fall in `Summaries published` is a quiet
+news day.** Until 2026-08-31 the console painted both from the sign, so the two
+read alike and the improvement read as the loss.
+
+- **Polarity is a property of the measure, declared where the measure is
+  defined.** `lower-is-better`, `higher-is-better`, or `no-agreed-direction`.
+  The console declares it in three places and nowhere else: `COLUMNS` on the
+  Model route for the eleven cards, `sideMeasures` in
+  [../../frontend/src/lib/server/model-work.ts](../../frontend/src/lib/server/model-work.ts)
+  for the seven swap rows, and the `TargetSense` a bar was already built with
+  for the two chart-arm figures. A component that decided its own is how two
+  cards come to disagree about whether down is good.
+- **A movement with no agreed direction paints neutral and says so.** The card
+  prints `no target` beside the percentage and the swap panel names the grey
+  rows under the chart. Susan, 2026-08-31: a grey number a reader has to
+  interpret is a fact withheld.
+- **Zero is neutral on every measure.** Nothing moved, so there is no direction
+  to be right about.
+- **The pair is not the confidence ramp and may never equal it.** Green there
+  means "it worked". A summary that got 3 percent slower is not broken, and
+  painting it `--band-low` is how an operator learns to ignore `--band-low`.
+  `ThemeConfig` in
+  [../../backend/idhazh/contracts/appearance_config.py](../../backend/idhazh/contracts/appearance_config.py)
+  refuses a movement value equal to a band value, and
+  [../../frontend/tests/console-polarity.spec.ts](../../frontend/tests/console-polarity.spec.ts)
+  refuses it again on the rendered page.
+- **Same meaning, quieter voice.** Measured 2026-08-31 over the committed hex
+  values, the light pair sits at 40.5 and 44.2 percent saturation against the
+  confidence ramp's 66 and 70.6; the dark pair at 40.7 and 57.9 against 46.3
+  and 81.5. Both are printed as text, so both clear the 4.5:1 that WCAG 2.2 SC
+  1.4.3 sets for normal type: 5.905:1 and 6.544:1 on `--color-surface` in
+  light, 9.118:1 and 8.344:1 in dark.
+- **Colour is never the only signal.** The sign is printed beside every
+  coloured percentage, and the swap panel keeps the arrowhead it always had.
+
+The values live in `config/appearance.json` under `theme`, one per theme, and
+reach CSS through `frame.generated.css` at build time - the same route the
+frame tokens take, and for the same reason: a colour that has to be right on
+the first painted frame cannot be injected from a layout.
+
+Rejected: reusing the confidence ramp, which is the alarm-fatigue trade above;
+and letting the sign alone decide, which is the defect the row removed. Owner,
+2026-08-31.
 
 Theming is override, not a second set of names: dark mode overrides the same token values. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) asserts it: every theme colour has a dark override, every non-exempt token has an `@theme inline` mirror, and nothing uses a token that is never declared.
 
@@ -568,7 +617,7 @@ scanned is a different quantity - a count, a percent, a second, a minute. At a
 thirty-day window it was 330 numbers under eleven header paragraphs.
 
 So the section leads with eleven cards on one `auto-fit minmax(220px, 1fr)`
-grid, and each card carries the same five things:
+grid, and each card carries the same six things:
 
 - **The label, verbatim.** The copy above is protected; the shape was the defect
   and the words were not. `frontend/tests/console-model.spec.ts` compares the
@@ -579,6 +628,11 @@ grid, and each card carries the same five things:
 - **A line over the window**, drawn as markup by `Sparkline`. Eleven
   engine-backed sparklines would be eleven chart instances and a lazy chunk on a
   page that renders complete without one.
+- **The change across that line**, as a signed percentage painted from the
+  measure's own polarity - `Time to write one` falling is good, `Failed` rising
+  is bad, and three of the eleven have no agreed direction and print `no
+  target`. The polarity is declared on `COLUMNS`, beside the label and the
+  sentence, so a card cannot invent one.
 - **What it is out of**, for the six quality figures. On a table row the day's
   count sat one column away; a card has no row, so it carries its own
   denominator or it invites a trend that is not there.
@@ -595,7 +649,8 @@ committed figure says that.
 **No card is tinted.** `Copied, not rewritten` reads about 12 percent and nobody
 has agreed what a bad number would be, so a tint there would invent a threshold
 and publish it. The health ramp is lent to a threshold somebody agreed to, and
-to nothing else.
+to nothing else - and the same reasoning is why that card's movement percentage
+paints neutral rather than green or red.
 
 **The daily table stays, below, behind a `Show the daily figures` control.**
 Nothing is deleted: after a card moves, the rows are what say which day. It is a
@@ -663,18 +718,22 @@ for, read through each article's own length rather than off `summarize.bands`
 directly - an article's length picks its band, so a run of short pieces is asked
 for less than a run of long ones. Susan, 2026-08-30.
 
-### A swap comparison carries direction in the arrow, never in the hue
+### A swap comparison carries direction in the arrow, and a verdict only where the measure has one
 
 `Did the model change move anything` is seven paired dot rows. Each measure is
 drawn against its own value on the older model, so no change is 100 percent on
 every row, and that is the only axis a median in seconds, a length in words and
 a count in a hundred summaries can share.
 
-- **The arrowhead carries the direction.** A red-for-worse ramp would need
-  somebody to have agreed which way is worse for each of the seven, and nobody
-  has: a shorter summary is what a smaller model was picked for, and more
-  copying is not obviously worse than more invention. The chart says how far and
-  which way, and leaves worse to the reader.
+- **The arrowhead carries the direction; the hue carries the verdict where
+  there is one.** Until 2026-08-31 every row was drawn in one categorical
+  colour, because a red-for-worse ramp would have needed somebody to agree
+  which way is worse for each of the seven. Five of them now say so themselves
+  - the polarity is declared on the measure in `sideMeasures`, not chosen by
+  the chart - and the two that genuinely have no agreed direction, `Summary
+  length` and `Copied, not rewritten`, stay grey and name themselves under the
+  plot. So a hue here is never a guess: a measure with no declared direction
+  gets no colour.
 - **The axis is symmetric about no change**, so a fifth off and a fifth on draw
   the same track length. An axis running 78 to 120 would draw one of them as the
   bigger move.
@@ -686,18 +745,18 @@ a count in a hundred summaries can share.
   trend. Andre, 2026-08-30.
 
 Measured 2026-08-31 off the built page, across the one swap the ledger holds -
-`qwen3-8b-q4-k-m` on 2,232 summaries to 26 August, `qwen3-5-9b-q4-k-m` on 1,312
+`qwen3-8b-q4-k-m` on 2,228 summaries to 26 August, `qwen3-5-9b-q4-k-m` on 1,529
 since 27 August - the seven read:
 
-| Measure | Before | After | Against the old model |
-| --- | --- | --- | --- |
-| Time to write one | 120 s | 124 s | 103% |
-| Summary length | 100 words | 79 words | 79% |
-| Copied, not rewritten | 9% | 11% | 119% |
-| Marked "not sure" | 16 in 100 | 14 in 100 | 86% |
-| Numbers not in the article | 5 in 100 | 3 in 100 | 68% |
-| "Maybe" told as fact | 12 in 100 | 14 in 100 | 116% |
-| Outside the length we asked for | 29 in 100 | 11 in 100 | 38% |
+| Measure | Before | After | Against the old model | Which way is better | Painted |
+| --- | --- | --- | --- | --- | --- |
+| Time to write one | 120 s | 123 s | 103% | lower | bad |
+| Summary length | 100 words | 78 words | 78% | no agreed direction | neutral |
+| Copied, not rewritten | 9% | 11% | 120% | no agreed direction | neutral |
+| Marked "not sure" | 17 in 100 | 14 in 100 | 86% | lower | good |
+| Numbers not in the article | 5 in 100 | 3 in 100 | 64% | lower | good |
+| "Maybe" told as fact | 12 in 100 | 14 in 100 | 117% | lower | bad |
+| Outside the length we asked for | 29 in 100 | 11 in 100 | 38% | lower | good |
 
 It is a difference and not yet a cause, which is what the two article counts are
 there to say.

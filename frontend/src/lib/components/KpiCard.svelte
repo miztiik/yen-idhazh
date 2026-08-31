@@ -18,6 +18,7 @@
 	 */
 	import Chart from '$lib/charts/Chart.svelte';
 	import { percentOf } from '$lib/charts/rank';
+	import { movementVerdict, type MovementPolarity } from '$lib/charts/theme';
 	import type { EChartsOption } from 'echarts';
 	import type { Snippet } from 'svelte';
 
@@ -28,6 +29,7 @@
 		line = null,
 		tone = 'neutral',
 		movement = null,
+		polarity = 'no-agreed-direction',
 		track = null,
 		trend = null,
 		trendSvg = null,
@@ -47,6 +49,9 @@
 		tone?: 'neutral' | 'info' | 'good' | 'warn' | 'bad';
 		/** Signed share, e.g. 0.12 for up 12 percent. Null prints nothing. */
 		movement?: number | null;
+		/** Which direction is the good one for THIS measure. The card never guesses
+		 * it: the default says nobody agreed, which paints neutral and says so. */
+		polarity?: MovementPolarity;
 		/** How full something is, and what it is full of. A level against a limit
 		 * that will not move is a length the eye reads without arithmetic - and
 		 * the caption is required, because a bar with no named limit says only
@@ -66,10 +71,10 @@
 		windowDays?: number | null;
 	} = $props();
 
-	const arrow = $derived(movement === null ? '' : movement >= 0 ? 'up' : 'down');
 	const percent = $derived(
 		movement === null ? '' : `${movement >= 0 ? '+' : ''}${Math.round(movement * 100)}%`
 	);
+	const verdict = $derived(movementVerdict(movement, polarity));
 </script>
 
 <div
@@ -103,7 +108,19 @@
 	{#if movement !== null || note}
 		<p class="kpi-foot">
 			{#if movement !== null}
-				<span class="kpi-move" data-direction={arrow}>{percent}</span>
+				<span
+					class="kpi-move"
+					data-movement={movement.toFixed(4)}
+					data-polarity={polarity}
+					data-movement-verdict={verdict}
+					data-movement-paint="color">{percent}</span
+				>
+				<!-- Susan, 2026-08-31: a movement nobody agreed a direction for is a
+				     fact, not a verdict, and the card has to SAY that rather than
+				     leave a grey number the reader has to interpret. -->
+				{#if polarity === 'no-agreed-direction'}
+					<span class="kpi-move-note" data-movement-note={label}>no target</span>
+				{/if}
 			{/if}
 			{#if note}<span class="kpi-note" data-kpi-note>{note}</span>{/if}
 		</p>
@@ -209,10 +226,22 @@
 		color: var(--color-text-secondary);
 	}
 
-	.kpi-move[data-direction='up'] {
-		color: var(--band-high);
+	/* The movement pair, never the confidence ramp. Green there means "it
+	   worked"; a summary that got 3 percent slower is not broken, and painting
+	   it in --band-low is how an operator learns to ignore --band-low. The sign
+	   and the arrow direction carry the same fact, so the colour is never the
+	   only signal. */
+	.kpi-move[data-movement-verdict='good'] {
+		color: var(--movement-good);
 	}
-	.kpi-move[data-direction='down'] {
-		color: var(--chart-4);
+	.kpi-move[data-movement-verdict='bad'] {
+		color: var(--movement-bad);
+	}
+	.kpi-move[data-movement-verdict='neutral'] {
+		color: var(--color-text-secondary);
+	}
+
+	.kpi-move-note {
+		color: var(--color-text-tertiary);
 	}
 </style>

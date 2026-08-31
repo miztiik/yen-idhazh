@@ -32,6 +32,8 @@
 	--color-fill-high: var(--fill-high);
 	--color-fill-medium: var(--fill-medium);
 	--color-fill-low: var(--fill-low);
+	--color-movement-good: var(--movement-good);
+	--color-movement-bad: var(--movement-bad);
 
 	--color-chart-1: var(--chart-1);
 	--color-chart-2: var(--chart-2);

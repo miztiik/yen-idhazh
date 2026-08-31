@@ -167,6 +167,13 @@ export interface ThemeConfig {
 	elevation_enabled: boolean;
 	display_face_enabled: boolean;
 	surface_tint_alpha: number;
+	/** `--movement-good` and `--movement-bad`, one value per theme. Read by
+	 * `scripts/build-frame-css.mjs`, not by a component: a colour that has to be
+	 * right on the first painted frame cannot be injected from a layout. */
+	movement_good_light: string;
+	movement_bad_light: string;
+	movement_good_dark: string;
+	movement_bad_dark: string;
 }
 
 /** How a chart is drawn, and what it does when a pointer reaches it. */
@@ -272,7 +279,11 @@ const THEME_DEFAULTS: ThemeConfig = {
 	gradient_enabled: true,
 	elevation_enabled: true,
 	display_face_enabled: true,
-	surface_tint_alpha: 0.07
+	surface_tint_alpha: 0.07,
+	movement_good_light: '#2f6f5e',
+	movement_bad_light: '#96453a',
+	movement_good_dark: '#7fc9ae',
+	movement_bad_dark: '#e3a396'
 };
 const CHART_DEFAULTS: ChartConfig = {
 	height_px: 220,
