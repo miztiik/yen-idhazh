@@ -77,6 +77,20 @@
           "default": null,
           "description": "Why the item is not in the top band. An identifier the site turns into a sentence; null on a `high` item and on a day published before this existed."
         },
+        "carried_by": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many feeds carried this one address today. Syndication of a single story, never 'also covered by N sources' - two outlets writing their own piece produce two addresses and both read 1. Null where the run did not record it, which is not the same as 1.",
+          "title": "Carried By"
+        },
         "entities": {
           "items": {
             "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
@@ -118,6 +132,19 @@
           "title": "Lenses",
           "type": "array"
         },
+        "on_front_page": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A salience feed voted for it. A vote, never a discovery. Null where the run did not record it, which is not the same as false.",
+          "title": "On Front Page"
+        },
         "published_at": {
           "anyOf": [
             {
@@ -130,6 +157,20 @@
           ],
           "default": null,
           "title": "Published At"
+        },
+        "rank_score": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the planning step scored this story at, against the other stories of its own desk. Comparable across the day because every desk uses one scale. Null where the run did not record it, which is not the same as 0.",
+          "title": "Rank Score"
         },
         "reader_note": {
           "anyOf": [
@@ -174,6 +215,18 @@
           "minLength": 1,
           "title": "Summary",
           "type": "string"
+        },
+        "time_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which clock published_at came from - the feed's, or our first sight of the address. Null on a day published before this existed, and that reads as unknown rather than as a claim about either clock."
         },
         "title": {
           "maxLength": 500,
@@ -230,6 +283,19 @@
             }
           ],
           "default": null
+        },
+        "watchlist_hit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The story names a watchlist entity. Null where the run did not record it.",
+          "title": "Watchlist Hit"
         }
       },
       "required": [
@@ -398,6 +464,16 @@
       "title": "SourceKind",
       "type": "string"
     },
+    "TimeSource": {
+      "description": "Which clock the time on an item came from.\n\n`rank.appeared_at` prefers the feed's own date and falls back to when we\nfirst saw the address. Both answers used to land in one field, so nothing\ndownstream could tell them apart - and the fallback is the one a reader\nwould want flagged, because it is our clock and not the publisher's.",
+      "enum": [
+        "feed",
+        "first_seen",
+        "unknown"
+      ],
+      "title": "TimeSource",
+      "type": "string"
+    },
     "VisualKind": {
       "enum": [
         "chart",
@@ -423,6 +499,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added carried_by, watchlist_hit, on_front_page, rank_score and time_source to published items.",
+      "version": "2026-08-31T10:30",
+      "why": "The planning step computed all five and published none, so the page could not say why a story is in the digest or which clock its time came from. Nothing new is computed: four are the score's own terms and the fifth is the choice rank.appeared_at already makes. All five are optional and null on the 10 days and 3,485 items committed before this, and a null reads as unknown - never as 0, which for carried_by would claim a story no feed carried, and never as false, which for on_front_page would claim a vote that was never counted (section 11)."
+    },
     {
       "change": "Marked updated_at and updated_by_run reserved in their descriptions.",
       "version": "2026-08-26",
@@ -520,7 +601,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-08-31T10:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -545,5 +626,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-08-31T10:30"
 }

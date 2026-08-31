@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -251,6 +251,8 @@ Three details in that carry weight:
 - **Ties break on the canonical address.** Without a deterministic tie-break, two runs over identical feeds can publish different orders, and the order is part of what a shared link shows.
 
 The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
+
+**Three of those terms and the score itself now reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` were computed here and thrown away at the end of the plan job until 2026-08-31, so the published page could not say why a story is in the digest. They are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is).
 
 ## Changing the source set without breaking history
 

@@ -14,6 +14,12 @@ which is why `introduced_by_run` may never decrease down the list.
 item's words are written once, by the run that introduced it. The two fields
 hold the join to the run manifest that names the model, so that join stays true
 if a run ever does rewrite an item's words.
+
+`carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` are the terms
+the planning step scored the story on, and `time_source` is the clock behind
+`published_at`. They are published so a page can say why a story is here and
+whose time it is printing. All five are null on a day published before they
+existed, and a null is unknown rather than a value.
 """
 
 from __future__ import annotations
@@ -36,6 +42,7 @@ from idhazh.contracts.base import (
 )
 from idhazh.contracts.eval_row import BandReason, ConfidenceBand
 from idhazh.contracts.route import VisualKind, VisualState
+from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import EventType, LensId, SourceKind
 
@@ -81,6 +88,14 @@ class DigestItem(Model):
         description="Who is speaking. A vendor's own copy must not look like a reporter's.",
     )
     published_at: Timestamp | None = None
+    time_source: TimeSource | None = Field(
+        default=None,
+        description=(
+            "Which clock published_at came from - the feed's, or our first sight of "
+            "the address. Null on a day published before this existed, and that reads "
+            "as unknown rather than as a claim about either clock."
+        ),
+    )
 
     summary: str = Field(min_length=1)
     key_points: list[str] = Field(min_length=1)
@@ -108,6 +123,36 @@ class DigestItem(Model):
         default=False, description="The reader is told before they find out by clicking through."
     )
     visual: DigestVisual | None = None
+    carried_by: int | None = Field(
+        default=None,
+        ge=1,
+        description=(
+            "How many feeds carried this one address today. Syndication of a single "
+            "story, never 'also covered by N sources' - two outlets writing their own "
+            "piece produce two addresses and both read 1. Null where the run did not "
+            "record it, which is not the same as 1."
+        ),
+    )
+    watchlist_hit: bool | None = Field(
+        default=None,
+        description="The story names a watchlist entity. Null where the run did not record it.",
+    )
+    on_front_page: bool | None = Field(
+        default=None,
+        description=(
+            "A salience feed voted for it. A vote, never a discovery. Null where the "
+            "run did not record it, which is not the same as false."
+        ),
+    )
+    rank_score: float | None = Field(
+        default=None,
+        ge=0.0,
+        description=(
+            "What the planning step scored this story at, against the other stories of "
+            "its own desk. Comparable across the day because every desk uses one scale. "
+            "Null where the run did not record it, which is not the same as 0."
+        ),
+    )
     introduced_by_run: int = Field(
         ge=1, description="A global fact, true for every reader, asserted without any storage."
     )
@@ -146,6 +191,14 @@ class DigestItem(Model):
             raise ValueError("a revision cannot precede the run that introduced the item")
         return self
 
+    @model_validator(mode="after")
+    def _the_clock_and_the_time_agree(self) -> Self:
+        if self.time_source is not None and self.time_source.names_a_clock != (
+            self.published_at is not None
+        ):
+            raise ValueError("time_source names a clock exactly when published_at carries a time")
+        return self
+
 
 class DigestEmbeddings(Model):
     """The day's item vectors, so a browser only ever embeds a reader's query.
@@ -176,6 +229,23 @@ class DigestDay(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31T10:30",
+            change=(
+                "Added carried_by, watchlist_hit, on_front_page, rank_score and "
+                "time_source to published items."
+            ),
+            why=(
+                "The planning step computed all five and published none, so the page "
+                "could not say why a story is in the digest or which clock its time "
+                "came from. Nothing new is computed: four are the score's own terms and "
+                "the fifth is the choice rank.appeared_at already makes. All five are "
+                "optional and null on the 10 days and 3,485 items committed before "
+                "this, and a null reads as unknown - never as 0, which for carried_by "
+                "would claim a story no feed carried, and never as false, which for "
+                "on_front_page would claim a vote that was never counted (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26",
             change="Marked updated_at and updated_by_run reserved in their descriptions.",

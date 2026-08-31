@@ -49,6 +49,7 @@ from idhazh.contracts.item_health import (
 )
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest
+from idhazh.contracts.run_plan import RunPlan, TimeSource
 from idhazh.contracts.runtime_counters import SERIES, RuntimeCountersRow
 from idhazh.contracts.sources import Sources
 from idhazh.contracts.summary import Summary
@@ -1553,6 +1554,104 @@ def test_a_day_written_before_the_revision_field_still_loads() -> None:
     day = DigestDay.model_validate(payload)
 
     assert [item.updated_by_run for item in day.items] == [None] * len(day.items)
+
+
+# --- the ranking signal and the clock behind published_at ------------------
+
+#: The five the planning step computes and the day payload started carrying on
+#: 2026-08-31. Every day published before that omits all five.
+RANKING_SIGNAL = ("carried_by", "watchlist_hit", "on_front_page", "rank_score", "time_source")
+
+
+def committed_days() -> list[Path]:
+    return sorted((REPO_ROOT / "frontend" / "public" / "digest").glob("*/*/*/digest.json"))
+
+
+def test_the_published_tree_holds_days_to_migrate() -> None:
+    """The denominator, asserted on its own.
+
+    The migration test below loops over the committed days. An empty tree would
+    loop zero times and report the same pass as a tree that checked every day.
+    """
+    assert committed_days(), "no digest.json under frontend/public/digest"
+
+
+def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
+    """The read-side migration (`CLAUDE.md` section 11), over the real payloads.
+
+    Ten committed days and 3,485 items on 2026-08-31, none of which carries any
+    of the five. Every one must load, and every absent field must come back as
+    `None`. `0` for `carried_by` would claim no feed carried the story, `false`
+    for `on_front_page` would claim a vote that was never counted, and `0.0` for
+    `rank_score` would put the story bottom of its desk - three different false
+    claims dressed as a default.
+    """
+    days = 0
+    items = 0
+    for path in committed_days():
+        day = DigestDay.from_json(read_text(path))
+        days += 1
+        for item in day.items:
+            items += 1
+            for name in RANKING_SIGNAL:
+                assert getattr(item, name) is None, f"{path.name} {item.item_id}: {name} invented"
+
+    assert days and items, "the loop above must have had something to read"
+
+
+def test_a_published_item_that_names_a_clock_must_carry_a_time() -> None:
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][0]["published_at"] = None
+    payload["items"][0]["time_source"] = "feed"
+    with pytest.raises(ValueError, match="names a clock exactly when"):
+        DigestDay.model_validate(payload)
+
+
+def test_a_published_item_with_no_time_may_only_say_unknown() -> None:
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][0]["published_at"] = None
+    payload["items"][0]["time_source"] = "unknown"
+
+    day = DigestDay.model_validate(payload)
+
+    assert day.items[0].time_source is TimeSource.UNKNOWN
+    assert day.items[0].published_at is None
+
+
+def test_a_planned_item_that_names_a_clock_must_carry_a_time() -> None:
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
+    payload["items"][0]["published_at"] = None
+    payload["items"][0]["time_source"] = "first_seen"
+    with pytest.raises(ValueError, match="names a clock exactly when"):
+        RunPlan.model_validate(payload)
+
+
+def test_the_ranking_signal_survives_a_round_trip_with_values_in_it() -> None:
+    """The fixture carries nulls, so the populated shape needs its own oracle."""
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][0].update(
+        carried_by=3, watchlist_hit=True, on_front_page=True, rank_score=3.4, time_source="feed"
+    )
+
+    once = DigestDay.model_validate(payload).to_json()
+    twice = DigestDay.from_json(once)
+
+    assert twice.to_json() == once
+    assert twice.items[0].carried_by == 3
+    assert twice.items[0].rank_score == 3.4
+    assert twice.items[0].time_source is TimeSource.FEED
+
+
+def test_a_story_no_feed_carried_cannot_be_published() -> None:
+    """`carried_by` counts the feeds that carried one address, so its floor is 1.
+
+    Null is how a run that did not record the count says so. Zero would be a
+    story that arrived from nowhere.
+    """
+    payload = json.loads(read_text(CONTRACT_FIXTURES_DIR / "digest-day" / "two-runs.json"))
+    payload["items"][0]["carried_by"] = 0
+    with pytest.raises(ValueError, match="greater than or equal to 1"):
+        DigestDay.model_validate(payload)
 
 
 def test_canonical_json_is_sorted_and_newline_terminated() -> None:
