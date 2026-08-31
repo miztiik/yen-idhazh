@@ -1,6 +1,6 @@
 # Contracts and Schemas
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 The persisted-shape subsystem: where the models live, how the schemas and frontend types are generated from them, and the gate that stops the three from drifting apart. This is the operational home of Rule #3 (contracts before logic) and `CLAUDE.md` sections 1a and 11.
 
@@ -102,10 +102,10 @@ carry a time window?**
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `keep_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published.csv` | one file | have we already published this? | no - published is forever |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
-| `state/scores.csv` | one file | how did every scored item do? | no |
+| `state/scores.csv` | one file | how did every scored item do? | no - and [nothing bounds it](../publishing/layout.md#what-bounds-the-committed-state-tree), measured and deliberate |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 
-A window turns a shard into a skipped file open. `ledger._shards_in_window`
+A window turns a shard into a skipped file open. `ledger.shards_in_window`
 walks the days the window can touch and opens only those stems, so a plan run
 reads one or two files instead of every month the project has ever written. The
 item-health shard boundary survives all the way to the browser: the projection
