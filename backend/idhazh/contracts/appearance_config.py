@@ -360,6 +360,23 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-31T23:59",
+            change=(
+                "digest.topic_pills_max added, defaulting to 8. The shape is "
+                "`UiConfig`, which this document and `AppConfig` share, so both "
+                "schemas moved together. Additive with a default, so an appearance "
+                "file written before today still validates."
+            ),
+            why=(
+                "The topic row was a horizontal scroll container, which is a control "
+                "that hides its own contents; the owner ruled on 2026-08-31 that no "
+                "reader-facing surface carries one. The row wraps now, and the topics "
+                "past this number sit inside a `+N more` disclosure so a day with "
+                "many topics does not turn the row into the page. A cap a component "
+                "spells is a cap an operator cannot move (Rule #6)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-31T23:55",
             change=(
                 "ThemeChoice lost its `system` member and digest.theme_default now "

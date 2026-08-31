@@ -1400,6 +1400,13 @@
           "default": "dark",
           "description": "The theme a reader who has never touched the control is served. It is the theme `:root` carries in tokens.css, so it is also what a page paints before any script runs and what a page with no script keeps."
         },
+        "topic_pills_max": {
+          "default": 8,
+          "description": "How many topic pills stay on the row before the rest go inside a disclosure. The cut is decided by each topic's story count at build time, never by measuring the row in pixels: every page here is prerendered, so a pixel-measured row is wrong until a script runs. Eight is what a 360px screen holds in three wrapped lines without the row becoming the page.",
+          "minimum": 1,
+          "title": "Topic Pills Max",
+          "type": "integer"
+        },
         "visual_side": {
           "$ref": "#/$defs/VisualSide",
           "default": "above"
@@ -1509,6 +1516,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ui.topic_pills_max added, defaulting to 8. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Additive with a default, so a config written before today still validates.",
+      "version": "2026-08-31T23:59",
+      "why": "The topic row was a horizontal scroll container, which is a control that hides its own contents; the owner ruled on 2026-08-31 that no reader-facing surface carries one. The row wraps now, and the topics past this number sit inside a `+N more` disclosure so a day with many topics does not turn the row into the page. A cap a component spells is a cap an operator cannot move (Rule #6)."
+    },
     {
       "change": "ThemeChoice lost its `system` member and ui.theme_default now defaults to `dark`; the committed config repeats it. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Breaking: the enum is narrower. The read-side migration is a before-validator on `UiConfig.theme_default` that reads `system` as `dark`, so a config written before today still loads.",
       "version": "2026-08-31T23:55",
@@ -1848,7 +1860,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-31T23:55",
+      "default": "2026-08-31T23:59",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1862,5 +1874,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-31T23:55"
+  "version": "2026-08-31T23:59"
 }
