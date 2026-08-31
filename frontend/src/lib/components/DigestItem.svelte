@@ -7,15 +7,20 @@
 	 * together. Nothing moves - the title is a heading rather than a link, so a
 	 * rise would promise a click the card does not answer.
 	 *
-	 * Read is marked on the title link only - one step down the ramp, accent
-	 * removed, a weight lighter. Never dimmed: a dimmed item reads as "you cannot
-	 * have this" rather than "you already had this".
+	 * Read is carried three ways and only one of them is brightness. The source
+	 * mark on the leading edge is filled when unread and hollow when read, which
+	 * is an area difference and survives a cheap panel and sunlight. The title
+	 * steps one down the ramp and loses a weight - never further, because a
+	 * dimmed item reads as "you cannot have this" rather than "you already had
+	 * this". And a visually-hidden word opens the heading, because a fill and a
+	 * font weight are announced to nobody.
 	 */
 	import type { DigestItem } from '$lib/payload/types';
 	import { shownLenses } from '$lib/payload/lenses';
 	import ItemMeta from './ItemMeta.svelte';
 	import ItemVisual from './ItemVisual.svelte';
 	import LensChips from './LensChips.svelte';
+	import SourceMark from './SourceMark.svelte';
 
 	let {
 		item,
@@ -47,6 +52,7 @@
 <article
 	id={item.item_id}
 	class="item"
+	class:has-mark={showMark}
 	data-band={item.band}
 	data-vertical={item.vertical}
 	data-truncated={item.truncated}
@@ -54,21 +60,23 @@
 	data-visual={item.visual?.state ?? 'absent'}
 	data-lenses={lenses.length ? lenses.join(' ') : undefined}
 >
+	{#if showMark}
+		<SourceMark name={item.source_name} sourceId={item.source_id} {read} />
+	{/if}
+
 	<div class="item-body">
 		<!-- Under a topic heading the name would repeat the heading, and a bullet on
 		     its own is decoration. The line then earns its place only when it has
 		     the one thing left to say. A topic is one of those things. -->
-		{#if showVertical || read || lenses.length}
+		{#if showVertical || lenses.length}
 			<p class="mb-1 flex items-center gap-2 text-xs tracking-wide text-text-tertiary uppercase">
-				{#if showVertical || read}
+				{#if showVertical}
 					<span
-						class="inline-block h-1.5 w-1.5 rounded-full border border-current"
-						class:bg-current={!read}
+						class="inline-block h-1.5 w-1.5 rounded-full border border-current bg-current"
 						aria-hidden="true"
 					></span>
+					{verticalName}
 				{/if}
-				{#if showVertical}{verticalName}{/if}
-				{#if read}<span class="normal-case">Read</span>{/if}
 				<LensChips {lenses} />
 			</p>
 		{/if}
@@ -81,7 +89,9 @@
 			class:text-text={!read}
 			class:text-text-secondary={read}
 		>
-			{item.title}
+			<!-- The ring and the weight say this to a reader looking at the page and
+			     to nobody else. The word is what a screen reader gets. -->
+			{#if read}<span class="sr-only">Read. </span>{/if}{item.title}
 		</svelte:element>
 
 		<p class="measure text-lg text-text">{item.summary}</p>
@@ -95,7 +105,7 @@
 	</div>
 
 	<div class="item-rail">
-		<ItemMeta {item} {showMark} {day} {onRead} />
+		<ItemMeta {item} {day} {onRead} />
 	</div>
 </article>
 
@@ -106,7 +116,9 @@
 	.item {
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
-		gap: var(--space-2);
+		align-items: start;
+		column-gap: var(--space-3);
+		row-gap: var(--space-2);
 		margin-block-start: var(--space-4);
 		padding: var(--space-4);
 		border: 1px solid var(--item-edge);
@@ -115,6 +127,18 @@
 		transition:
 			border-color var(--dur-fast) var(--ease-standard),
 			box-shadow var(--dur-fast) var(--ease-standard);
+	}
+
+	/* The mark leads the item at every width. It used to sit in the meta line,
+	   which moves into the right rail on a wide screen - and a read indicator
+	   14rem from the title it qualifies is paired with nothing. */
+	.item.has-mark {
+		grid-template-columns: auto minmax(0, 1fr);
+	}
+
+	.item.has-mark > .item-body,
+	.item.has-mark > .item-rail {
+		grid-column: 2;
 	}
 
 	/* No shadow at rest: a page of items that all float is a page where nothing
@@ -127,22 +151,31 @@
 		box-shadow: var(--shadow-md);
 	}
 
-	/* At this width the meta line - source, date, confidence, read mark - stops
-	   interrupting the read and moves beside it. The value matches
+	/* At this width the meta line - source, date, confidence, the way out -
+	   stops interrupting the read and moves beside it. The value matches
 	   frame.breakpoints_px[1] in config/appearance.json; a media query cannot
 	   read a custom property, which is the one place this duplication is
 	   unavoidable. */
 	@media (min-width: 1024px) {
 		.item {
 			grid-template-columns: minmax(0, 1fr) 14rem;
-			gap: var(--space-6);
-			align-items: start;
 			padding: var(--space-5);
 		}
 
+		.item.has-mark {
+			grid-template-columns: auto minmax(0, 1fr) 14rem;
+		}
+
+		.item.has-mark > .item-rail {
+			grid-column: 3;
+		}
+
+		/* The rail sits further from the prose than the mark does, and one grid
+		   gap cannot say both. */
 		.item-rail {
 			position: sticky;
 			top: var(--space-4);
+			margin-inline-start: var(--space-3);
 		}
 	}
 </style>
