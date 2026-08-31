@@ -3,9 +3,9 @@
  * Three failures this catches, all of which have shipped in real design
  * systems and none of which is visible in a diff:
  *
- * 1. A token declared in the light theme with no dark override. The page looks
- *    right until someone flips the theme, and then one element keeps a light
- *    colour on a dark ground.
+ * 1. A token declared in the base theme with no light override. The page looks
+ *    right until someone flips the theme, and then one element keeps a dark
+ *    colour on a light ground.
  * 2. A token with no `@theme inline` mirror. `bg-surface` and
  *    `var(--color-surface)` stop resolving to the same value, and the token
  *    file quietly stops being the only place a colour is decided.
@@ -60,8 +60,12 @@ function declaredIn(css: string): string[] {
 	return [...css.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]);
 }
 
-const LIGHT = declaredIn(block(TOKENS, ":root,\n[data-theme='light']"));
-const DARK = declaredIn(block(TOKENS, "[data-theme='dark']"));
+/** The base theme is dark and carries `:root`; light is the override. */
+const BASE_SELECTOR = ":root,\n[data-theme='dark']";
+const OVERRIDE_SELECTOR = "[data-theme='light']";
+
+const DARK = declaredIn(block(TOKENS, BASE_SELECTOR));
+const LIGHT = declaredIn(block(TOKENS, OVERRIDE_SELECTOR));
 
 function sourceFiles(dir: string, out: string[] = []): string[] {
 	for (const entry of readdirSync(dir)) {
@@ -133,26 +137,47 @@ function styleBlocks(text: string): string {
 const RATIO_UTILITY = /^aspect$/;
 
 test.describe('the token layer', () => {
-	test('every theme colour has a dark override', () => {
-		const missing = LIGHT.filter(
-			(token) => !THEME_INDEPENDENT.test(token) && !DARK.includes(token)
+	test('the base theme is dark, and light only overrides it', () => {
+		// The whole of "dark by default". A document with no `data-theme` - no
+		// script yet, or no script at all - matches `:root` and nothing else, so
+		// whatever `:root` holds is the first painted frame.
+		expect(block(TOKENS, BASE_SELECTOR), 'the base theme stopped being dark').toContain(
+			'--color-bg: #0b0e14;'
 		);
-		expect(missing, `declared in the light theme with no dark value: ${missing.join(', ')}`).toEqual(
-			[]
+		expect(block(TOKENS, OVERRIDE_SELECTOR), 'the override stopped being light').toContain(
+			'--color-bg: #f4f6fb;'
 		);
+		// Both selectors match at the same specificity, so source order is the
+		// only thing making a chosen light theme win. Put the override first and
+		// a reader who asked for light silently gets dark.
+		expect(
+			TOKENS.indexOf(OVERRIDE_SELECTOR),
+			'the light override sits above the base, so it loses the cascade'
+		).toBeGreaterThan(TOKENS.indexOf(BASE_SELECTOR));
 	});
 
-	test('the dark theme invents nothing the light theme does not declare', () => {
-		// A dark-only token is a colour that silently disappears in light mode.
-		const extra = DARK.filter((token) => !LIGHT.includes(token));
-		expect(extra, `declared only in the dark theme: ${extra.join(', ')}`).toEqual([]);
+	test('every theme colour has a light override', () => {
+		const missing = DARK.filter(
+			(token) => !THEME_INDEPENDENT.test(token) && !LIGHT.includes(token)
+		);
+		expect(
+			missing,
+			`declared in the base theme with no light value: ${missing.join(', ')}`
+		).toEqual([]);
+	});
+
+	test('the light theme invents nothing the base theme does not declare', () => {
+		// A light-only token is a colour that silently disappears in dark mode,
+		// which is now what almost every reader sees.
+		const extra = LIGHT.filter((token) => !DARK.includes(token));
+		expect(extra, `declared only in the light theme: ${extra.join(', ')}`).toEqual([]);
 	});
 
 	test('every non-exempt token has an @theme inline mirror', () => {
 		const mirrored = new Set(
 			[...APP.matchAll(/^\s*--[a-z0-9-]+:\s*var\((--[a-z0-9-]+)\)/gm)].map((m) => m[1])
 		);
-		const missing = LIGHT.filter(
+		const missing = DARK.filter(
 			(token) => !THEME_INDEPENDENT.test(token) && !NO_UTILITY.test(token) && !mirrored.has(token)
 		);
 		expect(
@@ -197,7 +222,7 @@ test.describe('the token layer', () => {
 		// A chart that borrowed the band tokens once told a reader the slowest
 		// stage was the failing one. The ramp is categorical and carries no
 		// word, so it may never reach for green, amber or red.
-		for (const theme of [block(TOKENS, ":root,\n[data-theme='light']"), block(TOKENS, "[data-theme='dark']")]) {
+		for (const theme of [block(TOKENS, BASE_SELECTOR), block(TOKENS, OVERRIDE_SELECTOR)]) {
 			const bands = [...theme.matchAll(/^\s*--band-(high|medium|low):\s*(#[0-9a-f]{6})/gm)].map(
 				(m) => m[2]
 			);

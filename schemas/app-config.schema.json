@@ -1286,8 +1286,8 @@
       "type": "object"
     },
     "ThemeChoice": {
+      "description": "The two themes. There is no third member for \"follow the device\".\n\n`system` was removed on 2026-08-31 with the control that offered it. It was\nnot a theme - it was the absence of a choice - and keeping it here would let\nan operator set a value no surface can honour. `UiConfig` migrates an older\nfile that names it (section 11).",
       "enum": [
-        "system",
         "light",
         "dark"
       ],
@@ -1397,7 +1397,8 @@
         },
         "theme_default": {
           "$ref": "#/$defs/ThemeChoice",
-          "default": "system"
+          "default": "dark",
+          "description": "The theme a reader who has never touched the control is served. It is the theme `:root` carries in tokens.css, so it is also what a page paints before any script runs and what a page with no script keeps."
         },
         "visual_side": {
           "$ref": "#/$defs/VisualSide",
@@ -1508,6 +1509,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "ThemeChoice lost its `system` member and ui.theme_default now defaults to `dark`; the committed config repeats it. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Breaking: the enum is narrower. The read-side migration is a before-validator on `UiConfig.theme_default` that reads `system` as `dark`, so a config written before today still loads.",
+      "version": "2026-08-31T23:55",
+      "why": "The site now starts dark and light is an opt-in stored choice, so the three-state theme control became one button with two states (owner decision, 2026-08-31). `system` was never a theme - it was the absence of a choice - and nothing asks the device any more. Leaving the member in would let an operator set a value no surface can honour, which is a knob that silently does nothing. `dark` is the value `:root` carries in tokens.css, so the config and the first painted frame now agree instead of disagreeing."
+    },
     {
       "change": "assist.recall_min default moved from 0.69 to 0.61, and the committed config repeats it. The shape is `AssistConfig`, which this document and `AppearanceConfig` share, so both schemas moved together.",
       "version": "2026-08-31T23:45",
@@ -1842,7 +1848,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-31T23:45",
+      "default": "2026-08-31T23:55",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1856,5 +1862,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-31T23:45"
+  "version": "2026-08-31T23:55"
 }

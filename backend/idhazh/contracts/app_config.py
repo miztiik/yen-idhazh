@@ -15,7 +15,7 @@ import math
 from enum import StrEnum
 from typing import ClassVar, Literal, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from idhazh.contracts.base import ChangelogEntry, CommitSha, Contract, Model, Sha256, Slug
 from idhazh.contracts.item_health import FailureCode
@@ -1115,7 +1115,14 @@ class VisualsConfig(Model):
 
 
 class ThemeChoice(StrEnum):
-    SYSTEM = "system"
+    """The two themes. There is no third member for "follow the device".
+
+    `system` was removed on 2026-08-31 with the control that offered it. It was
+    not a theme - it was the absence of a choice - and keeping it here would let
+    an operator set a value no surface can honour. `UiConfig` migrates an older
+    file that names it (section 11).
+    """
+
     LIGHT = "light"
     DARK = "dark"
 
@@ -1281,7 +1288,14 @@ class UiConfig(Model):
         min_length=1,
         description="Render order of the day page's sections, by registry id.",
     )
-    theme_default: ThemeChoice = ThemeChoice.SYSTEM
+    theme_default: ThemeChoice = Field(
+        default=ThemeChoice.DARK,
+        description=(
+            "The theme a reader who has never touched the control is served. It is the "
+            "theme `:root` carries in tokens.css, so it is also what a page paints "
+            "before any script runs and what a page with no script keeps."
+        ),
+    )
     visual_side: VisualSide = VisualSide.ABOVE
     source_mark: bool = Field(
         default=True, description="The monogram beside a source name. A scanning aid, not the id."
@@ -1330,6 +1344,16 @@ class UiConfig(Model):
             "it opens on the same twenty-five the console's failure list does."
         ),
     )
+
+    @field_validator("theme_default", mode="before")
+    @classmethod
+    def _system_reads_as_the_base_theme(cls, value: object) -> object:
+        """Read-side migration for a config written before 2026-08-31 (section 11).
+
+        `system` meant "follow the device". Nothing asks the device any more, so
+        the only honest reading of an older file is the base theme.
+        """
+        return ThemeChoice.DARK if value == "system" else value
 
 
 class PageWeightConfig(Model):
@@ -1531,6 +1555,27 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31T23:55",
+            change=(
+                "ThemeChoice lost its `system` member and ui.theme_default now defaults "
+                "to `dark`; the committed config repeats it. The shape is `UiConfig`, "
+                "which this document and `AppearanceConfig` share, so both schemas "
+                "moved together. Breaking: the enum is narrower. The read-side "
+                "migration is a before-validator on `UiConfig.theme_default` that reads "
+                "`system` as `dark`, so a config written before today still loads."
+            ),
+            why=(
+                "The site now starts dark and light is an opt-in stored choice, so the "
+                "three-state theme control became one button with two states (owner "
+                "decision, 2026-08-31). `system` was never a theme - it was the absence "
+                "of a choice - and nothing asks the device any more. Leaving the member "
+                "in would let an operator set a value no surface can honour, which is a "
+                "knob that silently does nothing. `dark` is the value `:root` carries "
+                "in tokens.css, so the config and the first painted frame now agree "
+                "instead of disagreeing."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-31T23:45",
             change=(
