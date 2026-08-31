@@ -27,6 +27,7 @@
 	 */
 	import {
 		chartWidth,
+		dayTicks,
 		frame,
 		linearAxis,
 		observeWidth,
@@ -47,6 +48,7 @@
 		width,
 		selectedCode,
 		onSelect,
+		tickDensity,
 		readoutMaxShare = 0.33
 	}: {
 		rows: TelemetryRow[];
@@ -58,6 +60,8 @@
 		width: number;
 		selectedCode: string | null;
 		onSelect: (code: string | null) => void;
+		/** The most date labels the day axis may carry - `chart.tick_density`. */
+		tickDensity: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;
 	} = $props();
@@ -70,10 +74,6 @@
 	/** Nought to one. A rate is already on a known scale, so the axis is fixed
 	 * and stays fixed. */
 	const RATE_TICKS = [0, 0.25, 0.5, 0.75, 1];
-
-	/** As many date labels as fit without overlapping at the narrowest window
-	 * this chart is drawn in. */
-	const DATE_LABELS = 6;
 
 	let measured = $state<number | null>(null);
 
@@ -114,6 +114,18 @@
 	function centre(index: number): number {
 		return box.left + index * slot + slot / 2;
 	}
+
+	/** Which columns carry a date. The columns are evenly spaced but the slot is
+	 * not the plot, so the centres go to the helper rather than a width. */
+	const dateAxis = $derived(
+		dayTicks(
+			load.columns.map((column) => column.date),
+			{
+				density: tickDensity,
+				columns: load.columns.map((_, index) => centre(index))
+			}
+		)
+	);
 
 	function rateY(rate: number): number {
 		return box.bottom - rate * box.innerHeight;
@@ -160,13 +172,6 @@
 		});
 		if (current.length > 1) runs.push(current);
 		return runs.map((run) => run.join(' '));
-	}
-
-	/** Which days get a date under them. The first and the last always, so the
-	 * span of the chart can be read off the chart. */
-	function labelled(index: number): boolean {
-		const step = Math.max(1, Math.ceil(load.columns.length / DATE_LABELS));
-		return index === 0 || index === load.columns.length - 1 || index % step === 0;
 	}
 
 	function below(index: number, band: number): number {
@@ -368,13 +373,27 @@
 							<title>{bandTitle(index, position)}</title>
 						</rect>
 					{/each}
-					{#if labelled(index)}
+				{/each}
+
+				<!-- The mark stays where the date was dropped, so a reader counting
+				     columns keeps the grid. -->
+				{#each dateAxis as tick (tick.index)}
+					<line
+						x1={centre(tick.index)}
+						x2={centre(tick.index)}
+						y1={box.bottom}
+						y2={box.bottom + 4}
+						stroke="var(--color-text-tertiary)"
+						data-day-tick={tick.date}
+					/>
+					{#if tick.text}
 						<text
-							x={centre(index)}
-							y={box.bottom + 14}
-							text-anchor="middle"
+							x={centre(tick.index)}
+							y={box.bottom + 16}
+							text-anchor={tick.anchor}
 							fill="var(--color-text-tertiary)"
-							font-size="10">{column.date.slice(5)}</text
+							font-size="10"
+							data-day-axis>{tick.text}</text
 						>
 					{/if}
 				{/each}

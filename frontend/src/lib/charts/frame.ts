@@ -141,49 +141,171 @@ export function chartWidth(measured: number | null, fallback: number): number {
 	return measured !== null && measured > 0 ? Math.round(measured) : fallback;
 }
 
-/** One column of a day axis that carries a date. */
+/** Which way a tick label must be anchored to stay inside its own plot.
+ *
+ * The end labels of an axis sit ON the plot edges, so a centred one hangs half
+ * its own width past the frame and an `svg` clips what hangs. Measured
+ * 2026-08-31 at 1440 on the built console: `What the cap cost, by source` drew
+ * `10,000` 3.2px outside its own `svg`, which is why the last two characters
+ * were missing.
+ */
+export type TickAnchor = 'start' | 'middle' | 'end';
+
+export function tickAnchor(at: number, count: number): TickAnchor {
+	if (count <= 1) return 'middle';
+	if (at === 0) return 'start';
+	if (at === count - 1) return 'end';
+	return 'middle';
+}
+
+/** The size every console axis sets a tick label at. */
+export const AXIS_LABEL_PX = 10;
+
+/** Clear pixels between two neighbouring labels. Two dates that touch read as
+ * one longer string, so the rule needs room between them and not merely no
+ * overlap. */
+export const AXIS_LABEL_GAP_PX = 8;
+
+/** How wide one character of a tick label is, as a share of the font size.
+ *
+ * Measured 2026-08-31 through `getComputedTextLength` in Chromium on the built
+ * console at 1440x900, on the page's own font at `font-size="10"`:
+ * `20 Aug 2026` is 55.83px over 11 characters, `18 Aug` is 31.53px over 6, and
+ * `10,000` is 29.13px over 6. The widest of those averages 5.26px a character,
+ * which is 0.526 of the size; this is ten percent over it on purpose. An
+ * estimate under the truth lets two labels touch, which is the defect the rule
+ * exists to stop, while an estimate over it only ever drops one label an axis
+ * could have carried.
+ */
+export const LABEL_ADVANCE_EM = 0.58;
+
+/** How wide a label will be, before anything has drawn it.
+ *
+ * The axis is decided on the server, where there is no text engine to ask, and
+ * on the client one frame before the browser has laid a label out. So the width
+ * is computed from the string rather than measured off the element.
+ */
+export function labelWidth(text: string, fontSize: number = AXIS_LABEL_PX): number {
+	return text.length * fontSize * LABEL_ADVANCE_EM;
+}
+
+/** Where a label anchored this way starts and ends, around its own x. */
+function labelExtent(
+	x: number,
+	text: string,
+	anchor: TickAnchor,
+	fontSize: number
+): [number, number] {
+	const wide = labelWidth(text, fontSize);
+	if (anchor === 'start') return [x, x + wide];
+	if (anchor === 'end') return [x - wide, x];
+	return [x - wide / 2, x + wide / 2];
+}
+
+/** Whether this set of labels can be drawn with room between every neighbour. */
+function fits(
+	take: readonly number[],
+	xs: readonly number[],
+	texts: readonly string[],
+	anchorOf: (at: number) => TickAnchor,
+	fontSize: number,
+	gap: number
+): boolean {
+	let previous = Number.NEGATIVE_INFINITY;
+	for (const at of take) {
+		const [from, to] = labelExtent(xs[at], texts[at], anchorOf(at), fontSize);
+		if (from < previous + gap) return false;
+		previous = to;
+	}
+	return true;
+}
+
+/** One column of a day axis. It carries a tick mark, and it may carry a date. */
 export interface DayTick {
 	/** 0-based column, counted along the dates the chart drew. */
 	index: number;
 	date: string;
+	/** What the label says, or '' where the fit dropped it. The tick mark is
+	 * drawn either way: a reader counting columns needs the grid even where the
+	 * date is gone. */
 	text: string;
-	anchor: 'start' | 'middle' | 'end';
+	anchor: TickAnchor;
+}
+
+export interface DayAxisOptions {
+	/** `chart.tick_density` - the MOST labels the axis may carry. A ceiling and
+	 * never a target: the measured fit below only ever takes more away. */
+	density: number;
+	/** Where each day sits, in the chart's own pixels, one entry per date.
+	 * `dayColumns` builds it where the days are evenly spaced; a chart whose
+	 * columns are not evenly spaced passes its own. */
+	columns: readonly number[];
+	fontSize?: number;
+	gap?: number;
 }
 
 /** Which columns of a day axis carry a date, and what each one says.
  *
- * `density` is `chart.tick_density`: the most labels the axis may carry. Fewer
- * days than that and every day is labelled; more, and the labels spread evenly
- * with the first and last day always among them.
+ * Two rules, in this order. `density` picks the columns that carry a tick mark,
+ * evenly spread with the first and last day always among them. Then the labels
+ * are measured against the room the plot actually has, and dropped in whole
+ * steps until no two of them touch - a count alone cannot hold at 1440 and at
+ * 390, and measured 2026-08-31 it did not: six labels over 30 days overlapped
+ * by 13.6px on a phone.
  *
  * The rule this replaces labelled the two endpoints and nothing between them,
  * so a spike in the middle of a month could not be attributed to a date without
- * counting columns with a finger. Six labels over thirty days puts every mark
- * within three columns of a date.
+ * counting columns with a finger.
  */
-export function dayTicks(dates: readonly string[], density: number): DayTick[] {
+export function dayTicks(dates: readonly string[], options: DayAxisOptions): DayTick[] {
 	const days = dates.length;
 	if (days === 0) return [];
-	const wanted = Math.max(1, Math.min(days, Math.floor(density)));
-	if (wanted === 1) {
+	const { density, columns, fontSize = AXIS_LABEL_PX, gap = AXIS_LABEL_GAP_PX } = options;
+	const ceiling = Math.max(1, Math.min(days, Math.floor(density)));
+	if (ceiling === 1) {
 		return [{ index: 0, date: dates[0], text: shortDate(dates[0]), anchor: 'middle' }];
 	}
-	const ticks: DayTick[] = [];
-	// The year is printed once and then only where it changes, so a month of
-	// columns does not carry four digits that never move.
-	let carried = '';
-	for (let n = 0; n < wanted; n += 1) {
-		const index = Math.round((n * (days - 1)) / (wanted - 1));
-		const date = dates[index];
-		ticks.push({
-			index,
-			date,
-			text: date.slice(0, 4) === carried ? dayMonth(date) : shortDate(date),
-			anchor: n === 0 ? 'start' : n === wanted - 1 ? 'end' : 'middle'
-		});
-		carried = date.slice(0, 4);
+
+	// Every column the ceiling allows. These carry a tick mark whichever labels
+	// survive, so the grid does not change shape as the window does.
+	const marks = Array.from({ length: ceiling }, (_, n) =>
+		Math.round((n * (days - 1)) / (ceiling - 1))
+	);
+	// Anchoring is about where a label sits on the plot, not about its rank among
+	// the survivors: the first candidate is on the left edge whether or not the
+	// one after it was dropped.
+	const anchorOf = (at: number) => tickAnchor(at, ceiling);
+	const xs = marks.map((index) => columns[index] ?? 0);
+	// The longest form of every label, so the fit is decided before the year rule
+	// shortens any of them. A shorter label can only ever help.
+	const widest = marks.map((index) => shortDate(dates[index]));
+
+	let kept: number[] = [];
+	for (let count = ceiling; count >= 2; count -= 1) {
+		const take = Array.from({ length: count }, (_, n) =>
+			Math.round((n * (ceiling - 1)) / (count - 1))
+		);
+		if (fits(take, xs, widest, anchorOf, fontSize, gap)) {
+			kept = take;
+			break;
+		}
 	}
-	return ticks;
+	// Not even the two ends fit. The newest day is the one an operator reads
+	// first, so it is the one that survives.
+	if (kept.length === 0) kept = [ceiling - 1];
+
+	const labelled = new Set(kept);
+	// The year is printed once and then only where it changes, so a month of
+	// columns does not carry four digits that never move. Carried over the
+	// labels that survived, never over the ones that were only offered.
+	let carried = '';
+	return marks.map((index, at) => {
+		const date = dates[index];
+		if (!labelled.has(at)) return { index, date, text: '', anchor: anchorOf(at) };
+		const text = date.slice(0, 4) === carried ? dayMonth(date) : shortDate(date);
+		carried = date.slice(0, 4);
+		return { index, date, text, anchor: anchorOf(at) };
+	});
 }
 
 /** Where a day's column sits, in the chart's own pixels.
@@ -199,6 +321,15 @@ export function dayColumnX(index: number, columns: number, box: Frame, pad = 0):
 	const right = Math.max(left, box.right - pad);
 	if (columns <= 1) return (left + right) / 2;
 	return left + (index * (right - left)) / (columns - 1);
+}
+
+/** Every day column's x, for an axis whose days are evenly spaced.
+ *
+ * The labels and the marks come out of one function, so they cannot disagree
+ * about where a column is.
+ */
+export function dayColumns(columns: number, box: Frame, pad = 0): number[] {
+	return Array.from({ length: columns }, (_, index) => dayColumnX(index, columns, box, pad));
 }
 
 /** How wide the readout strip under a plot may be, as an inline style.

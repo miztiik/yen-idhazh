@@ -21,6 +21,7 @@
 	 */
 	import {
 		chartWidth,
+		dayTicks,
 		frame,
 		linearAxis,
 		observeWidth,
@@ -30,7 +31,6 @@
 		type Margin
 	} from '$lib/charts/frame';
 	import ChartReadout from './ChartReadout.svelte';
-	import { dayMonth } from '$lib/format';
 	import type { RunLength } from '../../routes/console/model/+page.server';
 
 	let {
@@ -137,18 +137,26 @@
 			}))
 	);
 
-	/** One date label per day, thinned to the configured density. A run id is
-	 * eighteen characters and there are five of them a day. */
+	/** One date label per day, thinned by what the axis has room for. The columns
+	 * are the runs, and a day can hold one run or five, so the day-first columns
+	 * are not evenly spaced and their own x goes to the helper. A run id is
+	 * eighteen characters and there are five of them a day, so the label is the
+	 * date. */
+	const firsts = $derived(
+		runs
+			.map((run, index) => ({ run, index }))
+			.filter(({ run, index }) => index === 0 || runs[index - 1].date !== run.date)
+	);
 	const labels = $derived(
-		(() => {
-			const firsts = runs
-				.map((run, index) => ({ run, index }))
-				.filter(({ run, index }) => index === 0 || runs[index - 1].date !== run.date);
-			const step = Math.max(1, Math.ceil(firsts.length / Math.max(1, tickDensity)));
-			return firsts
-				.filter((_, position) => position % step === 0)
-				.map(({ run, index }) => ({ date: run.date, x: columnX(index) }));
-		})()
+		dayTicks(
+			firsts.map(({ run }) => run.date),
+			{ density: tickDensity, columns: firsts.map(({ index }) => columnX(index)) }
+		).map((tick) => ({
+			date: tick.date,
+			text: tick.text,
+			anchor: tick.anchor,
+			x: columnX(firsts[tick.index]?.index ?? 0)
+		}))
 	);
 
 	function sentence(run: RunLength): string {
@@ -314,17 +322,30 @@
 
 			<line x1={box.left} x2={box.right} y1={box.bottom} y2={box.bottom} stroke="var(--color-rule)" />
 
+			<!-- The mark stays where the date was dropped, so a reader counting runs
+			     keeps the grid. -->
 			{#each labels as label (label.date)}
-				<text
-					x={round(label.x)}
-					y={box.bottom + 14}
-					text-anchor="middle"
-					fill="var(--color-text-tertiary)"
-					font-size="10"
-					data-tick="x"
-				>
-					{dayMonth(label.date)}
-				</text>
+				<line
+					x1={round(label.x)}
+					x2={round(label.x)}
+					y1={box.bottom}
+					y2={box.bottom + 4}
+					stroke="var(--color-text-tertiary)"
+					data-day-tick={label.date}
+				/>
+				{#if label.text}
+					<text
+						x={round(label.x)}
+						y={box.bottom + 16}
+						text-anchor={label.anchor}
+						fill="var(--color-text-tertiary)"
+						font-size="10"
+						data-day-axis
+						data-tick="x"
+					>
+						{label.text}
+					</text>
+				{/if}
 			{/each}
 
 			<text

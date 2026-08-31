@@ -1124,7 +1124,7 @@ of type under it says the window is empty.
 sparse-label arithmetic until 2026-08-30, which printed the whole window as one
 span string and no per-day label at all, so a spike could not be attributed to a
 date. It now prints one date per plotted day through `dayTicks`,
-thinned evenly to `chart.tick_density` with both endpoints always kept, and the
+thinned to what the plot has room for with both endpoints always kept, and the
 span it used to print moved into the `<svg>`'s accessible name. Measured
 2026-08-30 by building the canary console from either side of the change on one
 machine in one session: 6 text nodes carrying 0 date labels before, 7 carrying 2
@@ -1148,16 +1148,22 @@ every column the density allows. The old block was one group of four bars per
 day - about 150 rows at a 30-day window, and no trend - and "is it getting
 slower" is the only question the section is asked.
 
-**The x axis prints a date per column, thinned to `chart.tick_density`.** It used
+**The x axis prints a date per column, thinned to what fits.** It used
 to print one string for the whole span - `24-29 Aug 2026`, measured on the built
 page 2026-08-30 - which is the run strip's sparse-label arithmetic, and that
 arithmetic is right for a strip of 16px squares and wrong for a 760px plot. Six
 labels over thirty days puts every mark within three columns of a date; one
 label over six days put a spike nowhere at all. The first and last day are always
 among them, evenly spaced indices fill the rest, and the year is printed once and
-then only where it changes. `dayTicks` in
+then only where it changes. `chart.tick_density` is the ceiling on how many the
+axis may carry and the measured fit takes more away where the plot is narrow, so
+nothing overlaps at 390px; a column whose date was dropped keeps its tick mark.
+`dayTicks` in
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
-owns it, so the throughput candle beside it labels its axis the same way.
+owns it, so the throughput candle beside it labels its axis the same way, and so
+do the band columns, the failure panel, the run lengths and both run strips.
+The rule and what it costs are in
+[../../concepts/design-system.md](../../concepts/design-system.md).
 
 **Every point on it carries a mark.** A filled dot is a measured time and an open
 dot on the baseline is a measured zero; a day a stage was never timed on has
@@ -1613,15 +1619,18 @@ still reads against the day before it. Differenced against zero it would report
 the whole tree as one day's work, and the window would invent an outlier every
 time it moved.
 
-**The `Site size` card carries the level, a track against the cap, the window's
-delta and a runway.** The runway is the arithmetic
-[../../../backend/idhazh/retention.py](../../../backend/idhazh/retention.py)
-already runs: headroom divided by one published day's growth, where a day's
-growth is the per-article cost times `run.safety_ceiling_per_run`. The item
-ceiling and not an average of the days on disk - a day that published 97
-articles is no evidence the next one will, and a runway has to be the worst case
-to be worth printing (Rule #10). Where the window measured no growth there is no
-rate, so the card says there is no runway instead of printing a date.
+**The `Site size` fact carries the level, a track against the cap, the window's
+delta and a runway.** The runway is headroom over the per-article cost, and what
+it counts is **articles**: `(cap - bytes) / bytesPerItem`. It was published days
+until 2026-08-31, divided by `run.safety_ceiling_per_run` articles a day - and
+that knob bounds one **run**, not one day. Up to five runs a day is normal, so
+the band priced a day at 160 articles while the days it measured ran a median of
+334, and the printed runway was 2.09 times too long
+([../../reference/measurements.md](../../reference/measurements.md#days-to-the-1-gb-pages-ceiling)).
+Articles need no daily rate at all, which is why the fix removed the assumption
+instead of correcting it. Where no published day grew the tree over an article
+it published there is no rate, so the fact says there is no runway instead of
+printing a figure.
 
 **The delta is megabytes and not a percentage, and that was a measurement.** The
 oldest committed manifest recorded 13,595 bytes, so a share taken from there read
@@ -1643,14 +1652,17 @@ Windows 11 10.0.26200, node v24.12.0, one build:
 
 The bundle is **14.63 times larger**, and it was eighteen times larger on
 2026-08-27 ([the run-manifest changelog](../../../backend/idhazh/contracts/run_manifest.py)),
-so the multiple itself is not stable. The card's sentence is therefore written
-caveat-first: it says the number is the committed payload tree and not the
-published site, that the site is what the cap measures, and that
-`idhazh site-weight` prints the runway that binds - and only then that
-`160 articles a day would fill this tree to 1 GB in about N published days`. It
-never says "the site" has N days, because it does not know that. Measured
-2026-08-30 the card read 2,038 published days and `site-weight` read 123, which
-is the size of the gap the wording exists to keep visible
+so the multiple itself is not stable. **The committed-tree runway above is how
+that cell was derived on the day it was measured**; it counts articles since
+2026-08-31, for the reason two paragraphs up. The card's sentence is therefore
+written caveat-first: it says the number is the committed payload tree and not
+the published site, that the site is what the cap measures, and that
+`idhazh site-weight` prints the runway that binds - and only then that this tree
+has room for about N more articles. It never says "the site" has room for N,
+because it does not know that. Measured 2026-08-31 the band read about 312,000
+articles of room in the committed payload tree, while `site-weight` on
+2026-08-30 read 119 published days in a bundle 14.63 times larger - two trees,
+two units, and that gap is what the wording exists to keep visible
 ([../../how-to/run-the-gates.md](../../how-to/run-the-gates.md)).
 
 **What the deleted table was for, and where each column went.** `Runs`,

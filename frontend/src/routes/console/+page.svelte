@@ -241,7 +241,12 @@
 	 * twenty observers, and the room a list row has is a layout decision the
 	 * server can make as well as the browser can. */
 	const stripCell = $derived(denseCellFor(ROW_STRIP_PX, stripDates.length));
-	const stripAxis = $derived(axisLabels(stripDates));
+	const stripAxis = $derived(
+		axisLabels(stripDates, {
+			density: data.chart.tick_density,
+			pitch: stripCell.cell + stripCell.gap
+		})
+	);
 	const strips = $derived(
 		new Map(
 			data.feeds.map((feed) => [feed.feedId, new Map(feed.days.map((day) => [day.date, day]))])
@@ -278,7 +283,6 @@
 	/** The strip reads the page's window, like every other windowed section. */
 	const windowGrid = $derived(data.grid.filter((day) => inWindow(day.date)));
 	const windowRuns = $derived(windowGrid.reduce((count, day) => count + day.squares.length, 0));
-	const axis = $derived(axisLabels(windowGrid.map((day) => day.date)));
 
 	/** A label is placed inside its column, not laid out by it, so the widest
 	 * date on the axis cannot push a single day track out of step. */
@@ -305,6 +309,16 @@
 	 * at zero. */
 	let stripWidth = $state<number | null>(null);
 	const strip_ = $derived(cellFor(stripWidth, windowGrid.length));
+
+	/** Which columns of the run strip carry a date. The cell here grows from 16px
+	 * to 34px with the room the strip has, so the number of labels that fit is a
+	 * measurement and not a constant. */
+	const axis = $derived(
+		axisLabels(
+			windowGrid.map((day) => day.date),
+			{ density: data.chart.tick_density, pitch: strip_.cell + strip_.gap }
+		)
+	);
 
 	$effect(() => {
 		const node = strip;
@@ -598,6 +612,7 @@
 								<span
 									class="absolute top-0 whitespace-nowrap text-[0.625rem] leading-4 tabular-nums text-text-tertiary"
 									style={ANCHOR[label.align]}
+									data-day-axis
 									data-axis-label={label.column}
 								>
 									{label.text}
@@ -780,7 +795,9 @@
 				>
 					{#each stripAxis as label (label.column)}
 						<div class="feed-axis-slot" style="grid-column: {label.column}">
-							<span style={ANCHOR[label.align]} data-feed-axis={label.column}>{label.text}</span>
+							<span style={ANCHOR[label.align]} data-day-axis data-feed-axis={label.column}
+								>{label.text}</span
+							>
 						</div>
 					{/each}
 				</div>

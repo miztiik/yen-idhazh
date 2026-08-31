@@ -26,6 +26,7 @@
 	 */
 	import {
 		chartWidth,
+		dayColumns,
 		dayColumnX,
 		dayTicks,
 		frame,
@@ -94,7 +95,6 @@
 	);
 	const y = $derived(linearAxis(rates, [box.bottom, box.top], { zero: false }));
 
-	const axis = $derived(dayTicks(calendar, tickDensity));
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 	const previous = $derived(ordered.length > 1 ? ordered[ordered.length - 2] : null);
 
@@ -142,6 +142,12 @@
 	 * plot rather than straddling its edge. */
 	const pad = $derived(Math.min(offset + candle / 2, box.innerWidth / 2));
 	const step = $derived((box.innerWidth - pad * 2) / Math.max(1, calendar.length - 1));
+
+	/** Which columns carry a date. The pad is part of it, so the fit is measured
+	 * against the room the labels actually have rather than the whole plot. */
+	const axis = $derived(
+		dayTicks(calendar, { density: tickDensity, columns: dayColumns(calendar.length, box, pad) })
+	);
 
 	function x(index: number): number {
 		return dayColumnX(index, calendar.length, box, pad);
@@ -373,20 +379,32 @@
 					{/if}
 				{/each}
 
-				<!-- A date per column, thinned to `tickDensity` with both ends kept. It
-				     used to be one span string for the whole axis, which left a spike
-				     sitting between two dates it could equally have belonged to. -->
+				<!-- A date per column, thinned to what the plot has room for with both
+				     ends kept. It used to be one span string for the whole axis, which
+				     left a spike sitting between two dates it could equally belong to.
+				     A column whose date was dropped keeps its mark. -->
 				{#each axis as label (label.index)}
-					<text
-						x={x(label.index)}
-						y={box.bottom + 14}
-						text-anchor={label.anchor}
-						fill="var(--color-text-tertiary)"
-						font-size="10"
-						data-throughput-label={label.date}
-					>
-						{label.text}
-					</text>
+					<line
+						x1={x(label.index)}
+						x2={x(label.index)}
+						y1={box.bottom}
+						y2={box.bottom + 4}
+						stroke="var(--color-text-tertiary)"
+						data-day-tick={label.date}
+					/>
+					{#if label.text}
+						<text
+							x={x(label.index)}
+							y={box.bottom + 16}
+							text-anchor={label.anchor}
+							fill="var(--color-text-tertiary)"
+							font-size="10"
+							data-day-axis
+							data-throughput-label={label.date}
+						>
+							{label.text}
+						</text>
+					{/if}
 				{/each}
 			</svg>
 		</div>
