@@ -29,6 +29,11 @@ import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/paylo
 
 const CANARY = resolve(process.cwd(), '..', 'backend', 'var', 'canary');
 
+/** A run strip at the pitch `cellFor` settles on for a page-wide frame: a 16px
+ * cell and a 4px gap. The axis is thinned against that room, so a test about it
+ * has to state it. `density` is `chart.tick_density`. */
+const STRIP = { density: 6, pitch: 20 };
+
 function dirs(at: string): string[] {
 	return readdirSync(at, { withFileTypes: true })
 		.filter((entry) => entry.isDirectory())
@@ -177,39 +182,45 @@ function watchFor404s(page: Page): string[] {
 }
 
 test('one day gets a full date, and a short run gets one span', () => {
-	expect(axisLabels([])).toEqual([]);
-	expect(axisLabels(['2026-08-20'])).toEqual([{ column: 1, text: '20 Aug 2026', align: 'end' }]);
+	expect(axisLabels([], STRIP)).toEqual([]);
+	expect(axisLabels(['2026-08-20'], STRIP)).toEqual([
+		{ column: 1, text: '20 Aug 2026', align: 'end' }
+	]);
 
 	// Two to six days cannot carry a cadence, so the whole span is said once.
 	expect(spanLabel('2026-08-18', '2026-08-20')).toBe('18-20 Aug 2026');
 	expect(spanLabel('2026-07-30', '2026-08-02')).toBe('30 Jul - 2 Aug 2026');
 	expect(spanLabel('2025-12-30', '2026-01-02')).toBe('30 Dec 2025 - 2 Jan 2026');
-	expect(axisLabels(days('2026-08-15', 4))).toEqual([
+	expect(axisLabels(days('2026-08-15', 4), STRIP)).toEqual([
 		{ column: 4, text: '15-18 Aug 2026', align: 'end' }
 	]);
 });
 
-test('a longer run carries both ends and a weekly cadence between them', () => {
-	const twenty = axisLabels(days('2026-08-01', 20));
+test('a longer run carries both ends and as many between them as fit', () => {
+	const twenty = axisLabels(days('2026-08-01', 20), STRIP);
 
-	// Column 15 would land five columns from the newest end, where the two texts
-	// would share pixels. It is dropped rather than crowded.
-	expect(twenty.map((label) => label.column)).toEqual([1, 8, 20]);
-	expect(twenty.map((label) => label.text)).toEqual(['1 Aug 2026', '8 Aug', '20 Aug 2026']);
+	// The ceiling offers six columns over twenty days. At a 20px pitch the strip
+	// is 380px wide, and a date is about 64px, so six of them cannot be drawn.
+	// The rule drops to three rather than letting two of them touch.
+	expect(twenty.map((label) => label.column)).toEqual([1, 12, 20]);
+	expect(twenty.map((label) => label.text)).toEqual(['1 Aug 2026', '12 Aug', '20 Aug']);
 	expect(twenty.map((label) => label.align)).toEqual(['start', 'centre', 'end']);
 
-	expect(axisLabels(days('2026-08-01', 30)).map((label) => label.column)).toEqual([1, 8, 15, 22, 30]);
+	// A strip with three times the room carries every column the ceiling allows.
+	const wide = axisLabels(days('2026-08-01', 20), { density: STRIP.density, pitch: 60 });
+	expect(wide.map((label) => label.column)).toEqual([1, 5, 9, 12, 16, 20]);
 });
 
 test('the year is stated on the first label that changes it, and not again', () => {
-	const across = axisLabels(days('2025-12-20', 30));
+	const across = axisLabels(days('2025-12-20', 30), { density: STRIP.density, pitch: 60 });
 
 	expect(across.map((label) => label.text)).toEqual([
 		'20 Dec 2025',
-		'27 Dec',
-		'3 Jan 2026',
-		'10 Jan',
-		'18 Jan 2026'
+		'26 Dec',
+		'1 Jan 2026',
+		'6 Jan',
+		'12 Jan',
+		'18 Jan'
 	]);
 });
 
