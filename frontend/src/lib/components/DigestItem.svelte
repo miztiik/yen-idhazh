@@ -1,8 +1,11 @@
 <script lang="ts">
 	/** One item. Three levels of hierarchy and no fourth.
 	 *
-	 * Hairline rules rather than cards: seventeen boxes of chrome on a page whose
-	 * product is prose is chrome winning.
+	 * A card on the page ground, carrying a hairline and no shadow at rest. The
+	 * surface and the edge do the separating; one step of elevation and a
+	 * warmer edge arrive on hover and on focus to say that these lines belong
+	 * together. Nothing moves - the title is a heading rather than a link, so a
+	 * rise would promise a click the card does not answer.
 	 *
 	 * Read is marked on the title link only - one step down the ramp, accent
 	 * removed, a weight lighter. Never dimmed: a dimmed item reads as "you cannot
@@ -43,7 +46,7 @@
 
 <article
 	id={item.item_id}
-	class="item border-b border-rule py-7"
+	class="item"
 	data-band={item.band}
 	data-vertical={item.vertical}
 	data-truncated={item.truncated}
@@ -72,7 +75,7 @@
 
 		<svelte:element
 			this={`h${level}`}
-			class="measure mb-2 text-xl"
+			class="measure mb-2 text-2xl"
 			class:font-semibold={!read}
 			class:font-normal={read}
 			class:text-text={!read}
@@ -104,6 +107,24 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr);
 		gap: var(--space-2);
+		margin-block-start: var(--space-4);
+		padding: var(--space-4);
+		border: 1px solid var(--item-edge);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+		transition:
+			border-color var(--dur-fast) var(--ease-standard),
+			box-shadow var(--dur-fast) var(--ease-standard);
+	}
+
+	/* No shadow at rest: a page of items that all float is a page where nothing
+	   is in front of anything either. The elevation is what the pointer and the
+	   keyboard buy, and :focus-within earns it for a reader who never uses a
+	   pointer at all. */
+	.item:hover,
+	.item:focus-within {
+		border-color: var(--color-accent);
+		box-shadow: var(--shadow-md);
 	}
 
 	/* At this width the meta line - source, date, confidence, read mark - stops
@@ -116,6 +137,7 @@
 			grid-template-columns: minmax(0, 1fr) 14rem;
 			gap: var(--space-6);
 			align-items: start;
+			padding: var(--space-5);
 		}
 
 		.item-rail {
