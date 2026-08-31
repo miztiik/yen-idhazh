@@ -745,6 +745,29 @@ is the average every throughput figure this project had quoted until this page.
 4x inside a run on this ledger and write speed barely moves, so a single "model
 seconds" figure averages two different machines together.
 
+**The board is five columns on a desktop and one card a shard at 1024px and
+under.** The column head is the only thing naming a value, so when the columns
+go the names have to go into the cells - a heading that exists only on a desktop
+is a value with no name on a phone. What the cards replaced was a two-column
+fallback holding five children, which pushed the read rate and the job clock
+into the 3rem shard column: measured 2026-09-01 at 360px on the build before the
+change, `1 h 28 m` was drawn over four lines in a 20px box, one character to a
+line, and `of the 150-minute timeout - 59 percent` took six lines in 41px. Every
+value the desktop shows the phone shows;
+[../../../frontend/tests/console-machine-data.spec.ts](../../../frontend/tests/console-machine-data.spec.ts)
+compares the two sets rather than trusting the layout, and holds every string to
+at least twelve characters a line. Dropping a column on a phone was refused: the
+board is five facts about one shard, and an instrument that answers four
+questions on a phone and five on a desktop is two instruments. So was a
+horizontal scroll, which hides the job clock - the column an operator opens the
+page for. Authority: Jony and Susan, 2026-08-31.
+
+**The card is an edge, not a fill.** Every quiet line in a row is
+`--color-text-tertiary`, which reads 4.72:1 on `--color-surface` and 4.26:1 on
+`--color-surface-raised`, so lifting the card would put four strings under 4.5:1
+in the dark theme to buy a tint. Both bars in a row are drawn on
+`--color-surface-sunken`, so a sunken card would erase them instead.
+
 **A run whose rows cannot be made into one run is named on the page.** The
 reader refuses a run where one shard index committed two different scrapes -
 two workflow runs computed the same run id and `merge=union` concatenated both -
