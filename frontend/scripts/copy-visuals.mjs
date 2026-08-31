@@ -31,9 +31,9 @@
  * index rebuild reads. A page renders less than that, and a reader fetches one
  * of these per day they open. Staging it whole put a second full copy of every
  * day's text and vectors in the bundle. Measured 2026-08-31 on Intel Core
- * i7-1265U / Windows 11 / node 24.12.0, 11 committed days and 3,596 items,
- * `gzip -9`: the committed day is 792.24 bytes an item and the projection is
- * 468.38, which is 40.9 percent less. The floor is not zero because 2,259,497
+ * i7-1265U / Windows 11 / node 24.12.0, 11 committed days and 3,733 items,
+ * `gzip -9`: the committed day is 792.65 bytes an item and the projection is
+ * 468.58, which is 40.9 percent less. The floor is not zero because 2,259,497
  * bytes of the staged tree is 178 rendered images, which this step must not
  * touch.
  *

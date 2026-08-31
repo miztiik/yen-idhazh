@@ -30,8 +30,8 @@ migration lands in the shell, not only in the build, because the two are not
 upgraded together and a reader can hold a shell for as long as their cache does.
 
 What it drops, and what that is worth. Measured 2026-08-31 on this checkout,
-11 committed days and 3,596 items, `gzip -9` over the compact projection: the
-committed day is 792.24 gzipped bytes an item, and this projection is 468.38 -
+11 committed days and 3,733 items, `gzip -9` over the compact projection: the
+committed day is 792.65 gzipped bytes an item, and this projection is 468.58 -
 40.9 percent less. `embeddings` is the block that pays for the projection
 existing at all: no browser opens it, its one production reader is the backend's
 index rebuild, and it was 40.0 percent of a day page. `events` and `entities`
@@ -104,7 +104,7 @@ class DigestViewItem(Model):
         default=None,
         description=(
             "Why the item is not in the top band. Null on a `high` item and on a day "
-            "published before this existed - 14 of 3,596 committed items on 2026-08-31."
+            "published before this existed - 14 of 3,733 committed items on 2026-08-31."
         ),
     )
     truncated: bool = Field(
@@ -189,8 +189,8 @@ class DigestView(Contract):
                 "block, published_at and time_source for the time rail, "
                 "introduced_by_run for the run divider, lenses for the topic chips, and "
                 "key_points for the in-page filter that reads them today. Measured "
-                "2026-08-31 over 11 committed days and 3,596 items, gzip -9: 361.78 "
-                "bytes an item before and 468.38 after, against 792.24 for the "
+                "2026-08-31 over 11 committed days and 3,733 items, gzip -9: 361.10 "
+                "bytes an item before and 468.58 after, against 792.65 for the "
                 "committed day."
             ),
         ),

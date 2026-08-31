@@ -1829,22 +1829,33 @@ def test_the_served_item_is_a_narrowing_of_the_published_one() -> None:
 def test_every_committed_day_serves_a_view_that_validates() -> None:
     """The migration, over every day a reader can already fetch.
 
-    Eleven days and 3,596 items on 2026-08-31, none of which carries any of the
-    five ranking fields. Each must project to a payload the contract accepts,
-    and every absent field must come back unknown rather than as a number a run
-    never recorded.
+    Each committed day must project to a payload the contract accepts, and a
+    field the file does not carry must come back unknown rather than as a number
+    the run never recorded.
+
+    The oracle reads the raw payload beside the served item and only judges a
+    field the file omits, for the same reason the published-day test next to it
+    does: asserting that no committed day carries any of the five was true for
+    one afternoon and false from the first run that published with the new
+    writer.
     """
     days = 0
     items = 0
+    absent = 0
     for path in committed_days():
-        view = DigestView.model_validate(serve(json.loads(read_text(path))))
+        written = json.loads(read_text(path))
+        view = DigestView.model_validate(serve(written))
         days += 1
-        for item in view.items:
+        for payload, item in zip(written["items"], view.items, strict=True):
             items += 1
             for name in RANKING_SIGNAL:
+                if name in payload:
+                    continue
+                absent += 1
                 assert getattr(item, name) is None, f"{path.name} {item.item_id}: {name} invented"
 
     assert days and items, "the loop above must have had something to read"
+    assert absent, "every committed item carries all five, so nothing here reads an absent field"
 
 
 def test_a_served_day_refuses_a_field_it_does_not_know() -> None:

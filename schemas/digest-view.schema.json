@@ -39,7 +39,7 @@
             }
           ],
           "default": null,
-          "description": "Why the item is not in the top band. Null on a `high` item and on a day published before this existed - 14 of 3,596 committed items on 2026-08-31."
+          "description": "Why the item is not in the top band. Null on a `high` item and on a day published before this existed - 14 of 3,733 committed items on 2026-08-31."
         },
         "carried_by": {
           "anyOf": [
@@ -326,7 +326,7 @@
     {
       "change": "Initial shape: the day's items narrowed to what a page renders, carrying a version of their own.",
       "version": "2026-08-31T12:00",
-      "why": "The staged day payload was a thirteen-name array in a build script, which was enough while the only reader was our own archive page. A reading route is about to fetch this file, so a browser we cannot upgrade will parse it and its address stops being movable - which is a persisted shape and therefore a contract before logic reads it (Rule #3). The version is here from the first byte so that an older shell reading a newer payload has something to branch on. Nine names join the thirteen in the same commit, each with a named renderer: carried_by, watchlist_hit, on_front_page and rank_score for the lead block, published_at and time_source for the time rail, introduced_by_run for the run divider, lenses for the topic chips, and key_points for the in-page filter that reads them today. Measured 2026-08-31 over 11 committed days and 3,596 items, gzip -9: 361.78 bytes an item before and 468.38 after, against 792.24 for the committed day."
+      "why": "The staged day payload was a thirteen-name array in a build script, which was enough while the only reader was our own archive page. A reading route is about to fetch this file, so a browser we cannot upgrade will parse it and its address stops being movable - which is a persisted shape and therefore a contract before logic reads it (Rule #3). The version is here from the first byte so that an older shell reading a newer payload has something to branch on. Nine names join the thirteen in the same commit, each with a named renderer: carried_by, watchlist_hit, on_front_page and rank_score for the lead block, published_at and time_source for the time rail, introduced_by_run for the run divider, lenses for the topic chips, and key_points for the in-page filter that reads them today. Measured 2026-08-31 over 11 committed days and 3,733 items, gzip -9: 361.10 bytes an item before and 468.58 after, against 792.65 for the committed day."
     }
   ],
   "description": "`<base>/digest/<YYYY>/<MM>/<DD>/digest.json`, as a browser fetches it.",

@@ -51,25 +51,29 @@ export const VIEW_VERSION = '2026-08-31T12:00';
 // an item after the summary itself.
 //
 // Nine names joined the original thirteen on 2026-08-31, each with a named
-// renderer and each priced. Measured over 11 committed days and 3,596 items,
-// `gzip -9` on the compact projection, against the thirteen-field arm:
+// renderer and each priced. Measured over 11 committed days and 3,733 items,
+// `gzip -9` on the compact projection, each name added to the thirteen-field
+// arm on its own:
 //
-//   carried_by, watchlist_hit, on_front_page, rank_score    +3.21 B an item
-//   published_at, time_source                               +9.04 B an item
-//   introduced_by_run                                       +1.16 B an item
-//   lenses                                                  +1.07 B an item
-//   key_points                                             +92.91 B an item
+//   carried_by      +0.94    published_at        +8.29
+//   watchlist_hit   +1.12    time_source         +0.99
+//   on_front_page   +1.11    introduced_by_run   +1.16
+//   rank_score      +1.16    lenses              +1.11
+//   key_points     +93.54
+//
+// All nine together are +107.42 bytes an item rather than the +109.42 those
+// nine sum to, because gzip shares what they have in common.
 //
 // `key_points` is nine tenths of that and it is the one worth defending.
 // `DigestList` filters on it today, so once a reading route fetches this file
 // instead of inlining the day, an absent `key_points` is a thrown TypeError
-// rather than a narrower filter. The six prerendered documents it replaces
-// carried the same words six times over, so on the wire it is cheaper here than
-// it was there.
+// rather than a narrower filter. The twelve prerendered documents it replaces
+// carry the same words twelve times over, so on the wire it is cheaper here
+// than it was there.
 //
 // Three names were refused. `events` and `entities` have no renderer and the
-// reading-page plan forbids publishing them as reader-facing chips (+1.57 and
-// +1.71 B an item). `source_form` has no reader at all (+1.20).
+// reading-page plan forbids publishing them as reader-facing chips (+1.63 and
+// +1.80 B an item). `source_form` has no reader at all (+1.21).
 //
 // The order is the order the staged file writes its keys in, so a name moved
 // here rewrites every staged day.
