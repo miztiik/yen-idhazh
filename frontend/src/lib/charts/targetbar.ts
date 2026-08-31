@@ -13,9 +13,12 @@
 
 import type { EChartsOption } from 'echarts';
 import { percentOf } from './rank';
-import { paint, type ChartToken } from './theme';
+import { paint, type ChartToken, type Polarity } from './theme';
 
-export type TargetSense = 'lower-is-better' | 'higher-is-better';
+/** Which side of the target is the good side. The same property of the same
+ * measure the movement colour reads, so a bar and a delta on one figure cannot
+ * disagree about which way is better. */
+export type TargetSense = Polarity;
 
 export type TargetBand = 'good' | 'near' | 'past';
 
@@ -34,6 +37,10 @@ export interface TargetGeometry {
 	markerFraction: number;
 	band: TargetBand;
 	empty: boolean;
+	/** Which way is better for this measure, carried through from the caller so
+	 * a delta drawn beside this bar reads the same polarity the bar was built
+	 * with rather than declaring its own. */
+	sense: TargetSense;
 }
 
 /** The same bar as CSS lengths, for markup. Kept apart from the geometry so the
@@ -63,7 +70,7 @@ export function targetGeometry(
 	// Absence prints as absence. A zero-length bar says the measurement was
 	// taken and came back zero, which is a claim nothing supports.
 	if (value === null || !Number.isFinite(value) || target <= 0) {
-		return { track: 0, valueFraction: 0, markerFraction: 0, band: 'good', empty: true };
+		return { track: 0, valueFraction: 0, markerFraction: 0, band: 'good', empty: true, sense };
 	}
 
 	// The track runs to whichever is larger, so a value past its target is still
@@ -77,7 +84,8 @@ export function targetGeometry(
 		valueFraction: value / track,
 		markerFraction: target / track,
 		band: past ? 'past' : distance <= NEAR ? 'near' : 'good',
-		empty: false
+		empty: false,
+		sense
 	};
 }
 

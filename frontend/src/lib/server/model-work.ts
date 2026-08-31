@@ -23,6 +23,7 @@
  * written relative for the same reason.
  */
 
+import type { MovementPolarity } from '../charts/theme';
 import type { SummaryBand } from './config';
 
 /** The ledger stamp from which `truncation_flagged` means extract cut the body.
@@ -802,6 +803,11 @@ export interface SwapMeasure {
 	/** After over before. Null where the before side is zero, because a move
 	 * away from nothing has no size. */
 	ratio: number | null;
+	/** Which direction is the good one. Declared here, with the measure, so the
+	 * chart never decides it. Two of the seven have no agreed direction: a
+	 * shorter summary is what a smaller model was picked for, and more copying
+	 * is not obviously worse than more invention. */
+	polarity: MovementPolarity;
 }
 
 /** The newest day the model changed, and what each side measured.
@@ -831,7 +837,7 @@ function sideMeasures(
 	scores: Record<string, string>[],
 	health: Record<string, string>[],
 	bands: readonly SummaryBand[]
-): { label: string; unit: SwapMeasure['unit']; value: number }[] {
+): { label: string; unit: SwapMeasure['unit']; value: number; polarity: MovementPolarity }[] {
 	const times = summarizeMs(health).sort((a, b) => a - b);
 	const words = scores
 		.map((row) => measured(row.summary_word_count))
@@ -849,33 +855,49 @@ function sideMeasures(
 		{
 			label: 'Time to write one',
 			unit: 'seconds',
-			value: times.length === 0 ? 0 : quantile(times, 0.5) / 1000
+			value: times.length === 0 ? 0 : quantile(times, 0.5) / 1000,
+			polarity: 'lower-is-better'
 		},
 		{
 			label: 'Summary length',
 			unit: 'words',
-			value: words.length === 0 ? 0 : quantile(words, 0.5)
+			value: words.length === 0 ? 0 : quantile(words, 0.5),
+			// The bands in config say what length was ASKED for, so neither longer
+			// nor shorter is better on its own - the measure two rows down is the
+			// one that carries a verdict about length.
+			polarity: 'no-agreed-direction'
 		},
 		{
 			label: 'Copied, not rewritten',
 			unit: 'percent',
-			value: copies.length === 0 ? 0 : quantile(copies, 0.5) * 100
+			value: copies.length === 0 ? 0 : quantile(copies, 0.5) * 100,
+			// No agreed threshold, and more copying is not obviously worse than more
+			// invention. The model route already refuses to tint this one.
+			polarity: 'no-agreed-direction'
 		},
-		{ label: 'Marked "not sure"', unit: 'per-hundred', value: share(scores, (row) => row.band === 'low') },
+		{
+			label: 'Marked "not sure"',
+			unit: 'per-hundred',
+			value: share(scores, (row) => row.band === 'low'),
+			polarity: 'lower-is-better'
+		},
 		{
 			label: 'Numbers not in the article',
 			unit: 'per-hundred',
-			value: share(scores, (row) => (measured(row.unsupported_numbers) ?? 0) > 0)
+			value: share(scores, (row) => (measured(row.unsupported_numbers) ?? 0) > 0),
+			polarity: 'lower-is-better'
 		},
 		{
 			label: '"Maybe" told as fact',
 			unit: 'per-hundred',
-			value: share(scores, (row) => flag(row.hedge_dropped))
+			value: share(scores, (row) => flag(row.hedge_dropped)),
+			polarity: 'lower-is-better'
 		},
 		{
 			label: 'Outside the length we asked for',
 			unit: 'per-hundred',
-			value: scores.length === 0 ? 0 : (outside.length / scores.length) * 100
+			value: scores.length === 0 ? 0 : (outside.length / scores.length) * 100,
+			polarity: 'lower-is-better'
 		}
 	];
 }
@@ -922,6 +944,7 @@ export function modelSwap(
 		measures: left.map((measure, index) => ({
 			label: measure.label,
 			unit: measure.unit,
+			polarity: measure.polarity,
 			before: measure.value,
 			after: right[index].value,
 			ratio: measure.value === 0 ? null : right[index].value / measure.value
