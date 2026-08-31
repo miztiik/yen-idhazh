@@ -123,8 +123,24 @@
 	   Chrome and identity only: the wordmark, a panel wash, an empty state.
 	   Never on an item, never inside a chart. These encode nothing, which is
 	   what makes them decoration rather than semantic colour - and decorative
-	   colour is unconstrained. */
-	--gradient-brand: linear-gradient(105deg, #6d84ff 0%, #9b7cff 48%, #dc8ce8 100%);
+	   colour is unconstrained.
+
+	   Decorative is not the same as unreadable. The wordmark is the site's
+	   name, so every one of its stops is read as type and every one clears the
+	   4.5:1 that WCAG 2.2 SC 1.4.3 sets for normal text against --color-bg.
+	   Five stops rather than seven: across roughly 200px of glyphs, seven puts
+	   a stop every 28px and the middle three read as one band. Dark carries
+	   its own set because dark is what most readers now see.
+	   frontend/tests/tokens.spec.ts recomputes all ten ratios from these hex
+	   values, so the spread is zero by construction. */
+	--gradient-wordmark: linear-gradient(
+		135deg,
+		#6ea8ff 0%,
+		#8f93ff 25%,
+		#b98cf5 50%,
+		#e58ad4 75%,
+		#ff96c2 100%
+	);
 	--gradient-wash: linear-gradient(168deg, #141a27 0%, #17141f 100%);
 	--gradient-panel: linear-gradient(180deg, #171d28 0%, #131820 100%);
 
@@ -247,8 +263,22 @@
 	   Chrome and identity only: the wordmark, a panel wash, an empty state.
 	   Never on an item, never inside a chart. These encode nothing, which is
 	   what makes them decoration rather than semantic colour - and decorative
-	   colour is unconstrained. */
-	--gradient-brand: linear-gradient(105deg, #4f6bff 0%, #7c5cff 48%, #c86dd7 100%);
+	   colour is unconstrained.
+
+	   Darker than the dark theme's set and not a tint of it, for the same
+	   reason the fill ramp parts company from the confidence ramp here: on a
+	   light ground a stop has to go DOWN to be read. The three hues that
+	   served this gradient before read 3.9803:1, 4.0195:1 and 2.9318:1
+	   against --color-bg, so the wordmark failed its own bound in this theme
+	   from the day it shipped. Every stop below clears 4.5:1. */
+	--gradient-wordmark: linear-gradient(
+		135deg,
+		#2f5bd0 0%,
+		#4b46c8 25%,
+		#7b3fb8 50%,
+		#a52f9e 75%,
+		#b32573 100%
+	);
 	--gradient-wash: linear-gradient(168deg, #f2f5ff 0%, #faf7fd 100%);
 	--gradient-panel: linear-gradient(180deg, #ffffff 0%, #fbfcff 100%);
 
@@ -307,6 +337,21 @@
 	--leading-2xl: 2.15rem;
 	--text-3xl: 2.25rem;
 	--leading-3xl: 2.6rem;
+
+	/* --- The wordmark ----------------------------------------------------
+	   Its own step rather than a rung of the type scale. Nothing else on the
+	   site is set at this size, and a --text-4xl minted for one string is a
+	   step every other element may then reach for.
+
+	   28px at 360px, 44px from 1127px up, against the 20px it was. Not 52px:
+	   the header sits on every route, and 52px is 8 percent of a 640px phone
+	   screen spent before the first story. The tracking is a ratio and not a
+	   pixel count, so it holds at both ends - a fixed 4px is 0.14em at 28px and
+	   breaks the word into separate letters. A size without a leading is half a
+	   decision, so the leading is here too, unitless so it follows the clamp. */
+	--wordmark-size: clamp(1.75rem, 1.2rem + 2.2vw, 2.75rem);
+	--wordmark-leading: 1.1;
+	--wordmark-tracking: 0.06em;
 
 	/* --- Frame -----------------------------------------------------------
 	   Defaults only. `config/appearance.json` overrides these at build time

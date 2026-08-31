@@ -37,7 +37,7 @@ Every colour, space, radius, shadow, font, easing and duration is a CSS custom p
 - **Elevation** - `--shadow-sm`, `--shadow-md`, `--shadow-lg`, `--shadow-panel`, plus `--color-surface-raised` and `--color-surface-sunken`. A page with one surface colour is a page where nothing is in front of anything.
 - **Colour** - `bg` and elevated surfaces; `text` primary / secondary / tertiary; `accent`; the **confidence ramp**, one token per band, which is the only semantic colour set the digest needs; the **fill ramp**, `--fill-high` / `--fill-medium` / `--fill-low`, which is the same three meanings weighted to be filled rather than read; and the **chart ramp**, `--chart-1` to `--chart-8`, which is categorical and carries no verdict.
 - **Tints** - `--tint-accent`, `--tint-info`, `--tint-good`, `--tint-warn`, `--tint-bad`, `--tint-neutral`. A panel takes the hue of what it means, at 7 to 9 percent in light and roughly double that in dark.
-- **Gradients** - `--gradient-brand`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
+- **Gradients** - `--gradient-wordmark`, `--gradient-wash`, `--gradient-panel`. Chrome and identity only.
 - **Frame** - `--frame-reading`, `--frame-console`, `--measure`, `--gutter`. Defaults live in the token file and `config/appearance.json` overrides them at build time ([config.md](config.md)).
 - **Motion** - one ease and a short duration scale.
 
@@ -282,6 +282,51 @@ The rule above binds **colour that encodes meaning**. Read as a general ban on c
 - **Decorative colour is unconstrained.** Chrome, identity, a panel tint, an empty state, the wordmark, a page background. It encodes nothing, so there is nothing for a second signal to duplicate.
 
 The line is drawn by the question "would a reader be wrong about a fact if this were grey?" A gradient on the site header fails that question, so it is decoration. A gradient running red at the bad end of a chart passes it, so it is semantic and is refused - a reader would read the hue as the verdict.
+
+### Decoration that spells a word is still read
+
+The wordmark is the one place the two rules meet. Its gradient encodes nothing,
+so the paragraph above leaves it unconstrained - but the shape it fills is the
+site's name, and a reader reads a name as type. So `--gradient-wordmark` takes
+the one bound a decoration normally escapes: **every stop clears 4.5:1 against
+`--color-bg` in both themes**, which is what WCAG 2.2 SC 1.4.3 sets for normal
+text.
+
+That bound was not being met. Measured 2026-08-31 over the committed hex
+values, the three stops that served this gradient in the light theme read
+3.9803:1, 4.0195:1 and 2.9318:1 - a site name a third of the way below its own
+floor, in the theme nobody was looking at. Nothing had ever asked.
+[../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) now
+asks on every run, from the committed values, so the spread is zero by
+construction.
+
+The rest of the wordmark, and why each part is what it is:
+
+- **Five stops at 135deg, one set per theme.** Seven stops across roughly 200px
+  of glyphs puts a stop every 28px and the middle three read as one band. Dark
+  gets its own set rather than a tint of light's, because on a light ground a
+  stop has to go down to be read and on a dark ground it has to go up.
+- **`--wordmark-size` is `clamp(1.75rem, 1.2rem + 2.2vw, 2.75rem)`** - 28px on a
+  360px phone, 44px from 1127px up. Not 52px: the header sits on every route,
+  and 52px is 8 percent of a 640px phone screen spent before the first story.
+- **Weight 300, and no second face.** The committed variable face covers 100 to
+  900, so the weight axis is free. A display face bought for the letterforms of
+  ten characters on one string is a second woff2 on every route
+  ([../../CLAUDE.md](../../CLAUDE.md) Rule #2).
+- **No animation.** The named motion set is `fadeIn`, `shimmer` and `toastIn`,
+  and a cycling `background-position` is a loop rather than a response to
+  anything the reader did. `prefers-reduced-motion` is a hard kill-switch, so
+  the effect would have to be designed twice. **What is lost is the moving
+  shimmer.** What buys it back is the size, the five stops and the wider angle -
+  and those survive a screenshot, reduced motion and a battery.
+- **`--wordmark-size`, `--wordmark-leading` and `--wordmark-tracking` sit in the
+  `:root` scale block, outside both themes.** A scale is not a colour. The
+  tracking is `0.06em` rather than a pixel count so it holds at both ends of the
+  clamp - a fixed 4px is 0.14em at 28px and breaks the word into separate
+  letters.
+
+Authority: Susan, 2026-08-31. Rejected: a second geometric display face, on
+bytes; and animating the gradient, on the reduced-motion cost above.
 
 ### A label's shape says whether it can be tapped
 
