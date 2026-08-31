@@ -16,6 +16,10 @@
 	 * Reading and writing are never one bar. Read time varies more than 4x on
 	 * this ledger and write time barely moves, so a single "model seconds" figure
 	 * would average two different machines together.
+	 *
+	 * At 1024px and under the five columns become one card a shard, and every
+	 * cell carries its own label. A column heading that only exists on a desktop
+	 * is a value with no name on a phone.
 	 */
 	import TargetBar from './TargetBar.svelte';
 	import { gib, seconds, type ShardBoardView } from '$lib/charts/machine';
@@ -79,11 +83,17 @@
 				data-shard-job-seconds={row.jobSeconds ?? ''}
 				data-shard-cpu={row.cpuModel ?? ''}
 			>
-				<p class="shard">{row.shard}</p>
+				<p class="shard">
+					<span class="cell-label" data-shard-name="shard" aria-hidden="true">Shard</span>
+					<span data-shard-figure="shard">{row.shard}</span>
+				</p>
 
 				<div class="split">
+					<span class="cell-label" data-shard-name="split" aria-hidden="true">
+						Reading against writing
+					</span>
 					{#if row.modelSeconds === null}
-						<p class="absent" data-shard-cell="split">
+						<p class="absent" data-shard-cell="split" data-shard-figure="split">
 							This shard reported no clock of its own, so its reading and writing are unknown.
 						</p>
 					{:else}
@@ -97,18 +107,23 @@
 							<span class="seg read" style="inline-size: {row.readWidth}"></span>
 							<span class="seg write" style="inline-size: {row.writeWidth}"></span>
 						</div>
-						<p class="legend">
-							<span class="key read"></span>reading {seconds(row.readSeconds)}
-							<span class="key write"></span>writing {seconds(row.writeSeconds)}
+						<p class="legend" data-shard-figure="split">
+							<span class="legend-pair">
+								<span class="key read"></span>reading {seconds(row.readSeconds)}
+							</span>
+							<span class="legend-pair">
+								<span class="key write"></span>writing {seconds(row.writeSeconds)}
+							</span>
 						</p>
 					{/if}
 				</div>
 
 				<p class="figure tabular-nums" data-shard-cell="rate">
+					<span class="cell-label" data-shard-name="rate" aria-hidden="true">Read rate</span>
 					{#if row.readTokensPerSecond === null}
-						<span class="absent">-</span>
+						<span class="absent" data-shard-figure="rate">-</span>
 					{:else}
-						{row.readTokensPerSecond.toFixed(2)}
+						<span data-shard-figure="rate">{row.readTokensPerSecond.toFixed(2)}</span>
 						<span class="unit">prompt tokens a second</span>
 					{/if}
 				</p>
@@ -117,17 +132,21 @@
 				     processor is the one host fact that changes an answer, so it is
 				     spelled out even when it makes the row wider. -->
 				<p class="cpu" data-shard-cell="cpu">
-					{#if row.cpuModel === null}
-						<span class="absent">Not recorded on this run</span>
-					{:else}
-						{row.cpuModel}
-					{/if}
+					<span class="cell-label" data-shard-name="cpu" aria-hidden="true">Processor</span>
+					<span data-shard-figure="cpu">
+						{#if row.cpuModel === null}
+							<span class="absent">Not recorded on this run</span>
+						{:else}
+							{row.cpuModel}
+						{/if}
+					</span>
 					{#if row.cpuBusyPct !== null}
 						<span class="unit">{row.cpuBusyPct.toFixed(1)}% busy</span>
 					{/if}
 				</p>
 
-				<div class="clock">
+				<!-- No cell label here: the bar prints its own, at every width. -->
+				<div class="clock" data-shard-cell="clock">
 					<TargetBar
 						marks={row.job}
 						label="Shard {row.shard} job clock"
@@ -191,6 +210,17 @@
 		border-block-end: 1px solid var(--color-rule);
 	}
 
+	/* The same words as the head, one copy a cell, hidden while the head is on
+	   screen. Below the breakpoint the head goes and these carry the names. */
+	.cell-label {
+		display: none;
+		font-size: var(--text-xs);
+		font-weight: 400;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
+		color: var(--color-text-tertiary);
+	}
+
 	/* Thick rows on purpose: the shard is the unit an operator acts on, so it
 	   gets the height a unit deserves rather than a table line's. */
 	.row {
@@ -245,6 +275,14 @@
 		color: var(--color-text-tertiary);
 	}
 
+	/* One item, not two. A wrap that puts the swatch on one line and the word it
+	   names on the next is a colour with nothing to read it by. */
+	.legend-pair {
+		display: inline-flex;
+		align-items: center;
+		white-space: nowrap;
+	}
+
 	.key {
 		display: inline-block;
 		inline-size: 10px;
@@ -290,14 +328,68 @@
 		min-inline-size: 0;
 	}
 
+	/* One card a shard.
+	 *
+	 * Above this width the row is five columns and the head names them. Below
+	 * it the head is gone, and the two-column fallback this replaced pushed the
+	 * read rate and the job clock into the 3rem shard column: measured
+	 * 2026-09-01 at 360px, `1 h 28 m` was drawn in a 20px box over four lines,
+	 * one character to a line, and `of the 150-minute timeout - 59 percent` took
+	 * six lines in 41px. A card gives every cell the full width and its own
+	 * name.
+	 *
+	 * An edge, not a fill. Every quiet line in a row is --color-text-tertiary,
+	 * which reads 4.72:1 on --color-surface and 4.26:1 on
+	 * --color-surface-raised - so a lifted card would put four strings under
+	 * 4.5:1 in the dark theme to buy a tint. The bars need the ground too: both
+	 * tracks are --color-surface-sunken, and a sunken card would erase them. */
 	@media (max-width: 1024px) {
+		.board {
+			gap: var(--space-3);
+		}
+
 		.head {
 			display: none;
 		}
 
+		.cell-label {
+			display: block;
+		}
+
 		.row {
-			grid-template-columns: 3rem 1fr;
-			row-gap: var(--space-2);
+			display: flex;
+			flex-direction: column;
+			/* The five-column rule centres its cells on the row's baseline. In a
+			   column that becomes centring on the card's midline, which shrinks
+			   every cell to its text and leaves the labels ragged. */
+			align-items: stretch;
+			gap: var(--space-3);
+			padding: var(--space-4);
+			border: 1px solid var(--color-rule);
+			border-radius: var(--radius-lg);
+		}
+
+		/* The base rule drops the last row's divider, which on a card is the
+		   bottom edge. Stated again because :last-of-type outranks .row. */
+		.row:last-of-type {
+			border-block-end: 1px solid var(--color-rule);
+		}
+
+		.shard {
+			display: flex;
+			align-items: baseline;
+			gap: var(--space-2);
+		}
+
+		.shard .cell-label {
+			display: inline;
+		}
+
+		/* The unit is the rate's name and belongs on the rate's line, not under
+		   it: three stacked lines for one number is what the label already fixed. */
+		.figure .unit {
+			display: inline;
+			margin-inline-start: 0.35em;
 		}
 	}
 </style>
