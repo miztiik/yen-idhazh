@@ -571,17 +571,19 @@ async function drewFor(
 test('a stage with no number draws a gap, never a plunge to the axis floor', async ({ page }) => {
 	await page.goto('/console/');
 
-	// The canary scores one day, so `score` has a number on that day and none on
-	// the rest of the window. A zero clamped onto a log axis would draw the line
-	// falling to the bottom of the plot, which says the stage got a thousand times
-	// faster. The chart breaks the line and names the loss.
-	await expect(page.locator('[data-stage-mark="score"]')).not.toHaveCount(0);
-	const note = page.locator('[data-timing-note="score"]');
-	await expect(note, 'score is not timed on every day, so it owes a note').toHaveCount(1);
-	const score = await drewFor(page, 'score');
-	expect(score.blank, 'the fixture leaves score no gap to name').toBeGreaterThan(0);
-	await expect(note).toHaveText(
-		`We timed no score work on ${score.blank} of the ${score.days} days. The line breaks there.`
+	// This read `score` until 2026-08-31, when that stage left this chart for the
+	// Model route - it runs after the summary is written, so nothing waits on it.
+	// `fetch` carries the same shape: the canary times it on some days of the
+	// window and not on others. A zero clamped onto a log axis would draw the
+	// line falling to the bottom of the plot, which says the stage got a thousand
+	// times faster. The chart breaks the line and names the loss.
+	await expect(page.locator('[data-stage-mark="fetch"]')).not.toHaveCount(0);
+	const note = page.locator('[data-timing-note="fetch"]');
+	await expect(note, 'fetch is not timed on every day, so it owes a note').toHaveCount(1);
+	const fetched = await drewFor(page, 'fetch');
+	expect(fetched.blank, 'the fixture leaves fetch no gap to name').toBeGreaterThan(0);
+	await expect(note).toContainText(
+		`We timed no fetch work on ${fetched.blank} of the ${fetched.days} days. The line breaks there.`
 	);
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
@@ -713,11 +715,16 @@ test('a stage colour is categorical, never a health band', () => {
 	);
 
 	// Green, amber and red mean good, watch and bad everywhere else on this page.
-	// Lending them to four stages says the slowest one is the failing one.
+	// Lending them to the stages says the slowest one is the failing one.
 	expect(source).not.toContain('--band-');
-	for (const series of ['--series-1', '--series-2', '--series-3', '--series-4']) {
+	// Three stages since 2026-08-31: `score` left this chart for the Model route,
+	// and `--series-4` went with it. One series per stage and no spare.
+	for (const series of ['--series-1', '--series-2', '--series-3']) {
 		expect(source).toContain(series);
 	}
+	expect(source, 'a fourth series here means a fourth stage nobody declared').not.toContain(
+		'--series-4'
+	);
 });
 
 test('reading and writing are drawn as separate candles per day', async ({ page }) => {
