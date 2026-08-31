@@ -119,6 +119,7 @@ if (!existsSync(source)) {
 
 let copied = 0;
 let payloads = 0;
+let skipped = 0;
 const walk = (relative) => {
 	for (const name of readdirSync(join(source, relative))) {
 		const next = join(relative, name);
@@ -128,8 +129,22 @@ const walk = (relative) => {
 			// A page renders the day it names, fetched when it is needed. The archive
 			// used to inline every one of these instead, which charged every browsing
 			// visitor the whole corpus.
+			//
+			// A payload we cannot read is one day, and throwing here stops the whole
+			// build - so one corrupt file stopped every OTHER day publishing too, and
+			// the site went out unchanged with nobody told which day was wrong.
+			// `$lib/server/payload.ts` takes the same view about the same file; this
+			// is the second reader of it, and the one that runs first.
+			let projected;
+			try {
+				projected = projectDay(readFileSync(join(source, next), 'utf8'));
+			} catch (cause) {
+				console.warn(`rendered visuals: ${next} is unreadable, day skipped - ${String(cause)}`);
+				skipped += 1;
+				continue;
+			}
 			mkdirSync(join(target, relative), { recursive: true });
-			writeFileSync(join(target, next), projectDay(readFileSync(join(source, next), 'utf8')));
+			writeFileSync(join(target, next), projected);
 			payloads += 1;
 		} else if (IMAGE_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix))) {
 			mkdirSync(join(target, relative), { recursive: true });
@@ -141,7 +156,8 @@ const walk = (relative) => {
 walk('');
 console.log(
 	`rendered visuals: staged ${copied} image(s) and projected ${payloads} day payload(s) ` +
-		`into static/digest at digest-view ${VIEW_VERSION}, ${ITEM_FIELDS.length} field(s) an item.`
+		`into static/digest at digest-view ${VIEW_VERSION}, ${ITEM_FIELDS.length} field(s) an item, ` +
+		`${skipped} unreadable.`
 );
 
 if (!existsSync(telemetrySource)) {
