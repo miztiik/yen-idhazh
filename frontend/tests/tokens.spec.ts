@@ -313,6 +313,71 @@ test.describe('the token layer', () => {
 		}
 	});
 
+	test('every wordmark gradient stop is readable on the ground it sits on', () => {
+		// The wordmark is the site's name, so it is read as type even though the
+		// gradient under it encodes nothing. Decorative colour is unconstrained
+		// (design-system.md); decorative colour that spells a word is not, and
+		// 4.5:1 is what WCAG 2.2 SC 1.4.3 sets for normal text.
+		//
+		// This is the one thing about the wordmark that cannot be seen in a
+		// screenshot of the theme somebody happened to open: the light set that
+		// served here until 2026-08-31 read 3.9803:1, 4.0195:1 and 2.9318:1, and
+		// nothing had ever asked.
+		//
+		// Arithmetic over the committed hex values, so the same two colours give
+		// the same number on every machine and the spread is zero by
+		// construction.
+		for (const [theme, selector] of [
+			['dark', BASE_SELECTOR],
+			['light', OVERRIDE_SELECTOR]
+		] as const) {
+			const css = block(TOKENS, selector);
+			const bg = valueOf(css, '--color-bg');
+			const declared = /^\s*--gradient-wordmark:\s*([^;]+);/m.exec(css);
+			expect(
+				declared,
+				`--gradient-wordmark is not declared in the ${theme} theme`
+			).not.toBeNull();
+
+			const stops = [...declared![1].matchAll(/#[0-9a-f]{6}/g)].map((m) => m[0]);
+			// Five, and the count is asserted: a set trimmed to two would pass
+			// every ratio below and lose the sweep the row was for.
+			expect(stops.length, `the ${theme} wordmark is no longer five stops`).toBe(5);
+
+			for (const stop of stops) {
+				const ratio = contrast(stop, bg);
+				console.log(`${theme} --gradient-wordmark ${stop} on ${bg}: ${ratio.toFixed(4)}:1`);
+				expect(
+					ratio,
+					`${theme} wordmark stop ${stop} reads ${ratio.toFixed(4)}:1 on ${bg}`
+				).toBeGreaterThanOrEqual(4.5);
+			}
+		}
+	});
+
+	test('the wordmark scale is a scale, and it is relative', () => {
+		// A scale is not a colour, so it is declared once outside both theme
+		// blocks. Left inside one, it reads as something a theme could change and
+		// the next theme has to restate it or lose it.
+		//
+		// And a size is relative, never a hard pixel count (owner, 2026-08-31): a
+		// px wordmark ignores a reader who set their browser text larger, and
+		// this is the first thing on every route.
+		const scale = ['--wordmark-size', '--wordmark-leading', '--wordmark-tracking'];
+		for (const token of scale) {
+			expect(declaredIn(TOKENS), `${token} is not declared`).toContain(token);
+			expect(DARK, `${token} is inside the base theme block`).not.toContain(token);
+			expect(LIGHT, `${token} is inside the light theme block`).not.toContain(token);
+		}
+		const size = /^\s*--wordmark-size:\s*([^;]+);/m.exec(TOKENS)![1];
+		expect(size, 'the wordmark size stopped being fluid').toContain('clamp(');
+		expect(size, 'the wordmark size is a hard pixel count').not.toMatch(/\dpx/);
+		expect(
+			/^\s*--wordmark-tracking:\s*([^;]+);/m.exec(TOKENS)![1],
+			'the tracking is a pixel count, so it does not hold at both ends of the clamp'
+		).toMatch(/em\s*$/);
+	});
+
 	test('the committed display face is inside its byte budget', () => {
 		// Rule #2: the published site has a 1 GB ceiling. A face that is a
 		// meaningful fraction of a day's growth has to argue for itself; this

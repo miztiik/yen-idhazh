@@ -377,6 +377,23 @@ refuses an encoder on the first-load path, and holds each capped page under its
 ceiling in `config/idhazh.json`, which is an absolute limit rather than a
 comparison against another build.
 
+**The browser suite goes quiet for minutes at a time and is still working.**
+`npm run test:browser` writes one line per completed test, so a test that reads
+every committed day prints nothing while it runs. On 2026-08-31 the log sat on
+the same last line for over two minutes, part-way through `served-day.spec.ts`,
+which reads exactly like a hung runner - and the suite then finished green, 698
+tests in 7.9 minutes. Tailing the log cannot tell the two apart. Two facts can,
+and neither is the tail:
+
+```powershell
+(Get-Item $log).LastWriteTime                                    # the file is still growing
+Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome-headless-shell.exe' } |
+  Select-Object ProcessId, @{n='CPU';e={$_.KernelModeTime/1e7 + $_.UserModeTime/1e7}}
+```
+
+A rising CPU total on a headless shell is work. Killing the run and starting
+again costs another eight minutes and proves nothing.
+
 **Two builds of the same source disagree on a fifth of `frontend/build/`, and
 the cause is a timestamp.** `kit.version.name` defaults to `Date.now()`. It
 lands in `_app/version.json`, in the `__sveltekit_<id>` global every prerendered
