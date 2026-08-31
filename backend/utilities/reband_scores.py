@@ -17,6 +17,7 @@ from pathlib import Path
 from idhazh.config import load
 from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.eval_row import ConfidenceBand
+from idhazh.evals import writer
 from idhazh.evals.score import band
 
 REQUIRED_COLUMNS = ("band", "hhem", "unsupported_numbers", "coverage", "hedge_dropped")
@@ -68,6 +69,25 @@ def read_rows(path: Path) -> list[dict[str, str]]:
         if missing:
             raise ValueError(f"{path.name} is missing columns: {', '.join(missing)}")
         return list(reader)
+
+
+def read_ledger(state_dir: Path) -> list[dict[str, str]]:
+    """Every committed row, oldest month first.
+
+    The ledger is a directory of month shards, so a re-band that opened one file
+    would report on whatever slice of history that file happened to be. Reading
+    every shard is what makes the percentages below percentages of the ledger.
+
+    Each shard's columns are checked on its own: a month written before a column
+    existed has to fail by name here rather than arrive as a missing key inside
+    the arithmetic.
+    """
+    shards = writer.ledger_shards(state_dir)
+    if not shards:
+        raise ValueError(
+            f"{(state_dir / writer.LEDGER_DIRNAME).as_posix()} holds no <YYYY-MM>.csv shard"
+        )
+    return [row for shard in shards for row in read_rows(shard)]
 
 
 def reband(rows: Iterable[dict[str, str]], config: EvaluationConfig) -> RebandReport:
@@ -149,13 +169,18 @@ def lines_for(report: RebandReport, path: Path) -> list[str]:
 
 def main(argv: Sequence[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--scores", type=Path, default=Path("state/scores.csv"))
+    parser.add_argument(
+        "--state",
+        type=Path,
+        default=Path("state"),
+        help="The state directory. Every month shard under scores/ is read.",
+    )
     parser.add_argument("--config", type=Path, default=Path("config"))
     args = parser.parse_args(argv)
 
     config = load(args.config).app.evaluation
-    report = reband(read_rows(args.scores), config)
-    print("\n".join(lines_for(report, args.scores)))
+    report = reband(read_ledger(args.state), config)
+    print("\n".join(lines_for(report, args.state / writer.LEDGER_DIRNAME)))
     return 0
 
 
