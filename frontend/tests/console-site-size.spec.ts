@@ -1,6 +1,4 @@
 import { expect, test, type Page } from '@playwright/test';
-import { readFileSync } from 'node:fs';
-import { resolve } from 'node:path';
 import { PAGES_CAP_BYTES, siteCost, siteRunway } from '../src/lib/charts/glance';
 import type { RunSummary } from '../src/lib/server/payload';
 
@@ -16,13 +14,9 @@ import type { RunSummary } from '../src/lib/server/payload';
  * unusual cannot be checked at all, so the rule is stated once - further from
  * the window's median than one standard deviation - and this file recomputes it
  * from numbers it owns, and then again from the numbers the page prints.
+ *
+ * What the runway is denominated in belongs to `console-band.spec.ts`.
  */
-
-const RUN_CONFIG = JSON.parse(
-	readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
-) as { run?: { safety_ceiling_per_run?: number } };
-
-const ITEM_CEILING = RUN_CONFIG.run?.safety_ceiling_per_run ?? 160;
 
 function manifest(date: string, siteBytes: number): RunSummary {
 	return { date, runs: 1, planned: 0, failed: 0, siteBytes, siteFiles: 1, models: [], records: [] };
@@ -130,20 +124,20 @@ test('one day is not a spread, and a window with no published day has no cost', 
 	expect(none.median).toBeNull();
 });
 
-test('the runway is headroom over one published day, and absent where there is no rate', () => {
+test('the runway is headroom over one article, and absent where there is no rate', () => {
 	const used = 100_000_000;
 	const alarm = 800 * 1024 * 1024;
-	const runway = siteRunway(used, 3000, 160, alarm, PAGES_CAP_BYTES);
+	const runway = siteRunway(used, 3000, alarm, PAGES_CAP_BYTES);
 	expect(runway).not.toBeNull();
-	expect(runway?.perDay).toBe(480_000);
-	expect(Math.round(runway?.toCap ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 480_000));
-	expect(Math.round(runway?.toAlarm ?? 0)).toBe(Math.round((alarm - used) / 480_000));
+	expect(Math.round(runway?.toCap ?? 0)).toBe(Math.round((PAGES_CAP_BYTES - used) / 3000));
+	expect(Math.round(runway?.toAlarm ?? 0)).toBe(Math.round((alarm - used) / 3000));
 
-	// Four ways there is no date to print, and none of them may print one.
-	expect(siteRunway(used, null, 160, alarm)).toBeNull();
-	expect(siteRunway(used, 0, 160, alarm)).toBeNull();
-	expect(siteRunway(used, -2000, 160, alarm)).toBeNull();
-	expect(siteRunway(used, 3000, 0, alarm)).toBeNull();
+	// Three ways there is no rate to divide by, and none of them may print an
+	// answer. There is no fourth: a runway in articles takes no daily rate, so
+	// there is no articles-a-day argument left to be zero.
+	expect(siteRunway(used, null, alarm)).toBeNull();
+	expect(siteRunway(used, 0, alarm)).toBeNull();
+	expect(siteRunway(used, -2000, alarm)).toBeNull();
 });
 
 async function hydrated(page: Page) {
@@ -205,7 +199,7 @@ test('the standing band carries the level, the track and the runway', async ({ p
 	// The size moved off a card and into the band on 2026-08-30, because the band
 	// stands on all three console routes and one page may not state one figure
 	// twice. What it owes is unchanged: a level, the share of the one limit that
-	// cannot move (Rule #2), and a runway in published days.
+	// cannot move (Rule #2), and a runway.
 	const band = page.locator('[data-console-band] [data-band-fact="size"]');
 	await expect(band).toHaveCount(1);
 	const sentence = page.locator('[data-band-size]');
@@ -220,13 +214,13 @@ test('the standing band carries the level, the track and the runway', async ({ p
 	expect(cap).toBe(PAGES_CAP_BYTES);
 	expect(drawnPct).toBeCloseTo(((printedMb * 1024 * 1024) / PAGES_CAP_BYTES) * 100, 1);
 
-	// The runway, in published days, at a rate the band also prints, against an
-	// item ceiling the config owns. A date with no basis beside it is the thing
-	// the level it replaced was already guilty of.
+	// The runway, in articles, at a rate the band also prints over the days it
+	// measured. A figure with no basis beside it is the thing the level it
+	// replaced was already guilty of. What the unit has to be, and why it may not
+	// be published days, is `console-band.spec.ts`.
 	await expect(sentence).toContainText(
-		new RegExp(`[\\d,]+ B an article over \\d+ published days?, ${ITEM_CEILING} articles a day`)
+		/[\d,]+ B an article over \d+ published days?, that is room for about [\d,]+ more articles/
 	);
-	await expect(sentence).toContainText(/fills it in about [\d.,]+ more/);
 	// And it names the tree it measured, because the cap is measured on a larger
 	// one and the number is optimistic by a multiple.
 	await expect(sentence).toContainText('committed payload tree, not the published site');
