@@ -347,6 +347,16 @@ python -m pytest backend/tests/test_retrieval_eval.py -n0 -s -k clears_its_bar
 exits **4** on an unrecognised argument - and a usage error with no test output
 looks like a broken suite rather than a bad flag.
 
+**`ruff` will rewrite a cross-check into the expression it was checking.** A
+test that recomputes a value a second way only works while the two expressions
+differ. On 2026-08-31 a check written as `zip(stamps, stamps[1:])` against an
+implementation using `itertools.pairwise` tripped `RUF007`, whose fix is
+`pairwise` - two copies of one expression, a test that passes, and nothing
+checked. The lint error is the warning; taking its suggestion is the trap. Write
+the second expression in a third form the rule does not name - an indexed
+`range(len(x) - 1)` loop here - and say in the docstring why it is not the
+obvious one, or the next reader applies the fix.
+
 **`ruff format` is not a gate here, and running it rewrites files you never
 touched.** CI runs `ruff check .` only. The tree is not `ruff format` clean, so
 `ruff format backend` reformatted 24 unrelated files in one pass on 2026-08-26 -

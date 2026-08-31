@@ -76,6 +76,112 @@ against the shares above. Third, whether `ai` recovers as its news feeds are
 read more often, or stays near a third - if it stays, the AI feed list is the
 thing to fix and no threshold will do it.
 
+## How long we go quiet about a registry name, 2026-08-31
+
+**We never go quiet. The longest silence about any of the 30 registry names, in
+the whole committed record, is three days - and it happened twice in 163
+chances.** A per-subject fade rate needs silence to act on, so on today's
+registry it has nothing to act on.
+
+Taken by `python backend/utilities/entity_gap.py` at commit `e0d6724`, over the
+11 published days from 2026-08-21 to 2026-08-31 and the 3,596 items in
+`frontend/public/digest/`. Windows 11, i7-1265U, 12 logical CPUs, 31.8 GiB RAM,
+Python 3.14.2, 2026-08-31. **No spread, because there is nothing to vary.** The
+report is a pure function of the committed tree, so two runs at one commit print
+the same bytes - checked by SHA-256 in `backend/tests/test_entity_gap.py`. Any
+machine at `e0d6724` gets these figures; the hardware is here because Rule #10
+asks, not because it moved anything.
+
+### Two arms, because the record disagrees with itself
+
+Both arms use one matcher - `tag.tags` against `Watchlist.entity_terms()`, the
+same function and the same terms the pipeline tags an item with. They differ
+only in which words they read.
+
+| Arm | Reads | Live on |
+| --- | --- | --- |
+| **As published** | the `entities` list each run wrote, over the article's title and whole body | 5 of 11 days, 2026-08-27 to 2026-08-31 |
+| **Re-matched** | the same matcher over the title, the summary and the key points | 10 of 11 days, 2026-08-22 to 2026-08-31 |
+
+The published field was declared on day one and read nowhere until 2026-08-26,
+so it is empty on the first six days. **A zero there is an instrument that was
+switched off, not a subject nobody mentioned**, which is why the second arm
+exists. The second arm reads far less text, and the price of that is measured
+rather than claimed: over the five days both are live, of 952 item-entity pairs
+the run wrote, the summary carries 514 and drops **438 - 46.0 percent**. Four
+more pairs go the other way, where the summary names a company the capped body
+did not. **A dropped mention lengthens a gap, so the re-matched arm reports the
+longer of the two readings, never the shorter.** Both arms still say the same
+thing.
+
+### Every gap, pooled
+
+A gap of 1 day means we mentioned the name on consecutive days - no silence at
+all. Days of silence is the gap minus one.
+
+| Gap | Days of silence | As published | Re-matched |
+| --- | --- | --- | --- |
+| 1 day | 0 | 72 of 84 (85.7%) | 137 of 163 (84.0%) |
+| 2 days | 1 | 12 of 84 (14.3%) | 23 of 163 (14.1%) |
+| 3 days | 2 | 0 | 1 of 163 (0.6%) |
+| 4 days | 3 | 0 | 2 of 163 (1.2%) |
+
+**The pipeline's own field never recorded a silence longer than one day.**
+
+### Every entry, by its own median gap
+
+`n` mentions give `n - 1` gaps, so the denominators are not the same. On the
+published arm, 28 of 30 entries were mentioned twice or more and have a gap at
+all; `adani` and `asml` were mentioned once each and have none. On the
+re-matched arm all 30 have a gap.
+
+| Median gap | Days of silence | As published | Re-matched |
+| --- | --- | --- | --- |
+| 1.0 days | 0 | 20 of 30 | 18 of 30 |
+| 1.5 days | 0 or 1 | 5 of 30 | 6 of 30 |
+| 2.0 days | 1 | 3 of 30 | 3 of 30 |
+| 2.5 days | 1 or 2 | 0 | 1 of 30 (`ecb`) |
+| 3.0 days | 2 | 0 | 2 of 30 (`adani`, `ftc`) |
+| no gap | - | 2 of 30 | 0 |
+
+**24 of 30 entries sit at 1.5 days or less. Not one reaches four.** The three
+slowest - `adani` at 2 mentions, `ftc` at 3, `ecb` at 3 - are also the three
+with the fewest mentions, so their medians rest on one, two and two gaps. The
+utility prints the full per-entry table; it is not repeated here because it
+re-derives from any checkout at this commit.
+
+### What bounds all of it
+
+**891 of 3,596 items carry a registry name - 24.8 percent.** Three items in four
+mention nothing the registry holds, and a subject in that 75.2 percent cannot
+appear in any figure above. Per day the share runs 15.5 percent (2026-08-30) to
+42.8 percent (2026-08-27), with one day at zero (2026-08-21, 4 items).
+
+Two further limits, stated rather than implied:
+
+- **The record is 11 days, so the longest gap it can express is 10.** A fade
+  rate longer than that is unsupported by this record whatever a table says. A
+  subject that goes quiet for a month cannot be observed here at all.
+- **The complementary question cannot be answered, only bounded.** "Is there a
+  subject with a long enough gap that the registry does not name?" needs an
+  entity recogniser this repository does not have. What is measured is the size
+  of the blind spot: 75.2 percent of items, and every one of them unlabelled.
+
+### What this settles
+
+A half-life is the number of days our silence about a subject may last before a
+new story on it stops reading as the next instalment. Our silence about a
+registry name lasts **zero days at the median and three days at the worst
+observed**. A rate set anywhere in that range fires on every name every day,
+which is the same as not having one; a rate set above it never fires. **The
+registry has to hold a subject that goes quiet before a fade rate does anything
+at all**, and today it holds 30 standing organisations - 25 companies and 5
+institutions - and no subjects.
+
+Re-run `python backend/utilities/entity_gap.py` after the registry gains its
+first subject, and read the gap for that entry alone. Thirty companies cannot
+answer the question, and averaging them with a subject would hide it.
+
 ## Inference throughput
 
 `llama-bench -m <model> -p 730,1800,4850 -n 250 -t 4`, at the three input
@@ -3190,6 +3296,7 @@ to justify a design decision.
 
 | Quantity | Current basis | What settles it |
 | --- | --- | --- |
+| **Whether a subject the registry does not name goes quiet for long enough to matter** | **bounded, not measured: 75.2 percent of published items carry no registry name** | the 30 registry names are all covered near-daily, so nothing in the record supports a fade rate ([How long we go quiet about a registry name](#how-long-we-go-quiet-about-a-registry-name-2026-08-31)). Whether a quiet subject exists in the other three items in four cannot be read from a closed vocabulary, and this repository has no entity recogniser. Two things settle it, in order: put one real subject in `config/watchlist.json` and re-run `python backend/utilities/entity_gap.py` for that entry alone; or, if the question is ever worth a model, score the model on the gap as well as the coverage, because a recogniser that splits one subject across three names raises coverage and shortens every gap. |
 | **Archive search latency in a real browser, and on a phone** | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
 | **Unaccounted job wall-clock per SHARD** | **the instrument landed 2026-08-30 and has no population: 0 of 4,167 committed item rows carry a `shard`** | `shard` is now a column on `ItemHealthRow`, and a column is null on every row written before it existed, so the finest grain the committed data supports is still the whole run ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). The read rate spreads 2.30x between shards inside one run, so a per-run figure averages away exactly what an operator needs to see. Re-run `python backend/utilities/measure_ledgers.py` after the next scheduled run - it splits per shard on its own once a run's rows carry the cell. |
 | **A work shard's fixed cost on more than one run** | **one run measured: 335.1 s a shard, 5.6 minutes** | only run `2026-08-29-2` has four clocks and one execution each; `2026-08-29-3` filed six counter rows for four shards and cannot be joined, and the six runs before 2026-08-29 have no `job_seconds` cell at all ([Three figures the ledgers already held](#three-figures-the-ledgers-already-held-2026-08-30)). Re-run `python backend/utilities/measure_ledgers.py` after a few more clocked days, and read the spread rather than the single figure. | | **measured on node 24 / V8 at 6.9 microseconds a vector; no browser figure exists** | the ranking clock in [Sizing the archive index](#sizing-the-archive-index) runs the real `decodeVector` and `cosine` on the same engine a browser uses, but with no DOM, no page and no phone. Drive the same loop from a Playwright page over a real day payload, and again on a throttled CPU, so the scope default is chosen against what a reader on a phone feels rather than against a desktop lower bound. |
