@@ -55,12 +55,14 @@
 	.empty-headline {
 		margin: 0;
 		font-size: var(--text-lg);
+		line-height: var(--leading-lg);
 		color: var(--color-text);
 	}
 
 	.empty-note {
 		margin: 0;
 		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
 		color: var(--color-text-secondary);
 	}
 
@@ -70,5 +72,6 @@
 		gap: var(--space-4);
 		margin-top: var(--space-3);
 		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
 	}
 </style>

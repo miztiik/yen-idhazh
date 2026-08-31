@@ -103,7 +103,7 @@
 		{#if day.items.length === 0}
 			<EmptyDay date={day.date} {latest} />
 		{:else if matched.length === 0}
-			<p class="py-12 text-[0.9375rem] text-text-secondary">
+			<p class="py-12 text-base text-text-secondary">
 				Nothing on today's page matches &ldquo;{query}&rdquo;.
 			</p>
 		{:else}
@@ -113,7 +113,7 @@
 						type="button"
 						onclick={toggleHide}
 						aria-pressed={hideRead}
-						class="min-h-11 text-[0.8125rem] text-text-tertiary hover:text-accent"
+						class="min-h-11 text-sm text-text-tertiary hover:text-accent"
 					>
 						{hideRead ? 'Show everything' : 'Hide what I have read'}
 					</button>
@@ -121,7 +121,7 @@
 			{/if}
 
 			{#if visible.length === 0}
-				<p class="py-12 text-[0.9375rem] text-text-secondary">
+				<p class="py-12 text-base text-text-secondary">
 					You have read everything here today.
 				</p>
 			{:else if grouped}
@@ -140,7 +140,7 @@
 				{#each paged as item (item.item_id)}
 					{#if item.item_id === firstLaterItem}
 						<p
-							class="border-t border-rule pt-6 text-[0.75rem] tracking-wide text-text-tertiary uppercase"
+							class="border-t border-rule pt-6 text-xs tracking-wide text-text-tertiary uppercase"
 							data-later-runs
 						>
 							Added later today
@@ -159,7 +159,7 @@
 					<button
 						type="button"
 						onclick={() => (shownCount = paged.length + PAGE)}
-						class="min-h-11 w-full py-6 text-[0.9375rem] text-accent hover:underline"
+						class="min-h-11 w-full py-6 text-base text-accent hover:underline"
 					>
 						Show {remaining} more
 					</button>
@@ -167,7 +167,7 @@
 			{/if}
 
 			{#if read.size > 0}
-				<p class="pt-6 text-[0.8125rem] text-text-tertiary">
+				<p class="pt-6 text-sm text-text-tertiary">
 					<button
 						type="button"
 						onclick={() => (read = forgetAll(day.date))}

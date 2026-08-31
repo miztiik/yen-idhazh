@@ -38,7 +38,7 @@
 	);
 </script>
 
-<footer class="mt-16 border-t border-rule pt-8 pb-12 text-[0.8125rem] text-text-tertiary">
+<footer class="mt-16 border-t border-rule pt-8 pb-12 text-sm text-text-tertiary">
 	<p>Every summary is checked against the article it came from. Where the check went badly, the item says so.</p>
 
 	{#if facts && facts.run}

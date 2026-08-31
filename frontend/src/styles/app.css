@@ -52,6 +52,26 @@
 	--color-tint-bad: var(--tint-bad);
 	--color-tint-neutral: var(--tint-neutral);
 
+	/* The type scale, each step carrying the leading it was paired with in
+	   tokens.css. Without the `--line-height` half, `text-sm` takes the utility
+	   framework's own default leading and the pair silently comes apart - which
+	   is the "a size without a leading is half a decision" rule failing in the
+	   one place a diff does not show it. */
+	--text-xs: var(--text-xs);
+	--text-xs--line-height: var(--leading-xs);
+	--text-sm: var(--text-sm);
+	--text-sm--line-height: var(--leading-sm);
+	--text-base: var(--text-base);
+	--text-base--line-height: var(--leading-base);
+	--text-lg: var(--text-lg);
+	--text-lg--line-height: var(--leading-lg);
+	--text-xl: var(--text-xl);
+	--text-xl--line-height: var(--leading-xl);
+	--text-2xl: var(--text-2xl);
+	--text-2xl--line-height: var(--leading-2xl);
+	--text-3xl: var(--text-3xl);
+	--text-3xl--line-height: var(--leading-3xl);
+
 	--radius-sm: var(--radius-sm);
 	--radius-md: var(--radius-md);
 	--radius-lg: var(--radius-lg);
@@ -148,7 +168,7 @@ body {
 .auto-grid {
 	display: grid;
 	gap: var(--space-4);
-	grid-template-columns: repeat(auto-fit, minmax(var(--auto-grid-min, 320px), 1fr));
+	grid-template-columns: repeat(auto-fit, minmax(var(--auto-grid-min, 20rem), 1fr));
 }
 
 .panel {
