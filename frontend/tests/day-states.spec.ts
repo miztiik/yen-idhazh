@@ -95,18 +95,16 @@ const HOST_FALLBACK = '/404.html';
  *
  * GitHub Pages answers any unknown path with `404.html` - which is why
  * `svelte.config.js` names that file as the adapter's fallback - and it keeps
- * the requested address in the bar. `vite preview` has no such rule: measured
- * 2026-08-31, it answers `/2001-09-11/` and `/404.html` alike with a bare 404
- * and a zero-byte body, so the screen is simply unreachable under it.
- *
- * So the host is stood in for, and only the host: the real built `404.html` is
- * served, with status 404, at the real address. Everything after that is the
- * shipped bundle doing what it does on Pages - the router resolves the dated
- * route, its data file is not there, and the error page renders.
+ * the requested address in the bar. `vite preview` decides for itself what an
+ * unknown path gets, and that decision is not the host's, so the host is stood
+ * in for and only the host: the real built `404.html`, with status 404, at the
+ * real address. Everything after that is the shipped bundle doing what it does
+ * on Pages - the router resolves the dated route, its data file is not there,
+ * and the error page renders.
  */
-function asStaticHost(page: Page, route: string): Promise<void> {
+async function asStaticHost(page: Page, route: string): Promise<void> {
 	const shell = readFileSync(join(process.cwd(), 'build', '404.html'), 'utf8');
-	return page.route(`**${route}`, (intercepted) =>
+	await page.route(`**${route}`, (intercepted) =>
 		intercepted.fulfill({ status: 404, contentType: 'text/html', body: shell })
 	);
 }
