@@ -225,7 +225,11 @@
 		{/if}
 	</p>
 
-	<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-band-distance>
+	<div
+		class="mt-4 rounded-md border border-rule bg-surface p-3"
+		data-band-distance
+		data-readout-columns={columns.length}
+	>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
@@ -373,40 +377,30 @@
 			hint="Point at a day to read all three parts. Left and Right step through the days, Escape returns to the newest."
 		/>
 
-		<div class="mt-4 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
-			<!-- The word sits beside the colour, because colour is one signal and
-			     never the only one. -->
-			<ul class="flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-				{#each PARTS as part (part.place)}
-					<li class="flex items-center gap-2" data-band-key={part.place}>
-						<span class="size-3 shrink-0 rounded-sm" style="background: {part.colour}"></span>
-						{part.text}
-					</li>
-				{/each}
-			</ul>
-
-			<!-- The bounds as numbers, beside the chart drawn from them. A band
-			     nobody can read is a band nobody can check a column against. -->
-			<table class="text-[0.75rem] tabular-nums text-text-tertiary" data-band-bounds>
-				<caption class="text-left text-[0.75rem] text-text-secondary">What we ask for</caption>
-				<thead>
-					<tr>
-						<th scope="col" class="pe-4 text-left font-normal">Article length, words</th>
-						<th scope="col" class="text-left font-normal">Target summary length, words</th>
+		<!-- The bounds as numbers, beside the chart drawn from them. A band
+		     nobody can read is a band nobody can check a column against. No key
+		     beside it any more: the strip above names all three parts in their own
+		     colours at the day the reader is on, and one fact drawn twice is how
+		     two of them drift. -->
+		<table class="mt-4 text-[0.75rem] tabular-nums text-text-tertiary" data-band-bounds>
+			<caption class="text-left text-[0.75rem] text-text-secondary">What we ask for</caption>
+			<thead>
+				<tr>
+					<th scope="col" class="pe-4 text-left font-normal">Article length, words</th>
+					<th scope="col" class="text-left font-normal">Target summary length, words</th>
+				</tr>
+			</thead>
+			<tbody>
+				{#each bands as band, index (band.min_source_words)}
+					<tr data-band-row={band.min_source_words}>
+						<td class="pe-4">{bandSpan(bands, index)}</td>
+						<td data-band-target={band.min_source_words}>
+							{band.target_words_min} to {band.target_words_max}
+						</td>
 					</tr>
-				</thead>
-				<tbody>
-					{#each bands as band, index (band.min_source_words)}
-						<tr data-band-row={band.min_source_words}>
-							<td class="pe-4">{bandSpan(bands, index)}</td>
-							<td data-band-target={band.min_source_words}>
-								{band.target_words_min} to {band.target_words_max}
-							</td>
-						</tr>
-					{/each}
-				</tbody>
-			</table>
-		</div>
+				{/each}
+			</tbody>
+		</table>
 	</div>
 
 	<div class="mt-6" data-band-outliers>

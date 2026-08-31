@@ -271,7 +271,11 @@
 		     too narrow to read a value off - and the three panels this replaced are
 		     what that bound was written against. Outside a figure the new chart
 		     would leave the check with nothing to measure. -->
-		<figure class="mt-4" use:observeWidth={(value) => (measured = value)}>
+		<figure
+			class="mt-4"
+			data-readout-columns={columns.length}
+			use:observeWidth={(value) => (measured = value)}
+		>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
 				class="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"

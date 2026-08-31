@@ -114,7 +114,11 @@
 	}
 </script>
 
-<div class="plot" data-source-cuts="range">
+<div
+	class="plot"
+	data-source-cuts="range"
+	data-readout-none="one row per source, so a pointer is already on the row a strip would print"
+>
 	<div use:observeWidth={(next) => (measured = next)}>
 		<svg
 			class="block max-w-full"

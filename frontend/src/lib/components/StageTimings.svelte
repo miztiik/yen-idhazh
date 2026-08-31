@@ -312,7 +312,11 @@
 		the same at 40 ms and at 100 s.
 	</p>
 
-	<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-timing="chart">
+	<div
+		class="mt-4 rounded-md border border-rule bg-surface p-3"
+		data-timing="chart"
+		data-readout-columns={columns.length}
+	>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg

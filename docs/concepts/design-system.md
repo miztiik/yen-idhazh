@@ -251,14 +251,22 @@ Any library adopted for the console must (1) render SVG, not canvas, so
 build time, so the page is complete before any script runs, and (3) carry a
 measured gzipped cost recorded next to the decision.
 
-Measured 2026-08-30 on this tree with this bundler - these are the built
+Measured 2026-08-31 on this tree with this bundler - these are the built
 artefacts, not a bundler probe. Registering only the chart types in use, the
-engine is a lazy chunk of **197,561 B gzipped** (585,481 B raw). Importing the
+engine is a lazy chunk of **192,029 B gzipped** (567,839 B raw). Importing the
 same package whole instead pulled **345,959 B gzipped** (1,044,275 B raw) when
 that arm was last built on 2026-08-29, so the registration file is worth about
 half the download and is the reason it is a file somebody has to edit.
 `d3-scale` and `d3-array`, which the surface already carries, are 20.5 KB
 together.
+
+**Deleting a component is worth measuring too.** The chunk read 197,561 B
+gzipped (585,481 B raw) until the legend component came out of the registration
+list on 2026-08-31, because no chart on this site draws a key any more - the
+readout strip is the key. That is **5,532 B, 2.8 percent**, and it takes the
+room left under the 200,000 B line this plan drew from 2,439 B to 7,971 B. Both
+arms were built back to back on one tree, and the arm holding the old list read
+197,561 B to the byte.
 
 **That record went 25 percent stale in one day, and the way it happened is the
 warning.** It read 153,204 B (451,227 B raw) from 2026-08-29, when the
@@ -302,12 +310,12 @@ custom property inside the drawn pixels, so a canvas chart has to resolve the
 token values in JavaScript at mount and again after every theme change - which
 means the token file stops being the only place a colour is decided.
 
-### A chart with more than one series prints them together, in a fixed strip
+### A chart with a shared column prints every series together, in a fixed strip
 
 One contract, one implementation:
 [frontend/src/lib/components/ChartReadout.svelte](../../frontend/src/lib/components/ChartReadout.svelte).
-It binds every chart on the console that plots more than one series at a shared
-column, and the rules are not negotiable per chart:
+It binds every chart on the console whose marks sit on a shared column - four
+series or one - and the rules are not negotiable per chart:
 
 - **A fixed strip below the plot, never a floating box over it.** A floating
   tooltip covers the mark it explains, and one that dodges the cursor moves the
@@ -331,6 +339,31 @@ An engine-drawn chart takes the same strip through
 the wrapping element and never on the SVG, because the engine swaps that SVG out
 on hydration; the column centres come from `bandShares`, which recomputes them
 from the measured width because the engine keeps its grid insets in pixels.
+
+### A chart with no column to hover says so, and no chart draws a key twice
+
+The strip **is** the legend. It prints each series in the colour that series is
+drawn in, at the column the reader is on, so a standing key beside it would draw
+the same pair a second time - and one fact drawn twice is how two of them drift.
+No chart on the console draws a key any more: the engine's `legend` component is
+not even registered in
+[core.ts](../../frontend/src/lib/charts/core.ts), and the three markup keys that
+survived under charts that already had a strip are gone.
+
+A chart with no shared column gets no strip - a ranked list, one target bar, a
+flow, two shares of one total. A strip there would print the row the cursor is
+already on. **That is a decision, so it is written down where the chart is**:
+such a chart carries `data-readout-none` with the reason in words, and a chart
+with a column carries `data-readout-columns` with the count.
+
+The pair exists because of what the absence looks like otherwise. A chart
+somebody decided needs no hover and a chart where the readout was forgotten are
+the same chart on screen.
+[console-readout.spec.ts](../../frontend/tests/console-readout.spec.ts)
+enumerates every chart on the three console routes, fails on one that declares
+neither, fails on a declared column with no strip, and fails on a swatch drawn
+inside a chart that has one. It also holds the reason to five words, because
+`none` passes an attribute check and tells a reader nothing.
 
 ### A stacked chart offers lines only where no data is re-shaped
 

@@ -53,6 +53,7 @@
 	<svg
 		class="spark"
 		data-sparkline="line"
+		data-readout-none="a direction line, and the number it belongs to is beside it"
 		width={width}
 		height={height}
 		viewBox="0 0 {width} {height}"
