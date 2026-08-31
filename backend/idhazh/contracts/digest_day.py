@@ -240,10 +240,11 @@ class DigestDay(Contract):
                 "could not say why a story is in the digest or which clock its time "
                 "came from. Nothing new is computed: four are the score's own terms and "
                 "the fifth is the choice rank.appeared_at already makes. All five are "
-                "optional and null on the 10 days and 3,485 items committed before "
-                "this, and a null reads as unknown - never as 0, which for carried_by "
-                "would claim a story no feed carried, and never as false, which for "
-                "on_front_page would claim a vote that was never counted (section 11)."
+                "optional and null on every day published before this - 11 days and "
+                "3,596 items when this landed, 2026-08-31 - and a null reads as "
+                "unknown, never as 0, which for carried_by would claim a story no feed "
+                "carried, and never as false, which for on_front_page would claim a "
+                "vote that was never counted (section 11)."
             ),
         ),
         ChangelogEntry(

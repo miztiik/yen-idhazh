@@ -157,13 +157,13 @@ class RunPlan(Contract):
                 "address when the feed gave no usable one, and the field could not say "
                 "which. The choice is made in rank.appeared_at and was thrown away one "
                 "line later, so a page printing the time could not vouch for it. "
-                "Measured 2026-08-31 on the committed 2026-08-30 payload, 431 items: "
-                "305 distinct HH:mm values, and 5 stamps - 1.2 percent - within two "
-                "minutes of a run stamp. That last figure is an upper bound on the "
-                "fallback rather than a count of it, because nothing committed records "
-                "the choice yet - which is the defect. Additive with a default, so a "
-                "plan an earlier run wrote still validates, and a null reads as "
-                "unknown (section 11)."
+                "Measured 2026-08-31 on the committed 2026-08-30 payload - the newest "
+                "day that had finished publishing - 431 items: 305 distinct HH:mm "
+                "values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. "
+                "That last figure is an upper bound on the fallback rather than a "
+                "count of it, because nothing committed records the choice yet - which "
+                "is the defect. Additive with a default, so a plan an earlier run wrote "
+                "still validates, and a null reads as unknown (section 11)."
             ),
         ),
         ChangelogEntry(
