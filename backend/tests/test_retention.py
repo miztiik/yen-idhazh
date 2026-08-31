@@ -17,7 +17,7 @@ import hashlib
 import io
 import json
 import logging
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 from typing import Final
 
@@ -925,3 +925,61 @@ def test_the_stage_says_so_when_every_seen_shard_is_inside_the_window(
 
     assert "seen prune: every shard is inside the" in caplog.text
     assert str(CollectConfig().seen_window_days) in caplog.text
+
+
+def test_what_is_kept_reaches_further_back_than_the_planner_ever_reads() -> None:
+    """The margin, in days, over every anchor date a year can offer.
+
+    The prune keeps whole month files and the reader asks for a span of days, so
+    the two are only comparable in days: what survives is every row on or after
+    the first of the oldest month the reader opens. This walks a year of anchor
+    dates and asserts that span is never shorter than `seen_window_days` - the
+    property the whole design rests on, stated as arithmetic rather than as a
+    claim about one date.
+
+    Measured over the 366 dates from 2026-01-01, at the committed window of 90
+    days: the retained span runs 90 to 120 days, so the margin is 0 to 30. It is
+    zero on the dates where the window's oldest day is already the first of a
+    month, and thirty where it is the last - the whole shard is kept either way.
+    """
+    window = CollectConfig().seen_window_days
+    margins = []
+    for offset in range(366):
+        anchor = date(2026, 1, 1) + timedelta(days=offset)
+        oldest_kept = min(ledger.shards_in_window(anchor.isoformat(), window))
+        first_row_kept = date.fromisoformat(f"{oldest_kept}-01")
+        retained_days = (anchor - first_row_kept).days
+        assert retained_days >= window, (
+            f"on {anchor} the prune keeps back to {first_row_kept}, which is "
+            f"{retained_days} days - the planner reads {window}"
+        )
+        margins.append(retained_days - window)
+
+    assert min(margins) >= 0
+    # Never wider than one whole shard, or the prune is keeping a month the
+    # reader cannot reach through any date.
+    assert max(margins) < 31, f"margin ran to {max(margins)} days"
+
+
+def test_a_shard_newer_than_the_date_it_was_handed_is_never_deleted(
+    tmp_path: Path,
+) -> None:
+    """A back-dated invocation must not delete the shard every later plan opens.
+
+    `--date` takes whatever it is handed, so `prune-state --date <last January>`
+    computes a window around last January. Every shard since is outside it. The
+    rule is "older than the oldest month the reader opens", not "outside the
+    window", so those shards stay and only the genuinely older one goes.
+    """
+    state = tmp_path / "state"
+    window = CollectConfig().seen_window_days
+    live = _seen_shard(state, "2026-08")
+    stale = _seen_shard(state, "2024-01")
+
+    result = prune_seen(state, today="2026-01-05", within_days=window)
+
+    assert result.deleted == ("2024-01",)
+    assert live.exists(), "the live shard was deleted by a run given an older date"
+    assert not stale.exists()
+    # And the planner reading at its own date still finds the rows it wants.
+    assert ledger.load_seen(state, today="2026-08-31", within_days=window)
