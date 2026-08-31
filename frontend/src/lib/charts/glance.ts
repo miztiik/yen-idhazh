@@ -14,8 +14,9 @@
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
 import { donut } from './donut';
+import type { DayReadout } from './frame';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
-import { stacked } from './stacked';
+import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { daysInWindow, type TimeWindow } from './viewport';
 import { paint, type ChartToken } from './theme';
@@ -370,19 +371,42 @@ export function siteRunway(
 /** What is failing, and is the mix changing?
  *
  * Stacked rather than grouped: the total per day is half the question, and
- * grouped bars answer "how big is each" while losing it.
+ * grouped bars answer "how big is each" while losing it. The same array also
+ * draws as lines - see `ShapeSwitch` - which answers the other half, what one
+ * stage did on its own.
  */
-export function failureMix(series: readonly StageFailureSeries[]) {
+export function failureMix(series: readonly StageFailureSeries[], shape: StackShape = 'bars') {
 	const columns = series[0]?.days.map((d) => d.date.slice(5)) ?? [];
-	const TOKENS = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
 	return stacked(
 		columns,
 		series.map((s, i) => ({
 			label: s.label,
-			token: TOKENS[i % TOKENS.length],
+			token: MIX_TOKENS[i % MIX_TOKENS.length],
 			values: s.days.map((d) => d.failures)
-		}))
+		})),
+		shape
 	);
+}
+
+const MIX_TOKENS = ['--chart-1', '--chart-2', '--chart-3', '--chart-4'] as const;
+
+/** Every stage's failure count on one day, for the strip under the chart.
+ *
+ * A stack is the hardest shape to read one band off, so the band a reader
+ * wants is the one the eye cannot measure. The strip prints all four at the
+ * hovered column, which is what turns four hovers into one.
+ */
+export function failureMixColumns(series: readonly StageFailureSeries[]): DayReadout[] {
+	const dates = series[0]?.days.map((d) => d.date) ?? [];
+	return dates.map((date, index) => ({
+		x: 0,
+		date,
+		rows: series.map((stage, position) => ({
+			label: stage.label,
+			value: String(stage.days[index]?.failures ?? 0),
+			colour: `var(${MIX_TOKENS[position % MIX_TOKENS.length]})`
+		}))
+	}));
 }
 
 /** The three stages in the categorical ramp, in pipeline order. */

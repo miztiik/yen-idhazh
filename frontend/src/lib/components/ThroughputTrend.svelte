@@ -32,10 +32,10 @@
 		linearAxis,
 		observeWidth,
 		pointerReadout,
-		readoutCapStyle,
 		readoutMarks,
 		type DayReadout
 	} from '$lib/charts/frame';
+	import ChartReadout from './ChartReadout.svelte';
 	import type { ThroughputDay } from '$lib/charts/series';
 	import { daysInWindow } from '$lib/charts/viewport';
 	import { shortDate } from '$lib/format';
@@ -388,28 +388,16 @@
 		</div>
 
 		{#if readout}
-			<!-- Below the plot, never over it. A strip here cannot cover a mark at any
-			     width, and it opens on the newest day, so pointing at the chart never
-			     changes the room it takes. -->
-			<dl
-				class="mt-3 text-[0.75rem] text-text-tertiary"
-				style={readoutCapStyle(readoutMaxShare)}
-				data-readout="throughput"
-				aria-live="polite"
-			>
-				<dt class="font-semibold text-text-secondary" data-readout-day>
-					{readout.date}{selected === null ? ', the newest day' : ''}
-				</dt>
-				{#each readout.rows as row (row.label)}
-					<div class="mt-1 flex items-center gap-2" data-series-readout={row.label}>
-						{#if row.colour}
-							<span class="size-3 shrink-0 rounded-sm" style="background: {row.colour}"></span>
-						{/if}
-						<dd class="grow">{row.label}</dd>
-						<dd class="tabular-nums text-text-secondary">{row.value}</dd>
-					</div>
-				{/each}
-			</dl>
+			<!-- Below the plot, never over it, and the same strip every chart on this
+			     console prints - see `ChartReadout.svelte` for the rules it holds. -->
+			<ChartReadout
+				{readout}
+				name="throughput"
+				maxShare={readoutMaxShare}
+				resting={selected === null}
+				restingNote=", the newest day"
+				hint="Point at a day to read it. Left and Right step through the days, Escape returns to the newest."
+			/>
 		{/if}
 
 		{#if newest}
@@ -462,8 +450,5 @@
 				{/if}
 			</p>
 		{/if}
-		<p class="mt-1 text-[0.75rem] text-text-tertiary" data-readout-hint="throughput">
-			Point at a day to read it. Left and Right step through the days, Escape returns to the newest.
-		</p>
 	</div>
 {/if}
