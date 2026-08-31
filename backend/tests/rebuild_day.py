@@ -124,10 +124,10 @@ def rebuild(root: Path, date: str) -> None:
 
     # The eval ledger refuses an observation it already holds, as
     # `idhazh.evals.writer.append` does.
-    scores = _read_rows(root / "state" / "scores.csv")
+    scores = _read_rows(root / "state" / "scores" / "2026-08.csv")
     already = {row["item_id"] for row in scores}
     scores += [{"item_id": item, "hhem": "0.900"} for item in mine if item not in already]
-    _write_rows(root / "state" / "scores.csv", SCORE_COLUMNS, scores)
+    _write_rows(root / "state" / "scores" / "2026-08.csv", SCORE_COLUMNS, scores)
 
     # The public projection is a full rewrite of the item-health ledger, never a
     # merge of two of them.

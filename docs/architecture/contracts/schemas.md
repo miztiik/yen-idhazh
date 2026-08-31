@@ -47,7 +47,7 @@ The shapes, and where each one lives once written:
 | `Article` | `article` | one file per item under the run directory |
 | `Summary` | `summary` | one file per item under the run directory |
 | `Route` | `route` | one file per item under the run directory |
-| `EvalRow` | `eval-row` | one appended row of `state/scores.csv` |
+| `EvalRow` | `eval-row` | one appended row of `state/scores/<YYYY-MM>.csv` |
 | `FingerprintRow` | `fingerprint-row` | one appended row of `state/fingerprints.csv` |
 | `SeenRow` | `seen-row` | one appended row of `state/seen/<YYYY-MM>.csv` |
 | `PublishedRow` | `published-row` | one appended row of `state/published.csv` |
@@ -102,7 +102,7 @@ carry a time window?**
 | `state/telemetry-aggregate/` | monthly shards | what did a month past `keep_months` do, in totals? | it inherits the shard boundary of the file it replaces |
 | `state/published.csv` | one file | have we already published this? | no - published is forever |
 | `state/fingerprints.csv` | one file | has this exact input run before? | no |
-| `state/scores.csv` | one file | how did every scored item do? | no - and [nothing bounds it](../publishing/layout.md#what-bounds-the-committed-state-tree), measured and deliberate |
+| `state/scores/` | monthly shards | how did every scored item do? | no - sharded since 2026-08-31, but [nothing deletes a month yet](../publishing/layout.md#what-bounds-the-committed-state-tree) |
 | `state/runtime-counters.csv` | one file | what did the model server itself count? | no - the audit reads one run |
 
 A window turns a shard into a skipped file open. `ledger.shards_in_window`

@@ -77,7 +77,7 @@ from typing import Final
 
 from idhazh import config, ledger
 from idhazh.contracts.item_health import ItemHealthRow
-from idhazh.evals.writer import ledger_path as scores_path
+from idhazh.evals.writer import records as score_records
 from idhazh.extract import TOKENS_PER_WORD
 
 #: The percentile the residual is reported at, beside the median and the two
@@ -385,15 +385,11 @@ def stamps_by_run(state_dir: Path) -> tuple[str, dict[str, set[str]]]:
     ledger holds every pipeline this project has ever run, and only the last one
     is the pipeline in force.
     """
-    path = scores_path(state_dir)
-    if not path.exists():
-        return "", {}
     per_run: dict[str, set[str]] = {}
     live = ""
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        for row in csv.DictReader(handle):
-            live = row["pipeline_fingerprint"]
-            per_run.setdefault(row["run_id"], set()).add(live)
+    for row in score_records(state_dir):
+        live = row["pipeline_fingerprint"]
+        per_run.setdefault(row["run_id"], set()).add(live)
     return live, per_run
 
 

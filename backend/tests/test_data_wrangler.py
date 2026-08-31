@@ -317,9 +317,10 @@ def app() -> AppConfig:
 
 
 def a_ledger(tmp_path: Path, rows: Sequence[EvalRow]) -> Path:
-    path = tmp_path / "scores.csv"
-    writer.append(path, rows)
-    return path
+    """A state directory holding the month shards those rows belong in."""
+    state = tmp_path / "state"
+    writer.append(state, rows)
+    return state
 
 
 def a_digest(tmp_path: Path, *, date: str, items: Sequence[DigestItem]) -> Path:
@@ -395,7 +396,7 @@ def test_refill_rebuilds_a_row_from_the_address_the_ledger_recorded(
     code = data_wrangler.refill(
         corpus_dir,
         config.load(CONFIG_DIR),
-        ledger_path=a_ledger(tmp_path, [recorded]),
+        state_dir=a_ledger(tmp_path, [recorded]),
         digest_root=a_digest(
             tmp_path, date=recorded.date, items=[a_digest_item(article, REFILL_PUBLISHED)]
         ),
@@ -426,7 +427,7 @@ def test_refill_reaches_no_address_it_already_holds_a_row_for(
     data_wrangler.refill(
         corpus_dir,
         settings,
-        ledger_path=ledger_path,
+        state_dir=ledger_path,
         digest_root=digest_root,
         limit=None,
         read_url=serving({article.canonical_url: refill_page(REFILL_BODY)}),
@@ -439,7 +440,7 @@ def test_refill_reaches_no_address_it_already_holds_a_row_for(
     code = data_wrangler.refill(
         corpus_dir,
         settings,
-        ledger_path=ledger_path,
+        state_dir=ledger_path,
         digest_root=digest_root,
         limit=None,
         read_url=refuse,
@@ -466,7 +467,7 @@ def test_refill_drops_an_address_that_no_longer_answers_and_keeps_the_rest(
     code = data_wrangler.refill(
         corpus_dir,
         config.load(CONFIG_DIR),
-        ledger_path=a_ledger(tmp_path, rows),
+        state_dir=a_ledger(tmp_path, rows),
         digest_root=a_digest(
             tmp_path,
             date=rows[0].date,
@@ -500,7 +501,7 @@ def test_refill_will_not_pair_a_summary_a_later_run_rewrote(
     code = data_wrangler.refill(
         corpus_dir,
         config.load(CONFIG_DIR),
-        ledger_path=a_ledger(tmp_path, [recorded]),
+        state_dir=a_ledger(tmp_path, [recorded]),
         digest_root=a_digest(
             tmp_path, date=recorded.date, items=[a_digest_item(article, rewritten)]
         ),
@@ -532,7 +533,7 @@ def test_refill_will_not_reach_for_a_pair_the_run_itself_rejected(
     code = data_wrangler.refill(
         corpus_dir,
         config.load(CONFIG_DIR),
-        ledger_path=a_ledger(tmp_path, [recorded]),
+        state_dir=a_ledger(tmp_path, [recorded]),
         digest_root=a_digest(
             tmp_path, date=recorded.date, items=[a_digest_item(article, REFILL_PUBLISHED)]
         ),
@@ -558,7 +559,7 @@ def test_refill_at_a_limit_of_zero_touches_no_address(
     code = data_wrangler.refill(
         tmp_path / "corpus",
         config.load(CONFIG_DIR),
-        ledger_path=a_ledger(tmp_path, [recorded]),
+        state_dir=a_ledger(tmp_path, [recorded]),
         digest_root=a_digest(
             tmp_path, date=recorded.date, items=[a_digest_item(article, REFILL_PUBLISHED)]
         ),
@@ -604,7 +605,7 @@ def test_refill_keeps_the_rows_it_had_already_rebuilt_when_it_is_interrupted(
         data_wrangler.refill(
             corpus_dir,
             config.load(CONFIG_DIR),
-            ledger_path=a_ledger(tmp_path, rows),
+            state_dir=a_ledger(tmp_path, rows),
             digest_root=a_digest(
                 tmp_path,
                 date=rows[0].date,

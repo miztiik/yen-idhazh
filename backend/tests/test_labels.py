@@ -26,7 +26,7 @@ from idhazh.contracts.label_row import LabelRow
 from idhazh.evals import labels
 from utilities import label_queue
 
-SCORES = REPO_ROOT / "state" / "scores.csv"
+SCORES = REPO_ROOT / "state" / "scores" / "2026-08.csv"
 
 #: A pair no run has ever written, so a draw for it is empty on any ledger.
 NO_SUCH_PIPELINE = "0" * 64
