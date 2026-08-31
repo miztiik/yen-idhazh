@@ -103,14 +103,21 @@
 	--tint-bad: rgba(240, 131, 108, 0.14);
 	--tint-neutral: rgba(230, 237, 245, 0.06);
 
-	--source-swatch-0: #1d2b41;
-	--source-swatch-1: #272341;
-	--source-swatch-2: #3d2226;
-	--source-swatch-3: #3a2f18;
-	--source-swatch-4: #17322a;
-	--source-swatch-5: #172d36;
-	--source-swatch-6: #331f31;
-	--source-swatch-7: #23262c;
+	/* --- Source swatches -------------------------------------------------
+	   Eight tints, one per publication, indexed from the source id. The hue is
+	   decoration - the publication is named in words on the same line - but
+	   whether the ring is filled at all is the read mark, so the fill has to be
+	   on screen. Every one reads at least 1.5:1 against --color-surface, which
+	   frontend/tests/tokens.spec.ts recomputes from these hex values.
+	   design-system.md owns where that bound comes from. */
+	--source-swatch-0: #283b59;
+	--source-swatch-1: #3b3562;
+	--source-swatch-2: #553035;
+	--source-swatch-3: #46391d;
+	--source-swatch-4: #1e4136;
+	--source-swatch-5: #203e4a;
+	--source-swatch-6: #4e304b;
+	--source-swatch-7: #363b44;
 
 	/* --- Gradients -------------------------------------------------------
 	   Chrome and identity only: the wordmark, a panel wash, an empty state.
@@ -223,14 +230,18 @@
 	--tint-bad: rgba(180, 51, 31, 0.08);
 	--tint-neutral: rgba(16, 24, 40, 0.04);
 
-	--source-swatch-0: #dbe7fb;
-	--source-swatch-1: #e5e0f8;
-	--source-swatch-2: #fbe2e2;
-	--source-swatch-3: #fdeacd;
-	--source-swatch-4: #d9f0e3;
-	--source-swatch-5: #d7edf5;
-	--source-swatch-6: #f3e2f0;
-	--source-swatch-7: #e8e9ec;
+	/* --- Source swatches -------------------------------------------------
+	   Deeper than the pale tints these replaced, for the reason above: on white
+	   the old set read 1.18:1 to 1.28:1, so a filled ring and a hollow one were
+	   the same ring. The letters still read about 4.9:1 on every one of them. */
+	--source-swatch-0: #b9d1f7;
+	--source-swatch-1: #d3caf3;
+	--source-swatch-2: #f7c2c2;
+	--source-swatch-3: #efc98f;
+	--source-swatch-4: #a5dbbc;
+	--source-swatch-5: #a7d7e9;
+	--source-swatch-6: #e7c5e1;
+	--source-swatch-7: #cdcfd6;
 
 	/* --- Gradients -------------------------------------------------------
 	   Chrome and identity only: the wordmark, a panel wash, an empty state.

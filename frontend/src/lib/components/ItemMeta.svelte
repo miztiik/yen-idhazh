@@ -9,6 +9,11 @@
 	 * archive found it on, as the link back to it, in place of the day the
 	 * publisher put on it. The two are the same day or one apart, and printing
 	 * both puts two dates on a line that is already four facts long.
+	 *
+	 * The source monogram is not here. It moved to the item's leading edge, where
+	 * it carries the read state - and this line moves into a 14rem right rail on
+	 * a wide screen, so a read mark left in it would sit 14rem from the title it
+	 * qualifies.
 	 */
 	import { KIND_WORTH_SAYING, SOURCE_KINDS } from '$lib/bands';
 	import { shortDate } from '$lib/format';
@@ -16,16 +21,13 @@
 	import ConfidenceChip from './ConfidenceChip.svelte';
 	import ReadAloud from './ReadAloud.svelte';
 	import SourceLink from './SourceLink.svelte';
-	import SourceMark from './SourceMark.svelte';
 
 	let {
 		item,
-		showMark = true,
 		day,
 		onRead
 	}: {
 		item: DigestItem;
-		showMark?: boolean;
 		/** The digest day this item was found on, and the way back to it. */
 		day?: { date: string; href: string };
 		onRead?: () => void;
@@ -34,12 +36,7 @@
 </script>
 
 <div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-secondary">
-	<span class="inline-flex items-center gap-1.5">
-		{#if showMark}
-			<SourceMark name={item.source_name} sourceId={item.source_id} />
-		{/if}
-		{item.source_name}
-	</span>
+	<span>{item.source_name}</span>
 
 	{#if kindWorthSaying}
 		<span class="text-text-tertiary">{SOURCE_KINDS[item.source_kind]}</span>
