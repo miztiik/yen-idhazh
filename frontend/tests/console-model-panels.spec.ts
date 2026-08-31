@@ -471,9 +471,7 @@ test.describe('did the model change move anything', () => {
 			nodes.map((node) => ({
 				label: node.getAttribute('data-swap-row') ?? '',
 				pct: Number(node.getAttribute('data-swap-pct')),
-				fills: [...node.querySelectorAll('polygon, line[data-swap-cell="track"]')].map((mark) =>
-					mark.getAttribute('fill') ?? mark.getAttribute('stroke')
-				),
+				polarity: node.getAttribute('data-polarity') ?? '',
 				values: node.querySelector('[data-swap-cell="values"]')?.textContent ?? '',
 				head: node.querySelector('polygon')?.getAttribute('points') ?? ''
 			}))
@@ -482,16 +480,27 @@ test.describe('did the model change move anything', () => {
 
 		const up = rows.filter((entry) => entry.pct > 100);
 		const down = rows.filter((entry) => entry.pct < 100);
-		// Direction is the arrowhead and never the hue: an arrow that rose and one
-		// that fell are painted the same, so a reader has to read the shape.
-		if (up.length > 0 && down.length > 0) {
-			expect(new Set([...up, ...down].flatMap((entry) => entry.fills)).size).toBe(1);
+		// Direction is the arrowhead: the tip leads and the base trails, so a row
+		// that rose points right and one that fell points left. The hue became the
+		// measure's own polarity on 2026-08-31 and console-polarity.spec.ts owns
+		// that rule - reading a colour here as well is how two tests come to
+		// disagree about one paint.
+		for (const entry of [...up, ...down]) {
+			const [tip, base] = entry.head.split(' ').map((point) => Number(point.split(',')[0]));
+			expect(
+				entry.pct > 100 ? tip > base : tip < base,
+				`${entry.label} moved to ${entry.pct}% and its arrowhead does not point that way`
+			).toBe(true);
 		}
 		for (const entry of rows) {
 			// A ratio with no magnitude behind it can be a rounding error wearing a
 			// percentage, so both absolute values print on the row.
 			expect(entry.values, `${entry.label} printed no absolute values`).toMatch(/, then /);
 			expect(entry.head, `${entry.label} drew no arrowhead`).not.toBe('');
+			expect(
+				['lower-is-better', 'higher-is-better', 'no-agreed-direction'],
+				`${entry.label} declares no direction, so it would paint neutral by default`
+			).toContain(entry.polarity);
 		}
 	});
 });
