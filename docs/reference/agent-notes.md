@@ -1314,6 +1314,16 @@ the variable protects the shell you remember to set it in and nothing else.
   every quirk above stops applying. Note a script written to `TEMP` resolves
   modules from `TEMP`, so `require()` Playwright by its absolute path inside the
   worktree's `node_modules` or it fails `MODULE_NOT_FOUND`.
+- **`page.url()` read straight after a click still says the page you left.**
+  Every route here is prerendered and the client router takes the click, so
+  `await locator.click()` then `await page.waitForLoadState('networkidle')` can
+  return before the address has moved - and the smoke reports that a link went
+  nowhere. Observed 2026-08-31 on a footer link that navigates correctly. Wait
+  for the address instead, alongside the click rather than after it:
+
+  ```js
+  await Promise.all([page.waitForURL('**/archive/'), locator.click()]);
+  ```
 
 ## Serving a build to measure it
 
@@ -1351,6 +1361,26 @@ the variable protects the shell you remember to set it in and nothing else.
   `Network.setCacheDisabled`), or the second reload is served from memory.
   Expect `vite preview` to die with an unhandled `ENOENT` when a file it is
   streaming disappears; that is the server, not the page.
+- **Two builds of one unchanged tree do not agree on bytes unless
+  `kit.version.name` is pinned.** It defaults to `Date.now()`, which reaches the
+  `__sveltekit_<id>` global every prerendered document names and, through that,
+  the content hash in every chunk filename the document preloads. So a
+  before-and-after page-weight comparison reports a difference on routes the
+  change never touched, and normalising the timestamp out of the text does not
+  help - the moved bytes are filenames, not the stamp. Patch
+  `frontend/svelte.config.js` for the measurement, run both arms with one
+  constant, and revert the patch before committing:
+
+  ```js
+  version: { name: process.env.BUILD_VERSION ?? Date.now().toString() },
+  ```
+
+  Measured 2026-08-31: with it pinned, two builds of each arm came out
+  byte-identical on `/`, `/404`, `/archive/` and `/evals/`, so the spread was 0
+  and every remaining byte was the change. Take the control arm by copying your
+  changed source files to `TEMP`, `git checkout HEAD -- <those paths>`,
+  building, then copying them back - `HEAD` never moves, so `__BUILD_COMMIT__`
+  and `__BUILD_DATE__` stay constant across both arms too.
 - **`vite build --outDir <other>` does NOT move the site. `adapter-static`
   writes `build/` whatever vite is told**, so a second arm built "somewhere
   else" silently overwrites the arm you were about to measure. On 2026-08-31 an
