@@ -1,25 +1,30 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { ITEM_FIELDS, VISUAL_FIELDS as PROJECTED_VISUAL_FIELDS } from '../src/lib/payload/project';
+import {
+	ITEM_FIELDS,
+	VIEW_VERSION,
+	VISUAL_FIELDS as PROJECTED_VISUAL_FIELDS
+} from '../src/lib/payload/project';
 
 /**
- * The staged day payload carries what a search result renders, and no more.
+ * The staged day payload carries what a page renders, and no more.
  *
  * `frontend/public/digest/` is the committed day: every field the digest page
  * draws, plus the vector block. `scripts/copy-visuals.mjs` projects it into
  * `static/` through the allow-list in `src/lib/payload/project.ts`, and that
  * staged copy is what reaches a reader - fetched by `lib/assist/day.ts` when a
- * search result from that day is on screen.
+ * search result from that day is on screen, and by a reading route once row 26
+ * of the reading-page plan lands.
  *
  * **The lists below are a second copy on purpose.** The module holds the
  * behaviour; this file holds the promise. Reading only the module's constants
  * here would make the test agree with any widening, which is the one failure it
  * exists to catch - a field added to the allow-list is paid for by every reader
- * who searches, and nothing else in the build would say a word. So the promise
- * is written out longhand, and the first test below holds the module against
- * it: a widening now names the field it added, instead of surfacing as a shape
- * mismatch on every staged item at once.
+ * who fetches a day, and nothing else in the build would say a word. So the
+ * promise is written out longhand, and the first test below holds the module
+ * against it: a widening now names the field it added, instead of surfacing as
+ * a shape mismatch on every staged item at once.
  *
  * Runs in Node over the tree the build just staged, like the arithmetic tests
  * in `frame.spec.ts`. No page is loaded.
@@ -28,22 +33,32 @@ import { ITEM_FIELDS, VISUAL_FIELDS as PROJECTED_VISUAL_FIELDS } from '../src/li
 const STAGED = resolve(process.cwd(), 'static', 'digest');
 const COMMITTED = resolve(process.cwd(), 'public', 'digest');
 
-/** Traced along the render path, not guessed: `DigestItem` with `ItemMeta`,
- * `ItemVisual`, `ConfidenceChip`, `ReadAloud` and `SourceLink`. */
+/** Traced along the render path, not guessed: `DigestList` scopes, filters and
+ * divides the list, and `DigestItem` with `ItemMeta`, `ItemVisual`,
+ * `LensChips`, `ConfidenceChip`, `ReadAloud` and `SourceLink` draws one item. */
 const RENDERED_FIELDS = [
 	'band',
 	'band_reason',
+	'carried_by',
+	'introduced_by_run',
 	'item_id',
+	'key_points',
+	'lenses',
+	'on_front_page',
+	'published_at',
+	'rank_score',
 	'reader_note',
 	'source_id',
 	'source_kind',
 	'source_name',
 	'source_url',
 	'summary',
+	'time_source',
 	'title',
 	'truncated',
 	'vertical',
-	'visual'
+	'visual',
+	'watchlist_hit'
 ];
 
 /** The three `ItemVisual` reads. `kind` is a build-time field of the committed
@@ -79,7 +94,7 @@ function items(day: Day): Record<string, unknown>[] {
 	return day.payload.items as Record<string, unknown>[];
 }
 
-test('the allow-list is the thirteen fields this file promises', () => {
+test('the allow-list is the twenty-two fields this file promises', () => {
 	// The staging step and the build-time reader share one module now, so a
 	// widening is one edit in one place. This is the test that makes that edit
 	// visible: it names the field that arrived, where the shape checks below
@@ -87,23 +102,26 @@ test('the allow-list is the thirteen fields this file promises', () => {
 	expect(
 		[...ITEM_FIELDS].sort(),
 		'the projection allow-list moved. Every field on it is paid for by every\n' +
-			'reader who searches, so widening it is a decision, not a detail.'
+			'reader who fetches a day, so widening it is a decision, not a detail.'
 	).toEqual(RENDERED_FIELDS);
 	expect([...PROJECTED_VISUAL_FIELDS].sort(), 'the visual allow-list moved').toEqual(VISUAL_FIELDS);
 });
 
-test('a staged day carries the one key the fetch reads', () => {
-	// `assist/day.ts` refuses a payload whose `items` is not an array and keeps
-	// nothing else, so this is the whole contract the fetched file answers to.
+test('a staged day carries its items and the stamp that says what shape they are', () => {
+	// `assist/day.ts` refuses a payload whose `items` is not an array, and the
+	// version is what an older shell branches on when this shape next moves -
+	// `schemas/digest-view.schema.json` is the contract both answer to.
 	for (const day of staged()) {
 		expect(Object.keys(day.payload).sort(), `${day.path} is not the day projection`).toEqual([
-			'items'
+			'items',
+			'version'
 		]);
 		expect(Array.isArray(day.payload.items), `${day.path} has no items array`).toBe(true);
+		expect(day.payload.version, `${day.path} carries the wrong contract stamp`).toBe(VIEW_VERSION);
 	}
 });
 
-test('a staged item carries the thirteen fields a result renders, and no fourteenth', () => {
+test('a staged item carries the twenty-two fields a page renders, and no twenty-third', () => {
 	const wrong: string[] = [];
 	let counted = 0;
 	for (const day of staged()) {
@@ -124,7 +142,7 @@ test('a staged item carries the thirteen fields a result renders, and no fourtee
 	expect(
 		wrong.slice(0, 10),
 		'the staged projection changed shape. Every field here is paid for by every\n' +
-			'reader who searches, so widening it is a decision, not a detail:\n' +
+			'reader who fetches a day, so widening it is a decision, not a detail:\n' +
 			wrong.join('\n')
 	).toEqual([]);
 });

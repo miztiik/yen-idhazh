@@ -897,6 +897,14 @@ dependency nothing in the change touched.
   reads like a bug in the one case the arithmetic cannot get wrong. Observed
   2026-08-30 on the console's ranked bars. Compare the number:
   `parseFloat(node.style.inlineSize)` against `Number(expected.toFixed(4))`.
+- **`getComputedStyle(document.body).backgroundColor` answers
+  `rgba(0, 0, 0, 0)` on a page whose background is plainly there.** `app.css`
+  puts `background-color` on `html`, and the browser propagates the root
+  element's background to the canvas - so the body genuinely has none, and a
+  theme assertion written against it fails on every route at once. Observed
+  2026-08-31 while writing the first-frame theme oracle; it reads exactly like
+  the stylesheet not loading. Read `document.documentElement` instead, which is
+  the element that actually paints.
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
   `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
   then shows progress dots and an exit code and nothing else, which reads like
@@ -984,6 +992,29 @@ dependency nothing in the change touched.
   errors on lines that were not edited. The fix is also the better code: keep one
   `[type, handler]` list and attach it through a single `const events: EventTarget
   = node`, so the add and the remove halves cannot drift apart.
+- **A transitioned paint property read straight after `hover()` or `focus()`
+  returns an interpolation, not the value it is going to.** A card whose
+  `box-shadow` and `border-color` ease over `--dur-fast` reported
+  `rgb(86, 78, 230)` against an accent of `rgb(79, 70, 229)`, which reads as the
+  wrong colour rather than as the right colour arriving. One
+  `requestAnimationFrame` is not enough either - that lands mid-ease. Poll for
+  the final value and let the poll be the assertion:
+
+  ```ts
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('article.item')!).boxShadow))
+    .toBe(resolvedShadowToken);
+  ```
+
+  Resolve the token through a throwaway element - set `style.boxShadow` to the
+  custom property's value, read the computed string back, remove it - so the
+  comparison is against the token rather than against a string somebody typed.
+- **`locator.hover()` scrolls the element into view, so a viewport-relative rect
+  taken before it and after it says the element moved.** A card asserting "no
+  lift on hover" failed with `top` 332 before and 18 after, which reads as a 314px
+  jump the CSS does not contain. Take `rect.top + window.scrollY` and
+  `rect.left + window.scrollX`, and call `scrollIntoViewIfNeeded()` before the
+  rest reading as well. Measured 2026-08-31.
 
 ## Git Bash on Windows
 
@@ -1291,6 +1322,16 @@ the variable protects the shell you remember to set it in and nothing else.
   every quirk above stops applying. Note a script written to `TEMP` resolves
   modules from `TEMP`, so `require()` Playwright by its absolute path inside the
   worktree's `node_modules` or it fails `MODULE_NOT_FOUND`.
+- **`page.url()` read straight after a click still says the page you left.**
+  Every route here is prerendered and the client router takes the click, so
+  `await locator.click()` then `await page.waitForLoadState('networkidle')` can
+  return before the address has moved - and the smoke reports that a link went
+  nowhere. Observed 2026-08-31 on a footer link that navigates correctly. Wait
+  for the address instead, alongside the click rather than after it:
+
+  ```js
+  await Promise.all([page.waitForURL('**/archive/'), locator.click()]);
+  ```
 
 ## Serving a build to measure it
 
@@ -1328,6 +1369,26 @@ the variable protects the shell you remember to set it in and nothing else.
   `Network.setCacheDisabled`), or the second reload is served from memory.
   Expect `vite preview` to die with an unhandled `ENOENT` when a file it is
   streaming disappears; that is the server, not the page.
+- **Two builds of one unchanged tree do not agree on bytes unless
+  `kit.version.name` is pinned.** It defaults to `Date.now()`, which reaches the
+  `__sveltekit_<id>` global every prerendered document names and, through that,
+  the content hash in every chunk filename the document preloads. So a
+  before-and-after page-weight comparison reports a difference on routes the
+  change never touched, and normalising the timestamp out of the text does not
+  help - the moved bytes are filenames, not the stamp. Patch
+  `frontend/svelte.config.js` for the measurement, run both arms with one
+  constant, and revert the patch before committing:
+
+  ```js
+  version: { name: process.env.BUILD_VERSION ?? Date.now().toString() },
+  ```
+
+  Measured 2026-08-31: with it pinned, two builds of each arm came out
+  byte-identical on `/`, `/404`, `/archive/` and `/evals/`, so the spread was 0
+  and every remaining byte was the change. Take the control arm by copying your
+  changed source files to `TEMP`, `git checkout HEAD -- <those paths>`,
+  building, then copying them back - `HEAD` never moves, so `__BUILD_COMMIT__`
+  and `__BUILD_DATE__` stay constant across both arms too.
 - **`vite build --outDir <other>` does NOT move the site. `adapter-static`
   writes `build/` whatever vite is told**, so a second arm built "somewhere
   else" silently overwrites the arm you were about to measure. On 2026-08-31 an
@@ -1600,6 +1661,16 @@ the variable protects the shell you remember to set it in and nothing else.
   longer flag with the same prefix does not match, because the test looks for
   the closing quote too. Before adding any flag, run
   `git grep -n '"--<your flag>"' -- backend`.
+- **Killing a queued `gate_lock` build leaves the tree unservable, and the next
+  error names the wrong thing.** The waiter and the build it wraps are one
+  process tree, so killing the wrapper can land after `vite build` has already
+  cleared `.svelte-kit/output/`. `vite preview` then exits with
+  `Server files not found at ...\.svelte-kit\output\server, did you run build
+  first?`, which reads as a broken install on a checkout that built cleanly
+  minutes earlier - and `frontend/build/` is still there and still looks
+  complete, which is what makes it convincing. The fix is one more
+  `npm run build`. Measured 2026-08-31. Prefer letting a queued gate finish;
+  if you do kill one, rebuild before serving anything.
 
 ## See also
 

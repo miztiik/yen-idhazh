@@ -1,0 +1,354 @@
+{
+  "$defs": {
+    "BandReason": {
+      "description": "Why an item did not reach the top band.\n\nAn identifier, never copy: the sentence a reader sees is owned by the site\nand can be rewritten without a schema change. A `high` item has no reason,\nbecause there is nothing to explain.",
+      "enum": [
+        "unsupported_number",
+        "not_scored",
+        "lead_missing",
+        "hedge_dropped",
+        "faithfulness"
+      ],
+      "title": "BandReason",
+      "type": "string"
+    },
+    "ConfidenceBand": {
+      "description": "The band, not the number, is what drives behaviour and what a reader sees.",
+      "enum": [
+        "high",
+        "medium",
+        "low"
+      ],
+      "title": "ConfidenceBand",
+      "type": "string"
+    },
+    "DigestViewItem": {
+      "additionalProperties": false,
+      "description": "One item, narrowed to what a page renders from it.\n\nEvery field here has a named renderer. The list is not \"the published item\nminus the big bits\" - it is traced along the render path, and a field\nwithout a reader does not earn the wire.",
+      "properties": {
+        "band": {
+          "$ref": "#/$defs/ConfidenceBand"
+        },
+        "band_reason": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BandReason"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Why the item is not in the top band. Null on a `high` item and on a day published before this existed - 14 of 3,733 committed items on 2026-08-31."
+        },
+        "carried_by": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many feeds carried this one address. Null is unknown, never 1.",
+          "title": "Carried By"
+        },
+        "introduced_by_run": {
+          "description": "A global fact, true for every reader, asserted without any storage.",
+          "minimum": 1,
+          "title": "Introduced By Run",
+          "type": "integer"
+        },
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "key_points": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "title": "Key Points",
+          "type": "array"
+        },
+        "lenses": {
+          "items": {
+            "$ref": "#/$defs/LensId"
+          },
+          "title": "Lenses",
+          "type": "array"
+        },
+        "on_front_page": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "A salience feed voted for it. Null is unknown, never false.",
+          "title": "On Front Page"
+        },
+        "published_at": {
+          "anyOf": [
+            {
+              "pattern": "^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}Z$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Published At"
+        },
+        "rank_score": {
+          "anyOf": [
+            {
+              "minimum": 0.0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "What the planning step scored the story at. Null is unknown, never 0.",
+          "title": "Rank Score"
+        },
+        "reader_note": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Our sentence explaining a source limitation, never a badge.",
+          "title": "Reader Note"
+        },
+        "source_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Source Id",
+          "type": "string"
+        },
+        "source_kind": {
+          "$ref": "#/$defs/SourceKind",
+          "default": "reporting",
+          "description": "Who is speaking. A vendor's own copy must not look like a reporter's."
+        },
+        "source_name": {
+          "minLength": 1,
+          "title": "Source Name",
+          "type": "string"
+        },
+        "source_url": {
+          "maxLength": 2048,
+          "pattern": "^https?://[^\\s\\\"'<>\\\\]+$",
+          "title": "Source Url",
+          "type": "string"
+        },
+        "summary": {
+          "minLength": 1,
+          "title": "Summary",
+          "type": "string"
+        },
+        "time_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which clock `published_at` came from. Null reads as unknown: a page that prints a time without naming its clock cannot say which of the two it has."
+        },
+        "title": {
+          "maxLength": 500,
+          "minLength": 1,
+          "title": "Title",
+          "type": "string"
+        },
+        "truncated": {
+          "default": false,
+          "description": "The reader is told before they find out by clicking through.",
+          "title": "Truncated",
+          "type": "boolean"
+        },
+        "vertical": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
+          "title": "Vertical",
+          "type": "string"
+        },
+        "visual": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DigestViewVisual"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null
+        },
+        "watchlist_hit": {
+          "anyOf": [
+            {
+              "type": "boolean"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The story names a watchlist entity. Null is unknown, never false.",
+          "title": "Watchlist Hit"
+        }
+      },
+      "required": [
+        "item_id",
+        "vertical",
+        "title",
+        "summary",
+        "band",
+        "source_name",
+        "source_id",
+        "source_url",
+        "introduced_by_run",
+        "key_points"
+      ],
+      "title": "DigestViewItem",
+      "type": "object"
+    },
+    "DigestViewVisual": {
+      "additionalProperties": false,
+      "description": "The rendered chart, as the `<img>` needs it.\n\n`kind` is not here. It is read at build time off the committed tree for the\nconsole's chart count, and a browser drawing the image has no use for it.",
+      "properties": {
+        "alt": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Alt"
+        },
+        "path": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "pattern": "^[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*(?:/[A-Za-z0-9._-]*[A-Za-z0-9_-][A-Za-z0-9._-]*)*$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Path"
+        },
+        "state": {
+          "$ref": "#/$defs/VisualState"
+        }
+      },
+      "required": [
+        "state"
+      ],
+      "title": "DigestViewVisual",
+      "type": "object"
+    },
+    "LensId": {
+      "description": "A question asked of items already collected. Costs no extra request.",
+      "enum": [
+        "china",
+        "ai-roi",
+        "markets",
+        "cyber",
+        "war",
+        "trade",
+        "chips"
+      ],
+      "title": "LensId",
+      "type": "string"
+    },
+    "SourceKind": {
+      "description": "What kind of speaker this is - the thing a reader uses to decide belief.\n\n\"A company said its product is faster\" and \"a reporter measured it\" are not\nthe same claim, and without this they arrive looking identical. The\ndangerous case is `announcement`: forwarding a vendor's own copy without\nknowing it was the vendor is how a reader ends up carrying an ad.",
+      "enum": [
+        "reporting",
+        "announcement",
+        "research",
+        "analysis",
+        "government",
+        "community"
+      ],
+      "title": "SourceKind",
+      "type": "string"
+    },
+    "TimeSource": {
+      "description": "Which clock the time on an item came from.\n\n`rank.appeared_at` prefers the feed's own date and falls back to when we\nfirst saw the address. Both answers used to land in one field, so nothing\ndownstream could tell them apart - and the fallback is the one a reader\nwould want flagged, because it is our clock and not the publisher's.",
+      "enum": [
+        "feed",
+        "first_seen",
+        "unknown"
+      ],
+      "title": "TimeSource",
+      "type": "string"
+    },
+    "VisualState": {
+      "description": "What became of the visual. \"Could not make it\" and \"made it then threw it\naway\" are different facts, so they never share a member.",
+      "enum": [
+        "absent",
+        "rendered",
+        "render_failed"
+      ],
+      "title": "VisualState",
+      "type": "string"
+    }
+  },
+  "$id": "digest-view.schema.json",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "changelog": [
+    {
+      "change": "Initial shape: the day's items narrowed to what a page renders, carrying a version of their own.",
+      "version": "2026-08-31T12:00",
+      "why": "The staged day payload was a thirteen-name array in a build script, which was enough while the only reader was our own archive page. A reading route is about to fetch this file, so a browser we cannot upgrade will parse it and its address stops being movable - which is a persisted shape and therefore a contract before logic reads it (Rule #3). The version is here from the first byte so that an older shell reading a newer payload has something to branch on. Nine names join the thirteen in the same commit, each with a named renderer: carried_by, watchlist_hit, on_front_page and rank_score for the lead block, published_at and time_source for the time rail, introduced_by_run for the run divider, lenses for the topic chips, and key_points for the in-page filter that reads them today. Measured 2026-08-31 over 11 committed days and 3,733 items, gzip -9: 361.10 bytes an item before and 468.58 after, against 792.65 for the committed day."
+    }
+  ],
+  "description": "`<base>/digest/<YYYY>/<MM>/<DD>/digest.json`, as a browser fetches it.",
+  "properties": {
+    "items": {
+      "items": {
+        "$ref": "#/$defs/DigestViewItem"
+      },
+      "title": "Items",
+      "type": "array"
+    },
+    "version": {
+      "default": "2026-08-31T12:00",
+      "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
+      "title": "Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "items"
+  ],
+  "title": "DigestView",
+  "type": "object",
+  "version": "2026-08-31T12:00"
+}

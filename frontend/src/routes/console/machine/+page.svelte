@@ -51,6 +51,7 @@
 		RUNNER_MEMORY_BYTES
 	} from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
+	import { columnStrip } from '$lib/charts/frame';
 	import { targetMarks } from '$lib/charts/targetbar';
 	import type { StackShape } from '$lib/charts/stacked';
 
@@ -115,15 +116,52 @@
 		tokenChart(view.tokens, (run) => run.output, 'written tokens', '--chart-4').option
 	);
 
-	// The strips under the three charts that draw more than one series. Built
-	// here from the same arrays the options are, so a column the strip prints and
-	// a column the chart drew can never be two different columns.
+	// The strips under every chart that has a column to land on. Built here from
+	// the same arrays the options are, so a column the strip prints and a column
+	// the chart drew can never be two different columns - which is why the two
+	// that follow the span read `view` and the two that describe one run read
+	// `data`.
 	const cacheStrip = $derived(cacheColumns(view.cacheDays));
 	const clockStrip = $derived(clockColumns(data.clocks.pairs));
 	const percentileStrip = $derived(percentileColumns(data.percentiles.curves));
 	/** The insets `percentileChart` draws its grid at. The strip's column centres
 	 * are computed from them, so a pointer and the strip agree. */
 	const PERCENTILE_GRID = { left: 60, right: 44 };
+	/** The same, for the two token charts. */
+	const TOKEN_GRID = { left: 62, right: 12 };
+	/** One series each, and each still earns a strip: a run id is turned 45
+		* degrees on the axis and thinned when the runs crowd, so the bar a pointer
+		* is on is the one place its run and its count can be read together. These
+		* read the open span, because the bars do. */
+	const tokenRuns = $derived(view.tokens.map((run) => run.runId));
+	const inputStrip = $derived(
+		columnStrip(tokenRuns, [
+			{
+				label: 'Prompt tokens',
+				colour: 'var(--chart-1)',
+				value: (index) => grouped(view.tokens[index]?.input ?? 0)
+			},
+			{
+				label: 'Items that reported both counts',
+				colour: '',
+				value: (index) => grouped(view.tokens[index]?.items ?? 0)
+			}
+		])
+	);
+	const outputStrip = $derived(
+		columnStrip(tokenRuns, [
+			{
+				label: 'Written tokens',
+				colour: 'var(--chart-4)',
+				value: (index) => grouped(view.tokens[index]?.output ?? 0)
+			},
+			{
+				label: 'Items that reported both counts',
+				colour: '',
+				value: (index) => grouped(view.tokens[index]?.items ?? 0)
+			}
+		])
+	);
 
 	// One shared rate for every cost figure below. It starts at the configured
 	// pair so the first paint matches the prerendered document, and `RateControl`
@@ -604,6 +642,9 @@
 				</p>
 			{:else}
 				<div class="pair">
+					<!-- Keyed on the span for the same reason the cache chart is, and the
+					     readouts sit inside the key with the charts: a strip built at one
+					     window and a chart drawn at another would name two different runs. -->
 					{#key windowDays}
 						<figure class="pane" data-token-chart="input">
 							<figcaption>Prompt tokens</figcaption>
@@ -613,6 +654,12 @@
 								width={data.chart.width_px}
 								height={data.chart.height_px}
 								label="Prompt tokens each run sent to the model over {view.days} days. One bar is one run."
+								columns={inputStrip}
+								readoutName="tokens-input"
+								readoutMaxShare={data.chart.readout_max_share}
+								grid={TOKEN_GRID}
+								restingNote=", the last run"
+								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 							/>
 						</figure>
 						<figure class="pane" data-token-chart="output">
@@ -623,6 +670,12 @@
 								width={data.chart.width_px}
 								height={data.chart.height_px}
 								label="Tokens each run's answers were made of over {view.days} days. One bar is one run."
+								columns={outputStrip}
+								readoutName="tokens-output"
+								readoutMaxShare={data.chart.readout_max_share}
+								grid={TOKEN_GRID}
+								restingNote=", the last run"
+								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 							/>
 						</figure>
 					{/key}

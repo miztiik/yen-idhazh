@@ -85,15 +85,17 @@ test('reader source limits are sentences in the page text', () => {
 		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DigestItem.svelte'),
 		'utf8'
 	);
-	const footer = readFileSync(
-		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'SiteFooter.svelte'),
+	// The sentence moved to the day notice, which is where the day is. The
+	// footer stated it on every route, including the ones that show no day.
+	const notice = readFileSync(
+		resolve(ROOT, 'frontend', 'src', 'lib', 'components', 'DayNotice.svelte'),
 		'utf8'
 	);
 
 	expect(item).toContain('item.reader_note');
 	expect(item).not.toContain('Brief');
-	expect(footer).toContain(
-		'We skipped {facts.items_failed} stories today because we could not read enough of the page to'
+	expect(notice).toContain(
+		'{day.items_failed} did not finish, because we could not read enough of the page to summarize'
 	);
 });
 

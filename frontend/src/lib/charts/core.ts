@@ -15,23 +15,21 @@
 
 import * as echarts from 'echarts/core';
 import { BarChart, LineChart, PieChart, SankeyChart } from 'echarts/charts';
-import {
-	GridComponent,
-	LegendComponent,
-	MarkLineComponent,
-	TooltipComponent
-} from 'echarts/components';
+import { GridComponent, MarkLineComponent, TooltipComponent } from 'echarts/components';
 import { SVGRenderer } from 'echarts/renderers';
 
 // SVG, never canvas: the server renders to a string at build time, and an SVG
 // carries a custom-property reference, so CSS keeps owning colour.
+//
+// No legend component. Every chart that had one now prints its key in the
+// readout strip under the plot, so the engine no longer draws a key on any
+// chart on this site and the code for it need not ship.
 echarts.use([
 	BarChart,
 	LineChart,
 	PieChart,
 	SankeyChart,
 	GridComponent,
-	LegendComponent,
 	MarkLineComponent,
 	TooltipComponent,
 	SVGRenderer
