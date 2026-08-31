@@ -36,7 +36,11 @@ SLUG_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
 # the address hash, not from a rank position, so the same article keeps the same
 # id across every run of the day. At least two, never capped.
 ITEM_ID_PATTERN: Final = r"^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$"
-# `<YYYY-MM-DD>-<N>`: the run address. Readable, sortable, and free of hashes.
+# `<YYYY-MM-DD>-<execution>`: the run address. Readable, sortable, free of
+# hashes, and unique per execution - the trailing field is the CI run id on
+# anything the pipeline produced, and a count of the day's runs only on a
+# developer machine, which cannot race itself. It used to be that count
+# everywhere, and two overlapping runs read the same answer out of it.
 RUN_ID_PATTERN: Final = r"^\d{4}-\d{2}-\d{2}-[0-9]+$"
 URL_PATTERN: Final = r"^https?://[^\s\"'<>\\]+$"
 SHA256_PATTERN: Final = r"^[0-9a-f]{64}$"

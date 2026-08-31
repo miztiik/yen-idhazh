@@ -270,7 +270,7 @@ def stage_plan(
     settings: config.Settings,
     fetcher: Fetcher | None = None,
     now: Clock | None = None,
-    run_n: int | None = None,
+    execution: int | None = None,
     state_dir: Path | None = None,
     cap: int | None = None,
 ) -> RunPlan:
@@ -301,7 +301,9 @@ def stage_plan(
     state = state_dir if state_dir is not None else STATE_ROOT
     collect = settings.app.collect
     generated_at = clock()
-    run_id = f"{date}-{run_n if run_n is not None else _next_run_n(date)}"
+    # Named by the execution that made it, not by a count of what is committed.
+    # See `_next_run_n` for what the count could not do.
+    run_id = f"{date}-{execution if execution is not None else _next_run_n(date)}"
 
     candidates: list[discover.Candidate] = []
     health: list[FeedHealthRow] = []
@@ -562,11 +564,21 @@ def _dedupe_planned_items(items: list[PlannedItem]) -> list[PlannedItem]:
 
 
 def _next_run_n(date: str) -> int:
-    """Which run of the day this is, read from what the last one committed.
+    """A run id for a machine with no CI run to name it. Local and test use only.
 
-    The schedule runs several times a day, so `-1` is no longer a safe
-    constant: two runs claiming one run id put two different work lists under
-    the same address in the manifest.
+    Reading the count off the last committed manifest cannot make an identifier
+    two executions are unable to share, and on 2026-08-29 two of them did share
+    one. `actions/checkout` pins a job to the commit its run was triggered at, so
+    the manifest a second run reads is the manifest as it stood before the first
+    run published - and both count the same number. Runs 33270983446 (dispatched
+    19:29) and 33274853468 (scheduled 20:58) both derived `2026-08-29-3`, and the
+    ledgers keyed on it then held six counter rows for four shards.
+
+    CI passes `--execution ${{ github.run_id }}` instead. GitHub allocates that
+    number, it is unique across every run of every workflow in the repository,
+    and nothing a second execution can read will reproduce it. This is what is
+    left: a developer machine has no such number, and a laptop cannot race
+    itself.
     """
     target = assemble.day_dir(PUBLIC_ROOT, date)
     manifest = _load_manifest(target / "run.json", day=_load_day(target / "digest.json"))
@@ -2296,6 +2308,51 @@ def stage_prune_stamp(*, corpus_dir: Path, date: str) -> int:
     return 0
 
 
+def stage_dedupe_ledgers(*, state_dir: Path | None = None, ledger_path: Path | None = None) -> int:
+    """Settle every keyed ledger after a merge, and print what it dropped.
+
+    The one thing an appending stage cannot do for itself. Each of those stages
+    filters what it is about to write against the file it checked out, and
+    `actions/checkout` pins a job to the commit its run was triggered at - so a
+    second attempt at the same work cannot see the rows the first attempt pushed
+    afterwards, appends them again, and `merge=union` concatenates both sides.
+    The result is a file whose key repeats, which is the one shape every reader
+    of it assumes cannot happen.
+
+    So this runs where the frozen snapshot cannot reach: after the merge, on the
+    merged file, which is the only artefact that has ever held both sides at
+    once. `.github/scripts/commit-and-push.sh` calls it there through
+    `DROP_REPEATED_ROWS_COMMAND`, between the rebase and the push.
+
+    Three ledgers declare what makes two of their rows the same record and all
+    three are settled here. `state/seen/` and `state/feed-health/` declare
+    nothing and are left alone - see `ledger.keyed_paths`.
+
+    It always returns 0. A repeat it drops is a repair, not a finding, and a
+    non-zero exit here would abort the commit step that called it and cost the
+    run every ledger row staged beside the one it just fixed.
+    """
+    state = state_dir if state_dir is not None else STATE_ROOT
+    scores = ledger_path if ledger_path is not None else LEDGER
+    targets: list[tuple[Path, tuple[str, ...]]] = [
+        *ledger.keyed_paths(state),
+        (scores, writer.OBSERVATION_KEY),
+    ]
+    total = 0
+    for path, key in targets:
+        dropped = ledger.drop_repeated_rows(path, key)
+        total += dropped
+        if dropped:
+            LOG.info(
+                "dropped repeated rows file=%s key=%s rows=%s",
+                path.name,
+                "+".join(key),
+                dropped,
+            )
+    LOG.info("ledgers settled files=%s repeated_rows_dropped=%s", len(targets), total)
+    return 0
+
+
 def stage_prune_state(
     *,
     observability: ObservabilityConfig,
@@ -2381,8 +2438,12 @@ def stage_assemble(
     target = assemble.day_dir(PUBLIC_ROOT, plan.date)
     previous_day = _load_day(target / "digest.json")
     previous_manifest = _load_manifest(target / "run.json", day=previous_day)
-    run_n = (previous_manifest.runs[-1].n + 1) if previous_manifest else 1
-    run_id = f"{plan.date}-{run_n}"
+    # The plan's own id, because the work shards filed their ledger rows under it
+    # and this stage writes the day's census into the same files. Deriving a
+    # second one here would key assemble's rows differently from the shards' and
+    # land every item twice.
+    run_id = plan.run_id
+    run_n = assemble.run_n_for(previous_manifest, run_id)
     digest_items = []
     summaries: list[Summary] = []
     rows = []
@@ -2503,8 +2564,7 @@ def stage_assemble(
         routes=routes,
         evaluation_enabled=observability.evaluation_enabled,
         evaluation_sample_rate=observability.sample_rate,
-        # The plan's own id, because that is the string the work shards hashed.
-        evaluation_sampled=sampling.run_is_sampled(plan.run_id, observability.sample_rate),
+        evaluation_sampled=sampling.run_is_sampled(run_id, observability.sample_rate),
         scorer_version=instruments[0] if len(instruments) == 1 else None,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
@@ -2935,6 +2995,7 @@ def main(argv: Sequence[str] | None = None) -> int:
             "route",
             "assemble",
             "harvest",
+            "dedupe-ledgers",
             "prune-stamp",
             "prune-state",
             "run",
@@ -2952,6 +3013,18 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--commit", default="0" * 40)
     parser.add_argument("--shard", type=int, default=0)
     parser.add_argument("--shards", type=int, default=1)
+    parser.add_argument(
+        "--execution",
+        type=int,
+        default=None,
+        help=(
+            "The identity of this execution, which becomes the run id after the date. "
+            "CI passes the GitHub run id: GitHub allocates it, it is unique across "
+            "every run of every workflow here, and no second execution can compute "
+            "it. Left out, the run counts off the last committed manifest, which two "
+            "overlapping runs were able to read the same answer from."
+        ),
+    )
     parser.add_argument(
         "--no-faithfulness",
         action="store_true",
@@ -3127,6 +3200,13 @@ def main(argv: Sequence[str] | None = None) -> int:
         # Above the fetcher for the same reason: it rewrites one committed field.
         return stage_prune_stamp(corpus_dir=args.corpus_dir, date=args.date or _today())
 
+    if args.stage == "dedupe-ledgers":
+        # Above the fetcher because it reads and rewrites committed files only.
+        # It runs from inside a commit step, between a rebase and a push, and a
+        # step that opened a socket there would read the open web to decide what
+        # to keep.
+        return stage_dedupe_ledgers()
+
     if args.stage == "prune-state":
         # And this one only reads and deletes committed files. A fold that opened
         # a socket would be reading the open web to decide what to delete.
@@ -3202,7 +3282,9 @@ def main(argv: Sequence[str] | None = None) -> int:
         return 0
 
     if args.stage in ("plan", "run"):
-        plan = stage_plan(date, settings=settings, fetcher=read_url, cap=args.cap)
+        plan = stage_plan(
+            date, settings=settings, fetcher=read_url, cap=args.cap, execution=args.execution
+        )
         assemble.write_atomic(_plan_path(date), plan.to_json())
         LOG.info("planned date=%s items=%s feeds=%s", date, len(plan.items), plan.feeds_read)
 

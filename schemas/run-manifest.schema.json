@@ -292,6 +292,7 @@
           "title": "Route Ms"
         },
         "run_id": {
+          "description": "The identity of the execution that made this record, as every ledger under state/ spells it. Addressed by the date and then by the CI run that produced it, so no second execution can compute the same one. Records written before 2026-08-31 carry the day's ordinal there instead, which is what two runs were able to share.",
           "pattern": "^\\d{4}-\\d{2}-\\d{2}-[0-9]+$",
           "title": "Run Id",
           "type": "string"
@@ -416,6 +417,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "run_id is the execution's own identity and no longer restates n. A record is still numbered from 1 without gaps and still addressed by the date, and no two records may share a run_id.",
+      "version": "2026-08-31",
+      "why": "n was read off the last committed manifest, and actions/checkout pins a job to the commit its run was triggered at - so a run that starts while another is still working reads a manifest that has never heard of it and counts the same number. On 2026-08-29 two runs did: 33270983446 dispatched at 19:29 and 33274853468 scheduled at 20:58 both derived 2026-08-29-3, and the ledgers keyed on that string ended up with six counter rows for four shards and 44 repeated item-health keys. Summed naively that run's reading clock read 19,305.8 seconds against 11,810.3 - 63 percent high. The id now comes from the CI run, which GitHub allocates and no second execution can reproduce, and the day's ordinal stays on n where it was always the thing being asked for. Every committed manifest still validates: <date>-<n> is addressed by the date and unique within a day, so this relaxes the rule rather than breaking it."
+    },
+    {
       "change": "Added optional evaluation_enabled, evaluation_sample_rate, evaluation_sampled and scorer_version to a run.",
       "version": "2026-08-30T16:00",
       "why": "The faithfulness scorer is now sampled by run, so a day with no eval rows has four possible causes - switched off in config, not drawn at the rate, the weights would not load, or the run never reached the scorer - and an absence in state/scores.csv looks the same for all four. The rate lands here rather than on EvalRow because the unit sampled is the run: every row of a run shares one rate, so one cell per run says everything a per-row column would, and no persisted ledger widens. All four are nullable and default to null, because an older manifest does not know what it was configured to do and a concrete default would invent the answer - the same rule the observability block states as an empty cell is never a zero."
@@ -482,7 +488,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-30T16:00",
+      "default": "2026-08-31",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -494,5 +500,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-30T16:00"
+  "version": "2026-08-31"
 }
