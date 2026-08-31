@@ -17,6 +17,11 @@
 	 * the arrow keys stepping through them. The engine's own tooltip still fires,
 	 * but it is never the only place a value appears - a tooltip needs a hover,
 	 * and a hover is not a thing a thumb can do.
+	 *
+	 * The strip is also the key, so no chart that carries one draws a legend as
+	 * well. A chart with no shared column says why in `noReadout` instead: the
+	 * wrapper declares one of the two, and `console-readout.spec.ts` fails on a
+	 * chart that declares neither.
 	 */
 	import type { EChartsOption } from 'echarts';
 	import { onMount } from 'svelte';
@@ -38,6 +43,7 @@
 		label,
 		columns = [],
 		readoutName = '',
+		noReadout = '',
 		readoutMaxShare = 0.33,
 		restingNote = ', the newest column',
 		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
@@ -54,6 +60,10 @@
 		 * off, which is right for a chart with one series or with no columns. */
 		columns?: DayReadout[];
 		readoutName?: string;
+		/** Why this chart has no strip, in words, where `columns` is empty.
+		 * Left blank only where an enclosing element already says it - a card's
+		 * trend line is declared once by the card, not once per card. */
+		noReadout?: string;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;
 		restingNote?: string;
@@ -116,7 +126,12 @@
 	});
 </script>
 
-<figure class="chart" aria-label={label}>
+<figure
+	class="chart"
+	aria-label={label}
+	data-readout-columns={columns.length > 0 ? columns.length : undefined}
+	data-readout-none={columns.length > 0 || noReadout === '' ? undefined : noReadout}
+>
 	{#if columns.length > 0}
 		<!-- The action goes on the wrapper, never on the SVG: the engine swaps that
 		     SVG out on hydration, so an action bound to it would come away holding

@@ -261,7 +261,11 @@
 		>.
 	</p>
 
-	<div class="relative mt-4 rounded-md border border-rule bg-surface p-3" data-throughput="chart">
+	<div
+		class="relative mt-4 rounded-md border border-rule bg-surface p-3"
+		data-throughput="chart"
+		data-readout-columns={columns.length}
+	>
 		<!-- The measured element is this one, not the card: the card's padding and
 		     border are not part of the width the chart draws into. -->
 		<div use:observeWidth={(px) => (measured = px)}>
@@ -420,15 +424,10 @@
 
 		{#if newest}
 			<ul class="mt-3 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-				{#each drawn as series (series.key)}
-					<li class="flex items-center gap-2" data-series={series.label}>
-						<span class="size-3 shrink-0 rounded-sm" style="background: {series.colour}"></span>
-						{series.label}
-						<span class="tabular-nums text-text-secondary">
-							{rate(series.key === 'read' ? newest.readTps : newest.writeTps)}
-						</span>
-					</li>
-				{/each}
+				<!-- No entry for the two rates. The strip above prints both at the day
+				     the reader is on, in the colours they are drawn in, and the line
+				     below prints them again for the newest day - a key here was the
+				     same pair a third time. -->
 				<!-- A cache statistic, not a series. Drawn as a line against a second y
 				     axis until 2026-08-25, which invited a reader to correlate it with a
 				     rate it shares no unit with. -->
