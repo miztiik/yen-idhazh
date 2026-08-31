@@ -11,8 +11,11 @@ being new. Nothing is ever dropped for being old. A cutoff cannot tell a strong
 old story from a weak fresh one; a bonus lets the rest of the score answer that.
 
 Nothing bounds how many items a vertical contributes except supply, the score,
-and `max_per_source`. Ties break on the canonical URL, so two runs over the same
-feeds cannot disagree about the order.
+and `max_per_source`. What bounds one feed across the whole day - every desk,
+every run - is `collect.max_source_share_per_day`, and it is a share rather
+than a count because a count of ten is 2 percent of a big day and a quarter of
+a thin one. Ties break on the canonical URL, so two runs over the same feeds
+cannot disagree about the order.
 """
 
 from __future__ import annotations
@@ -233,17 +236,102 @@ def _ordered(scored: list[Ranked]) -> list[Ranked]:
     return ordered
 
 
-def _take(ordered: list[Ranked], *, max_per_source: int) -> list[Ranked]:
-    """Everything the feeds offered, except that no one feed becomes the vertical."""
-    taken: list[Ranked] = []
+@dataclass(frozen=True, slots=True)
+class DayCeiling:
+    """How much of one day one feed may hold, and how much it holds already.
+
+    `max_per_source` bounds a feed inside one desk in one run, and a feed sits
+    on exactly one desk, so a feed's ceiling for a whole day is that count
+    times the runs the day had. That is a fixed number, and a fixed number is a
+    moving share: ten items is 2.3 percent of a 431-item day and a quarter of a
+    four-item one. This is the share.
+
+    `carried` is what today's earlier runs already put in front of a reader,
+    per feed, and the run adds to it as each desk is planned - so the ceiling
+    counts across desks and across runs, which is the whole point of it.
+    """
+
+    per_source: int
+    carried: dict[str, int]
+
+    def room_for(self, source_id: str) -> int:
+        """How many more items this feed may still take today. Never negative."""
+        return max(0, self.per_source - self.carried.get(source_id, 0))
+
+    def record(self, source_id: str) -> None:
+        """Count one more item for this feed, so the next desk plans against it."""
+        self.carried[source_id] = self.carried.get(source_id, 0) + 1
+
+
+def day_source_ceiling(share: float, day_items: int, *, max_per_source: int) -> int:
+    """Turn the share into the count a run can enforce.
+
+    Never below `max_per_source`. A day ceiling under that would tighten what
+    one desk may take in one run, which is a different decision about a desk
+    rather than about a day, and it was refused: it starves a desk where one
+    publication is genuinely the best source and still does not bound the day.
+    """
+    return max(max_per_source, int(share * day_items))
+
+
+def _take(
+    ordered: list[Ranked],
+    *,
+    max_per_source: int,
+    day_ceiling: DayCeiling | None = None,
+) -> list[Ranked]:
+    """Everything the feeds offered, except that no one feed becomes the vertical.
+
+    Two limits, and they answer different questions. `max_per_source` asks how
+    much of this desk one feed may be in this run. `day_ceiling` asks how much
+    of today one feed may be, counting every desk and every run.
+
+    A day ceiling displaces a story; it never shortens the day. Every slot it
+    takes back is offered to the best candidate `max_per_source` alone held
+    down - the next candidate on this desk - as long as the day still has room
+    for that feed. Where the desk has nothing to put in its place, the story
+    comes back: a shorter day is the one thing this is not allowed to buy, and
+    a reader cannot see what was left out.
+
+    A story the day ceiling refuses still spends its feed's `max_per_source`
+    quota, and that is what makes the two rules compose. Without it a feed with
+    no room left would never reach the per-desk limit, so every one of its
+    candidates would queue for the slot instead of two of them - and a desk
+    where most feeds are out of room would hand one of them the whole day. That
+    is the failure this exact line prevents, measured on a real day's pool.
+    """
+    chosen: set[str] = set()
     per_source: dict[str, int] = {}
+    held: list[Ranked] = []
+    refused: list[Ranked] = []
     for item in ordered:
         source_id = item.candidate.source_id
-        if per_source.get(source_id, 0) >= max_per_source:
+        used = per_source.get(source_id, 0)
+        if used >= max_per_source:
+            held.append(item)
             continue
-        per_source[source_id] = per_source.get(source_id, 0) + 1
-        taken.append(item)
-    return taken
+        per_source[source_id] = used + 1
+        if day_ceiling is not None and used >= day_ceiling.room_for(source_id):
+            refused.append(item)
+            continue
+        chosen.add(item.candidate.url_key)
+
+    owed = len(refused)
+    for item in held:
+        if not owed:
+            break
+        source_id = item.candidate.source_id
+        used = per_source.get(source_id, 0)
+        if day_ceiling is not None and used >= day_ceiling.room_for(source_id):
+            continue
+        per_source[source_id] = used + 1
+        chosen.add(item.candidate.url_key)
+        owed -= 1
+
+    for item in refused[:owed]:
+        chosen.add(item.candidate.url_key)
+
+    return [item for item in ordered if item.candidate.url_key in chosen]
 
 
 def plan_vertical(
@@ -259,6 +347,7 @@ def plan_vertical(
     watchlist_keys: frozenset[str] = frozenset(),
     front_page_keys: frozenset[str] = frozenset(),
     lens_bonuses: Mapping[str, float] | None = None,
+    day_ceiling: DayCeiling | None = None,
 ) -> tuple[VerticalPlan, list[PlannedItem]]:
     """Rank one vertical's candidates and take what its feeds actually offered.
 
@@ -289,6 +378,12 @@ def plan_vertical(
     `published_at` on the planned item is the time we believe, not the time the
     feed claimed. A date rejected as impossible must not reach a reader either,
     and `time_source` says which of the two clocks answered.
+
+    `day_ceiling` is the one input here that counts past this desk and past
+    this run. Without it a feed's ceiling for a whole day is `max_per_source`
+    times the runs the day had, which is a count and not a share - and the
+    share is what a reader sees. A run that does not pass one plans exactly
+    what it planned before.
     """
     sightings = first_seen or {}
     themes = lens_bonuses or {}
@@ -346,7 +441,9 @@ def plan_vertical(
             )
         )
 
-    taken = _take(_ordered(scored), max_per_source=config.max_per_source)
+    taken = _take(
+        _ordered(scored), max_per_source=config.max_per_source, day_ceiling=day_ceiling
+    )
     ids = assign_ids(vertical.id, (item.candidate.url_key for item in taken))
     items = [
         PlannedItem(
