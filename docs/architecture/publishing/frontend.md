@@ -879,7 +879,7 @@ not.
 **Each feed carries a target bar and a strip of days.** The bar's track is
 `collect.quarantine_after_failures`, its fill is the run of failures, and its
 marker sits on the threshold - the same `TargetBar` the truncation cap and the
-router-minute rule draw with. The strip is one square a day over the page's
+minutes-per-visual rule draw with. The strip is one square a day over the page's
 window, oldest to newest, on a single date axis every row shares, so "broken
 since Tuesday" and "flaky all month" cannot draw the same picture. It shrinks to
 fit its row rather than scrolling, because twenty scroll regions in one column
@@ -965,7 +965,7 @@ Three surfaces do not simply follow the span, and each says so on the page:
 | --- | --- | --- |
 | `Feeds that failed` | The count and its marker read every run on record; the strip of days beside them follows the span | A windowed recount would disagree with the resting the pipeline actually performed. Two numbers for one decision is the defect the run strip already avoids. The strip answers a different question - when it broke - and that one is only readable over a span. |
 | `Site size` | Absolute number always; the delta and the runway are windowed | The size is a level and the operator wants today's whatever span he is reading. The delta and the runway are rates, and a rate has to say what it is over. |
-| `Router minutes per chart` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
+| `Minutes per visual` | Prints `The rule reads 14 days. Widen the window to see it.` under 14 days | The retirement rule is stated over 14 days. A median of the wrong span is the same figure with a different meaning and nothing on the page to say which one is being read. |
 
 `Sources cut short most often` used to hard-code seven days. It follows the
 control now, and the section prints its own denominator, which at seven days
@@ -1400,12 +1400,12 @@ and Fowler, 2026-08-27.
 
 ## The chart arm is a flow, and every drop leaves it as a named branch
 
-`Charts drawn for articles` opens with one diagram of where items go between the
-router reaching one and a chart reaching a page. It is drawn left to right, the
-direction the page reads and the order the pipeline runs its stages in, and it
-totals the whole open window rather than one day - a single day's four numbers
-are already legible in the table under it, and "where do items go" is a question
-about the window.
+`Visuals drawn for articles` opens with one diagram of where items go between the
+visuals planner reaching one and a visual reaching a page. It is drawn left to
+right, the direction the page reads and the order the pipeline runs its stages
+in, and it totals the whole open window rather than one day - a single day's four
+numbers are already legible in the table under it, and "where do items go" is a
+question about the window.
 
 **It was a funnel until 2026-08-30, and a funnel could not answer the question
 it was on the page for.** A funnel draws a monotonic sequence as a taper, so it
@@ -1414,7 +1414,7 @@ three drops here have three different causes and three different fixes: an item
 can be answered without the model being asked at all, the model can be asked and
 draw nothing, and a drafted chart can fail the checks that run after it. A taper
 shows all three as one slope. Every loss now leaves the flow as its own branch,
-labelled `Answered without a chart`, `The model drew nothing` and `Did not
+labelled `Answered without a visual`, `The model drew nothing` and `Did not
 survive the checks`, and the branch is as wide as the number of items in it.
 
 **The widths conserve, and that is asserted rather than assumed.** What leaves a
@@ -1501,10 +1501,10 @@ Authority: the shape, Jony, 2026-08-30; the chunk, Carmack, 2026-08-30.
 
 ## The chart arm is judged against its own rule, and the daily rows come second
 
-`Charts drawn for articles` is the only console section carrying a written
+`Visuals drawn for articles` is the only console section carrying a written
 decision rule in its own prose: over a stated span the arm is retired if the
-median day spends more than a set number of router minutes per published chart,
-or puts a chart on fewer than a set share of the items it published. Until
+median day spends more than a set number of minutes per published visual, or
+puts a visual on fewer than a set share of the items it published. Until
 2026-08-30 the section printed that rule in a paragraph and then showed none of
 the three numbers in it. Seven columns of daily counts sat where the answer
 should have been, and the operator was asked to take a fourteen-day median of a
@@ -1565,9 +1565,9 @@ console is complete before any script runs and stays complete if none does, so a
 button plus a conditional block would leave the rows permanently unreachable
 with JavaScript off - the rows would be gone rather than on demand. A disclosure
 is keyboard-reachable for free and says which state it is in without a second
-label. `Reached`, `Asked the model`, `Charts drafted` and raw `Router minutes`
+label. `Reached`, `Asked the model`, `Visuals drafted` and raw `Minutes spent`
 moved down with the table: the flow diagram above already draws the first three
-as branches, and router minutes on its own is the numerator of the ratio rather
+as branches, and the minutes on their own are the numerator of the ratio rather
 than a decision. Nothing was deleted, and the table gained the `Items published`
 column that coverage divides by, so the share and its denominator sit on one
 row.
@@ -1710,6 +1710,38 @@ which was which; it became `Runs and site size`, which is what its columns were.
 No doc anchor and no test selector read any of the three. `Runs and site size`
 is itself gone since 2026-08-30 - two nouns joined by "and" is two sections, and
 the section below says where each half went.
+
+**`Charts drawn for articles` became `Visuals drawn for articles` on 2026-08-31,
+and the whole section stopped saying `router`.** `router` names a pipeline
+stage, and `CLAUDE.md` section 0b bars a subsystem word from a string a person
+reads - ten reader strings carried it, from the section's own rule down to the
+flow diagram's empty note. Where the word modified a quantity it is gone,
+because a section headed for the arm does not need to name the arm again:
+`Router minutes per chart` is `Minutes per visual`, the column `Router minutes`
+is `Minutes spent`, and `No router time is on record` is `has no minutes on
+record`. Where it names the actor it is `the visuals planner` - `Reached is
+every item the visuals planner looked at`. `chart` as the name of a drawn thing
+became `visual` in the same pass, including the flow branch `Answered without a
+visual`, because more visual kinds are coming and a name about to stop being
+true is worth changing once.
+
+**What that costs, stated rather than implied.** `Visuals published` counts only
+items whose `visual` is a `chart` in state `rendered`, which is what
+[visuals.md](visuals.md) requires so a diagram never lands on the chart arm's
+bill. Measured 2026-08-31 over the eleven committed published days: 185 visuals,
+185 of them charts, no other kind and no other state - so the heading and the
+count agree today and the rename is early rather than wrong. The day a non-chart
+visual publishes for real, either the count widens or the heading narrows;
+`frontend/tests/console.spec.ts` holds the count to charts and says so.
+
+**No identifier moved.** `RouteId`, `data-` attributes, `chart_arm_rule_days`,
+`chart_arm_minutes_target`, `chart_arm_coverage_pct`, `route_ms`,
+`items_routed`, `charts_drafted` and `routerMinutes` are untouched, because
+renaming those reaches `backend/`, `config/` and the committed ledgers and is
+its own change with its own gates. The section also still says `the chart-only
+gate`, which is the gate's real name in [visuals.md](visuals.md) and is the
+sentence that explains why every visual here is a chart. Authority: owner,
+2026-08-31, over Fowler's split of copy from identifiers.
 
 ## The site's size is a rate, and the level beside it says which tree
 
