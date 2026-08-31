@@ -410,7 +410,41 @@ exit code you needed is gone. On 2026-08-26 this destroyed the ruff and mypy
 output of a full gate run and cost a second one. Give a sentinel a name that is
 not the stem of any output file, such as `SENTINEL.txt`.
 
+**Launching a detached gate script twice gives two runs sharing one log, and
+the sentinel is what tells you.** Cross-worktree contamination makes a
+`Start-Process` look like it failed - the terminal answers with a sibling's tag
+and a non-zero exit - so the reflex is to launch it again. Both copies then run,
+both write the same output file, and the log is a mix of two runs with no marker
+between them. Observed 2026-08-31: a sentinel written by appending held
+`BUILDCANARY=0` twice, which is the tell, and the browser suite's own summary
+was missing from a log that ended in another arm's lock-wait lines. The exit
+code said 0 and meant nothing. Before re-launching, ask whether the first copy
+is alive, and give each attempt its own output filenames:
+
+```powershell
+Get-CimInstance Win32_Process | Where-Object { $_.CommandLine -like '*<your script>*' }
+```
+
+**A polled `page.evaluate` straight after `page.goto` fails on a page that is
+fine.** `expect.poll(() => page.evaluate(...))` reports
+`Execution context was destroyed, most likely because of a navigation` when the
+client router does its own first navigation under the poll. Measured 2026-08-31
+on a new spec that read `data-theme` this way: two tests failed out of 625 and
+the page had nothing wrong with it. A locator assertion retries against the live
+document instead and does not race:
+
+```typescript
+await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
+```
+
 **A new pipeline CLI flag may not be named after a llama-server flag.**
+`test_every_job_that_starts_a_server_reaches_the_one_argv_builder` reads every
+`run:` body in every workflow and fails on any whole-token match against
+`llama_server_flags()`, so that the server's argv is built once from `config/`
+and never spelled by hand. A stage that wants to be handed the scraped
+`/metrics` body therefore takes `--counters-file` and not `--metrics`. The
+failure names the step and the flag, so it is quick to read - but only if you
+know the guard is about the server's namespace rather than about your stage.
 `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` reads every
 `run:` body in every workflow and fails on any whole-token match against
 `llama_server_flags()`, so that the server's argv is built once from `config/`
