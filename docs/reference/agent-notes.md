@@ -352,6 +352,30 @@ refuses an encoder on the first-load path, and holds each capped page under its
 ceiling in `config/idhazh.json`, which is an absolute limit rather than a
 comparison against another build.
 
+**Two builds of the same source disagree on a fifth of `frontend/build/`, and
+the cause is a timestamp.** `kit.version.name` defaults to `Date.now()`. It
+lands in `_app/version.json`, in the `__sveltekit_<id>` global every prerendered
+document names, and through that in the content hash of every chunk filename -
+so a byte-identity oracle over `build/` reads as a regression across every dated
+page when nothing changed. Measured 2026-08-31 over 380 files: 83 of them
+differed between two builds of one tree, and the byte total was identical to the
+byte, which is the tell. Normalising the string out before hashing does not
+rescue it - only two files carry the literal timestamp, because the rest inherit
+it through filenames that moved.
+
+Pin the version for both arms instead, and revert the pin before you commit:
+
+```javascript
+version: { name: process.env.BUILD_VERSION ?? Date.now().toString() },
+```
+
+With `BUILD_VERSION` set to one constant, the same pair came out 380 files and
+158,564,941 bytes with zero differing hashes. The control arm is your own
+changed files `git checkout --`'d in place and copied back afterwards, in the
+worktree that just built - not a fresh extract of `origin/main`, which brings
+its own byte offset from whatever gitignored state differs between the two
+trees.
+
 **A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
 Windows filenames are case-insensitive, so a gate script that writes
 `ruff check` output to `$out\ruff.txt` and then a sentinel to `$out\RUFF.txt`
