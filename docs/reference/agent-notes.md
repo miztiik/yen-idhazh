@@ -332,6 +332,21 @@ gate reports a diff in a file whose content never changed.
 
 ## Gate commands
 
+**A test's `print()` never reaches you on the default `pytest` run, and `-s`
+does not bring it back.** `addopts` is `-q -n auto`, so every run is distributed
+and a passing worker's output is dropped. A gate that prints the measurement it
+just took reads as a gate that printed nothing - `test_the_ranking_clears_its_bar`
+prints the whole retrieval report, and on 2026-08-31 it took three attempts to
+see it. Ask for one worker:
+
+```powershell
+python -m pytest backend/tests/test_retrieval_eval.py -n0 -s -k clears_its_bar
+```
+
+`-p no:xdist` is the wrong reflex. `-n auto` is still in `addopts`, so pytest
+exits **4** on an unrecognised argument - and a usage error with no test output
+looks like a broken suite rather than a bad flag.
+
 **`ruff format` is not a gate here, and running it rewrites files you never
 touched.** CI runs `ruff check .` only. The tree is not `ruff format` clean, so
 `ruff format backend` reformatted 24 unrelated files in one pass on 2026-08-26 -
@@ -1021,6 +1036,22 @@ the variable protects the shell you remember to set it in and nothing else.
   2026-08-30 introspecting an installed package. Write the snippet to a `.py`
   file with the editor's file tool and run the file; a single-line `python -c`
   with semicolons works but stops being readable at about three statements.
+- **`Start-Process -ArgumentList` splits an element that holds spaces into
+  several arguments.** The detached-script pattern below is the right way to run
+  `gh`, and passing the command's own arguments through `-ArgumentList` is not.
+  Observed 2026-08-31 opening a pull request: a seven-word `--title` came back as
+  `unknown arguments ["the" "archive-search" "recall" ...]; please quote all
+  values that have spaces`, which reads like a wrong flag rather than a shell
+  fault. Do not answer it by adding quotes to the element - the script is already
+  detached, so call the program directly inside it and redirect there:
+
+  ```powershell
+  & gh pr create --base main --title $title --body-file $body 1> $out 2> $err
+  "EXIT=$LASTEXITCODE" | Set-Content -LiteralPath $done
+  ```
+
+  Separate `1>` and `2>` rather than `*>`, and read the two files. First try, PR
+  URL on stdout.
 - **A command that IDLES is killed at 16 to 45 seconds, exit 1, no output.**
   `Start-Sleep`, `Wait-Process -Timeout` and any `while` loop that sleeps between
   probes all return instantly with an empty result. A loop that PRINTS something
