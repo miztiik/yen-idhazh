@@ -24,6 +24,7 @@
         }
       ],
       "id": "example-lab",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -42,6 +43,7 @@
         }
       ],
       "id": "example-fab",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -51,9 +53,23 @@
       "display_name": "Example Merged Corp",
       "feeds": [],
       "id": "example-merged",
+      "kind": "organisation",
       "retired_on": "2026-05-30",
       "status": "retired"
+    },
+    {
+      "aliases": [
+        "Example Outbreak",
+        "the Example outbreak"
+      ],
+      "cik": null,
+      "display_name": "Example Outbreak",
+      "feeds": [],
+      "id": "example-outbreak",
+      "kind": "subject",
+      "retired_on": null,
+      "status": "active"
     }
   ],
-  "version": "2026-08-21"
+  "version": "2026-08-31"
 }

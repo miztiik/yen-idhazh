@@ -48,7 +48,7 @@
     },
     "EntityDef": {
       "additionalProperties": false,
-      "description": "One named organisation.",
+      "description": "One entry in the registry: a named organisation, or a running subject.",
       "properties": {
         "aliases": {
           "description": "Every name this entity is called. An item is tagged with the entity when one of these appears in its words as a whole-word phrase, case-folded, and the same set decides the watchlist ranking bonus against a candidate's feed title. Nothing is derived from the id or the display name. An entity with no alias is never matched and never lifts a score.",
@@ -69,7 +69,7 @@
             }
           ],
           "default": null,
-          "description": "Ten-digit, zero-padded SEC filer id. Null for a non-US entity.",
+          "description": "Ten-digit, zero-padded SEC filer id. Null for a non-US entity, and null for every subject, because only an organisation files with the SEC.",
           "title": "Cik"
         },
         "display_name": {
@@ -88,6 +88,11 @@
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$",
           "title": "Id",
           "type": "string"
+        },
+        "kind": {
+          "$ref": "#/$defs/EntityKind",
+          "default": "organisation",
+          "description": "Whether this entry names a standing organisation or a running subject. A subject - a pandemic, a tournament, an export-control regime - has no filer id and often no feed, so the registry has to say which kind it holds. Absent means organisation, which is what every entry written before the field existed was."
         },
         "retired_on": {
           "anyOf": [
@@ -164,6 +169,15 @@
       "title": "EntityFeed",
       "type": "object"
     },
+    "EntityKind": {
+      "description": "What the entry names: a standing organisation, or a running subject.",
+      "enum": [
+        "organisation",
+        "subject"
+      ],
+      "title": "EntityKind",
+      "type": "string"
+    },
     "LifecycleStatus": {
       "description": "Retire, never delete: a tombstone keeps old payloads valid.",
       "enum": [
@@ -190,6 +204,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "EntityDef gained kind, so an entry can be a subject and not only an organisation.",
+      "version": "2026-08-31",
+      "why": "A running story - a pandemic, a tournament, an export-control regime - has no SEC filer id and no feed of its own, and the registry described itself as a list of named organisations, so nothing could hold one. The field defaults to organisation, which is what all 30 committed entries are, so the change is additive and no payload needs a migration."
+    },
+    {
       "change": "Stated the match rule on EntityDef.aliases.",
       "version": "2026-08-26",
       "why": "The field was declared on day one and read nowhere, so entities were empty on every committed item and the watchlist ranking bonus had never moved a score. The rule is now written where the terms live. Description-only, so no payload changes and none needs a migration."
@@ -213,7 +232,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-26",
+      "default": "2026-08-31",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -224,5 +243,5 @@
   ],
   "title": "Watchlist",
   "type": "object",
-  "version": "2026-08-26"
+  "version": "2026-08-31"
 }
