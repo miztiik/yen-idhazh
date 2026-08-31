@@ -2506,6 +2506,7 @@ def stage_assemble(
                 source_kind=kinds.get(article.source_id, SourceKind.REPORTING),
                 run_n=1,
                 route=decision,
+                planned=payload.planned,
             )
         )
 

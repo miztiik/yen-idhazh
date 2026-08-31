@@ -35,7 +35,7 @@ from idhazh.contracts.fingerprint import FingerprintRow
 from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome
 from idhazh.contracts.route import Route
 from idhazh.contracts.run_manifest import RunManifest, RunRecord
-from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.run_plan import RunPlan, TimeSource
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -1318,6 +1318,50 @@ def test_truncated_items_publish_the_partial_read_sentence() -> None:
     )
 
     assert item.reader_note == "We could only read the first part of this page."
+
+
+def test_the_published_item_carries_the_plan_rows_own_ranking_signal() -> None:
+    """Nothing is recomputed at assemble: the four numbers are the plan's own.
+
+    The published item is built from an article and a summary, and neither of
+    them knows why the story was chosen. The plan row is the only place that
+    fact still exists by this stage.
+    """
+    planned = plan().items[0].model_copy(update={"time_source": TimeSource.FEED})
+    item = assemble.to_digest_item(
+        article=article(),
+        summary=summary(),
+        band=row().band,
+        source_name="Example Lab",
+        source_kind=SourceKind.REPORTING,
+        run_n=1,
+        planned=planned,
+    )
+
+    assert item.carried_by == planned.carried_by == 3
+    assert item.watchlist_hit == planned.watchlist_hit
+    assert item.on_front_page == planned.on_front_page
+    assert item.rank_score == planned.rank_score == 3.4
+    assert item.on_front_page, "the fixture's first item did get an aggregator vote"
+    assert item.time_source is TimeSource.FEED
+
+
+def test_an_item_built_without_a_plan_row_publishes_no_signal_at_all() -> None:
+    """Absent is unknown. A default here would be a claim nobody measured."""
+    item = assemble.to_digest_item(
+        article=article(),
+        summary=summary(),
+        band=row().band,
+        source_name="Example Lab",
+        source_kind=SourceKind.REPORTING,
+        run_n=1,
+    )
+
+    assert item.carried_by is None, "1 would claim a count the run never took"
+    assert item.watchlist_hit is None
+    assert item.on_front_page is None, "false would deny a vote nobody counted"
+    assert item.rank_score is None, "0.0 would put the story bottom of its desk"
+    assert item.time_source is None
 
 
 def cut_article(*, read: int, total: int | None, abstract: bool = False) -> Article:

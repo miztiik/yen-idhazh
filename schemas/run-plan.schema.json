@@ -2,7 +2,7 @@
   "$defs": {
     "PlannedItem": {
       "additionalProperties": false,
-      "description": "One URL that survived deduplication and was chosen for the day.\n\n`item_id` is derived from `url_key`, so the same article carries the same\nid on every run of every day. `published_at` is the time the run believes -\nthe feed's own date, unless it claimed a future too far ahead to be true,\nin which case it is when we first saw the address.",
+      "description": "One URL that survived deduplication and was chosen for the day.\n\n`item_id` is derived from `url_key`, so the same article carries the same\nid on every run of every day. `published_at` is the time the run believes -\nthe feed's own date, unless it claimed a future too far ahead to be true,\nin which case it is when we first saw the address. `time_source` says which\nof the two it is.",
       "properties": {
         "canonical_url": {
           "description": "After canonicalisation. url_key derives from it.",
@@ -68,6 +68,18 @@
         "tier": {
           "$ref": "#/$defs/SourceTier"
         },
+        "time_source": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TimeSource"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "Which clock published_at came from. Null on a plan written before the field existed - unknown, and never a claim about a clock."
+        },
         "title": {
           "anyOf": [
             {
@@ -129,6 +141,16 @@
       "title": "SourceTier",
       "type": "integer"
     },
+    "TimeSource": {
+      "description": "Which clock the time on an item came from.\n\n`rank.appeared_at` prefers the feed's own date and falls back to when we\nfirst saw the address. Both answers used to land in one field, so nothing\ndownstream could tell them apart - and the fallback is the one a reader\nwould want flagged, because it is our clock and not the publisher's.",
+      "enum": [
+        "feed",
+        "first_seen",
+        "unknown"
+      ],
+      "title": "TimeSource",
+      "type": "string"
+    },
     "VerticalPlan": {
       "additionalProperties": false,
       "description": "Why a vertical contributed what it did, including when it contributed nothing.",
@@ -182,6 +204,11 @@
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "additionalProperties": false,
   "changelog": [
+    {
+      "change": "Added time_source to each planned item.",
+      "version": "2026-08-31T10:30",
+      "why": "published_at holds the feed's own date, or our first sight of the address when the feed gave no usable one, and the field could not say which. The choice is made in rank.appeared_at and was thrown away one line later, so a page printing the time could not vouch for it. Measured 2026-08-31 on the committed 2026-08-30 payload - the newest day that had finished publishing - 431 items: 305 distinct HH:mm values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. That last figure is an upper bound on the fallback rather than a count of it, because nothing committed records the choice yet - which is the defect. Additive with a default, so a plan an earlier run wrote still validates, and a null reads as unknown (section 11)."
+    },
     {
       "change": "Added too_old to each vertical's plan summary.",
       "version": "2026-08-30",
@@ -258,7 +285,7 @@
       "type": "boolean"
     },
     "version": {
-      "default": "2026-08-30",
+      "default": "2026-08-31T10:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -278,5 +305,5 @@
   ],
   "title": "RunPlan",
   "type": "object",
-  "version": "2026-08-30"
+  "version": "2026-08-31T10:30"
 }
