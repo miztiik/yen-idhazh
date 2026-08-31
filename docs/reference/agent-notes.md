@@ -332,6 +332,21 @@ gate reports a diff in a file whose content never changed.
 
 ## Gate commands
 
+**A test's `print()` never reaches you on the default `pytest` run, and `-s`
+does not bring it back.** `addopts` is `-q -n auto`, so every run is distributed
+and a passing worker's output is dropped. A gate that prints the measurement it
+just took reads as a gate that printed nothing - `test_the_ranking_clears_its_bar`
+prints the whole retrieval report, and on 2026-08-31 it took three attempts to
+see it. Ask for one worker:
+
+```powershell
+python -m pytest backend/tests/test_retrieval_eval.py -n0 -s -k clears_its_bar
+```
+
+`-p no:xdist` is the wrong reflex. `-n auto` is still in `addopts`, so pytest
+exits **4** on an unrecognised argument - and a usage error with no test output
+looks like a broken suite rather than a bad flag.
+
 **`ruff format` is not a gate here, and running it rewrites files you never
 touched.** CI runs `ruff check .` only. The tree is not `ruff format` clean, so
 `ruff format backend` reformatted 24 unrelated files in one pass on 2026-08-26 -
@@ -351,6 +366,30 @@ measured number must never be recorded. All of it is gone with the gate and with
 refuses an encoder on the first-load path, and holds each capped page under its
 ceiling in `config/idhazh.json`, which is an absolute limit rather than a
 comparison against another build.
+
+**Two builds of the same source disagree on a fifth of `frontend/build/`, and
+the cause is a timestamp.** `kit.version.name` defaults to `Date.now()`. It
+lands in `_app/version.json`, in the `__sveltekit_<id>` global every prerendered
+document names, and through that in the content hash of every chunk filename -
+so a byte-identity oracle over `build/` reads as a regression across every dated
+page when nothing changed. Measured 2026-08-31 over 380 files: 83 of them
+differed between two builds of one tree, and the byte total was identical to the
+byte, which is the tell. Normalising the string out before hashing does not
+rescue it - only two files carry the literal timestamp, because the rest inherit
+it through filenames that moved.
+
+Pin the version for both arms instead, and revert the pin before you commit:
+
+```javascript
+version: { name: process.env.BUILD_VERSION ?? Date.now().toString() },
+```
+
+With `BUILD_VERSION` set to one constant, the same pair came out 380 files and
+158,564,941 bytes with zero differing hashes. The control arm is your own
+changed files `git checkout --`'d in place and copied back afterwards, in the
+worktree that just built - not a fresh extract of `origin/main`, which brings
+its own byte offset from whatever gitignored state differs between the two
+trees.
 
 **A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
 Windows filenames are case-insensitive, so a gate script that writes
@@ -997,6 +1036,22 @@ the variable protects the shell you remember to set it in and nothing else.
   2026-08-30 introspecting an installed package. Write the snippet to a `.py`
   file with the editor's file tool and run the file; a single-line `python -c`
   with semicolons works but stops being readable at about three statements.
+- **`Start-Process -ArgumentList` splits an element that holds spaces into
+  several arguments.** The detached-script pattern below is the right way to run
+  `gh`, and passing the command's own arguments through `-ArgumentList` is not.
+  Observed 2026-08-31 opening a pull request: a seven-word `--title` came back as
+  `unknown arguments ["the" "archive-search" "recall" ...]; please quote all
+  values that have spaces`, which reads like a wrong flag rather than a shell
+  fault. Do not answer it by adding quotes to the element - the script is already
+  detached, so call the program directly inside it and redirect there:
+
+  ```powershell
+  & gh pr create --base main --title $title --body-file $body 1> $out 2> $err
+  "EXIT=$LASTEXITCODE" | Set-Content -LiteralPath $done
+  ```
+
+  Separate `1>` and `2>` rather than `*>`, and read the two files. First try, PR
+  URL on stdout.
 - **A command that IDLES is killed at 16 to 45 seconds, exit 1, no output.**
   `Start-Sleep`, `Wait-Process -Timeout` and any `while` loop that sleeps between
   probes all return instantly with an empty result. A loop that PRINTS something

@@ -12,9 +12,11 @@ The common mistake is to model every topic a reader cares about as a source list
 | --- | --- | --- |
 | **Vertical** | A subject that has its own reporters and its own feeds. Carries a curated feed list. | ~25 feeds to curate |
 | **Lens** | A question asked of items already collected. A tag, applied after the fetch. | nothing |
-| **Entity** | A named organisation followed by name, with its own primary feeds. | ~1 feed |
+| **Entity** | A name followed across days: a standing organisation with its own primary feeds, or a running subject with neither. | ~1 feed, or none |
 
 A lens and an entity never get their own feed list. "China" is not a desk - it appears inside four verticals. "Return on AI investment" is not a desk - no outlet publishes one. Both are questions asked of items already in hand, and asking them is free.
+
+**A vertical and an entity can both be called a subject, and they are not the same thing.** A vertical is a desk with its own reporters and its own feed list. A subject in the entity registry - a pandemic, a tournament, an export-control regime - is one name we follow, with no feed of its own. `EntityKind` in `backend/idhazh/contracts/watchlist.py` is what separates that from a standing organisation.
 
 The payoff compounds. One supply agreement between a chip maker and a datacentre operator is three verticals, two lenses, two event types and two entities: eight index entries, one fetch, one summary.
 
@@ -157,6 +159,8 @@ Full event spread: `release` 22.3, `regulation` 19.0, `deal` 13.2, `research` 12
 The title, not the article text, and the asymmetry is deliberate. A plan runs before a single page is fetched, so the title is all it has. An article whose body names an entity its title does not still earns the published tag at Extract: **the tag says what the item is about, the bonus says what we were already watching for.** Those are different questions and they are allowed to disagree.
 
 **This reorders every future day and no past one.** A bonus that starts firing is a live ranking change - that was named before it was made, and it is the reason this was an owner decision rather than a defect fix. `state/published.csv` still stops an already-published address being planned again, so no day a reader has already seen moves.
+
+**All thirty are standing organisations, and on 2026-08-31 the registry gained room for something else.** `EntityDef.kind` is `organisation` or `subject`, it defaults to `organisation`, and no committed entry is a subject yet. The reason for the widening is a gap: a company is in the news most weeks, so the time between our own mentions of it is near zero, and a running story goes quiet between instalments. Only the second kind of entry has a gap worth measuring. Nothing reads `kind` yet - it exists so a pandemic or a tournament can enter the vocabulary at all, which an organisation-only registry could not allow. A subject carries no SEC filer id and the contract refuses one.
 
 ## Sources are tiered, and the tier is scaled by the feed's own weight
 
