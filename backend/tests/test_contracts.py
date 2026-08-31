@@ -614,6 +614,23 @@ def test_the_canary_writes_every_column_the_item_health_ledger_defines() -> None
     assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == ItemHealthRow.csv_columns()
 
 
+def test_the_canary_writes_every_column_the_counters_ledger_defines() -> None:
+    """The same guard, over the second header the canary restates.
+
+    The canary gained a `state/runtime-counters.csv` on 2026-08-31, because
+    without one the Machine route draws every panel in its empty state and the
+    browser suite can assert nothing else. That file is written by hand in
+    JavaScript for the same reason the item-health one is, so it needs the same
+    guard: a column added to `RuntimeCountersRow` and not to that array writes a
+    canary whose cells sit one place to the left, and every backend gate stays
+    green while the console reads the wrong number.
+    """
+    source = read_text(REPO_ROOT / "frontend" / "scripts" / "build-canary.mjs")
+    declared = re.search(r"const COUNTER_COLUMNS = \[(.*?)\];", source, re.DOTALL)
+    assert declared is not None, "build-canary.mjs no longer declares a COUNTER_COLUMNS array"
+    assert tuple(re.findall(r"'([^']+)'", declared.group(1))) == RuntimeCountersRow.csv_columns()
+
+
 def test_the_frontend_names_every_live_lens_and_no_retired_one() -> None:
     """The page's own copy of the lens display names, held against the config.
 

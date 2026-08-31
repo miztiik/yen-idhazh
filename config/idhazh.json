@@ -160,6 +160,9 @@
     }
   },
   "observability": {
+    "cost_currency": "USD",
+    "cost_input_per_million": 0.2,
+    "cost_output_per_million": 0.6,
     "evaluation_enabled": true,
     "hard_delete_after_months": null,
     "keep_months": 13,
@@ -173,7 +176,7 @@
       "/404": 1706,
       "/archive/": 7553,
       "/console/": 250096,
-      "/console/machine/": 6899,
+      "/console/machine/": 30391,
       "/console/model/": 28394,
       "/evals/": 3279
     }

@@ -334,6 +334,9 @@ retiring it is a removal with a read-side migration behind it (section 11).
 | `sample_rate` | `1.0` | Nothing. It is the fraction of runs whose scorer runs. |
 | `keep_months` | `13` | Nothing. It is where a month stops being kept at full grain. |
 | `hard_delete_after_months` | `null` | Nothing by default. Null means a downsampled month is never removed. |
+| `cost_currency` | `"USD"` | Nothing. It is the ISO 4217 code the console prints a counterfactual cost in. |
+| `cost_input_per_million` | `0.20` | Nothing. It is what a hosted provider would charge for a million prompt tokens. |
+| `cost_output_per_million` | `0.60` | Nothing. The same, for a million written tokens. |
 
 **Four switches and not one master switch.** Collection, scoring, publishing and
 tracing fail in different ways: the score ledger empties when the scorer will
@@ -352,8 +355,35 @@ for a developer looking at one slow item, and it is described in
 rate the console and the dashboard print divides by it, so switching it off does
 not thin a measurement - it makes every other measurement unreadable. A failure
 rate with no denominator beside it is the defect the census exists to prevent. A
-contract test asserts the switch list holds exactly three names, so adding a
-fourth has to be argued for rather than typed.
+contract test asserts the switch list holds exactly four names, so adding a
+fifth has to be argued for rather than typed. The three cost knobs are not on
+that list because none of them is a boolean and none of them switches an
+instrument: they are a price, and they are described below.
+
+## The cost rate is the operator's to set, and it is not a bill
+
+`cost_currency`, `cost_input_per_million` and `cost_output_per_million` are the
+only knobs in this block a published page reads. `/console/machine/` multiplies
+a run's committed token counts by them and prints **what that run would have
+cost at a hosted provider's price**. Nothing bills us - Actions minutes are free
+on a public repository (Rule #2) - so the figure is a counterfactual, and it is
+labelled one everywhere it appears. What it answers is the question wall clock
+cannot: whether four hours of runner time was a good trade.
+
+CLAUDE.md Rule #10 carries the owner's carve-out for it, on one condition: the
+page prints the rate it used and says where the rate came from. The operator may
+type a different pair into the panel, which is kept in `localStorage` and read on
+mount only, so the first paint always matches the prerendered document.
+
+**The committed pair is a documented starting point and nobody has set it.**
+`0.20` and `0.60` US dollars per million tokens are representative of a hosted
+provider's price for an 8-to-9-billion-parameter open-weights model, with output
+at three times input, taken from published list prices in August 2026. They are
+not a quote anybody gave this project, and they are the first thing to correct
+when the owner names a rate - a one-line edit to `config/idhazh.json`, with no
+code change and no migration. Input and output are priced apart because a
+provider prices them apart; one blended rate would understate a run that wrote a
+lot and overstate one that read a lot.
 
 **An instrument that did not run writes an empty cell, never a zero.** A switch
 here decides whether a row is written; it never changes the shape of a row. The
