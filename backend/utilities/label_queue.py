@@ -60,7 +60,6 @@ inert terminal text and are sanitized on the way to the note field.
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from collections.abc import Sequence
 from pathlib import Path
@@ -72,7 +71,9 @@ sys.path.insert(0, str(REPO_ROOT / "backend"))
 from idhazh import config  # noqa: E402
 from idhazh.contracts.label_row import LabelRow, LabelTag, LabelVerdict  # noqa: E402
 from idhazh.evals import evidence, labels  # noqa: E402
-from idhazh.evals.writer import LEDGER_RELPATH as SCORES_RELPATH  # noqa: E402
+from idhazh.evals.writer import LEDGER_RELDIR as SCORES_RELDIR  # noqa: E402
+from idhazh.evals.writer import records as _score_records  # noqa: E402
+from idhazh.ledger import STATE_DIRNAME  # noqa: E402
 from idhazh.sanitize import sanitize  # noqa: E402
 
 RULE: Final = "-" * 72
@@ -92,11 +93,12 @@ TAG_KEYS: Final[dict[str, LabelTag]] = {
 SKIP: Final = object()
 
 
-def _ledger(path: Path) -> list[dict[str, str]]:
-    if not path.exists():
-        raise SystemExit(f"no eval ledger at {path.as_posix()}")
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return list(csv.DictReader(handle))
+def _ledger(state_dir: Path) -> list[dict[str, str]]:
+    """Every committed row, oldest month first. The ledger is a directory now."""
+    rows = list(_score_records(state_dir))
+    if not rows:
+        raise SystemExit(f"no eval ledger under {(state_dir / SCORES_RELDIR).as_posix()}")
+    return rows
 
 
 def _live_scorer(records: Sequence[dict[str, str]]) -> str:
@@ -123,7 +125,7 @@ def refuse(records: Sequence[dict[str, str]], *, scorer: str, pipeline: str, rea
     print(f"reason           {reason}")
     print(RULE)
     print()
-    print(f"{SCORES_RELPATH} holds these pairs. Only a pair at the scorer above can be drawn:")
+    print(f"{SCORES_RELDIR} holds these pairs. Only a pair at the scorer above can be drawn:")
     for pair in labels.pairs(records):
         here = "   <- this scorer" if pair.scorer_version == scorer else ""
         print()
@@ -278,7 +280,7 @@ def main() -> int:
 
     settings = config.load(REPO_ROOT / "config")
     evaluation = settings.app.evaluation
-    records = _ledger(REPO_ROOT / SCORES_RELPATH)
+    records = _ledger(REPO_ROOT / STATE_DIRNAME)
     scorer = _live_scorer(records)
 
     pipeline = args.pipeline_fingerprint or None

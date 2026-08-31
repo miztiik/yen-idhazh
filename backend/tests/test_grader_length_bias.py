@@ -69,15 +69,18 @@ def a_package(directory: Path, items: list[EvidenceItem]) -> Path:
     return directory
 
 
-def a_ledger(path: Path, rows: list[dict[str, object]]) -> Path:
-    """The real ledger shape, so the tool reads the columns it reads in production."""
+def a_ledger(state: Path, rows: list[dict[str, object]]) -> Path:
+    """The real ledger shape and the real layout: a state directory of shards."""
     names = EvalRow.csv_columns()
+    path = state / "scores" / f"{rows[0]['date'] if rows else '2026-08-22'}"[:7]
+    path = path.with_suffix(".csv") if path.suffix else Path(f"{path}.csv")
+    path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=names, lineterminator="\n")
         writer.writeheader()
         for row in rows:
             writer.writerow({name: row[name] for name in names})
-    return path
+    return state
 
 
 def a_ledger_row(
@@ -133,7 +136,7 @@ class TestTheHarnessRefusesRatherThanReportingZero:
         missing = tmp_path / "never-downloaded"
 
         with pytest.raises(bias.NoEvidenceError) as raised:
-            bias.load_pairs(missing, tmp_path / "scores.csv")
+            bias.load_pairs(missing, tmp_path)
 
         assert "never-downloaded" in str(raised.value)
 
@@ -142,7 +145,7 @@ class TestTheHarnessRefusesRatherThanReportingZero:
         (tmp_path / "evidence-0").mkdir()
 
         with pytest.raises(bias.NoEvidenceError) as raised:
-            bias.load_pairs(tmp_path, tmp_path / "scores.csv")
+            bias.load_pairs(tmp_path, tmp_path)
 
         assert "gh run download" in str(raised.value)
 
@@ -249,7 +252,7 @@ class TestTheCutSplitReadsTheArithmetic:
         whole = an_item(a_premise(60), SUMMARY, name="whole")
         a_package(tmp_path, [cut, whole])
         ledger = a_ledger(
-            tmp_path / "scores.csv",
+            tmp_path,
             [
                 a_ledger_row(cut, full_words=4000, seen_words=1923),
                 a_ledger_row(whole, full_words=600, seen_words=600),
@@ -266,7 +269,7 @@ class TestTheCutSplitReadsTheArithmetic:
         item = an_item(a_premise(50), SUMMARY, name="emptied")
         a_package(tmp_path, [item])
         ledger = a_ledger(
-            tmp_path / "scores.csv", [a_ledger_row(item, full_words=None, seen_words=1923)]
+            tmp_path, [a_ledger_row(item, full_words=None, seen_words=1923)]
         )
 
         (pair,) = bias.load_pairs(tmp_path, ledger)
@@ -283,7 +286,7 @@ class TestTheReport:
         ]
         a_package(tmp_path, items)
         ledger = a_ledger(
-            tmp_path / "scores.csv",
+            tmp_path,
             [
                 a_ledger_row(items[0], full_words=50, seen_words=50),
                 a_ledger_row(items[1], full_words=4000, seen_words=1923),

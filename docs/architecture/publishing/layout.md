@@ -21,7 +21,7 @@ frontend/public/digest/<YYYY>/<MM>/<DD>/run.json        append-only runs[] for t
 frontend/public/digest/<YYYY>/<MM>/<DD>/<item_id>.svg           optional visual
 frontend/public/assist/index/<YYYY-MM>.json             one month of items, for browsing and search
 frontend/public/assist/index/<YYYY-MM>.bin              that month's vectors, raw int8
-state/scores.csv                                        the ledger - one path, never published twice
+state/scores/<YYYY-MM>.csv                              the ledger - one row per measurement, never published twice
 ```
 
 ```
@@ -225,7 +225,7 @@ The three levers this page already names - encode efficiently, honour the visual
 | File | Bytes | Share of `state/` | Bounded by |
 | --- | --- | --- | --- |
 | `state/seen/<YYYY-MM>.csv` | 2,904,221 | 37.2 percent | `collect.seen_window_days` |
-| `state/scores.csv` | 2,700,019 | 34.6 percent | **nothing** |
+| `state/scores/<YYYY-MM>.csv` | 2,700,019 | 34.6 percent | **nothing deletes a month yet** |
 | `state/item-health/<YYYY-MM>.csv` | 1,409,945 | 18.0 percent | `observability.keep_months` |
 | `state/published.csv` | 384,448 | 4.9 percent | nothing, and deliberately - published is forever |
 | everything else | 416,995 | 5.3 percent | small enough not to ask |
@@ -248,31 +248,108 @@ Three things make it the one ledger the fold reaches, and each of them is why th
 
 The aggregate is kept forever by default. `observability.hard_delete_after_months` is null, and the contract refuses a value at or below `keep_months` - so a month is never deleted before it has been folded.
 
-### `state/scores.csv` stays unbounded, and this is the arithmetic (2026-08-31)
+### `state/scores/` shards by month, and that bounds nothing on its own (2026-08-31)
 
-**It is the largest unbounded thing in the tree and nothing here changes that.** What follows is why the two available bounds each cost more than they save today, so the next person starts from the numbers rather than from the finding.
+**The eval ledger moved from `state/scores.csv` to `state/scores/<YYYY-MM>.csv` on
+2026-08-31.** The migration is a split and nothing else: 3,509 rows, one month,
+2,700,019 bytes before and after, every cell compared by name across both
+revisions. Say what it did not do first, because the section this replaces was
+right about it: **sharding is not a bound.** Nothing is deleted, nothing is
+folded, and the tree grows at the same rate it grew yesterday.
 
-Measured 2026-08-31 on the committed file: 3,509 rows over nine days and 30 runs, 35 columns, 2,700,019 bytes. Over the seven mature days (dropping the first and last, which are partial) it holds 3,068 rows, so **769.3 bytes a row and 438.3 rows a published day = 337,185 bytes a published day, about 117.4 MiB a year.** There is no cap on `state/` the way there is a 1 GB cap on the published site, so the runway is not a date - the cost is a checkout, paid by every `plan`, `work`, `assemble` and CI job, several times a day.
+What it buys is that the two things which could bound it are now possible. A
+retention rule can take a whole month the way `state/item-health/` already does,
+instead of rewriting a file that `merge=union` will not let anyone rewrite. And a
+reader that wants a window can skip whole files - `payload.ts` has a shared
+`readShards` helper now, which `state/item-health/` was already using and this
+ledger could not.
 
-What each reader would lose, and the window each one actually asks for:
+It also shrinks what one commit touches. Every run appended to a single file, so
+git stored a new blob of the whole ledger several times a day; it now stores a
+new blob of the current month.
+
+**The cost was named in advance and it was accurate.** The change touched
+`evals/writer.py`, `cli.py`, the `drift.yml` inline program, four utilities, the
+canary builder, `payload.ts`, `commit-and-push.sh`'s staged list,
+`REFRESH_PATHS`, the closed-world path map and the merge-driver test in
+`test_workflows.py`, nine test modules, a fixture tree, and a migration of the
+committed file. It is a Level 4 change taken on an owner instruction, against a
+file that is not yet costing anything measurable.
+
+One promise had to be defended explicitly. `writer.append` dedupes against
+`OBSERVATION_KEY` across **every** shard, not the one being written, because an
+observation is the same measurement whichever month it is re-taken in - a dedupe
+scoped to the current month would let January's row come back in February and
+turn a count over the ledger into a count of times the pipeline looked. The
+header check moved ahead of the dedupe for the same reason: a corrupt shard is
+corrupt whatever the call had to say, and checking after the dedupe let a stale
+header survive an append that returned zero.
+
+#### What the ledger is made of, and the three narrowings not taken
+
+Measured 2026-08-31 on the committed file: 3,544 rows over nine days and 30 runs,
+35 columns, 2,728,991 bytes; 770 bytes a row, 303,221 bytes a published day,
+about 111 MB a year. There is no cap on `state/` the way there is a 1 GB cap on
+the published site, so the runway is not a date - the cost is a checkout, paid by
+every `plan`, `work`, `assemble` and CI job, several times a day.
+
+What each reader needs, and how far back:
 
 | Reader | What it needs | How far back |
 | --- | --- | --- |
-| `frontend/src/lib/server/payload.ts` -> `model-work.ts` | per-**day** figures only | `console.max_window_days`, 366 |
-| `backend/idhazh/drift.py` | per-item, per-domain | `drift.yml`'s `recent_days` plus `baseline_days` inputs, 35 days on the scheduled path |
+| `payload.ts` -> `model-work.ts` | per-**day** figures only | `console.max_window_days`, 366 |
+| `backend/idhazh/drift.py` | per-item, per-domain | `recent_days` plus `baseline_days`, 35 days on the scheduled path |
 | `backend/utilities/label_queue.py` | per-item, at the live `scorer_version` and `pipeline_fingerprint` | `evaluation.label_min_run_days`, 10 run-days |
-| `backend/idhazh/evals/writer.py` | one row per `OBSERVATION_KEY`, to refuse a repeat | for ever, and belt-and-braces: `load_published` already stops the address being planned twice |
+| `backend/idhazh/evals/writer.py` | one row per `OBSERVATION_KEY`, to refuse a repeat | for ever |
 
-So **no reader wants a per-item row older than 366 days, and only one wants 366 days at all - as daily totals.** A fold is therefore the right shape in principle. Both ways of getting one are refused:
+**Twenty-four percent of every cell byte is derivable from `run_id`.** Four
+columns are constant within a run - measured over all 30 committed runs, **none
+varies**:
 
-- **Folding in place is unsound, not merely awkward.** `.gitattributes` sets `merge=union` on `state/**/*.csv`, and states its own precondition: "every file here is append-only and every row is independent of its neighbours". A commit that removes rows, rebased onto a tip that added some - which is exactly what `commit-and-push.sh` does when a push loses a race - is resolved by a union that keeps both sides' lines, so the removal silently does not happen. That is the same reason `corpus/` is deliberately *not* union, and `corpus/` needed a replay path to leave it.
-- **Sharding it by month cannot be done inside the backend.** `payload.ts` reads `join(STATE_ROOT, 'scores.csv')` by name, so a month layout is a `frontend/src/` change plus `evals/writer.py`, the `drift.yml` inline program, four utilities, `commit-and-push.sh`'s staged list, `REFRESH_PATHS`, the closed-world path map in `test_workflows.py`, the canary builder, and a migration of the committed 2.7 MB file. It is a Level 4 change to bound a file that is not yet costing anything measurable.
+| Column | Distinct values | Runs that vary | Bytes | Share |
+| --- | --- | --- | --- | --- |
+| `scorer_version` | 5 | 0 of 30 | 288,448 | 10.6 percent |
+| `pipeline_fingerprint` | 7 | 0 of 30 | 230,360 | 8.5 percent |
+| `model_id` | 2 | 0 of 30 | 59,328 | 2.2 percent |
+| `version` | 6 | 0 of 30 | 46,286 | 1.7 percent |
 
-And the threshold with a precedent buys nothing for a year anyway. At `observability.keep_months` = 13 the first row would be folded on **2027-09-30**, by which time the file is about 127 MiB - against the 117.7 MiB the console's own 366-day appetite justifies keeping. The bound is real over five years (127 MiB against 587 MiB) and invisible over one.
+`scorer_version` alone is a 99-character string repeated 3,544 times to say one
+of five things, and `RunRecord` **already carries** `scorer_version` and
+`pipeline_fingerprints`, so two of the four are duplicated onto a committed
+manifest today. `date` is a strict prefix of `run_id` on 3,544 of 3,544 rows, for
+another 38,984 bytes. Together: **663,406 bytes, 24.3 percent, 111 MB a year to
+84 MB.**
 
-**A narrowing is not available here, and that is worth saying because it worked twice next door.** `PublishedRow` shed 48.6 percent and `SeenRow` 49.1 percent by dropping a column no reader opened. Every wide column in this ledger is opened: `source_url` (377,142 bytes, 14.0 percent) is how `drift` names a domain; `title` (257,070) and `output_digest` (224,576) are what `evals/evidence.py` writes into an evidence pair and what `label_queue` prints to a labeller; `url_key` (224,576) and `pipeline_fingerprint` (224,576) are two of the four fields in `OBSERVATION_KEY`. The one that looks like waste - `scorer_version` at 281,575 bytes, 10.4 percent, a repeated 80-character constant - is the field `label_queue` selects the live instrument by.
+**This corrects the previous version of this section**, which said the one column
+that looks like waste - `scorer_version` - could not move because `label_queue`
+selects the live instrument by it. It can move: a per-run side table answers that
+selection exactly, because the value never varies inside a run. What it costs is
+real and is why it was not taken here: **a row stops being self-describing.**
+Reading one today tells you which scorer produced it without opening anything
+else, and that is a property somebody chose. 26 MB a year is not obviously worth
+trading it for.
 
-**What would change this.** Any of: the console learning to read a daily aggregate, which makes a short full-grain window enough; `state/` acquiring a measured ceiling the way the published site has one; or the file passing a size where a checkout is measurably slower. Until one of those, the honest answer is that it is measured, named, and left.
+Two smaller narrowings, also measured and also not taken:
+
+- **Ten columns no committed-file reader opens** - `attempt`, `hhem_full`,
+  `hhem_delta`, `compression`, `extraction_suspect`, `determinism_violation`,
+  `scored_at`, `evidential_density`, `speculative_density`, `self_repetition` -
+  are 379,095 bytes, 13.9 percent. **"No reader" is not "delete" here.** This
+  ledger is evidence, unlike `state/seen/`, which is a lookup: Rule #10 turns on
+  being able to re-read a measurement to defend a design, and four of these got
+  written descriptions on 2026-08-30. Deleting evidence a day after documenting
+  it is churn.
+- **`source_url` and `title`** are 643,696 bytes, 23.6 percent - the largest pair
+  in the file - and both are read. `drift` names a domain from the first;
+  `evals/evidence.py` and `label_queue` both open the second. This is where the
+  `PublishedRow` and `SeenRow` narrowings do not repeat: those two dropped a
+  column nobody opened, and this ledger has none.
+
+**What would change the answer.** The console learning to read a daily aggregate,
+which makes a short full-grain window enough; `state/` acquiring a measured
+ceiling the way the published site has one; or the file passing a size where a
+checkout is measurably slower. Sharding is what makes the first two cheap when
+somebody wants them.
 
 ## The frontend stack
 

@@ -723,7 +723,7 @@ def scores(state: Path, items: Sequence[DigestItem], evaluation: EvaluationConfi
     owns the column order and the header check, and a column added to `EvalRow`
     lands here without this file being told about it.
     """
-    return writer.append(writer.ledger_path(state), score_rows(items, evaluation))
+    return writer.append(state, score_rows(items, evaluation))
 
 
 def main() -> int:
@@ -767,7 +767,7 @@ def main() -> int:
     print(f"wrote {(day_dir(args.out, DATE) / 'run.json').as_posix()}: {len(runs.runs)} runs")
     print(f"wrote {len(quiet)} quiet days, {quiet[0]} to {quiet[-1]}")
     print(f"wrote {args.state.as_posix()}/feed-health: {checks} feed results")
-    print(f"wrote {writer.ledger_path(args.state).as_posix()}: {scored} scored items")
+    print(f"wrote {writer.ledger_path(args.state, DATE).as_posix()}: {scored} scored items")
     print(
         f"wrote {index_root.as_posix()}: {len(indexed)} month(s), "
         f"{sum(len(index.entries) for index in indexed)} entries"

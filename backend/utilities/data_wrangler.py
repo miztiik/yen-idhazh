@@ -34,7 +34,6 @@ these rows fit `finetune.sequence_length`?
 from __future__ import annotations
 
 import argparse
-import csv
 import sys
 from collections import Counter
 from collections.abc import Sequence
@@ -338,18 +337,17 @@ class _Rebuildable(NamedTuple):
     entry: _Entry
 
 
-def _ledger_rows(path: Path) -> list[EvalRow]:
-    """Every scored row the committed ledger holds.
+def _ledger_rows(state_dir: Path) -> list[EvalRow]:
+    """Every scored row the committed ledger holds, across every month shard.
 
     An empty CSV cell is dropped rather than passed as an empty string, so an
     optional column that was blank when the row was written reads back as the
     default it was written with instead of failing validation.
     """
-    with path.open(encoding="utf-8", newline="") as handle:
-        return [
-            EvalRow.model_validate({key: value for key, value in raw.items() if value != ""})
-            for raw in csv.DictReader(handle)
-        ]
+    return [
+        EvalRow.model_validate({key: value for key, value in raw.items() if value != ""})
+        for raw in writer.records(state_dir)
+    ]
 
 
 def _digest_items(digest_root: Path) -> dict[str, _Entry]:
@@ -434,7 +432,7 @@ def refill(
     corpus_dir: Path,
     settings: config.Settings,
     *,
-    ledger_path: Path,
+    state_dir: Path,
     digest_root: Path,
     limit: int | None,
     read_url: cli.Fetcher | None = None,
@@ -463,8 +461,8 @@ def refill(
     under it, and a row that needs the article to have moved is not a row worth
     teaching.
     """
-    if not ledger_path.is_file():
-        print(f"{ledger_path.as_posix()} is not a file")
+    if not writer.ledger_shards(state_dir):
+        print(f"{(state_dir / writer.LEDGER_DIRNAME).as_posix()} holds no month shard")
         return 1
     if not digest_root.is_dir():
         print(f"{digest_root.as_posix()} is not a directory")
@@ -475,7 +473,7 @@ def refill(
     before = len(held)
     have = {row.url_key for row in held}
     entries = _digest_items(digest_root)
-    recorded = _ledger_rows(ledger_path)
+    recorded = _ledger_rows(state_dir)
 
     candidates: list[_Rebuildable] = []
     claimed: set[str] = set()
@@ -647,10 +645,10 @@ def main(argv: Sequence[str] | None = None) -> int:
         "refill", help="Re-fetch source addresses the ledger remembers. Reaches the network."
     )
     refilled.add_argument(
-        "--ledger",
+        "--state",
         type=Path,
-        default=writer.ledger_path(REPO_ROOT / STATE_DIRNAME),
-        help="The committed eval ledger. It names every address ever scored.",
+        default=REPO_ROOT / STATE_DIRNAME,
+        help="The state directory. Its monthly eval shards name every address ever scored.",
     )
     refilled.add_argument(
         "--digest-root",
@@ -684,7 +682,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         return refill(
             args.corpus_dir,
             settings,
-            ledger_path=args.ledger,
+            state_dir=args.state,
             digest_root=args.digest_root,
             limit=args.limit,
         )
