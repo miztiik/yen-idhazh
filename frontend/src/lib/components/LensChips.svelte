@@ -29,11 +29,12 @@
 <style>
 	.lens-chip {
 		display: inline-block;
-		padding: 2px 8px;
+		padding: var(--space-1) var(--space-2);
 		border-radius: var(--radius-full);
 		background: var(--tint-accent);
 		color: var(--color-text-secondary);
 		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 		font-weight: 500;
 		text-transform: none;
 		letter-spacing: normal;

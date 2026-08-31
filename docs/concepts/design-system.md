@@ -100,7 +100,64 @@ radius and motion are declared once in their own `:root` block outside both
 themes. A scale left inside a theme block reads as something a theme could
 change, and the next theme has to restate it or lose it.
 
-Theming is override, not a second set of names: dark mode overrides the same token values. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) asserts three things at once: every theme colour has a dark override, every non-exempt token has an `@theme inline` mirror, and nothing uses a token that is never declared.
+Theming is override, not a second set of names: dark mode overrides the same token values. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) asserts it: every theme colour has a dark override, every non-exempt token has an `@theme inline` mirror, and nothing uses a token that is never declared.
+
+**The type scale is mirrored with its leading attached.** `--text-sm` and
+`--leading-sm` are one decision, so the mirror carries both - `--text-sm` and
+`--text-sm--line-height` - and the utility emits the pair. Mirror only the size
+and the utility silently takes the framework's own default leading, which is the
+"a size without a leading is half a decision" rule failing in the one place a
+diff does not show it: the source reads `text-sm` and the page renders a leading
+nobody chose. Measured 2026-08-31 on the archive search panel, the only place
+this had already happened - 14px text on a 20px leading where the token pairs it
+with 20.8px.
+
+### A value the scale cannot hold does not go on the reading surface
+
+Every font, colour, size and space on the reading routes resolves through a
+utility to a token. Two rules, and an oracle in
+[../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) for
+each, over every file a reading route can reach:
+
+- **No bracketed arbitrary value in a utility class.** `text-[0.8125rem]` is a
+  size no theme can reach and no scale can hold. Where one sat between two
+  steps it was rounded to the nearer step, and to the larger of the two on an
+  exact tie - this surface's proven failure mode is being too little, so a tie
+  that shrinks it is the wrong way to break one.
+- **No `px` literal in an authored style block.** A hard pixel count ignores a
+  reader who set their browser text larger. A size is `%` or `fr` for a share of
+  the space, `ch` for a text measure, `rem` for anything that should scale with
+  the reader's own setting, or a `clamp()` between two of those.
+
+Two carve-outs, named in the oracle rather than left to a general escape. **A
+hairline is `1px`**, because a border that scales stops being a hairline. **A
+media-query breakpoint keeps its committed value**, because a media query cannot
+read a custom property - and the oracle checks the number against
+`frame.breakpoints_px` in `config/appearance.json`, so an invented breakpoint
+still fails. An aspect ratio is neither: it has no absolute value, so there is no
+step to round it to.
+
+A genuinely dynamic value - a computed width, a chart coordinate - stays in a
+`style=` attribute, which the inline-style rule above already allows. The oracle
+reads utility classes and `<style>` blocks and does not read `style=`.
+
+**The console is out of scope, and it is excluded structurally.** The oracle
+walks the import graph from the reading routes, so a component only the console
+renders drops out on its own and no name list has to be maintained against a
+sibling plan. A component both surfaces share is covered, which is the stricter
+answer and the right one.
+
+### Design rationale
+
+The pile was 60 bracketed values across 19 files and 8 distinct type sizes -
+10, 12, 13, 14, 15, 17, 20 and 22px - against a seven-step scale, measured
+2026-08-31. Rejected: minting tokens that match the existing values, which
+preserves the pile under new names and leaves the scale unusable; and doing this
+inside the row that raises contrast, which would put a no-op refactor and a
+visual change in one commit so a regression could not be attributed to either.
+Authority: Susan and Fowler, with the owner ruling the scope on 2026-08-31 -
+every hardcoded value, not only type, because a hex in a component is a colour
+the dark theme cannot override.
 
 ## Colour is one signal, never the only one
 

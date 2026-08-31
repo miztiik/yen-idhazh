@@ -60,6 +60,7 @@
 	.more-title {
 		margin: 0 0 var(--space-3);
 		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 		letter-spacing: 0.06em;
 		text-transform: uppercase;
 		color: var(--color-text-tertiary);
@@ -80,7 +81,7 @@
 	.more-day {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: var(--space-1);
 		min-height: 2.75rem;
 		padding: var(--space-2) var(--space-3);
 		border: 1px solid var(--color-rule);
@@ -95,11 +96,13 @@
 
 	.more-date {
 		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
 		color: var(--color-text);
 	}
 
 	.more-count {
 		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 		color: var(--color-text-tertiary);
 	}
 
@@ -110,6 +113,7 @@
 		min-height: 2.75rem;
 		margin-top: var(--space-3);
 		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
 		color: var(--color-accent);
 	}
 

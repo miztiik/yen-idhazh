@@ -37,7 +37,7 @@
 			type="button"
 			onclick={() => pick(option.value)}
 			aria-pressed={choice === option.value}
-			class="min-h-11 rounded-full px-3 text-[0.8125rem] transition-colors"
+				class="min-h-11 rounded-full px-3 text-sm transition-colors"
 			class:text-accent={choice === option.value}
 			class:text-text-tertiary={choice !== option.value}
 		>
