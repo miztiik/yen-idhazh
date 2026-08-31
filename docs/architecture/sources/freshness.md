@@ -66,6 +66,12 @@ Six hours, not zero. Clock skew between a publisher and the runner is real and s
 
 The placeholder then reads as two thousand years old, so the age gate refuses it and the vertical counts it in `too_old`. That is the answer a back catalogue gets, and the plan says which gate refused it. It is not the answer an undated article gets, which is first sighting. Treating an implausible year as no date at all is the better answer, and it needs a floor - see the rejected alternatives.
 
+### The item says which of the two clocks answered
+
+`rank.appeared_at` returns the time **and** the clock that produced it, and both travel to the reader. Three answers: `feed`, `first_seen`, and `unknown` where neither had a time. The label leaves the function with the value rather than being derived again downstream, because once the two are in one field nothing can tell them apart - a stamp we wrote and a stamp a publisher wrote are the same kind of string.
+
+This is the fix for a real hazard, not tidiness. Both fallbacks above - an undated article and a date too far ahead - replace the publisher's time with ours **silently**. A page that prints the time without the label is repeating our own clock as though it were the source's, which is the same class of mistake as forwarding a feed's future stamp. What the published field means and what an absent one means is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is).
+
 ## Publishing twice is prevented by a record, not by a window
 
 An article published at 23:00 on Monday is seven hours old at 06:00 on Tuesday. Any freshness rule you can write will happily plan it a second time.

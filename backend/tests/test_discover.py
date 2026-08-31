@@ -23,6 +23,7 @@ from idhazh import config
 from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.run_plan import TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
 from idhazh.discover import (
@@ -203,9 +204,37 @@ def test_a_placeholder_date_still_leaves_a_stamp_the_run_can_read() -> None:
                 first_seen_at=None,
                 now=NOW,
                 max_future_hours=CollectConfig().max_future_hours,
-            )
+            ).at
             == candidate.published_at
         )
+
+
+def test_the_chosen_time_leaves_with_the_clock_that_produced_it() -> None:
+    """Three answers, and each one names its own clock.
+
+    The value alone cannot say which. A feed's stamp and our first sight are the
+    same kind of string, so anything downstream that prints one is guessing
+    unless the choice travels with it.
+    """
+    seen = "2026-08-21T04:00:00Z"
+    tolerance = CollectConfig().max_future_hours
+
+    from_feed = appeared_at(
+        "2026-08-21T05:30:00Z", first_seen_at=seen, now=NOW, max_future_hours=tolerance
+    )
+    assert from_feed == ("2026-08-21T05:30:00Z", TimeSource.FEED)
+
+    undated = appeared_at(None, first_seen_at=seen, now=NOW, max_future_hours=tolerance)
+    assert undated == (seen, TimeSource.FIRST_SEEN)
+
+    tomorrow = appeared_at(
+        "2026-08-22T20:00:00Z", first_seen_at=seen, now=NOW, max_future_hours=tolerance
+    )
+    assert tomorrow == (seen, TimeSource.FIRST_SEEN), "a date we refused is not the feed's answer"
+
+    nothing = appeared_at(None, first_seen_at=None, now=NOW, max_future_hours=tolerance)
+    assert not nothing.source.names_a_clock
+    assert nothing == (None, TimeSource.UNKNOWN), "no clock answered, and the item says so"
 
 
 def test_a_feed_title_is_sanitized_on_arrival() -> None:
