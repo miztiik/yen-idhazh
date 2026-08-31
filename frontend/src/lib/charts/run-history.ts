@@ -8,6 +8,7 @@
  * a column because the machine that built it sat west of UTC.
  */
 
+import { dayTicks } from './frame';
 import { dayMonth, shortDate } from '../format';
 
 export type LabelAlign = 'start' | 'centre' | 'end';
@@ -105,10 +106,6 @@ const WEEK = 7;
  * A cadence needs at least two intervals to read as one. */
 const SPAN_MAX_DAYS = WEEK - 1;
 
-/** How close an intermediate label may come to the newest endpoint before it is
- * dropped. Under six columns the two texts share pixels. */
-const MIN_GAP_COLUMNS = 6;
-
 function year(date: string): string {
 	return date.slice(0, 4);
 }
@@ -127,30 +124,36 @@ export function spanLabel(first: string, last: string): string {
 	return `${shortDate(first)} - ${shortDate(last)}`;
 }
 
-/** Where each date label sits, for a strip of `dates` in chronological order. */
-export function axisLabels(dates: string[]): AxisLabel[] {
+export interface StripAxisOptions {
+	/** `chart.tick_density` - the most labels the strip may carry. */
+	density: number;
+	/** One column's pitch in pixels: `cell + gap` from `cellFor` or
+	 * `denseCellFor`. The room a grid-placed label actually has. */
+	pitch: number;
+}
+
+/** Where each date label sits, for a strip of `dates` in chronological order.
+ *
+ * The thinning is `dayTicks`, not a rule of its own. This strip had a weekly
+ * cadence with a hand-written "drop an intermediate within six columns of the
+ * end" clause, and six columns is only the right number at one cell size - the
+ * cell here runs from 3px to 34px. Two helpers is how the two axes drifted, so
+ * there is one, and this converts its answer into grid columns.
+ */
+export function axisLabels(dates: string[], options: StripAxisOptions): AxisLabel[] {
 	const last = dates.length;
 	if (last === 0) return [];
 	if (last <= SPAN_MAX_DAYS) {
 		return [{ column: last, text: spanLabel(dates[0], dates[last - 1]), align: 'end' }];
 	}
-
-	const labels: AxisLabel[] = [{ column: 1, text: shortDate(dates[0]), align: 'start' }];
-	// The year is repeated only when it changes, so the axis says "3 Jan 2026"
-	// once instead of carrying four digits every week that never move.
-	let carried = year(dates[0]);
-	for (let column = 1 + WEEK; column < last; column += WEEK) {
-		// An intermediate that lands under the newest endpoint is not a second
-		// reading of the axis, it is the same reading twice.
-		if (last - column < MIN_GAP_COLUMNS) continue;
-		const date = dates[column - 1];
-		labels.push({
-			column,
-			text: year(date) === carried ? dayMonth(date) : shortDate(date),
-			align: 'centre'
-		});
-		carried = year(date);
-	}
-	labels.push({ column: last, text: shortDate(dates[last - 1]), align: 'end' });
-	return labels;
+	return dayTicks(dates, {
+		density: options.density,
+		columns: dates.map((_, index) => index * options.pitch)
+	})
+		.filter((tick) => tick.text !== '')
+		.map((tick) => ({
+			column: tick.index + 1,
+			text: tick.text,
+			align: tick.anchor === 'middle' ? 'centre' : tick.anchor
+		}));
 }

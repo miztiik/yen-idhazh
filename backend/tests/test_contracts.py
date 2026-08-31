@@ -1647,24 +1647,33 @@ def test_the_published_tree_holds_days_to_migrate() -> None:
 def test_a_committed_day_reads_an_absent_ranking_field_as_unknown() -> None:
     """The read-side migration (`CLAUDE.md` section 11), over the real payloads.
 
-    Ten committed days and 3,485 items on 2026-08-31, none of which carries any
-    of the five. Every one must load, and every absent field must come back as
-    `None`. `0` for `carried_by` would claim no feed carried the story, `false`
-    for `on_front_page` would claim a vote that was never counted, and `0.0` for
-    `rank_score` would put the story bottom of its desk - three different false
-    claims dressed as a default.
+    A day written before the five fields existed omits them, and every one must
+    come back as `None`. `0` for `carried_by` would claim no feed carried the
+    story, `false` for `on_front_page` would claim a vote that was never
+    counted, and `0.0` for `rank_score` would put the story bottom of its desk -
+    three different false claims dressed as a default.
+
+    The oracle reads the raw payload beside the parsed day and only judges a
+    field the file does not carry. Asserting instead that no committed day
+    carries any of the five was true for one afternoon and false from the first
+    run that published with the new writer.
     """
-    days = 0
     items = 0
+    absent = 0
     for path in committed_days():
-        day = DigestDay.from_json(read_text(path))
-        days += 1
-        for item in day.items:
+        text = read_text(path)
+        written = json.loads(text)["items"]
+        day = DigestDay.from_json(text)
+        for payload, item in zip(written, day.items, strict=True):
             items += 1
             for name in RANKING_SIGNAL:
+                if name in payload:
+                    continue
+                absent += 1
                 assert getattr(item, name) is None, f"{path.name} {item.item_id}: {name} invented"
 
-    assert days and items, "the loop above must have had something to read"
+    assert items, "the loop above must have had something to read"
+    assert absent, "every committed item carries all five, so nothing here reads an absent field"
 
 
 def test_a_published_item_that_names_a_clock_must_carry_a_time() -> None:

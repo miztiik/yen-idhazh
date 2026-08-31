@@ -13,6 +13,7 @@
 
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
+import { dayMonth } from '../format';
 import { donut } from './donut';
 import type { DayReadout } from './frame';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
@@ -288,7 +289,9 @@ export function siteCost(
 			tooltip: { trigger: 'axis' },
 			xAxis: {
 				type: 'category',
-				data: days.map((d) => d.date.slice(5)),
+				// The same date grammar the hand-written axes print. `08-20` is how the
+				// ledger spells a day, and a ledger spelling is not a label.
+				data: days.map((d) => dayMonth(d.date)),
 				axisLine: { lineStyle: { color: paint('--chart-axis') } },
 				axisTick: { show: false },
 				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11, hideOverlap: true }
@@ -330,41 +333,42 @@ export function siteCost(
 	};
 }
 
-/** Published days of room left, at the cost the window measured.
+/** Articles of room left, at the cost the record measured.
  *
- * The same arithmetic `backend/idhazh/retention.py` runs against the built
- * bundle: headroom divided by one published day's growth, where a day's growth
- * is the per-article cost times the articles a day is allowed to publish. The
- * item ceiling and not an average of the days on disk - a day that published 97
- * articles is not evidence the next one will, and the ceiling is the most a day
- * may cost (Rule #10).
+ * Articles and not published days, because nothing here has ever measured a
+ * daily rate. The figure this divided by was `run.safety_ceiling_per_run`,
+ * which bounds one RUN and not one day, and the schedule fires up to five runs
+ * a day. So a day was priced at 160 articles while the ten committed published
+ * days ran 4 to 731, median 334 - and the printed runway was 1,950 days where
+ * the measured median rate gives 934, too long by 2.09 times (measured
+ * 2026-08-31, `docs/reference/measurements.md`).
  *
- * Null where there is no rate to divide by. A tree that did not grow over the
- * window has no date attached to it, and printing one anyway is the whole
- * defect this replaced.
+ * Headroom over the per-article cost needs no daily rate at all, and articles
+ * are the unit the pipeline actually spends. A reader who wants a date can
+ * multiply by a rate somebody measured; `What one more article costs` does
+ * exactly that, over the same published days this median came from.
+ *
+ * Null where there is no rate to divide by. A tree that never grew over an
+ * article it published has no runway, and printing one anyway is the other half
+ * of the defect this replaced.
  */
 export interface SiteRunway {
-	/** Bytes one more published day is expected to add. */
-	perDay: number;
-	/** Published days to the alarm point. Negative once it is behind us. */
+	/** Published articles to the alarm point. Negative once it is behind us. */
 	toAlarm: number;
-	/** Published days to the Pages cap. */
+	/** Published articles to the Pages cap. */
 	toCap: number;
 }
 
 export function siteRunway(
 	bytesUsed: number,
 	bytesPerItem: number | null,
-	itemsPerDay: number,
 	alarmBytes: number,
 	capBytes: number = PAGES_CAP_BYTES
 ): SiteRunway | null {
-	if (bytesPerItem === null || bytesPerItem <= 0 || itemsPerDay <= 0) return null;
-	const perDay = bytesPerItem * itemsPerDay;
+	if (bytesPerItem === null || bytesPerItem <= 0) return null;
 	return {
-		perDay,
-		toAlarm: (alarmBytes - bytesUsed) / perDay,
-		toCap: (capBytes - bytesUsed) / perDay
+		toAlarm: (alarmBytes - bytesUsed) / bytesPerItem,
+		toCap: (capBytes - bytesUsed) / bytesPerItem
 	};
 }
 
@@ -376,7 +380,9 @@ export function siteRunway(
  * stage did on its own.
  */
 export function failureMix(series: readonly StageFailureSeries[], shape: StackShape = 'bars') {
-	const columns = series[0]?.days.map((d) => d.date.slice(5)) ?? [];
+	// The same date grammar the hand-written axes print. `08-25` is how the
+	// ledger spells a day, and a ledger spelling is not a label for a reader.
+	const columns = series[0]?.days.map((d) => dayMonth(d.date)) ?? [];
 	return stacked(
 		columns,
 		series.map((s, i) => ({
