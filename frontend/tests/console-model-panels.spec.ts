@@ -252,7 +252,7 @@ test.describe('what checking a summary cost, off the critical path', () => {
 
 		// The timing chart is titled `Time per item, by stage`, so every line on it
 		// is a thing the run waits on. Scoring is not one.
-		await expect(page.locator('[data-stage="score"]')).toHaveCount(0);
+		await expect(page.locator('[data-readout="timings"] [data-readout-row="score"]')).toHaveCount(0);
 		await expect(page.locator('[data-stage-mark="score"]')).toHaveCount(0);
 		await expect(page.locator('[data-timing-note="score"]')).toHaveCount(0);
 

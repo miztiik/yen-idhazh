@@ -19,8 +19,12 @@
 		frame,
 		linearAxis,
 		MARGIN,
-		observeWidth
+		observeWidth,
+		pointerReadout,
+		readoutMarks,
+		type DayReadout
 	} from '$lib/charts/frame';
+	import ChartReadout from './ChartReadout.svelte';
 	import { rank, tailSentence, type Rankable, type RankedDisplay } from '$lib/charts/rank';
 	import {
 		bandOutliers,
@@ -47,7 +51,8 @@
 		height,
 		width,
 		tickDensity,
-		outlierRows
+		outlierRows,
+		readoutMaxShare = 0.33
 	}: {
 		points: CompressionPoint[];
 		viewport: TimeWindow;
@@ -59,6 +64,8 @@
 		tickDensity: number;
 		/** How many outliers the list prints before the tail sentence takes over. */
 		outlierRows: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare?: number;
 	} = $props();
 
 	/** One row of dates under the plot, and room for a descender. */
@@ -171,6 +178,31 @@
 		const noun = day.items === 1 ? 'summary' : 'summaries';
 		return `${dayMonth(day.date)} - ${day.items} ${noun}: ${day.inside} inside the band, ${day.short} shorter, ${day.long} longer.`;
 	}
+
+	/** The column a pointer or an arrow key has picked. */
+	let selected = $state<number | null>(null);
+
+	/** All three parts of a day, printed together. A stack is the shape where
+	 * reading one band off the middle is hardest, and the two bands that ride on
+	 * top are the ones anybody acts on. */
+	const columns = $derived<DayReadout[]>(
+		split.map((day, index) => ({
+			x: centre(index),
+			date: dayMonth(day.date),
+			rows: [
+				...PARTS.map((part) => ({
+					label: part.text,
+					value: String(day[part.place]),
+					colour: part.colour
+				})),
+				{ label: 'Summaries that day', value: String(day.items), colour: '' }
+			]
+		}))
+	);
+	const marks = $derived(readoutMarks(columns));
+	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
+	const readout = $derived(at === null ? null : (columns[at] ?? null));
+	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
 </script>
 
 <section
@@ -195,14 +227,32 @@
 
 	<div class="mt-4 rounded-md border border-rule bg-surface p-3" data-band-distance>
 		<div use:observeWidth={(next) => (measured = next)}>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
-				class="block max-w-full overflow-visible"
+				class="block max-w-full overflow-visible focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
+				tabindex="0"
 				aria-label="Summaries a day, split by whether each landed inside its target band"
+				use:pointerReadout={{
+					marks,
+					width: box.width,
+					onSelect: (index) => (selected = index)
+				}}
 			>
+				{#if guide !== null}
+					<line
+						x1={guide}
+						x2={guide}
+						y1={box.top}
+						y2={box.bottom}
+						stroke="var(--color-text-tertiary)"
+						stroke-opacity="0.5"
+						data-band-distance="guide"
+					/>
+				{/if}
 				<line
 					x1={box.left}
 					x2={box.right}
@@ -311,6 +361,17 @@
 				</text>
 			</svg>
 		</div>
+
+		<!-- Below the plot, never over it, and the same strip every chart on this
+		     console prints - see `ChartReadout.svelte` for the rules it holds. -->
+		<ChartReadout
+			{readout}
+			name="band-distance"
+			maxShare={readoutMaxShare}
+			resting={selected === null}
+			restingNote=", the newest day"
+			hint="Point at a day to read all three parts. Left and Right step through the days, Escape returns to the newest."
+		/>
 
 		<div class="mt-4 flex flex-wrap items-start justify-between gap-x-8 gap-y-4">
 			<!-- The word sits beside the colour, because colour is one signal and

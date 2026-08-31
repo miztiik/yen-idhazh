@@ -22,6 +22,7 @@
 		config,
 		bands,
 		tickDensity,
+		readoutMaxShare,
 		onPan,
 		onStep
 	}: {
@@ -38,6 +39,8 @@
 		bands: SummaryBand[];
 		/** The most date labels a day axis may carry - `chart.tick_density`. */
 		tickDensity: number;
+		/** The share of a plot a readout strip may take - `chart.readout_max_share`. */
+		readoutMaxShare: number;
 		/** Move the window by this many days, keeping its span. */
 		onPan: (days: number) => void;
 		/** Widen (`1`) or narrow (`-1`) to the next preset. */
@@ -126,6 +129,7 @@
 				height={config.chart_height}
 				width={config.chart_width}
 				{selectedCode}
+				{readoutMaxShare}
 				onSelect={(code) => (selectedCode = code)}
 			/>
 			<BandDistance
@@ -136,6 +140,7 @@
 				height={config.chart_height}
 				width={config.chart_width}
 				{tickDensity}
+				{readoutMaxShare}
 				outlierRows={config.band_outlier_rows}
 			/>
 			<FailureList

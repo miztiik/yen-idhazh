@@ -302,6 +302,56 @@ custom property inside the drawn pixels, so a canvas chart has to resolve the
 token values in JavaScript at mount and again after every theme change - which
 means the token file stops being the only place a colour is decided.
 
+### A chart with more than one series prints them together, in a fixed strip
+
+One contract, one implementation:
+[frontend/src/lib/components/ChartReadout.svelte](../../frontend/src/lib/components/ChartReadout.svelte).
+It binds every chart on the console that plots more than one series at a shared
+column, and the rules are not negotiable per chart:
+
+- **A fixed strip below the plot, never a floating box over it.** A floating
+  tooltip covers the mark it explains, and one that dodges the cursor moves the
+  thing being read. Measured 2026-08-30: a floating box occupied 40 to 55
+  percent of the chart it explained.
+- **Every series at the hovered column, at once.** Comparing four series must
+  not cost four hovers. The strip is the legend as well, so the four numbers a
+  reader compares are printed once rather than twice.
+- **Capped at `chart.readout_max_share`** - 0.33 today. A share of the plot and
+  not a pixel count, so the cap holds at every window width.
+- **A vertical guide down the hovered column**, across every series.
+- **Reachable by keyboard.** Left and Right step, Home and End jump, Escape
+  returns to rest. **A tooltip is never the only place a value appears**: a
+  tooltip needs a hover, and a hover is not a thing a thumb can do.
+- **It opens on a resting column and is never blank.** The prerendered document
+  carries that column's numbers in words, so a reader with no script still gets
+  one column read out to him, and the panel never changes size as it fills.
+
+An engine-drawn chart takes the same strip through
+[Chart.svelte](../../frontend/src/lib/charts/Chart.svelte). The action goes on
+the wrapping element and never on the SVG, because the engine swaps that SVG out
+on hydration; the column centres come from `bandShares`, which recomputes them
+from the measured width because the engine keeps its grid insets in pixels.
+
+### A stacked chart offers lines only where no data is re-shaped
+
+Stacked says what the mix is and how big the total got. Lines say what one
+series did on its own, which a stack hides the moment one band halves while its
+neighbour doubles. Both questions are worth answering, so the chart offers both
+shapes - **but only where the same array draws both with nothing between them**.
+
+The test is mechanical and is the acceptance rule, not a preference: hand the
+engine the identical `data` list in both shapes and change only `type` and
+`stack`. The presence of a transform is the definition of "not cheap", and a
+chart that needs its data massaged to fit the second shape gets no switch at
+all. Owner, 2026-08-30. Two charts qualify today - `What is failing, by stage`
+and `Prompt cache`, both callers of `stacked()` - and
+`console-chrome.spec.ts` fails the build if their two shapes ever draw different
+numbers.
+
+One control per panel, never one per series and never a preference that follows
+the reader across the site. A Sankey is not a line and a histogram is not a
+stacked bar; forcing the control everywhere would mean massaging data to fit it.
+
 ## A console figure says what it counts, in words
 
 The console is read by the developer and the operator, not by a digest reader.
@@ -324,6 +374,42 @@ Five rules hold for every number the console prints:
 - **The item count sits beside every quality figure.** A share over four
   articles is not a measurement, and a column that hides its denominator
   invites a trend that is not there.
+
+### The empty state is the panel, not a replacement for it
+
+A panel that vanishes when it has nothing teaches the operator that the
+measurement does not exist. The heading and the explanatory sentence stay; only
+the figure changes. Jony, 2026-08-30.
+
+This is the normal case rather than the exception, and the ledger says so.
+Measured 2026-08-31 on the committed tree: `job_seconds` and `cpu_model` are
+empty on **24 of 54** counter rows, the three host cells on **34 of 54**, and
+the counters ledger starts 2026-08-27 against a score ledger that starts
+2026-08-22 - so five days inside a thirty-day window have scores and no server
+figures at all. A console that only designed the loaded state would be mostly
+undesigned.
+
+Five states have fixed wording, written by the owner on 2026-08-30 and held in
+[frontend/src/lib/console/recording.ts](../../frontend/src/lib/console/recording.ts).
+Only the dates and counts inside them are computed, and every one is derived
+from the ledger that is missing - **a date that is not true is worse than no
+date**. None is apologetic, none is styled as an error, each states a fact about
+the recording at body size in the panel it governs, and none is a banner across
+the page: three panels can be in three different states on one day.
+
+| State | What it says |
+| --- | --- |
+| Measurement off | `Measurement is off. Nothing has been recorded since <day>, so the figures below stop on that day. Turn it back on in config/idhazh.json.` |
+| Sampled below 1.0 | `Measured on 1 run in <n>. These figures count the runs we measured and are not scaled up to stand for the rest.` |
+| Counters but no scores | `The machine ran and we timed it. Nothing scored the summaries, so this day has no quality figure.` |
+| Scores but no counters | `The summaries were scored, but the server's own counters were not written down for this day. The speed figures here come from the summariser, not the server.` |
+| Recording started mid-window | `Recording started on <day>. The <n> days before it have no server figures, and the gap in the chart is a gap in the recording, not a quiet day.` |
+
+Two of those are worth reading twice. **A sampled figure is never scaled up** -
+multiplying a quarter-sample by four publishes an estimate as a measurement,
+which Rule #10 forbids. And **no string names a config key as if it were a
+word**: it is `Measurement is off`, never `runtime_counters_scrape is false`,
+because a term from a subsystem is not a term for a user (section 0b).
 
 ### A figure in currency prints its rate, its source and the word for what it is
 

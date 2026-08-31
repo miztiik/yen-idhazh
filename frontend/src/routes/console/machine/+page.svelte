@@ -29,20 +29,25 @@
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import Panel from '$lib/components/Panel.svelte';
 	import RateControl from '$lib/components/RateControl.svelte';
+	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import {
 		cacheChart,
+		cacheColumns,
+		clockColumns,
 		clocksChart,
 		costOf,
 		gib,
 		money,
 		percentileChart,
+		percentileColumns,
 		tokenChart,
 		RUNNER_MEMORY_BYTES
 	} from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
 	import { targetMarks } from '$lib/charts/targetbar';
+	import type { StackShape } from '$lib/charts/stacked';
 
 	let { data } = $props();
 
@@ -52,7 +57,12 @@
 	// out of the SVG - so passing one across would ship a colour no reader may
 	// ever see, and `charts.spec.ts` fails the build over exactly that. The server
 	// draws the SVG; the browser redraws from the same numbers.
-	const cacheOption = $derived(cacheChart(data.cacheDays).option);
+	//
+	// The cache chart is the one that takes a shape. The server drew stacked, so
+	// the first paint matches the prerendered document; picking `Lines` redraws
+	// the identical values with no transform between them.
+	let cacheShape = $state<StackShape>('bars');
+	const cacheOption = $derived(cacheChart(data.cacheDays, cacheShape).option);
 	const clocksOption = $derived(clocksChart(data.clocks.pairs).option);
 	const percentileOption = $derived(percentileChart(data.percentiles.curves).option);
 	const inputOption = $derived(
@@ -61,6 +71,16 @@
 	const outputOption = $derived(
 		tokenChart(data.tokens, (run) => run.output, 'written tokens', '--chart-4').option
 	);
+
+	// The strips under the three charts that draw more than one series. Built
+	// here from the same arrays the options are, so a column the strip prints and
+	// a column the chart drew can never be two different columns.
+	const cacheStrip = $derived(cacheColumns(data.cacheDays));
+	const clockStrip = $derived(clockColumns(data.clocks.pairs));
+	const percentileStrip = $derived(percentileColumns(data.percentiles.curves));
+	/** The insets `percentileChart` draws its grid at. The strip's column centres
+	 * are computed from them, so a pointer and the strip agree. */
+	const PERCENTILE_GRID = { left: 60, right: 44 };
 
 	// One shared rate for every cost figure below. It starts at the configured
 	// pair so the first paint matches the prerendered document, and `RateControl`
@@ -131,6 +151,32 @@
 		Every figure below is the model server's own count, read at build time and published nowhere.
 	</p>
 
+	<!-- What the recording was doing, before anything says what it recorded.
+	     None of these is an error and none is styled as one: each states a fact
+	     about the instrument, at body size, in the route it governs. A day the
+	     scrape never ran and a day the machine did nothing draw the same gap,
+	     and only a sentence can tell them apart. -->
+	{#if data.recording.off}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
+			{data.recording.off}
+		</p>
+	{/if}
+	{#if data.recording.sampled}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="sampled">
+			{data.recording.sampled}
+		</p>
+	{/if}
+	{#if data.recording.startedMidWindow}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="started">
+			{data.recording.startedMidWindow}
+		</p>
+	{/if}
+	{#if data.recording.scoresOnly}
+		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="scores-only">
+			{data.recording.scoresOnly}
+		</p>
+	{/if}
+
 	{#if data.refused.length > 0}
 		<!-- Named, never dropped. A run count that quietly excludes one is a run
 		     count nobody can check, and the cause is a real defect in how the
@@ -161,7 +207,7 @@
 
 	<Panel
 		title="Reading against writing"
-		note="Two rows over the same shards: how the model server's seconds split, and how its tokens split. Read the mismatch between them - that is the price of a written token, and one bar cannot show it."
+		note="Two rows over the same shards: how the model server's seconds split, and how its tokens split. Read the mismatch between them - that is the price of a written token."
 	>
 		{#if data.split.empty}
 			<p class="empty" data-machine-panel-empty="reading-writing">
@@ -205,7 +251,7 @@
 
 	<Panel
 		title="Prompt cache"
-		note="Prompt tokens the server read, against the ones it reused instead of reading. Absolute tokens and not a share: the decision is whether a bigger cache would save wall clock, and a share over a shrinking prompt cannot answer that."
+		note="Prompt tokens the server read, against the ones it reused instead of reading. Read whether a bigger cache would save wall clock."
 	>
 		{#if data.cacheSvg === null}
 			<p class="empty" data-machine-panel-empty="cache">
@@ -219,7 +265,16 @@
 				width={data.chart.width_px}
 				height={data.chart.height_px}
 				label="Prompt tokens per day, split into the tokens the model server read and the tokens it served from its own cache. One column is one day."
+				columns={cacheStrip}
+				readoutName="cache"
+				readoutMaxShare={data.chart.readout_max_share}
+				restingNote=", the newest day"
+				hint="Point at a day to read both halves. Left and Right step through the days, Escape returns to the newest."
 			/>
+			<!-- Stacked says how many prompt tokens the day needed; lines say whether
+			     the read half fell while the cached half rose. One array, two shapes,
+			     nothing re-shaped between them. -->
+			<ShapeSwitch bind:shape={cacheShape} name="cache" label="How to draw the prompt cache" />
 			<!-- No threshold marker and no tint. Nobody has agreed a floor for this,
 			     and a tint would invent one and publish it. -->
 			<ul class="shares" data-cache-days>
@@ -278,6 +333,11 @@
 				height={data.chart.height_px}
 				label="Prompt tokens a second as the item ledger counted them, beside the same figure as the model server counted it, per {data
 					.clocks.grain}."
+				columns={clockStrip}
+				readoutName="clocks"
+				readoutMaxShare={data.chart.readout_max_share}
+				restingNote=", the last one"
+				hint="Point at a {data.clocks.grain} to read both instruments. Left and Right step through them, Escape returns to the last."
 			/>
 			<ul class="shares" data-clock-pairs={data.clocks.grain}>
 				{#each data.clocks.pairs as pair (pair.label)}
@@ -409,7 +469,7 @@
 
 	<Panel
 		title="The shape of a run's latency"
-		note="Percentile across, seconds up, one curve per run - never pooled between runs, because two runs of one day draw different processors. Two curves that cross show a tail changing shape, which no single figure says."
+		note="One curve per run, never pooled between them - two runs of one day draw different processors. Read two curves that cross: a tail changing shape is what no single figure says."
 	>
 		{#if data.percentileSvg === null}
 			<p class="empty" data-machine-panel-empty="percentiles">
@@ -428,6 +488,12 @@
 				height={data.chart.height_px}
 				label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one line per run of {data
 					.percentiles.date}."
+				columns={percentileStrip}
+				readoutName="percentiles"
+				readoutMaxShare={data.chart.readout_max_share}
+				grid={PERCENTILE_GRID}
+				restingNote=", the slowest one in a hundred"
+				hint="Point at a percentile to read every run at it. Left and Right step through them, Escape returns to p99."
 			/>
 			<p class="reads" data-percentile-note>
 				{data.percentiles.curves.length}
@@ -467,7 +533,7 @@
 
 	<Panel
 		title="Tokens per run"
-		note="Prompt tokens and written tokens, one bar per run. Two charts and not one: they are different quantities with different prices, and a shared axis would flatten the smaller of them into nothing."
+		note="Prompt tokens and written tokens, one bar per run. They are different quantities with different prices, so each carries its own axis."
 	>
 		{#if data.inputSvg === null || data.outputSvg === null}
 			<p class="empty" data-machine-panel-empty="tokens">

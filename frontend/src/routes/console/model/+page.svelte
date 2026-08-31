@@ -330,6 +330,30 @@
 				>.
 			</p>
 
+			<!-- What the recording was doing, in the panel it governs rather than as
+			     a banner: three panels can be in three different states on one day.
+			     None of these is an error and none is styled as one. -->
+			{#if data.recording.off}
+				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
+					{data.recording.off}
+				</p>
+			{/if}
+			{#if data.recording.sampled}
+				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="sampled">
+					{data.recording.sampled}
+				</p>
+			{/if}
+			{#if data.recording.countersOnly}
+				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="counters-only">
+					{data.recording.countersOnly}
+				</p>
+			{/if}
+			{#if data.recording.startedMidWindow}
+				<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="started">
+					{data.recording.startedMidWindow}
+				</p>
+			{/if}
+
 			<!-- Always rendered, empty window included. The chart owns its own empty
 			     state, so a window with nothing in it says so instead of taking the
 			     heading away with it. -->
@@ -445,11 +469,23 @@
 				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-write-times="empty">
 					Nothing was timed in these {windowDays} days.
 				</p>
+			{:else if writeTimes.n < data.console.min_attempts_for_rate}
+				<!-- A median over three summaries is the second summary, and a one in
+				     twenty over three is the slowest of them. The counts are the whole
+				     answer until there are enough of them to divide. -->
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-write-times="thin">
+					{grouped(writeTimes.n)}
+					{writeTimes.n === 1 ? 'summary was' : 'summaries were'} timed in these {windowDays} days.
+					Too few to give a middle or a slowest one in twenty - {data.console
+						.min_attempts_for_rate} needed. The fastest took {asSeconds(writeTimes.fastest)} and the
+					slowest {asSeconds(writeTimes.slowest)}.
+				</p>
 			{:else}
 				<WriteTimeHistogram
 					times={writeTimes}
 					width={data.console.chart_width}
 					height={data.console.chart_height}
+					readoutMaxShare={data.chart.readout_max_share}
 				/>
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-write-times="readout">
 					Over {grouped(writeTimes.n)} summaries on {writeTimes.timedDays} of these {windowDays} days.
@@ -465,6 +501,14 @@
 			{#if scoreCost === null}
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="empty">
 					Nothing scored a summary in these {windowDays} days.
+				</p>
+			{:else if scoreCost.n < data.console.min_attempts_for_rate}
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="thin">
+					{grouped(scoreCost.n)}
+					{scoreCost.n === 1 ? 'summary was' : 'summaries were'} checked in these {windowDays} days.
+					Too few to give a middle or a slowest one in twenty - {data.console
+						.min_attempts_for_rate} needed. It runs after the model has finished, so the run never
+					waits on it.
 				</p>
 			{:else}
 				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="readout">
@@ -495,6 +539,7 @@
 					width={data.console.chart_width}
 					height={data.console.chart_height}
 					tickDensity={data.chart.tick_density}
+					readoutMaxShare={data.chart.readout_max_share}
 				/>
 			{/if}
 		</div>
