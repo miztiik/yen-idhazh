@@ -1772,7 +1772,8 @@ on `/console/model/`; three publishes' worth of complete text rewriting on
 `/console/machine/`. All three are meant to expire. Rows 13 to 19 of the
 observability plan add panels to every one of them, and each of those rows
 re-derives the ceiling it crosses and records what the bytes bought - it never
-cuts a panel to stay under a number (owner ruling, 2026-08-31).
+cuts a panel to stay under a number (owner ruling, 2026-08-31). The Machine
+ceiling expired the same day; see the next section.
 
 **The lazy chart chunk did not move.** `DIuPWcXJ.js`, 585,481 raw and 197,561
 gzipped bytes, byte for byte what it measured before the split, against the
@@ -1861,6 +1862,90 @@ The slack is 134,534 on `/console/`, 8,002 on `/console/model/` and 1,567 on
 therefore the same content hash - the section above recorded. Every panel this
 change added is hand-written SVG, so no echarts type was registered and the
 route loads no engine at all.
+
+#### The Machine route draws the counters, and its ceiling is re-derived (2026-08-31)
+
+Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-08-31. Tree: `feat/the-machine-route-draws-what-the-server-did` off
+`origin/main` at `100e2f6`, ten published days, **54 runtime-counter rows over 12
+runs** and **4,632 item-health rows**. Method: `npm run build` then
+`node scripts/bundle-gate.mjs`, whose printed byte is the one the gate itself
+takes.
+
+The route rendered no ledger at all when it was priced at 6,899 bytes. It now
+draws nine panels off `state/runtime-counters.csv` and `state/item-health/`.
+
+**Five builds of the same tree, heaviest per route, never a mean:**
+
+| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/machine/` | 22,242 | 22,236 | 22,241 | 22,241 | 22,238 | **22,242** | 6 |
+| `/console/` | 115,821 | 115,808 | 115,810 | 115,814 | 115,811 | 115,821 | 13 |
+| `/console/model/` | 13,489 | 13,483 | 13,481 | 13,485 | 13,477 | 13,489 | 12 |
+
+Six bytes of spread on a 22,242-byte page, and the two routes this row does not
+touch moved 13 and 12 - well inside the 64-byte noise floor every other ceiling
+on this site carries, and the control that says the machine reproduces itself.
+
+**A first attempt read 23,225 and 981 of those bytes were a defect.** The route's
+`load` returned each chart's echarts `option` beside its prerendered SVG, and
+everything a load returns is serialised into the document - so the page shipped
+the magenta sentinel colours `toCssVariables` swaps out of the SVG, which
+`charts.spec.ts` fails the build over and which no reader may ever see. The
+component rebuilds the option from the same arrays instead. The bytes were the
+smaller half of that; the leak was the point.
+
+**A published day was priced by removing a real one**, the same method the two
+sections above use. 2026-08-27 was dropped from `state/runtime-counters.csv`,
+`state/scores.csv`, `state/item-health/`, `state/feed-health/`,
+`frontend/public/telemetry/` and its own directory under
+`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT`, and the tree rebuilt twice. That is **3 runs**, 16 counter rows,
+480 item-health rows, 334 scored rows, 414 feed-health rows and 27 files of
+published day. The day is neither the newest nor the oldest, so the window
+anchor never moves.
+
+| Route | ten days (mean of five) | without 2026-08-27 (2 builds) | cost of that day |
+| --- | ---: | ---: | ---: |
+| `/console/machine/` | 22,239.6 | 21,547 / 21,549 | **692** |
+| `/console/` | 115,812.8 | 107,518 / 107,519 | 8,294 |
+| `/console/model/` | 13,483.0 | 12,892 / 12,894 | 590 |
+
+**The Machine route is linear in RUNS, not in days, and that is what its
+allowance has to be built from.** 2026-08-27 carried 3 runs, so a day costs it
+692 bytes only when the day ran three times; at **231 bytes a run** the newest
+day, which ran five times, costs 1,155. The allowance therefore prices seven days
+at the observed maximum of five runs a day rather than at the removed day's
+three - a runway has to be the worst case to be worth printing.
+
+```text
+/console/machine/   22,242  heaviest of five builds of the tree that ships
+                  +  8,085  seven published days at 5 runs a day, 231 B a run
+                  +     64  the build noise floor
+                  = 30,391
+```
+
+**The route grew 4.17x and no panel was cut, which is the ruling working rather
+than a regression.** The owner ruled on 2026-08-31 that no approved feature is
+removed, deferred or shrunk to stay under a page-weight number: a ceiling is a
+ratchet. What the 16,913 extra bytes bought is a shard board that says whether a
+slow day was the work or the machine, the split between reading and writing, the
+prompt cache per day, context headroom per day, the two clocks checked against
+each other per shard, the three host cells nothing had printed, a latency curve
+per run, tokens per run, and the counterfactual cost. Nine panels for 22.2 KB on
+a `noindex` operator page that no reader is ever served.
+
+**What bounds it from here.** Every figure on the route reads a fixed
+`console.default_window_days` = 30 days, so the page stops growing once thirty
+days of runs are inside the window; it does not grow forever. The counters ledger
+spans four days today, so there are about twenty-three more days of growth
+available before it saturates, and seven of those are inside this ceiling. Like
+the other two, this ceiling is meant to expire.
+
+**The lazy chart chunk did not move.** Every chart on the route is a bar, a line
+or hand-written markup, all of which `frontend/src/lib/charts/core.ts` already
+registers. No new echarts type was added and the 200,000-byte escalate trigger
+was not approached.
 
 ### Days to the 1 GB Pages ceiling
 

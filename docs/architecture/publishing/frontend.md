@@ -33,6 +33,20 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 
 [frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
 
+**The same rule bites a chart, and it is the reason a `load` never returns an
+echarts option.** A chart is drawn to SVG on the server and the sentinel
+colours in it are swapped for custom-property references on the way out
+([../../concepts/design-system.md](../../concepts/design-system.md)), so the
+finished SVG is safe. The `option` the live chart hydrates from is not: it still
+holds the magenta sentinels, and anything a load returns is serialised into the
+document. Hand one across and the page ships a colour no reader may ever see.
+[frontend/tests/charts.spec.ts](../../../frontend/tests/charts.spec.ts) scans
+every built page for the sentinel pattern and fails the build, which is how the
+Machine route's first draft was caught on 2026-08-31 - 981 gzipped bytes of
+option JSON in the document, and a colour leak underneath them. Every console
+route rebuilds its options in the component from the arrays the load returned;
+the server sends the drawing and the numbers, never a drawing instruction.
+
 | State | When | What ships |
 | --- | --- | --- |
 | Ready | Normal | Prerendered HTML with the items in it |
@@ -527,9 +541,13 @@ on its own. Tabs keyed on a query string cannot prerender at all; tabs keyed on
 a hash stop find-in-page at the hidden panels.
 
 **Every label carries its own worst state**, computed at build time from the
-committed ledger - `Machine - no panel reads the counters yet`, not `Machine`.
+committed ledger - `Machine - shards read 4.31x apart`, not `Machine`.
 Without it a route is where a metric goes to die: nobody opens a page to find
-out whether it was worth opening.
+out whether it was worth opening. Machine's candidates are a run the counters
+reader refused, a shard that committed no row, and the newest run's read spread.
+The spread is reported at the lowest rank on purpose: nobody has agreed how far
+apart two shards of one run may read before it is a problem, so ranking it any
+higher would publish a threshold this project has not taken.
 
 **The strip never takes the health ramp.** The one thing that differs between
 routes is a 3px rule under the active label, from the categorical ramp. Green,
@@ -563,11 +581,59 @@ control below the thing it governs is read second. Each route hands its own
 control in: Pipelines prices the month files a wider window would fetch, Model
 fetches nothing and prices nothing, and Machine draws no control at all and
 prints a sentence saying where the control is. That last one is a deliberate
-departure from "the band carries the window control on all three routes":
-nothing on Machine is windowed yet, and a control that answers a click by
-changing nothing is worse than an absent one. The choice is still shared - all
-three routes read the same `idhazh:console-window` key - so setting it on
-Pipelines and clicking Model keeps the span.
+departure from "the band carries the window control on all three routes": every
+figure on Machine reads one fixed span, `console.default_window_days`, and a
+control that answers a click by changing nothing is worse than an absent one.
+What the sentence in its place prints is the span itself, with both dates - a
+figure whose span a reader cannot SEE is worse than one he cannot change, and
+the bound is also what stops the cache chart growing a column a day forever.
+The choice is still shared - all three routes read the same
+`idhazh:console-window` key - so setting it on Pipelines and clicking Model
+keeps the span.
+
+### What the Machine route draws
+
+Nine panels, all off `state/runtime-counters.csv` and `state/item-health/`, both
+read at build time under `$lib/server/` and neither published. The route added
+no telemetry column and no reader sees a cell of either ledger.
+
+| Panel | Grain | The sentence it is for |
+| --- | --- | --- |
+| Shards of the newest run | one row a shard | Was the day slow because of the work or because of the machine. |
+| Reading against writing | the newest run | What a written token costs against a read one. |
+| Prompt cache | one column a day | Whether a bigger cache would save wall clock. |
+| Context headroom | one bar a day | Whether raising the truncation cap is even possible. |
+| Do the two clocks agree | one bar a shard | Whether the day's rates can be trusted at all. |
+| The host under the newest run | the newest run | Which processors it drew, how busy they were, how close to 16 GB, and how long the weights took to open. |
+| The shape of a run's latency | one curve a run | Whether a tail changed shape, which no single percentile says. |
+| Tokens per run | one bar a run, twice | How much the model read and how much it wrote. |
+| What this would have cost somewhere else | the whole span | Whether the runner time was a good trade. |
+
+**The shard is the unit, and that is the whole point of the route.** Measured on
+the committed ledger on 2026-08-31, the fastest shard of run `2026-08-30-5` read
+its prompts at 41.98 prompt tokens a second and the slowest at 9.73 - the same
+run, the same day, **4.31x apart** - and the two slow shards took 62 and 78
+percent longer to finish. A per-run average reports neither end of that, and it
+is the average every throughput figure this project had quoted until this page.
+
+**Reading and writing are never one bar, anywhere.** Read speed varies more than
+4x inside a run on this ledger and write speed barely moves, so a single "model
+seconds" figure averages two different machines together.
+
+**A run whose rows cannot be made into one run is named on the page.** The
+reader refuses a run where one shard index committed two different scrapes -
+two workflow runs computed the same run id and `merge=union` concatenated both -
+and the route prints the run id and the reason rather than quietly excluding it
+from a count nobody can then check.
+
+**The cost panel is a counterfactual and never a bill**, and it is the one place
+on this site a figure in currency appears. CLAUDE.md Rule #10 carries the
+owner's carve-out for it; the condition is that the page prints the rate it used
+and says whether that rate came from `config/idhazh.json` or from the operator.
+The operator's pair is kept in `localStorage` and read on mount only, so the
+first paint always matches the prerendered document, and every cost figure on
+the page is derived from one shared value rather than from four copies that
+could drift.
 
 ### Three cross-boundary carries, one sentence each
 
@@ -1679,10 +1745,12 @@ retypes it.
 
 **Since 2026-08-31 there are three of them, one per route.** `/console/` is
 capped at 250,096 bytes, `/console/model/` at 28,394 and `/console/machine/` at
-6,899. One key over three surfaces still fails when any of them grows and then
+30,391. One key over three surfaces still fails when any of them grows and then
 cannot say which one did, so the operator raises the shared number and the
 regression lands under it. Sizing them separately is what makes the split worth
-having. **They are meant to expire.**
+having. **They are meant to expire** - all three of the first numbers did, on
+the day they were set, when Model and Machine gained the panels they had been
+standing empty for.
 
 Each of the first two has the same three terms `/archive/` has, and only the
 middle one differs:
@@ -1699,19 +1767,26 @@ middle one differs:
 =  28,394  /console/model/
 ```
 
-**Both moved on 2026-08-31, in opposite directions, and both were re-derived
-rather than nudged.** `/console/` fell 547 bytes because `score_ms` left its
-timing chart. `/console/model/` rose 9,712 because it gained the per-item cost
+**All three moved on 2026-08-31, and every one of them was re-derived rather
+than nudged.** `/console/` fell 547 bytes because `score_ms` left its timing
+chart. `/console/model/` rose 9,712 because it gained the per-item cost
 distribution, the per-run summary lengths and the model-swap comparison - and
 because a published day now costs it 1,134 bytes instead of 730, since the
-length panel draws a column per run and a day holds up to five. The owner's
-byte ruling of 2026-08-31 is why the number moved and the panels did not.
+length panel draws a column per run and a day holds up to five. The owner's byte
+ruling of 2026-08-31 is why the numbers moved and the panels did not.
 
-`/console/machine/` reads no ledger yet, so a published day costs it nothing -
-measured at minus three bytes against a nine-byte build spread. Its allowance is
-a bound on text rather than a growth rate: three publishes' worth of rewriting
-all 502 characters of the band, the strip's worst states and its carry, which is
-`5,329 + 3 x 502 + 64 = 6,899`.
+`/console/machine/` was priced at 6,899 while it rendered no ledger - a published
+day moved it minus three bytes against a nine-byte build spread, so its allowance
+was a bound on text rather than a growth rate. It draws the runtime counters
+since 2026-08-31 and is priced in RUNS, because a day that ran three times and a
+day that ran five cost it differently:
+
+```text
+   22,242  heaviest of five builds
++   8,085  seven published days at 5 runs a day, 231 bytes a run
++      64  the build noise floor
+=  30,391  /console/machine/
+```
 
 **A published day was priced by removing a real one, not by cloning one.** Take
 every ledger the console reads - `state/scores.csv`, `state/item-health/`,

@@ -24,6 +24,7 @@ import {
 	type RunRecord
 } from '$lib/server/payload';
 import { collectConfig, retentionConfig, runConfig } from '$lib/server/config';
+import { loadMachineCounters, type MachineCounters } from '$lib/server/runtime-counters';
 
 /** Green: it worked. Amber: look at it. Red: it did not work. */
 export type Health = 'green' | 'amber' | 'red';
@@ -188,6 +189,41 @@ function pipelinesCandidates(
 	return found;
 }
 
+/** What the Machine route's own panels would make an operator look at.
+ *
+ * The read spread is reported as a FACT and not as a verdict: nobody has agreed
+ * how far apart two shards of one run may read before it is a problem, and a
+ * severity that invented one would publish a threshold this project has not
+ * taken. It sits at `WORTH_KNOWING` so it never outranks a real failure, and it
+ * is on the strip because the number is the whole reason the route exists.
+ */
+function machineCandidates(counters: MachineCounters): Candidate[] {
+	const found: Candidate[] = [];
+	if (counters.refused.length > 0) {
+		found.push({
+			text: `${plural(counters.refused.length, 'run', 'runs')} cannot be read`,
+			severity: WORTH_A_LOOK
+		});
+	}
+	const newest = counters.runs[0] ?? null;
+	if (newest !== null) {
+		const silent = newest.shards - newest.reported.length;
+		if (silent > 0) {
+			found.push({
+				text: `${plural(silent, 'shard', 'shards')} reported nothing`,
+				severity: WORTH_A_LOOK
+			});
+		}
+		if (newest.readSpread.value !== null) {
+			found.push({
+				text: `shards read ${newest.readSpread.value.toFixed(2)}x apart`,
+				severity: WORTH_KNOWING
+			});
+		}
+	}
+	return found;
+}
+
 function modelCandidates(day: ModelDay | null): Candidate[] {
 	if (day === null) return [];
 	const found: Candidate[] = [];
@@ -265,14 +301,11 @@ export function consoleShell(): ConsoleShell {
 	// --- The routes and their worst states ---------------------------------
 	const worstPipelines = worstOf(pipelinesCandidates(newest, feeds));
 	const worstModel = worstOf(modelCandidates(newestModelDay));
-	// `$lib/server/runtime-counters.ts` reads the ledger since 2026-08-30, and no
-	// panel renders a cell of it - so the honest worst state is that the route
-	// exists before its panels do, which is a state a route has to say out loud or
-	// nobody knows to come back.
-	const worstMachine: Candidate = {
-		text: 'no panel reads the counters yet',
-		severity: WORTH_KNOWING
-	};
+	// The Machine route draws the counters since 2026-08-31, so its worst state is
+	// derived from them like the other two rather than being a standing note that
+	// nothing reads them. A route whose label never changes is a route an operator
+	// stops opening.
+	const worstMachine = worstOf(machineCandidates(loadMachineCounters()));
 
 	const routes: ConsoleRoute[] = [
 		{
@@ -296,8 +329,8 @@ export function consoleShell(): ConsoleShell {
 			label: 'Machine',
 			href: '/console/machine/',
 			description: DESCRIPTIONS.machine,
-			worst: worstMachine.text,
-			severity: worstMachine.severity
+			worst: worstMachine?.text ?? null,
+			severity: worstMachine?.severity ?? CLEAR
 		}
 	];
 

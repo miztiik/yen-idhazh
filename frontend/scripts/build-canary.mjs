@@ -278,7 +278,112 @@ function writeItemHealthCanary() {
 	);
 }
 
+/** What llama-server counted, for the two canary runs the item ledger already has.
+ *
+ * Without this file the Machine route draws nothing at all in the browser
+ * suite, so every panel on it would be asserted only in its empty state - a
+ * canary column nothing exercises is a chart state no test can reach.
+ *
+ * The numbers are chosen so three states are on the page at once and each one
+ * can be checked with a pencil:
+ *
+ *  - **A real read spread.** Shard 0 of the newest run reads 800 prompt tokens
+ *    in 40 seconds and shard 1 reads 253 in 52, which is 20.00 against 4.87 -
+ *    4.11x apart inside one run, which is the whole reason the route exists.
+ *  - **The two clocks agreeing without agreeing exactly.** The item rows above
+ *    give run `<date>-2` 1,053 read tokens over 91.029 seconds, or 11.57 a
+ *    second. This file gives the server 1,053 over 92, or 11.45 - 1.1 percent
+ *    apart, inside the 5 percent `reconcile_prefill.py` gates on. Equal figures
+ *    would pass a check that had never run.
+ *  - **Absence drawn as absence.** Shard 1 of that run carries no `job_seconds`,
+ *    no `cpu_model` and none of the three host cells, exactly as 24 of the 54
+ *    committed rows do, because each of those columns landed after the ledger
+ *    started. The board prints a dash and ranks that shard last rather than
+ *    treating a blank clock as a fast one.
+ */
+function writeRuntimeCountersCanary() {
+	const year = newestDirectory(ROOT);
+	const month = newestDirectory(join(ROOT, year));
+	const day = newestDirectory(join(ROOT, year, month));
+	const date = `${year}-${month}-${day}`;
+	const earlier = new Date(`${date}T00:00:00Z`);
+	earlier.setUTCDate(earlier.getUTCDate() - 1);
+	const before = earlier.toISOString().slice(0, 10);
+
+	// Named cells for the same reason the item-health canary uses them: a column
+	// added to the row must not shift every number one place to the left.
+	const COUNTER_COLUMNS = [
+		'version', 'date', 'run_id', 'shard', 'shards', 'scraped_at',
+		'prompt_tokens_total', 'prompt_tokens_cached_total', 'prompt_seconds_total',
+		'tokens_predicted_total', 'tokens_predicted_seconds_total', 'n_decode_total',
+		'n_tokens_max', 'n_busy_slots_per_decode', 'job_seconds', 'cpu_model',
+		'cpu_busy_pct', 'peak_rss_bytes', 'model_load_ms'
+	];
+	const row = (cells) => COUNTER_COLUMNS.map((name) => cells[name] ?? '').join(',');
+	const shard = (rowDate, run, index, cells) => ({
+		version: '2026-08-30',
+		date: rowDate,
+		run_id: `${rowDate}-${run}`,
+		shard: index,
+		shards: 2,
+		scraped_at: `${rowDate}T2${run}:0${index}:00Z`,
+		n_busy_slots_per_decode: '1.0',
+		...cells
+	});
+
+	writeFileSync(join(STATE, 'runtime-counters.csv'), [
+		COUNTER_COLUMNS.join(','),
+		// The newest run. Shard 0 is fully instrumented; shard 1 is a shard that
+		// ran before the host cells existed.
+		row(shard(date, 2, 0, {
+			prompt_tokens_total: 800, prompt_tokens_cached_total: 700, prompt_seconds_total: 40,
+			tokens_predicted_total: 296, tokens_predicted_seconds_total: 60, n_decode_total: 299,
+			n_tokens_max: 4096, job_seconds: 900,
+			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
+			cpu_busy_pct: 94.5, peak_rss_bytes: 12990730240, model_load_ms: 2470.828
+		})),
+		row(shard(date, 2, 1, {
+			prompt_tokens_total: 253, prompt_tokens_cached_total: 583, prompt_seconds_total: 52,
+			tokens_predicted_total: 22, tokens_predicted_seconds_total: 4, n_decode_total: 23,
+			n_tokens_max: 2048
+		})),
+		// A second run on the same day, so the cache chart has a column to sum and
+		// the context panel has more than one bar to compare.
+		row(shard(date, 1, 0, {
+			prompt_tokens_total: 942, prompt_tokens_cached_total: 0, prompt_seconds_total: 79.1,
+			tokens_predicted_total: 170, tokens_predicted_seconds_total: 29.062, n_decode_total: 172,
+			n_tokens_max: 1112, job_seconds: 640,
+			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cpu_busy_pct: 88.4, peak_rss_bytes: 10804060160, model_load_ms: 3881.795
+		})),
+		row(shard(date, 1, 1, {
+			prompt_tokens_total: 975, prompt_tokens_cached_total: 900, prompt_seconds_total: 7.12,
+			tokens_predicted_total: 167, tokens_predicted_seconds_total: 28.206, n_decode_total: 169,
+			n_tokens_max: 1875, job_seconds: 610,
+			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cpu_busy_pct: 91.2, peak_rss_bytes: 11779497984, model_load_ms: 3769.648
+		})),
+		// The day before, so the cache chart draws a second column and a trend
+		// rather than one bar with nothing to be a trend against.
+		row(shard(before, 1, 0, {
+			prompt_tokens_total: 1497, prompt_tokens_cached_total: 900, prompt_seconds_total: 53.309,
+			tokens_predicted_total: 215, tokens_predicted_seconds_total: 40.21, n_decode_total: 218,
+			n_tokens_max: 1712, job_seconds: 720,
+			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
+			cpu_busy_pct: 93.1, peak_rss_bytes: 13072498688, model_load_ms: 2418.609
+		})),
+		row(shard(before, 1, 1, {
+			prompt_tokens_total: 1765, prompt_tokens_cached_total: 900, prompt_seconds_total: 77.778,
+			tokens_predicted_total: 230, tokens_predicted_seconds_total: 43.436, n_decode_total: 233,
+			n_tokens_max: 1995, job_seconds: 780,
+			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
+			cpu_busy_pct: 92.8, peak_rss_bytes: 12990730240, model_load_ms: 2470.828
+		}))
+	].join('\n') + '\n');
+}
+
 writeItemHealthCanary();
+writeRuntimeCountersCanary();
 execFileSync(
 	'python',
 	['-m', 'idhazh.publish_telemetry', '--state', STATE, '--public', join(STATE, 'telemetry')],
