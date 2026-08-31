@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -220,15 +220,17 @@ The three levers this page already names - encode efficiently, honour the visual
 
 ### What bounds the committed state tree
 
-`state/` is the other tree that grows every run, and it is bounded separately, because what it costs is a checkout rather than a deploy. Measured on this checkout 2026-08-30, over the eight days the ledgers then held:
+`state/` is the other tree that grows every run, and it is bounded separately, because what it costs is a checkout rather than a deploy. Re-measured on this checkout 2026-08-31, over the nine days the ledgers then held:
 
 | File | Bytes | Share of `state/` | Bounded by |
 | --- | --- | --- | --- |
-| `state/seen/<YYYY-MM>.csv` | 5,166,315 | 54.5 percent | `collect.seen_window_days`, since 2026-08-31 |
-| `state/scores.csv` | 2,359,230 | 24.9 percent | **nothing** |
-| `state/item-health/<YYYY-MM>.csv` | 1,270,452 | 13.4 percent | `observability.keep_months` |
-| `state/published.csv` | 338,979 | 3.6 percent | nothing, and deliberately - published is forever |
-| everything else | 352,309 | 3.7 percent | small enough not to ask |
+| `state/seen/<YYYY-MM>.csv` | 2,904,221 | 37.2 percent | `collect.seen_window_days` |
+| `state/scores.csv` | 2,700,019 | 34.6 percent | **nothing** |
+| `state/item-health/<YYYY-MM>.csv` | 1,409,945 | 18.0 percent | `observability.keep_months` |
+| `state/published.csv` | 384,448 | 4.9 percent | nothing, and deliberately - published is forever |
+| everything else | 416,995 | 5.3 percent | small enough not to ask |
+
+Total 7,815,628 bytes over 8 files. **All three of the ledgers this table exists to watch moved inside a day**, and the shares moved further than the bytes did, so the shares are the ones to re-take rather than to quote. Against 2026-08-30: `state/` as a whole fell 17.6 percent, because `state/seen/` shed its address column and fell 43.8 percent from 5,166,315. `state/scores.csv` grew 14.4 percent from 2,359,230 in the same day - so its share went from 24.9 to 34.6 percent while it was the only file nobody had touched, and it is now 204,202 bytes short of being the largest file in the tree.
 
 **The fold covers `state/item-health/` and only that.** A month older than `observability.keep_months` is read whole, folded to one row per `(date, stage)` in `state/telemetry-aggregate/<YYYY-MM>.csv`, and the full-grain shard is deleted - in that order, with the aggregate read back before the shard is unlinked, so a fold that cannot be written leaves the shard where it was. Thirteen months, because `console.max_window_days` is 366 and a shard has to answer for a year with the current month still being written.
 
@@ -238,11 +240,39 @@ Three things make it the one ledger the fold reaches, and each of them is why th
 
 - Its rows carry a `stage`, which is what the aggregate is keyed on. A `seen` row is an address and a timestamp; a `scores.csv` row is a faithfulness measurement. Neither folds to `(date, stage)`.
 - It shards by month, so a fold is a whole file appearing and a whole file going. `state/scores.csv` is one file, and bounding it means either sharding it - a change across four readers, `payload.ts`, `model-work.ts`, `drift.py` and `label_queue.py` - or rewriting it in place.
-- It is a measurement whose totals are worth keeping. `state/seen/` is a lookup, read only through `collect.seen_window_days`, so a shard past that window answers nothing and its honest retention is deletion rather than a fold. **That is what it now gets**, in the same step as the fold: `retention.prune_seen` deletes every shard outside `ledger.shards_in_window(today, seen_window_days)` - the reader's own helper, so the keep-set cannot drift from what the planner opens. The same day the ledger also shed `canonical_url`, which no reader had ever opened: 2,800,881 bytes of 5,705,102 over 25,036 rows, **49.1 percent of the file**, leaving about 356 KB a published day and roughly 32 MB across a full 90-day window.
+- It is a measurement whose totals are worth keeping. `state/seen/` is a lookup, read only through `collect.seen_window_days`, so a shard past that window answers nothing and its honest retention is deletion rather than a fold. **That is what it now gets**, in the same step as the fold: `retention.prune_seen` deletes every seen shard *older* than the oldest month `ledger.shards_in_window(today, seen_window_days)` names - the reader's own helper, so the keep-set cannot drift from what the planner opens. The same day the ledger also shed `canonical_url`, which no reader had ever opened: 2,800,881 bytes of 5,705,102 over 25,036 rows, **49.1 percent of the file**, leaving about 356 KB a published day and roughly 32 MB across a full 90-day window.
+
+**Older than the oldest month kept, never merely outside the window.** The two rules read the same on the scheduled path and come apart the moment the prune is handed a date in the past - `--date` takes whatever it is given, and a window drawn around last January puts every shard since outside it, the live one included. Deleting below the window's floor instead makes the retained set a superset of the read set for every date rather than for today's. Measured over the 366 anchor dates from 2026-01-01 at the committed 90-day window: what survives reaches back **90 to 120 days, so the margin over what the planner reads is 0 to 30 days** - zero where the window's oldest day is already the first of a month, thirty where it is the last, because a whole shard is kept either way.
 
 **What this does not do, stated plainly: it does not bound the `/console/` document.** That page was linear in items at a measured 50.45 gzipped bytes an item and crossed its 301,580-byte ceiling on published day 16, because the compression scatter inlined every row `state/scores.csv` had ever held. Both halves of that are closed - the plot moved to a windowed seed over the telemetry projection on 2026-08-29, and the scatter itself became a per-day count of three bins on 2026-08-30 - so the page no longer grows a mark an item. The fold was never an answer to it either way: the two problems share a file and share nothing else.
 
 The aggregate is kept forever by default. `observability.hard_delete_after_months` is null, and the contract refuses a value at or below `keep_months` - so a month is never deleted before it has been folded.
+
+### `state/scores.csv` stays unbounded, and this is the arithmetic (2026-08-31)
+
+**It is the largest unbounded thing in the tree and nothing here changes that.** What follows is why the two available bounds each cost more than they save today, so the next person starts from the numbers rather than from the finding.
+
+Measured 2026-08-31 on the committed file: 3,509 rows over nine days and 30 runs, 35 columns, 2,700,019 bytes. Over the seven mature days (dropping the first and last, which are partial) it holds 3,068 rows, so **769.3 bytes a row and 438.3 rows a published day = 337,185 bytes a published day, about 117.4 MiB a year.** There is no cap on `state/` the way there is a 1 GB cap on the published site, so the runway is not a date - the cost is a checkout, paid by every `plan`, `work`, `assemble` and CI job, several times a day.
+
+What each reader would lose, and the window each one actually asks for:
+
+| Reader | What it needs | How far back |
+| --- | --- | --- |
+| `frontend/src/lib/server/payload.ts` -> `model-work.ts` | per-**day** figures only | `console.max_window_days`, 366 |
+| `backend/idhazh/drift.py` | per-item, per-domain | `drift.yml`'s `recent_days` plus `baseline_days` inputs, 35 days on the scheduled path |
+| `backend/utilities/label_queue.py` | per-item, at the live `scorer_version` and `pipeline_fingerprint` | `evaluation.label_min_run_days`, 10 run-days |
+| `backend/idhazh/evals/writer.py` | one row per `OBSERVATION_KEY`, to refuse a repeat | for ever, and belt-and-braces: `load_published` already stops the address being planned twice |
+
+So **no reader wants a per-item row older than 366 days, and only one wants 366 days at all - as daily totals.** A fold is therefore the right shape in principle. Both ways of getting one are refused:
+
+- **Folding in place is unsound, not merely awkward.** `.gitattributes` sets `merge=union` on `state/**/*.csv`, and states its own precondition: "every file here is append-only and every row is independent of its neighbours". A commit that removes rows, rebased onto a tip that added some - which is exactly what `commit-and-push.sh` does when a push loses a race - is resolved by a union that keeps both sides' lines, so the removal silently does not happen. That is the same reason `corpus/` is deliberately *not* union, and `corpus/` needed a replay path to leave it.
+- **Sharding it by month cannot be done inside the backend.** `payload.ts` reads `join(STATE_ROOT, 'scores.csv')` by name, so a month layout is a `frontend/src/` change plus `evals/writer.py`, the `drift.yml` inline program, four utilities, `commit-and-push.sh`'s staged list, `REFRESH_PATHS`, the closed-world path map in `test_workflows.py`, the canary builder, and a migration of the committed 2.7 MB file. It is a Level 4 change to bound a file that is not yet costing anything measurable.
+
+And the threshold with a precedent buys nothing for a year anyway. At `observability.keep_months` = 13 the first row would be folded on **2027-09-30**, by which time the file is about 127 MiB - against the 117.7 MiB the console's own 366-day appetite justifies keeping. The bound is real over five years (127 MiB against 587 MiB) and invisible over one.
+
+**A narrowing is not available here, and that is worth saying because it worked twice next door.** `PublishedRow` shed 48.6 percent and `SeenRow` 49.1 percent by dropping a column no reader opened. Every wide column in this ledger is opened: `source_url` (377,142 bytes, 14.0 percent) is how `drift` names a domain; `title` (257,070) and `output_digest` (224,576) are what `evals/evidence.py` writes into an evidence pair and what `label_queue` prints to a labeller; `url_key` (224,576) and `pipeline_fingerprint` (224,576) are two of the four fields in `OBSERVATION_KEY`. The one that looks like waste - `scorer_version` at 281,575 bytes, 10.4 percent, a repeated 80-character constant - is the field `label_queue` selects the live instrument by.
+
+**What would change this.** Any of: the console learning to read a daily aggregate, which makes a short full-grain window enough; `state/` acquiring a measured ceiling the way the published site has one; or the file passing a size where a checkout is measurably slower. Until one of those, the honest answer is that it is measured, named, and left.
 
 ## The frontend stack
 

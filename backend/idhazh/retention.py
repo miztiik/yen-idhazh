@@ -50,6 +50,15 @@ shard has to answer for a year and a month of it is still being written. The
 aggregate is kept forever by default, because a downsampled year costs
 kilobytes and deleting it would make a year-over-year comparison unanswerable -
 `observability.hard_delete_after_months` is the escape hatch and is null.
+
+**The seen prune is the fourth thing, and it folds nothing on purpose.**
+`state/seen/` is a lookup rather than a measurement: `ledger.load_seen` opens
+the shards `shards_in_window(today, collect.seen_window_days)` names and
+nothing else, so a shard outside that set answers no question anybody asks and
+its honest retention is deletion. A fold would be inventing a total nobody
+reads. The keep-set is taken from the reader's own helper, and only months
+*older* than it are deleted, so the retained set is a superset of the read set
+whatever date the prune is handed.
 """
 
 from __future__ import annotations
@@ -488,28 +497,39 @@ def prune_seen(
     """Delete every seen shard the reader would no longer open.
 
     `ledger.load_seen` consults `shards_in_window(today, within_days)` and
-    nothing else, so a shard outside that set is already invisible to the
-    pipeline - it is bytes in the working tree answering no question. Without
-    this the ledger grows for ever at a rate nothing bounds: measured
-    2026-08-31, 356 KB a day after the address column came off, which is 32 MB
-    over a 90-day window and no ceiling after that.
+    nothing else, so a shard older than the oldest month that names is already
+    invisible to the pipeline - it is bytes in the working tree answering no
+    question. Without this the ledger grows for ever at a rate nothing bounds:
+    measured 2026-08-31, 356 KB a day after the address column came off, which
+    is 32 MB over a 90-day window and no ceiling after that.
 
     The keep-set comes from the reader's own helper rather than from a second
     date calculation here. That is the safety argument: two calculations drift,
     and the day they drift this one deletes a shard the next plan wanted.
+
+    **Only what is older than that set goes, never what is newer.** The window
+    is anchored on the date this is handed, and a run can be handed a date in
+    the past - `--date` takes whatever it is given. Deleting everything outside
+    the window would then delete the live shard, which is the one file every
+    later plan opens. Deleting everything below the window's oldest month keeps
+    the retained set a superset of the read set for every date rather than for
+    today's, and it costs nothing: on the scheduled path the two sets are the
+    same shards.
 
     There is no fuse and no `max_deletes_per_run`. A shard nobody reads is not
     the archive, and the picture pruner's fuse exists because a date-parse bug
     there eats published images - the worst case here is that the pipeline
     re-learns a first-sight date it had already forgotten.
     """
-    keep = set(ledger.shards_in_window(today, within_days))
+    # `shards_in_window` always names the anchor's own month, so this is never
+    # the minimum of an empty set.
+    oldest_read = min(ledger.shards_in_window(today, within_days))
     deleted: list[str] = []
     kept: list[str] = []
     freed = 0
 
     for shard in month_shards(state_dir / ledger.SEEN_DIRNAME):
-        if shard.stem in keep:
+        if shard.stem >= oldest_read:
             kept.append(shard.stem)
             continue
         deleted.append(shard.stem)

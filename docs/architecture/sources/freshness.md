@@ -1,6 +1,6 @@
 # Freshness and Identity
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-08-31
 
 How often the pipeline runs, what makes an article worth today's slot, what stops the same article being published twice, and how an item keeps its name across the runs of one day. This page owns the decisions the planning step makes before any model loads.
 
@@ -52,7 +52,7 @@ Plenty of feeds carry no publish date, and the ones that omit it omit it consist
 
 **An undated article is therefore never refused for age on the day we find it, and is always refused a day later.** Dropping it on sight would silently retire every feed that omits a date, which is a different decision from refusing a back catalogue, and it is not the one taken here.
 
-The shard is monthly and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over. A shard outside that window is therefore deleted rather than kept: `retention.prune_seen` takes its keep-set from `ledger.shards_in_window`, the same function the read uses, so it cannot delete a shard a later plan would have opened.
+The shard is monthly and the lookback is `seen_window_days` (90). An address older than the window is not worth a lookup - it is past the gate several times over. A shard below that window is therefore deleted rather than kept: `retention.prune_seen` takes its floor from `ledger.shards_in_window`, the same function the read uses, so the two cannot drift. It deletes what is *older* than the oldest month that helper names and never merely what is outside the window - the window is drawn around whatever date the prune is handed, and a run given a date in the past would otherwise delete the live shard. Measured over 366 anchor dates at a 90-day window, what survives reaches back 90 to 120 days: a whole shard is kept if any of its days is in the window.
 
 ## A date in the future is ignored
 
