@@ -47,6 +47,7 @@
 	 */
 	import {
 		chartWidth,
+		dayColumns,
 		dayColumnX,
 		dayTicks,
 		frame,
@@ -134,7 +135,9 @@
 			.flatMap((decade) => MINOR_STEPS.map((factor) => factor * decade))
 			.filter((value) => value < scale.domain[1])
 	);
-	const axis = $derived(dayTicks(calendar, tickDensity));
+	const axis = $derived(
+		dayTicks(calendar, { density: tickDensity, columns: dayColumns(calendar.length, box) })
+	);
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 
 	/** A stage is on the chart where the window timed it at all, a zero
@@ -424,17 +427,30 @@
 					{/each}
 				{/each}
 
+				<!-- The mark stays where the date is dropped: a reader counting columns
+				     needs the grid whether or not the label survived the fit. -->
 				{#each axis as label (label.index)}
-					<text
-						x={x(label.index)}
-						y={box.bottom + 14}
-						text-anchor={label.anchor}
-						fill="var(--color-text-tertiary)"
-						font-size="10"
-						data-timing-label={label.date}
-					>
-						{label.text}
-					</text>
+					<line
+						x1={x(label.index)}
+						x2={x(label.index)}
+						y1={box.bottom}
+						y2={box.bottom + 4}
+						stroke="var(--color-text-tertiary)"
+						data-day-tick={label.date}
+					/>
+					{#if label.text}
+						<text
+							x={x(label.index)}
+							y={box.bottom + 16}
+							text-anchor={label.anchor}
+							fill="var(--color-text-tertiary)"
+							font-size="10"
+							data-day-axis
+							data-timing-label={label.date}
+						>
+							{label.text}
+						</text>
+					{/if}
 				{/each}
 			</svg>
 		</div>

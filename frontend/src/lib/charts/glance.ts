@@ -13,6 +13,7 @@
 
 import type { EChartsOption } from 'echarts';
 import type { RunSummary } from '$lib/server/payload';
+import { dayMonth } from '../format';
 import { donut } from './donut';
 import type { DayReadout } from './frame';
 import { sparklineMarks, type SparklineMarks } from './sparkline';
@@ -288,7 +289,9 @@ export function siteCost(
 			tooltip: { trigger: 'axis' },
 			xAxis: {
 				type: 'category',
-				data: days.map((d) => d.date.slice(5)),
+				// The same date grammar the hand-written axes print. `08-20` is how the
+				// ledger spells a day, and a ledger spelling is not a label.
+				data: days.map((d) => dayMonth(d.date)),
 				axisLine: { lineStyle: { color: paint('--chart-axis') } },
 				axisTick: { show: false },
 				axisLabel: { color: paint('--color-text-tertiary'), fontSize: 11, hideOverlap: true }
@@ -377,7 +380,9 @@ export function siteRunway(
  * stage did on its own.
  */
 export function failureMix(series: readonly StageFailureSeries[], shape: StackShape = 'bars') {
-	const columns = series[0]?.days.map((d) => d.date.slice(5)) ?? [];
+	// The same date grammar the hand-written axes print. `08-25` is how the
+	// ledger spells a day, and a ledger spelling is not a label for a reader.
+	const columns = series[0]?.days.map((d) => dayMonth(d.date)) ?? [];
 	return stacked(
 		columns,
 		series.map((s, i) => ({

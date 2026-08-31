@@ -40,6 +40,16 @@ const QUARANTINE_AFTER = (
 	}
 ).collect.quarantine_after_failures;
 
+/** The most date labels an axis may carry, from the file the page reads it
+ * from. Not a copy. */
+function tickDensity(): number {
+	return (
+		JSON.parse(readFileSync(join(repo, 'config', 'appearance.json'), 'utf8')) as {
+			chart: { tick_density: number };
+		}
+	).chart.tick_density;
+}
+
 /** The ledger the page read, read again independently. Nothing is mocked:
  * these are the CSVs `build_canary_day.py` wrote. */
 type LedgerRow = FeedRead & { feedId: string };
@@ -453,9 +463,14 @@ test('the date axis labels the same columns the squares sit in', async ({ page }
 		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-feed-day') ?? ''));
 	expect(columns.length, 'the strip drew no day').toBeGreaterThan(0);
 
-	// The axis is computed from the same dates the squares are, so an axis that
-	// drifted a column would show up as a label pointing at the wrong day.
-	const expected = axisLabels(columns);
+	// The axis is computed from the same dates the squares are, at the same pitch
+	// and the same ceiling, so an axis that drifted a column would show up as a
+	// label pointing at the wrong day.
+	const metrics = denseCellFor(ROW_STRIP_PX, columns.length);
+	const expected = axisLabels(columns, {
+		density: tickDensity(),
+		pitch: metrics.cell + metrics.gap
+	});
 	const drawnAxis = await page
 		.locator('[data-feed-axis]')
 		.evaluateAll((nodes) =>

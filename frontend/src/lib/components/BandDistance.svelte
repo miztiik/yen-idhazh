@@ -15,6 +15,7 @@
 	import {
 		chartWidth,
 		dayColumnX,
+		dayColumns,
 		dayTicks,
 		frame,
 		linearAxis,
@@ -118,14 +119,14 @@
 	/** A count has no halves. d3 offers them on a short domain, so they are
 	 * dropped rather than rounded - a repeated `1` reads as a broken axis. */
 	const yTicks = $derived(yAxis.ticks.filter((tick) => Number.isInteger(tick)));
+	const bar = $derived(
+		Math.max(MIN_BAR, Math.min(MAX_BAR, (box.innerWidth / Math.max(1, split.length)) * 0.7))
+	);
 	const ticks = $derived(
 		dayTicks(
 			split.map((day) => day.date),
-			tickDensity
+			{ density: tickDensity, columns: dayColumns(split.length, box, bar / 2) }
 		)
-	);
-	const bar = $derived(
-		Math.max(MIN_BAR, Math.min(MAX_BAR, (box.innerWidth / Math.max(1, split.length)) * 0.7))
 	);
 
 	const ranked = $derived(
@@ -328,6 +329,8 @@
 					{/each}
 				{/if}
 
+				<!-- The mark stays where the date was dropped, so a reader counting
+				     columns keeps the grid. -->
 				{#each ticks as tick (tick.index)}
 					<line
 						x1={centre(tick.index)}
@@ -335,17 +338,21 @@
 						y1={box.bottom}
 						y2={box.bottom + 4}
 						stroke="var(--color-text-tertiary)"
+						data-day-tick={tick.date}
 					/>
-					<text
-						x={centre(tick.index)}
-						y={box.bottom + 16}
-						text-anchor={tick.anchor}
-						fill="var(--color-text-tertiary)"
-						font-size="10"
-						data-day-label={tick.date}
-					>
-						{tick.text}
-					</text>
+					{#if tick.text}
+						<text
+							x={centre(tick.index)}
+							y={box.bottom + 16}
+							text-anchor={tick.anchor}
+							fill="var(--color-text-tertiary)"
+							font-size="10"
+							data-day-axis
+							data-day-label={tick.date}
+						>
+							{tick.text}
+						</text>
+					{/if}
 				{/each}
 
 				<text
