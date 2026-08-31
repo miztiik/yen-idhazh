@@ -36,6 +36,7 @@ from idhazh.contracts.digest_day import (
     DigestVerticalRef,
     DigestVisual,
 )
+from idhazh.contracts.digest_view import DigestView, DigestViewItem, DigestViewVisual
 from idhazh.contracts.eval_row import ConfidenceBand, EvalRow
 from idhazh.contracts.fingerprint import FingerprintRow, PipelineInputs
 from idhazh.contracts.route import Route, SpecFormat, VisualKind, VisualState
@@ -78,6 +79,9 @@ __all__ = [
     "DigestItem",
     "DigestRunRef",
     "DigestVerticalRef",
+    "DigestView",
+    "DigestViewItem",
+    "DigestViewVisual",
     "DigestVisual",
     "DriftConfig",
     "EdgarPolicy",
