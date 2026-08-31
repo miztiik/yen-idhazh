@@ -256,6 +256,8 @@ Three details in that carry weight:
 
 The consequence worth stating plainly: the planning step loads no weights, finishes in seconds, and produces the identical list on every re-run. That is what makes the expensive work shardable afterwards and a re-run cheap.
 
+**Three of those terms and the score itself now reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` were computed here and thrown away at the end of the plan job until 2026-08-31, so the published page could not say why a story is in the digest. They are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is).
+
 ## Changing the source set without breaking history
 
 A vertical will be retired. A feed will die quietly when a site is redesigned. Both are normal, and both are handled in config rather than in code.

@@ -360,6 +360,29 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-31T23:45",
+            change=(
+                "assist.recall_min default moved from 0.69 to 0.61, and the committed "
+                "file repeats it. The shape is `AssistConfig`, which this document and "
+                "`AppConfig` share, so both schemas moved together."
+            ),
+            why=(
+                "The backend retrieval gate reads this knob, and 0.69 stopped being a "
+                "measurement of the system when the archive grew: reachable recall@10 "
+                "over the 60 labelled queries is 0.690 +/- 0.041 on 2026-08-31 against "
+                "0.767 +/- 0.036 on 2026-08-26. Four arms hold the corpus, the labels "
+                "and the vectors still one at a time and find no ranking regression - "
+                "the same items read with today's vectors score identically, and the "
+                "whole drop is new items competing for the same ten slots against a "
+                "frozen label set. 0.61 is two standard errors below the new baseline, "
+                "which is the rule that set 0.69. Nothing the published surface draws "
+                "reads this field; it lives here because `AssistConfig` is one shape "
+                "with two exposure points, and a value that disagreed across the two "
+                "files would make one knob mean two things. Same field, same type: an "
+                "appearance file that names 0.69 still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-31",
             change=(
                 "chart.tick_density keeps its name, its type and its default of 6, "

@@ -32,7 +32,7 @@ from idhazh.contracts.item_health import (
     ItemHealthRow,
     ItemOutcome,
 )
-from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource
 from idhazh.contracts.seen import PublishedRow
 from idhazh.contracts.sources import FeedDef, SalienceFeedDef, Sources
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
@@ -664,6 +664,47 @@ def test_first_sight_survives_the_run_that_saw_it() -> None:
     assert undated
     for item in undated:
         assert item.published_at == "2026-08-22T06:00:00Z", "twelve hours old, not brand new"
+
+
+def test_a_dated_entry_says_the_time_is_the_feeds_own() -> None:
+    """The common case, and the one a page has to be able to state."""
+    built = plan([LAB, TRADE, COMMUNITY], now="2026-08-21T12:00:00Z")
+    assert built.items, "the feeds do publish on the day"
+    for item in built.items:
+        assert item.time_source is TimeSource.FEED
+
+
+def test_an_undated_entry_says_the_time_is_our_first_sight() -> None:
+    """The fallback is silent in `published_at` alone, so the label is the only tell."""
+    state = Path(tempfile.mkdtemp())
+    built = plan([LAB, TRADE, NOTICES], state=state)
+    undated = [item for item in built.items if item.source_id == "notices"]
+    assert undated, "an undated entry is planned"
+    for item in undated:
+        assert item.published_at == NOW
+        assert item.time_source is TimeSource.FIRST_SEEN
+    dated = [item for item in built.items if item.source_id != "notices"]
+    assert dated, "and the same run's dated entries are labelled differently"
+    assert all(item.time_source is TimeSource.FEED for item in dated)
+
+
+def test_a_date_too_far_ahead_is_labelled_as_our_clock_not_the_feeds() -> None:
+    """A replaced date is our time under the feed's name unless the item says so.
+
+    This is the case row 17's time rail has to be able to caption. The stamp
+    the reader sees is `NOW`, and without the label nothing on the payload says
+    it is ours rather than the publisher's.
+    """
+    pair = VerticalDef(id="ai", display_name="AI", min_feeds=2)
+    built = plan([FORWARD, TRADE], verticals=[pair])
+    labelled = {item.title: item.time_source for item in built.items}
+    assert (
+        labelled["Datacentre build announced for the northern corridor"]
+        is TimeSource.FIRST_SEEN
+    ), "14 hours ahead is not a date - the time printed is ours"
+    assert (
+        labelled["Quarterly capex guidance raised on accelerator demand"] is TimeSource.FEED
+    ), "three hours ahead is clock skew, and the feed's time stands"
 
 
 def test_an_item_id_survives_a_second_run_of_the_same_day() -> None:
