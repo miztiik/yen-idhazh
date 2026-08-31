@@ -48,81 +48,13 @@ import {
 	writeFileSync
 } from 'node:fs';
 import { join, resolve } from 'node:path';
+// The allow-list and the projector itself, shared with the build-time reader in
+// `src/lib/server/payload.ts`. The `.ts` extension and the full relative path
+// are both required: this script is run by plain `node`, which strips the types
+// but resolves nothing else.
+import { ITEM_FIELDS, projectDay } from '../src/lib/payload/project.ts';
 
 const IMAGE_SUFFIXES = ['.svg', '.webp', '.png', '.jpg', '.jpeg'];
-
-// The fields a search result renders, and no others. Traced along the render
-// path rather than guessed: `assist/day.ts` fetches the file,
-// `routes/archive/+page.svelte` hands one item to `DigestItem`, and that
-// component with `ItemMeta`, `ItemVisual`, `ConfidenceChip`, `ReadAloud` and
-// `SourceLink` reads exactly this list. `source_url` is on it because it is the
-// reader's way out to the source, which is the most important thing on a result
-// after the summary itself.
-//
-// `published_at` is not, and that is the one entry worth explaining.
-// `ItemMeta` reads it only in the branch where no day was passed, and a search
-// result always passes one. It stays in the committed payload; it never had a
-// reader here.
-const ITEM_FIELDS = [
-	'item_id',
-	'vertical',
-	'title',
-	'summary',
-	'reader_note',
-	'band',
-	'band_reason',
-	'truncated',
-	'visual',
-	'source_name',
-	'source_id',
-	'source_kind',
-	'source_url'
-];
-
-// The three `ItemVisual` reads. `kind` is read at build time off the committed
-// tree, for the console's chart count, and never from a staged copy.
-const VISUAL_FIELDS = ['state', 'path', 'alt'];
-
-// One key. `assist/day.ts` refuses a payload whose `items` is not an array, so
-// this is the entire contract the fetched file answers to.
-const DAY_FIELDS = ['items'];
-
-// Names that may never reach a staged copy, whoever widens the lists above.
-// `embeddings` is why this projection exists: it is the vector block, its only
-// production reader is the backend's index rebuild, and it was 40.0 percent of
-// a day page. The other four are bulk the digest page renders and a search
-// result does not.
-const FORBIDDEN_FIELDS = ['embeddings', 'key_points', 'lenses', 'events', 'entities'];
-
-// The build fails here rather than shipping a widened payload, because a
-// projection that has quietly grown looks exactly like one that has not.
-const staged = new Set([...DAY_FIELDS, ...ITEM_FIELDS, ...VISUAL_FIELDS]);
-const leaked = FORBIDDEN_FIELDS.filter((name) => staged.has(name));
-if (leaked.length > 0) {
-	throw new Error(`copy-visuals: a staged day may never carry ${leaked.join(', ')}`);
-}
-
-/** Keep only the named fields, in one fixed order. */
-const project = (source, fields) =>
-	Object.fromEntries(fields.map((name) => [name, source[name] ?? null]));
-
-/** One item, as a search result renders it. */
-function projectItem(item) {
-	const kept = project(item, ITEM_FIELDS);
-	kept.visual = item.visual ? project(item.visual, VISUAL_FIELDS) : null;
-	return kept;
-}
-
-/** The day, narrowed to its items.
- *
- * Compact, where the committed payload is pretty-printed. That indent is worth
- * paying for a file whose diff a person reviews by eye, and not for one a
- * reader downloads.
- */
-function projectDay(text) {
-	const day = JSON.parse(text);
-	return JSON.stringify({ items: (day.items ?? []).map(projectItem) });
-}
 
 // The same root the payload loader reads, so a canary build stages its own
 // visuals rather than the real day's.
