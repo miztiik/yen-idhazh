@@ -38,7 +38,6 @@ from typing import Final
 
 from idhazh.assemble import write_atomic
 from idhazh.contracts.eval_row import EvalRow
-from idhazh.evals.writer import ledger_path
 
 #: Rows stamped before this were written by the code that conflated the two
 #: counters. The stamp travels on the row, which is why a migrated row keeps the
@@ -156,7 +155,7 @@ def main() -> None:
     parser.add_argument("--state", default="state", help="the state directory to migrate")
     args = parser.parse_args()
 
-    path = ledger_path(Path(args.state))
+    path = Path(args.state) / "scores.csv"
     relpath = _relpath(path)
     if not path.is_file():
         raise SystemExit(f"{relpath} does not exist")

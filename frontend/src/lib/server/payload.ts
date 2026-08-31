@@ -170,14 +170,22 @@ export function readCsv(path: string): CsvTable {
 	return { rows, columns };
 }
 
-/** One row per scored item, read from the committed ledger and never recomputed. */
+/** One row per scored item, read from the committed ledger and never recomputed.
+ *
+ * The ledger is a directory of month shards, so this reads them oldest first and
+ * hands back one table. The concatenation is what every caller had before, and
+ * a caller that only wants a window can now skip whole months instead.
+ */
 export function evalRows(): CsvTable {
-	return readCsv(join(STATE_ROOT, 'scores.csv'));
+	return readShards(join(STATE_ROOT, 'scores'));
 }
 
-/** One row per planned item per run, read from month shards. */
-export function itemHealthRows(): CsvTable {
-	const dir = join(STATE_ROOT, 'item-health');
+/** Every `<YYYY-MM>.csv` in a ledger directory, oldest first, as one table.
+ *
+ * Two ledgers shard by month and both wanted this loop. The columns come from
+ * the first shard that has any, so an empty month cannot blank the header.
+ */
+export function readShards(dir: string): CsvTable {
 	if (!existsSync(dir)) return { rows: [], columns: [] };
 	const rows: Record<string, string>[] = [];
 	let columns: string[] = [];
@@ -189,6 +197,11 @@ export function itemHealthRows(): CsvTable {
 		rows.push(...table.rows);
 	}
 	return { rows, columns };
+}
+
+/** One row per planned item per run, read from month shards. */
+export function itemHealthRows(): CsvTable {
+	return readShards(join(STATE_ROOT, 'item-health'));
 }
 
 /** Public monthly telemetry shards. These are safe for a browser to fetch. */

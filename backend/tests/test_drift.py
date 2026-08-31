@@ -274,7 +274,9 @@ def ledger(directory: Path, *, recent: int, baseline: int) -> None:
     today = datetime.date.today()
     written = directory / "state"
     written.mkdir(parents=True, exist_ok=True)
-    with (written / "scores.csv").open("w", encoding="utf-8", newline="") as handle:
+    shard = written / "scores" / "2026-08.csv"
+    shard.parent.mkdir(parents=True, exist_ok=True)
+    with shard.open("w", encoding="utf-8", newline="") as handle:
         out = csv.DictWriter(handle, fieldnames=LEDGER_COLUMNS)
         out.writeheader()
         for age, count in ((1, recent), (14, baseline)):
@@ -360,7 +362,7 @@ def test_a_ledger_that_is_not_there_is_not_a_green_check(tmp_path: Path) -> None
     result = review(tmp_path)
 
     assert result.returncode != 0, result.stdout
-    assert "state/scores.csv is not there" in result.stdout
+    assert "state/scores/ holds no month" in result.stdout
 
 
 def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
@@ -368,7 +370,9 @@ def test_the_review_still_fires_on_real_drift(tmp_path: Path) -> None:
     today = datetime.date.today()
     written = tmp_path / "state"
     written.mkdir(parents=True)
-    with (written / "scores.csv").open("w", encoding="utf-8", newline="") as handle:
+    shard = written / "scores" / "2026-08.csv"
+    shard.parent.mkdir(parents=True, exist_ok=True)
+    with shard.open("w", encoding="utf-8", newline="") as handle:
         out = csv.DictWriter(handle, fieldnames=LEDGER_COLUMNS)
         out.writeheader()
         for age, words in ((1, 150), (14, 1200)):

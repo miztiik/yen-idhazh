@@ -66,16 +66,21 @@ jobs:
           baseline_days = int(os.environ["BASELINE_DAYS"])
           minimum = load().app.drift.min_window_rows
           today = datetime.date.today()
-          ledger = pathlib.Path("state/scores.csv")
-          if not ledger.exists():
+          shards = sorted(pathlib.Path("state/scores").glob("*.csv"))
+          if not shards:
               # Not a green check. An absent ledger compared nothing, and a
               # review that compared nothing has not cleared anything.
-              print("state/scores.csv is not there - nothing was compared")
+              print("state/scores/ holds no month - nothing was compared")
               raise SystemExit(1)
+
+          rows = []
+          for shard in shards:
+              with shard.open(encoding="utf-8", newline="") as handle:
+                  rows.extend(csv.DictReader(handle))
 
           recent, baseline = [], []
           unknown_length = 0
-          for row in csv.DictReader(ledger.open(encoding="utf-8")):
+          for row in rows:
               try:
                   when = datetime.date.fromisoformat(row["date"])
                   # Empty means the article's length was never recorded, not that
