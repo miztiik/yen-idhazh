@@ -41,7 +41,7 @@ against the wrong number.
 **Which rows count as "at the configured cap", and why two instruments.** A run
 qualifies on either proof, and both are committed data:
 
-- **The eval ledger.** `state/scores.csv` carries `pipeline_fingerprint`, and
+- **The eval ledger.** `state/scores/<YYYY-MM>.csv` carries `pipeline_fingerprint`, and
   `extract.truncation_cap_tokens` is a field of the payload that stamp is taken
   over - so the stamp moved when the cap moved. The live stamp is the one on the
   newest committed row, the same "the live instrument is the last row" rule
