@@ -71,15 +71,23 @@ What is deliberately *not* built is a slot system for moving components left and
 
 ## Theming
 
-Class strategy, not media query: a reader on a dark-defaulted phone who wants to read in bed needs a way to say so. Three toggle states (`system`, `light`, `dark`), two themes. A six-line inline script applies the stored choice before first paint, which is the one inline script this site carries and exists solely to prevent a white flash.
+Class strategy, not media query. **Dark is the base and light is the override.** `:root` in `frontend/src/styles/tokens.css` carries the dark values, so a document with no `data-theme` attribute - no script yet, or no script at all - paints dark on its first frame. `[data-theme="light"]` comes after it in the file and wins on source order, because both selectors match at the same specificity.
+
+Two themes, and one control with two states: a moon button that flips between them. The glyph never changes - the page is the state indicator, and an icon that changed with the theme would be a second and weaker copy of it - so the `aria-label` names the action (`Switch to the light theme`) and there is no `aria-pressed`. A choice is always stored as `light` or `dark`; the default is never encoded as the absence of a key, or the day the default moves every reader who chose it moves with it without being asked.
+
+A seven-line inline script applies a stored `light` before first paint. It is the one inline script this site carries, and it now exists only for that reader: everyone else is already dark from the stylesheet, so the script has nothing to correct. Its failure branch sets `dark`.
 
 **A theme is exactly one `[data-theme="x"]` block supplying the token names in `frontend/src/styles/tokens.css` and nothing else.** The mechanism ships; two themes ship. A third means re-picking three band colours, eight source swatches and a focus colour and carrying them forever for a reader nobody has met.
 
-The browser's own chrome follows the page. `app.html` ships two media-scoped `theme-color` tags, one per system preference, because an installed window reads those at launch before any script has run. A media query only knows what the system wants, so `apply()` in `$lib/theme` also writes one unconditional tag from the resolved `--color-bg`; an unconditional tag wins over both, which is what keeps a manually chosen light page from sitting under dark chrome.
+`system` was a third toggle state until 2026-08-31. It was removed with `ThemeChoice.SYSTEM`, `watchSystem` and the sun glyph, on the owner's decision that the site starts dark. What a reader loses is a theme that follows their device at sunset; what they get is a control with one obvious action instead of three. `config/appearance.json` still names the default in `digest.theme_default`, and a config that still says `system` reads as `dark` (`CLAUDE.md` section 11).
+
+The browser's own chrome follows the page. `app.html` ships one unconditional `theme-color` tag holding the base theme's background, because an installed window reads it at launch before any script has run and the page is dark whatever the system prefers - a media-scoped pair would be wrong for every reader whose system says light and who has chosen nothing. `apply()` in `$lib/theme` rewrites that same tag from the resolved `--color-bg`, so a reader who picked light does not sit under dark chrome.
+
+The oracle is [../../frontend/tests/theme.spec.ts](../../frontend/tests/theme.spec.ts). It loads every route three ways - no stored choice, `light` stored, `dark` stored - and asserts that every change to `data-theme` happened while `document.body` was still null, which is what makes it a statement about the first painted frame rather than about the settled one. A fourth arm runs with JavaScript switched off, where there is exactly one frame and it has to be dark.
 
 ## Installability
 
-`frontend/static/manifest.webmanifest`, four PNG icons and the `theme-color` tags above. That is the whole feature, and the doctrine around it - including the ban on `Notification` and `PushManager`, and why there is no service worker - is in [../../concepts/ui-shell.md](../../concepts/ui-shell.md).
+`frontend/static/manifest.webmanifest`, four PNG icons and the `theme-color` tag above. That is the whole feature, and the doctrine around it - including the ban on `Notification` and `PushManager`, and why there is no service worker - is in [../../concepts/ui-shell.md](../../concepts/ui-shell.md).
 
 The icons are generated once from two committed SVG sources, `app-icon.svg` and `app-icon-maskable.svg`, using `sharp` installed with `--no-save` and removed afterwards: the PNGs are the committed artefact, not the toolchain. The maskable variant is a second drawing rather than a crop, with the mark inside the central 80 percent, because a platform that crops the square icon takes the ends off the bars. Measured 2026-08-29: 48,788 B for the six files, of which 46,869 B is raster.
 
