@@ -276,10 +276,13 @@ class ChartConfig(Model):
         ge=3,
         le=12,
         description=(
-            "Roughly how many ticks an axis aims for before `.nice()` rounds the "
-            "domain. A hand-rolled axis gets exactly this wrong, which is why "
-            "`d3-scale` and `d3-array` are carried: they return a number and own no "
-            "element, no canvas and no theme."
+            "The MOST date labels a chart's day axis may carry. A ceiling and never "
+            "a target: the axis then measures the labels against the room the plot "
+            "actually has and drops more of them until no two touch. A count alone "
+            "cannot hold at two widths - measured 2026-08-31 at 390px, six labels "
+            "over a thirty-day window overlapped by 13.6px. Every column this "
+            "number allows keeps its tick mark whether or not its date survived, "
+            "because a reader counting columns needs the grid."
         ),
     )
     sparkline_height_px: int = Field(
@@ -398,6 +401,24 @@ class AppearanceConfig(Contract):
                 "with two exposure points, and a value that disagreed across the two "
                 "files would make one knob mean two things. Same field, same type: an "
                 "appearance file that names 0.69 still validates (section 11)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-31",
+            change=(
+                "chart.tick_density keeps its name, its type and its default of 6, "
+                "and its meaning is narrowed: it is now the CEILING on a day axis's "
+                "date labels rather than the number the axis aims for. No field is "
+                "added, removed or retyped."
+            ),
+            why=(
+                "A count alone cannot hold at two widths. Measured 2026-08-31 on the "
+                "built console, six labels over a thirty-day window overlapped by "
+                "13.6px at 390px and read as one longer string. The axis now measures "
+                "the labels against the room the plot has and drops more of them "
+                "until none touch, so this number can only ever be an upper bound. "
+                "Every value that validated yesterday still validates and still "
+                "means something - it just cannot force a label onto a phone."
             ),
         ),
         ChangelogEntry(
