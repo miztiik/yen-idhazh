@@ -254,6 +254,10 @@ under `$lib/server/` for the same reason `model-work.ts` is. Nothing is served
 and no column is published: `state/` is not part of the site, and the figures
 below reach a page as numbers, never as rows.
 
+Since 2026-08-31 `/console/machine/` draws them
+([frontend.md](frontend.md#what-the-machine-route-draws)). Before that the
+ledger had been committed for four days with no page reading a cell of it.
+
 | Figure | Made from | Composed as |
 | --- | --- | --- |
 | Seconds reading, seconds writing | `prompt_seconds_total`, `tokens_predicted_seconds_total` | summed over shards, and never added together into one "model seconds" |
@@ -270,6 +274,14 @@ Both ceilings come from `config/idhazh.json` through
 [frontend/src/lib/server/config.ts](../../../frontend/src/lib/server/config.ts)
 (Rule #6). A counter without its ceiling is not a measurement: 4,925 says
 nothing until 8,192 sits beside it.
+
+**What counts as a read prompt token is defined once**, in `itemRead` in
+[frontend/src/lib/charts/machine.ts](../../../frontend/src/lib/charts/machine.ts):
+`input_tokens - cached_tokens`, because the runtime reused the cached ones
+instead of reading them and leaving them in reports a rate the machine never ran
+at. The reader imports it rather than restating it, which is why a server module
+imports a chart module for that one function - the run figure and the per-shard
+figure the page draws can then never disagree about what a token is.
 
 ### Every figure carries the shards it was made from
 
@@ -300,8 +312,12 @@ process - so they can neither be added nor chosen between, and the whole run is
 refused. A refused run is returned with its id and the reason, never dropped
 silently: a page that prints half a run prints a figure that reads as the run.
 
-Measured 2026-08-30 over the committed ledger: 50 rows, 11 runs, **10 read and 1
-refused** - `2026-08-29-3`, whose shard 1 committed two different scrapes.
+Measured 2026-08-31 over the committed ledger: **54 rows, 12 runs, 11 read and 1
+refused** - still `2026-08-29-3`, and now both its shard 1 and its shard 3 hold
+two different scrapes. Summing its rows rather than its shards overstates the
+run's reading clock by 7,495.5 seconds, 63 percent high. The refusal is printed
+on `/console/machine/` with the run id and the reason, so the run count on that
+page can be checked against the ledger.
 
 ## Degrade rules
 

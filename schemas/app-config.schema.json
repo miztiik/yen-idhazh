@@ -1023,6 +1023,27 @@
       "additionalProperties": false,
       "description": "What the pipeline records about itself, and what an operator may switch off.\n\nFour switches rather than one master switch. Collection, scoring, publishing\nand tracing fail in different ways and a reader has to behave differently\nfor each of them, so one switch would leave nobody able to say which\ninstrument went dark.\n\n**The item-health census is not on this list and must never be added to it.**\nEvery rate this project publishes divides by that census, so switching it off\nwould not thin a measurement - it would make every other measurement\nunreadable. A rate printed without its denominator beside it is the exact\ndefect the census exists to prevent.\n\nAn instrument that did not run writes an EMPTY cell, never a zero. A switch\nhere decides whether a row is written at all; it never changes the shape of a\nrow, so a month file stays readable across a day somebody turned something\noff.",
       "properties": {
+        "cost_currency": {
+          "default": "USD",
+          "description": "The currency the console prints the counterfactual cost in, as an ISO 4217 code. Named rather than assumed: a bare number with a symbol in front of it is the shape a bill takes, and this figure is not a bill.",
+          "pattern": "^[A-Z]{3}$",
+          "title": "Cost Currency",
+          "type": "string"
+        },
+        "cost_input_per_million": {
+          "default": 0.2,
+          "description": "What a hosted provider would charge for a million PROMPT tokens, in cost_currency. Priced apart from output because a provider prices them apart - output usually runs three to five times input - and one blended rate would understate a run that wrote a lot and overstate one that read a lot. This is the operator's number to set: nothing bills us, so the committed value is a documented starting point rather than a measurement (CLAUDE.md Rule #10's one carve-out). The console prints the rate it used and says whether it came from here or from the operator, and it labels the result a counterfactual - what the run would have cost elsewhere - never an amount owed.",
+          "minimum": 0.0,
+          "title": "Cost Input Per Million",
+          "type": "number"
+        },
+        "cost_output_per_million": {
+          "default": 0.6,
+          "description": "What a hosted provider would charge for a million GENERATED tokens, in cost_currency. Same standing as cost_input_per_million: a documented starting point the operator sets, never a bill. Zero is allowed and means free rather than unknown, so a rate nobody has chosen is the committed default and not an empty cell.",
+          "minimum": 0.0,
+          "title": "Cost Output Per Million",
+          "type": "number"
+        },
         "evaluation_enabled": {
           "default": true,
           "description": "Whether the faithfulness scorer runs. False writes no row to state/scores.csv, so for those days the eval dashboard and the console's score panels list nothing and each item bands from the model-free counterweights instead. The digest still publishes. `--no-faithfulness` is the same switch for one invocation and overrides this; no flag turns it back on. It governs the daily pipeline's work stage only: `validate` and `qualify` are asked for by hand and each refuses outright without a scorer, so a standing switch cannot silence them into measuring nothing. Every run records the state of this switch on its run manifest.",
@@ -1488,6 +1509,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "observability gained cost_currency, cost_input_per_million and cost_output_per_million, all with defaults the committed config repeats. page_weight.ceilings_bytes moved /console/machine/ from 6,899 to 30,391.",
+      "version": "2026-08-31T23:00",
+      "why": "The Machine route now draws the six panels rows 13 to 16 of the observability plan describe, one of which prices a run's tokens at a hosted provider's rate. That figure is a counterfactual and never a bill - nothing bills us, because Actions minutes are free on a public repository - and CLAUDE.md Rule #10 carries the owner's carve-out for it on the condition that the rate and its source are printed beside it. So the rate is a config knob and not a literal in a component (Rule #6), input and output are priced apart because a provider prices them apart, and the currency is named rather than assumed. The committed values are a documented starting point the owner has not yet set; docs/concepts/config.md says so. The ceiling moved because the route went from rendering no ledger to rendering nine panels: it is a ratchet and not a budget, re-derived from five builds with the heaviest per route, and no panel was cut to stay under the old number (owner ruling, 2026-08-31). Additive only - the model defaults and the committed file agree, and a config written before today still validates, so no read-side migration (section 11)."
+    },
+    {
       "change": "page_weight.ceilings_bytes gained /console/model/ at 18,682 and /console/machine/ at 6,899 in config/idhazh.json, and /console/ moved from 259,908 to 250,643. PageWeightConfig now says a surface that splits into routes takes a ceiling per route. No field moved.",
       "version": "2026-08-31",
       "why": "The console became three prerendered routes, and one ceiling covering three surfaces cannot say which of them blew a budget - which is the decisive argument for routes over tabs, so the split is not finished until the ceilings follow it. The gate already fails a ceiling that names no route in the build; a route that names no ceiling is only reported, so two new surfaces would have grown unwatched. All three numbers are re-derived rather than carried over: heaviest of five builds, plus seven published days priced by removing a real one, plus the 64-byte noise floor, measured 2026-08-31 (measurements.md). /console/ came down because its model panels moved to a route of their own. Committed values only - the model default stays empty, the shape and the validation are unchanged, and every older config still validates, so no read-side migration (section 11)."
@@ -1811,7 +1837,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-31",
+      "default": "2026-08-31T23:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1825,5 +1851,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-31"
+  "version": "2026-08-31T23:00"
 }

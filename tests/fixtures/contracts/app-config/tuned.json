@@ -172,6 +172,9 @@
     }
   },
   "observability": {
+    "cost_currency": "EUR",
+    "cost_input_per_million": 1.5,
+    "cost_output_per_million": 7.5,
     "evaluation_enabled": false,
     "hard_delete_after_months": 36,
     "keep_months": 13,
