@@ -984,6 +984,29 @@ dependency nothing in the change touched.
   errors on lines that were not edited. The fix is also the better code: keep one
   `[type, handler]` list and attach it through a single `const events: EventTarget
   = node`, so the add and the remove halves cannot drift apart.
+- **A transitioned paint property read straight after `hover()` or `focus()`
+  returns an interpolation, not the value it is going to.** A card whose
+  `box-shadow` and `border-color` ease over `--dur-fast` reported
+  `rgb(86, 78, 230)` against an accent of `rgb(79, 70, 229)`, which reads as the
+  wrong colour rather than as the right colour arriving. One
+  `requestAnimationFrame` is not enough either - that lands mid-ease. Poll for
+  the final value and let the poll be the assertion:
+
+  ```ts
+  await expect
+    .poll(() => page.evaluate(() => getComputedStyle(document.querySelector('article.item')!).boxShadow))
+    .toBe(resolvedShadowToken);
+  ```
+
+  Resolve the token through a throwaway element - set `style.boxShadow` to the
+  custom property's value, read the computed string back, remove it - so the
+  comparison is against the token rather than against a string somebody typed.
+- **`locator.hover()` scrolls the element into view, so a viewport-relative rect
+  taken before it and after it says the element moved.** A card asserting "no
+  lift on hover" failed with `top` 332 before and 18 after, which reads as a 314px
+  jump the CSS does not contain. Take `rect.top + window.scrollY` and
+  `rect.left + window.scrollX`, and call `scrollIntoViewIfNeeded()` before the
+  rest reading as well. Measured 2026-08-31.
 
 ## Git Bash on Windows
 
@@ -1600,6 +1623,16 @@ the variable protects the shell you remember to set it in and nothing else.
   longer flag with the same prefix does not match, because the test looks for
   the closing quote too. Before adding any flag, run
   `git grep -n '"--<your flag>"' -- backend`.
+- **Killing a queued `gate_lock` build leaves the tree unservable, and the next
+  error names the wrong thing.** The waiter and the build it wraps are one
+  process tree, so killing the wrapper can land after `vite build` has already
+  cleared `.svelte-kit/output/`. `vite preview` then exits with
+  `Server files not found at ...\.svelte-kit\output\server, did you run build
+  first?`, which reads as a broken install on a checkout that built cleanly
+  minutes earlier - and `frontend/build/` is still there and still looks
+  complete, which is what makes it convincing. The fix is one more
+  `npm run build`. Measured 2026-08-31. Prefer letting a queued gate finish;
+  if you do kill one, rebuild before serving anything.
 
 ## See also
 
