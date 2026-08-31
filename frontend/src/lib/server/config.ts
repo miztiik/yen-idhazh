@@ -68,6 +68,25 @@ export interface RetentionConfig {
 	site_budget_mb: number;
 }
 
+/** The rate the Machine route prices a run's tokens at.
+ *
+ * Three knobs of the pipeline's `observability` block, not the whole of it: the
+ * switches decide what the pipeline records and nothing on the published site
+ * reads them. What the site does read is the price, because Rule #6 forbids a
+ * literal in a component and CLAUDE.md Rule #10's one carve-out requires the
+ * figure to say where its rate came from.
+ *
+ * **Nothing bills us.** These are a hosted provider's prices, and the number the
+ * page draws from them is a counterfactual - what the run would have cost
+ * somewhere else - never an amount owed.
+ */
+export interface ObservabilityConfig {
+	/** ISO 4217, so the page names the currency rather than assuming a symbol. */
+	cost_currency: string;
+	cost_input_per_million: number;
+	cost_output_per_million: number;
+}
+
 /** What the console needs to say how close a feed is to being rested. */
 export interface CollectConfig {
 	quarantine_after_failures: number;
@@ -188,6 +207,14 @@ const RUN_DEFAULTS: RunConfig = {
 };
 const INFERENCE_DEFAULTS: InferenceConfig = { n_ctx: 8192 };
 const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
+// The same three values `ObservabilityConfig` declares in the contract, so a
+// checkout with no config file prices a run at the documented starting rate
+// rather than at nothing (section 1a).
+const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
+	cost_currency: 'USD',
+	cost_input_per_million: 0.2,
+	cost_output_per_million: 0.6
+};
 const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {
 	bands: [
@@ -264,6 +291,7 @@ interface RawConfig {
 	summarize?: Partial<SummarizeConfig>;
 	console?: Partial<ConsoleConfig>;
 	assist?: Partial<AssistConfig>;
+	observability?: Partial<ObservabilityConfig>;
 	models?: { inference?: Partial<InferenceConfig> };
 }
 
@@ -328,6 +356,10 @@ export function inferenceConfig(): InferenceConfig {
 
 export function retentionConfig(): RetentionConfig {
 	return { ...RETENTION_DEFAULTS, ...(raw().retention ?? {}) };
+}
+
+export function observabilityConfig(): ObservabilityConfig {
+	return { ...OBSERVABILITY_DEFAULTS, ...(raw().observability ?? {}) };
 }
 
 export function collectConfig(): CollectConfig {

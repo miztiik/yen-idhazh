@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -1243,6 +1243,25 @@ the variable protects the shell you remember to set it in and nothing else.
   has run it. Nothing needs deleting by hand any more. Kept here because the
   shape of the trap generalises - a fixture builder that is not idempotent turns
   every later gate into a coin toss.
+
+- **A route that reads a ledger the canary does not write can only be tested
+  empty, and an all-green suite hides it.** Seen 2026-08-31 building the Machine
+  route: `build-canary.mjs` wrote no `runtime-counters.csv`, so every panel of
+  the new route rendered its empty state, every browser assertion passed, and
+  the suite proved nothing about the nine panels. An empty state passing is a
+  **null result**, not a pass. Before writing a browser spec for a new route,
+  open `frontend/scripts/build-canary.mjs` and confirm it writes the ledger the
+  route reads; if it does not, add a writer there first. Make the fixture
+  contain the case you are claiming - the counters canary deliberately gives
+  shard 0 every host cell and shard 1 none, so both the instrumented and the
+  silent path are asserted.
+
+- **Keep the canary's column list and the contract in the same test.**
+  `build-canary.mjs` hardcodes `const COUNTER_COLUMNS = [...]`, which drifts
+  silently from `RuntimeCountersRow.csv_columns()` and only shows up as a route
+  that renders empty for no visible reason. `backend/tests/test_contracts.py`
+  now reads that array out of the `.mjs` with a regex and compares it to the
+  model.
 
 ## A clean merge is not a working merge
 

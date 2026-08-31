@@ -30,6 +30,7 @@
 
 import { join } from 'node:path';
 // Relative, not `$lib`, for the reason in the module docstring.
+import { itemRead } from '../charts/machine';
 import { inferenceConfig, runConfig } from './config';
 import { itemHealthRows, readCsv, STATE_ROOT, type CsvTable } from './payload';
 
@@ -377,11 +378,12 @@ function pooledRate(
 
 /** One run's item-health rows, pooled the way `reconcile_prefill.pool_ledger` pools them.
  *
- * `input_tokens - cached_tokens` is the definition: `cached_tokens` is what the
- * runtime reused instead of reading, so leaving it in reports a rate the
- * machine never ran at. A row missing either required cell predates token
- * capture and is evidence in neither direction, so it is skipped rather than
- * counted as an item that read nothing.
+ * `input_tokens - cached_tokens` is the definition and `itemRead` in
+ * `$lib/charts/machine.ts` owns it, so the run figure here and the per-shard
+ * figure the machine page draws can never disagree about what a prompt token
+ * is. A row missing either required cell predates token capture and is evidence
+ * in neither direction, so it is skipped rather than counted as an item that
+ * read nothing.
  */
 function poolLedger(health: Record<string, string>[], runId: string): Pooled {
 	let tokens = 0;
@@ -389,11 +391,10 @@ function poolLedger(health: Record<string, string>[], runId: string): Pooled {
 	let parts = 0;
 	for (const row of health) {
 		if (row.run_id !== runId) continue;
-		const prefillMs = measured(row.prefill_ms);
-		const inputTokens = measured(row.input_tokens);
-		if (prefillMs === null || inputTokens === null) continue;
-		tokens += inputTokens - (measured(row.cached_tokens) ?? 0);
-		milliseconds += prefillMs;
+		const read = itemRead(row);
+		if (read === null) continue;
+		tokens += read.tokens;
+		milliseconds += read.ms;
 		parts += 1;
 	}
 	const seconds = milliseconds / 1000;

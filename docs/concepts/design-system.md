@@ -325,6 +325,27 @@ Five rules hold for every number the console prints:
   articles is not a measurement, and a column that hides its denominator
   invites a trend that is not there.
 
+### A figure in currency prints its rate, its source and the word for what it is
+
+There is exactly one money figure on this site: the counterfactual cost on
+`/console/machine/`. CLAUDE.md Rule #10 forbids the rest, and carries the
+owner's carve-out for that one on conditions this section holds:
+
+- **Never a currency symbol.** `0.48 USD`, never `$0.48`. A symbol in front of a
+  number is the shape a bill takes, and this is not a bill - nothing bills us,
+  because Actions minutes are free on a public repository.
+- **The rate is printed, in full, beside the figure.** Both halves of it: a
+  provider prices prompt tokens and written tokens apart, and one blended rate
+  would understate a run that wrote a lot.
+- **Where the rate came from is printed too** - `Using your rate` or `Using the
+  configured rate`. A money figure whose basis is invisible is the exact thing
+  Rule #10 exists to prevent.
+- **The word for what it is sits in the panel, not in a tooltip**: what the run
+  would have cost somewhere else, never an amount owed.
+- **Digits are grouped by hand, never by `toLocaleString`.** The server draws
+  the page and two builds have to agree; a locale-dependent separator moves the
+  prerendered document and the byte gate reads it as a regression.
+
 The label set for `What the model did`, with the sentence each one carries:
 
 | Label | The line under it |
