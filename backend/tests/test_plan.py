@@ -31,6 +31,7 @@ from idhazh.contracts.item_health import (
     FailureCode,
     ItemHealthRow,
     ItemOutcome,
+    ItemStage,
 )
 from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource
 from idhazh.contracts.seen import PublishedRow
@@ -46,6 +47,7 @@ QUIET_URL = "https://quiet.example.org/feed"
 NOTICES_URL = "https://notices.example.gov/feed"
 FORWARD_URL = "https://forward.example-press.net/feed"
 DUPLICATE_URL = "https://energy.example-wire.net/feed"
+PROLIFIC_URL = "https://prolific.example-wire.net/feed"
 FRONT_PAGE_URL = "https://salience.example.org/feed"
 
 MODEL_RELEASE = "https://blog.example-lab.org/2026/08/model-release"
@@ -99,6 +101,13 @@ DUPLICATE = FeedDef(
     url=DUPLICATE_URL,
     tier=SourceTier.INSTITUTION,
 )
+PROLIFIC = FeedDef(
+    id="prolific-wire",
+    vertical="ai",
+    title="Example Prolific Wire",
+    url=PROLIFIC_URL,
+    tier=SourceTier.TRADE_PRESS,
+)
 FRONT_PAGE = SalienceFeedDef(
     id="front-page",
     title="Example Front Page",
@@ -119,6 +128,7 @@ BODIES = {
     NOTICES_URL: "undated.xml",
     FORWARD_URL: "future-dated.xml",
     DUPLICATE_URL: "cross-vertical-duplicate.xml",
+    PROLIFIC_URL: "prolific-outlet.xml",
     FRONT_PAGE_URL: "front-page.xml",
 }
 
@@ -200,6 +210,7 @@ def plan(
     state: Path | None = None,
     safety_ceiling: int | None = None,
     max_age_hours: float | None = None,
+    source_share: float | None = None,
     cap: int | None = None,
 ) -> RunPlan:
     settings = settings_for(feeds, salience=salience, verticals=verticals, retired=retired)
@@ -221,6 +232,17 @@ def plan(
                 update={
                     "collect": settings.app.collect.model_copy(
                         update={"max_age_hours": max_age_hours}
+                    )
+                }
+            ),
+        )
+    if source_share is not None:
+        settings = dataclasses.replace(
+            settings,
+            app=settings.app.model_copy(
+                update={
+                    "collect": settings.app.collect.model_copy(
+                        update={"max_source_share_per_day": source_share}
                     )
                 }
             ),
@@ -829,6 +851,95 @@ def test_an_empty_settled_code_list_plans_the_failure_again() -> None:
     assert ledger.load_settled_failures(
         state, DATE, codes=(FailureCode.PAYWALLED,)
     ) == {blocked.url_key}
+
+
+# --- how much of a day one feed may hold -------------------------------------
+
+
+def _carried(item: PlannedItem) -> ItemHealthRow:
+    """One item-health row saying this address reached a reader today.
+
+    The address stays in the pool, because nothing published it - what these
+    rows carry is the count, and the count is all a day-wide source ceiling
+    reads. Not planning an address twice is a different gate with its own
+    ledger and its own tests.
+    """
+    return ItemHealthRow(
+        version=ItemHealthRow.schema_version(),
+        date=DATE,
+        run_id=f"{DATE}-1",
+        item_id=item.item_id,
+        url_key=item.url_key,
+        canonical_url=item.canonical_url,
+        vertical=item.vertical,
+        source_id=item.source_id,
+        stage=ItemStage.PUBLISH,
+        outcome=ItemOutcome.OK,
+    )
+
+
+DESK = [LAB, TRADE, COMMUNITY, PROLIFIC]
+#: A share that puts the ceiling one item above `collect.max_per_source` on
+#: this desk, which is the only place a day ceiling has anything to say: below
+#: that it is the per-desk rule, and far above it nothing is crowded.
+CROWDED_SHARE = 0.4
+
+
+def _from(built: RunPlan, feed_id: str) -> int:
+    return sum(1 for item in built.items if item.source_id == feed_id)
+
+
+def test_a_feed_that_filled_its_share_of_today_takes_less_of_the_next_run() -> None:
+    """The wiring, end to end: the ledger is read and the plan answers to it.
+
+    `collect.max_per_source` counts one desk in one run, and a feed sits on one
+    desk, so a feed's ceiling for the whole day was that count times the runs
+    the day had. Nothing turned it into a share of the day a reader sees.
+    """
+    state = Path(tempfile.mkdtemp())
+    first = plan(DESK, state=state, source_share=CROWDED_SHARE)
+    lab_first = [item for item in first.items if item.source_id == "lab-blog"]
+    assert lab_first, "the fixture desk must give the lab something to fill the day with"
+    ledger.append_item_health(state, DATE, [_carried(item) for item in lab_first])
+
+    again = plan(DESK, state=state, run_n=2, source_share=CROWDED_SHARE)
+
+    assert _from(again, "lab-blog") < _from(first, "lab-blog")
+    assert _from(again, "prolific-wire") > _from(first, "prolific-wire"), (
+        "the slot goes to the next candidate on the desk"
+    )
+    assert len(again.items) == len(first.items), "and the day is not one story shorter"
+
+
+def test_a_run_that_has_the_day_to_itself_plans_what_it_always_planned() -> None:
+    """No feed is crowding, so the second pass never runs and nothing moves."""
+    state = Path(tempfile.mkdtemp())
+    first = plan(DESK, state=state, source_share=CROWDED_SHARE)
+    again = plan(DESK, state=Path(tempfile.mkdtemp()), source_share=CROWDED_SHARE)
+
+    assert [item.model_dump() for item in again.items] == [
+        item.model_dump() for item in first.items
+    ]
+
+
+def test_the_ceiling_yields_rather_than_costing_the_day_a_story() -> None:
+    """The desk with nothing held back is where the two rules disagree.
+
+    Without `PROLIFIC` no feed files more than `collect.max_per_source`
+    stories, so there is no next candidate to promote. The ceiling then keeps
+    the story: a reader cannot see what was left out, so an omission is the
+    failure this is not allowed to trade for.
+    """
+    state = Path(tempfile.mkdtemp())
+    thin = [LAB, TRADE, COMMUNITY]
+    first = plan(thin, state=state, source_share=CROWDED_SHARE)
+    lab_first = [item for item in first.items if item.source_id == "lab-blog"]
+    ledger.append_item_health(state, DATE, [_carried(item) for item in lab_first])
+
+    again = plan(thin, state=state, run_n=2, source_share=CROWDED_SHARE)
+
+    assert len(again.items) == len(first.items)
+    assert _from(again, "lab-blog") == _from(first, "lab-blog")
 
 
 def test_a_weighted_down_feed_ranks_below_a_full_one_of_the_same_tier() -> None:

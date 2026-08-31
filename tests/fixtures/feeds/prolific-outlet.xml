@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="utf-8"?>
+<rss version="2.0">
+  <channel>
+    <title>Example Prolific Wire</title>
+    <link>https://prolific.example-wire.net/</link>
+    <description>An outlet that files five stories before breakfast.</description>
+    <item>
+      <title>Prolific Wire reports on the grid connection</title>
+      <link>https://prolific.example-wire.net/2026/08/grid-connection</link>
+      <pubDate>Fri, 21 Aug 2026 07:00:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Prolific Wire reports on the training cluster</title>
+      <link>https://prolific.example-wire.net/2026/08/training-cluster</link>
+      <pubDate>Fri, 21 Aug 2026 07:10:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Prolific Wire reports on the export licence</title>
+      <link>https://prolific.example-wire.net/2026/08/export-licence</link>
+      <pubDate>Fri, 21 Aug 2026 07:20:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Prolific Wire reports on the funding round</title>
+      <link>https://prolific.example-wire.net/2026/08/funding-round</link>
+      <pubDate>Fri, 21 Aug 2026 07:30:00 GMT</pubDate>
+    </item>
+    <item>
+      <title>Prolific Wire reports on the chip shipment</title>
+      <link>https://prolific.example-wire.net/2026/08/chip-shipment</link>
+      <pubDate>Fri, 21 Aug 2026 07:40:00 GMT</pubDate>
+    </item>
+  </channel>
+</rss>

@@ -114,7 +114,9 @@ census row is the record.
 more than one feed every score is identical, so the ordering rule - score, then
 when it appeared, then the address - is what picks the day, and
 `collect.max_per_source` is what stops one prolific blog becoming the whole
-vertical.
+vertical. A quiet day is also where `collect.max_source_share_per_day` earns its
+keep: the same two-per-desk rule that is a rounding error on a 400-item day is a
+quarter of a four-item one, and the share is what says so.
 
 **A vertical below its feed floor plans nothing.** The floor is `min_feeds` on
 the vertical in `config/taxonomy.json`. That is the floor working, not a bug: a

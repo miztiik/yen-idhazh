@@ -309,6 +309,29 @@ def load_settled_failures(state_dir: Path, date: str, *, codes: Collection[str])
     }
 
 
+def load_source_counts(state_dir: Path, date: str) -> dict[str, int]:
+    """Feed -> how many of today's items it has already put in front of a reader.
+
+    The count a day-wide source ceiling reads. Only rows that reached the
+    digest are counted: a feed whose page was behind a paywall spent a slot,
+    but it did not fill any of the day, and the ceiling is about what a reader
+    sees.
+
+    Keyed on the address rather than the row, because one item settles once but
+    can be written by more than one job, and a re-run of the same day writes it
+    again. Counting rows would charge a feed twice for one story.
+    """
+    carried: dict[str, str] = {}
+    for row in _read_rows(item_health_path(state_dir, date)):
+        if row["date"] != date or row["outcome"] != ItemOutcome.OK:
+            continue
+        carried[row["url_key"]] = row["source_id"]
+    counts: dict[str, int] = {}
+    for source_id in carried.values():
+        counts[source_id] = counts.get(source_id, 0) + 1
+    return counts
+
+
 def append_health(state_dir: Path, date: str, rows: Iterable[FeedHealthRow]) -> int:
     """Append this run's verdict on every feed it tried."""
     payloads = [row.csv_row() for row in rows]

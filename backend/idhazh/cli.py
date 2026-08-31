@@ -84,7 +84,7 @@ from idhazh.contracts.qualification import (
 )
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
-from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import FeedDef
@@ -290,6 +290,13 @@ def stage_plan(
     Nothing is dropped for being old. `run.safety_ceiling_per_run` is a crash
     guard against a mis-parsed feed, not a reading budget.
 
+    The item-health store answers a second question as well: how much of today
+    each feed has already put in front of a reader. `collect.max_per_source`
+    bounds a feed inside one desk in one run, and a feed sits on one desk, so
+    its ceiling for a whole day is that count times the runs the day had - a
+    fixed number whose share of the day moves with the day's size.
+    `collect.max_source_share_per_day` is the share.
+
     `cap` takes the best `cap` stories of each vertical and is for a validation
     run that must not plan a whole day. It is a different knob from the crash
     guard: it works per vertical, before the day is deduplicated, and a run that
@@ -398,15 +405,49 @@ def stage_plan(
         len(candidates),
         sorted(lens_weights),
     )
-    verticals = []
-    items: list[PlannedItem] = []
-    for vertical in settings.taxonomy.verticals:
-        live = discover.live(settings.sources.feeds, vertical.id)
-        summary, planned = rank.plan_vertical(
-            vertical,
-            [c for c in candidates if c.vertical == vertical.id],
-            config=collect,
-            live_feeds=len(live),
+    day_carried = ledger.load_source_counts(state, date)
+    verticals, items = _plan_desks(
+        settings,
+        candidates,
+        now=generated_at,
+        first_seen=first_seen,
+        already_published=already_published,
+        settled_today=settled_today,
+        watchlist_keys=watchlist_keys,
+        front_page_keys=frozenset(front_page),
+        lens_bonuses=lens_bonuses,
+        cap=cap,
+    )
+
+    items = _dedupe_planned_items(items)
+    items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
+
+    # How much of the day one feed may hold is a share, and a share needs the
+    # day's size. The day is what earlier runs published plus what this run is
+    # about to plan, and the second half is only knowable once the desks have
+    # been planned - so they are planned once to size the day, and again only
+    # when the ceiling that size gives can actually bind on somebody.
+    per_source = rank.day_source_ceiling(
+        collect.max_source_share_per_day,
+        sum(day_carried.values()) + len(items),
+        max_per_source=collect.max_per_source,
+    )
+    crowding = sorted(
+        source_id
+        for source_id, held in day_carried.items()
+        if per_source - held < collect.max_per_source
+    )
+    if crowding:
+        LOG.info(
+            "day source ceiling binds ceiling=%s carried=%s planning=%s feeds=%s",
+            per_source,
+            sum(day_carried.values()),
+            len(items),
+            crowding,
+        )
+        verticals, capped = _plan_desks(
+            settings,
+            candidates,
             now=generated_at,
             first_seen=first_seen,
             already_published=already_published,
@@ -414,15 +455,20 @@ def stage_plan(
             watchlist_keys=watchlist_keys,
             front_page_keys=frozenset(front_page),
             lens_bonuses=lens_bonuses,
+            cap=cap,
+            day_ceiling=rank.DayCeiling(per_source=per_source, carried=dict(day_carried)),
         )
-        verticals.append(summary)
-        if cap is not None and len(planned) > cap:
-            LOG.info("cap applied vertical=%s planned=%s cap=%s", vertical.id, len(planned), cap)
-            planned = planned[:cap]
-        items.extend(planned)
+        capped = _dedupe_planned_items(capped)
+        capped = _within_ceiling(capped, ceiling=settings.app.run.safety_ceiling_per_run)
+        if len(capped) < len(items):
+            LOG.warning(
+                "day source ceiling cost the day a story short=%s planned=%s ceiling=%s",
+                len(items) - len(capped),
+                len(items),
+                per_source,
+            )
+        items = capped
 
-    items = _dedupe_planned_items(items)
-    items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
     counts = Counter(item.vertical for item in items)
     verticals = [
         summary.model_copy(update={"planned": counts.get(summary.id, 0)}) for summary in verticals
@@ -440,6 +486,62 @@ def stage_plan(
         verticals=verticals,
         items=items,
     )
+
+
+def _plan_desks(
+    settings: config.Settings,
+    candidates: list[discover.Candidate],
+    *,
+    now: str,
+    first_seen: dict[str, str],
+    already_published: frozenset[str],
+    settled_today: frozenset[str],
+    watchlist_keys: frozenset[str],
+    front_page_keys: frozenset[str],
+    lens_bonuses: dict[str, float],
+    cap: int | None,
+    day_ceiling: rank.DayCeiling | None = None,
+) -> tuple[list[VerticalPlan], list[PlannedItem]]:
+    """Rank every desk once and return what they offered, desk by desk.
+
+    Each desk is planned on its own: a vertical's candidates never compete with
+    another's, which is what stops a busy desk emptying a quiet one. What comes
+    back is still per-desk, so the caller deduplicates the day and applies the
+    run's own ceiling.
+
+    `day_ceiling` is the one limit that crosses a desk boundary, so it is the
+    one thing this loop carries forward: each desk's take is added to the count
+    before the next desk is planned. A feed sits on one desk, so in practice
+    only that desk ever sees the count move - but a day ceiling that only
+    counted one desk would be a per-desk rule wearing a day's name.
+    """
+    summaries: list[VerticalPlan] = []
+    items: list[PlannedItem] = []
+    for vertical in settings.taxonomy.verticals:
+        live = discover.live(settings.sources.feeds, vertical.id)
+        summary, planned = rank.plan_vertical(
+            vertical,
+            [c for c in candidates if c.vertical == vertical.id],
+            config=settings.app.collect,
+            live_feeds=len(live),
+            now=now,
+            first_seen=first_seen,
+            already_published=already_published,
+            settled_today=settled_today,
+            watchlist_keys=watchlist_keys,
+            front_page_keys=front_page_keys,
+            lens_bonuses=lens_bonuses,
+            day_ceiling=day_ceiling,
+        )
+        summaries.append(summary)
+        if cap is not None and len(planned) > cap:
+            LOG.info("cap applied vertical=%s planned=%s cap=%s", vertical.id, len(planned), cap)
+            planned = planned[:cap]
+        if day_ceiling is not None:
+            for item in planned:
+                day_ceiling.record(item.source_id)
+        items.extend(planned)
+    return summaries, items
 
 
 def _rest_row(feed: FeedDef, *, at: str, run_id: str) -> FeedHealthRow:

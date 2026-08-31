@@ -13,7 +13,7 @@ from idhazh import cli, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.item_health import ItemHealthRow
+from idhazh.contracts.item_health import FailureCode, ItemHealthRow, ItemOutcome, ItemStage
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.evals import writer
@@ -145,6 +145,91 @@ def test_the_state_ledgers_append_blind_and_the_reads_absorb_a_repeat(tmp_path: 
 
     assert len(rows) == 2, "the append path does not deduplicate"
     assert ledger.load_published(state) == {URL_KEY: DATE}, "the read keeps the earliest date"
+
+
+def carried_row(
+    number: int,
+    *,
+    source_id: str,
+    outcome: ItemOutcome = ItemOutcome.OK,
+    date: str = DATE,
+) -> ItemHealthRow:
+    """One item-health row for a distinct address, so a count has something to count."""
+    url = f"https://{source_id}.example.org/items/{number}"
+    code = None if outcome is ItemOutcome.OK else FailureCode.PAYWALLED
+    return ItemHealthRow(
+        version=ItemHealthRow.schema_version(),
+        date=date,
+        run_id=f"{date}-1",
+        item_id=f"ai-{number:010d}",
+        url_key=derive_url_key(url),
+        canonical_url=url,
+        vertical="ai",
+        source_id=source_id,
+        stage=ItemStage.PUBLISH if outcome is ItemOutcome.OK else ItemStage.EXTRACT,
+        outcome=outcome,
+        code=code,
+    )
+
+
+def test_the_day_count_is_what_each_feed_put_in_front_of_a_reader(tmp_path: Path) -> None:
+    """A slot a feed spent and lost is not a slot it filled.
+
+    The ceiling this feeds is about how much of the day a reader sees from one
+    publication. A paywall costs the run a slot, but it puts nothing on the
+    page, so charging the feed for it would quarantine a source for a door
+    somebody else locked.
+    """
+    state = tmp_path / "state"
+    ledger.append_item_health(
+        state,
+        DATE,
+        [
+            carried_row(1, source_id="wire"),
+            carried_row(2, source_id="wire"),
+            carried_row(3, source_id="wire", outcome=ItemOutcome.FAILED),
+            carried_row(4, source_id="lab"),
+        ],
+    )
+
+    assert ledger.load_source_counts(state, DATE) == {"wire": 2, "lab": 1}
+
+
+def test_one_story_recorded_twice_is_counted_once(tmp_path: Path) -> None:
+    """Both jobs write this ledger and a replay of the day writes it again.
+
+    `state/item-health/` is appended by the work shards and by assemble, and
+    the committed file has held repeated keys before now. Counting rows would
+    charge a feed twice for one story and cut its share of the day in half for
+    no reason a reader could see.
+    """
+    state = tmp_path / "state"
+    ledger.append_item_health(state, DATE, [carried_row(1, source_id="wire")])
+    twice = carried_row(1, source_id="wire")
+    ledger.append_item_health(
+        state, DATE, [twice.model_copy(update={"run_id": f"{DATE}-2"})]
+    )
+
+    assert ledger.load_source_counts(state, DATE) == {"wire": 1}
+
+
+def test_yesterdays_share_is_not_todays(tmp_path: Path) -> None:
+    """The window is the day. A feed that filled yesterday starts today empty."""
+    state = tmp_path / "state"
+    yesterday = "2026-08-22"
+    ledger.append_item_health(
+        state, yesterday, [carried_row(1, source_id="wire", date=yesterday)]
+    )
+    ledger.append_item_health(state, DATE, [carried_row(2, source_id="wire")])
+
+    assert ledger.load_source_counts(state, yesterday) == {"wire": 1}
+    assert ledger.load_source_counts(state, DATE) == {"wire": 1}
+
+
+def test_a_day_nothing_was_recorded_for_counts_nothing(tmp_path: Path) -> None:
+    """A fresh clone has no history, and no history is an empty count."""
+    assert ledger.load_source_counts(tmp_path / "state", DATE) == {}
+
 
 def test_narrowing_the_published_ledger_keeps_every_pair_the_skip_read_uses() -> None:
     """The Oracle for dropping `canonical_url`: same rows, same pairs, same order.
