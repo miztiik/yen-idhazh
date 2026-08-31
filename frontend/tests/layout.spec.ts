@@ -151,12 +151,28 @@ test.describe('the frame', () => {
 		expect(gutter).toBeGreaterThan(0);
 		expect(gutter).toBeLessThanOrEqual(32);
 
-		// One column: the meta rail follows the body rather than sitting beside it.
-		const columns = await page.evaluate(() => {
+		// One column of prose: the meta rail follows the body rather than sitting
+		// beside it. Asserted as geometry rather than as a track count, because
+		// the item gained a leading column for the source mark - a track count
+		// stopped measuring what this test's own sentence claims.
+		const stacked = await page.evaluate(() => {
 			const item = document.querySelector('article.item');
-			return item ? getComputedStyle(item).gridTemplateColumns.split(' ').length : -1;
+			const body = item?.querySelector('.item-body');
+			const rail = item?.querySelector('.item-rail');
+			if (!item || !body || !rail) return null;
+			return {
+				railTop: Math.round(rail.getBoundingClientRect().top),
+				bodyBottom: Math.round(body.getBoundingClientRect().bottom),
+				tracks: getComputedStyle(item).gridTemplateColumns.split(' ').length
+			};
 		});
-		expect(columns).toBe(1);
+		expect(stacked, 'no item with a body and a rail on the page').not.toBeNull();
+		expect(
+			stacked!.railTop,
+			'the meta rail sits beside the body on a phone'
+		).toBeGreaterThanOrEqual(stacked!.bodyBottom);
+		// The mark and the prose, and never a third track on a phone.
+		expect(stacked!.tracks, 'the item grew a third column on a phone').toBeLessThanOrEqual(2);
 	});
 
 	test('the page still renders when its payload is absent', async ({ page }) => {

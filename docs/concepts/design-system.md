@@ -46,9 +46,9 @@ is green, amber and red because those colours mean good, watch and bad. The
 chart ramp exists so a chart can tell up to eight series apart, and it
 deliberately holds none of those three hues - a chart that borrowed the band
 tokens told a reader that the slowest stage was the failing one.
-`--source-swatch-*` is not the answer either: those are pale background tints
-for a monogram, not stroke colours, and at 1px on a white card they are not
-visible. `--series-1` to `--series-4` survive as aliases of the first four chart
+`--source-swatch-*` is not the answer either: those are background tints for a
+monogram, not stroke colours, and at 1px on a card they are not visible.
+`--series-1` to `--series-4` survive as aliases of the first four chart
 stops so no existing chart changed colour when the ramp widened.
 
 **The dark theme is designed, not derived.** A shadow on a dark ground reads as
@@ -194,6 +194,32 @@ diff does not show it: the source reads `text-sm` and the page renders a leading
 nobody chose. Measured 2026-08-31 on the archive search panel, the only place
 this had already happened - 14px text on a 20px leading where the token pairs it
 with 20.8px.
+
+### The source swatch is a fill, and its floor is 1.5:1
+
+The eight `--source-swatch-*` values are the fill of the ring on an item's
+leading edge. **Whether that ring is filled at all is the read mark**: filled
+means unread, hollow means read. So the swatch has to be visible against
+`--color-surface`, and until 2026-08-31 it was not - the dark set read 1.16:1 to
+1.34:1 and the light set 1.18:1 to 1.28:1, which makes a filled ring and a
+hollow one the same ring. All sixteen were re-tuned in place, hue kept and
+lightness moved, and every one now reads at least 1.5:1.
+
+**1.5:1, and not the 3:1 the fill ramp takes.** The bound above binds a fill
+whose *colour* carries meaning; here the colour carries nothing, because the
+publication is named in words on the same line and the monogram repeats it. What
+carries meaning is the presence of the fill, which is an area rather than a hue -
+and an area difference survives a cheap panel, sunlight and arm's length, which
+is exactly what dimmer text and a lighter weight do not. Those two are one signal
+twice: both are less ink, so they fail together.
+
+The letters sit on the fill at about 4.9:1 in both themes, so raising the tint
+cost the monogram nothing.
+[../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts)
+recomputes all sixteen ratios from the committed hex values, and checks the
+number of swatches against the modulus `swatchIndex` divides by - an index with
+no swatch behind it resolves to no fill, which on this surface reads as "already
+read". Authority: Susan, 2026-08-31.
 
 ### A value the scale cannot hold does not go on the reading surface
 

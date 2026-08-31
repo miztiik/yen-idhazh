@@ -141,6 +141,12 @@ warnings they could act on rather than a grade, and Jony rejected another badge.
 
 A build-time monogram plus the publication name in type. No fetched favicon - that is a runtime third-party request that announces every reader to every publisher, and its failure mode is a broken-image glyph mid-page. No per-publisher artwork either: 37 marks and growing, each one somebody's trademark at 16px.
 
+**The mark is a ring on the item's leading edge, and it carries the read state.** It was a `1.25rem` square in the meta line until 2026-08-31, and that line moves into a 14rem right rail at the side-rail breakpoint - so on a wide screen the read indicator sat 14rem from the title it qualified, paired with nothing. It is now `1.75rem`, a circle, in a leading grid column at every width, with the letters at `--text-xs` and weight 600. The size is in `rem` so the ring grows with a reader who raised their browser's text.
+
+Unread is filled with the source's own swatch and read is hollow, with a hairline in both states - `--color-rule-strong` unread, `--color-rule` read. **The border is never the swatch**: at 1px against the card a swatch reads about 1.1:1, so a coloured ring would be a ring nobody can see. The swatch bound and why it is 1.5:1 rather than 3:1 are in [../../concepts/design-system.md](../../concepts/design-system.md).
+
+When `ui.source_mark` is off the mark is not drawn, and the read state falls back to the title's weight and colour alone. That is what turning a scanning aid off costs, and the knob's owner is the one turning it.
+
 Reader named one thing an item did not carry that they wanted before they would share it: **what kind of source it is.** "A company said its product is faster" and "a reporter measured it" are not the same claim, and they were arriving in the same typeface. `source_kind` is now on the payload, and the item prints it only where the speaker has a stake worth naming - `announcement` and `community`. Labelling every item "Reporting" would be noise; labelling a vendor's own copy is the warning.
 
 ## Topics: pills, and never an empty one
@@ -216,6 +222,18 @@ A date makes a mark answerable, and answerable is what lets an old one be droppe
 `forgetAll` clears one day, because the button sits on a day page and has to do what it says. Everything here is a convenience: a quota error or private mode degrades to no marks and never to a broken page.
 
 The rule this must never break is in [layout.md](layout.md): read state may change how an item **looks**, and may never change where it sits, whether it appears, or how it ranks.
+
+### What a read item looks like, and what it sounds like
+
+Three cues, and only one of them is brightness:
+
+- **The ring on the leading edge loses its fill.** An area difference, so it survives a cheap panel, sunlight and arm's length.
+- **The title steps one down the ramp and loses a weight**, to `--color-text-secondary` and no further. A dimmed item reads as "you cannot have this" rather than "you already had this".
+- **A visually-hidden `Read.` opens the heading**, so the accessible name of a read item is `Read. <title>`. A fill and a font weight are announced to nobody.
+
+**Two older cues are gone.** The eyebrow dot encoded the state as filled-or-hollow with no legend anywhere on the page - a dot with no sentence - and it stays only as a plain bullet before the desk name. The visible `Read` chip is removed by the owner, 2026-08-31; the word it printed is the one now in the heading, where a screen reader gets it and the page does not carry a second label.
+
+The reason the fill was needed at all: dim text plus a lighter weight is one signal twice. Both are less ink, so both fail in the same conditions, and on that page the reader had no third cue. Authority: Susan, 2026-08-31.
 
 ## Search: overruled, and built the narrow way
 
