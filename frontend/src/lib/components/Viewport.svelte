@@ -129,6 +129,7 @@
 				height={config.chart_height}
 				width={config.chart_width}
 				{selectedCode}
+				{tickDensity}
 				{readoutMaxShare}
 				onSelect={(code) => (selectedCode = code)}
 			/>
