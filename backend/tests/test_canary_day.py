@@ -180,7 +180,7 @@ def test_the_ledger_header_is_the_contract(tmp_path: Path) -> None:
     """Written by the pipeline's writer, so the column order cannot be invented here."""
     build_canary_day.scores(tmp_path, ITEMS, EVALUATION)
 
-    assert writer.read_header(writer.ledger_path(tmp_path)) == EvalRow.csv_columns()
+    assert writer.read_header(writer.ledger_path(tmp_path, build_canary_day.DATE)) == EvalRow.csv_columns()
 
 
 def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
@@ -189,7 +189,7 @@ def test_a_fresh_run_writes_the_same_ledger_every_time(tmp_path: Path) -> None:
     for index in range(3):
         state = tmp_path / f"run-{index}"
         assert build_canary_day.scores(state, ITEMS, EVALUATION) == len(ITEMS)
-        written.append(writer.ledger_path(state).read_bytes())
+        written.append(writer.ledger_path(state, build_canary_day.DATE).read_bytes())
 
     assert written[0] == written[1] == written[2]
 
@@ -200,7 +200,7 @@ def test_appending_the_same_day_twice_adds_nothing(tmp_path: Path) -> None:
     The builder clears its state directory before writing, so this is the belt
     behind that brace: a ledger that survived the clear still cannot double.
     """
-    ledger = writer.ledger_path(tmp_path)
+    ledger = writer.ledger_path(tmp_path, build_canary_day.DATE)
     assert build_canary_day.scores(tmp_path, ITEMS, EVALUATION) == len(ITEMS)
     once = ledger.read_bytes()
 

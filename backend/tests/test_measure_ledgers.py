@@ -79,7 +79,7 @@ def test_the_fixture_only_names_columns_the_real_ledgers_have() -> None:
     pairs = (
         ("item-health/2026-01.csv", ItemHealthRow.csv_columns()),
         ("runtime-counters.csv", RuntimeCountersRow.csv_columns()),
-        ("scores.csv", EvalRow.csv_columns()),
+        ("scores/2026-01.csv", EvalRow.csv_columns()),
     )
     for relpath, columns in pairs:
         with (LEDGERS / relpath).open(encoding="utf-8", newline="") as handle:

@@ -44,7 +44,6 @@ not measure.
 from __future__ import annotations
 
 import argparse
-import csv
 import statistics
 import time
 from collections.abc import Iterable, Mapping, Sequence
@@ -56,7 +55,8 @@ from idhazh.contracts.app_config import EvaluationConfig
 from idhazh.contracts.evidence import EvidenceItem
 from idhazh.evals.evidence import EVIDENCE_ROOT_RELPATH, index, key_of
 from idhazh.evals.hhem import Scorer, chunks, score_over_chunks
-from idhazh.evals.writer import LEDGER_RELPATH
+from idhazh.evals.writer import records as score_records
+from idhazh.ledger import STATE_DIRNAME
 
 HOW_TO_GET_PAIRS = (
     "The pairs are gitignored and travel as a workflow artifact with a 14-day life. "
@@ -134,7 +134,7 @@ def slices_under(text: str, config: EvaluationConfig) -> int:
     return len(chunks(text, config.chunk_words, config.chunk_overlap_words))
 
 
-def _cut_by_row(path: Path) -> dict[str, bool | None]:
+def _cut_by_row(state_dir: Path) -> dict[str, bool | None]:
     """Whether extract cut each measurement's article, keyed the way evidence is named.
 
     Read as the arithmetic rather than as the flag. `source_word_count` counts
@@ -147,10 +147,7 @@ def _cut_by_row(path: Path) -> dict[str, bool | None]:
     An empty `source_word_count` is a row that does not know its own pre-cap
     length, and that is `None` rather than `False`.
     """
-    if not path.exists():
-        return {}
-    with path.open("r", encoding="utf-8", newline="") as handle:
-        return {key_of(record): _cut_of(record) for record in csv.DictReader(handle)}
+    return {key_of(record): _cut_of(record) for record in score_records(state_dir)}
 
 
 def _cut_of(record: Mapping[str, str]) -> bool | None:
@@ -160,7 +157,7 @@ def _cut_of(record: Mapping[str, str]) -> bool | None:
     return int(full) > int(record["source_seen_word_count"])
 
 
-def load_pairs(evidence_dir: Path, ledger: Path) -> list[Pair]:
+def load_pairs(evidence_dir: Path, state_dir: Path) -> list[Pair]:
     """Every pair in a downloaded evidence package, joined to the ledger for the cut.
 
     Refuses an empty package rather than returning an empty list. Every caller
@@ -172,7 +169,7 @@ def load_pairs(evidence_dir: Path, ledger: Path) -> list[Pair]:
             f"no evidence pairs under {evidence_dir.as_posix()} "
             f"(the pipeline writes them to {EVIDENCE_ROOT_RELPATH}/<date>/). {HOW_TO_GET_PAIRS}"
         )
-    cut = _cut_by_row(ledger)
+    cut = _cut_by_row(state_dir)
     pairs = []
     for key, path in sorted(files.items()):
         item = EvidenceItem.from_json(path.read_text(encoding="utf-8"))
@@ -304,12 +301,17 @@ def main(argv: Sequence[str] | None = None) -> int:
         default=Path(EVIDENCE_ROOT_RELPATH),
         help="a downloaded evidence package, in whatever shape the workflow uploaded it",
     )
-    parser.add_argument("--scores", type=Path, default=Path(LEDGER_RELPATH))
+    parser.add_argument(
+        "--state",
+        type=Path,
+        default=Path(STATE_DIRNAME),
+        help="The state directory holding the monthly eval shards.",
+    )
     parser.add_argument("--config", type=Path, default=Path("config"))
     args = parser.parse_args(argv)
 
     narrow = load(args.config).app.evaluation
-    pairs = load_pairs(args.evidence, args.scores)
+    pairs = load_pairs(args.evidence, args.state)
     wide = single_slice_geometry(pairs, narrow)
 
     from idhazh.evals.hhem import HhemScorer

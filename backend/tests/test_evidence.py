@@ -35,7 +35,7 @@ from utilities import label_queue
 
 EVIDENCE_FIXTURE = CONTRACT_FIXTURES_DIR / "evidence-item" / "premise-recorded.json"
 ROW_FIXTURE = CONTRACT_FIXTURES_DIR / "eval-row" / "premise-recorded.json"
-SCORES = REPO_ROOT / "state" / "scores.csv"
+SCORES = REPO_ROOT / "state" / "scores" / "2026-08.csv"
 DIGEST_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "digest.yml"
 
 

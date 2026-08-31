@@ -111,7 +111,6 @@ class TestTheStageAssembledTwice:
         monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
         monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
         monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
-        monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
         items_dir = tmp_path / "run" / full_plan().date / "items"
         write_payloads(items_dir, full_plan().items[0])
 
@@ -142,7 +141,6 @@ class TestTheStageAssembledTwice:
         monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
         monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
         monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
-        monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
         items_dir = tmp_path / "run" / full_plan().date / "items"
         for index in (0, 1):
             write_payloads(items_dir, full_plan().items[index])
