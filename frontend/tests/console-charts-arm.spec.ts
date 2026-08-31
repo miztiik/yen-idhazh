@@ -53,7 +53,7 @@ function day(date: string, over: Partial<GlanceDay> = {}): GlanceDay {
 
 test.describe('the arithmetic behind the two bars', () => {
 	test('a share of nothing is an absence, never zero percent', () => {
-		// A day that published no article did not fail to put a chart on one. Zero
+		// A day that published no article did not fail to put a visual on one. Zero
 		// would read as an arm that ran and reached nobody, and it would drag the
 		// median of every quiet week to the floor.
 		expect(coverageOf(day('2026-08-01'))).toBeNull();
@@ -113,7 +113,7 @@ test.describe('the arithmetic behind the two bars', () => {
 			THRESHOLDS,
 			WIDE
 		);
-		expect(inside.verdict).toContain('1.0 router minutes per chart');
+		expect(inside.verdict).toContain('1.0 minutes per visual');
 		expect(inside.verdict).toContain('inside');
 		expect(inside.verdict).toContain('50% of what it published');
 		expect(inside.verdict).toContain('above');
@@ -135,8 +135,11 @@ test.describe('the arithmetic behind the two bars', () => {
 		const arm = chartArm([day('2026-08-01')], THRESHOLDS, WIDE);
 		expect(arm.minutes).toBeNull();
 		expect(arm.coverage).toBeNull();
-		expect(arm.verdict).toContain('No router time is on record');
-		expect(arm.verdict).toContain('no day published anything to put a chart on');
+		expect(arm.verdict).toContain('has no minutes on record');
+		expect(arm.verdict).toContain('no day published anything to put a visual on');
+		// The second clause has no subject of its own, so the first has to hand it
+		// one whichever branch it took.
+		expect(arm.verdict.startsWith('The median day')).toBe(true);
 	});
 
 	test('each trend carries one point per measured day, oldest first', () => {
@@ -340,7 +343,7 @@ test.describe('the section on the page', () => {
 
 		const section = page.locator('[data-windowed="chart-arm"]');
 		await expect(section).toContainText(`${THRESHOLDS.ruleDays} days`);
-		await expect(section).toContainText(`${THRESHOLDS.minutesTarget} router minutes`);
+		await expect(section).toContainText(`${THRESHOLDS.minutesTarget} minutes per published visual`);
 		await expect(section).toContainText(`${THRESHOLDS.coveragePct}% of the items`);
 	});
 
@@ -382,7 +385,7 @@ test.describe('the section on the page', () => {
 		await setDaily(page, true);
 
 		// Reached, asked and drafted left the top level for the flow diagram, and
-		// raw router minutes left because a numerator is not a decision. All four
+		// raw minutes left because a numerator is not a decision. All four
 		// are one control away rather than gone.
 		for (const cell of ['reached', 'asked', 'drafted', 'items', 'minutes']) {
 			await expect(

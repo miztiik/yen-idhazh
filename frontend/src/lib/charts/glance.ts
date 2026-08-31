@@ -89,7 +89,7 @@ export function coverageOf(day: GlanceDay): number | null {
 export interface ArmThresholds {
 	/** The span the rule is stated over. */
 	ruleDays: number;
-	/** Router minutes per published chart that retires the arm. */
+	/** Minutes per published visual that retires the arm. */
 	minutesTarget: number;
 	/** The share of published items that must carry a chart, in whole percent. */
 	coveragePct: number;
@@ -99,7 +99,7 @@ export interface ArmThresholds {
 export interface ChartArm {
 	/** The window is narrower than the rule's own span, so no median is offered. */
 	narrow: boolean;
-	/** Window median router minutes per published chart, or null. */
+	/** Window median minutes per published visual, or null. */
 	minutes: number | null;
 	/** Window median coverage in percent, or null. */
 	coverage: number | null;
@@ -124,7 +124,9 @@ function trim(value: number): string {
  *
  * Each clause names its figure, its threshold and which side of it the figure
  * fell. A clause that only printed the figure would leave the reader to do the
- * comparison the rule already made.
+ * comparison the rule already made. Both cost clauses open with `The median
+ * day`, because the reach clause has no subject of its own and takes one across
+ * the join.
  */
 function verdictOf(
 	minutes: number | null,
@@ -134,14 +136,14 @@ function verdictOf(
 ): string {
 	const cost =
 		minutes === null
-			? `No router time is on record for these ${days} days`
-			: `The median day spends ${minutes.toFixed(1)} router minutes per chart, ` +
+			? `The median day has no minutes on record over these ${days} days`
+			: `The median day spends ${minutes.toFixed(1)} minutes per visual, ` +
 				`${minutes > thresholds.minutesTarget ? 'past' : 'inside'} the ` +
 				`${trim(thresholds.minutesTarget)} that retires the arm`;
 	const reach =
 		coverage === null
-			? 'no day published anything to put a chart on'
-			: `puts a chart on ${Math.round(coverage)}% of what it published, ` +
+			? 'no day published anything to put a visual on'
+			: `puts a visual on ${Math.round(coverage)}% of what it published, ` +
 				`${coverage < thresholds.coveragePct ? 'below' : 'above'} the ` +
 				`${trim(thresholds.coveragePct)}% floor`;
 	return `${cost}, and ${reach}.`;
