@@ -1,20 +1,25 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
+import { ITEM_FIELDS, VISUAL_FIELDS as PROJECTED_VISUAL_FIELDS } from '../src/lib/payload/project';
 
 /**
  * The staged day payload carries what a search result renders, and no more.
  *
  * `frontend/public/digest/` is the committed day: every field the digest page
  * draws, plus the vector block. `scripts/copy-visuals.mjs` projects it into
- * `static/`, which is the copy that reaches a reader - fetched by
- * `lib/assist/day.ts` when a search result from that day is on screen.
+ * `static/` through the allow-list in `src/lib/payload/project.ts`, and that
+ * staged copy is what reaches a reader - fetched by `lib/assist/day.ts` when a
+ * search result from that day is on screen.
  *
- * **The list below is a second copy on purpose.** The script holds the
- * behaviour; this file holds the promise. Reading the script's own constant
+ * **The lists below are a second copy on purpose.** The module holds the
+ * behaviour; this file holds the promise. Reading only the module's constants
  * here would make the test agree with any widening, which is the one failure it
  * exists to catch - a field added to the allow-list is paid for by every reader
- * who searches, and nothing else in the build would say a word.
+ * who searches, and nothing else in the build would say a word. So the promise
+ * is written out longhand, and the first test below holds the module against
+ * it: a widening now names the field it added, instead of surfacing as a shape
+ * mismatch on every staged item at once.
  *
  * Runs in Node over the tree the build just staged, like the arithmetic tests
  * in `frame.spec.ts`. No page is loaded.
@@ -73,6 +78,19 @@ function staged(): Day[] {
 function items(day: Day): Record<string, unknown>[] {
 	return day.payload.items as Record<string, unknown>[];
 }
+
+test('the allow-list is the thirteen fields this file promises', () => {
+	// The staging step and the build-time reader share one module now, so a
+	// widening is one edit in one place. This is the test that makes that edit
+	// visible: it names the field that arrived, where the shape checks below
+	// would only report that every staged item disagrees with the promise.
+	expect(
+		[...ITEM_FIELDS].sort(),
+		'the projection allow-list moved. Every field on it is paid for by every\n' +
+			'reader who searches, so widening it is a decision, not a detail.'
+	).toEqual(RENDERED_FIELDS);
+	expect([...PROJECTED_VISUAL_FIELDS].sort(), 'the visual allow-list moved').toEqual(VISUAL_FIELDS);
+});
 
 test('a staged day carries the one key the fetch reads', () => {
 	// `assist/day.ts` refuses a payload whose `items` is not an array and keeps

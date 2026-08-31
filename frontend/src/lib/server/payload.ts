@@ -11,6 +11,7 @@ import { join, resolve } from 'node:path';
 // Relative, not `$lib`: the browser suite imports this module in plain Node,
 // where no Vite alias exists to resolve one.
 import { dayKey, toDay } from '../charts/viewport';
+import { dropVectors } from '../payload/project';
 import type { DigestDay } from '$lib/payload/types';
 
 /** The build runs from `frontend/`, so the repo root is one level up. */
@@ -83,22 +84,16 @@ function dirsIn(path: string): string[] {
  *
  * **The vectors are dropped here, and this is the only place they can be.**
  * Whatever this returns is inlined into every prerendered document that renders
- * the day, and nothing in a browser opens the block: its one production reader
- * is the backend's index rebuild, which reads `frontend/public/` from disk. The
- * committed payload keeps it - that tree is the only store the vectors have.
- *
- * Measured 2026-08-27 on Intel Core i7-1265U / Windows 11 / node 24.12.0, six
- * committed days, 2,237 items, `gzip -9`, heaviest of five builds: the block
- * was 232,462 of the 581,553 gzipped bytes of `/<date>/`, which is 40.0 percent
- * of a page nobody could read it on, and it rode in twelve documents per day.
+ * the day. `$lib/payload/project` owns that drop, alongside the allow-list the
+ * staging step projects with, so both copies that leave `frontend/public/` are
+ * ruled by one module.
  */
 export function loadDay(date: string, root: string = DIGEST_ROOT): DigestDay | null {
 	const [year, month, day] = date.split('-');
 	if (!year || !month || !day) return null;
 	const path = join(root, year, month, day, 'digest.json');
 	if (!existsSync(path)) return null;
-	const payload = JSON.parse(readFileSync(path, 'utf8')) as DigestDay;
-	return { ...payload, embeddings: null };
+	return dropVectors(JSON.parse(readFileSync(path, 'utf8')) as DigestDay);
 }
 
 export function latestDate(root: string = DIGEST_ROOT): string | null {
