@@ -13,6 +13,7 @@ Nothing is mocked and nothing touches the network.
 from __future__ import annotations
 
 import json
+import re
 from pathlib import Path
 
 import pytest
@@ -20,15 +21,18 @@ from pydantic import ValidationError
 
 from idhazh.contracts.app_config import AppConfig, ThemeChoice
 from idhazh.contracts.appearance_config import (
+    DARK_CONFIDENCE_RAMP,
     FRAME_CONSOLE_MIN_PX,
     FRAME_READING_MAX_PX,
     FRAME_READING_MIN_PX,
+    LIGHT_CONFIDENCE_RAMP,
     MEASURE_CH_MAX,
     MEASURE_CH_MIN,
     AppearanceConfig,
     ChartConfig,
     FrameConfig,
     MotionConfig,
+    ThemeConfig,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -233,7 +237,67 @@ def test_a_theme_that_never_existed_is_still_refused() -> None:
 def test_the_schema_is_generated_and_stamped() -> None:
     schema = AppearanceConfig.json_schema()
     assert schema["$id"] == "appearance-config.schema.json"
-    assert schema["version"] == "2026-08-31T23:55"
-    assert schema["changelog"][0]["version"] == "2026-08-31T23:55"
+    assert schema["version"] == "2026-08-31T23:56"
+    assert schema["changelog"][0]["version"] == "2026-08-31T23:56"
     for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
         assert block in schema["properties"], f"{block} missing from the generated schema"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("movement_good_light", LIGHT_CONFIDENCE_RAMP["--band-high"]),
+        ("movement_bad_light", LIGHT_CONFIDENCE_RAMP["--band-low"]),
+        ("movement_good_light", LIGHT_CONFIDENCE_RAMP["--band-medium"]),
+        ("movement_good_dark", DARK_CONFIDENCE_RAMP["--band-high"]),
+        ("movement_bad_dark", DARK_CONFIDENCE_RAMP["--band-low"]),
+    ],
+)
+def test_a_movement_colour_that_is_a_confidence_hue_is_refused(field: str, value: str) -> None:
+    """`They are not the health ramp`, made mechanical.
+
+    Green on the confidence ramp means "it worked". A summary that got 3 percent
+    slower is not broken, and a movement pair that resolves to the same bytes as
+    `--band-*` is the confidence ramp under a second name - which is exactly the
+    alarm fatigue the pair was added to avoid.
+    """
+    with pytest.raises(ValidationError):
+        ThemeConfig.model_validate({field: value})
+
+
+def test_one_colour_cannot_say_both_directions() -> None:
+    with pytest.raises(ValidationError):
+        ThemeConfig(movement_good_light="#2f6f5e", movement_bad_light="#2f6f5e")
+
+
+@pytest.mark.parametrize("value", ["2f6f5e", "#2F6F5E", "#2f6f5", "rebeccapurple", ""])
+def test_a_movement_colour_that_is_not_a_lower_case_six_digit_hex_is_refused(value: str) -> None:
+    """One form, because `tokens.css` writes one form and `tokens.spec.ts` reads it back."""
+    with pytest.raises(ValidationError):
+        ThemeConfig(movement_good_light=value)
+
+
+def test_the_committed_movement_pair_is_what_tokens_css_declares() -> None:
+    """The config file and the token file are two copies of one decision.
+
+    `scripts/build-frame-css.mjs` emits the config values after `tokens.css`
+    loads, so the two disagreeing means the committed default is dead and no
+    diff shows it.
+    """
+    theme = AppearanceConfig.model_validate(
+        json.loads(APPEARANCE_PATH.read_text(encoding="utf-8"))
+    ).theme
+    tokens = (REPO_ROOT / "frontend" / "src" / "styles" / "tokens.css").read_text(encoding="utf-8")
+    # Dark is the base block and light is the override that follows it, so the
+    # light selector is the boundary between the two.
+    light_at = tokens.index("[data-theme='light']")
+    for block, start, end in (("dark", 0, light_at), ("light", light_at, len(tokens))):
+        for name in ("good", "bad"):
+            declared = re.search(
+                rf"--movement-{name}:\s*(#[0-9a-f]{{6}});", tokens[start:end]
+            )
+            assert declared is not None, f"--movement-{name} is not declared in the {block} theme"
+            assert declared.group(1) == getattr(theme, f"movement_{name}_{block}"), (
+                f"tokens.css and config/appearance.json disagree about "
+                f"--movement-{name} on the {block} theme"
+            )

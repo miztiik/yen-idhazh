@@ -7,11 +7,14 @@
 	 * and the question is the same for all seven anyway - did it move, and which
 	 * way.
 	 *
-	 * **Direction is carried by the arrowhead and never by hue.** A red-for-worse
-	 * ramp would need somebody to have agreed which way is worse for each of the
-	 * seven, and nobody has: a shorter summary is what a smaller model was picked
-	 * for, and more copying is not obviously worse than more invention. So the
-	 * chart says how far and which way, and leaves worse to the reader.
+	 * **Direction is carried by the arrowhead first and by hue second.** Until
+	 * 2026-08-31 the hue was refused outright, because nobody had said which way
+	 * was worse for each of the seven. Five of them now say so themselves - the
+	 * polarity is declared on the measure in `model-work.ts` - and the two that
+	 * genuinely have no agreed direction, summary length and copying, keep the
+	 * grey they always had and print the reason under the chart. So a hue here
+	 * is never a guess: it is a property of the measure, and a measure with no
+	 * property gets no hue.
 	 *
 	 * Both absolute values print on the row, because a ratio with no magnitude
 	 * behind it can be a rounding error wearing a percentage. And both article
@@ -22,6 +25,7 @@
 	 */
 	import { chartWidth, frame, observeWidth, type Margin } from '$lib/charts/frame';
 	import { swapScale } from '$lib/charts/series';
+	import { movementVerdict } from '$lib/charts/theme';
 	import type { ModelSwap, SwapMeasure } from '../../routes/console/model/+page.server';
 
 	let {
@@ -50,6 +54,9 @@
 	 * rather than drawing a track to infinity. */
 	const drawn = $derived(swap.measures.filter((measure) => measure.ratio !== null));
 	const unmeasured = $derived(swap.measures.filter((measure) => measure.ratio === null));
+	/** The drawn rows nobody has agreed a direction for. Named under the chart,
+	 * because a grey row beside six coloured ones has to say why it is grey. */
+	const greyed = $derived(drawn.filter((measure) => measure.polarity === 'no-agreed-direction'));
 
 	const box = $derived(
 		frame(chartWidth(measured, width), TOP + drawn.length * ROW + AXIS_ROOM, {
@@ -92,8 +99,28 @@
 		return change > 0 ? `up ${change}%` : `down ${Math.abs(change)}%`;
 	}
 
+	/** Did this measure move the way we wanted.
+	 *
+	 * Read off the same rounded percentage the track is drawn to and the row
+	 * prints, so a move that rounds to `no change` can never be coloured as a
+	 * move - the words and the hue come from one number. */
+	function change(measure: SwapMeasure): number {
+		return (pct(measure) - 100) / 100;
+	}
+
+	function verdict(measure: SwapMeasure): string {
+		return movementVerdict(change(measure), measure.polarity);
+	}
+
 	function sentence(measure: SwapMeasure): string {
-		return `${measure.label}: ${reading(measure, measure.before)} on ${swap.before.model}, ${reading(measure, measure.after)} on ${swap.after.model} - ${moved(measure)}.`;
+		const read = `${measure.label}: ${reading(measure, measure.before)} on ${swap.before.model}, ${reading(measure, measure.after)} on ${swap.after.model} - ${moved(measure)}`;
+		const said = verdict(measure);
+		if (said === 'good') return `${read}, the way we want.`;
+		if (said === 'bad') return `${read}, the wrong way.`;
+		if (measure.polarity === 'no-agreed-direction') {
+			return `${read}. No direction is agreed for this one.`;
+		}
+		return `${read}.`;
 	}
 
 	/** The arrowhead, pointing the way the measure went. */
@@ -172,6 +199,9 @@
 					data-swap-pct={pct(measure)}
 					data-swap-before={Math.round(measure.before)}
 					data-swap-after={Math.round(measure.after)}
+					data-movement={change(measure).toFixed(4)}
+					data-polarity={measure.polarity}
+					data-movement-verdict={verdict(measure)}
 				>
 					<title>{sentence(measure)}</title>
 					<text
@@ -200,20 +230,24 @@
 						x2={round(x(pct(measure)))}
 						y1={y}
 						y2={y}
-						stroke="var(--chart-1)"
 						stroke-width="2"
 						data-swap-cell="track"
+						data-movement-paint="stroke"
 					/>
 					<circle
 						cx={round(x(100))}
 						cy={y}
 						r="3.5"
 						fill="var(--color-surface)"
-						stroke="var(--chart-1)"
 						stroke-width="2"
 						data-swap-cell="before"
+						data-movement-paint="stroke"
 					/>
-					<polygon points={head(measure, y)} fill="var(--chart-1)" data-swap-cell="after" />
+					<polygon
+						points={head(measure, y)}
+						data-swap-cell="after"
+						data-movement-paint="fill"
+					/>
 				</g>
 			{/each}
 		</svg>
@@ -225,10 +259,48 @@
 			measured nothing on {swap.before.model}, so there is nothing to compare against.
 		</p>
 	{/if}
+	{#if greyed.length > 0}
+		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-swap-no-direction>
+			{#each greyed as measure, index (measure.label)}{index > 0 ? ', ' : ''}{measure.label}{/each}
+			{greyed.length === 1 ? 'is drawn' : 'are drawn'} grey: nobody has agreed which way is the
+			better way, so the row says how far it moved and stops there.
+		</p>
+	{/if}
 </div>
 
 <style>
 	.plot {
 		margin-top: var(--space-4);
+	}
+
+	/* The movement pair, never the confidence ramp: a summary that got slower is
+	   not a broken run. The arrowhead already carries the direction and the two
+	   values are printed on the row, so the hue is the third signal and never
+	   the only one. */
+	[data-movement-verdict='good'] [data-swap-cell='track'],
+	[data-movement-verdict='good'] [data-swap-cell='before'] {
+		stroke: var(--movement-good);
+	}
+	[data-movement-verdict='good'] [data-swap-cell='after'] {
+		fill: var(--movement-good);
+	}
+
+	[data-movement-verdict='bad'] [data-swap-cell='track'],
+	[data-movement-verdict='bad'] [data-swap-cell='before'] {
+		stroke: var(--movement-bad);
+	}
+	[data-movement-verdict='bad'] [data-swap-cell='after'] {
+		fill: var(--movement-bad);
+	}
+
+	/* No agreed direction, or nothing moved. One neutral across every movement
+	   surface on the console, so a grey delta and a grey row are the same
+	   statement. */
+	[data-movement-verdict='neutral'] [data-swap-cell='track'],
+	[data-movement-verdict='neutral'] [data-swap-cell='before'] {
+		stroke: var(--color-text-secondary);
+	}
+	[data-movement-verdict='neutral'] [data-swap-cell='after'] {
+		fill: var(--color-text-secondary);
 	}
 </style>

@@ -14,6 +14,7 @@
 	import { windowOfDays } from '$lib/charts/viewport';
 	import { grouped } from '$lib/charts/series';
 	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
+	import type { MovementPolarity } from '$lib/charts/theme';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -82,52 +83,70 @@
 	/** Every column of the model table, in the order it is printed.
 	 *
 	 * The label and the sentence under it live together, so a column cannot be
-	 * added without saying in plain words what it counts.
+	 * added without saying in plain words what it counts - and now without
+	 * saying which way is the good way. `polarity` is declared here because
+	 * this is where the measure is defined; a card that decided its own is how
+	 * two cards come to disagree about whether down is good.
+	 *
+	 * Three of the eleven have no agreed direction and say so on the card.
+	 * `Summaries today` and `Model minutes` both rise on a busy news day, so a
+	 * rule that called one good would have to call the other bad for the same
+	 * cause. `Copied, not rewritten` has no agreed threshold - this page already
+	 * refused to tint it for that reason - and more copying is not obviously
+	 * worse than more invention.
 	 */
-	const COLUMNS: { key: string; label: string; line: string }[] = [
-		{ key: 'summaries', label: 'Summaries today', line: '' },
+	const COLUMNS: { key: string; label: string; line: string; polarity: MovementPolarity }[] = [
+		{ key: 'summaries', label: 'Summaries today', line: '', polarity: 'no-agreed-direction' },
 		{
 			key: 'not-sure',
 			label: 'Marked "not sure"',
-			line: "How many of today's summaries we told you not to trust."
+			line: "How many of today's summaries we told you not to trust.",
+			polarity: 'lower-is-better'
 		},
 		{
 			key: 'unsupported',
 			label: 'Numbers not in the article',
-			line: 'The summary had a figure. The article did not.'
+			line: 'The summary had a figure. The article did not.',
+			polarity: 'lower-is-better'
 		},
 		{
 			key: 'hedge',
 			label: '"Maybe" told as fact',
-			line: 'The article said it might have happened. The summary said it did.'
+			line: 'The article said it might have happened. The summary said it did.',
+			polarity: 'lower-is-better'
 		},
 		{
 			key: 'part',
 			label: 'Article read only in part',
-			line: 'The article was too long, so the machine read the start and stopped.'
+			line: 'The article was too long, so the machine read the start and stopped.',
+			polarity: 'lower-is-better'
 		},
 		{
 			key: 'part-pct',
 			label: 'Read only in part, as a percent',
-			line: "The same articles, against the day's own count, so a busy day and a quiet one compare."
+			line: "The same articles, against the day's own count, so a busy day and a quiet one compare.",
+			polarity: 'lower-is-better'
 		},
 		{
 			key: 'copied',
 			label: 'Copied, not rewritten',
-			line: 'How much of a normal summary is lifted word for word.'
+			line: 'How much of a normal summary is lifted word for word.',
+			polarity: 'no-agreed-direction'
 		},
 		{
 			key: 'per-item',
 			label: 'Time to write one',
-			line: 'How long the machine takes on one article. The second figure is the articles it read only the start of.'
+			line: 'How long the machine takes on one article. The second figure is the articles it read only the start of.',
+			polarity: 'lower-is-better'
 		},
-		{ key: 'minutes', label: 'Model minutes', line: '' },
+		{ key: 'minutes', label: 'Model minutes', line: '', polarity: 'no-agreed-direction' },
 		{
 			key: 'too-long',
 			label: 'Too long to send',
-			line: 'The article and the instructions together did not fit, so the machine was never asked.'
+			line: 'The article and the instructions together did not fit, so the machine was never asked.',
+			polarity: 'lower-is-better'
 		},
-		{ key: 'failed', label: 'Failed', line: '' }
+		{ key: 'failed', label: 'Failed', line: '', polarity: 'lower-is-better' }
 	];
 
 	/** One day's printed cells, in the order `COLUMNS` names them.
@@ -257,6 +276,7 @@
 			key: cell.key,
 			label: COLUMNS[index].label,
 			line: COLUMNS[index].line,
+			polarity: COLUMNS[index].polarity,
 			value: cell.text,
 			note: cell.aside ?? outOf(cell.key, day),
 			trend: trendFor(cell.key)
@@ -381,12 +401,21 @@
 				>
 					Every figure is {newestModelDay.date}, the newest day either ledger holds. Each line is
 					the {windowDays} days ending there, and a dashed rule across one is a day the model
-					changed.
+					changed. The percentage beside it is the change from the start of that line to its
+					end, coloured green where the measure went the way we want and red where it did not;
+					a measure nobody has agreed a direction for says "no target" instead.
 				</p>
 
 				<div class="auto-grid mt-4" style="--auto-grid-min: {CARD_MIN_PX}px" data-model-cards>
 					{#each cards as card (card.key)}
-						<KpiCard label={card.label} value={card.value} note={card.note} line={card.line}>
+						<KpiCard
+							label={card.label}
+							value={card.value}
+							note={card.note}
+							line={card.line}
+							movement={card.trend.marks.movement}
+							polarity={card.polarity}
+						>
 							{#snippet trend()}
 								<Sparkline
 									marks={card.trend.marks}
