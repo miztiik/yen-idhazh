@@ -6,6 +6,7 @@
     {
       "band": "high",
       "band_reason": null,
+      "carried_by": null,
       "entities": [
         "example-lab"
       ],
@@ -22,7 +23,9 @@
       "lenses": [
         "ai-roi"
       ],
+      "on_front_page": null,
       "published_at": "2026-08-21T05:30:00Z",
+      "rank_score": null,
       "reader_note": null,
       "source_form": "article",
       "source_id": "example-lab-blog",
@@ -30,6 +33,7 @@
       "source_name": "Example Lab blog",
       "source_url": "https://blog.example-lab.org/2026/08/model-release",
       "summary": "Example Lab released a smaller model, claiming a 34 percent lower cost per million tokens and 2.1x the throughput of the model it replaces on commodity CPUs. The weights are published under a permissive licence.",
+      "time_source": null,
       "title": "Example Lab releases a smaller model",
       "truncated": false,
       "updated_at": null,
@@ -40,11 +44,13 @@
         "kind": "chart",
         "path": "digest/2026/08/21/ai-01.svg",
         "state": "rendered"
-      }
+      },
+      "watchlist_hit": null
     },
     {
       "band": "medium",
       "band_reason": null,
+      "carried_by": null,
       "entities": [],
       "events": [
         "capex",
@@ -60,7 +66,9 @@
       "lenses": [
         "markets"
       ],
+      "on_front_page": null,
       "published_at": "2026-08-20T22:10:00Z",
+      "rank_score": null,
       "reader_note": null,
       "source_form": "article",
       "source_id": "example-grid-newsroom",
@@ -68,16 +76,19 @@
       "source_name": "Example Grid newsroom",
       "source_url": "https://newsroom.example-grid.com/2026/08/reactor-order",
       "summary": "Example Grid has ordered four small modular reactors totalling 1.2 gigawatts for a datacentre campus. The order is worth 3.2 billion dollars and the first unit is due in 2031.",
+      "time_source": null,
       "title": "Example Grid orders four small modular reactors",
       "truncated": true,
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "energy",
-      "visual": null
+      "visual": null,
+      "watchlist_hit": null
     },
     {
       "band": "high",
       "band_reason": null,
+      "carried_by": null,
       "entities": [
         "example-lab"
       ],
@@ -91,7 +102,9 @@
         "Training used 4,000 GPU hours."
       ],
       "lenses": [],
+      "on_front_page": null,
       "published_at": "2026-08-21T16:40:00Z",
+      "rank_score": null,
       "reader_note": null,
       "source_form": "article",
       "source_id": "example-lab-research",
@@ -99,12 +112,14 @@
       "source_name": "Example Lab research",
       "source_url": "https://research.example-lab.org/2026/08/paper",
       "summary": "A paper from Example Lab reports a 12 point gain on a summarization benchmark, trained in 4,000 GPU hours.",
+      "time_source": null,
       "title": "Example Lab publishes a summarization paper",
       "truncated": false,
       "updated_at": null,
       "updated_by_run": null,
       "vertical": "ai",
-      "visual": null
+      "visual": null,
+      "watchlist_hit": null
     }
   ],
   "items_failed": 1,

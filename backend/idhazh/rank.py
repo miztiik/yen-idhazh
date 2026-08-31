@@ -20,10 +20,10 @@ from __future__ import annotations
 from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
-from typing import Final
+from typing import Final, NamedTuple
 
 from idhazh.contracts.app_config import CollectConfig
-from idhazh.contracts.run_plan import PlannedItem, VerticalPlan
+from idhazh.contracts.run_plan import PlannedItem, TimeSource, VerticalPlan
 from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
 
@@ -86,23 +86,37 @@ def assign_ids(vertical: str, url_keys: Iterable[str]) -> dict[str, str]:
 # --- when a story appeared ---------------------------------------------------
 
 
+class Appearance(NamedTuple):
+    """When a story appeared, and which clock said so."""
+
+    at: str | None
+    source: TimeSource
+
+
 def appeared_at(
     published_at: str | None,
     *,
     first_seen_at: str | None,
     now: str,
     max_future_hours: float,
-) -> str | None:
-    """When to treat a story as having appeared.
+) -> Appearance:
+    """When to treat a story as having appeared, and whose clock that is.
 
     The feed's own date wins, unless it claims a future too far ahead to be
     true: a feed that stamps tomorrow would otherwise hold the top slot every
     single day. First sight is the fallback, and for an article carrying no
     date at all it is the only age anybody has.
+
+    The label leaves with the value rather than being worked out again further
+    down, because the fallback is silent: once the two clocks are in one field
+    nothing can tell them apart, and a page that prints the time cannot say
+    whose it is.
     """
     if published_at is not None and _hours(published_at, now) <= max_future_hours:
-        return published_at
-    return first_seen_at
+        return Appearance(published_at, TimeSource.FEED)
+    if first_seen_at is not None:
+        return Appearance(first_seen_at, TimeSource.FIRST_SEEN)
+    return Appearance(None, TimeSource.UNKNOWN)
 
 
 def too_old(at: str | None, *, now: str, config: CollectConfig) -> bool:
@@ -198,6 +212,7 @@ class Ranked:
     score: float
     candidate: Candidate
     appeared_at: str | None
+    time_source: TimeSource
     carried_by: int
     watchlist_hit: bool
     on_front_page: bool
@@ -272,7 +287,8 @@ def plan_vertical(
     is not twice the story.
 
     `published_at` on the planned item is the time we believe, not the time the
-    feed claimed. A date rejected as impossible must not reach a reader either.
+    feed claimed. A date rejected as impossible must not reach a reader either,
+    and `time_source` says which of the two clocks answered.
     """
     sightings = first_seen or {}
     themes = lens_bonuses or {}
@@ -305,7 +321,7 @@ def plan_vertical(
             now=now,
             max_future_hours=config.max_future_hours,
         )
-        if too_old(appeared, now=now, config=config):
+        if too_old(appeared.at, now=now, config=config):
             stale += 1
             continue
         theme = themes.get(url_key, 0.0)
@@ -317,11 +333,12 @@ def plan_vertical(
                     watchlist_hit=watchlist_hit,
                     on_front_page=on_front_page,
                     lens_bonus=theme,
-                    appeared=appeared,
+                    appeared=appeared.at,
                     now=now,
                 ),
                 candidate=best,
-                appeared_at=appeared,
+                appeared_at=appeared.at,
+                time_source=appeared.source,
                 carried_by=len(carried),
                 watchlist_hit=watchlist_hit,
                 on_front_page=on_front_page,
@@ -343,6 +360,7 @@ def plan_vertical(
             vertical=vertical.id,
             title=item.candidate.title,
             published_at=item.appeared_at,
+            time_source=item.time_source,
             carried_by=item.carried_by,
             watchlist_hit=item.watchlist_hit,
             on_front_page=item.on_front_page,
