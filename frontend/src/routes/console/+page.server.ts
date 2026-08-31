@@ -315,24 +315,26 @@ export async function load() {
 	const console = consoleConfig();
 	const summarize = summarizeConfig();
 
-	const scoresByDate = byDate(rows);
 	const itemHealthByDate = byDate(itemRows);
 
 	// A day is kept when something on it was timed. Judging it by its medians
 	// would drop a day whose only measurement was a zero, which is the same
 	// mistake one level up.
+	//
+	// The three stages an item waits on. `score_ms` was a fourth entry here until
+	// 2026-08-31: the scorer runs after the summary is written, so nothing waits
+	// on it, and a fourth line on a critical-path chart read as a fourth thing the
+	// run is held up by. It is on the Model route now, beside the cost of writing
+	// the summary it checks.
 	const timingDays: TimingStats[] = [...itemHealthByDate.entries()]
 		.map(([date, group]) => ({
 			date,
 			items: group.length,
 			fetch: timing(sample(group, 'fetch_ms')),
 			extract: timing(sample(group, 'extract_ms')),
-			summarize: timing(sample(group, 'summarize_ms')),
-			score: timing(sample(scoresByDate.get(date) ?? [], 'score_ms'))
+			summarize: timing(sample(group, 'summarize_ms'))
 		}))
-		.filter((day) =>
-			[day.fetch, day.extract, day.summarize, day.score].some((stage) => stage.timed > 0)
-		)
+		.filter((day) => [day.fetch, day.extract, day.summarize].some((stage) => stage.timed > 0))
 		.sort((a, b) => b.date.localeCompare(a.date));
 
 	const manifests = loadManifests();

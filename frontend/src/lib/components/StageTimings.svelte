@@ -5,6 +5,12 @@
 	 * that is about 150 rows and no trend at all, which answers the question by
 	 * making the operator hold thirty numbers in their head.
 	 *
+	 * Three stages, and they are the three an item waits on. Scoring was a fourth
+	 * line here until 2026-08-31, and on a chart titled `Time per item, by stage`
+	 * a fourth line reads as a fourth thing the run is held up by. It is not: the
+	 * scorer reads a summary the model has already finished. It moved to the Model
+	 * route, beside the cost of writing the summary it checks.
+	 *
 	 * The y axis is decades. Four stages on one linear scale answered for one
 	 * of them: `summarize` at 110.6 s set the domain on its own and `extract`
 	 * at 42 ms drew flat on the baseline, so three stages shared 2.5% of the
@@ -28,10 +34,10 @@
 	 * chart names whichever of the three happened, because a hole in a line is a
 	 * mystery and three holes that look alike are worse than one.
 	 *
-	 * Four stages, four categorical colours, bound to the stage and never to
+	 * Three stages, three categorical colours, bound to the stage and never to
 	 * its rank, so sorting the legend never repaints a line. The health ramp is
 	 * not lent out: on a page where green means a clean run and red means a
-	 * failed one, a red fetch line beside a green score line reads as "fetch is
+	 * failed one, a red fetch line beside a green extract line reads as "fetch is
 	 * broken" when it only means "these are two different stages".
 	 *
 	 * The strip under the plot is the legend AND the readout, because they were
@@ -75,8 +81,7 @@
 	const STAGES = [
 		{ key: 'fetch', label: 'fetch', colour: 'var(--series-1)' },
 		{ key: 'extract', label: 'extract', colour: 'var(--series-2)' },
-		{ key: 'summarize', label: 'summarize', colour: 'var(--series-3)' },
-		{ key: 'score', label: 'score', colour: 'var(--series-4)' }
+		{ key: 'summarize', label: 'summarize', colour: 'var(--series-3)' }
 	] as const;
 
 	type Stage = (typeof STAGES)[number];

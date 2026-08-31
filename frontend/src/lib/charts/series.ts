@@ -358,14 +358,19 @@ export interface StageTiming {
 	total: number;
 }
 
-/** One day's median milliseconds per stage, over the item-health census. */
+/** One day's median milliseconds per stage, over the item-health census.
+ *
+ * The three stages an item waits on, and only those. Scoring is timed too and
+ * it is not here: it runs after the summary is written, so nothing waits on it
+ * and a fourth line on a critical-path chart read as a fourth constraint. It is
+ * on the Model route, beside the cost of writing the summary it checks.
+ */
 export interface StageTimingDay {
 	date: string;
 	items: number;
 	fetch: StageTiming;
 	extract: StageTiming;
 	summarize: StageTiming;
-	score: StageTiming;
 }
 
 /** The spread of one day's per-item rates. A candle, never an average.
@@ -689,6 +694,34 @@ export function failureLedger(rows: TelemetryRow[], window: TimeWindow): Failure
 		failed,
 		sourcesSeen: sourcesSeen.size,
 		rows: inWindow.length
+	};
+}
+
+/** The axis the model-swap comparison shares, as fractions of the plot width.
+ *
+ * Every row is drawn against its own value on the older model, so no change is
+ * 100 percent on all of them and that point is the axis centre. Symmetric on
+ * purpose: an axis running 78 to 120 would draw a fifth off as a longer track
+ * than a fifth on, and the whole panel is a reader comparing seven track
+ * lengths.
+ *
+ * Pure arithmetic, so the geometry can be checked in Node without a browser.
+ */
+export interface SwapScale {
+	/** Percentage points either side of no change. */
+	half: number;
+	/** Low, no change, high. */
+	ticks: [number, number, number];
+	/** A percent to a share of the plot, 0 at the left edge and 1 at the right. */
+	at: (percent: number) => number;
+}
+
+export function swapScale(percents: readonly number[], minHalf = 25): SwapScale {
+	const half = Math.max(minHalf, ...percents.map((percent) => Math.abs(percent - 100)));
+	return {
+		half,
+		ticks: [100 - half, 100, 100 + half],
+		at: (percent: number) => (percent - (100 - half)) / (half * 2)
 	};
 }
 
