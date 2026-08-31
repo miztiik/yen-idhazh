@@ -101,6 +101,14 @@
           "title": "Max Per Source",
           "type": "integer"
         },
+        "max_source_share_per_day": {
+          "default": 0.05,
+          "description": "Most of one day one feed may hold, counting every desk and every run. max_per_source bounds a count inside one desk in one run, and a feed sits on one desk, so what a feed can hold of a whole day is that count times the runs the day had - a fixed number whose share moves with the day's size. Measured 2026-08-31 over the eleven committed days, the most one feed ever held was 10 items, which is 2.32 percent of the 431-item day of 2026-08-30 and 25 percent of the four-item day of 2026-08-21. The default is above the largest full-day share by a factor of two, so it displaces nothing that has ever been published; it bounds the thin day, where a fixed count of ten is a quarter of the page. It is never tighter than max_per_source for one desk in one run - a day ceiling below that would tighten the per-desk rule, which is a different decision and was refused.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Max Source Share Per Day",
+          "type": "number"
+        },
         "quarantine_after_failures": {
           "default": 5,
           "minimum": 1,
@@ -1510,6 +1518,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added collect.max_source_share_per_day, and the committed config sets it.",
+      "version": "2026-08-31T23:58",
+      "why": "Nothing counted one feed's contribution across a day. collect.max_per_source bounds a count inside one desk in one run, and a feed sits on exactly one desk, so a feed's ceiling for a whole day is that count times the runs the day had - 10 on a five-run day. A fixed count is a moving share: measured 2026-08-31 over the eleven committed days, 21 feeds held exactly 10 items of the 431-item day of 2026-08-30, which is 2.32 percent each, while one feed held 1 of the four-item day of 2026-08-21, which is 25 percent. The share is what a reader sees and nothing bounded it. Additive with a default, so a config written before today still loads (section 11)."
+    },
+    {
       "change": "ThemeChoice lost its `system` member and ui.theme_default now defaults to `dark`; the committed config repeats it. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Breaking: the enum is narrower. The read-side migration is a before-validator on `UiConfig.theme_default` that reads `system` as `dark`, so a config written before today still loads.",
       "version": "2026-08-31T23:55",
       "why": "The site now starts dark and light is an opt-in stored choice, so the three-state theme control became one button with two states (owner decision, 2026-08-31). `system` was never a theme - it was the absence of a choice - and nothing asks the device any more. Leaving the member in would let an operator set a value no surface can honour, which is a knob that silently does nothing. `dark` is the value `:root` carries in tokens.css, so the config and the first painted frame now agree instead of disagreeing."
@@ -1848,7 +1861,7 @@
       "$ref": "#/$defs/UiConfig"
     },
     "version": {
-      "default": "2026-08-31T23:55",
+      "default": "2026-08-31T23:58",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -1862,5 +1875,5 @@
   ],
   "title": "AppConfig",
   "type": "object",
-  "version": "2026-08-31T23:55"
+  "version": "2026-08-31T23:58"
 }
