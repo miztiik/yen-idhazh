@@ -45,7 +45,7 @@ test.describe('the prerendered chart', () => {
 			expect(html).toContain(label);
 		}
 		// Every drop is named. A taper says an item was lost; these say how.
-		for (const loss of ['Answered without a chart', 'The model drew nothing']) {
+		for (const loss of ['Answered without a visual', 'The model drew nothing']) {
 			expect(html).toContain(loss);
 		}
 	});
@@ -151,7 +151,7 @@ test.describe('the option the engine is given', () => {
 		expect(value('Published')).toBe(TOTAL.published);
 		expect(out('Published')).toBe(0);
 		// A loss is a dead end that holds exactly what reached it.
-		for (const loss of ['Answered without a chart', 'The model drew nothing', 'Did not survive the checks']) {
+		for (const loss of ['Answered without a visual', 'The model drew nothing', 'Did not survive the checks']) {
 			expect(out(loss), `${loss} is where those items stop`).toBe(0);
 			expect(
 				links.filter((link) => link.target === loss).reduce((sum, link) => sum + link.value, 0),
@@ -165,20 +165,20 @@ test.describe('the option the engine is given', () => {
 		// draw the first stage's loss beside the last stage's.
 		const { nodes } = sankey(chartFlow(days).option as Record<string, unknown>);
 		const depth = (name: string) => (nodes.find((node) => node.name === name) as Node).depth;
-		expect(depth('Answered without a chart')).toBe(depth('Asked the model'));
+		expect(depth('Answered without a visual')).toBe(depth('Asked the model'));
 		expect(depth('The model drew nothing')).toBe(depth('Drafted'));
 		expect(depth('Did not survive the checks')).toBe(depth('Published'));
 	});
 
 	test('nothing reached says so, rather than drawing four zeros', () => {
-		// Zero reached means nothing committed says what the router did.
+		// Zero reached means nothing committed says what the visuals planner did.
 		const { empty, reason } = chartFlow([{ reached: 0, asked: 0, drafted: 0, published: 0 }]);
 		expect(empty).toBe(true);
-		expect(reason).toContain('Nothing committed says what the router did');
+		expect(reason).toContain('Nothing committed says what the visuals planner did');
 	});
 
 	test('a stage that counts more than the one before it is refused, in words', () => {
-		// A chart published inside the window can have been drafted before it
+		// A visual published inside the window can have been drafted before it
 		// opened, and that drop is negative. A negative branch cannot be drawn, so
 		// the diagram steps aside and names what it saw.
 		const { empty, option, reason } = chartFlow([
@@ -195,7 +195,7 @@ test.describe('the option the engine is given', () => {
 		// with a label beside it reads as a loss too small to see.
 		const { option } = chartFlow([{ reached: 10, asked: 10, drafted: 4, published: 4 }]);
 		const { nodes, links } = sankey(option as Record<string, unknown>);
-		expect(nodes.map((node) => node.name)).not.toContain('Answered without a chart');
+		expect(nodes.map((node) => node.name)).not.toContain('Answered without a visual');
 		expect(nodes.map((node) => node.name)).not.toContain('Did not survive the checks');
 		expect(links.every((link) => link.value > 0)).toBe(true);
 	});
