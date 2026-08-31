@@ -298,18 +298,22 @@ test.describe('a route that draws what the server counted', () => {
 		expect(errors, 'the route logged an error').toEqual([]);
 	});
 
-	test('Machine draws no window control and says where the control is', async ({ page }) => {
+	test('Machine carries the same window control as the other two', async ({ page }) => {
 		await page.goto('/console/machine/');
-		// A control that governs nothing answers a click by changing nothing. The
-		// sentence in its place points at the two routes it does govern, and the
-		// choice is remembered across all three.
-		await expect(page.locator('[data-console-band] [data-window-control]')).toHaveCount(0);
-		await expect(page.locator('[data-band-window="none"]')).toBeVisible();
-		const hrefs = await page
-			.locator('[data-band-window="none"] a')
-			.evaluateAll((links) => links.map((node) => (node as HTMLAnchorElement).getAttribute('href') ?? ''));
-		expect(hrefs.some((href) => href.endsWith('/console/'))).toBe(true);
-		expect(hrefs.some((href) => href.endsWith('/console/model/'))).toBe(true);
+		// It was the one route without one until 2026-08-31, and it printed a
+		// sentence pointing at the two routes that had it. An operator who
+		// narrowed Pipelines to look at a bad afternoon lost the span the moment
+		// he asked what the machine had been doing, and two charts on two spans
+		// cannot be compared - which is the question he came to ask.
+		const control = page.locator('[data-console-band] [data-window-control]');
+		await expect(control).toHaveCount(1);
+		await expect(control).toHaveAttribute('data-window-days', /\d+/);
+		await expect(page.locator('[data-band-window="none"]')).toHaveCount(0);
+		// And the four panels a span cannot narrow say so where the sentence used
+		// to be. A window is a span; a snapshot of one run is not.
+		await expect(page.locator('[data-window-exempt="newest-run"]')).toContainText(
+			'do not follow the window'
+		);
 	});
 });
 

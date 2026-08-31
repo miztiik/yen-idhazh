@@ -5,17 +5,19 @@ import {
 	clockAgreement,
 	clocksChart,
 	contextHeadroom,
-	costOf,
 	percentileChart,
 	percentileCurves,
 	readingAgainstWriting,
 	shardBoard,
 	tokenChart,
 	tokensByRun,
-	type CostRate
+	type CacheDay,
+	type ContextBar,
+	type CostRate,
+	type RunTokens
 } from '$lib/charts/machine';
-import { defaultWindow } from '$lib/charts/viewport';
-import { recordingNotes } from '$lib/console/recording';
+import { windowOfDays } from '$lib/charts/viewport';
+import { recordingNotes, type RecordingNotes } from '$lib/console/recording';
 import {
 	chartConfig,
 	consoleConfig,
@@ -24,7 +26,13 @@ import {
 	runConfig
 } from '$lib/server/config';
 import { itemHealthRows } from '$lib/server/payload';
-import { CLOCKS_AGREE_WITHIN_PCT, loadMachineCounters, machineLimits } from '$lib/server/runtime-counters';
+import {
+	CLOCKS_AGREE_WITHIN_PCT,
+	loadMachineCounters,
+	machineLimits,
+	type RefusedRun,
+	type RunCounters
+} from '$lib/server/runtime-counters';
 
 export const prerender = true;
 
@@ -47,6 +55,34 @@ function spanOf(
 	};
 }
 
+export type FigureSpan = ReturnType<typeof spanOf>;
+
+/** Everything one span of days answers, worked out once for each span the
+ * control offers.
+ *
+ * The browser holds no ledger, so it cannot re-aggregate a window: a token
+ * total, a cache share and a recording note all read rows this page never
+ * receives. Four small objects is the price of a control that works with no
+ * fetch, and it is bounded - the widest preset is the widest anything here can
+ * reach, so a run older than that is never carried at any span.
+ */
+export interface MachineWindow {
+	days: number;
+	start: string;
+	end: string;
+	runsRead: number;
+	refused: RefusedRun[];
+	recording: RecordingNotes;
+	cacheDays: CacheDay[];
+	context: ContextBar[];
+	batching: { highest: number | null; from: number; outOf: number };
+	cpuBusySpan: FigureSpan;
+	peakRssSpan: FigureSpan;
+	modelLoadSpan: FigureSpan;
+	tokens: RunTokens[];
+	tokenTotals: { input: number; output: number; items: number };
+}
+
 /** What the model server counted, read once at build time.
  *
  * The whole route reads `state/runtime-counters.csv` and `state/item-health/`,
@@ -55,11 +91,15 @@ function spanOf(
  * `state/scores.csv`. No cell of either crosses to a reader and this route adds
  * no published telemetry column.
  *
- * **Every figure here reads one fixed span**, `console.default_window_days`.
- * There is no days control on this route yet, so the span is stated on the page
- * rather than offered as a choice - a figure whose span a reader cannot see is
- * worse than one he cannot change. The bound is what stops a chart growing a
- * column per run forever as the ledgers fill.
+ * **Every span the control offers is answered here**, not in the browser. Since
+ * 2026-08-31 this route carries the same 7/14/30/90 control as the other two
+ * and reads the same `idhazh:console-window` key, so an operator comparing a
+ * slow day across Pipelines and Hardware sees both on one span.
+ *
+ * **A panel about one run does not follow the window.** The shard board, the
+ * reading/writing split, the clock check and the latency curves are snapshots:
+ * a window is a span, and a span cannot narrow a single run. Each names the run
+ * or the day it is about instead.
  */
 export async function load() {
 	const console_ = consoleConfig();
@@ -67,97 +107,122 @@ export async function load() {
 	const limits = machineLimits();
 	const counters = loadMachineCounters();
 	const health = itemHealthRows().rows;
+	const observability = observabilityConfig();
 	const today = new Date().toISOString().slice(0, 10);
 
 	const dates = [
 		...new Set([...counters.runs.map((run) => run.date), ...health.map((row) => row.date ?? '')])
 	].filter((date) => date !== '');
-	const window = defaultWindow(dates, today, console_);
-	const inWindow = <T extends { date: string }>(rows: readonly T[]): T[] =>
-		rows.filter((row) => row.date >= window.start && row.date <= window.end);
 
-	// Newest first, as the reader hands them over. The board and the two splits
-	// read the newest run; everything else reads the span.
-	const runs = inWindow(counters.runs);
-	const newest = runs[0] ?? null;
-	const healthRows = health.filter(
-		(row) => (row.date ?? '') >= window.start && (row.date ?? '') <= window.end
-	);
+	/** One span, and every figure that reads a span. */
+	function answer(days: number): MachineWindow {
+		const span = windowOfDays(dates, today, days, console_.today_anchor);
+		const inSpan = <T extends { date: string }>(rows: readonly T[]): T[] =>
+			rows.filter((row) => row.date >= span.start && row.date <= span.end);
 
+		const runs = inSpan(counters.runs);
+		const healthRows = health.filter(
+			(row) => (row.date ?? '') >= span.start && (row.date ?? '') <= span.end
+		);
+		const tokens = tokensByRun(healthRows);
+		// Batching is one line of text and not a chart. It reads 1.0 on every row
+		// the ledger holds, because `models.inference.n_parallel` is 1, and it
+		// earns a chart the day that knob moves.
+		const slots = runs.map((run) => run.slotsPerDecode).filter((reading) => reading.value !== null);
+
+		return {
+			days,
+			start: span.start,
+			end: span.end,
+			runsRead: runs.length,
+			// Never dropped silently: a run whose rows cannot be made into one run
+			// is named on the page with the reason, because a run count that quietly
+			// excludes one is a run count nobody can check.
+			refused: inSpan(counters.refused),
+			// What the recording itself was doing. Every panel below reads the model
+			// server's own counters, so a day the scrape never ran is a gap in the
+			// recording rather than a machine that did nothing - and the two states
+			// look identical on a chart unless the page says which one it is. The
+			// item ledger is the other instrument: a day it covers and the counters
+			// do not is the state most committed days are in.
+			recording: recordingNotes({
+				enabled: observability.runtime_counters_scrape,
+				rate: observability.sample_rate,
+				recorded: [...new Set(runs.map((run) => run.date))].sort(),
+				window: [...new Set(inSpan(dates.map((date) => ({ date }))).map((row) => row.date))].sort(),
+				coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
+					.filter((date) => date !== '')
+					.sort()
+			}),
+			cacheDays: cacheByDay(runs),
+			context: contextHeadroom(runs, limits.contextWindow),
+			batching: {
+				highest: slots.length === 0 ? null : Math.max(...slots.map((reading) => reading.value ?? 0)),
+				from: slots.length,
+				outOf: runs.length
+			},
+			// The newest run's own reading is a snapshot and sits below; these three
+			// say whether that reading was unusual over the span.
+			cpuBusySpan: spanOf(runs.map((run) => run.lowestCpuBusyPct.value)),
+			peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
+			modelLoadSpan: spanOf(runs.map((run) => run.slowestModelLoadMs.value)),
+			tokens,
+			tokenTotals: tokens.reduce(
+				(carry, run) => ({
+					input: carry.input + run.input,
+					output: carry.output + run.output,
+					items: carry.items + run.items
+				}),
+				{ input: 0, output: 0, items: 0 }
+			)
+		};
+	}
+
+	// The default span is answered whether or not it is one of the presets, so
+	// the document the browser is handed always has an entry to fall back to.
+	const spans = [...new Set([console_.default_window_days, ...console_.window_presets])];
+	const windows = new Map<number, MachineWindow>(spans.map((days) => [days, answer(days)]));
+	// The span the prerendered document opens on. Its drawings are the ones
+	// inlined; a browser redraws from the arrays when the operator moves the
+	// control, so widening costs a repaint rather than four more SVGs.
+	const opening = windows.get(console_.default_window_days) as MachineWindow;
+
+	// Newest first, as the reader hands them over. The four panels below read one
+	// run or one day, so they read the newest the ledger holds whatever the
+	// control says - a window is a span, and narrowing a span cannot narrow a
+	// single run into something smaller.
+	const newest: RunCounters | null = counters.runs[0] ?? null;
 	const board = shardBoard(newest, limits.jobTimeoutSeconds);
 	const split = readingAgainstWriting(newest);
-	const cacheDays = cacheByDay(runs);
-	const cache = cacheChart(cacheDays);
-	const context = contextHeadroom(runs, limits.contextWindow);
-	const clocks = clockAgreement(newest, healthRows, CLOCKS_AGREE_WITHIN_PCT);
+	const clocks = clockAgreement(newest, health, CLOCKS_AGREE_WITHIN_PCT);
 	const clocksPlot = clocksChart(clocks.pairs);
 
 	// The newest day the item ledger reached, which is not always the newest day
 	// the counters reached: a run can publish before its shards scrape.
 	const percentileDate =
-		[...new Set(healthRows.map((row) => row.date ?? ''))].filter((date) => date !== '').sort().at(-1) ??
+		[...new Set(health.map((row) => row.date ?? ''))].filter((date) => date !== '').sort().at(-1) ??
 		null;
-	const percentiles = percentileCurves(healthRows, percentileDate, console_.min_attempts_for_rate);
+	const percentiles = percentileCurves(health, percentileDate, console_.min_attempts_for_rate);
 	const percentilePlot = percentileChart(percentiles.curves);
 
-	const tokens = tokensByRun(healthRows);
-	const observability = observabilityConfig();
 	const rate: CostRate = {
 		currency: observability.cost_currency,
 		inputPerMillion: observability.cost_input_per_million,
 		outputPerMillion: observability.cost_output_per_million
 	};
-	const totals = tokens.reduce(
-		(carry, run) => ({
-			input: carry.input + run.input,
-			output: carry.output + run.output,
-			items: carry.items + run.items
-		}),
-		{ input: 0, output: 0, items: 0 }
-	);
-	const inputPlot = tokenChart(tokens, (run) => run.input, 'prompt tokens', '--chart-1');
-	const outputPlot = tokenChart(tokens, (run) => run.output, 'written tokens', '--chart-4');
+	const cache = cacheChart(opening.cacheDays);
+	const inputPlot = tokenChart(opening.tokens, (run) => run.input, 'prompt tokens', '--chart-1');
+	const outputPlot = tokenChart(opening.tokens, (run) => run.output, 'written tokens', '--chart-4');
 
-	// What the recording itself was doing. Every panel below reads the model
-	// server's own counters, so a day the scrape never ran is a gap in the
-	// recording rather than a machine that did nothing - and the two states look
-	// identical on a chart unless the page says which one it is. The item ledger
-	// is the other instrument: a day it covers and the counters do not is the
-	// state most committed days are in.
-	const recording = recordingNotes({
-		enabled: observability.runtime_counters_scrape,
-		rate: observability.sample_rate,
-		recorded: [...new Set(runs.map((run) => run.date))].sort(),
-		window: [...new Set(inWindow(dates.map((date) => ({ date }))).map((row) => row.date))].sort(),
-		coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
-			.filter((date) => date !== '')
-			.sort()
-	});
-
-	// Batching is one line of text and not a chart. It reads 1.0 on every row the
-	// ledger holds, because `models.inference.n_parallel` is 1, and it earns a
-	// chart the day that knob moves.
-	const slots = runs
-		.map((run) => run.slotsPerDecode)
-		.filter((reading) => reading.value !== null);
-	const batching = {
-		highest: slots.length === 0 ? null : Math.max(...slots.map((reading) => reading.value ?? 0)),
-		from: slots.length,
-		outOf: runs.length
-	};
-
-	// Three cells that landed on 2026-08-30 and that no page has printed. The
-	// newest run's own reading, and the span across the window beside it - one
-	// says what happened today and the other says whether today was unusual.
+	// Three cells that landed on 2026-08-30 and that no page had printed. The
+	// newest run's own reading; the span across the open window sits beside it on
+	// the page, from the object above.
 	const host = {
 		runId: newest?.runId ?? null,
 		cpuModels: newest?.cpuModels ?? null,
 		cpuBusy: newest?.lowestCpuBusyPct ?? null,
 		peakRss: newest?.peakRssBytes ?? null,
-		modelLoad: newest?.slowestModelLoadMs ?? null,
-		cpuBusySpan: spanOf(runs.map((run) => run.lowestCpuBusyPct.value)),
-		peakRssSpan: spanOf(runs.map((run) => run.peakRssBytes.value)),
-		modelLoadSpan: spanOf(runs.map((run) => run.slowestModelLoadMs.value))
+		modelLoad: newest?.slowestModelLoadMs ?? null
 	};
 
 	// Drawn on the server so every mark is on the page before a script runs, and
@@ -176,34 +241,26 @@ export async function load() {
 	) => (plot.empty ? null : await renderToSvg(plot.option, { width: chart.width_px, height }));
 
 	return {
-		window: { days: console_.default_window_days, start: window.start, end: window.end },
+		// One entry per span the control offers, keyed by its day count. The page
+		// picks the open one; nothing is recomputed in a browser.
+		windows: Object.fromEntries(windows),
 		board,
-		// Never dropped silently: a run whose rows cannot be made into one run is
-		// named on the page with the reason, because a run count that quietly
-		// excludes one is a run count nobody can check.
-		refused: inWindow(counters.refused),
-		runsRead: runs.length,
-		recording,
+		newestRunId: newest?.runId ?? null,
 		split,
-		cacheDays,
 		cacheSvg: await draw(cache, chart.height_px),
-		context,
 		clocks,
 		clocksSvg: await draw(clocksPlot, chart.height_px),
-		batching,
 		host,
 		percentiles,
 		percentileSvg: await draw(percentilePlot, chart.height_px),
-		tokens,
-		tokenTotals: totals,
 		inputSvg: await draw(inputPlot, chart.height_px),
 		outputSvg: await draw(outputPlot, chart.height_px),
 		rate,
-		windowCost: costOf(totals, rate),
 		limits,
 		shardTimeoutMinutes: runConfig().shard_timeout_minutes,
 		contextWindow: inferenceConfig().n_ctx,
 		clocksTolerancePct: CLOCKS_AGREE_WITHIN_PCT,
+		console: console_,
 		chart
 	};
 }
