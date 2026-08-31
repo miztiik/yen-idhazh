@@ -51,7 +51,7 @@
 	<div class="flex snap-x items-center gap-2 overflow-x-auto pb-1">
 		<a
 			href={root}
-			class="inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-3.5 text-[0.875rem] transition-colors"
+			class="inline-flex min-h-11 shrink-0 snap-start items-center rounded-full border px-3.5 text-sm transition-colors"
 			class:border-accent={active === null}
 			class:text-accent={active === null}
 			class:border-rule={active !== null}
@@ -63,7 +63,7 @@
 		{#each verticals as vertical (vertical.id)}
 			<a
 				href={verticalHref(base, datePrefix, vertical.id)}
-				class="inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3.5 text-[0.875rem] whitespace-nowrap transition-colors"
+				class="inline-flex min-h-11 shrink-0 snap-start items-center gap-1.5 rounded-full border px-3.5 text-sm whitespace-nowrap transition-colors"
 				class:border-accent={active === vertical.id}
 				class:text-accent={active === vertical.id}
 				class:border-rule={active !== vertical.id}
@@ -88,10 +88,10 @@
 				bind:value={query}
 				placeholder="Filter today's stories"
 				autocomplete="off"
-				class="min-h-11 w-full rounded-[--radius-md] border border-rule bg-surface px-3 text-[0.9375rem] text-text placeholder:text-text-tertiary"
+				class="min-h-11 w-full rounded-md border border-rule bg-surface px-3 text-base text-text placeholder:text-text-tertiary"
 			/>
 			{#if query}
-				<span class="shrink-0 text-[0.8125rem] text-text-secondary">{shown} of {total}</span>
+				<span class="shrink-0 text-sm text-text-secondary">{shown} of {total}</span>
 			{/if}
 		</div>
 	{/if}

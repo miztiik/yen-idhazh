@@ -39,7 +39,7 @@
 
 <section class="pt-8" data-topic={vertical.id}>
 	<h2
-		class="border-b border-rule pb-2 text-[0.8125rem] font-semibold tracking-wide text-text-tertiary uppercase"
+		class="border-b border-rule pb-2 text-sm font-semibold tracking-wide text-text-tertiary uppercase"
 	>
 		{vertical.display_name}
 	</h2>
@@ -58,7 +58,7 @@
 
 	{#if more}
 		<p class="pt-4">
-			<a href={href} class="text-[0.9375rem] text-accent hover:underline" data-topic-link>
+			<a href={href} class="text-base text-accent hover:underline" data-topic-link>
 				All {vertical.count}
 				{vertical.display_name} stories
 			</a>

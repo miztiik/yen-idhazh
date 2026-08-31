@@ -40,7 +40,7 @@ from idhazh.contracts.run_manifest import (
     RunStatus,
     VerticalCount,
 )
-from idhazh.contracts.run_plan import RunPlan
+from idhazh.contracts.run_plan import PlannedItem, RunPlan
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
@@ -118,12 +118,19 @@ def to_digest_item(
     run_n: int,
     route: Route | None = None,
     band_reason: BandReason | None = None,
+    planned: PlannedItem | None = None,
 ) -> DigestItem:
     """One finished item as a reader consumes it. The link is a first-class element.
 
     The published title is ours when the summarizer wrote one, and the source's
     when it did not. The fallback runs on a real item whenever a drafted title
     missed the asked range, so it is the normal path and not the error path.
+
+    `planned` is the plan row this item was built from, and it is the only place
+    the ranking signal and the clock behind `published_at` still exist by now.
+    Without it all five publish as null, which reads as unknown - a caller that
+    has no plan row must not be able to publish a 0 that means "no feed carried
+    this".
     """
     return DigestItem(
         item_id=summary.item_id,
@@ -134,6 +141,9 @@ def to_digest_item(
         source_name=source_name,
         source_kind=source_kind,
         published_at=article.published_at,
+        # Extract copies the plan row's `published_at` onto the article verbatim,
+        # so this label describes the time above and not a second one.
+        time_source=planned.time_source if planned is not None else None,
         summary=summary.summary or "",
         key_points=summary.key_points,
         lenses=article.lenses,
@@ -146,6 +156,10 @@ def to_digest_item(
         truncated=article.truncated,
         introduced_by_run=run_n,
         visual=to_digest_visual(route),
+        carried_by=planned.carried_by if planned is not None else None,
+        watchlist_hit=planned.watchlist_hit if planned is not None else None,
+        on_front_page=planned.on_front_page if planned is not None else None,
+        rank_score=planned.rank_score if planned is not None else None,
     )
 
 

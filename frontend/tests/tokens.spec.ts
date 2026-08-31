@@ -75,6 +75,63 @@ function sourceFiles(dir: string, out: string[] = []): string[] {
 	return out;
 }
 
+/** Every Svelte file the reading routes can reach, and nothing else.
+ *
+ * The console is excluded by not being reachable from a reading route rather
+ * than by a list of names: a sibling plan owns those files, and a name list
+ * would have to be edited every time that plan renames one. A component the
+ * console alone renders drops out on its own; a component both surfaces share
+ * is covered, which is the stricter and correct answer.
+ */
+function readerSurface(): string[] {
+	const src = join(FRONTEND, 'src');
+	const seeds = sourceFiles(join(src, 'routes'))
+		.filter((path) => extname(path) === '.svelte')
+		.filter((path) => !path.split(/[\\/]/).includes('console'))
+		.map((path) => path.slice(src.length + 1).split('\\').join('/'));
+
+	const seen = new Set<string>();
+	const walk = (rel: string) => {
+		if (seen.has(rel)) return;
+		seen.add(rel);
+		const abs = join(src, rel);
+		let text: string;
+		try {
+			text = readFileSync(abs, 'utf8');
+		} catch {
+			return;
+		}
+		for (const match of text.matchAll(/from\s+'([^']+\.svelte)'/g)) {
+			const target = match[1];
+			if (target.startsWith('$lib/')) walk('lib/' + target.slice(5));
+			else if (target.startsWith('./'))
+				walk(posixDirname(rel) + '/' + target.slice(2));
+		}
+	};
+	seeds.forEach(walk);
+	return [...seen].sort();
+}
+
+function posixDirname(rel: string): string {
+	return rel.slice(0, rel.lastIndexOf('/'));
+}
+
+function classAttributes(text: string): string[] {
+	return [...text.matchAll(/\sclass=(?:"([^"]*)"|'([^']*)')/g)].map((m) => m[1] ?? m[2] ?? '');
+}
+
+function styleBlocks(text: string): string {
+	return [...text.matchAll(/<style[^>]*>([\s\S]*?)<\/style>/g)]
+		.map((m) => m[1].replace(/\/\*[\s\S]*?\*\//g, ''))
+		.join('\n');
+}
+
+/** An aspect ratio is the one bracketed value that is not a hardcoded size.
+ * It has no absolute value to round, so there is no scale step to round it to,
+ * and minting a token to hold one ratio is the pile coming back under a new
+ * name. */
+const RATIO_UTILITY = /^aspect$/;
+
 test.describe('the token layer', () => {
 	test('every theme colour has a dark override', () => {
 		const missing = LIGHT.filter(
@@ -200,5 +257,72 @@ test.describe('the token layer', () => {
 		}
 		const layout = readFileSync(join(FRONTEND, 'src', 'routes', '+layout.svelte'), 'utf8');
 		expect(layout, 'the frame is being injected from the layout again').not.toContain('svelte:head');
+	});
+
+	test('the reader surface is reachable and holds the components it should', () => {
+		// The two checks below are only worth their run time while this walk
+		// still finds the surface. A resolver that quietly returns nothing
+		// passes both of them on an empty set.
+		const surface = readerSurface();
+		expect(surface.length, 'the import walk found no reader surface').toBeGreaterThan(15);
+		for (const file of ['lib/components/DigestItem.svelte', 'lib/components/SiteFooter.svelte']) {
+			expect(surface, `${file} is no longer reachable from a reading route`).toContain(file);
+		}
+		// And the console has to stay out, or these checks start failing a
+		// sibling plan's files.
+		expect(
+			surface.filter((file) => file.includes('console')),
+			'a console file entered the reader surface'
+		).toEqual([]);
+	});
+
+	test('no reader-surface utility carries a hardcoded value', () => {
+		// A bracketed value is a size, a colour or a space decided in one
+		// component, where no theme can reach it and no scale can hold it. The
+		// pile it built was 60 of them across 19 files on 2026-08-31.
+		const offenders: string[] = [];
+		for (const file of readerSurface()) {
+			const text = readFileSync(join(FRONTEND, 'src', file), 'utf8');
+			for (const attribute of classAttributes(text)) {
+				for (const match of attribute.matchAll(/([a-z][a-z0-9]*(?:-[a-z0-9.]+)*)-\[/g)) {
+					if (RATIO_UTILITY.test(match[1])) continue;
+					offenders.push(`${file} -> ${match[0]}`);
+				}
+			}
+		}
+		expect(
+			offenders,
+			`a hardcoded value in a utility class: ${offenders.join('; ')}`
+		).toEqual([]);
+	});
+
+	test('no reader-surface style block carries a px literal', () => {
+		// A px size ignores a reader who set their browser text larger. Two
+		// carve-outs and only two: a hairline, because a border that scales
+		// stops being a hairline; and a media-query breakpoint, because a media
+		// query cannot read a custom property. The breakpoint is checked against
+		// the committed config rather than waved through, so an invented one
+		// still fails.
+		const breakpoints: number[] = JSON.parse(
+			readFileSync(join(FRONTEND, '..', 'config', 'appearance.json'), 'utf8')
+		).frame.breakpoints_px;
+
+		const offenders: string[] = [];
+		for (const file of readerSurface()) {
+			const css = styleBlocks(readFileSync(join(FRONTEND, 'src', file), 'utf8'));
+			const allowed = new Set<string>();
+			for (const query of css.matchAll(/\((?:min|max)-(?:width|inline-size):\s*(\d+)px\)/g)) {
+				if (breakpoints.includes(Number(query[1]))) allowed.add(query[0]);
+			}
+			let remaining = css;
+			for (const query of allowed) remaining = remaining.split(query).join('');
+			for (const match of remaining.matchAll(/(-?\d+(?:\.\d+)?)px/g)) {
+				if (Math.abs(Number(match[1])) === 1) continue;
+				offenders.push(`${file} -> ${match[0]}`);
+			}
+		}
+		expect(offenders, `a px literal in an authored style block: ${offenders.join('; ')}`).toEqual(
+			[]
+		);
 	});
 });
