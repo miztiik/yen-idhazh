@@ -656,18 +656,47 @@ and says so.
 
 The window control sits **inside** the band rather than under it, because a
 control below the thing it governs is read second. Each route hands its own
-control in: Pipelines prices the month files a wider window would fetch, Model
-fetches nothing and prices nothing, and Machine draws no control at all and
-prints a sentence saying where the control is. That last one is a deliberate
-departure from "the band carries the window control on all three routes": every
-figure on Machine reads one fixed span, `console.default_window_days`, and a
-control that answers a click by changing nothing is worse than an absent one.
-What the sentence in its place prints is the span itself, with both dates - a
-figure whose span a reader cannot SEE is worse than one he cannot change, and
-the bound is also what stops the cache chart growing a column a day forever.
-The choice is still shared - all three routes read the same
-`idhazh:console-window` key - so setting it on Pipelines and clicking Model
-keeps the span.
+control in: Pipelines prices the month files a wider window would fetch, and
+Model and Machine fetch nothing and price nothing. All three read the same
+`idhazh:console-window` key, so a span picked on Pipelines is the span Hardware
+opens on and the other way round -
+[../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
+drives it both ways in one browser session, because a route that writes the key
+and never reads it passes a one-way check.
+
+**Machine joined the window on 2026-08-31, and until then it was the one route
+without a control.** It printed a sentence naming the fixed span instead, on the
+argument that a control which answers a click by changing nothing is worse than
+an absent one. What that cost is the question the console exists for: an
+operator who narrowed Pipelines to 7 days to look at a bad afternoon lost the
+span the moment he asked what the machine had been doing, and two charts on two
+spans cannot be compared. The route is also the one whose numbers move most
+between runs, so it is the one where "over how long" matters most.
+Authority: owner, 2026-08-31; Fowler concurs.
+
+**Every span the control offers is answered on the server, one small object per
+preset.** The browser holds no ledger - a token total, a cache share and a
+recording note all read rows this page never receives - so it cannot
+re-aggregate a window the way the Pipelines viewport can. Four small objects is
+the price, and it is bounded: the widest preset is the widest anything on the
+route can reach, so a run older than 90 days is carried at no span at all and
+the page does not grow with the ledger. That is the same rule Model's per-preset
+distributions follow, and the alternative was inlining every counter row so the
+browser could re-bin it. Authority: Carmack, 2026-08-31.
+
+**A panel about one run does not follow the window.** The shard board, the
+reading-against-writing split, the clock check and the latency curves read the
+newest run or the newest day the ledger holds, at every preset. A window is a
+span and a snapshot is not something a span can narrow - a board that emptied at
+7 days would say the run had stopped existing. The page states this once, above
+the four, and names the run they are about. Authority: Jony, 2026-08-31.
+
+Six surfaces on Machine declare `data-windowed`, and each one prints the day
+count in its own words: the run count at the top, the prompt cache, context
+headroom, the host panel's three spans, tokens per run and the cost panel. The
+refused-run list follows the window without declaring it, because a clean span
+renders nothing at all and a surface that comes and goes cannot report a day
+count.
 
 ### What the Machine route draws
 
