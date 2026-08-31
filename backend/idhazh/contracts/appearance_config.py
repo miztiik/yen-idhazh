@@ -360,6 +360,27 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-31T23:55",
+            change=(
+                "ThemeChoice lost its `system` member and digest.theme_default now "
+                "defaults to `dark`; the committed file repeats it. The shape is "
+                "`UiConfig`, which this document and `AppConfig` share, so both schemas "
+                "moved together. Breaking: the enum is narrower. The read-side "
+                "migration is a before-validator on `UiConfig.theme_default` that reads "
+                "`system` as `dark`, so an appearance file written before today still "
+                "loads."
+            ),
+            why=(
+                "The site now starts dark and light is an opt-in stored choice, so the "
+                "three-state theme control became one button with two states (owner "
+                "decision, 2026-08-31). `system` was never a theme - it was the absence "
+                "of a choice - and nothing asks the device any more. Leaving the member "
+                "in would let an operator set a value no surface can honour. `dark` is "
+                "the value `:root` carries in tokens.css, so this knob and the first "
+                "painted frame now agree."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-31T23:45",
             change=(
                 "assist.recall_min default moved from 0.69 to 0.61, and the committed "

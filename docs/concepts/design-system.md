@@ -134,7 +134,7 @@ radius and motion are declared once in their own `:root` block outside both
 themes. A scale left inside a theme block reads as something a theme could
 change, and the next theme has to restate it or lose it.
 
-Theming is override, not a second set of names: dark mode overrides the same token values. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) asserts it: every theme colour has a dark override, every non-exempt token has an `@theme inline` mirror, and nothing uses a token that is never declared.
+Theming is override, not a second set of names: **dark is the base and light overrides the same token values.** `:root` carries dark, so a page paints dark before any script runs and keeps it when no script runs at all. Where a utility framework is used, its theme **mirrors** these tokens so a utility resolves to the same custom property - one source of truth, not two - and [../../frontend/tests/tokens.spec.ts](../../frontend/tests/tokens.spec.ts) asserts it: every theme colour has a light override, every non-exempt token has an `@theme inline` mirror, and nothing uses a token that is never declared.
 
 **The type scale is mirrored with its leading attached.** `--text-sm` and
 `--leading-sm` are one decision, so the mirror carries both - `--text-sm` and

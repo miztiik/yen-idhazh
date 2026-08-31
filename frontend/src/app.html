@@ -3,7 +3,7 @@
 	<head>
 		<meta charset="utf-8" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
-		<meta name="color-scheme" content="light dark" />
+		<meta name="color-scheme" content="dark light" />
 		<link rel="icon" href="%sveltekit.assets%/favicon.svg" type="image/svg+xml" />
 		<!-- Installable, and nothing more than that. A manifest is a static JSON
 		     file: no request, no account, no notification, no code running off the
@@ -11,11 +11,9 @@
 		     Pages project path without being templated. -->
 		<link rel="manifest" href="%sveltekit.assets%/manifest.webmanifest" />
 		<link rel="apple-touch-icon" href="%sveltekit.assets%/icons/apple-touch-icon.png" />
-		<!-- The browser chrome matches the page before any script runs. The theme
-		     control overwrites this on a manual choice, because the media query
-		     only knows what the system wants. -->
-		<meta name="theme-color" media="(prefers-color-scheme: light)" content="#f4f6fb" />
-		<meta name="theme-color" media="(prefers-color-scheme: dark)" content="#0b0e14" />
+		<!-- The browser chrome matches the page before any script runs. One tag, no
+		     media query: the page is dark whatever the system prefers. -->
+		<meta name="theme-color" content="#0b0e14" />
 		<!-- Self-hosted, Latin subset, one variable file. Only the preload sits
 		     here: it has to be in the head to start the fetch early. The
 		     @font-face rule lives in app.css, because a rule inlined here is
@@ -28,20 +26,18 @@
 			type="font/woff2"
 			crossorigin
 		/>
-		<!-- The one inline script this site carries. It runs before first paint so a
-		     reader on a dark phone never gets a white flash. -->
+		<!-- The one inline script this site carries. The stylesheet already paints
+		     dark, so this exists only to apply a stored light choice before the
+		     first frame. Anything else, storage included, is dark. -->
 		<script>
 			(function () {
+				var choice = 'dark';
 				try {
-					var stored = localStorage.getItem('idhazh:theme');
-					var choice = stored === 'light' || stored === 'dark' ? stored : null;
-					var dark = choice
-						? choice === 'dark'
-						: window.matchMedia('(prefers-color-scheme: dark)').matches;
-					document.documentElement.setAttribute('data-theme', dark ? 'dark' : 'light');
+					if (localStorage.getItem('idhazh:theme') === 'light') choice = 'light';
 				} catch (e) {
-					document.documentElement.setAttribute('data-theme', 'light');
+					choice = 'dark';
 				}
+				document.documentElement.setAttribute('data-theme', choice);
 			})();
 		</script>
 		%sveltekit.head%
