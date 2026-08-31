@@ -9,12 +9,15 @@ from pathlib import Path
 import pytest
 from conftest import FIXTURES_DIR
 
-from idhazh import ledger
+from idhazh import cli, ledger
 from idhazh.contracts.base import derive_url_key
 from idhazh.contracts.eval_row import EvalRow
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
+from idhazh.contracts.item_health import ItemHealthRow
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
+from idhazh.evals import writer
+from idhazh.evals.writer import OBSERVATION_KEY
 from utilities import migrate_score_ledger as migrate
 from utilities.migrate_published_ledger import narrow
 from utilities.reconcile_prefill import TOLERANCE, pool_counters, pool_ledger, reconcile
@@ -306,6 +309,113 @@ def test_committed_state_csv_rows_match_their_headers() -> None:
                 )
 
     assert mismatches == []
+
+
+# --- The pass that runs after the merge ------------------------------------
+
+
+def test_no_committed_ledger_repeats_a_key_it_says_makes_a_row_unique() -> None:
+    """The guard. Every reader of these files sums a run and would be wrong here.
+
+    Measured on this checkout 2026-08-31 before the repair: `2026-08-29-3` held
+    six counter rows for four shards and 44 repeated `(date, run_id, item_id)`
+    item-health keys, because two workflow runs computed that id and neither
+    could see what the other had pushed. Summing that run's reading clock over
+    the rows gave 19,305.8 seconds against 11,810.3 - 63 percent high.
+    """
+    repeated: list[str] = []
+    state = REPO_ROOT / "state"
+    targets = [*ledger.keyed_paths(state), (REPO_ROOT / writer.LEDGER_RELPATH, OBSERVATION_KEY)]
+    for path, key in targets:
+        for found, count in sorted(ledger.repeated_keys(path, key).items()):
+            relpath = path.relative_to(REPO_ROOT).as_posix()
+            repeated.append(f"{relpath}: {'/'.join(found)} has {count} rows, keyed by {key}")
+
+    assert repeated == []
+
+
+def test_a_repeated_row_is_dropped_and_every_other_byte_is_left_alone(tmp_path: Path) -> None:
+    """First row wins, and a kept row is the line that was read.
+
+    The rule is the one every appending caller already states: a re-run's items
+    are skipped, so the ledgers keep describing the attempt that got there first.
+    Rewriting rather than re-serializing is what makes a clean file a no-op -
+    a pass that re-quoted a cell would show up as a diff on every run.
+    """
+    path = tmp_path / "runtime-counters.csv"
+    header = ",".join(RuntimeCountersRow.csv_columns())
+    assert ledger.append_runtime_counters(tmp_path, [counters_row(0, prompt_tokens_total=100)]) == 1
+    assert ledger.append_runtime_counters(tmp_path, [counters_row(1, prompt_tokens_total=200)]) == 1
+    clean = path.read_text(encoding="utf-8")
+    assert clean.startswith(header)
+
+    # What the union merge leaves behind: the same key twice, different cells.
+    second_scrape = clean.splitlines()[1].replace(",100,", ",999,")
+    with path.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(f"{second_scrape}\n")
+    assert ledger.repeated_keys(path, ledger.RUNTIME_COUNTERS_KEY)
+
+    assert ledger.drop_repeated_rows(path, ledger.RUNTIME_COUNTERS_KEY) == 1
+    assert path.read_text(encoding="utf-8") == clean
+    assert ledger.drop_repeated_rows(path, ledger.RUNTIME_COUNTERS_KEY) == 0
+    assert path.read_text(encoding="utf-8") == clean
+
+
+def test_the_pass_leaves_a_ledger_it_cannot_key_alone(tmp_path: Path) -> None:
+    """A shard written before the key existed is not a shard to start deleting from.
+
+    Refusing would cost a run the whole commit step it was called from, over a
+    file nothing is appending to any more.
+    """
+    path = tmp_path / "runtime-counters.csv"
+    path.write_text("date,shard\n2026-08-29,0\n2026-08-29,0\n", encoding="utf-8", newline="")
+    before = path.read_bytes()
+
+    assert ledger.drop_repeated_rows(path, ledger.RUNTIME_COUNTERS_KEY) == 0
+    assert path.read_bytes() == before
+    assert ledger.drop_repeated_rows(tmp_path / "absent.csv", ledger.RUNTIME_COUNTERS_KEY) == 0
+
+
+def test_the_keyed_set_names_every_ledger_that_declares_one(tmp_path: Path) -> None:
+    """`state/seen/` and `state/feed-health/` are absent on purpose, not by omission.
+
+    Neither declares a key. A second sight is folded by `load_seen` keeping the
+    earliest, and a feed's row is one verdict per feed per run - which two runs
+    are entitled to write twice, and which nothing here may collapse.
+    """
+    ledger.append_seen(tmp_path, DATE, [seen_row()])
+    ledger.append_health(tmp_path, DATE, [health_row()])
+    ledger.append_runtime_counters(tmp_path, [counters_row(0)])
+    item_health = ledger.item_health_path(tmp_path, DATE)
+    item_health.parent.mkdir(parents=True, exist_ok=True)
+    item_health.write_text(",".join(ItemHealthRow.csv_columns()) + "\n", encoding="utf-8")
+
+    keyed = {path.name: key for path, key in ledger.keyed_paths(tmp_path)}
+
+    assert keyed == {
+        "runtime-counters.csv": ledger.RUNTIME_COUNTERS_KEY,
+        f"{DATE[:7]}.csv": ledger.ITEM_HEALTH_KEY,
+    }
+
+
+def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:
+    """What the commit step calls between the rebase and the push.
+
+    It returns zero whatever it finds, because a repeat it drops is a repair
+    rather than a finding: a non-zero exit inside `commit-and-push.sh` runs under
+    `set -euo pipefail` and would abort the commit, costing the run every ledger
+    row staged beside the one it just fixed.
+    """
+    state = tmp_path / "state"
+    scores = tmp_path / "state" / "scores.csv"
+    ledger.append_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
+    counters = ledger.runtime_counters_path(state)
+    with counters.open("a", encoding="utf-8", newline="") as handle:
+        handle.write(counters.read_text(encoding="utf-8").splitlines()[1] + "\n")
+
+    assert cli.stage_dedupe_ledgers(state_dir=state, ledger_path=scores) == 0
+    assert ledger.repeated_keys(counters, ledger.RUNTIME_COUNTERS_KEY) == {}
+    assert len(ledger.load_runtime_counters(state, run_id=RUN_ID)) == 1
 
 
 # --- The server's own counters, and what they are for ----------------------
