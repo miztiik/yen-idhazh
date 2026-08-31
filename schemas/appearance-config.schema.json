@@ -112,7 +112,7 @@
         },
         "tick_density": {
           "default": 6,
-          "description": "Roughly how many ticks an axis aims for before `.nice()` rounds the domain. A hand-rolled axis gets exactly this wrong, which is why `d3-scale` and `d3-array` are carried: they return a number and own no element, no canvas and no theme.",
+          "description": "The MOST date labels a chart's day axis may carry. A ceiling and never a target: the axis then measures the labels against the room the plot actually has and drops more of them until no two touch. A count alone cannot hold at two widths - measured 2026-08-31 at 390px, six labels over a thirty-day window overlapped by 13.6px. Every column this number allows keeps its tick mark whether or not its date survived, because a reader counting columns needs the grid.",
           "maximum": 12,
           "minimum": 3,
           "title": "Tick Density",
@@ -514,6 +514,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "chart.tick_density keeps its name, its type and its default of 6, and its meaning is narrowed: it is now the CEILING on a day axis's date labels rather than the number the axis aims for. No field is added, removed or retyped.",
+      "version": "2026-08-31",
+      "why": "A count alone cannot hold at two widths. Measured 2026-08-31 on the built console, six labels over a thirty-day window overlapped by 13.6px at 390px and read as one longer string. The axis now measures the labels against the room the plot has and drops more of them until none touch, so this number can only ever be an upper bound. Every value that validated yesterday still validates and still means something - it just cannot force a label onto a phone."
+    },
+    {
       "change": "console.chart_arm_rule_days, console.chart_arm_minutes_target and console.chart_arm_coverage_pct added, defaulting to 14 days, 6.0 minutes and 5 percent. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
       "version": "2026-08-30T21:15",
       "why": "The chart arm section now leads with the two figures its retirement rule names, each as a bar with the limit drawn on it. A limit a component hardcodes is one an operator cannot move (Rule #6), and these three were constants in a TypeScript module. Additive with defaults, so an appearance file written before today still validates (section 11)."
@@ -569,7 +574,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-08-30T21:15",
+      "default": "2026-08-31",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -577,5 +582,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-08-30T21:15"
+  "version": "2026-08-31"
 }
