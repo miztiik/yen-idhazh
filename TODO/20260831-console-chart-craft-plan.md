@@ -10,8 +10,8 @@
 | Why this plan exists | The console's three routes each grew their own axis, hover, legend and colour habits, so a reader learns the page three times and several panels are unreadable on a phone. |
 | Hard scope - in | The three prerendered routes `/console/`, `/console/model/`, `/console/machine/`; the shared chart primitives under `frontend/src/lib/charts/`; the console components under `frontend/src/lib/components/`; the tunable knobs in `config/appearance.json` and `config/idhazh.json`; the browser suite under `frontend/tests/`. |
 | Hard scope - out | Reader-facing routes (`/`, `/<date>/`, `/archive/`); any pipeline stage; any persisted backend contract, unless a row names one explicitly and clears its ESCALATE trigger; new source data; any new chart type in `frontend/src/lib/charts/core.ts`. |
-| ESCALATE triggers | (a) any row that needs a field the committed ledgers do not carry - stop, do not widen a contract to draw a chart; (b) any row that would register a new echarts type, because the lazy chart chunk measured 197,561 gzipped B against its own 200,000 B line; (c) any row whose built route crosses its `page_weight.ceilings_bytes` entry and cannot be brought back under it by deleting markup; (d) Row #5's second rename, which is unresolved (section 2, Row #5 decision 2). |
-| Chosen strategy | Fix the shared primitive once and let every chart inherit it, before touching a single panel. Rows #1-#4 are the primitives; every later row is cheaper because they landed. Ruled by Jony (what survives) with Susan holding the sufficiency veto on Rows #7, #8, #17 and #19. |
+| ESCALATE triggers | (a) any row that needs a field the committed ledgers do not carry - stop, do not widen a contract to draw a chart; (b) any row that would register a new echarts type, because the lazy chart chunk measured 197,561 gzipped B against its own 200,000 B line; (c) any row whose built route crosses its `page_weight.ceilings_bytes` entry and cannot be brought back under it by deleting markup; (d) any row that would rename a route directory, a `RouteId` or an `href` - a label may change, an address may not. |
+| Chosen strategy | Fix the shared primitive once and let every chart inherit it, before touching a single panel. Rows #1-#4 are the primitives; every later row is cheaper because they landed. Ruled by Jony (what survives) with Susan holding the sufficiency veto on Rows #7, #8, #14, #17, #19 and #23. |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3. |
 
 Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 3; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
@@ -25,6 +25,52 @@ Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-
 | `/console/machine/` | **none** | 7 | 3 | 5,038 px | 9,219 px |
 
 Zero console errors and zero 4xx on all six loads. The window choice is already shared across routes through the `idhazh:console-window` localStorage key, so a preset picked on one route holds on the next; the Machine route is the only one that cannot set it.
+
+The first viewport of `/console/`, same session:
+
+| Element | Desktop top / height | Phone top / height |
+| --- | --- | --- |
+| site header | 0 / 100 | 0 / 119 |
+| band | 207 / 321 | 249 / **528** |
+| window control, inside the band | 386 / 125 | 583 / 177 |
+| navigation strip, below the band | 544 / 72 | 793 / 277 |
+| first chart | 842 | 1,296 |
+
+The band is 101 words, of which the site-size fact is about 60. On a phone it is 528 px of an 844 px viewport - 63 percent - and the first chart is 1.5 screens down.
+
+`Time per item, by stage` at 1440: the plot is 1,350 px wide and every drawn mark sits between x=1,075 and x=1,342 - **267 px, 19.8 percent, all on the right** - because the window is 30 days and 7 carry data. Its hover works (a pointer at 25 percent selects 7 Aug and moves the guide) but selects a column with nothing on it, which is what reads as a broken hover.
+
+## 1a - Every change this plan makes
+
+| Row | Surface | What changes | Kind |
+| --- | --- | --- | --- |
+| 1 | every chart, 3 routes | one date-axis helper, measured thinning, no clipped label | shared primitive |
+| 2 | every chart, 3 routes | hover readout is the default and replaces the legend; hovered column is highlighted | shared primitive |
+| 3 | windowed charts | model-change rule where it is meaningful, and nowhere else | shared primitive |
+| 4 | cards, deltas, dots | movement colour reads the measure's polarity, both themes | shared primitive |
+| 5 | nav, every panel title | middle route becomes Summaries, last becomes Hardware, one title grammar | naming |
+| 6 | `/console/machine/` | joins the shared 7/14/30/90 window | window |
+| 7 | Pipelines failures | sources ranked by articles lost; item rows behind a disclosure | new signal |
+| 8 | Pipelines feeds | reliability headline and denominator; failure list capped | new signal |
+| 9 | Pipelines source cuts | fills its frame, row pitch grows, right label stops clipping | layout |
+| 10 | Pipelines glance | articles-published skyline beside charts-published | new signal |
+| 11 | Pipelines run health | readout, date cadence, no dead right margin | layout + hover |
+| 12 | windowed charts | a chart states the span nothing measured instead of piling right | correctness |
+| 13 | Pipelines chart-arm flow | readable at 360 px, or a stepped list below the breakpoint | mobile |
+| 14 | both daily tables | windowed, renamed, re-placed, disclosure loses its card chrome | layout |
+| 15 | Summaries | which sources the checker doubts, three counts | new signal |
+| 16 | Summaries cost | the cost sentence becomes a labelled distribution | new chart |
+| 17 | Summaries model change | full width, semantic colour, more measures | layout + signal |
+| 18 | Hardware shard board | readable at 360 px, every value keeps its name | mobile |
+| 19 | Hardware context | thirteen repeated bars become one chart with a limit rule | new chart |
+| 20 | Hardware memory | peak per shard and one high-water mark against 16 GB | new signal |
+| 21 | Hardware latency | small multiples per percentile plus one aggregate | new chart |
+| 22 | Pipelines chart arm | the router becomes the visuals planner in every reader string | naming |
+| 23 | the band, 3 routes | three facts, strip above it, control below it, site size cut to one line | layout |
+| 24 | `Time per item, by stage` | per-series footnotes become one sentence under the title | copy |
+| 25 | the band | the site runway stops dividing by a per-run ceiling | **defect** |
+| 26 | Pipelines glance | `What one more article costs` says what it is for | copy |
+| 27 | closure | distil, re-derive three ceilings, delete the plan | closure |
 
 ## 1 - Status Reckoner
 
@@ -51,7 +97,12 @@ Zero console errors and zero 4xx on all six loads. The window choice is already 
 | 19 | Context headroom becomes one chart | 1, 2, 6 | E | PENDING | - | - | - |
 | 20 | Peak memory, per shard and in one number | 2, 6 | E | PENDING | - | - | - |
 | 21 | Run latency, one chart per percentile and one across them | 1, 2, 6 | E | PENDING | - | - | - |
-| 22 | Closure - distil, re-derive the ceilings, delete the plan | 1-21 | F | PENDING | - | - | - |
+| 22 | The router becomes the visuals planner | - | A | PENDING | - | - | - |
+| 23 | The band carries three facts and half the height | - | B | PENDING | - | - | - |
+| 24 | One coverage sentence, not one per series | 1 | C | PENDING | - | - | - |
+| 25 | The site runway stops dividing by a per-run ceiling | - | A | PENDING | - | - | - |
+| 26 | What one more article costs says what it is for | 25 | D | PENDING | - | - | - |
+| 27 | Closure - distil, re-derive the ceilings, delete the plan | 1-26 | F | PENDING | - | - | - |
 
 ## 2 - Rows
 
@@ -191,9 +242,9 @@ Zero console errors and zero 4xx on all six loads. The window choice is already 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | `/console/model/` is relabelled **Summaries**. Every panel on it is about a published summary - its length, its cost, how long it took, what the checker doubted - and none is about the model as an artefact. | owner, 2026-08-31; Editor concurs |
-| 2 | **UNRESOLVED, ESCALATE trigger (d).** The owner proposed relabelling `/console/machine/` to **Model**. Recommendation is to keep **Machine**: that route measures the host and the inference runtime - shards, job clock, processor, peak memory, context window - and moving the word "Model" onto it puts it on the page about the box rather than the page about the output. If the route must say what runs there rather than what it runs on, **Runtime** is truer than Model. The row STOPS here for a ruling and ships decision 1 either way. | owner |
+| 2 | `/console/machine/` is relabelled **Hardware**. It is the plainest word for what that route measures - the processor, the memory, the clock, the context window - and unlike `Runner` it is not a GitHub Actions term (section 0b: a subsystem term is not a reader term). `Model` was refused: it would put the word on the page about the box rather than the page about the output, and both pages talk about a model. | owner, 2026-08-31 |
 | 3 | The title grammar is a noun phrase, not a question. `Did the runs finish?` and `Do the two clocks agree` become `Runs that finished` and `The two clocks, compared`; `What one more article costs` is already the form and is the model. A page of questions makes a reader answer before reading. | Editor |
-| 4 | `RouteId` stays `pipelines` / `model` / `machine` and no `href` moves. A label is not an address. | Fowler |
+| 4 | `RouteId` stays `pipelines` / `model` / `machine` and no `href` moves. A label is not an address, and ESCALATE trigger (d) fires on anything that says otherwise. | Fowler |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
@@ -364,18 +415,20 @@ Zero console errors and zero 4xx on all six loads. The window choice is already 
   - `frontend/tests/console-coverage.spec.ts` (new)
   - `docs/architecture/publishing/telemetry-series.md`
 - **Acceptance gates:** as Row #1.
-- **Oracle:** For each windowed chart, compare the count of columns carrying a mark against the window's day count and assert that whenever the ratio is under a declared threshold the chart renders a `data-coverage-note` naming both numbers. Measured 2026-08-31, `Failure rate against volume` draws 30 columns over a 30-day window with marks on about 7, which is why the chart reads as right-aligned.
+- **Oracle:** For each windowed chart, compare the count of columns carrying a mark against the window's day count and assert that whenever the ratio is under a declared threshold the chart renders a `data-coverage-note` naming both numbers, AND that a pointer landing on an unmeasured column prints a readout row saying the day was not measured rather than a blank value. Measured 2026-08-31 at 1440: `Time per item, by stage` draws a 1,350 px plot whose every mark sits between x=1,075 and x=1,342 - 19.8 percent of the frame, all on the right - and `Failure rate against volume` draws 30 columns with marks on about 7.
 
 | # | Decision | Authority |
 | --- | --- | --- |
 | 1 | The window is not narrowed. The empty span is a true fact - the telemetry projection starts on 2026-08-24 - and a chart that hides it reports a fuller record than exists. | Editor |
 | 2 | The note names both numbers: days drawn and days measured. Rule #10 in a sentence a reader can check. | CLAUDE.md Rule #10 |
 | 3 | The empty region is tinted at the surface level, not hatched. A hatch is a pattern a reader tries to decode. | Jony |
+| 4 | **A hover on an unmeasured column must say so.** Measured, the hover mechanism works and still reads as broken, because four columns in five carry a date and no values. The readout prints `Nothing was timed on this day` rather than an empty row - which is the difference between a chart that is quiet and one that looks broken. | Susan |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Auto-fit the domain to the measured days | It makes a seven-day record look like a thirty-day one, and the preset the reader picked stops meaning anything. | Editor |
-| 2 | Say nothing and let the reader see the gap | Measured, the reader reads it as a right-aligned chart and asks why, which is exactly what happened. | owner, 2026-08-31 |
+| 2 | Say nothing and let the reader see the gap | Measured, the reader reads it as a right-aligned chart with a broken hover and asks why, which is exactly what happened twice. | owner, 2026-08-31 |
+| 3 | Refuse the hover outside the measured span | It makes the dead region feel dead rather than explaining it, and the reader still does not learn why four fifths of the chart is empty. | Susan |
 
 ### Row #13 - The chart-arm flow survives a phone
 
@@ -401,23 +454,30 @@ Zero console errors and zero 4xx on all six loads. The window choice is already 
 
 ### Row #14 - Every daily-figures disclosure states its window
 
-- **Scope:** Both `Show the daily figures` disclosures declare the span they cover, honour the shared window, and say so in their summary line.
+- **Scope:** Both daily tables follow the shared window, take one name, sit where the section ends, and stop wearing card chrome while closed.
 - **Files touched:**
   - `frontend/src/routes/console/+page.svelte`
   - `frontend/src/routes/console/model/+page.svelte`
+  - `frontend/src/styles/app.css`
   - `frontend/tests/console-window.spec.ts`
   - `docs/architecture/publishing/frontend.md`
 - **Acceptance gates:** as Row #1.
-- **Oracle:** Drive each preset and assert both disclosures' row counts change with the preset and equal the count of days in the window that carry data, and that each summary line names the same day count as the window control.
+- **Oracle:** Drive each preset and assert both disclosures' row counts change with the preset and equal the count of days in the window that carry data, and that each summary line names the same day count as the window control. Then assert the closed disclosure's computed `border-width`, `box-shadow` and `background` match the surrounding prose and not a panel - the chrome is the defect and an eye cannot check it.
 
 | # | Decision | Authority |
 | --- | --- | --- |
-| 1 | A disclosure inside a windowed section is windowed. A table that ignores the preset above it is the two-spans defect in a `<details>`. | Fowler |
-| 2 | The summary line carries the count, so the span is readable without opening it. | Susan |
+| 1 | Both tables survive. Deleting the Pipelines one costs the reader the only place `Items published` appears, the only per-day breakdown under a window-level flow, and the only way to check a printed rate against the two counts it was divided from. The Model table is already ruled on in `design-system.md` - the rows are what say which day. | Susan |
+| 2 | A disclosure inside a windowed section is windowed. A table that ignores the preset above it is the two-spans defect in a `<details>`. | Fowler |
+| 3 | Both routes take one name, byte-identical: **Show these figures day by day.** `Show the daily figures` is unclear because "figures" names nothing on a page that is nothing but figures. | Susan |
+| 4 | **The "hanging" is chrome, not placement.** Closed, the disclosure is a bordered, shadowed, rounded card wrapped around one line of link text - the visual weight of a section with the content of a footnote. `.console-disclosure:not([open])` drops the border, the background and the shadow. | Susan |
+| 5 | On Pipelines it moves INSIDE `[data-windowed="chart-arm"]`, directly after the flow panel, as the last element of the section. On Model the placement is already right and only the chrome and the name change. | Susan |
+| 6 | Most of the Pipelines table is already drawn above it - the flow covers reached, asked, drafted and published; two target bars and their sparklines cover the minutes and the coverage. Only `Items published` is uncharted, and Row #10 charts it. The table stays as the per-DAY reading of a window-level picture, and its summary line says so. | measured 2026-08-31 |
 
 | # | Option | Why rejected | Authority |
 | --- | --- | --- | --- |
 | 1 | Leave the tables all-time and label them so | The reader picked a window; two answers on one page for one question is what the shared control removed. | Fowler |
+| 2 | Delete the Pipelines table because the section already charts it | It is the only place `Items published` appears and the only way to attribute a window aggregate to a day. | Susan |
+| 3 | Move the table to its own section | It answers the section above it. A table that has to be found is a table nobody reads. | Susan |
 
 ### Row #15 - Which sources the checker doubts
 
@@ -586,7 +646,138 @@ Zero console errors and zero 4xx on all six loads. The window choice is already 
 | 1 | Keep one chart and add a series toggle | A toggle is a control a reader has to operate before he can read anything, and the comparison across percentiles is exactly what small multiples give free. | Jony |
 | 2 | Drop the aggregate | It is the only place the newest run's whole distribution is visible at once. | Andre |
 
-### Row #22 - Closure
+### Row #22 - The router becomes the visuals planner
+
+- **Scope:** Every reader-facing string that calls the chart arm a router names it for what it does; the code identifiers follow in a later change and are out of scope here.
+- **Files touched:**
+  - `frontend/src/routes/console/+page.svelte`
+  - `frontend/src/lib/charts/chart-flow.ts`
+  - `frontend/src/lib/charts/glance.ts`
+  - `frontend/tests/console.spec.ts`
+  - `docs/architecture/publishing/frontend.md`
+  - `docs/concepts/ui-shell.md`
+- **Acceptance gates:** as Row #1.
+- **Oracle:** Assert no rendered text node on any of the three built routes contains `router`, case-insensitive, and that the section's own count of drawn figures is unchanged from `origin/main` - which is what proves the row renamed and did not redesign.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | `router` is a subsystem term and section 0b forbids it in a reader string. Inside a section headed `Charts drawn for articles` the word is not needed at all. | CLAUDE.md section 0b |
+| 2 | The strings: `Router minutes per chart` becomes `Minutes per visual`; `Published items with a chart` becomes `Published articles with a visual`; the table column `Router minutes` becomes `Minutes spent`; `the router looked at` becomes `the visuals planner looked at`. | owner, 2026-08-31 |
+| 3 | The section heading becomes `Visuals drawn for articles`, and `chart` as the name of a drawn thing becomes `visual` throughout the section, because more visual types are coming and `chart` will stop being true. | owner, 2026-08-31 |
+| 4 | **Reader strings only.** `RouteId`, data attributes, function names, config keys, ledger columns and the `chart_arm_*` knobs are untouched. Renaming an identifier is a repo-wide change with its own gates and belongs in its own plan. | Fowler |
+| 5 | Two names for one quantity on one screen is the defect to avoid: rename the target bar, its sparkline label, the section intro and the table column together or not at all. | Susan |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Rename the code identifiers in the same row | It reaches `backend/`, `config/` and the committed ledgers, and it would put a naming change on the critical path of twenty chart rows. | Fowler |
+| 2 | Keep `chart` and only drop `router` | The owner's reason for the rename is that more visual types are coming; a name that is about to stop being true is worth changing once. | Editor |
+
+### Row #23 - The band carries three facts and half the height
+
+- **Scope:** The band loses the window control and five of the site-size fact's six lines, gains a run row and a consequence clause, and the navigation strip moves above it.
+- **Files touched:**
+  - `frontend/src/lib/components/ConsoleBand.svelte`
+  - `frontend/src/lib/components/ConsoleNav.svelte`
+  - `frontend/src/lib/components/WindowControl.svelte`
+  - `frontend/src/lib/server/console-shell.ts`
+  - `frontend/src/routes/console/+page.svelte`
+  - `frontend/src/routes/console/model/+page.svelte`
+  - `frontend/src/routes/console/machine/+page.svelte`
+  - `frontend/tests/console-band.spec.ts` (new)
+  - `frontend/tests/console-nav.spec.ts`
+  - `docs/architecture/publishing/frontend.md`
+- **Acceptance gates:** as Row #1, with 390 px load-bearing.
+- **Oracle:** In a real browser assert the band's measured height is at most 130 px at 1440 and at most 320 px at 390 (measured 2026-08-31: 321 and 528), that the first chart's top is at most 640 px and 1,000 px, that the DOM order is header, `h1`, nav, band, window control, content, and that the band's worst-thing sentence is NOT byte-equal to the strip's own worst fragment - the two say the same thing today, 337 px apart on a phone.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | Three facts, not four. The window control governs nothing in the band - `console-shell.ts` says twice the band is deliberately not windowed - so a control sitting inside a panel it does not govern is in the wrong container. It moves below the band. | Susan |
+| 2 | The strip moves ABOVE the band. Chrome above content is the one ordering a reader never has to learn, and the band's worst fact links into the strip, which a phone reader currently cannot find 337 px below. | Susan |
+| 3 | **The control does not move above the band**, which is what the owner proposed. A control read before any fact asks the operator to configure a page he has been told nothing about. | Susan |
+| 4 | The site-size fact becomes one line: `10.7 MB of the 1 GB limit - room for about 326,000 more articles.` The basis, the caveat and the years move to `What one more article costs`, which already owns the rate, its n and its spread. `idhazh site-weight` and `committed payload tree` leave every reader string. | Susan |
+| 5 | The worst-thing fact gains a consequence clause, so it says what the state costs rather than naming it. `15 feeds resting` becomes `15 feeds are resting, so nothing they carry reaches the digest. Each is asked again after 5 runs.` The 5 comes from `quarantine_after_failures`, never a literal. `Candidate` gains a `sentence` field; the strip keeps the short `text`. | Susan |
+| 6 | The answer to "what action does resting ask of me" is **none today**: quarantine is self-terminating - five failures rest a feed, five skips lift it. What it asks is that the operator knows the digest is short of sources until the retry, and retires a feed only if it stays dead. The sentence says that; it does not invent a task. | `docs/architecture/sources/health.md` |
+| 7 | The Yesterday fact gains a run row: one small square per run of that day, on the same `--fill-*` ramp and the same square as `Run health` 800 px below, so it is a system rather than a mark invented for one panel. Hand-written markup, capped at 12 squares then `+N`. It says what the sentence cannot - whether one run ate all 34 failures or all five limped. | Susan |
+| 8 | `feedTrouble` ranks a resting feed at `BROKEN`, tying with a failed run, and the stable sort hands the tie to resting - so a self-clearing rest silently outranks a run that did not finish. Break the tie by pushing the run candidates first. | Susan |
+| 9 | The page subtitle is cut on all three routes. It costs 66 px on a phone, repeats what the active tab's own description says 150 px lower, and puts `committed ledger` at the top of the page. | Susan |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | A published-of-planned progress bar on the Yesterday fact | It would draw that sentence's own two numbers a second time. The run row says something the sentence cannot. | Susan |
+| 2 | A tint on the site-size track | Nothing has agreed what "too full" is at 1 percent of the cap, and a tint would publish a threshold nobody took. | Susan |
+| 3 | Drop the site-size fact entirely | It is the one number that says whether the project has a future, and it is one line. | Editor |
+| 4 | Keep the band at four things per its own docstring | The docstring's count is right and its fourth member is wrong. Three facts and no more. | Susan |
+
+### Row #24 - One coverage sentence, not one per series
+
+- **Scope:** The three near-identical per-series footnotes under `Time per item, by stage` become one sentence under the chart's own description.
+- **Files touched:**
+  - `frontend/src/lib/components/StageTimings.svelte`
+  - `frontend/tests/console-timings.spec.ts`
+  - `docs/concepts/design-system.md`
+- **Acceptance gates:** as Row #1.
+- **Oracle:** Assert exactly one `[data-timing-coverage]` element whatever the series count, that its two numbers equal the independently computed timed-day count and timed-item count over the window, and that a fixture where two stages disagree renders the range form. The series count must appear in no assertion - that is what proves it stopped scaling with the series.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The three sentences are one window-level fact printed once per series, and a fourth stage would make it four. One sentence, under the `h2`, beside the description already there. | Susan |
+| 2 | It goes ABOVE the plot, not below. A reader meets a broken line before he meets the sentence that explains it. | Susan |
+| 3 | The denominator is the day's own `items`, not the sum of `StageTiming.total` - summing across three stages triple-counts, and picking one stage is arbitrary. Where the stages disagree the numerator prints as a range. | Susan |
+| 4 | Where every day in the window was timed in full, print nothing. A sentence that only ever says "all of it" is noise. | Susan |
+| 5 | The open-dot legend is a second sentence in the same paragraph, printed once and only where an open dot is drawn. | Susan |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Move the sentence into the hover strip | `ChartReadout` is one contract for every multi-series chart, capped at `chart.readout_max_share`, and it prints one column's values. A window-level sentence there is a second thing that strip means. | Susan |
+| 2 | Keep one note per series and shorten each | Four stages would be four notes. The count is the defect, not the length. | Susan |
+
+### Row #25 - The site runway stops dividing by a per-run ceiling
+
+- **Scope:** The band's remaining-room figure stops assuming a daily article rate it does not measure.
+- **Files touched:**
+  - `frontend/src/lib/charts/glance.ts`
+  - `frontend/src/lib/server/console-shell.ts`
+  - `frontend/tests/console-band.spec.ts`
+  - `docs/reference/measurements.md`
+- **Acceptance gates:** as Row #1, plus `ruff`, `mypy --strict` and the full backend suite if any config description moves.
+- **Oracle:** Compute the remaining articles independently as `(cap - bytes) / bytesPerItem` and assert the printed figure equals it. Bite-proof against the defect: build a fixture whose runs-per-day is 3 and assert the printed answer does not change, which no per-day formula can satisfy.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | **This is a live defect, verified 2026-08-31.** `console-shell.ts:348` passes `run.safety_ceiling_per_run` (160) into `siteRunway` as `itemsPerDay`, and line 361 prints it as `160 articles a day`. It is a per-RUN ceiling. The band's own first fact says yesterday ran 5 runs and published 431 items, so the printed 2,036-day runway overstates the room by about 2.7 times. | measured 2026-08-31 |
+| 2 | The fix removes the assumption rather than correcting it: print remaining **articles**, which needs no per-day rate at all. About 326,000 on the committed tree. | Susan |
+| 3 | The years figure survives on `What one more article costs`, where it is derived from the measured median articles a published day over the same days `siteCost` measured - never from a config ceiling and never from one day. | Rule #10 |
+| 4 | `safety_ceiling_per_run` keeps its meaning and its value. This is a reader defect, not a config one. | Fowler |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Multiply the ceiling by the median runs a day | It replaces one assumption with two, and the runs-a-day figure is itself unstable - GitHub drops scheduled slots. | Carmack |
+| 2 | Leave it and add a caveat | A caveat under a number wrong by 2.7x is a caveat nobody reads. | Susan |
+
+### Row #26 - What one more article costs says what it is for
+
+- **Scope:** The per-article cost panel states the question it answers, and stops drawing at a width it was given rather than the width it has.
+- **Files touched:**
+  - `frontend/src/routes/console/+page.svelte`
+  - `frontend/src/lib/charts/glance.ts`
+  - `frontend/tests/console-published.spec.ts`
+  - `docs/architecture/publishing/frontend.md`
+- **Acceptance gates:** as Row #1.
+- **Oracle:** Assert the chart's drawn width tracks its container at 1440, 768 and 390 - it is hardcoded `width={760}` today - and that the panel's note names the cap, the rate and the horizon in one sentence whose numbers equal the ones `siteCost` computed.
+
+| # | Decision | Authority |
+| --- | --- | --- |
+| 1 | The panel is NOT about data growth across days. It is the marginal cost of one more article, and it exists to answer how long the project can keep publishing under the 1 GB Pages cap. The note has never said so. | Editor |
+| 2 | The note gains the horizon sentence Row #23 moved off the band: the cap is measured on the built site, which is larger than the data behind it, so the band's figure is the most room we have and not the least; at the measured rate and the measured median articles a published day, that is about 2 years. | Susan |
+| 3 | The daily points stay. The spread and the flagged days are how a reader sees whether the rate is stable enough to extrapolate from, which is the only thing that makes the horizon honest. | Andre |
+| 4 | The hardcoded `width={760}` goes. Every other chart on the page measures its container. | Jony |
+
+| # | Option | Why rejected | Authority |
+| --- | --- | --- | --- |
+| 1 | Replace it with a cumulative size-over-time chart | That answers "how big is it", which the band already answers in one line. The panel exists for the RATE, which a cumulative line hides. | Editor |
+| 2 | Reduce it to the median sentence | One number cannot say whether the rate is stable, and an unstable rate makes the horizon meaningless. | Andre |
+
+### Row #27 - Closure
 
 - **Scope:** Distil the plan's durable lessons into the living docs, re-derive the three console page ceilings on the merged tree, and delete the plan-doc.
 - **Files touched:**
