@@ -116,7 +116,12 @@
 	);
 </script>
 
-<div class="plot" data-model-swap-plot data-swap-at={swap.at}>
+<div
+	class="plot"
+	data-model-swap-plot
+	data-swap-at={swap.at}
+	data-readout-none="one row per measure, each against its own baseline, so no column is shared"
+>
 	<div use:observeWidth={(next) => (measured = next)}>
 		<svg
 			class="block max-w-full"
