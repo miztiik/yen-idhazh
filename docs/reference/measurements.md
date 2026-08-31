@@ -2229,6 +2229,53 @@ The ordering of the levers falls out of this: encoding buys 5.6x, honouring the
 visual rule buys another 2.9x, and retention is what remains after both. See
 [../architecture/publishing/layout.md](../architecture/publishing/layout.md).
 
+#### The console band divided by a per-run ceiling (2026-08-31)
+
+The band's remaining-room figure was in published days, and the articles-a-day
+it divided by was `run.safety_ceiling_per_run`. That knob bounds one **run**,
+and the schedule fires up to five runs a day
+([github-actions.md](github-actions.md)) - so the band priced a day at 160
+articles while the days it was measuring ran many times that.
+
+Measured on `origin/main` at `fb6a65a`, over the eleven committed manifests
+under `frontend/public/digest/`. Hardware: Intel Core i7-1265U, Windows 11
+10.0.26200, node v24.12.0. n=1 per figure: a count over a fixed committed tree
+has no spread, and the spread that matters is on the rate and is given below.
+
+| Quantity | Value |
+| --- | ---: |
+| Committed payload tree, newest manifest (2026-08-31) | 11,660,434 B |
+| Per-article cost, median over the 10 measured published days | 3,404 B |
+| Spread of that cost, root-mean-square about the median | 654 B, 19.2 percent |
+| Articles a published day, median over the same days | 334 |
+| Articles a published day, range | 4 to 731 |
+| Runs a published day, median | 3 |
+| `run.safety_ceiling_per_run` | 160 |
+
+At the ceiling the band read **1,950 published days**. At the measured median of
+334 articles a published day the same headroom is **934 days**, so the printed
+figure was **2.09 times too long**. Against 2026-08-30 alone - 431 articles over
+5 runs - it is 2.69 times, which is the figure the plan-doc recorded from that
+one day.
+
+**The fix removes the assumption rather than correcting it.** Headroom over the
+per-article cost is `(1,073,741,824 - 11,660,434) / 3,404 =` **312,038
+articles**, and no daily rate enters it. It is printed to three significant
+figures because the cost under it carries a 19.2 percent spread (Rule #10):
+`room for about 312,000 more articles`.
+
+**Multiplying the ceiling by a median runs-a-day was rejected.** It replaces one
+assumption with two, and the runs-a-day figure is itself unstable - 1 to 5 over
+these eleven days, and GitHub drops scheduled slots silently
+([github-actions.md](github-actions.md)).
+
+**`idhazh site-weight` still divides by the ceiling and shares the premise.**
+`retention.daily_growth_bytes` documents `items_per_day` as "the most a day is
+allowed to cost", which a per-run ceiling is not, so its published-days runway
+is long by the same kind of factor. It measures a different tree and answers to
+an operator rather than to a reader; it was left alone deliberately and is filed
+here rather than fixed.
+
 ### Where the alarm fires, and what it buys
 
 `retention.site_budget_mb` is the size at which a build logs a warning. It is an
