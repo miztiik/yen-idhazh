@@ -1747,35 +1747,39 @@ retypes it.
 ## The console ceiling is a tripwire, and what to do when it fires
 
 **Since 2026-08-31 there are three of them, one per route.** `/console/` is
-capped at 250,096 bytes, `/console/model/` at 28,394 and `/console/machine/` at
-30,391. One key over three surfaces still fails when any of them grows and then
+capped at 251,324 bytes, `/console/model/` at 29,273 and `/console/machine/` at
+31,714. One key over three surfaces still fails when any of them grows and then
 cannot say which one did, so the operator raises the shared number and the
 regression lands under it. Sizing them separately is what makes the split worth
-having. **They are meant to expire** - all three of the first numbers did, on
-the day they were set, when Model and Machine gained the panels they had been
-standing empty for.
+having. **They are meant to expire** - the first set did, on the day it was set,
+when Model and Machine gained the panels they had been standing empty for, and
+the second set did once every row of the observability plan had merged.
 
 Each of the first two has the same three terms `/archive/` has, and only the
 middle one differs:
 
 ```text
-  115,562  heaviest of seven builds of the tree that ships
-+ 134,470  seven published days, at 19,210 bytes measured by removing a real one
+  116,153  heaviest of five builds of the tree that ships
++ 135,107  seven published days, at 19,301 bytes measured by removing a real one
 +      64  the build noise floor, derived in measurements.md
-= 250,096  /console/
+= 251,324  /console/
 
-   20,392  heaviest of seven builds
-+   7,938  seven published days, at 1,134 bytes measured the same way
+   20,956  heaviest of five builds
++   8,253  seven published days, at 1,179 bytes measured the same way
 +      64  the build noise floor
-=  28,394  /console/model/
+=  29,273  /console/model/
 ```
 
-**All three moved on 2026-08-31, and every one of them was re-derived rather
-than nudged.** `/console/` fell 547 bytes because `score_ms` left its timing
-chart. `/console/model/` rose 9,712 because it gained the per-item cost
-distribution, the per-run summary lengths and the model-swap comparison - and
-because a published day now costs it 1,134 bytes instead of 730, since the
-length panel draws a column per run and a day holds up to five. The owner's byte
+**All three moved twice on 2026-08-31, and every move was a re-derivation rather
+than a nudge.** The first move was the Model route gaining its panels and the
+Machine route gaining all nine of its own. The second was the closure of the
+observability plan, which re-derived all three on one tree once no sibling row
+was still in flight - because a ceiling set from a tree two rows old carries a
+runway that has already been spent. Not one of the three had fired: they read
+116,153, 20,956 and 23,110 against 250,096, 28,394 and 30,391. What the second
+move bought is 591, 564 and 868 bytes of page - one shared readout strip
+replacing two hand-rolled ones, and a named empty state on every panel - plus
+seven publishes of runway at the rates the ledgers now cost. The owner's byte
 ruling of 2026-08-31 is why the numbers moved and the panels did not.
 
 `/console/machine/` was priced at 6,899 while it rendered no ledger - a published
@@ -1785,10 +1789,10 @@ since 2026-08-31 and is priced in RUNS, because a day that ran three times and a
 day that ran five cost it differently:
 
 ```text
-   22,242  heaviest of five builds
-+   8,085  seven published days at 5 runs a day, 231 bytes a run
+   23,110  heaviest of five builds
++   8,540  seven published days at 5 runs a day, 244 bytes a run
 +      64  the build noise floor
-=  30,391  /console/machine/
+=  31,714  /console/machine/
 ```
 
 **A published day was priced by removing a real one, not by cloning one.** Take
