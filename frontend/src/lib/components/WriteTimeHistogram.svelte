@@ -193,7 +193,12 @@
 	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
 </script>
 
-<div class="plot" data-write-times="chart" data-write-times-n={times.n}>
+<div
+	class="plot"
+	data-write-times="chart"
+	data-write-times-n={times.n}
+	data-readout-columns={columns.length}
+>
 	<div use:observeWidth={(next) => (measured = next)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg

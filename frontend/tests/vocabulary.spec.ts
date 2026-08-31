@@ -134,7 +134,7 @@ test.describe('the stacked bars', () => {
 		expect(s.totals).toEqual([3, 5]);
 	});
 
-	test('a series with nothing in the window takes its legend entry with it', () => {
+	test('a series with nothing in the window is not drawn at all', () => {
 		const s = stacked(
 			['Mon'],
 			[
@@ -142,8 +142,22 @@ test.describe('the stacked bars', () => {
 				{ label: 'never ran', token: '--chart-2', values: [0] }
 			]
 		);
-		const legend = s.option.legend as { data: string[] };
-		expect(legend.data).toEqual(['fetch']);
+		const series = s.option.series as { name: string }[];
+		expect(series.map((one) => one.name)).toEqual(['fetch']);
+	});
+
+	test('no chart draws a legend, because the readout strip is the key', () => {
+		// The strip under the plot prints every series at the hovered column with
+		// its own swatch. A legend above the plot would draw the same pair a
+		// second time, and one fact drawn twice is how two of them drift.
+		const s = stacked(
+			['Mon'],
+			[
+				{ label: 'fetch', token: '--chart-1', values: [2] },
+				{ label: 'extract', token: '--chart-2', values: [1] }
+			]
+		);
+		expect(s.option.legend).toBeUndefined();
 	});
 
 	test('a stack of nothing is empty', () => {
