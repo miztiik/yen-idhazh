@@ -2,11 +2,124 @@
    A theme is exactly one [data-theme="x"] block supplying these names and
    nothing else - that is the whole theming mechanism.
 
+   Dark is the base and light is the override. :root carries the dark values,
+   so a document that has not run its script yet, or has no script to run,
+   paints dark on its first frame instead of flashing white and correcting
+   itself.
+
    The dark theme is DESIGNED, not derived. A shadow on a dark ground reads as
    nothing, so elevation there is surface lift plus a hairline, and every tint
    is re-tuned rather than reused at the same alpha. */
 
 :root,
+[data-theme='dark'] {
+	/* --- Surfaces -------------------------------------------------------
+	   The page is darker than the card that sits on it, and the raised
+	   surface is lighter again. On a dark ground that lift IS the elevation,
+	   because a shadow there reads as nothing. */
+	--color-bg: #0b0e14;
+	--color-surface: #141922;
+	--color-surface-raised: #1b2230;
+	--color-surface-sunken: #0f131b;
+	--color-rule: #232b39;
+	--color-rule-strong: #333d4f;
+
+	--color-text: #e6edf5;
+	--color-text-secondary: #a3aec0;
+	--color-text-tertiary: #78859a;
+	--color-accent: #8b8bf5;
+	--color-accent-strong: #a5a5ff;
+	--color-on-accent: #0b0e14;
+	--color-focus: #8b8bf5;
+
+	--band-high: #4bbd84;
+	--band-medium: #d6a743;
+	--band-low: #f0836c;
+
+	/* --- Fill ramp -------------------------------------------------------
+	   Written out rather than pointed at the three above, even though they
+	   agree here. The three above are TEXT colours and stay text colours: a
+	   chip, a table cell and a card all read them as type. A 16px filled
+	   square is a different job, and a later change made for the sake of text
+	   must not silently repaint every fill. On a dark ground a fill sits
+	   lighter than its ground and cannot become ink, which is why the two
+	   ramps agree here and part company in the light theme below.
+	   design-system.md owns the band a value has to land in. */
+	--fill-high: #4bbd84;
+	--fill-medium: #d6a743;
+	--fill-low: #f0836c;
+
+	/* --- Chart ramp ------------------------------------------------------
+	   Categorical, eight stops, and it holds no green, no amber and no red -
+	   a chart that borrowed the confidence ramp once told a reader the
+	   slowest stage was the failing one. */
+	--chart-1: #5b95f5;
+	--chart-2: #b79bf0;
+	--chart-3: #4fc7dd;
+	--chart-4: #f08cc4;
+	--chart-5: #8b93ff;
+	--chart-6: #3fc3e0;
+	--chart-7: #e07ce8;
+	--chart-8: #94a3b8;
+
+	--series-1: var(--chart-1);
+	--series-2: var(--chart-2);
+	--series-3: var(--chart-3);
+	--series-4: var(--chart-4);
+
+	--chart-grid: #1f2632;
+	--chart-axis: #5c6a7e;
+	--chart-marker: #cbd5e1;
+	--chart-readout-bg: rgba(230, 237, 245, 0.95);
+	--chart-readout-text: #0b0e14;
+
+	/* --- Semantic tints --------------------------------------------------
+	   A panel takes the hue of what it means. --tint-warn, --tint-bad and
+	   --tint-good ARE the confidence hues, and that is correct: a tinted
+	   status card carries a word as well. What may never borrow them is the
+	   chart ramp above, which carries no word. The alphas are roughly twice
+	   the light theme's, because the same alpha over a dark ground is
+	   invisible. */
+	--tint-accent: rgba(139, 139, 245, 0.14);
+	--tint-info: rgba(91, 149, 245, 0.13);
+	--tint-good: rgba(75, 189, 132, 0.14);
+	--tint-warn: rgba(214, 167, 67, 0.15);
+	--tint-bad: rgba(240, 131, 108, 0.14);
+	--tint-neutral: rgba(230, 237, 245, 0.06);
+
+	--source-swatch-0: #1d2b41;
+	--source-swatch-1: #272341;
+	--source-swatch-2: #3d2226;
+	--source-swatch-3: #3a2f18;
+	--source-swatch-4: #17322a;
+	--source-swatch-5: #172d36;
+	--source-swatch-6: #331f31;
+	--source-swatch-7: #23262c;
+
+	/* --- Gradients -------------------------------------------------------
+	   Chrome and identity only: the wordmark, a panel wash, an empty state.
+	   Never on an item, never inside a chart. These encode nothing, which is
+	   what makes them decoration rather than semantic colour - and decorative
+	   colour is unconstrained. */
+	--gradient-brand: linear-gradient(105deg, #6d84ff 0%, #9b7cff 48%, #dc8ce8 100%);
+	--gradient-wash: linear-gradient(168deg, #141a27 0%, #17141f 100%);
+	--gradient-panel: linear-gradient(180deg, #171d28 0%, #131820 100%);
+
+	/* --- Elevation -------------------------------------------------------
+	   A shadow on a dark ground reads as nothing, so elevation here is carried
+	   by the hairline and by the raised surface colour above. The shadow is
+	   still present for depth under a floating element, but it is never the
+	   only cue. */
+	--shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.04);
+	--shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
+	--shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
+	--shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.07);
+	--shadow-focus: 0 0 0 3px rgba(139, 139, 245, 0.35);
+}
+
+/* The override. It comes after the base and matches at the same specificity,
+   so source order is what makes a chosen light theme win. Move it above and a
+   reader who asked for light gets dark. */
 [data-theme='light'] {
 	/* --- Surfaces -------------------------------------------------------
 	   The page is cooler and darker than the card that sits on it. The gap
@@ -42,9 +155,9 @@
 	   colour text weight, and on screen they read as olive and brick.
 
 	   So the ramp is parallel rather than a replacement: lighter here, and
-	   the same values in the dark theme, where a fill sits lighter than its
-	   ground and cannot become ink. design-system.md owns the band a value
-	   has to land in and where each bound comes from. */
+	   the band values themselves in the dark theme, where a fill sits lighter
+	   than its ground and cannot become ink. design-system.md owns the band a
+	   value has to land in and where each bound comes from. */
 	--fill-high: #2e9e63;
 	--fill-medium: #c08200;
 	--fill-low: #e0523a;
@@ -115,86 +228,6 @@
 	--shadow-lg: 0 12px 24px -6px rgba(16, 24, 40, 0.1), 0 4px 8px -3px rgba(16, 24, 40, 0.05);
 	--shadow-panel: 0 1px 3px rgba(16, 24, 40, 0.06), 0 0 0 1px rgba(16, 24, 40, 0.05);
 	--shadow-focus: 0 0 0 3px rgba(79, 70, 229, 0.2);
-}
-
-[data-theme='dark'] {
-	--color-bg: #0b0e14;
-	--color-surface: #141922;
-	--color-surface-raised: #1b2230;
-	--color-surface-sunken: #0f131b;
-	--color-rule: #232b39;
-	--color-rule-strong: #333d4f;
-
-	--color-text: #e6edf5;
-	--color-text-secondary: #a3aec0;
-	--color-text-tertiary: #78859a;
-	--color-accent: #8b8bf5;
-	--color-accent-strong: #a5a5ff;
-	--color-on-accent: #0b0e14;
-	--color-focus: #8b8bf5;
-
-	--band-high: #4bbd84;
-	--band-medium: #d6a743;
-	--band-low: #f0836c;
-
-	/* Written out rather than pointed at the three above, even though they
-	   agree today. The dark theme is designed, not derived, and a later change
-	   made for the sake of text must not silently repaint every fill. */
-	--fill-high: #4bbd84;
-	--fill-medium: #d6a743;
-	--fill-low: #f0836c;
-
-	--chart-1: #5b95f5;
-	--chart-2: #b79bf0;
-	--chart-3: #4fc7dd;
-	--chart-4: #f08cc4;
-	--chart-5: #8b93ff;
-	--chart-6: #3fc3e0;
-	--chart-7: #e07ce8;
-	--chart-8: #94a3b8;
-
-	--series-1: var(--chart-1);
-	--series-2: var(--chart-2);
-	--series-3: var(--chart-3);
-	--series-4: var(--chart-4);
-
-	--chart-grid: #1f2632;
-	--chart-axis: #5c6a7e;
-	--chart-marker: #cbd5e1;
-	--chart-readout-bg: rgba(230, 237, 245, 0.95);
-	--chart-readout-text: #0b0e14;
-
-	/* Re-tuned rather than reused: the same alpha over a dark ground is
-	   invisible, so every tint here is roughly twice the light-theme value. */
-	--tint-accent: rgba(139, 139, 245, 0.14);
-	--tint-info: rgba(91, 149, 245, 0.13);
-	--tint-good: rgba(75, 189, 132, 0.14);
-	--tint-warn: rgba(214, 167, 67, 0.15);
-	--tint-bad: rgba(240, 131, 108, 0.14);
-	--tint-neutral: rgba(230, 237, 245, 0.06);
-
-	--source-swatch-0: #1d2b41;
-	--source-swatch-1: #272341;
-	--source-swatch-2: #3d2226;
-	--source-swatch-3: #3a2f18;
-	--source-swatch-4: #17322a;
-	--source-swatch-5: #172d36;
-	--source-swatch-6: #331f31;
-	--source-swatch-7: #23262c;
-
-	--gradient-brand: linear-gradient(105deg, #6d84ff 0%, #9b7cff 48%, #dc8ce8 100%);
-	--gradient-wash: linear-gradient(168deg, #141a27 0%, #17141f 100%);
-	--gradient-panel: linear-gradient(180deg, #171d28 0%, #131820 100%);
-
-	/* A shadow on a dark ground reads as nothing, so elevation here is carried
-	   by the hairline and by the raised surface colour above. The shadow is
-	   still present for depth under a floating element, but it is never the
-	   only cue. */
-	--shadow-sm: 0 0 0 1px rgba(255, 255, 255, 0.04);
-	--shadow-md: 0 2px 8px rgba(0, 0, 0, 0.45), 0 0 0 1px rgba(255, 255, 255, 0.05);
-	--shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(255, 255, 255, 0.07);
-	--shadow-panel: 0 0 0 1px rgba(255, 255, 255, 0.07);
-	--shadow-focus: 0 0 0 3px rgba(139, 139, 245, 0.35);
 }
 
 /* --- Scales that do not change with the theme ---------------------------

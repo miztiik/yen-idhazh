@@ -1,47 +1,40 @@
 <script lang="ts">
-	import { apply, storedChoice, watchSystem } from '$lib/theme';
+	/** Two themes, one button, and the glyph never flips.
+	 *
+	 * The page is the state indicator - a reader can see which theme they are
+	 * in - so an icon that changed with the theme would be a second and weaker
+	 * copy of that. The moon names the control; the label names the action.
+	 * There is no `aria-pressed` for the same reason: this is a switch between
+	 * two states, not a thing that is on or off.
+	 */
+	import { apply, storedChoice, syncBrowserChrome } from '$lib/theme';
 	import type { ThemeChoice } from '$lib/theme';
 	import Icon from '$lib/icons/Icon.svelte';
-	import type { IconId } from '$lib/icons/generated';
 	import { onMount } from 'svelte';
 
-	let choice = $state<ThemeChoice>('system');
-	// Auto gets no mark on purpose: it means "whatever the system says", and a sun
-	// or a moon beside it would be a claim about which one that is.
-	const OPTIONS: { value: ThemeChoice; label: string; icon: IconId | null }[] = [
-		{ value: 'system', label: 'Auto', icon: null },
-		{ value: 'light', label: 'Light', icon: 'theme-light' },
-		{ value: 'dark', label: 'Dark', icon: 'theme-dark' }
-	];
+	// Dark until the stored choice is read, which matches what the document is
+	// already painting.
+	let choice = $state<ThemeChoice>('dark');
 
 	onMount(() => {
 		choice = storedChoice();
-		return watchSystem(() => {
-			if (choice === 'system') apply('system');
-		});
+		// The tag in app.html holds the base theme, so a reader who stored light
+		// would otherwise sit under dark chrome until they touched the control.
+		syncBrowserChrome();
 	});
 
-	function pick(value: ThemeChoice) {
-		choice = value;
-		apply(value);
+	function toggle() {
+		choice = choice === 'dark' ? 'light' : 'dark';
+		apply(choice);
 	}
 </script>
 
-<div
-	class="inline-flex items-center rounded-full border border-rule p-0.5"
-	role="group"
-	aria-label="Theme"
+<button
+	type="button"
+	onclick={toggle}
+	class="inline-flex min-h-11 min-w-11 items-center justify-center rounded-full border border-rule text-text-tertiary transition-colors hover:text-accent"
+	aria-label={choice === 'dark' ? 'Switch to the light theme' : 'Switch to the dark theme'}
+	data-theme-toggle
 >
-	{#each OPTIONS as option (option.value)}
-		<button
-			type="button"
-			onclick={() => pick(option.value)}
-			aria-pressed={choice === option.value}
-				class="min-h-11 rounded-full px-3 text-sm transition-colors"
-			class:text-accent={choice === option.value}
-			class:text-text-tertiary={choice !== option.value}
-		>
-			{option.label}
-		</button>
-	{/each}
-</div>
+	<Icon id="theme-dark" />
+</button>
