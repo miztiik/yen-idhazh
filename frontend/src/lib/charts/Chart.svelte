@@ -10,9 +10,24 @@
 	 * an arrow key names the value. If that never happens, nothing is lost that
 	 * the axis did not already say - which is the whole reason the readout is
 	 * allowed to exist (design-system.md).
+	 *
+	 * Where the chart draws more than one series, `columns` turns on the same
+	 * fixed strip a hand-written chart prints: every series at one column, below
+	 * the plot, capped at a share of it, with a guide line down the column and
+	 * the arrow keys stepping through them. The engine's own tooltip still fires,
+	 * but it is never the only place a value appears - a tooltip needs a hover,
+	 * and a hover is not a thing a thumb can do.
 	 */
 	import type { EChartsOption } from 'echarts';
 	import { onMount } from 'svelte';
+	import {
+		bandShares,
+		pointerReadout,
+		readoutMarks,
+		type DayReadout,
+		type PlotGrid
+	} from './frame';
+	import ChartReadout from '../components/ChartReadout.svelte';
 	import type { LiveChart } from './engine';
 
 	let {
@@ -20,7 +35,13 @@
 		option,
 		width,
 		height,
-		label
+		label,
+		columns = [],
+		readoutName = '',
+		readoutMaxShare = 0.33,
+		restingNote = ', the newest column',
+		hint = 'Point at a column to read it. Left and Right step through them, Escape returns to the newest.',
+		grid = { left: 48, right: 12 }
 	}: {
 		/** Prerendered by `$lib/server/chart-render`. */
 		svg: string;
@@ -29,14 +50,42 @@
 		height: number;
 		/** What the chart is, for anyone who cannot see it. */
 		label: string;
+		/** One entry per category column, in drawing order. Empty turns the strip
+		 * off, which is right for a chart with one series or with no columns. */
+		columns?: DayReadout[];
+		readoutName?: string;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare?: number;
+		restingNote?: string;
+		hint?: string;
+		/** The engine's own plot insets, in pixels. They decide where a column
+		 * centre falls, and they are not the same for every option this wraps. */
+		grid?: PlotGrid;
 	} = $props();
 
-	let host: HTMLDivElement;
+	// Bound in one of two branches, so it is state rather than a plain binding.
+	let host = $state<HTMLDivElement | null>(null);
 	let live: LiveChart | null = null;
 	// The prerendered width is only a starting point; the observer owns it from
-	// mount onward. Not reactive - nothing in the markup reads it.
+	// mount onward. Reactive because the strip's column centres come off it: the
+	// engine keeps its grid insets in pixels, so the share of the element a
+	// column sits at moves with every resize.
 	// svelte-ignore state_referenced_locally
-	let measured = width;
+	let measured = $state(width);
+
+	/** The column a pointer or an arrow key has picked, or null for none. */
+	let selected = $state<number | null>(null);
+
+	const shares = $derived(bandShares(columns.length, measured, grid));
+	const marks = $derived(
+		readoutMarks(columns.map((column, index) => ({ ...column, x: shares[index] ?? 0 })))
+	);
+	/** The newest column, which is the one a reader came for. It is what the strip
+	 * prints before anything is pointed at, so the strip is never blank and never
+	 * changes the room the panel takes as it fills. */
+	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
+	const readout = $derived(at === null ? null : (columns[at] ?? null));
+	const guide = $derived(selected === null ? null : (shares[selected] ?? null));
 
 	onMount(() => {
 		let cancelled = false;
@@ -46,8 +95,9 @@
 		// already complete and this only adds the readout.
 		void (async () => {
 			const { hydrate } = await import('./engine');
-			if (cancelled) return;
-			live = await hydrate(host, option, { width: measured, height });
+			const node = host;
+			if (cancelled || node === null) return;
+			live = await hydrate(node, option, { width: measured, height });
 			observer = new ResizeObserver((entries) => {
 				const next = Math.round(entries[0].contentRect.width);
 				if (next > 0 && next !== measured) {
@@ -55,7 +105,7 @@
 					live?.resize({ width: next, height });
 				}
 			});
-			observer.observe(host);
+			observer.observe(node);
 		})();
 
 		return () => {
@@ -67,15 +117,74 @@
 </script>
 
 <figure class="chart" aria-label={label}>
-	<div bind:this={host} class="chart-host" style="height: {height}px">
-		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-		{@html svg}
-	</div>
+	{#if columns.length > 0}
+		<!-- The action goes on the wrapper, never on the SVG: the engine swaps that
+		     SVG out on hydration, so an action bound to it would come away holding
+		     the markup it was attached to. The wrapper takes the focus for the same
+		     reason - and one tab stop for a chart, never one per column. -->
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+		<div
+			class="chart-frame"
+			tabindex="0"
+			role="img"
+			aria-label={label}
+			data-chart-readout={readoutName}
+			use:pointerReadout={{ marks, width: 1, onSelect: (index) => (selected = index) }}
+		>
+			<div bind:this={host} class="chart-host" style="height: {height}px">
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				{@html svg}
+			</div>
+			{#if guide !== null}
+				<span
+					class="chart-guide"
+					style="left: {(guide * 100).toFixed(3)}%"
+					data-chart-guide={readoutName}
+					aria-hidden="true"
+				></span>
+			{/if}
+		</div>
+		<ChartReadout
+			{readout}
+			name={readoutName}
+			maxShare={readoutMaxShare}
+			resting={selected === null}
+			{restingNote}
+			{hint}
+		/>
+	{:else}
+		<div bind:this={host} class="chart-host" style="height: {height}px">
+			<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+			{@html svg}
+		</div>
+	{/if}
 </figure>
 
 <style>
 	.chart {
 		margin: 0;
+	}
+
+	.chart-frame {
+		position: relative;
+	}
+
+	.chart-frame:focus-visible {
+		outline: 2px solid var(--color-focus);
+		outline-offset: 2px;
+	}
+
+	/* Down the whole plot, so several series are read at one column rather than
+	   one at a time. Drawn over the chart because it marks a position rather
+	   than carrying a value - the values are in the strip below, where they
+	   cover nothing. */
+	.chart-guide {
+		position: absolute;
+		inset-block: 0;
+		inline-size: 1px;
+		background: var(--color-text-tertiary);
+		opacity: 0.5;
+		pointer-events: none;
 	}
 
 	.chart-host {

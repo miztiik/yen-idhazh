@@ -18,9 +18,10 @@
 
 import type { EChartsOption } from 'echarts';
 import type { RunCounters, ShardCounters } from '$lib/server/runtime-counters';
+import type { DayReadout } from './frame';
 import { percentOf } from './rank';
 import { grouped } from './series';
-import { stacked } from './stacked';
+import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
 import { paint, type ChartToken } from './theme';
 
@@ -361,15 +362,33 @@ export function cacheByDay(runs: readonly RunCounters[]): CacheDay[] {
 }
 
 /** The cache as a stacked column a day. No threshold marker and no health tint:
- * nobody has agreed a floor, and a tint would invent one and publish it. */
-export function cacheChart(days: readonly CacheDay[]) {
+ * nobody has agreed a floor, and a tint would invent one and publish it.
+ *
+ * The same array draws as two lines, which is the other half of the question:
+ * stacked says how many prompt tokens the day needed, lines say whether the
+ * read half fell while the cached half rose. Nothing is re-shaped between them.
+ */
+export function cacheChart(days: readonly CacheDay[], shape: StackShape = 'bars') {
 	return stacked(
 		days.map((day) => day.date),
 		[
 			{ label: 'Read', token: '--chart-1', values: days.map((day) => day.read) },
 			{ label: 'Served from cache', token: '--chart-3', values: days.map((day) => day.cached) }
-		]
+		],
+		shape
 	);
+}
+
+/** Both halves of one day's prompt tokens, for the strip under the chart. */
+export function cacheColumns(days: readonly CacheDay[]): DayReadout[] {
+	return days.map((day) => ({
+		x: 0,
+		date: day.date,
+		rows: [
+			{ label: 'Read', value: grouped(day.read), colour: 'var(--chart-1)' },
+			{ label: 'Served from cache', value: grouped(day.cached), colour: 'var(--chart-3)' }
+		]
+	}));
 }
 
 // ---------------------------------------------------------------------------
@@ -609,6 +628,33 @@ export function clocksChart(pairs: readonly ClockPair[]): {
 // The percentile curve
 // ---------------------------------------------------------------------------
 
+/** Both instruments at one column, for the strip under the clock chart.
+ *
+ * The panel exists to compare two readings of one quantity, and reading two
+ * bars off a shared axis by eye is the thing it was built to stop.
+ */
+export function clockColumns(pairs: readonly ClockPair[]): DayReadout[] {
+	return pairs
+		.filter((pair) => pair.ledger !== null && pair.server !== null)
+		.map((pair) => ({
+			x: 0,
+			date: pair.label,
+			rows: [
+				{
+					label: 'Item ledger',
+					value: `${(pair.ledger ?? 0).toFixed(2)} tok/s`,
+					colour: 'var(--chart-1)'
+				},
+				{
+					label: 'Model server',
+					value: `${(pair.server ?? 0).toFixed(2)} tok/s`,
+					colour: 'var(--chart-4)'
+				},
+				{ label: 'Apart', value: `${(pair.gapPct ?? 0).toFixed(2)}%`, colour: '' }
+			]
+		}));
+}
+
 export interface PercentilePoint {
 	percentile: number;
 	ms: number;
@@ -752,6 +798,24 @@ export function percentileChart(curves: readonly PercentileCurve[]): {
 // ---------------------------------------------------------------------------
 // Tokens, and what they would have cost somewhere else
 // ---------------------------------------------------------------------------
+
+/** Every run's reading at one percentile, for the strip under the curves.
+ *
+ * Two curves that cross are the fact this panel was drawn for, and a crossing
+ * is exactly where reading one curve at a time stops working.
+ */
+export function percentileColumns(curves: readonly PercentileCurve[]): DayReadout[] {
+	const tokens: ChartToken[] = ['--chart-1', '--chart-2', '--chart-3', '--chart-4', '--chart-5'];
+	return PERCENTILES.map((percentile, at) => ({
+		x: 0,
+		date: `p${percentile}`,
+		rows: curves.map((curve, index) => ({
+			label: curve.runId,
+			value: seconds(curve.points[at]?.ms === undefined ? null : curve.points[at].ms / 1000),
+			colour: `var(${tokens[index % tokens.length]})`
+		}))
+	}));
+}
 
 export interface RunTokens {
 	runId: string;

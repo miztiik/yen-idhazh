@@ -25,7 +25,16 @@
 	 * measured. The same knob decides the source-cut table's share, so two
 	 * shares on one page cannot disagree about when a denominator is too thin.
 	 */
-	import { chartWidth, frame, linearAxis, observeWidth } from '$lib/charts/frame';
+	import {
+		chartWidth,
+		frame,
+		linearAxis,
+		observeWidth,
+		pointerReadout,
+		readoutMarks,
+		type DayReadout
+	} from '$lib/charts/frame';
+	import ChartReadout from './ChartReadout.svelte';
 	import { failureLoad, type FailurePoint, type FailureStage } from '$lib/charts/glance';
 	import { failureSeries, grouped, type TelemetryRow } from '$lib/charts/series';
 	import { daysBetween, type TimeWindow } from '$lib/charts/viewport';
@@ -37,7 +46,8 @@
 		height,
 		width,
 		selectedCode,
-		onSelect
+		onSelect,
+		readoutMaxShare = 0.33
 	}: {
 		rows: TelemetryRow[];
 		window: TimeWindow;
@@ -48,6 +58,8 @@
 		width: number;
 		selectedCode: string | null;
 		onSelect: (code: string | null) => void;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare?: number;
 	} = $props();
 
 	/** Room on the right for the percent axis this chart added, on the left for
@@ -192,6 +204,36 @@
 					.map((stage) => `${stage.label}: ${sentence(stage)}`)
 					.join(' ')}`
 	);
+
+	/** The column a pointer or an arrow key has picked. */
+	let selected = $state<number | null>(null);
+
+	/** Where the day's items stopped, and every stage's rate, at one column. Two
+	 * quantities on two axes is the shape where reading them together by eye is
+	 * hardest, and it is the whole reason both are drawn. */
+	const columns = $derived<DayReadout[]>(
+		load.columns.map((column, index) => ({
+			x: centre(index),
+			date: column.date,
+			rows: [
+				...column.bands.map((band) => ({
+					label: band.key === 'finished' ? 'Finished' : band.label,
+					value: grouped(band.value),
+					colour: `var(${band.token})`
+				})),
+				...load.stages.map((stage) => ({
+					label: `${stage.label} rate`,
+					value:
+						stage.points[index]?.rate == null ? 'too few' : percent(stage.points[index].rate ?? 0),
+					colour: `var(${stage.token})`
+				}))
+			]
+		}))
+	);
+	const marks = $derived(readoutMarks(columns));
+	const at = $derived(selected ?? (columns.length === 0 ? null : columns.length - 1));
+	const readout = $derived(at === null ? null : (columns[at] ?? null));
+	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
 </script>
 
 <section
@@ -230,14 +272,33 @@
 		     what that bound was written against. Outside a figure the new chart
 		     would leave the check with nothing to measure. -->
 		<figure class="mt-4" use:observeWidth={(value) => (measured = value)}>
+			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 			<svg
+				class="focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 				width={box.width}
 				height={box.height}
 				viewBox={`0 0 ${box.width} ${box.height}`}
 				role="img"
+				tabindex="0"
 				aria-label={headline}
 				data-failure-chart
+				use:pointerReadout={{
+					marks,
+					width: box.width,
+					onSelect: (index) => (selected = index)
+				}}
 			>
+				{#if guide !== null}
+					<line
+						x1={guide}
+						x2={guide}
+						y1={box.top}
+						y2={box.bottom}
+						stroke="var(--color-text-tertiary)"
+						stroke-opacity="0.5"
+						data-failure-chart="guide"
+					/>
+				{/if}
 				<text x="0" y="11" fill="var(--color-text-tertiary)" font-size="11">Items</text>
 				<text
 					x={box.width}
@@ -343,6 +404,16 @@
 					{/each}
 				{/each}
 			</svg>
+			<!-- Below the plot, never over it, and the same strip every chart on
+			     this console prints - see `ChartReadout.svelte` for the rules. -->
+			<ChartReadout
+				{readout}
+				name="failure-rate"
+				maxShare={readoutMaxShare}
+				resting={selected === null}
+				restingNote=", the newest day"
+				hint="Point at a day to read where its items stopped and every stage's rate. Left and Right step through the days, Escape returns to the newest."
+			/>
 			<figcaption class="mt-2 text-[0.75rem] text-text-tertiary" data-failure-key>
 				The grey ground under each column is the work that finished{#if anySkipped}, and the slate
 					band on top of it is what the run listed and never fetched{/if}. The three coloured bands

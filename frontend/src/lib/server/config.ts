@@ -68,13 +68,16 @@ export interface RetentionConfig {
 	site_budget_mb: number;
 }
 
-/** The rate the Machine route prices a run's tokens at.
+/** The rate the Machine route prices a run's tokens at, and what was recorded.
  *
- * Three knobs of the pipeline's `observability` block, not the whole of it: the
- * switches decide what the pipeline records and nothing on the published site
- * reads them. What the site does read is the price, because Rule #6 forbids a
- * literal in a component and CLAUDE.md Rule #10's one carve-out requires the
- * figure to say where its rate came from.
+ * Part of the pipeline's `observability` block, not the whole of it. The price
+ * is here because Rule #6 forbids a literal in a component and CLAUDE.md Rule
+ * #10's one carve-out requires the figure to say where its rate came from.
+ *
+ * The two switches and the rate are here for the opposite reason: a page whose
+ * ledger is empty has to say **why** it is empty, and "the measurement is
+ * switched off" and "nothing happened" are different facts an operator acts on
+ * differently. Without them every off state reads as a broken pipeline.
  *
  * **Nothing bills us.** These are a hosted provider's prices, and the number the
  * page draws from them is a counterfactual - what the run would have cost
@@ -85,6 +88,12 @@ export interface ObservabilityConfig {
 	cost_currency: string;
 	cost_input_per_million: number;
 	cost_output_per_million: number;
+	/** Whether the faithfulness scorer runs at all. */
+	evaluation_enabled: boolean;
+	/** Whether a work shard scrapes the model server's own counters. */
+	runtime_counters_scrape: boolean;
+	/** The share of runs the scorer is drawn for. 1.0 measures every run. */
+	sample_rate: number;
 }
 
 /** What the console needs to say how close a feed is to being rested. */
@@ -213,7 +222,10 @@ const RETENTION_DEFAULTS: RetentionConfig = { site_budget_mb: 800 };
 const OBSERVABILITY_DEFAULTS: ObservabilityConfig = {
 	cost_currency: 'USD',
 	cost_input_per_million: 0.2,
-	cost_output_per_million: 0.6
+	cost_output_per_million: 0.6,
+	evaluation_enabled: true,
+	runtime_counters_scrape: true,
+	sample_rate: 1
 };
 const COLLECT_DEFAULTS: CollectConfig = { quarantine_after_failures: 5 };
 const SUMMARIZE_DEFAULTS: SummarizeConfig = {

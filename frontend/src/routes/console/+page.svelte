@@ -44,12 +44,15 @@
 	import {
 		chartArm,
 		failureMix,
+		failureMixColumns,
 		publishedSkyline,
 		runHealth,
 		siteCost,
 		sizeGain,
 		type SkylineBar
 	} from '$lib/charts/glance';
+	import type { StackShape } from '$lib/charts/stacked';
+	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
 	import SourceCutRange from '$lib/components/SourceCutRange.svelte';
 	import Viewport from '$lib/components/Viewport.svelte';
@@ -300,6 +303,14 @@
 		return failureSeries(rows, { start: dates[0], end: dates[dates.length - 1] });
 	}
 
+	/** The stage failure series the mix chart and its strip both read. One array,
+	 * so the band a reader hovers and the number the strip prints are the same
+	 * measurement rather than two that happen to agree today. */
+	const mixSeries = $derived(failureSeriesFor(data.telemetryRows));
+	/** The server drew stacked, so the first paint matches the prerendered
+	 * document. Picking `Lines` redraws the identical values. */
+	let mixShape = $state<StackShape>('bars');
+
 	/** A minute count, or a dash where there is no number to print.
 	 *
 	 * Null means nothing was measured. Printing that as `0.0` would say the
@@ -462,17 +473,28 @@
 	</div>
 
 	{#if data.glance.mixSvg}
-		<Panel
-			title="What is failing, by stage"
-			note="One column is one day. Its height is that day's failures, and the bands are the stages they stopped at."
-		>
+		<!-- No note. The heading names the subject and the strip under the chart
+		     prints every stage at the hovered day, so a sentence restating the
+		     encoding said what the shape already says - and said it wrongly the
+		     moment the switch below drew lines. It survives verbatim in the chart's
+		     accessible description, so nobody loses it. -->
+		<Panel title="What is failing, by stage">
 			<Chart
 				svg={data.glance.mixSvg}
-				option={failureMix(failureSeriesFor(data.telemetryRows)).option}
+				option={failureMix(mixSeries, mixShape).option}
 				width={760}
 				height={220}
-				label="Failures per day by stage. One column is one day, its height is that day's failures, and the bands are the stages they stopped at - so a quiet day and a clean day do not draw alike."
+				label="Failures per day by stage. One column is one day, its height is that day's failures, and the bands are the stages they stopped at - so a quiet day and a clean day do not draw alike. Drawn as lines instead, each stage is its own count a day and the total is not shown."
+				columns={failureMixColumns(mixSeries)}
+				readoutName="failure-mix"
+				readoutMaxShare={data.chart.readout_max_share}
+				restingNote=", the newest day"
+				hint="Point at a day to read every stage at once. Left and Right step through the days, Escape returns to the newest."
 			/>
+			<!-- Stacked answers what the mix is and how big the day got; lines answer
+			     what one stage did on its own, which a stack hides when one band
+			     halves while its neighbour doubles. Same array either way. -->
+			<ShapeSwitch bind:shape={mixShape} name="failure-mix" label="How to draw the failure mix" />
 		</Panel>
 	{/if}
 
@@ -568,6 +590,7 @@
 		config={data.console}
 		bands={data.summarizeBands}
 		tickDensity={data.chart.tick_density}
+		readoutMaxShare={data.chart.readout_max_share}
 		onPan={pan}
 		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>

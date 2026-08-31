@@ -27,7 +27,25 @@ export interface Stacked {
 	empty: boolean;
 }
 
-export function stacked(columns: readonly string[], series: readonly StackSeries[]): Stacked {
+/** The two shapes this one array can take.
+ *
+ * `bars` stacks, so the column height is the total and the bands are the mix.
+ * `lines` draws each series from zero, so two series that both doubled are two
+ * parallel climbs rather than one column that grew.
+ *
+ * They read the same array. **Nothing is re-shaped between them** - the values
+ * handed to the engine are byte-for-byte the same list either way, and only
+ * `type` and `stack` differ. That is the whole test for whether a chart may
+ * carry the switch: where the data would need massaging to fit the second
+ * shape, the switch does not ship.
+ */
+export type StackShape = 'bars' | 'lines';
+
+export function stacked(
+	columns: readonly string[],
+	series: readonly StackSeries[],
+	shape: StackShape = 'bars'
+): Stacked {
 	const drawn = series.filter((s) => s.values.some((v) => v > 0));
 	if (columns.length === 0 || drawn.length === 0) {
 		return { option: {}, totals: [], empty: true };
@@ -65,9 +83,9 @@ export function stacked(columns: readonly string[], series: readonly StackSeries
 			},
 			series: drawn.map((s) => ({
 				name: s.label,
-				type: 'bar' as const,
-				stack: 'total',
-				barMaxWidth: 26,
+				...(shape === 'bars'
+					? { type: 'bar' as const, stack: 'total', barMaxWidth: 26 }
+					: { type: 'line' as const, symbolSize: 5, lineStyle: { width: 1.5 } }),
 				itemStyle: { color: paint(s.token) },
 				data: columns.map((_, i) => s.values[i] ?? 0)
 			}))
