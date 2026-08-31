@@ -21,18 +21,31 @@
 	 * Hand-written SVG, so the chart is complete before any script runs and both
 	 * themes work with none - every colour leaves as a custom property.
 	 */
-	import { chartWidth, frame, linearAxis, observeWidth, type Margin } from '$lib/charts/frame';
+	import {
+		chartWidth,
+		frame,
+		linearAxis,
+		observeWidth,
+		pointerReadout,
+		readoutMarks,
+		type DayReadout,
+		type Margin
+	} from '$lib/charts/frame';
+	import ChartReadout from './ChartReadout.svelte';
 	import { plural } from '$lib/format';
 	import type { WriteTimes } from '../../routes/console/model/+page.server';
 
 	let {
 		times,
 		width,
-		height
+		height,
+		readoutMaxShare = 0.33
 	}: {
 		times: WriteTimes;
 		width: number;
 		height: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare?: number;
 	} = $props();
 
 	/** Room for the count axis, the percent axis and the two rule labels. */
@@ -145,17 +158,57 @@
 				.map((bar) => barTitle(bar.bin))
 				.join(' ')
 	);
+
+	/** The bin a pointer or an arrow key has picked. */
+	let selected = $state<number | null>(null);
+
+	/** The bar's own count and the curve's reading at the same bin. Two series
+	 * against two different axes is the one shape where reading them together by
+	 * eye is hardest, and it is the reason both are drawn at all. */
+	const columns = $derived<DayReadout[]>(
+		bars.map((bar) => ({
+			// The bar's centre, not its right edge: the curve's point sits on the
+			// edge, but a reader aiming at a bar aims at the middle of it.
+			x: (bar.x + bar.pointX) / 2,
+			date: bar.bin.from === 0 ? 'Under 1 second' : `${bar.bin.from} to ${bar.bin.to} seconds`,
+			rows: [
+				{
+					label: 'Written in this band',
+					value: String(bar.bin.n),
+					colour: 'var(--chart-1)'
+				},
+				{
+					label: `Done by ${bar.bin.to} s`,
+					value: `${bar.bin.throughPct}%`,
+					colour: 'var(--chart-3)'
+				}
+			]
+		}))
+	);
+	const marks = $derived(readoutMarks(columns));
+	/** The last band, which is the tail the panel exists to show. */
+	const resting = $derived(columns.length === 0 ? null : columns.length - 1);
+	const at = $derived(selected ?? resting);
+	const readout = $derived(at === null ? null : (columns[at] ?? null));
+	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
 </script>
 
 <div class="plot" data-write-times="chart" data-write-times-n={times.n}>
 	<div use:observeWidth={(next) => (measured = next)}>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
-			class="block max-w-full"
+			class="block max-w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			width={box.width}
 			height={box.height}
 			viewBox={`0 0 ${box.width} ${box.height}`}
 			role="img"
+			tabindex="0"
 			aria-label={description}
+			use:pointerReadout={{
+				marks,
+				width: box.width,
+				onSelect: (index) => (selected = index)
+			}}
 		>
 			<!-- The count axis. Bars are read against it, so it is anchored at zero
 			     and labelled where the bars are. -->
@@ -226,6 +279,18 @@
 				data-write-times="cumulative"
 			/>
 
+			{#if guide !== null}
+				<line
+					x1={round(guide)}
+					x2={round(guide)}
+					y1={box.top}
+					y2={box.bottom}
+					stroke="var(--color-text-tertiary)"
+					stroke-opacity="0.5"
+					data-write-times="guide"
+				/>
+			{/if}
+
 			<!-- The last bar's upper edge. Every other label is a boundary two bars
 			     share, and this one is the boundary the axis ends on. -->
 			<text
@@ -287,6 +352,17 @@
 			</text>
 		</svg>
 	</div>
+
+	<!-- Below the plot, never over it, and the same strip every chart on this
+	     console prints - see `ChartReadout.svelte` for the rules it holds. -->
+	<ChartReadout
+		{readout}
+		name="write-times"
+		maxShare={readoutMaxShare}
+		resting={selected === null}
+		restingNote=", the slowest band"
+		hint="Point at a band to read its count and how much of the day is done by then. Left and Right step through the bands, Escape returns to the slowest."
+	/>
 </div>
 
 <style>

@@ -1,4 +1,5 @@
-import { chartConfig, consoleConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import { chartConfig, consoleConfig, observabilityConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import { countersWithoutScores, recordingNotes } from '$lib/console/recording';
 import {
 	modelByDate,
 	modelSwap,
@@ -125,6 +126,12 @@ export async function load() {
 	// whatever the operator does, so nothing older is inlined.
 	const widest = [...windows.values()].reduce((a, b) => (a.days >= b.days ? a : b));
 
+	const observability = observabilityConfig();
+	/** The days each instrument answered for, so the page can name a day one of
+	 * them missed rather than drawing it as a day nothing happened. */
+	const scoredDays = [...new Set(rows.map((row) => row.date ?? ''))].filter((date) => date !== '').sort();
+	const timedDays = [...itemHealthByDate.keys()].sort();
+
 	// Two different statistics, both kept on purpose. The candle is the spread of
 	// per-item rates, because the worker sorts short articles first and the two
 	// ends of a day drift apart. The day figure is the sum of the parts, because
@@ -188,6 +195,24 @@ export async function load() {
 	return {
 		modelWork: work,
 		throughputDays,
+		// What the recording itself was doing. Every quality figure on this route
+		// comes from the faithfulness scorer, so a day it was switched off for or
+		// sampled past has summaries nobody counted - which is not the same fact as
+		// a day the model wrote nothing, and a zero cannot tell them apart.
+		recording: {
+			...recordingNotes({
+				enabled: observability.evaluation_enabled,
+				rate: observability.sample_rate,
+				recorded: scoredDays,
+				window: [...new Set([...scoredDays, ...timedDays])].sort()
+			}),
+			// The other direction: the machine ran and we timed it, and nothing
+			// scored what it wrote. Null where every timed day was also scored.
+			countersOnly:
+				timedDays.filter((date) => !scoredDays.includes(date)).length === 0
+					? null
+					: countersWithoutScores()
+		},
 		// One entry per span the control offers. Null where the span timed
 		// nothing, which the panel prints as a sentence rather than as an empty
 		// chart of zeroes.
