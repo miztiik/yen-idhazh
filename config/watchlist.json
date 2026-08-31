@@ -16,6 +16,7 @@
       "display_name": "Adani",
       "feeds": [],
       "id": "adani",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -29,6 +30,7 @@
       "display_name": "Alibaba",
       "feeds": [],
       "id": "alibaba",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -43,6 +45,7 @@
       "display_name": "Amazon",
       "feeds": [],
       "id": "amazon",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -55,6 +58,7 @@
       "display_name": "AMD",
       "feeds": [],
       "id": "amd",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -67,6 +71,7 @@
       "display_name": "Anthropic",
       "feeds": [],
       "id": "anthropic",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -80,6 +85,7 @@
       "display_name": "Apple",
       "feeds": [],
       "id": "apple",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -91,6 +97,7 @@
       "display_name": "ASML",
       "feeds": [],
       "id": "asml",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -103,6 +110,7 @@
       "display_name": "ByteDance",
       "feeds": [],
       "id": "bytedance",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -114,6 +122,7 @@
       "display_name": "DeepSeek",
       "feeds": [],
       "id": "deepseek",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -126,6 +135,7 @@
       "display_name": "European Central Bank",
       "feeds": [],
       "id": "ecb",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -140,6 +150,7 @@
       "display_name": "US Federal Reserve",
       "feeds": [],
       "id": "federal-reserve",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -152,6 +163,7 @@
       "display_name": "US Federal Trade Commission",
       "feeds": [],
       "id": "ftc",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -167,6 +179,7 @@
       "display_name": "Google",
       "feeds": [],
       "id": "google",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -178,6 +191,7 @@
       "display_name": "Huawei",
       "feeds": [],
       "id": "huawei",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -189,6 +203,7 @@
       "display_name": "IBM",
       "feeds": [],
       "id": "ibm",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -201,6 +216,7 @@
       "display_name": "International Energy Agency",
       "feeds": [],
       "id": "iea",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -212,6 +228,7 @@
       "display_name": "Infosys",
       "feeds": [],
       "id": "infosys",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -223,6 +240,7 @@
       "display_name": "Intel",
       "feeds": [],
       "id": "intel",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -239,6 +257,7 @@
       "display_name": "Meta",
       "feeds": [],
       "id": "meta",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -253,6 +272,7 @@
       "display_name": "Microsoft",
       "feeds": [],
       "id": "microsoft",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -265,6 +285,7 @@
       "display_name": "Mistral AI",
       "feeds": [],
       "id": "mistral",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -278,6 +299,7 @@
       "display_name": "Nvidia",
       "feeds": [],
       "id": "nvidia",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -293,6 +315,7 @@
       "display_name": "OpenAI",
       "feeds": [],
       "id": "openai",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -304,6 +327,7 @@
       "display_name": "Oracle",
       "feeds": [],
       "id": "oracle",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -316,6 +340,7 @@
       "display_name": "Reserve Bank of India",
       "feeds": [],
       "id": "rbi",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -329,6 +354,7 @@
       "display_name": "Reliance Industries",
       "feeds": [],
       "id": "reliance",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -340,6 +366,7 @@
       "display_name": "Samsung",
       "feeds": [],
       "id": "samsung",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -354,6 +381,7 @@
       "display_name": "Tata",
       "feeds": [],
       "id": "tata",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -366,6 +394,7 @@
       "display_name": "Tesla",
       "feeds": [],
       "id": "tesla",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     },
@@ -378,9 +407,10 @@
       "display_name": "xAI",
       "feeds": [],
       "id": "xai",
+      "kind": "organisation",
       "retired_on": null,
       "status": "active"
     }
   ],
-  "version": "2026-08-26"
+  "version": "2026-08-31"
 }
