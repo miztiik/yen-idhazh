@@ -338,7 +338,13 @@
 		{/if}
 	</Panel>
 
-	<div data-windowed="machine-cache" data-window-days={windowDays}>
+	<div
+		data-windowed="machine-cache"
+		data-window-days={windowDays}
+		data-model-rule="no"
+		data-model-rule-name="machine-cache"
+		data-model-rule-none="a change moves this, and an engine-drawn axis carries no rule yet"
+	>
 		<Panel
 			title="Prompt cache"
 			note="Prompt tokens the server read, against the ones it reused instead of reading, over the last {windowDays} days. Read whether a bigger cache would save wall clock."
@@ -385,7 +391,13 @@
 		</Panel>
 	</div>
 
-	<div data-windowed="machine-context" data-window-days={windowDays}>
+	<div
+		data-windowed="machine-context"
+		data-window-days={windowDays}
+		data-model-rule="no"
+		data-model-rule-name="machine-context"
+		data-model-rule-none="one bar a run, so there is no day edge to draw between"
+	>
 		<Panel
 			title="Context headroom"
 			note="The longest sequence each run saw, prompt and answer together, against the window the server was given. One bar a run over the last {windowDays} days. This is the panel that says whether raising the truncation cap is even possible."
@@ -631,7 +643,13 @@
 		{/if}
 	</Panel>
 
-	<div data-windowed="machine-tokens" data-window-days={windowDays}>
+	<div
+		data-windowed="machine-tokens"
+		data-window-days={windowDays}
+		data-model-rule="no"
+		data-model-rule-name="machine-tokens"
+		data-model-rule-none="one bar a run, so there is no day edge to draw between"
+	>
 		<Panel
 			title="Tokens per run"
 			note="Prompt tokens and written tokens, one bar per run over the last {windowDays} days. They are different quantities with different prices, so each carries its own axis."

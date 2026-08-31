@@ -53,6 +53,10 @@
 		frame,
 		logAxis,
 		MARGIN,
+		MODEL_RULE_ROW,
+		modelRules,
+		modelRuleTitle,
+		noModelRuleNote,
 		observeWidth,
 		pointerReadout,
 		readoutMarks,
@@ -69,7 +73,8 @@
 		height,
 		width,
 		tickDensity,
-		readoutMaxShare
+		readoutMaxShare,
+		modelChanges = []
 	}: {
 		days: StageTimingDay[];
 		span: TimeWindow;
@@ -77,6 +82,13 @@
 		width: number;
 		tickDensity: number;
 		readoutMaxShare: number;
+		/** Every day the summarizing pipeline changed, derived once on the server.
+		 *
+		 * This chart qualifies for the rule because two of its three lines are
+		 * drawn by things the stamp covers: `summarize` is the model writing, and
+		 * `extract` moves with the extractor version the same stamp digests. A step
+		 * in either that lines up with a rule has a candidate cause. */
+		modelChanges?: string[];
 	} = $props();
 
 	const STAGES = [
@@ -135,9 +147,13 @@
 			.flatMap((decade) => MINOR_STEPS.map((factor) => factor * decade))
 			.filter((value) => value < scale.domain[1])
 	);
-	const axis = $derived(
-		dayTicks(calendar, { density: tickDensity, columns: dayColumns(calendar.length, box) })
-	);
+	/** One array of column pixels, so the ticks, the marks and the model rules
+	 * cannot disagree about where a day sits. */
+	const columnsX = $derived(dayColumns(calendar.length, box));
+	const axis = $derived(dayTicks(calendar, { density: tickDensity, columns: columnsX }));
+	/** The days the pipeline changed, of the days this chart drew. */
+	const rules = $derived(modelRules(modelChanges, calendar, columnsX));
+	const changedOn = $derived(new Set(rules.map((rule) => rule.date)));
 	const newest = $derived(ordered[ordered.length - 1] ?? null);
 
 	/** A stage is on the chart where the window timed it at all, a zero
@@ -179,11 +195,16 @@
 		calendar.map((date, index) => ({
 			x: x(index),
 			date: shortDate(date),
-			rows: legend.map((stage) => ({
-				label: stage.label,
-				value: reading(at(date, stage.key)),
-				colour: stage.colour
-			}))
+			rows: [
+				...legend.map((stage) => ({
+					label: stage.label,
+					value: reading(at(date, stage.key)),
+					colour: stage.colour
+				})),
+				// The rule is a mark on the plot and a line in the strip, so a reader
+				// stepping the days with an arrow key meets it without a pointer.
+				...(changedOn.has(date) ? [MODEL_RULE_ROW] : [])
+			]
 		}))
 	);
 	const marks = $derived(readoutMarks(columns));
@@ -219,7 +240,7 @@
 	}
 
 	function x(index: number): number {
-		return dayColumnX(index, calendar.length, box);
+		return columnsX[index] ?? dayColumnX(index, calendar.length, box);
 	}
 
 	function y(ms: number): number {
@@ -313,12 +334,21 @@
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		Median per item, each day. Each gridline is ten times the one below, so the same slowdown looks
 		the same at 40 ms and at 100 s.
+		{#if rules.length === 0}
+			<!-- Stated, not omitted. A chart that draws no rule and says nothing about
+			     it is indistinguishable from one where the rule was forgotten. -->
+			<span data-model-rule-empty="timings">{noModelRuleNote(calendar.length)}</span>
+		{/if}
 	</p>
 
 	<div
 		class="mt-4 rounded-md border border-rule bg-surface p-3"
 		data-timing="chart"
 		data-readout-columns={columns.length}
+		data-model-rule="yes"
+		data-model-rule-name="timings"
+		data-model-rule-from={calendar[0] ?? ''}
+		data-model-rule-to={calendar[calendar.length - 1] ?? ''}
 	>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -383,6 +413,23 @@
 					stroke="var(--color-rule)"
 				/>
 				<line x1={box.left} x2={box.left} y1={box.top} y2={box.bottom} stroke="var(--color-rule)" />
+
+				<!-- Dashed and in the neutral rule ink, never on the health ramp: a
+				     pipeline change is an event, not a verdict. Drawn under the series,
+				     so a dash never hides a day's own point. -->
+				{#each rules as rule (rule.date)}
+					<line
+						x1={rule.x}
+						x2={rule.x}
+						y1={box.top}
+						y2={box.bottom}
+						stroke="var(--color-text-tertiary)"
+						stroke-dasharray="3 3"
+						data-model-rule-line={rule.date}
+					>
+						<title>{modelRuleTitle(rule.date)}</title>
+					</line>
+				{/each}
 
 				{#if guide !== null}
 					<line

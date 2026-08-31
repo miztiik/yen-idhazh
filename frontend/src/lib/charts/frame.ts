@@ -332,6 +332,80 @@ export function dayColumns(columns: number, box: Frame, pad = 0): number[] {
 	return Array.from({ length: columns }, (_, index) => dayColumnX(index, columns, box, pad));
 }
 
+/** Where a change to the summarizing pipeline falls on a day axis.
+ *
+ * `x` is in the chart's own pixels, on the leading edge of the day that
+ * changed - between two columns rather than through either one's marks.
+ * Everything left of it was written by the setup that had just been replaced,
+ * which is the whole of what the mark is for. `ThroughputTrend` has drawn it
+ * that way since 2026-08-30; this is that rule made shared.
+ */
+export interface ModelRule {
+	date: string;
+	x: number;
+}
+
+/** The rules a chart draws, for the changes that fall inside the days it drew.
+ *
+ * Not the days the window covers - a chart can draw fewer. The caller passes
+ * the dates it actually put on the axis and the pixel of each, so the count of
+ * rules is a fact about the drawing rather than about the control above it.
+ *
+ * A change on the first drawn day draws nothing, and that is not an omission.
+ * The rule would sit on the value axis with no day to its left, so it would
+ * separate nothing from nothing: the change is at the edge of the span rather
+ * than inside it, and every day drawn ran the setup that came out of it.
+ */
+export function modelRules(
+	changes: readonly string[],
+	dates: readonly string[],
+	columns: readonly number[]
+): ModelRule[] {
+	const changed = new Set(changes);
+	const rules: ModelRule[] = [];
+	for (let index = 1; index < dates.length; index += 1) {
+		if (!changed.has(dates[index])) continue;
+		const at = columns[index];
+		const before = columns[index - 1];
+		if (at === undefined || before === undefined) continue;
+		rules.push({ date: dates[index], x: (at + before) / 2 });
+	}
+	return rules;
+}
+
+/** What one rule says to anybody who points at it.
+ *
+ * One sentence in one place, so two charts cannot describe one event
+ * differently. It names the set the stamp actually covers rather than saying
+ * "the model": the stamp moves for a reworded prompt or a rebuilt runtime as
+ * readily as for new weights, and four of the five stamps in the ledger cannot
+ * be expanded into their cause at all (measured 2026-08-27,
+ * `docs/concepts/evaluation.md`). Naming one candidate cause would be a guess.
+ */
+export function modelRuleTitle(date: string): string {
+	return `A new model, prompt or setting started on ${shortDate(date)}. Everything left of this line was written by the one before it.`;
+}
+
+/** The readout row a chart prints on a day the pipeline changed.
+ *
+ * No colour, because it is an event and not a series - the strip draws a swatch
+ * only where a mark on the plot is that colour.
+ */
+export const MODEL_RULE_ROW: ReadoutRow = {
+	label: 'How summaries are written',
+	value: 'changed on this day',
+	colour: ''
+};
+
+/** What a chart says where the days it drew hold no change.
+ *
+ * A named state and never a missing element: an absent rule and a rule nobody
+ * remembered to draw look identical, and only one of them is an answer.
+ */
+export function noModelRuleNote(days: number): string {
+	return `Nothing changed about how the summaries are written inside these ${days} ${days === 1 ? 'day' : 'days'}.`;
+}
+
 /** How wide the readout strip under a plot may be, as an inline style.
  *
  * The strip sits below the plot, so it cannot cover a mark whatever its width.
