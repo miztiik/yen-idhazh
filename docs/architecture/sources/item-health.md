@@ -1,6 +1,6 @@
 # Item Health
 
-**Last Updated**: 2026-08-28
+**Last Updated**: 2026-08-31
 
 What every planned item did on every run, where that record lives, and which
 failures count against a source. This is item-grain evidence. Feed health is
@@ -50,7 +50,7 @@ The 26 columns, in file order:
 | --- | --- | --- | --- |
 | `version` | date-stamp | always | which contract wrote this row (section 11) |
 | `date` | `YYYY-MM-DD` | always | the digest day, and the shard this row files under |
-| `run_id` | `<date>-<n>` | always | which of the day's runs wrote it |
+| `run_id` | `<date>-<execution>` | always | which execution wrote it. The trailing field is the CI run id, and a small ordinal on rows written before 2026-08-31 |
 | `item_id` | slug | always | `<vertical>-<ten digits>`, derived from the address. Stable across a day's runs, but see the caveat below |
 | `url_key` | sha256 | always | the stable article key. Join on this, not `item_id` |
 | `canonical_url` | URL | always | the address, after a run artifact has expired |
@@ -81,8 +81,18 @@ because a rate needs its denominator beside its numerator.
 **A row is one planned item on one run.** `(date, run_id, item_id)` is the
 identity, and `ledger.append_item_health` filters on it before it writes. That is
 what lets two stages write the file: the second one to see an item has nothing
-new to say. Nothing else here filters - `merge=union` keeps the lines from both
-sides rather than collapsing them, so the check has to happen before the write.
+new to say.
+
+**That filter reads a frozen file, so it is only half the guarantee.**
+`actions/checkout` pins a job to the commit its run was triggered at, so a second
+attempt at the same work cannot see the rows the first attempt pushed afterwards
+and appends them again; `merge=union` then keeps the lines from both sides rather
+than collapsing them. The other half runs after that merge, on the merged file:
+`ledger.drop_repeated_rows`, called by the work job's commit step through
+`DROP_REPEATED_ROWS_COMMAND`, keeps the first row for each key and drops the rest.
+Before-the-write and after-the-merge are two different moments and the file needs
+both - measured 2026-08-31, `2026-08-29-3` held 44 repeated keys here because
+only the first existed.
 
 **A worker records only settled items.** It writes an article payload for every
 item it reaches and a summary payload for every item that got as far as the

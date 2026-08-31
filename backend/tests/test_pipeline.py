@@ -1546,6 +1546,72 @@ def test_replaying_a_day_the_worker_already_recorded_appends_no_duplicate(
     assert committed.read_bytes() == after_one_run
 
 
+def test_two_runs_that_start_before_either_publishes_cannot_share_a_run_id(
+    tmp_path: Path, monkeypatch: MonkeyPatch
+) -> None:
+    """The defect, and the fix, on the tree that produced it.
+
+    `actions/checkout` pins a job to the commit its run was triggered at, so a
+    run that starts while another is still working reads the day exactly as it
+    stood before that one published. Counting the runs off it therefore gives
+    both of them the same answer - which is what happened on 2026-08-29, when
+    runs 33270983446 and 33274853468 both derived `2026-08-29-3` and the ledgers
+    keyed on it ended up with six counter rows for four shards.
+
+    Naming the execution is what makes that impossible: GitHub allocates the
+    number and nothing a second run can read reproduces it.
+    """
+    isolate_ledgers(tmp_path, monkeypatch)
+    settings = config.load(CONFIG_DIR)
+    date = plan().date
+    frozen = assemble.day_dir(cli.PUBLIC_ROOT, date)
+    frozen.mkdir(parents=True, exist_ok=True)
+    day = assemble.build_day(
+        plan=plan(),
+        items=[digest_item()],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
+    assemble.write_atomic(frozen / "digest.json", day.to_json())
+    assemble.write_atomic(
+        frozen / "run.json",
+        assemble.build_manifest(
+            plan=plan(),
+            day=day,
+            previous=None,
+            summaries=[summary()],
+            models=[],
+            commit_sha="a" * 40,
+            runner="local",
+            started_at="2026-08-21T06:00:00Z",
+            completed_at="2026-08-21T07:00:00Z",
+            config_digests=settings.digests,
+            site_bytes=1,
+            site_files=1,
+        ).to_json(),
+    )
+
+    def planned(execution: int | None) -> str:
+        return cli.stage_plan(
+            date,
+            settings=settings,
+            fetcher=lambda _url: FetchResult(outcome=FetchOutcome.TRANSIENT, detail="offline"),
+            now=lambda: "2026-08-21T09:00:00Z",
+            execution=execution,
+            state_dir=tmp_path / "state",
+        ).run_id
+
+    # Neither run has published, so the count is the same answer for both.
+    assert cli._next_run_n(date) == cli._next_run_n(date) == 2
+    assert planned(None) == planned(None), "the count cannot tell two executions apart"
+
+    assert planned(33270983446) == f"{date}-33270983446"
+    assert planned(33270983446) != planned(33274853468)
+
+
 def test_a_shard_records_its_own_items_and_nobody_else_s(
     tmp_path: Path, monkeypatch: MonkeyPatch
 ) -> None:
@@ -1920,11 +1986,13 @@ def test_the_manifest_records_what_ran_against_what() -> None:
 
 
 def test_the_manifest_cannot_record_one_run_twice() -> None:
-    """Why `build_manifest` appends where `build_day` replaces.
+    """One execution is one record, however many times it reaches this stage.
 
-    The numbering rule lives on the contract, so `runs[-1].n` is `len(runs)` and
-    the next number cannot already be taken. Pinned here because the docstring
-    on `build_manifest` points at this to explain the missing guard.
+    `run_id` is the identity of the execution rather than a count of what is
+    committed, so an assemble job that runs again reads the same plan and
+    computes the same id. It replaces its own record instead of appending a
+    second one that planned nothing - the rule `build_day` already applies to
+    the day's own run list. The contract refuses the shape either way.
     """
     settings = config.load(CONFIG_DIR)
     day = assemble.build_day(
@@ -1937,9 +2005,9 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
         retention_window_months=-1,
     )
 
-    def manifest_after(previous: RunManifest | None) -> RunManifest:
+    def manifest_after(previous: RunManifest | None, run_id: str) -> RunManifest:
         return assemble.build_manifest(
-            plan=plan(),
+            plan=plan().model_copy(update={"run_id": run_id}),
             day=day,
             previous=previous,
             summaries=[summary()],
@@ -1953,8 +2021,13 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
             site_files=2,
         )
 
-    first = manifest_after(None)
-    second = manifest_after(first)
+    first = manifest_after(None, "2026-08-21-33270983446")
+    replayed = manifest_after(first, "2026-08-21-33270983446")
+    assert [run.n for run in replayed.runs] == [1], "one execution and its replay are one run"
+    assert [run.run_id for run in replayed.runs] == ["2026-08-21-33270983446"]
+
+    # A different execution is a different run, and takes the next number.
+    second = manifest_after(first, "2026-08-21-33274853468")
     assert [run.n for run in second.runs] == [1, 2]
 
     with pytest.raises(ValidationError, match="numbered from 1 without gaps"):
@@ -1968,6 +2041,17 @@ def test_the_manifest_cannot_record_one_run_twice() -> None:
             version=RunManifest.schema_version(),
             date=second.date,
             runs=[second.runs[1], second.runs[0]],
+        )
+    # And the shape the collision made: two records, correctly numbered, that
+    # name one execution between them.
+    with pytest.raises(ValidationError, match="cannot share a run_id"):
+        RunManifest(
+            version=RunManifest.schema_version(),
+            date=second.date,
+            runs=[
+                second.runs[0],
+                second.runs[1].model_copy(update={"run_id": second.runs[0].run_id}),
+            ],
         )
 
 

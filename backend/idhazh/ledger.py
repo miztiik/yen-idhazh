@@ -207,16 +207,21 @@ def _append(path: Path, columns: tuple[str, ...], payloads: list[dict[str, str]]
       distinct addresses. `load_published` keeps the earliest date, so a repeat
       costs bytes and never moves a publication date.
     - **feed-health** - one row per feed per run. A repeat needs a run to run
-      twice under one `run_id`, which `cli._next_run_n` reads off the committed
-      manifest to prevent. It is the one caller where a repeat is not free:
-      `discover.resting` counts failures to decide a quarantine, so a duplicated
-      failure counts twice.
+      twice under one `run_id`. Two runs cannot compute one any more - a run id
+      now carries the identity of the execution that made it (`cli.stage_plan`)
+      - but a second attempt of the same execution still can, and this is the
+      one caller where the repeat is not free: `discover.resting` counts
+      failures to decide a quarantine, so a duplicated failure counts twice.
     - **item-health** - two stages write it, so it cannot rely on a caller's own
       guarantee. `append_item_health` filters against `ITEM_HEALTH_KEY` instead.
     - **runtime-counters** - one writer, but the row is a cumulative total rather
       than an event, so a re-run of a failed shard would make a run-level sum
       count that shard twice. `append_runtime_counters` filters against
       `RUNTIME_COUNTERS_KEY`.
+
+    Both filters read the file the job checked out, which is frozen at the
+    commit its run was triggered at, so neither can see a row a second attempt
+    pushed afterwards. `drop_repeated_rows` settles that after the merge.
     """
     if not payloads:
         return 0
@@ -375,6 +380,91 @@ def recorded_runtime_counters(path: Path) -> set[tuple[str, ...]]:
     return {tuple(row[name] for name in RUNTIME_COUNTERS_KEY) for row in _read_rows(path)}
 
 
+def keyed_paths(state_dir: Path) -> list[tuple[Path, tuple[str, ...]]]:
+    """Every ledger here that says what makes two of its rows the same record.
+
+    `state/seen/` and `state/feed-health/` are deliberately absent. Neither has a
+    key: `load_seen` folds a second sight by keeping the earliest, and a feed's
+    row is one verdict per feed per run, which two runs are entitled to write
+    twice.
+    """
+    return [
+        (runtime_counters_path(state_dir), RUNTIME_COUNTERS_KEY),
+        *(
+            (path, ITEM_HEALTH_KEY)
+            for path in sorted((state_dir / ITEM_HEALTH_DIRNAME).glob("*.csv"))
+        ),
+    ]
+
+
+def drop_repeated_rows(path: Path, key: tuple[str, ...]) -> int:
+    """Rewrite the file without any row repeating a key an earlier row holds.
+
+    This is the half of the guarantee `_append`'s filter cannot give. That filter
+    reads the committed file the job checked out, and `actions/checkout` pins a
+    job to the commit its run was triggered at - so a second execution of the
+    same work cannot see rows the first one pushed after that commit. Its append
+    lands them again, and `merge=union` then concatenates both sides line by
+    line, which is the right answer for two runs writing different rows and
+    exactly the wrong one for two attempts writing the same row. Measured on this
+    repository 2026-08-31: run `2026-08-29-3` holds six counter rows for four
+    shards and 44 repeated `(date, run_id, item_id)` item-health keys.
+
+    So the file has to be settled once more after the merge, which is the only
+    moment both sides have ever been in one place. The first row wins, because
+    that is the rule `_append`'s callers already state: a re-run's items are
+    skipped, so the ledgers stay describing the attempt that got there first.
+
+    Rows are matched and rewritten as whole lines rather than re-serialized, so
+    a kept row is byte-identical to the row that was read and a pass that drops
+    nothing leaves no diff. Reading by line is safe for the same reason the merge
+    is: every free-text cell in these contracts is pinned to printable ASCII on
+    one line, so no cell can carry a newline.
+
+    Returns how many rows were dropped, so a caller can log the count.
+    """
+    if not path.exists():
+        return 0
+    with path.open("r", encoding="utf-8", newline="") as handle:
+        lines = handle.readlines()
+    if not lines:
+        return 0
+    header = next(csv.reader(lines[:1]), [])
+    if any(name not in header for name in key):
+        # A shard written before the key existed cannot be checked against it,
+        # and refusing would cost a run its whole commit over an old file.
+        return 0
+    columns = [header.index(name) for name in key]
+    seen: set[tuple[str, ...]] = set()
+    kept = [lines[0]]
+    dropped = 0
+    for line in lines[1:]:
+        cells = next(csv.reader([line]), [])
+        if len(cells) <= max(columns):
+            kept.append(line)
+            continue
+        found = tuple(cells[index] for index in columns)
+        if found in seen:
+            dropped += 1
+            continue
+        seen.add(found)
+        kept.append(line)
+    if dropped:
+        path.write_text("".join(kept), encoding="utf-8", newline="")
+    return dropped
+
+
+def repeated_keys(path: Path, key: tuple[str, ...]) -> dict[tuple[str, ...], int]:
+    """Every key the file holds more than one row for, and how many. Empty is clean."""
+    counts: dict[tuple[str, ...], int] = {}
+    for row in _read_rows(path):
+        if any(name not in row for name in key):
+            continue
+        found = tuple(row[name] or "" for name in key)
+        counts[found] = counts.get(found, 0) + 1
+    return {found: count for found, count in counts.items() if count > 1}
+
+
 def load_item_health_shard(path: Path) -> list[ItemHealthRow]:
     """Every row of one month's full-grain shard. Empty for a month never written."""
     return [ItemHealthRow.from_csv_row(row) for row in _read_rows(path)]
@@ -443,5 +533,10 @@ def load_health(state_dir: Path, *, today: str, within_days: int) -> list[FeedHe
 
 
 def _run_n(run_id: str) -> int:
-    """The run number out of `<date>-<n>`, so run 10 sorts after run 9."""
+    """The execution number out of `<date>-<execution>`, so a later run sorts last.
+
+    The trailing field is the GitHub run id on anything CI produced and a small
+    ordinal on anything a developer machine did, and both increase with time, so
+    the sort is chronological across the change and on either side of it.
+    """
     return int(run_id.rsplit("-", 1)[1])

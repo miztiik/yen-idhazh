@@ -30,13 +30,20 @@ def full_plan() -> RunPlan:
     return RunPlan.from_json(read_text(CONTRACT_FIXTURES_DIR / "run-plan" / "one-day.json"))
 
 
-def plan_for(*indexes: int) -> RunPlan:
-    """The fixture plan narrowed to the items one run worked, revalidated not copied."""
+def plan_for(*indexes: int, execution: int = 1) -> RunPlan:
+    """The fixture plan narrowed to the items one run worked, revalidated not copied.
+
+    Each narrowed plan carries its own `execution`, because two runs of a day are
+    two executions and the manifest refuses a day whose records share a run id.
+    Sharing one here made the second run's items count against the first run's
+    plan, which is the arithmetic the collision broke in production.
+    """
     full = full_plan()
     items = [full.items[index] for index in indexes]
     return RunPlan.model_validate(
         full.model_dump(mode="json")
         | {
+            "run_id": f"{full.date}-{execution}",
             "items": [item.model_dump(mode="json") for item in items],
             "verticals": [
                 vertical.model_dump(mode="json")
@@ -113,7 +120,7 @@ class TestTheStageAssembledTwice:
         )
         write_payloads(items_dir, full_plan().items[1])
         second = cli.stage_assemble(
-            plan_for(1), settings=settings, commit_sha="a" * 40, runner="fixture"
+            plan_for(1, execution=2), settings=settings, commit_sha="a" * 40, runner="fixture"
         )
 
         assert first.embeddings is not None
@@ -140,7 +147,9 @@ class TestTheStageAssembledTwice:
         for index in (0, 1):
             write_payloads(items_dir, full_plan().items[index])
         cli.stage_assemble(plan_for(0), settings=settings, commit_sha="a" * 40, runner="fixture")
-        cli.stage_assemble(plan_for(1), settings=settings, commit_sha="a" * 40, runner="fixture")
+        cli.stage_assemble(
+            plan_for(1, execution=2), settings=settings, commit_sha="a" * 40, runner="fixture"
+        )
 
         committed = cli._load_day(
             assemble.day_dir(tmp_path / "public" / "digest", full_plan().date) / "digest.json"

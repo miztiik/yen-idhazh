@@ -1,6 +1,6 @@
 # GitHub Actions Workflows
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 The exact workflow display names, files, and trigger classes. All scheduled
 times are UTC.
@@ -240,6 +240,14 @@ are append-only and every row is independent of its neighbours, so two runs that
 both appended are not in disagreement and the union of both sides is the answer.
 Every file under `state/` carries `merge=union` in `.gitattributes`, so that
 rebase resolves itself. A reader of those ledgers already deduplicates.
+
+That is the answer for two runs writing different rows and the wrong one for two
+attempts writing the same row, and an appending stage cannot tell them apart: it
+filters against the file it checked out, and `actions/checkout` pins the job to
+the commit its run was triggered at. So the work shard's commit step names
+`DROP_REPEATED_ROWS_COMMAND`, which runs after the rebase, on the merged file -
+the only artefact that has ever held both attempts. The first row for a key wins,
+which is the rule the appending stages already state.
 
 A shard's two steps carry `continue-on-error`, so neither can fail the shard. The
 shard owes the run its items artifact, and assemble writes the same census again,

@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -624,7 +624,10 @@ seconds" figure averages two different machines together.
 reader refuses a run where one shard index committed two different scrapes -
 two workflow runs computed the same run id and `merge=union` concatenated both -
 and the route prints the run id and the reason rather than quietly excluding it
-from a count nobody can then check.
+from a count nobody can then check. Both halves of that cause are closed on the
+writer's side since 2026-08-31 and the committed file was settled with them, so
+today no run is refused; the guard stays because a reader of a committed ledger
+cannot assume the run that wrote it was made by today's pipeline.
 
 **The cost panel is a counterfactual and never a bill**, and it is the one place
 on this site a figure in currency appears. CLAUDE.md Rule #10 carries the

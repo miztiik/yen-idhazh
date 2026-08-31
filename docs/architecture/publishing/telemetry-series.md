@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -300,10 +300,19 @@ read no tokens are different facts, and one of them is a broken scrape."
 
 `state/runtime-counters.csv` is merged line by line with the union driver, while
 the deduplication that writes it reads a tree frozen at checkout. So two workflow
-runs that compute the same `run_id` both append, and the file ends up holding one
-shard index twice. Summed as rows rather than as a set, run `2026-08-29-3`
+runs that computed the same `run_id` both appended, and the file ended up holding
+one shard index twice. Summed as rows rather than as a set, run `2026-08-29-3`
 reported **-394 seconds** against the item ledger, which is not a number any
 machine produced.
+
+Both halves of that are now closed on the writer's side, and this reader is kept
+anyway. A run id carries the identity of the execution that made it, so two
+workflow runs can no longer compute one; and `ledger.drop_repeated_rows` settles
+the file after the merge, where the frozen dedup cannot see. See
+[../sources/item-health.md](../sources/item-health.md#the-shape-of-a-row). What
+remains is that a reader of a committed file cannot assume the run that wrote it
+was made by today's pipeline, so refusing an inconsistent run stays correct and
+costs nothing.
 
 The reader groups by shard index. Two rows for one shard whose every counter cell
 matches are one scrape written twice, and collapse to one. Two rows that differ
@@ -312,12 +321,15 @@ process - so they can neither be added nor chosen between, and the whole run is
 refused. A refused run is returned with its id and the reason, never dropped
 silently: a page that prints half a run prints a figure that reads as the run.
 
-Measured 2026-08-31 over the committed ledger: **54 rows, 12 runs, 11 read and 1
-refused** - still `2026-08-29-3`, and now both its shard 1 and its shard 3 hold
-two different scrapes. Summing its rows rather than its shards overstates the
-run's reading clock by 7,495.5 seconds, 63 percent high. The refusal is printed
-on `/console/machine/` with the run id and the reason, so the run count on that
-page can be checked against the ledger.
+Measured 2026-08-31 over the committed ledger before the repair: **54 rows, 12
+runs, 11 read and 1 refused** - `2026-08-29-3`, whose shard 1 and shard 3 each
+held two different scrapes (21:06 against 23:15, and 21:10 against 23:39).
+Summing its rows rather than its shards overstated the run's reading clock by
+7,495.5 seconds - 19,305.8 against 11,810.3, **63 percent high**. The file was
+settled in the same commit that fixed the writer: 54 rows to 52, 7,871 bytes to
+7,577. All 12 runs now read. The refusal is still printed on `/console/machine/`
+with the run id and the reason, so the run count on that page can be checked
+against the ledger.
 
 ## Degrade rules
 

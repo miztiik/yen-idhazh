@@ -76,7 +76,15 @@ class ConfigDigest(Model):
 
 
 class RunRecord(Model):
-    run_id: RunId
+    run_id: RunId = Field(
+        description=(
+            "The identity of the execution that made this record, as every ledger "
+            "under state/ spells it. Addressed by the date and then by the CI run "
+            "that produced it, so no second execution can compute the same one. "
+            "Records written before 2026-08-31 carry the day's ordinal there "
+            "instead, which is what two runs were able to share."
+        )
+    )
     n: int = Field(ge=1, description="Run sequence within the date. 1 is the morning run.")
     started_at: Timestamp
     completed_at: Timestamp | None = None
@@ -206,6 +214,30 @@ class RunManifest(Contract):
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-08-31",
+            change=(
+                "run_id is the execution's own identity and no longer restates n. "
+                "A record is still numbered from 1 without gaps and still addressed "
+                "by the date, and no two records may share a run_id."
+            ),
+            why=(
+                "n was read off the last committed manifest, and actions/checkout "
+                "pins a job to the commit its run was triggered at - so a run that "
+                "starts while another is still working reads a manifest that has "
+                "never heard of it and counts the same number. On 2026-08-29 two "
+                "runs did: 33270983446 dispatched at 19:29 and 33274853468 "
+                "scheduled at 20:58 both derived 2026-08-29-3, and the ledgers keyed "
+                "on that string ended up with six counter rows for four shards and "
+                "44 repeated item-health keys. Summed naively that run's reading "
+                "clock read 19,305.8 seconds against 11,810.3 - 63 percent high. The "
+                "id now comes from the CI run, which GitHub allocates and no second "
+                "execution can reproduce, and the day's ordinal stays on n where it "
+                "was always the thing being asked for. Every committed manifest "
+                "still validates: <date>-<n> is addressed by the date and unique "
+                "within a day, so this relaxes the rule rather than breaking it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-30T16:00",
             change=(
                 "Added optional evaluation_enabled, evaluation_sample_rate, "
@@ -319,9 +351,13 @@ class RunManifest(Contract):
 
     @model_validator(mode="after")
     def _runs_are_append_only_and_addressed_by_date(self) -> Self:
+        seen: set[str] = set()
         for index, record in enumerate(self.runs, start=1):
             if record.n != index:
                 raise ValueError("runs are append-only and numbered from 1 without gaps")
-            if record.run_id != f"{self.date}-{record.n}":
-                raise ValueError("run_id must be <date>-<n>")
+            if not record.run_id.startswith(f"{self.date}-"):
+                raise ValueError("run_id must be addressed by this date")
+            if record.run_id in seen:
+                raise ValueError("two runs of a day cannot share a run_id")
+            seen.add(record.run_id)
         return self
