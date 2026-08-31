@@ -6,8 +6,13 @@
  * normalised stack hides a quiet day, and a quiet day looks identical to a
  * clean one.
  *
- * One colour per series, bound to the series and never to its size, so sorting
- * a legend never repaints a chart.
+ * One colour per series, bound to the series and never to its size, so the
+ * strip under the chart names each one in the colour it is drawn in.
+ *
+ * No legend. The readout strip prints every series at the hovered column with
+ * its own swatch beside it, and a legend above the plot would draw the same
+ * pair a second time - which is how two of them drift. The room the legend took
+ * goes back to the plot.
  */
 
 import type { EChartsOption } from 'echarts';
@@ -58,16 +63,10 @@ export function stacked(
 		empty: false,
 		option: {
 			animation: false,
-			grid: { left: 48, right: 12, top: 30, bottom: 26, containLabel: false },
+			grid: { left: 48, right: 12, top: 8, bottom: 26, containLabel: false },
 			// One pointer position, every series at that column. Asking about one
 			// band at a time is what makes a stack hard to read.
 			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-			legend: {
-				data: drawn.map((s) => s.label),
-				top: 0,
-				itemGap: 16,
-				textStyle: { color: paint('--color-text-secondary'), fontSize: 12 }
-			},
 			xAxis: {
 				type: 'category',
 				data: [...columns],

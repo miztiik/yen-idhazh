@@ -40,6 +40,7 @@
 	import TargetBar from '$lib/components/TargetBar.svelte';
 	import { shortDate } from '$lib/format';
 	import Chart from '$lib/charts/Chart.svelte';
+	import { columnStrip } from '$lib/charts/frame';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
 		chartArm,
@@ -178,6 +179,34 @@
 	 * same way the server did. */
 	const articles = $derived(new Map(Object.entries(data.publishedItems)));
 	const perArticle = $derived(siteCost(data.manifests, articles, viewport));
+	/** `siteCost`'s own plot insets, so a column the pointer lands on is the
+	 * column the strip prints at every width. */
+	const COST_GRID = { left: 56, right: 14 };
+	/** The cost chart's strip. One series, and it still earns one: the axis
+	 * carries a month and a day, the point carries a size, and nothing else on
+	 * the chart says whether the day sat outside the band. */
+	const costColumns = $derived(
+		columnStrip(
+			perArticle.days.map((day) => shortDate(day.date)),
+			[
+				{
+					label: 'Payload bytes per article',
+					colour: 'var(--chart-3)',
+					value: (index) => bytes(Math.round(perArticle.days[index]?.bytesPerItem ?? 0))
+				},
+				{
+					label: 'Against the window',
+					colour: '',
+					value: (index) =>
+						perArticle.spread === null
+							? 'one day, so no band'
+							: perArticle.days[index]?.flagged
+								? 'outside the band'
+								: 'inside the band'
+				}
+			]
+		)
+	);
 	/** What the tree gained over the window, in megabytes.
 	 *
 	 * It is here rather than in the band because it is a rate and the band is
@@ -424,6 +453,7 @@
 					width={260}
 					height={200}
 					label="Share of planned items that finished, against those that failed"
+					noReadout="two shares of one total, and each share carries its own label"
 				/>
 			</figure>
 		{/if}
@@ -463,6 +493,12 @@
 							width={760}
 							height={220}
 							label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
+							columns={costColumns}
+							readoutName="cost-per-article"
+							readoutMaxShare={data.chart.readout_max_share}
+							grid={COST_GRID}
+							restingNote=", the newest published day"
+							hint="Point at a day to read what its articles cost. Left and Right step through them, Escape returns to the newest."
 						/>
 					{/key}
 				{/if}
@@ -850,6 +886,7 @@
 					width={data.console.chart_width}
 					height={FLOW_HEIGHT}
 					label="Where items go between the visuals planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
+					noReadout="a flow between stages, so there is no column two branches share"
 				/>
 			</div>
 		{:else if data.flowNote}

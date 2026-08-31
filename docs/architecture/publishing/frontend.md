@@ -29,7 +29,7 @@ The loader lives under `frontend/src/lib/server/`, which is the framework's own 
 
 `handleUnseenRoutes: 'ignore'` clears both and hides every later prerender defect with them, so the build asks the tree instead. [../../../frontend/prerender-guard.js](../../../frontend/prerender-guard.js) excuses `/[date]` only when no day is published, and `/[date]/[vertical]` only when no published day names a topic. Any other unseen route still fails, and so do those two when the tree says they had a page to build. The guard asks a smaller question than `entries()` does - `entries()` lists the days, the guard only asks whether any day is there at all - so the two can disagree, and a disagreement fails the build. [../../../frontend/tests/prerender-guard.spec.ts](../../../frontend/tests/prerender-guard.spec.ts) drives the real handler off the real config, so the wiring is under test with the rule.
 
-**Whatever the root layout's load returns is inlined into every page beneath it**, so the root layout returns the four facts the footer prints and never the day they were read from. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB.
+**Whatever the root layout's load returns is inlined into every page beneath it**, so the root layout returns the one fact the footer still prints - `retention_window_months` - and never the day it was read from. The home page loads the day it renders. The layout used to return the whole latest day, which put a day of article summaries on the console, on `/evals/`, which draws none, and on every older dated page that already carried its own. Measured 2026-08-26, `gzip -9` over each prerendered page, one tree carrying five published days built twice with only that field differing: `/console/` 406.3 -> 93.0 KB, `/evals/` 315.6 -> 2.4 KB, `/2026-08-23/` 439.6 -> 126.0 KB, and 15749.2 -> 6343.3 KB over all 31 pages. Two builds of the same tree agree to within 0.1 KB.
 
 [frontend/tests/payload-weight.spec.ts](../../../frontend/tests/payload-weight.spec.ts) holds that line. It counts a marker only a day payload carries and fails on any page below the layout that has one. It had one exclusion, `/archive/`, which inlined every committed day on purpose to feed the on-device search; the exclusion is gone from 2026-08-27, and the archive now carries an assertion of its own that it holds **zero** day markers.
 
@@ -71,15 +71,23 @@ What is deliberately *not* built is a slot system for moving components left and
 
 ## Theming
 
-Class strategy, not media query: a reader on a dark-defaulted phone who wants to read in bed needs a way to say so. Three toggle states (`system`, `light`, `dark`), two themes. A six-line inline script applies the stored choice before first paint, which is the one inline script this site carries and exists solely to prevent a white flash.
+Class strategy, not media query. **Dark is the base and light is the override.** `:root` in `frontend/src/styles/tokens.css` carries the dark values, so a document with no `data-theme` attribute - no script yet, or no script at all - paints dark on its first frame. `[data-theme="light"]` comes after it in the file and wins on source order, because both selectors match at the same specificity.
+
+Two themes, and one control with two states: a moon button that flips between them. The glyph never changes - the page is the state indicator, and an icon that changed with the theme would be a second and weaker copy of it - so the `aria-label` names the action (`Switch to the light theme`) and there is no `aria-pressed`. A choice is always stored as `light` or `dark`; the default is never encoded as the absence of a key, or the day the default moves every reader who chose it moves with it without being asked.
+
+A seven-line inline script applies a stored `light` before first paint. It is the one inline script this site carries, and it now exists only for that reader: everyone else is already dark from the stylesheet, so the script has nothing to correct. Its failure branch sets `dark`.
 
 **A theme is exactly one `[data-theme="x"]` block supplying the token names in `frontend/src/styles/tokens.css` and nothing else.** The mechanism ships; two themes ship. A third means re-picking three band colours, eight source swatches and a focus colour and carrying them forever for a reader nobody has met.
 
-The browser's own chrome follows the page. `app.html` ships two media-scoped `theme-color` tags, one per system preference, because an installed window reads those at launch before any script has run. A media query only knows what the system wants, so `apply()` in `$lib/theme` also writes one unconditional tag from the resolved `--color-bg`; an unconditional tag wins over both, which is what keeps a manually chosen light page from sitting under dark chrome.
+`system` was a third toggle state until 2026-08-31. It was removed with `ThemeChoice.SYSTEM`, `watchSystem` and the sun glyph, on the owner's decision that the site starts dark. What a reader loses is a theme that follows their device at sunset; what they get is a control with one obvious action instead of three. `config/appearance.json` still names the default in `digest.theme_default`, and a config that still says `system` reads as `dark` (`CLAUDE.md` section 11).
+
+The browser's own chrome follows the page. `app.html` ships one unconditional `theme-color` tag holding the base theme's background, because an installed window reads it at launch before any script has run and the page is dark whatever the system prefers - a media-scoped pair would be wrong for every reader whose system says light and who has chosen nothing. `apply()` in `$lib/theme` rewrites that same tag from the resolved `--color-bg`, so a reader who picked light does not sit under dark chrome.
+
+The oracle is [../../frontend/tests/theme.spec.ts](../../frontend/tests/theme.spec.ts). It loads every route three ways - no stored choice, `light` stored, `dark` stored - and asserts that every change to `data-theme` happened while `document.body` was still null, which is what makes it a statement about the first painted frame rather than about the settled one. A fourth arm runs with JavaScript switched off, where there is exactly one frame and it has to be dark.
 
 ## Installability
 
-`frontend/static/manifest.webmanifest`, four PNG icons and the `theme-color` tags above. That is the whole feature, and the doctrine around it - including the ban on `Notification` and `PushManager`, and why there is no service worker - is in [../../concepts/ui-shell.md](../../concepts/ui-shell.md).
+`frontend/static/manifest.webmanifest`, four PNG icons and the `theme-color` tag above. That is the whole feature, and the doctrine around it - including the ban on `Notification` and `PushManager`, and why there is no service worker - is in [../../concepts/ui-shell.md](../../concepts/ui-shell.md).
 
 The icons are generated once from two committed SVG sources, `app-icon.svg` and `app-icon-maskable.svg`, using `sharp` installed with `--no-save` and removed afterwards: the PNGs are the committed artefact, not the toolchain. The maskable variant is a second drawing rather than a crop, with the mark inside the central 80 percent, because a platform that crops the square icon takes the ends off the bars. Measured 2026-08-29: 48,788 B for the six files, of which 46,869 B is raster.
 
@@ -472,15 +480,29 @@ the run strip's axis does, so the rules can be tested without a browser.
 ## The day notice is one line, and one divider marks the later runs
 
 The notice states the day as facts and never as a judgement: the count, the
-failures when the run was partial, and how many arrived after the first run. It
-used to print one near-identical paragraph per later run, which said one fact
-three times.
+failures when the run was partial and why they failed, how many arrived after
+the first run, and last, which run made this page and at what time. It used to
+print one near-identical paragraph per later run, which said one fact three
+times.
+
+**The last two of those sentences arrived from the footer on 2026-08-31**, and
+the reason is where they belong rather than what they say. A stamp about today's
+run printed eight screens under today is filed in the wrong place, and the same
+footer printed it under `/archive/`, `/console/` and `/evals/`, which render no
+day at all. The skipped-story count came with it because the notice was already
+stating it - the same fact twice on one page reads as two facts - and the
+footer's reason clause, that we could not read enough of the page to summarize
+those stories fairly, merged into the notice's sentence so nothing was lost.
+
+The run stamp goes **last** in the paragraph and the count goes first. A reader
+came for the stories, not for us.
 
 `introduced_by_run` is on every item and used to be rendered nowhere, so the
 notice named a fact with no place on the page. A flat list now carries one
 hairline divider - `Added later today` - before the first item a later run
-added. Once per page, never once per run and never once per item, and never a
-run number or a UTC time, because a reader does not know what run 3 is.
+added. Once per page, never once per run and never once per item, and the
+divider itself carries no run number and no UTC time, because a reader reading
+past an item does not know what run 3 is.
 
 ## No summary of the summaries
 
@@ -490,14 +512,70 @@ Asked for, and Reader ruled **no**, decisively:
 
 It would also be three removes from the source - a summary of summaries of articles - and every layer of compression is a layer of invention. What sits at the top instead is a line of facts with no voice: the date, the counts, and, when a run was partial, plainly how many did not finish. If four of five items failed and the page does not say so, a reader who works it out later has spent the trust the digest was saving.
 
-## The footer states two commits, and never merges them
+## The footer is three lines, and none of them is about today
 
 ```
-Run 1 of 21 August 2026, 21:12 UTC.
-Built from git - 473ba32 - deployed 2026-08-21
+Archive   Console   Source code
+Built from git 473ba32, deployed 2026-08-21. Nothing is deleted.
+Every summary is checked against the article it came from. Where the check went badly, the item says so.
 ```
 
-The run is the data's provenance; the commit is the site's. They move independently, so a single line claiming both would be wrong half the time. The SHA comes from the build environment, injected at build time - never fetched, never read from a committed pointer that could go stale.
+Links first, because they are the only thing in a footer anyone came to use. The
+build line next. The verification sentence last and at the smallest type step -
+it is the only sentence that tells a stranger why an item is allowed to say it
+is unsure, so it stays, but a reader who has read it once never needs it again.
+
+**It printed six blocks until 2026-08-31 and two of them stated today's run**:
+which run produced the day and at what time, and how many stories did not
+finish. The footer is on every page that has one, so both were printed under
+`/archive/`, `/console/` and `/evals/`, which render no day at all - and printed
+a second time under `/`, where
+[the day notice](#the-day-notice-is-one-line-and-one-divider-marks-the-later-runs)
+was already saying them. Both live beside the day now. The git line and the
+retention line were two blocks stating one thing about the build and one about
+what is kept; they are one line.
+
+The run is the data's provenance and the commit is the site's. They still never
+merge into one line, because they move independently and a single line claiming
+both would be wrong half the time - they are simply on different parts of the
+page now. The SHA comes from the build environment, injected at build time -
+never fetched, never read from a committed pointer that could go stale.
+
+**What the root layout hands every page shrank with it, from four fields to
+one.** `retention_window_months` is all the footer still reads, so `date`, `run`
+and `items_failed` stopped travelling to `/archive/`, `/console/` and `/evals/`.
+Measured 2026-08-31 on a Windows developer box, 4 cores, with the same node
+`zlib` level 9 the bundle gate uses, over one tree carrying ten published days,
+and with `kit.version.name` pinned so a build-to-build difference could not be
+mistaken for a change. Two builds of each arm came out byte-identical, so the
+spread is 0 and every difference below is the change:
+
+| Document | Before | After | Change |
+| --- | --- | --- | --- |
+| `/evals/` | 3,228 | 3,083 | 145 bytes lighter, 4.5 percent |
+| `/archive/` | 3,994 | 3,877 | 117 bytes lighter, 2.9 percent |
+| `/` | 61,371 | 61,317 | 54 bytes lighter, 0.1 percent |
+| `/404` | 1,673 | 1,674 | 1 byte heavier, and it is not ours |
+
+**`/404` never carried any of this, and that is worth writing down because the
+plan that made this change assumed it did.** The document is the adapter's
+fallback shell: no footer, no layout payload, no rendered day. It is 4,351 raw
+bytes on both sides of the change, to the byte. The one gzipped byte it moved is
+in the content hashes in its `modulepreload` list, which are the same length and
+different characters once any component changes. `/404` sits 32 bytes under its
+ceiling and always did; nothing here spent that headroom.
+
+The two that mattered are the two that inlined a day they do not render.
+`/evals/` had 51 bytes of room under its 3,279-byte ceiling before this and has
+196 now, which is the difference between a ceiling that fires on the next
+unrelated edit and one that does not.
+
+[frontend/tests/footer-facts.spec.ts](../../../frontend/tests/footer-facts.spec.ts)
+is what keeps the facts from leaking back or leaking away. It counts every
+sentence the old footer carried exactly once in the footer of every route that
+has one, counts the day's run facts at exactly zero in the documents that render
+no day, pins `/404` as a footerless shell, and fails if the layout hands down a
+second field.
 
 ## The console answers "is it working", in one screen
 
@@ -1047,8 +1125,11 @@ its band on the same day - 260 words where the rung asks for 50 to 90 - because
 every other row it writes lands inside or short, and a third state the fixture
 cannot reach is a state an implementation can pass by never entering.
 
-**Two charts carry a pointer readout, and it is not an SVG `<title>`.** The
-stage-timing and throughput trends each get a strip below their plot.
+**Every chart with a shared column carries a pointer readout, and it is not an
+SVG `<title>`.** It was two charts when the strip was written and seven of
+twenty-four by 2026-08-30; it is the default on all three console routes from
+2026-08-31, and a chart with no shared column now says so in
+`data-readout-none` rather than by saying nothing.
 Both are **never pinned to the pointer** - a readout under a thumb is a
 readout nobody reads. One
 Svelte action beside `observeWidth` drives it
@@ -1072,11 +1153,11 @@ rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
 121px over a 220px plot - 40 to 55 percent of the chart it was explaining - so
 this one is laid out under the plot where it cannot cover a mark at any width,
 and `chart.readout_max_share` bounds it at a third of the plot so it cannot
-become a paragraph beside a chart being glanced at. `FailurePanels` and the
-run-health strip still get none. The run-health strip has no per-day point to
-land on. The failure chart has one per stage per day, but it prints every
-stage's rate and its denominator in type under the plot at all times, so a
-readout there would only repeat a sentence that is never hidden.
+become a paragraph beside a chart being glanced at. The run-health strip still
+gets none - it has no per-day point to land on, and it says so where it is
+drawn. `FailurePanels` gained one: it does print every stage's rate and its
+denominator in type under the plot, but not per day, and the day is the column
+the strip prints.
 
 **That strip is the legend as well.** The legend already printed the newest day's
 four numbers and a sentence under it said which day they were, which is the
@@ -1365,7 +1446,9 @@ registered. The six figures added since brought bar, line, pie, grid, legend and
 mark-line with them and nobody re-measured, so the record sat 38,685 B - 25
 percent - under the truth. The number is corrected there in this commit, and the
 lesson is the one `core.ts` already states: the registration list is a file
-somebody has to edit, and re-measuring it is the reason it is.
+somebody has to edit, and re-measuring it is the reason it is. (The legend came
+back out on 2026-08-31, when the readout strip became every chart's key: 5,532 B
+gzipped, re-measured in the same commit.)
 
 Authority: the shape, Jony, 2026-08-30; the chunk, Carmack, 2026-08-30.
 
@@ -2163,7 +2246,8 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | An SVG `<title>` as the chart tooltip | It does not fire on touch, carries a delay nobody chose, cannot be styled, is not keyboard-reachable, and does not survive a screenshot pasted into an issue. It stays as the accessible name. | Jony |
 | A readout pinned to the pointer | A readout under a thumb is a readout nobody reads. | Jony |
 | A tab stop on every data point | The committed ledger draws 2,541 of them. A 2,541-stop tab order is a trap, not access. | Jony |
-| A readout on `FailurePanels` or the run-health strip | The run-health strip has no per-day point to land on, and the failure chart already prints every stage's rate and its denominator in type under the plot at all times. | Jony |
+| A readout on the run-health strip | It has no per-day point to land on. | Jony |
+| A readout on `FailurePanels` - reversed 2026-08-31 | It was refused because the chart prints every stage's rate and its denominator in type under the plot. It prints them for the window, not for a day, and the day is the column the strip prints. | Susan |
 | A readout on `StageTimings` - reversed 2026-08-30 | It was refused because the chart "already prints its headline in type", and the headline it printed was the newest day. The chart had no per-day label and no mark, so the other twenty-nine days could not be read at all. The strip replaces the legend rather than joining it, so the count of things that move on the card is still one. | Susan, over Jony's 2026-08-25 ruling |
 | A floating readout box over the stage-timing plot | Measured 2026-08-29 at 88 to 121px over a 220px plot: 40 to 55 percent of the chart it explains. A strip below the plot cannot occlude at any width, so there is nothing left for a dodge rule to solve. | Jony |
 | Re-sorting the readout rows to the hovered day | The rows are the legend. A legend that re-orders under the eye as the pointer moves cannot be read, and the colour swatch already matches the line. | Jony |

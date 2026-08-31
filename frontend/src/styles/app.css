@@ -113,6 +113,21 @@
 :root {
 	--font-display:
 		'InterVariable', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Roboto, sans-serif;
+
+	/* The reading item's hairline, which is the item's whole edge now that it
+	   sits on the page ground rather than under a rule.
+
+	   On a dark ground the weaker rule is not an edge: measured by arithmetic
+	   over the committed values, --color-rule reads 1.36:1 against --color-bg
+	   and --color-rule-strong reads 1.77:1, while the surface lift itself is
+	   only 1.10:1. So dark is the branch this takes when the document names no
+	   theme, and light is named explicitly below - which keeps the item right
+	   whichever theme is the base. */
+	--item-edge: var(--color-rule-strong);
+}
+
+[data-theme='light'] {
+	--item-edge: var(--color-rule);
 }
 
 html {
@@ -284,5 +299,22 @@ body {
 	*::after {
 		animation-duration: 0.01ms !important;
 		transition-duration: 0.01ms !important;
+	}
+
+	/* A zeroed duration makes a movement instant. It does not remove it, and a
+	   2px rise that happens in one frame is still a rise. So a transform an
+	   interaction brings on is removed outright rather than shortened.
+
+	   The subject list is elements that take an interaction, not `*`: a
+	   transform that POSITIONS something - a rotated axis title, a chart
+	   readout centred on its own width - is not motion, and a blanket reset
+	   would drop both on the floor. */
+	:where(a, button, summary, label, article, li, [tabindex]):is(
+		:hover,
+		:focus-within,
+		:focus-visible,
+		:active
+	) {
+		transform: none !important;
 	}
 }
