@@ -97,6 +97,59 @@ export interface DigestDay {
 	embeddings: DigestEmbeddings | null;
 }
 
+/** The rendered chart as a served item carries it, mirroring
+ * `schemas/digest-view.schema.json`. `kind` is a build-time field of the
+ * committed tree and never reaches a browser. */
+export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
+
+/** One item as the served day carries it - twenty-two of the published item's
+ * fields, every one with a renderer.
+ *
+ * Derived from `DigestItem` rather than restated, so a field cannot mean one
+ * thing in the committed payload and another on the wire. The allow-list that
+ * decides which names are here lives in `project.ts`, and the shape is a
+ * contract: `schemas/digest-view.schema.json`, from
+ * `backend/idhazh/contracts/digest_view.py`.
+ *
+ * Every optional field is optional for the same reason it is on `DigestItem`:
+ * a day published before it existed has no value for it, and **absent and null
+ * both mean unknown**. Never read an absent `carried_by` as 0 or an absent
+ * `on_front_page` as false. */
+export type DigestViewItem = Pick<
+	DigestItem,
+	| 'item_id'
+	| 'vertical'
+	| 'title'
+	| 'summary'
+	| 'reader_note'
+	| 'band'
+	| 'band_reason'
+	| 'truncated'
+	| 'source_name'
+	| 'source_id'
+	| 'source_kind'
+	| 'source_url'
+	| 'published_at'
+	| 'time_source'
+	| 'carried_by'
+	| 'watchlist_hit'
+	| 'on_front_page'
+	| 'rank_score'
+	| 'introduced_by_run'
+	| 'lenses'
+	| 'key_points'
+> & { visual: DigestViewVisual | null };
+
+/** `<base>/digest/<YYYY>/<MM>/<DD>/digest.json` - the day a browser fetches.
+ *
+ * `version` is the contract's own stamp, not the committed day's. A shell that
+ * does not recognise it still renders: an unknown key is ignored, and a known
+ * key that is absent reads as unknown. */
+export interface DigestView {
+	version: string;
+	items: DigestViewItem[];
+}
+
 /** One published story as the archive's list reads it, mirroring
  * `schemas/search-index.schema.json`.
  *
