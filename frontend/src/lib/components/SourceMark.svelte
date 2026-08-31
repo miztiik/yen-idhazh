@@ -13,7 +13,7 @@
 </script>
 
 <span
-	class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-[0.3rem] text-[0.625rem] font-semibold tracking-tight text-text-secondary"
+	class="inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-sm text-xs font-semibold tracking-tight text-text-secondary"
 	style="background-color: {swatch}"
 	aria-hidden="true"
 >

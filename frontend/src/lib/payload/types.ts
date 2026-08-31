@@ -18,6 +18,10 @@ export type SourceKind =
 	| 'government'
 	| 'community';
 
+/** Which clock an item's `published_at` came from. `unknown` means neither the
+ * feed nor our own first sight gave a time, so the item carries none. */
+export type TimeSource = 'feed' | 'first_seen' | 'unknown';
+
 export interface DigestVisual {
 	kind: string;
 	state: string;
@@ -49,6 +53,15 @@ export interface DigestItem {
 	updated_at: string | null;
 	// Optional because every day published before 2026-08-25 omits the key entirely.
 	updated_by_run?: number | null;
+	// The five below are optional for the same reason: every day published before
+	// 2026-08-31 omits them. Absent and null both mean unknown. Never read an
+	// absent `carried_by` as 0 or an absent `on_front_page` as false - that turns
+	// a fact the run never recorded into a claim about the story.
+	carried_by?: number | null;
+	watchlist_hit?: boolean | null;
+	on_front_page?: boolean | null;
+	rank_score?: number | null;
+	time_source?: TimeSource | null;
 }
 
 export interface DigestRunRef {

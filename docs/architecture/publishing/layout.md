@@ -74,6 +74,22 @@ The consequence worth protecting: **rendering any page costs at most two request
 
 **The gzip window settles long before a shard does.** Over the same corpus, per-item gzipped bytes barely move between a quarter of the blob and all of it: 249.6 to 249.8 for the vectors, and 47.3 down to 45.5 for the browse entries. So the compression argument above is about a per-item body of hundreds of bytes, not about a shard of hundreds of kilobytes - any shard past about 70 KB already gets the full ratio.
 
+## An item says why it is here, and whose clock its time is
+
+The planning step scores every story before a single model loads ([../sources/discovery.md](../sources/discovery.md#ranking-is-arithmetic-not-judgement)), and until 2026-08-31 the whole of that arithmetic was thrown away at the end of the plan job. The published item now carries five fields. **Nothing new is computed for them**: four are the score's own terms, and the fifth is a choice `rank.appeared_at` was already making and discarding one line later.
+
+| Field | What it says | What it is not |
+| --- | --- | --- |
+| `carried_by` | How many feeds carried **this one address** today. | Not "also covered by N sources". Two outlets writing their own piece produce two addresses and both read 1. The honest cross-outlet version is a different measurement. |
+| `watchlist_hit` | The story names an entity on the watchlist. | Not an importance grade. It is one bonus term of several. |
+| `on_front_page` | An aggregator voted for it. | A vote, never a discovery - a salience feed never puts a new address in the pool. |
+| `rank_score` | What the planning step scored the story at. Comparable across the whole day, because every desk uses one scale. | Not a quality score and not a confidence band. `band` is the quality signal and it is measured somewhere else entirely ([../../concepts/evaluation.md](../../concepts/evaluation.md)). |
+| `time_source` | Which clock `published_at` came from: `feed`, `first_seen`, or `unknown`. | Not a second timestamp. There is one time on the item and this says whose it is. |
+
+**All five are optional, and an absent one reads as unknown.** Every day published before the fields existed omits all five - 11 days and 3,596 items when they landed, counted 2026-08-31 - and not one of them was rewritten (`CLAUDE.md` section 11). A reader of the payload - our own page included - must not fill an absent field with a default, because every plausible default is a false claim: `0` for `carried_by` says no feed carried the story, `false` for `on_front_page` denies a vote that was never counted, and `0.0` for `rank_score` puts the story at the bottom of its desk. `null` is the only honest answer and the contract test over every committed day asserts it.
+
+`time_source` earns its place because the fallback it names is silent. `published_at` is the feed's own date where the feed gave a usable one, and our first sight of the address where it did not ([../sources/freshness.md](../sources/freshness.md)). Both are the same kind of string, so a page printing the time cannot say whose it is without this field. Measured 2026-08-31 on the committed 2026-08-30 payload - the newest day that had finished publishing - 431 items: 305 distinct `HH:mm` values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. **That last figure is an upper bound on the fallback and not a count of it**, because until this field shipped nothing committed recorded the choice, and a feed's own stamp can land near a run by chance. The fallback is rare either way, which is exactly why it needs naming: a reader has no way to spot the 1 percent.
+
 ## The month search index
 
 `frontend/public/assist/index/<YYYY-MM>.json` is one month of published items in published order, and `<YYYY-MM>.bin` is that month's vectors laid end to end as raw int8. The contract is `backend/idhazh/contracts/search_index.py`; the writer is `assemble.rebuild_search_index`. The archive's story list reads the JSON, and on-device search reads both.

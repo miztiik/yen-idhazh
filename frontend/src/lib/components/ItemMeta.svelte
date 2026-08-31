@@ -33,9 +33,7 @@
 	const kindWorthSaying = $derived(KIND_WORTH_SAYING.includes(item.source_kind));
 </script>
 
-<div
-	class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[0.8125rem] leading-[1.4] text-text-secondary"
->
+<div class="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-sm text-text-secondary">
 	<span class="inline-flex items-center gap-1.5">
 		{#if showMark}
 			<SourceMark name={item.source_name} sourceId={item.source_id} />
