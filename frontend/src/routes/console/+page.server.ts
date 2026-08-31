@@ -5,7 +5,7 @@ import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 import { targetMarks, type TargetMarks } from '$lib/charts/targetbar';
 import { failureMix, runHealth, siteCost } from '$lib/charts/glance';
 import { renderToSvg } from '$lib/server/chart-render';
-import { sourceCuts, wasCut, SOURCE_CUT_ROWS } from '$lib/server/model-work';
+import { pipelineChanges, sourceCuts, wasCut, SOURCE_CUT_ROWS } from '$lib/server/model-work';
 import {
 	chronological,
 	failing,
@@ -428,6 +428,11 @@ export async function load() {
 		// says nothing about which of the two nothings happened.
 		flowNote: flow.reason,
 		grid,
+		// Every day the pipeline that writes the summaries changed, derived once here
+		// over the whole ledger and handed to the charts a change can move. Derived
+		// per component it would be derived three times off three different day
+		// lists, and two of them would eventually disagree about when it happened.
+		modelChanges: pipelineChanges(rows),
 		floorPct,
 		itemCeiling,
 		siteBudgetMb,

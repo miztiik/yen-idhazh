@@ -248,6 +248,45 @@ export function modelWork(
 	);
 }
 
+/** Every day the pipeline that wrote the summaries was not the one before it.
+ *
+ * The stamp compared is `pipeline_fingerprint`: a digest over the declared
+ * inputs that can move an output - the weights, the quantisation, the llama.cpp
+ * build, the chat template, the prompt, the output schema, the truncation cap,
+ * the decoding settings, and the extractor and sanitizer versions
+ * (`backend/idhazh/contracts/fingerprint.py`).
+ *
+ * `model_id` cannot stand in for it. Measured 2026-08-27 over 2,232 rows the
+ * stamp moved four times while every row named one model, so a slug attributes
+ * a changed number to an unchanged pipeline - which is why
+ * `docs/concepts/evaluation.md` segments on the stamp too.
+ *
+ * A day is a boundary when it ran a stamp the previous scored day did not run.
+ * A day that only stopped using one of yesterday's stamps changed nothing and
+ * is not a boundary. A day carrying several stamps is one boundary, because a
+ * day is one column and a change inside it cannot be placed any finer.
+ *
+ * Derived over the whole ledger and never over a window, so a chart opening on
+ * the day after a change still knows the change happened.
+ */
+export function pipelineChanges(scores: Record<string, string>[]): string[] {
+	const stamps = new Map<string, Set<string>>();
+	for (const row of scores) {
+		const date = row.date ?? '';
+		const stamp = row.pipeline_fingerprint ?? '';
+		if (date === '' || stamp === '') continue;
+		stamps.set(date, (stamps.get(date) ?? new Set<string>()).add(stamp));
+	}
+	const dates = [...stamps.keys()].sort();
+	const changes: string[] = [];
+	for (let index = 1; index < dates.length; index += 1) {
+		const before = stamps.get(dates[index - 1]) as Set<string>;
+		const now = stamps.get(dates[index]) as Set<string>;
+		if ([...now].some((stamp) => !before.has(stamp))) changes.push(dates[index]);
+	}
+	return changes;
+}
+
 /** The model id each date's score rows name, for the days that name one.
  *
  * The candle needs it to know when two days ran on different models and must
