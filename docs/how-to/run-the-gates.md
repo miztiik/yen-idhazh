@@ -252,13 +252,14 @@ is to re-measure and re-derive the number, not to add a digit
 One key over three surfaces fails without saying which surface failed, so
 `/console/`, `/console/model/` and `/console/machine/` each carry their own.
 Removing one real mature published day from every ledger the console reads and
-rebuilding cost 19,250 gzipped bytes on `/console/`, 730 on `/console/model/` and
-nothing at all on `/console/machine/`, which reads no ledger yet. So the numbers
-are the heaviest of five builds plus seven of those days plus the 64-byte noise
-floor - 250,643 and 18,682 - and Machine, which no publish moves, takes three
-publishes' worth of rewriting its 502 characters of ledger-derived text instead,
-at 6,899. All three are meant to expire
-([../reference/measurements.md](../reference/measurements.md#three-console-routes-three-ceilings-and-a-day-priced-on-each-2026-08-31)).
+rebuilding cost 19,250 gzipped bytes on `/console/` and 730 on `/console/model/`,
+so those two are the heaviest of five builds plus seven of those days plus the
+64-byte noise floor - 250,643 and 18,682. `/console/machine/` was re-derived
+again the same day, from 6,899 to **30,391**, when it went from rendering no
+ledger at all to drawing nine panels off the runtime counters. It is priced in
+RUNS rather than days, at 231 bytes a run over seven days at the observed maximum
+of five runs a day. All three are meant to expire
+([../reference/measurements.md](../reference/measurements.md#the-machine-route-draws-the-counters-and-its-ceiling-is-re-derived-2026-08-31)).
 
 **When a console ceiling fires, the panel does not move.** The owner ruled on
 2026-08-31 that no approved feature is removed, deferred or shrunk to stay under

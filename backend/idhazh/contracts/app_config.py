@@ -843,6 +843,42 @@ class ObservabilityConfig(Model):
             "or a month would be deleted before it was ever downsampled."
         ),
     )
+    cost_currency: str = Field(
+        default="USD",
+        pattern=r"^[A-Z]{3}$",
+        description=(
+            "The currency the console prints the counterfactual cost in, as an ISO "
+            "4217 code. Named rather than assumed: a bare number with a symbol in "
+            "front of it is the shape a bill takes, and this figure is not a bill."
+        ),
+    )
+    cost_input_per_million: float = Field(
+        default=0.20,
+        ge=0.0,
+        description=(
+            "What a hosted provider would charge for a million PROMPT tokens, in "
+            "cost_currency. Priced apart from output because a provider prices them "
+            "apart - output usually runs three to five times input - and one blended "
+            "rate would understate a run that wrote a lot and overstate one that read "
+            "a lot. This is the operator's number to set: nothing bills us, so the "
+            "committed value is a documented starting point rather than a measurement "
+            "(CLAUDE.md Rule #10's one carve-out). The console prints the rate it "
+            "used and says whether it came from here or from the operator, and it "
+            "labels the result a counterfactual - what the run would have cost "
+            "elsewhere - never an amount owed."
+        ),
+    )
+    cost_output_per_million: float = Field(
+        default=0.60,
+        ge=0.0,
+        description=(
+            "What a hosted provider would charge for a million GENERATED tokens, in "
+            "cost_currency. Same standing as cost_input_per_million: a documented "
+            "starting point the operator sets, never a bill. Zero is allowed and "
+            "means free rather than unknown, so a rate nobody has chosen is the "
+            "committed default and not an empty cell."
+        ),
+    )
 
     @model_validator(mode="after")
     def _the_two_thresholds_are_ordered(self) -> Self:
@@ -1492,6 +1528,34 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31T23:00",
+            change=(
+                "observability gained cost_currency, cost_input_per_million and "
+                "cost_output_per_million, all with defaults the committed config "
+                "repeats. page_weight.ceilings_bytes moved /console/machine/ from "
+                "6,899 to 30,391."
+            ),
+            why=(
+                "The Machine route now draws the six panels rows 13 to 16 of the "
+                "observability plan describe, one of which prices a run's tokens at a "
+                "hosted provider's rate. That figure is a counterfactual and never a "
+                "bill - nothing bills us, because Actions minutes are free on a public "
+                "repository - and CLAUDE.md Rule #10 carries the owner's carve-out for "
+                "it on the condition that the rate and its source are printed beside "
+                "it. So the rate is a config knob and not a literal in a component "
+                "(Rule #6), input and output are priced apart because a provider "
+                "prices them apart, and the currency is named rather than assumed. "
+                "The committed values are a documented starting point the owner has "
+                "not yet set; docs/concepts/config.md says so. The ceiling moved "
+                "because the route went from rendering no ledger to rendering nine "
+                "panels: it is a ratchet and not a budget, re-derived from five builds "
+                "with the heaviest per route, and no panel was cut to stay under the "
+                "old number (owner ruling, 2026-08-31). Additive only - the model "
+                "defaults and the committed file agree, and a config written before "
+                "today still validates, so no read-side migration (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-31",
             change=(

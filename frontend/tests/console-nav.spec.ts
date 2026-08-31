@@ -260,14 +260,14 @@ test.describe('the ceilings follow the split', () => {
 	});
 });
 
-test.describe('a route with nothing to draw', () => {
-	test('Machine renders complete, and says so once at the top and once per panel', async ({
+test.describe('a route that draws what the server counted', () => {
+	test('Machine renders its panels, and any panel with nothing to draw says so', async ({
 		page
 	}) => {
-		// This route reads no ledger at all today, so it IS the missing-data case
-		// and it is asserted on every run rather than only when one is contrived.
-		// A route that hid itself until it had data would be one nobody knew to
-		// check.
+		// This route shipped empty on 2026-08-30 and gained its panels on
+		// 2026-08-31. What is asserted is the shape that survives either state: the
+		// panels exist, the span every figure reads is stated in words, and a panel
+		// with no data says which reading is missing rather than drawing a zero.
 		const errors: string[] = [];
 		page.on('console', (message) => {
 			if (message.type() === 'error') errors.push(message.text());
@@ -275,8 +275,16 @@ test.describe('a route with nothing to draw', () => {
 		page.on('pageerror', (error) => errors.push(String(error)));
 
 		await page.goto('/console/machine/');
-		await expect(page.locator('[data-machine="empty"]')).toBeVisible();
-		const panels = await page
+		const intro = page.locator('[data-machine="intro"]');
+		await expect(intro).toBeVisible();
+		expect((await intro.innerText()).trim().length).toBeGreaterThan(40);
+
+		const panels = await page.locator('[data-console-panel]').count();
+		expect(panels, 'the route draws no panels at all').toBeGreaterThan(5);
+
+		// Absence prints as absence. Every panel that cannot draw names the reading
+		// it is missing; none of them prints a zero in its place.
+		const empties = await page
 			.locator('[data-machine-panel-empty]')
 			.evaluateAll((nodes) =>
 				nodes.map((node) => ({
@@ -284,10 +292,7 @@ test.describe('a route with nothing to draw', () => {
 					text: (node.textContent ?? '').trim()
 				}))
 			);
-		expect(panels.length, 'the route names no panel, so nothing says what is missing').toBeGreaterThan(
-			2
-		);
-		for (const panel of panels) {
+		for (const panel of empties) {
 			expect(panel.text.length, `${panel.id} is empty without saying so`).toBeGreaterThan(20);
 		}
 		expect(errors, 'the route logged an error').toEqual([]);
