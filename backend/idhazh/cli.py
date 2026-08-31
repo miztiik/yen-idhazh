@@ -84,7 +84,7 @@ from idhazh.contracts.qualification import (
 )
 from idhazh.contracts.route import Route, VisualKind
 from idhazh.contracts.run_manifest import ModelRole, ModelUse, RunManifest
-from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.run_plan import PlannedItem, RunPlan, VerticalPlan
 from idhazh.contracts.runtime_counters import RuntimeCountersRow
 from idhazh.contracts.seen import PublishedRow, SeenRow
 from idhazh.contracts.sources import FeedDef
@@ -398,28 +398,18 @@ def stage_plan(
         len(candidates),
         sorted(lens_weights),
     )
-    verticals = []
-    items: list[PlannedItem] = []
-    for vertical in settings.taxonomy.verticals:
-        live = discover.live(settings.sources.feeds, vertical.id)
-        summary, planned = rank.plan_vertical(
-            vertical,
-            [c for c in candidates if c.vertical == vertical.id],
-            config=collect,
-            live_feeds=len(live),
-            now=generated_at,
-            first_seen=first_seen,
-            already_published=already_published,
-            settled_today=settled_today,
-            watchlist_keys=watchlist_keys,
-            front_page_keys=frozenset(front_page),
-            lens_bonuses=lens_bonuses,
-        )
-        verticals.append(summary)
-        if cap is not None and len(planned) > cap:
-            LOG.info("cap applied vertical=%s planned=%s cap=%s", vertical.id, len(planned), cap)
-            planned = planned[:cap]
-        items.extend(planned)
+    verticals, items = _plan_desks(
+        settings,
+        candidates,
+        now=generated_at,
+        first_seen=first_seen,
+        already_published=already_published,
+        settled_today=settled_today,
+        watchlist_keys=watchlist_keys,
+        front_page_keys=frozenset(front_page),
+        lens_bonuses=lens_bonuses,
+        cap=cap,
+    )
 
     items = _dedupe_planned_items(items)
     items = _within_ceiling(items, ceiling=settings.app.run.safety_ceiling_per_run)
@@ -440,6 +430,51 @@ def stage_plan(
         verticals=verticals,
         items=items,
     )
+
+
+def _plan_desks(
+    settings: config.Settings,
+    candidates: list[discover.Candidate],
+    *,
+    now: str,
+    first_seen: dict[str, str],
+    already_published: frozenset[str],
+    settled_today: frozenset[str],
+    watchlist_keys: frozenset[str],
+    front_page_keys: frozenset[str],
+    lens_bonuses: dict[str, float],
+    cap: int | None,
+) -> tuple[list[VerticalPlan], list[PlannedItem]]:
+    """Rank every desk once and return what they offered, desk by desk.
+
+    Each desk is planned on its own: a vertical's candidates never compete with
+    another's, which is what stops a busy desk emptying a quiet one. What comes
+    back is still per-desk, so the caller deduplicates the day and applies the
+    run's own ceiling.
+    """
+    summaries: list[VerticalPlan] = []
+    items: list[PlannedItem] = []
+    for vertical in settings.taxonomy.verticals:
+        live = discover.live(settings.sources.feeds, vertical.id)
+        summary, planned = rank.plan_vertical(
+            vertical,
+            [c for c in candidates if c.vertical == vertical.id],
+            config=settings.app.collect,
+            live_feeds=len(live),
+            now=now,
+            first_seen=first_seen,
+            already_published=already_published,
+            settled_today=settled_today,
+            watchlist_keys=watchlist_keys,
+            front_page_keys=front_page_keys,
+            lens_bonuses=lens_bonuses,
+        )
+        summaries.append(summary)
+        if cap is not None and len(planned) > cap:
+            LOG.info("cap applied vertical=%s planned=%s cap=%s", vertical.id, len(planned), cap)
+            planned = planned[:cap]
+        items.extend(planned)
+    return summaries, items
 
 
 def _rest_row(feed: FeedDef, *, at: str, run_id: str) -> FeedHealthRow:
