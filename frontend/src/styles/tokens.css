@@ -49,6 +49,22 @@
 	--fill-medium: #d6a743;
 	--fill-low: #f0836c;
 
+	/* --- Movement pair ---------------------------------------------------
+	   Did a number go the right way. Not the confidence ramp and never equal
+	   to it: health says a thing is broken, movement says a figure moved the
+	   way we wanted. A summary that got 3 percent slower is not broken, and
+	   painting it in --band-low trains an operator to ignore --band-low.
+
+	   Same meaning, quieter voice. Measured 2026-08-31 these two sit at 40.7
+	   and 57.9 percent saturation against the dark confidence ramp's 46.3 and
+	   81.5, so a movement reads as a direction beside a status chip rather
+	   than as a second status. Both are TEXT colours - a card foot prints a
+	   percentage in them - so both clear 4.5:1 on --color-surface: 9.118:1 and
+	   8.344:1. config/appearance.json overrides them per theme and
+	   frame.generated.css carries the override.  */
+	--movement-good: #7fc9ae;
+	--movement-bad: #e3a396;
+
 	/* --- Chart ramp ------------------------------------------------------
 	   Categorical, eight stops, and it holds no green, no amber and no red -
 	   a chart that borrowed the confidence ramp once told a reader the
@@ -161,6 +177,12 @@
 	--fill-high: #2e9e63;
 	--fill-medium: #c08200;
 	--fill-low: #e0523a;
+
+	/* --- Movement pair ---------------------------------------------------
+	   40.5 and 44.2 percent saturation against the light confidence ramp's 66
+	   and 70.6, and 5.905:1 and 6.544:1 on --color-surface. */
+	--movement-good: #2f6f5e;
+	--movement-bad: #96453a;
 
 	/* --- Chart ramp ------------------------------------------------------
 	   Categorical, eight stops, and it holds no green, no amber and no red -

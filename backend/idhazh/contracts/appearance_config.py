@@ -56,6 +56,26 @@ FRAME_READING_MAX_PX: Final = 1600
 FRAME_CONSOLE_MIN_PX: Final = 1100
 FRAME_CONSOLE_MAX_PX: Final = 2000
 
+#: A six-digit CSS hex, lower case. The one form `frontend/src/styles/tokens.css`
+#: writes and the one form `tokens.spec.ts` reads back off it.
+HEX_COLOUR: Final = r"^#[0-9a-f]{6}$"
+
+#: The confidence ramp as `tokens.css` declares it, so the movement pair can be
+#: refused for being it. Copied rather than imported because nothing in
+#: `backend/` may read a frontend file (CLAUDE.md section 4), and the copy is
+#: safe to hold: these three values are the ones the ramp had when the movement
+#: pair was chosen, and a ramp that moves off them only widens the gap.
+LIGHT_CONFIDENCE_RAMP: Final = {
+    "--band-high": "#1a7f4b",
+    "--band-medium": "#8a6300",
+    "--band-low": "#b4331f",
+}
+DARK_CONFIDENCE_RAMP: Final = {
+    "--band-high": "#4bbd84",
+    "--band-medium": "#d6a743",
+    "--band-low": "#f0836c",
+}
+
 
 class TintMode(StrEnum):
     """How an icon takes its colour.
@@ -217,6 +237,70 @@ class ThemeConfig(Model):
             "2026-08-29 sit between 0.055 and 0.086."
         ),
     )
+    movement_good_light: str = Field(
+        default="#2f6f5e",
+        pattern=HEX_COLOUR,
+        description=(
+            "`--movement-good` on the light theme: a figure went the way we wanted. "
+            "Not the confidence ramp and never equal to it - health says a thing is "
+            "broken, movement says a number moved the right way, and a summary that "
+            "got 3 percent slower is not broken. Text weight, so it clears 4.5:1 on "
+            "the surface; measured 2026-08-31 the default reads 5.905:1."
+        ),
+    )
+    movement_bad_light: str = Field(
+        default="#96453a",
+        pattern=HEX_COLOUR,
+        description=(
+            "`--movement-bad` on the light theme. Quieter than `--band-low` on "
+            "purpose: measured 2026-08-31 the default is 44.2 percent saturation "
+            "against the confidence ramp's 70.6, so a movement reads as a direction "
+            "beside a status chip rather than as a second status. 6.544:1 on the "
+            "surface."
+        ),
+    )
+    movement_good_dark: str = Field(
+        default="#7fc9ae",
+        pattern=HEX_COLOUR,
+        description=(
+            "`--movement-good` on the dark theme. Designed rather than derived: the "
+            "light value over a dark ground is ink, not a colour. 9.118:1 on the dark "
+            "surface, measured 2026-08-31."
+        ),
+    )
+    movement_bad_dark: str = Field(
+        default="#e3a396",
+        pattern=HEX_COLOUR,
+        description=(
+            "`--movement-bad` on the dark theme. 8.344:1 on the dark surface, "
+            "measured 2026-08-31."
+        ),
+    )
+
+    @model_validator(mode="after")
+    def _movement_is_not_the_confidence_ramp(self) -> Self:
+        """The whole of `they are not the health ramp`, made mechanical.
+
+        Two tokens that resolve to the same bytes as `--band-high` and
+        `--band-low` ARE the confidence ramp under a second name, and the
+        alarm-fatigue argument that put them here dies quietly.
+        """
+        for theme, ramp in (("light", LIGHT_CONFIDENCE_RAMP), ("dark", DARK_CONFIDENCE_RAMP)):
+            good: str = getattr(self, f"movement_good_{theme}").lower()
+            bad: str = getattr(self, f"movement_bad_{theme}").lower()
+            if good == bad:
+                raise ValueError(
+                    f"theme.movement_good_{theme} and movement_bad_{theme} must differ: "
+                    "one colour cannot say both directions"
+                )
+            for name, value in ramp.items():
+                if value in (good, bad):
+                    raise ValueError(
+                        f"theme.movement_*_{theme} must not equal {name} ({value}): "
+                        "movement colour says a number went the right way, and the "
+                        "confidence ramp says a thing is broken"
+                    )
+        return self
 
 
 class ChartConfig(Model):
@@ -359,6 +443,30 @@ class AppearanceConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31T23:56",
+            change=(
+                "theme.movement_good_light, theme.movement_bad_light, "
+                "theme.movement_good_dark and theme.movement_bad_dark added, "
+                "defaulting to #2f6f5e, #96453a, #7fc9ae and #e3a396. They are the "
+                "values of the `--movement-good` and `--movement-bad` CSS tokens, one "
+                "per theme, and a validator refuses any of them that equals a "
+                "confidence-ramp value."
+            ),
+            why=(
+                "Movement colour on the console read the sign of the number instead "
+                "of the polarity of the measure, so a fall in time per summary - an "
+                "improvement - painted the same as a fall in summaries published. "
+                "The fix needs a colour pair that means `went the right way`, and the "
+                "confidence ramp cannot be it: green there means `it worked`, and a "
+                "summary that got 3 percent slower is not broken. Painting it in "
+                "`--band-low` teaches an operator to ignore `--band-low`. The pair is "
+                "quieter than the ramp on purpose - measured 2026-08-31 at 40.5 and "
+                "44.2 percent saturation against 66 and 70.6 in light - and both "
+                "clear 4.5:1 as text on their own surface. Additive with defaults, so "
+                "an appearance file written before today still validates (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-31T23:55",
             change=(
