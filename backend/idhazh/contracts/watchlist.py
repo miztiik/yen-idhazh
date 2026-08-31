@@ -1,8 +1,14 @@
 """The entity watchlist (`config/watchlist.json`).
 
-An entity is followed by name and carries its own primary feeds - roughly one
-feed each, against roughly twenty-five for a vertical. That asymmetry is the
-whole reason entities are a separate primitive rather than a vertical.
+An entity is followed by name rather than by feed list. Where it has feeds at
+all there is roughly one, against roughly twenty-five for a vertical. That
+asymmetry is the whole reason entities are a separate primitive.
+
+The registry holds two kinds of entry. An organisation is a standing name - a
+company or an institution - and it is in the news most weeks. A subject is a
+running story: a pandemic, a tournament, an export-control regime. It has no
+filer id, often no feed, and it goes quiet between instalments. `EntityKind` is
+what tells the two apart.
 
 US filers additionally resolve through EDGAR, which needs no key but does
 require a declared contact address in the `User-Agent`. Non-US entities have no
@@ -11,6 +17,7 @@ EDGAR coverage at all, so the watchlist needs both layers.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import Annotated, ClassVar, Self
 
 from pydantic import Field, StringConstraints, model_validator
@@ -20,6 +27,13 @@ from idhazh.contracts.taxonomy import Lifecycled, LifecycleStatus, SourceTier
 
 Cik = Annotated[str, StringConstraints(pattern=r"^[0-9]{10}$")]
 ContactEmail = Annotated[str, StringConstraints(pattern=r"^[^@\s]+@[^@\s]+\.[^@\s]+$")]
+
+
+class EntityKind(StrEnum):
+    """What the entry names: a standing organisation, or a running subject."""
+
+    ORGANISATION = "organisation"
+    SUBJECT = "subject"
 
 
 class EntityFeed(Lifecycled):
@@ -32,10 +46,20 @@ class EntityFeed(Lifecycled):
 
 
 class EntityDef(Lifecycled):
-    """One named organisation."""
+    """One entry in the registry: a named organisation, or a running subject."""
 
     id: Slug
     display_name: str = Field(min_length=1)
+    kind: EntityKind = Field(
+        default=EntityKind.ORGANISATION,
+        description=(
+            "Whether this entry names a standing organisation or a running subject. A "
+            "subject - a pandemic, a tournament, an export-control regime - has no filer "
+            "id and often no feed, so the registry has to say which kind it holds. "
+            "Absent means organisation, which is what every entry written before the "
+            "field existed was."
+        ),
+    )
     aliases: list[str] = Field(
         default_factory=list,
         description=(
@@ -48,9 +72,18 @@ class EntityDef(Lifecycled):
     )
     cik: Cik | None = Field(
         default=None,
-        description="Ten-digit, zero-padded SEC filer id. Null for a non-US entity.",
+        description=(
+            "Ten-digit, zero-padded SEC filer id. Null for a non-US entity, and null "
+            "for every subject, because only an organisation files with the SEC."
+        ),
     )
     feeds: list[EntityFeed] = Field(default_factory=list)
+
+    @model_validator(mode="after")
+    def _only_an_organisation_files_with_the_sec(self) -> Self:
+        if self.kind is not EntityKind.ORGANISATION and self.cik is not None:
+            raise ValueError("a cik belongs to an organisation, never to a subject")
+        return self
 
 
 class EdgarPolicy(Model):
@@ -77,6 +110,20 @@ class Watchlist(Contract):
 
     __schema_stem__: ClassVar[str] = "watchlist"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31",
+            change=(
+                "EntityDef gained kind, so an entry can be a subject and not only "
+                "an organisation."
+            ),
+            why=(
+                "A running story - a pandemic, a tournament, an export-control regime - "
+                "has no SEC filer id and no feed of its own, and the registry described "
+                "itself as a list of named organisations, so nothing could hold one. The "
+                "field defaults to organisation, which is what all 30 committed entries "
+                "are, so the change is additive and no payload needs a migration."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-26",
             change="Stated the match rule on EntityDef.aliases.",
