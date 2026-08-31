@@ -15,7 +15,7 @@
 
 {#if rendered && visual}
 	<figure
-		class="my-4 aspect-[16/10] overflow-hidden rounded-[--radius-md] border border-rule bg-surface"
+		class="my-4 aspect-[16/10] overflow-hidden rounded-md border border-rule bg-surface"
 	>
 		<img
 			src="{base}/{visual.path}"
