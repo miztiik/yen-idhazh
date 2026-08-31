@@ -902,11 +902,12 @@ The viewport is a 30-day default window, not a retention policy. The window size
 and where today sits are `console.default_window_days` and
 `console.today_anchor`. Arrow keys pan, and `+` / `-` step the window to the
 next preset, from a labelled focusable control with a visible focus ring; the
-buttons beside it pan with a pointer. **Every console chart is hand-written SVG
-rendered on the server**, so the page is complete before any script runs and
-stays complete if none does. If a telemetry month is absent or cannot be parsed,
-that month is a gap in the charts. It is not interpolated, and it never
-white-screens the console.
+buttons beside it pan with a pointer. **Every console chart is drawn on the
+server before any script runs** - most as hand-written SVG, the rest prerendered
+by the engine and swapped for a live chart on mount - so the page is complete
+with no script and stays complete if none arrives. If a telemetry month is
+absent or cannot be parsed, that month is a gap in the charts. It is not
+interpolated, and it never white-screens the console.
 
 ### One window governs the page
 
@@ -1379,6 +1380,95 @@ built on the same tree and the same machine.
 
 Authority: Jony, 2026-08-25; the three marks and the counts behind them, Jony
 and Fowler, 2026-08-27.
+
+### The model-change rule, and the charts it means something on
+
+A dashed rule down a chart says one sentence: *everything left of this line was
+written by a different setup*. That sentence is true of a chart of writing time
+and false of a chart of feed outcomes, so the mark is a judgement about what the
+chart measures and never a decoration applied everywhere. A marker that means
+nothing on half the page teaches an operator to stop reading it, and that costs
+the half where it did mean something.
+
+**The boundary is a `pipeline_fingerprint` transition, never a `model_id` one.**
+The stamp is a digest over every declared input that can move an output - the
+weights, the quantisation, the llama.cpp build, the chat template, the prompt,
+the output schema, the truncation cap, the decoding settings, and the extractor
+and sanitizer versions
+([../../../backend/idhazh/contracts/fingerprint.py](../../../backend/idhazh/contracts/fingerprint.py)).
+Measured 2026-08-27 over 2,232 rows the stamp moved four times while every row
+named one model, so a slug attributes a changed number to an unchanged pipeline;
+[../../concepts/evaluation.md](../../concepts/evaluation.md) segments on the
+stamp for the same reason.
+
+**A day is a boundary when it ran a stamp the previous scored day did not run.**
+A day that only stopped using one of yesterday's stamps started nothing, so it
+is not one. A day carrying several stamps is one boundary, because a day is one
+column and a change inside it cannot be placed any finer. Measured 2026-08-31
+over the committed ledger - 3,884 rows, 10 scored days - that rule finds five
+boundaries: 23, 24, 26, 27 and 29 August. Comparing only the previous day's last
+stamp against this day's first would have found two, and would have called
+2026-08-26 a single unchanged day while it ran three pipelines.
+
+**Derived once on the server, over the whole ledger, and passed down.**
+`pipelineChanges()` in `$lib/server/model-work` is the one derivation and
+`/console/`'s load calls it; a component that derived its own would be deriving
+it off its own day list, and two of them would eventually disagree about when it
+happened. Over the whole ledger rather than the window, so a chart opening on
+the day after a change still knows the change happened.
+
+**The rule is dashed, in the neutral rule ink, and never on the health ramp.** A
+pipeline change is an event, not a verdict. It sits on the leading edge of the
+changed day rather than through its own marks, so a step in the trend either
+lines up with it or does not. A change on the oldest drawn day draws nothing: it
+would separate nothing from nothing, because every day on the chart ran the
+setup that came out of it.
+
+**Every chart says which bucket it is in, in markup.** A chart that draws
+carries `data-model-rule="yes"`, its own drawn span as
+`data-model-rule-from`/`-to`, and one `data-model-rule-line` per boundary inside
+that span. A chart that does not carries `data-model-rule="no"` and the reason
+in words in `data-model-rule-none`. The pair is the point: an absent rule and a
+rule nobody remembered to draw look identical on a page, and only one of them is
+an answer. Where a drawing chart's span holds no boundary it says so in type
+(`data-model-rule-empty`) rather than leaving the reader to guess.
+
+| Chart | Route | Draws | Why |
+| --- | --- | --- | --- |
+| Time per item, by stage | Pipelines | **yes** | `summarize` is the model writing, and `extract` moves with the extractor version the same stamp digests. |
+| Summary length against the length asked for | Pipelines | **yes** | The length a summary comes out at is decided by the prompt and the model, and the stamp covers both. |
+| What one more article costs | Pipelines | no | Bytes an article are what got published, not how it was written. |
+| Feeds that failed | Pipelines | no | A feed answered or it did not, before any summary existed. |
+| Charts drawn for articles | Pipelines | no | The chart arm is a different model call, judged on its own retirement rule. |
+| Time to write one summary | Summaries | no | A change moves every bar on it. The axis is seconds, so the window is pooled into one distribution and a day has no position to draw at. |
+| Prompt cache | Hardware | no | A change moves it - the prompt is in the stamp - and its engine-drawn axis carries no rule yet. |
+| Context headroom | Hardware | no | One bar a run, so there is no day edge to draw between. |
+| Tokens per run | Hardware | no | One bar a run, so there is no day edge to draw between. |
+
+The last three are the honest edge of this rule and are recorded rather than
+hidden: two of them are charts a change **does** move, and neither draws,
+because the mechanism is a `<line>` in an SVG the component owns and neither
+chart owns one. Rows #19, #20 and #21 of the console chart-craft plan rebuild
+all three, and the rule lands with the chart it belongs to. `ThroughputTrend` on
+Summaries has drawn its own version since 2026-08-30, off `model_id` rather than
+the stamp; that is the precedent this rule was generalised from and it is not
+yet a caller of it.
+
+**The rule reaches the readout as well as the plot.** A boundary day prints one
+extra line in the strip under the chart, so a reader stepping the days with an
+arrow key meets the change without a pointer. Two charts, one string, from
+`$lib/charts/frame` - two charts describing one event differently is how the two
+descriptions drift.
+
+The wording never says "the model changed", because the stamp moves for a
+reworded prompt or a rebuilt runtime as readily as for new weights, and four of
+the five stamps in the ledger cannot be expanded into their cause at all
+(measured 2026-08-27). It says *a new model, prompt or setting started here*,
+which is the set the stamp actually covers.
+
+Authority: Andre (AI/LLM) on which measures a change moves, Fowler
+(Architecture) on one server-side derivation, Jony (UI/UX) on the mark being
+neutral ink; console chart-craft plan Row #3, 2026-08-31.
 
 ## The chart arm is a flow, and every drop leaves it as a named branch
 

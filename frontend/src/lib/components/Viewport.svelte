@@ -23,6 +23,7 @@
 		bands,
 		tickDensity,
 		readoutMaxShare,
+		modelChanges = [],
 		onPan,
 		onStep
 	}: {
@@ -41,6 +42,10 @@
 		tickDensity: number;
 		/** The share of a plot a readout strip may take - `chart.readout_max_share`. */
 		readoutMaxShare: number;
+		/** Every day the summarizing pipeline changed. Carried through rather than
+		 * re-derived: the page reads it once from the server and the band chart is
+		 * the only child here a summarizer change can move. */
+		modelChanges?: string[];
 		/** Move the window by this many days, keeping its span. */
 		onPan: (days: number) => void;
 		/** Widen (`1`) or narrow (`-1`) to the next preset. */
@@ -142,6 +147,7 @@
 				width={config.chart_width}
 				{tickDensity}
 				{readoutMaxShare}
+				{modelChanges}
 				outlierRows={config.band_outlier_rows}
 			/>
 			<FailureList
