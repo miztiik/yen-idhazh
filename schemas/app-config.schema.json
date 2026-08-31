@@ -101,6 +101,14 @@
           "title": "Max Per Source",
           "type": "integer"
         },
+        "max_source_share_per_day": {
+          "default": 0.05,
+          "description": "Most of one day one feed may hold, counting every desk and every run. max_per_source bounds a count inside one desk in one run, and a feed sits on one desk, so what a feed can hold of a whole day is that count times the runs the day had - a fixed number whose share moves with the day's size. Measured 2026-08-31 over the eleven committed days, the most one feed ever held was 10 items, which is 2.32 percent of the 431-item day of 2026-08-30 and 25 percent of the four-item day of 2026-08-21. The default is above the largest full-day share by a factor of two, so it displaces nothing that has ever been published; it bounds the thin day, where a fixed count of ten is a quarter of the page. It is never tighter than max_per_source for one desk in one run - a day ceiling below that would tighten the per-desk rule, which is a different decision and was refused.",
+          "exclusiveMinimum": 0.0,
+          "maximum": 1.0,
+          "title": "Max Source Share Per Day",
+          "type": "number"
+        },
         "quarantine_after_failures": {
           "default": 5,
           "minimum": 1,
@@ -1520,6 +1528,11 @@
       "change": "ui.topic_pills_max added, defaulting to 8. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Additive with a default, so a config written before today still validates.",
       "version": "2026-08-31T23:59",
       "why": "The topic row was a horizontal scroll container, which is a control that hides its own contents; the owner ruled on 2026-08-31 that no reader-facing surface carries one. The row wraps now, and the topics past this number sit inside a `+N more` disclosure so a day with many topics does not turn the row into the page. A cap a component spells is a cap an operator cannot move (Rule #6)."
+    },
+    {
+      "change": "Added collect.max_source_share_per_day, and the committed config sets it.",
+      "version": "2026-08-31T23:58",
+      "why": "Nothing counted one feed's contribution across a day. collect.max_per_source bounds a count inside one desk in one run, and a feed sits on exactly one desk, so a feed's ceiling for a whole day is that count times the runs the day had - 10 on a five-run day. A fixed count is a moving share: measured 2026-08-31 over the eleven committed days, 21 feeds held exactly 10 items of the 431-item day of 2026-08-30, which is 2.32 percent each, while one feed held 1 of the four-item day of 2026-08-21, which is 25 percent. The share is what a reader sees and nothing bounded it. Additive with a default, so a config written before today still loads (section 11)."
     },
     {
       "change": "ThemeChoice lost its `system` member and ui.theme_default now defaults to `dark`; the committed config repeats it. The shape is `UiConfig`, which this document and `AppearanceConfig` share, so both schemas moved together. Breaking: the enum is narrower. The read-side migration is a before-validator on `UiConfig.theme_default` that reads `system` as `dark`, so a config written before today still loads.",

@@ -60,6 +60,34 @@ function declaredIn(css: string): string[] {
 	return [...css.matchAll(/^\s*(--[a-z0-9-]+)\s*:/gm)].map((m) => m[1]);
 }
 
+/** The value of one token in one theme block, and only where it is a plain hex. */
+function valueOf(css: string, token: string): string {
+	const match = new RegExp(`^\\s*${token}\\s*:\\s*(#[0-9a-f]{6})`, 'm').exec(css);
+	expect(match, `${token} is no longer a plain hex value in this theme`).not.toBeNull();
+	return match![1];
+}
+
+/** WCAG 2.2 relative luminance, written out rather than imported.
+ *
+ * Audit tooling is a project non-goal (CLAUDE.md section 0a). This is one
+ * surface's oracle over the tokens that surface uses, and it adds no
+ * dependency. `item-card.spec.ts` carries the same eight lines for the same
+ * reason.
+ */
+function luminance(hex: string): number {
+	const channel = (value: number) => {
+		const s = value / 255;
+		return s <= 0.04045 ? s / 12.92 : Math.pow((s + 0.055) / 1.055, 2.4);
+	};
+	const [r, g, b] = [1, 3, 5].map((at) => parseInt(hex.slice(at, at + 2), 16));
+	return 0.2126 * channel(r) + 0.7152 * channel(g) + 0.0722 * channel(b);
+}
+
+function contrast(a: string, b: string): number {
+	const [high, low] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+	return (high + 0.05) / (low + 0.05);
+}
+
 /** The base theme is dark and carries `:root`; light is the override. */
 const BASE_SELECTOR = ":root,\n[data-theme='dark']";
 const OVERRIDE_SELECTOR = "[data-theme='light']";
@@ -233,6 +261,121 @@ test.describe('the token layer', () => {
 				expect(bands, `chart ramp stop ${stop} is a confidence hue`).not.toContain(stop);
 			}
 		}
+	});
+
+	test('every source swatch is a fill a reader can see on the card', () => {
+		// The mark's fill IS the read state: filled means unread, hollow means
+		// read. Below a floor the two rings are one ring, and the whole signal
+		// falls back on dimmer text and a lighter weight - which is the thing the
+		// fill was added to replace, because both of those are less ink and they
+		// fail together on a cheap panel and in sunlight.
+		//
+		// The floor is 1.5:1 and not the 3:1 that binds a fill carrying meaning:
+		// the hue here says nothing, because the publication is named in words on
+		// the same line. What carries meaning is whether there is a fill at all,
+		// and that is an area rather than a colour (design-system.md).
+		//
+		// Arithmetic over the committed hex values, so the spread is zero by
+		// construction and the same two colours give the same number everywhere.
+		const format = readFileSync(join(FRONTEND, 'src', 'lib', 'format.ts'), 'utf8');
+		const modulus = Number(/return hash % (\d+);/.exec(format)?.[1]);
+		expect(
+			modulus,
+			'swatchIndex no longer picks a swatch by a fixed modulus'
+		).toBeGreaterThan(0);
+
+		for (const [theme, selector] of [
+			['dark', BASE_SELECTOR],
+			['light', OVERRIDE_SELECTOR]
+		] as const) {
+			const css = block(TOKENS, selector);
+			const surface = valueOf(css, '--color-surface');
+			const swatches = [
+				...css.matchAll(/^\s*(--source-swatch-\d+)\s*:\s*(#[0-9a-f]{6})/gm)
+			].map((m) => [m[1], m[2]] as const);
+
+			// A shrunken set would pass every assertion under it, and an index the
+			// payload can produce with no swatch behind it resolves to no fill at
+			// all - which reads as "this item is read".
+			expect(
+				swatches.length,
+				`${theme} declares ${swatches.length} swatches and swatchIndex asks for ${modulus}`
+			).toBe(modulus);
+
+			for (const [name, value] of swatches) {
+				const ratio = contrast(value, surface);
+				console.log(`${theme} ${name} ${value} on ${surface}: ${ratio.toFixed(4)}:1`);
+				expect(
+					ratio,
+					`${theme} ${name} ${value} reads ${ratio.toFixed(4)}:1 on ${surface}`
+				).toBeGreaterThanOrEqual(1.5);
+			}
+		}
+	});
+
+	test('every wordmark gradient stop is readable on the ground it sits on', () => {
+		// The wordmark is the site's name, so it is read as type even though the
+		// gradient under it encodes nothing. Decorative colour is unconstrained
+		// (design-system.md); decorative colour that spells a word is not, and
+		// 4.5:1 is what WCAG 2.2 SC 1.4.3 sets for normal text.
+		//
+		// This is the one thing about the wordmark that cannot be seen in a
+		// screenshot of the theme somebody happened to open: the light set that
+		// served here until 2026-08-31 read 3.9803:1, 4.0195:1 and 2.9318:1, and
+		// nothing had ever asked.
+		//
+		// Arithmetic over the committed hex values, so the same two colours give
+		// the same number on every machine and the spread is zero by
+		// construction.
+		for (const [theme, selector] of [
+			['dark', BASE_SELECTOR],
+			['light', OVERRIDE_SELECTOR]
+		] as const) {
+			const css = block(TOKENS, selector);
+			const bg = valueOf(css, '--color-bg');
+			const declared = /^\s*--gradient-wordmark:\s*([^;]+);/m.exec(css);
+			expect(
+				declared,
+				`--gradient-wordmark is not declared in the ${theme} theme`
+			).not.toBeNull();
+
+			const stops = [...declared![1].matchAll(/#[0-9a-f]{6}/g)].map((m) => m[0]);
+			// Five, and the count is asserted: a set trimmed to two would pass
+			// every ratio below and lose the sweep the row was for.
+			expect(stops.length, `the ${theme} wordmark is no longer five stops`).toBe(5);
+
+			for (const stop of stops) {
+				const ratio = contrast(stop, bg);
+				console.log(`${theme} --gradient-wordmark ${stop} on ${bg}: ${ratio.toFixed(4)}:1`);
+				expect(
+					ratio,
+					`${theme} wordmark stop ${stop} reads ${ratio.toFixed(4)}:1 on ${bg}`
+				).toBeGreaterThanOrEqual(4.5);
+			}
+		}
+	});
+
+	test('the wordmark scale is a scale, and it is relative', () => {
+		// A scale is not a colour, so it is declared once outside both theme
+		// blocks. Left inside one, it reads as something a theme could change and
+		// the next theme has to restate it or lose it.
+		//
+		// And a size is relative, never a hard pixel count (owner, 2026-08-31): a
+		// px wordmark ignores a reader who set their browser text larger, and
+		// this is the first thing on every route.
+		const scale = ['--wordmark-size', '--wordmark-leading', '--wordmark-tracking'];
+		for (const token of scale) {
+			expect(declaredIn(TOKENS), `${token} is not declared`).toContain(token);
+			expect(DARK, `${token} is inside the base theme block`).not.toContain(token);
+			expect(LIGHT, `${token} is inside the light theme block`).not.toContain(token);
+		}
+		const size = /^\s*--wordmark-size:\s*([^;]+);/m.exec(TOKENS)![1];
+		expect(size, 'the wordmark size stopped being fluid').toContain('clamp(');
+		expect(size, 'the wordmark size is a hard pixel count').not.toMatch(/\dpx/);
+		expect(
+			/^\s*--wordmark-tracking:\s*([^;]+);/m.exec(TOKENS)![1],
+			'the tracking is a pixel count, so it does not hold at both ends of the clamp'
+		).toMatch(/em\s*$/);
 	});
 
 	test('the committed display face is inside its byte budget', () => {

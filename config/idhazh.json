@@ -16,6 +16,7 @@
     "max_age_hours": 24.0,
     "max_future_hours": 6.0,
     "max_per_source": 2,
+    "max_source_share_per_day": 0.05,
     "quarantine_after_failures": 5,
     "recency_half_life_hours": 18.0,
     "recency_weight": 0.6,
@@ -240,7 +241,7 @@
       "items"
     ],
     "show_filter": true,
-    "site_title": "yen-idhazh",
+    "site_title": "Yen Idhazh",
     "source_mark": true,
     "tagline": "A daily digest that checks its own work.",
     "theme_default": "dark",

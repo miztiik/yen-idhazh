@@ -23,7 +23,7 @@ from idhazh import config
 from idhazh.contracts.app_config import CollectConfig
 from idhazh.contracts.base import TIMESTAMP_PATTERN, derive_url_key
 from idhazh.contracts.feed_health import FeedHealthRow, FetchOutcome
-from idhazh.contracts.run_plan import TimeSource
+from idhazh.contracts.run_plan import PlannedItem, TimeSource
 from idhazh.contracts.sources import FeedDef, SourceForm
 from idhazh.contracts.taxonomy import LifecycleStatus, SourceTier, VerticalDef
 from idhazh.discover import (
@@ -36,7 +36,16 @@ from idhazh.discover import (
     salience_urls,
     split_blocked,
 )
-from idhazh.rank import ITEM_ID_DIGITS, appeared_at, merge, plan_vertical, score, tier_weight
+from idhazh.rank import (
+    ITEM_ID_DIGITS,
+    DayCeiling,
+    appeared_at,
+    day_source_ceiling,
+    merge,
+    plan_vertical,
+    score,
+    tier_weight,
+)
 from idhazh.tag import tags
 
 FEEDS = FIXTURES_DIR / "feeds"
@@ -61,6 +70,13 @@ COMMUNITY = FeedDef(
     title="Example Community",
     url="https://community.example.org/feed",
     tier=SourceTier.COMMUNITY,
+)
+PROLIFIC = FeedDef(
+    id="prolific-wire",
+    vertical="ai",
+    title="Example Prolific Wire",
+    url="https://prolific.example-wire.net/feed",
+    tier=SourceTier.TRADE_PRESS,
 )
 
 AI = VerticalDef(id="ai", display_name="AI", min_feeds=3)
@@ -580,6 +596,167 @@ def test_no_single_feed_becomes_the_whole_vertical() -> None:
     _, items = plan_vertical(AI, all_candidates(), config=config, live_feeds=3, now=NOW)
     per_source = Counter(item.source_id for item in items)
     assert max(per_source.values()) == 1
+
+
+# --- how much of a day one feed may hold -------------------------------------
+
+
+def crowded_candidates() -> list[Candidate]:
+    """The same desk, plus one outlet that files five stories of its own.
+
+    `max_per_source` then has something to hold down, which is what a day-wide
+    ceiling needs: the slot it takes back has to go somewhere, and the only
+    place it can come from is a story the per-desk rule was already refusing.
+    """
+    return [*all_candidates(), *candidates_from_feed(PROLIFIC, body("prolific-outlet.xml"))]
+
+
+def crowded_plan(day_ceiling: DayCeiling | None = None) -> list[PlannedItem]:
+    _, items = plan_vertical(
+        AI,
+        crowded_candidates(),
+        config=CollectConfig(),
+        live_feeds=4,
+        now=NOW,
+        day_ceiling=day_ceiling,
+    )
+    return items
+
+
+def test_a_feed_that_has_had_its_share_of_the_day_takes_less_of_this_one() -> None:
+    """The gap `max_per_source` cannot close: it counts a desk, not a day.
+
+    A feed sits on one desk, so its ceiling for a whole day is
+    `max_per_source` times the runs the day had - nothing counted it, and
+    nothing turned it into a share of the day a reader actually sees.
+    """
+    before = Counter(item.source_id for item in crowded_plan())
+    after = Counter(
+        item.source_id
+        for item in crowded_plan(DayCeiling(per_source=3, carried={"lab-blog": 3}))
+    )
+
+    assert after["lab-blog"] < before["lab-blog"]
+
+
+def test_a_slot_the_ceiling_takes_back_goes_to_the_next_candidate_on_the_desk() -> None:
+    """Displacement, not deletion. The day is exactly as long either way."""
+    plain = crowded_plan()
+    capped = crowded_plan(DayCeiling(per_source=3, carried={"lab-blog": 3}))
+
+    before = Counter(item.source_id for item in plain)
+    after = Counter(item.source_id for item in capped)
+    assert after["prolific-wire"] > before["prolific-wire"], (
+        "the story max_per_source was holding down takes the slot"
+    )
+    assert len(capped) == len(plain), "and the day is not one story shorter"
+    assert [item.rank_score for item in capped] == sorted(
+        (item.rank_score for item in capped), reverse=True
+    ), "the desk stays in rank order, so a backfill cannot jump the queue"
+
+
+def test_a_ceiling_with_nothing_to_put_in_its_place_keeps_the_story() -> None:
+    """The one thing this may never buy is a shorter day.
+
+    `all_candidates()` has no outlet filing more than `max_per_source` stories,
+    so nothing is held down and there is no story to swap in. The ceiling then
+    yields rather than costing the reader an item they cannot see was dropped.
+    """
+    plain_summary, plain = plan_vertical(
+        AI, all_candidates(), config=CollectConfig(), live_feeds=3, now=NOW
+    )
+    _, capped = plan_vertical(
+        AI,
+        all_candidates(),
+        config=CollectConfig(),
+        live_feeds=3,
+        now=NOW,
+        day_ceiling=DayCeiling(per_source=2, carried={"lab-blog": 2}),
+    )
+
+    assert [item.model_dump() for item in capped] == [item.model_dump() for item in plain]
+    assert plain_summary.planned == len(capped)
+
+
+def test_a_ceiling_no_feed_has_reached_leaves_the_day_untouched() -> None:
+    """A day nobody is crowding must plan byte-identically to one with no ceiling."""
+    plain = crowded_plan()
+    wide = crowded_plan(DayCeiling(per_source=len(crowded_candidates()), carried={}))
+
+    assert [item.model_dump() for item in wide] == [item.model_dump() for item in plain]
+
+
+@pytest.mark.parametrize("per_source", [1, 2, 3, 4, 20])
+@pytest.mark.parametrize(
+    "carried",
+    [
+        {},
+        {"lab-blog": 9},
+        {"prolific-wire": 9},
+        {"lab-blog": 2, "prolific-wire": 2},
+        {"lab-blog": 9, "prolific-wire": 9, "trade-press": 9, "community": 9},
+    ],
+)
+def test_a_day_ceiling_never_changes_how_many_stories_a_desk_plans(
+    per_source: int, carried: dict[str, int]
+) -> None:
+    """The invariant that makes this a displacement rather than a cut.
+
+    A story the ceiling refuses still spends its feed's `max_per_source` quota,
+    so what the ceiling chooses from is exactly what the per-desk rule would
+    have taken. Every refusal is then either replaced or given back, and the
+    two cases add up to the same desk.
+    """
+    plain = crowded_plan()
+    capped = crowded_plan(DayCeiling(per_source=per_source, carried=dict(carried)))
+
+    assert len(capped) == len(plain)
+
+
+def test_a_feed_the_day_has_no_room_for_still_stops_at_the_per_desk_limit() -> None:
+    """The defect a real day's pool found, and the one line that answers it.
+
+    Measured 2026-08-31 over a live 4,845-candidate pool with the ceiling set
+    below what most feeds had already carried: one feed took 40 of 160 planned
+    items, a quarter of the run. A feed with no room never reached
+    `max_per_source`, because nothing was counting the stories it was refused -
+    so all forty of its candidates queued for the slots the ceiling was giving
+    back, instead of two of them.
+    """
+    capped = crowded_plan(DayCeiling(per_source=1, carried={"prolific-wire": 9}))
+    per_source = Counter(item.source_id for item in capped)
+
+    assert per_source["prolific-wire"] <= CollectConfig().max_per_source
+
+
+def test_the_day_ceiling_is_never_tighter_than_one_desk_in_one_run() -> None:
+    """Tightening the per-desk rule is a different decision, and it was refused.
+
+    It starves a desk where one publication is genuinely the best source, and
+    it still does not bound the day. So the share floors at `max_per_source`:
+    on a day too thin for the share to reach two items, the ceiling is the rule
+    that was already there.
+    """
+    assert day_source_ceiling(0.05, 10, max_per_source=2) == 2
+
+
+def test_the_ceiling_is_read_off_the_day_rather_than_off_a_constant() -> None:
+    """Two day sizes, two answers - no fixed number satisfies both."""
+    assert day_source_ceiling(0.05, 400, max_per_source=2) == 20
+    assert day_source_ceiling(0.05, 800, max_per_source=2) == 40
+
+
+def test_the_committed_share_bounds_the_largest_day_this_project_has_published() -> None:
+    """A ceiling is a number a person can check against a real day.
+
+    2026-08-30 published 431 items and its heaviest feed carried 10 of them,
+    2.32 percent. Measured 2026-08-31 over all eleven committed days, that is
+    the largest share one feed has ever held of a full day.
+    """
+    share = config.load().app.collect.max_source_share_per_day
+    assert day_source_ceiling(share, 431, max_per_source=2) >= 10, (
+        "the default displaces nothing that has ever been published"
+    )
 
 
 def test_a_vertical_below_its_feed_floor_plans_nothing() -> None:

@@ -162,6 +162,25 @@ class CollectConfig(Model):
             "quiet news day is whichever blog published most."
         ),
     )
+    max_source_share_per_day: float = Field(
+        default=0.05,
+        gt=0.0,
+        le=1.0,
+        description=(
+            "Most of one day one feed may hold, counting every desk and every run. "
+            "max_per_source bounds a count inside one desk in one run, and a feed sits "
+            "on one desk, so what a feed can hold of a whole day is that count times "
+            "the runs the day had - a fixed number whose share moves with the day's "
+            "size. Measured 2026-08-31 over the eleven committed days, the most one "
+            "feed ever held was 10 items, which is 2.32 percent of the 431-item day of "
+            "2026-08-30 and 25 percent of the four-item day of 2026-08-21. The default "
+            "is above the largest full-day share by a factor of two, so it displaces "
+            "nothing that has ever been published; it bounds the thin day, where a "
+            "fixed count of ten is a quarter of the page. It is never tighter than "
+            "max_per_source for one desk in one run - a day ceiling below that would "
+            "tighten the per-desk rule, which is a different decision and was refused."
+        ),
+    )
     tier_weights: TierWeights = Field(default_factory=TierWeights)
     repetition_weight: float = Field(default=1.0, ge=0.0)
     watchlist_bonus: float = Field(default=0.5, ge=0.0)
@@ -1582,6 +1601,22 @@ class AppConfig(Contract):
                 "past this number sit inside a `+N more` disclosure so a day with "
                 "many topics does not turn the row into the page. A cap a component "
                 "spells is a cap an operator cannot move (Rule #6)."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-08-31T23:58",
+            change="Added collect.max_source_share_per_day, and the committed config sets it.",
+            why=(
+                "Nothing counted one feed's contribution across a day. "
+                "collect.max_per_source bounds a count inside one desk in one run, and "
+                "a feed sits on exactly one desk, so a feed's ceiling for a whole day "
+                "is that count times the runs the day had - 10 on a five-run day. A "
+                "fixed count is a moving share: measured 2026-08-31 over the eleven "
+                "committed days, 21 feeds held exactly 10 items of the 431-item day of "
+                "2026-08-30, which is 2.32 percent each, while one feed held 1 of the "
+                "four-item day of 2026-08-21, which is 25 percent. The share is what a "
+                "reader sees and nothing bounded it. Additive with a default, so a "
+                "config written before today still loads (section 11)."
             ),
         ),
         ChangelogEntry(
