@@ -377,6 +377,18 @@ turns a producer failure into a failure of the whole commit step - and the other
 ledgers staged beside it are lost with it. Ship a new row ledger with its header
 committed, and assert the committed header equals the contract's column list.
 
+**A test that runs the real `commit-and-push.sh` will edit your own `state/`
+unless every command it hands the script is substituted.** The harness in
+`backend/tests/test_workflows.py` executes the shipped script against a
+`tmp_path` repository, and any step the script runs as `python -m idhazh <verb>`
+resolves its paths off `config.REPO_ROOT`, which is derived from the installed
+package rather than from the working directory. So a seven-shard fan-out test
+settles the developer's committed ledgers seven times, silently, and the damage
+shows up as a dirty tree long after the suite is green. Substitute the command
+with a script that takes the tree as an argument - `backend/utilities/settle_ledger.py`
+and `backend/utilities/rebuild_day.py` exist for exactly this - and check
+`git status --porcelain` after any suite run that exercised the commit step.
+
 ## GitHub CLI
 
 **A `workflow_dispatch` cannot reach a workflow that is not on the default
@@ -467,6 +479,23 @@ nobody checks.
 has `main` checked out - but the server-side merge has already succeeded.**
 Verify with `gh pr view <n> --json state` before reacting. Do not retry the
 merge. Only `gh`'s local post-merge cleanup was skipped.
+
+**The same command from a DETACHED worktree exits 1 with
+`could not determine current branch: failed to run git: not on any branch`, and
+both the merge and the branch delete succeeded.** Seen three times on
+2026-08-31. Detaching before merging is still right - it is what stops the
+branch delete failing - so this exit code is the normal outcome of doing the
+right thing, not a fault.
+
+**And the merge can be invisible for a few seconds after it lands.** Also
+2026-08-31: `gh pr merge` exited 0, and `gh pr view <n> --json state,mergeCommit`
+run immediately afterwards still answered `OPEN` with a null merge commit.
+Re-query after doing something else rather than retrying the merge; a second
+merge attempt on a merged PR is the one action here that is not idempotent.
+
+**The rule under all three: `gh pr merge`'s exit code says nothing useful.**
+`gh pr view <n> --json state,mergeCommit` is the only reliable read, and it needs
+a pause before it is reliable either.
 
 **`gh run download` exits 0 on a partial download.** Observed 2026-08-25: one
 invocation extracted 25 of 37 items and returned a clean exit code, with no
@@ -633,6 +662,22 @@ hangs exactly the way piped `pytest` does (recorded under "PowerShell" below), a
 low CPU, with the shell prompt never returning - and on a fresh venv it looks
 precisely like the resolver stall documented above it.
 
+**From a detached script, the install is not usable when its log says it
+finished.** `Start-Process pwsh -WindowStyle Hidden` running `pip install -e
+".[dev]"` writes `Successfully installed ...` and then `import idhazh` keeps
+failing for minutes, because the redirected log is buffered and the last lines
+arrive well before the process exits. Observed 2026-08-31. Only the sentinel the
+script writes after the install is the truth, and the cheapest confirmation is
+the import itself:
+
+```powershell
+& .\.venv\Scripts\python.exe -c "import idhazh; print(idhazh.__file__)"
+```
+
+Run that before any schema regeneration, for a second reason as well: it prints
+which checkout the editable install points at, and an editable install left over
+from the shared checkout answers about a different revision of the package.
+
 ## The editor's own search tools
 
 **A workspace search reads the folder VS Code has open, not your worktree.**
@@ -642,6 +687,14 @@ error, an empty result - and an absolute path into the main checkout silently
 answers about a different revision of the file you meant. The tell is a symbol
 you know exists reported as absent, or a line number tens of lines off. Read the
 file by absolute path instead, or search from a terminal in your own worktree.
+
+**It is unreliable in BOTH directions, and the false positive is newer.** On
+2026-08-31 one session got an empty result for a function that was in the file it
+named, and, minutes earlier, real matches from a sibling worktree nobody had
+asked about. So neither answer is evidence outside the workspace root: an empty
+result does not mean absent, and a hit does not mean yours. `git grep -n` from
+your own worktree answers both questions and cannot be confused about which tree
+it read.
 
 **It can also return a line of code that no longer exists anywhere.** That is a
 different failure from the one above: not the wrong revision of a file, but
@@ -680,6 +733,14 @@ git diff --stat -- <path>
 A line count that moved by more than the change you meant is the whole signal.
 Prefer a match tight enough to hold only the lines you are changing; a wide
 match to "give the tool context" is the thing that makes this possible.
+
+**Inserting a heading can orphan the paragraphs after it, and the diff of what
+you inserted looks perfect.** Markdown has no closing tag, so a new `###` takes
+ownership of everything below it until the next heading. On 2026-08-31 a new
+subsection swallowed the two closing paragraphs of the topic above it; the
+inserted text was exactly right and the page had quietly changed what those two
+paragraphs were about. Re-read the whole region after any heading insert, not
+only the lines you added.
 
 ## Hugging Face
 
@@ -840,6 +901,40 @@ dependency nothing in the change touched.
   the pure half in its own file with no `$app` import, the fetching half
   re-exporting it. The tell is that the error names a *package* rather than a
   test.
+- **Run the browser suite through `npm run test:browser` and nothing else.**
+  Calling Playwright's own entry point by hand -
+  `node node_modules/@playwright/test/cli.js test` - makes every spec fail with
+  `Playwright Test did not expect test() to be called here`, followed by
+  `No tests found`. It reads exactly like two installed copies of the package,
+  and it is not: the `.cmd` shim runs that same file, and `npm run test:browser`
+  passes on the identical tree seconds later. Observed 2026-08-31. This is the
+  **inverse** of the rule elsewhere on this page about calling a bin with `node`
+  rather than through `npx`; that rule is about long-lived servers, and it does
+  not extend to the test runner.
+- **A new chart component that draws a `<path>` fails a spec about icons.**
+  `frontend/tests/icons.spec.ts::no component holds a path of its own` keeps the
+  icon set closed by forbidding path data anywhere outside
+  `frontend/src/lib/icons/`, and its exemption for chart components is a **name**
+  regex. So a component called `WriteTimeHistogram` fails until the name is added
+  to that regex, while the existing chart components pass because they draw with
+  `line`, `rect` and `polyline` and never needed the carve-out. The failure names
+  the icon rule, which is nowhere near the row that caused it.
+- **A test that drives the console's window control must wait for hydration
+  first.** Every `[data-window-preset]` input is `disabled` in the prerendered
+  document and enabled on mount, so a click issued before that lands times out at
+  about 15 s with no useful message. `frontend/tests/console-window.spec.ts`'s
+  `hydrated()` helper is the pattern:
+
+  ```ts
+  await expect(page.locator(`[data-window-preset="${DEFAULT_DAYS}"] input`)).toBeEnabled();
+  ```
+- **Widening a Svelte action's node type to a union breaks its listeners, and
+  `svelte-check` reports it far from the change.** `addEventListener` overload
+  sets do not merge across element types, so changing
+  `action(node: SVGSVGElement)` to `SVGSVGElement | HTMLElement` produced eight
+  errors on lines that were not edited. The fix is also the better code: keep one
+  `[type, handler]` list and attach it through a single `const events: EventTarget
+  = node`, so the add and the remove halves cannot drift apart.
 
 ## Git Bash on Windows
 
@@ -1000,6 +1095,21 @@ the variable protects the shell you remember to set it in and nothing else.
   Increment the number on every call. Refuse any result whose first line is not
   the tag you just sent, and re-run rather than interpret it. Printing
   `$PWD.Path` catches the same fault a second way.
+- **`Set-Location -LiteralPath` to a path that does not exist fails, and every
+  command after the semicolon still runs - in the previous directory.** Under
+  parallel agents that previous directory is often a sibling's worktree. The tag
+  above does not catch it, because the tag is printed before the `Set-Location`
+  and so the first line looks right. Observed 2026-08-31 re-verifying a row: the
+  worktree had never been created, and `git status` answered about another
+  agent's 27 staged files as if they were mine. Gate on the directory rather than
+  trusting the change:
+
+  ```powershell
+  Write-Host 'MYTAG-015'; $t = '<abs>'; Set-Location -LiteralPath $t; if ($PWD.Path -ne $t) { exit 9 }; <command>
+  ```
+
+  Exit code 9 is then unambiguous: the command never ran, rather than running
+  somewhere else.
 - **A queued command can execute long after you sent it, on top of live work.**
   On 2026-08-29 a `Remove-Item -Recurse -Force .venv` ran about 25 minutes after
   it was issued and deleted `site-packages` under a `pytest` that had started in
@@ -1134,6 +1244,14 @@ the variable protects the shell you remember to set it in and nothing else.
   per worktree before running the browser suite. Two agents on one port do not
   collide loudly: `reuseExistingServer` is on outside CI, so the second one
   silently tests the first one's bytes.
+- **A killed Playwright run leaves that server behind, and it poisons the next
+  run.** `reuseExistingServer` then adopts a server whose asset map predates your
+  rebuild, so the page loads and every hashed asset 404s. Observed 2026-08-31:
+  39 failures in 74 tests, across specs the change never touched, **every one of
+  them a timeout at the same 15.6 s**. That identical duration across unrelated
+  specs is the tell - a real regression fails in different ways at different
+  points. One spec re-run on a fresh `PREVIEW_PORT` passed 7 of 7 in 11.9 s.
+  Always take a fresh port before diagnosing a wide, uniform failure.
 - **`vite preview --outDir build` still serves static assets out of
   `.svelte-kit/output/client`.** So the section 12 step-5 check - delete the
   page's data file and confirm it degrades - fails to prove anything if you only
@@ -1231,6 +1349,17 @@ the variable protects the shell you remember to set it in and nothing else.
   Run it before the suite, not after a red one. `backend/var/` is gitignored, so
   every fresh worktree pays this and CI pays it on every run - which is why
   `ci.yml` runs `build:canary` immediately before `test:browser`.
+
+- **There are two builds and they are for different questions. Do not swap
+  them.** `npm run build` makes the real site, and that is the tree a page-weight
+  ceiling is measured on. `npm run build:canary` makes the fixture site, and that
+  is the tree the browser suite asserts against - `ci.yml` runs
+  `build_canary_day.py`, then `build:canary`, then `test:browser`, in that order.
+  Running the suite against a real build fails about sixteen canary tests for
+  reasons that have nothing to do with your change, and reading a ceiling off a
+  canary build measures a fixture. They share one output directory, so whichever
+  ran last is what is on disk: rebuild the real site before any byte reading, and
+  rebuild the canary before any suite run.
 
 - **`build_canary_day.py` used to append to the canary ledgers instead of
   replacing them.** Running it a second time doubled every feed-health row, and

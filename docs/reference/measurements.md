@@ -1947,6 +1947,162 @@ or hand-written markup, all of which `frontend/src/lib/charts/core.ts` already
 registers. No new echarts type was added and the 200,000-byte escalate trigger
 was not approached.
 
+#### All three console ceilings, re-derived once every row had merged (2026-08-31)
+
+Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-08-31, at the close of the observability plan. Tree: `origin/main` at
+`ce4e09e`, **ten published days, 3,509 scored rows, 4,588 item-health rows and 52
+runtime-counter rows over 12 runs** - the ledgers as PR #309 settled them, which
+is the first tree on which no run holds a shard twice. Method: `npm run build`,
+then `gzipSync(readFileSync(page), { level: 9 }).length`, which is the byte the
+gate itself takes.
+
+**The three sections above each set a ceiling from the tree that shipped that
+row, and each of those trees is now stale.** Two more rows landed after the last
+of them - #310 gave every chart a shared readout strip and every panel a named
+empty state, and #309 removed 81 duplicate rows from three ledgers - so all three
+numbers are re-derived here on one tree, which is the whole point of doing it at
+closure rather than inside a row.
+
+**Five builds of the same tree, heaviest per route, never a mean.** A mean fires
+on half of all builds:
+
+| Route | 1 | 2 | 3 | 4 | 5 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 116,153 | 116,149 | 116,145 | 116,148 | 116,150 | **116,153** | 8 |
+| `/console/model/` | 20,954 | 20,956 | 20,948 | 20,952 | 20,948 | **20,956** | 8 |
+| `/console/machine/` | 23,110 | 23,110 | 23,106 | 23,106 | 23,109 | **23,110** | 4 |
+
+A sixth build of the same source, taken after both removal arms to leave the real
+site on disk, read 116,146 / 20,952 / 23,104 - inside all three spreads, which is
+the control saying the machine reproduces itself and that the root redirection
+below is not a variable.
+
+**Two removal arms, because the three routes do not grow on the same thing.** A
+published day is priced by removing a real one, never by cloning one: a clone
+reads about 18 percent cheap because gzip sees a near-copy of a block it already
+holds. Both arms drop a mature day - neither the newest nor the oldest, so the
+30-day window anchor never moves - from `state/scores.csv`,
+`state/runtime-counters.csv`, `state/item-health/`, `state/feed-health/`,
+`frontend/public/telemetry/` and the day's own directory under
+`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT`. Both are paired against build 1, the same source and the same
+command.
+
+| Arm | What it removed | `/console/` | `/console/model/` | `/console/machine/` |
+| --- | --- | ---: | ---: | ---: |
+| ten days (build 1) | - | 116,153 | 20,954 | 23,110 |
+| A: without 2026-08-25 | 724 scored, 1,000 item-health, 828 feed-health, 1,000 telemetry rows, 29 files, **no counter rows** | 96,852 | 19,775 | 22,676 |
+| **cost of that day** | | **19,301** | **1,179** | 434 |
+| B: without 2026-08-27 | 334 scored, 480 item-health, 414 feed-health, 480 telemetry rows, 27 files, **16 counter rows over 3 runs** | 107,828 | 20,077 | 22,378 |
+| **cost of that day** | | 8,325 | 877 | **732, so 244 a run** |
+
+**Arm A prices the two routes that grow per day and arm B prices the one that
+grows per run.** 2026-08-25 is the heavier day and predates the counters
+entirely, so it is the honest worst case for Pipelines and Model and says nothing
+about Machine. 2026-08-27 carries three runs, which is what makes a per-run
+figure available at all. The 434 bytes a counter-free day still costs Machine is
+the band's own text and the item-health the clock check reads - real, and far
+smaller than a run.
+
+The ceilings follow the method already written down above - heaviest of five
+builds, plus seven publishes, plus the 64-byte build noise floor - with Machine
+priced at the observed maximum of five runs a day:
+
+```text
+  116,153 + 7 x 19,301     + 64 = 251,324  /console/
+   20,956 + 7 x  1,179     + 64 =  29,273  /console/model/
+   23,110 + 7 x 5 x    244 + 64 =  31,714  /console/machine/
+```
+
+**No ceiling was crossed and all three still rose.** The pages measured 116,153,
+20,956 and 23,110 against committed ceilings of 250,096, 28,394 and 30,391, so
+nothing fired. What expired was the runway: each of those ceilings was derived on
+a tree two rows older, and the point of the allowance is that it is seven
+publishes long on the tree that ships. The raise is +1,228, +879 and +1,323
+bytes, and it decomposes exactly:
+
+| Route | page since its ceiling was set | a day, or a run, since then | seven publishes of that | total |
+| --- | ---: | ---: | ---: | ---: |
+| `/console/` | 115,562 -> 116,153, **+591** | 19,210 -> 19,301, +91 | +637 | **+1,228** |
+| `/console/model/` | 20,392 -> 20,956, **+564** | 1,134 -> 1,179, +45 | +315 | **+879** |
+| `/console/machine/` | 22,242 -> 23,110, **+868** | 231 -> 244 a run, +13 | +455 | **+1,323** |
+
+**What the bytes bought, stated because the ruling requires it.** The page terms
+- 591, 564 and 868 bytes - are the one shared readout strip that replaced two
+components' worth of hand-rolled strips and gave eight more charts one, plus a
+named empty state on every panel of all three routes. The rate terms are the
+ledgers growing: a published day costs Pipelines 91 bytes more and Model 45 more
+than when those two were last priced, because both inline more per day than they
+did. No panel was cut, deferred or shrunk to fit, which is the owner's ruling of
+2026-08-31 working rather than a number being nudged.
+
+**The regression each ceiling exists to catch is still far above its slack.** A
+day payload inlined by a layout measured 313,300 gzipped bytes on 2026-08-26. The
+slack is 135,171 on `/console/`, 8,317 on `/console/model/` and 8,604 on
+`/console/machine/`, so that regression is 2.32x, 37.7x and 36.4x the slack. All
+three stay well under the 433,000 bound
+`test_contracts.py::test_the_committed_config_carries_the_capped_routes` holds
+them to.
+
+**All three are meant to expire, and `/console/` expires first.** Its slack is
+exactly seven published days at 19,301 bytes each. The finding that opened this
+question - `/console/` crossing on published day 16 - was measured against a
+301,580-byte ceiling on a page that still carried the model panels; the split
+moved those to a route of their own and the page is now a third of the size, so
+the crossing date moved out and the shape did not change. The page is still
+linear in items, `state/scores.csv` is still unbounded on purpose, and the answer
+when the gate fires is still to re-measure and raise it.
+
+**The lazy chart chunk did not move across the whole plan.**
+`_app/immutable/chunks/DIuPWcXJ.js` measured **585,481 bytes raw and 197,561
+gzipped on every one of the eight builds** taken here - the same filename, and
+therefore the same content hash, that the three sections above recorded. Twenty-one
+rows added panels to three routes and not one of them registered a new echarts
+type, so the 200,000-byte escalate trigger was never approached. 2,439 bytes of
+headroom remain, and the next registration still crosses it.
+
+#### The console is taller after the split, not shorter (2026-08-31)
+
+Same tree, same day, measured in chromium at a 1440x900 viewport off the built
+site: `document.documentElement.scrollHeight` per route, and every `svg` the page
+draws.
+
+| Route | height | screens at 900px | charts |
+| --- | ---: | ---: | ---: |
+| `/console/` (Pipelines) | 10,484 px | 11.6 | 24 |
+| `/console/model/` | 3,818 px | 4.2 | 17 |
+| `/console/machine/` | 5,364 px | 6.0 | 7 |
+
+**The route an operator lands on is 19 percent taller than the single page the
+split replaced**, which was 8,794 px on 2026-08-30. That is the honest answer to
+"did splitting it make it shorter" and the answer is no. What the split bought is
+different: 9,182 px of the total now sit behind two named routes with their own
+labels, their own worst state and their own ceiling, rather than below the fold of
+one page where a figure 7,000 px down was hidden without saying so. Rows 13 to 19
+then added panels to all three, so `/console/` grew even as it lost every model
+panel to a route of its own.
+
+**Every ledger emptied, the three routes still render.** The console fetches
+nothing at runtime but a font, so an aborted-request arm intercepts nothing and
+proves nothing. The honest arm is a rebuild: `state/` and
+`frontend/public/telemetry/` copied to a scratch tree, all **nine CSV files
+truncated to their header line - 45,903 rows dropped** - and `STATE_ROOT` and
+`TELEMETRY_ROOT` pointed at the copy.
+
+| Route | height, ten days | height, every ledger empty | charts, before -> after |
+| --- | ---: | ---: | --- |
+| `/console/` | 10,484 px | 4,446 px | 24 -> 9 |
+| `/console/model/` | 3,818 px | 1,097 px | 17 -> 2 |
+| `/console/machine/` | 5,364 px | 2,585 px | 7 -> 2 |
+
+All three answered HTTP 200 with **zero console errors and zero responses at 400
+or above**, and each panel printed its own named empty state rather than a zero.
+`/` and `/archive/` were byte-identical across the two arms, at 7,481 px and
+1,872 px, which is the control saying the arm bit the ledgers the console reads
+and nothing else. The height fall is the proof the content really left; a page
+that still measured 10,484 px would mean the arm had missed.
+
 ### Days to the 1 GB Pages ceiling
 
 **This section divided by the wrong tree until 2026-08-27, and both of its
