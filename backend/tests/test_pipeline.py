@@ -45,6 +45,7 @@ from idhazh.evals.hhem import chunks, dual_score, score_over_chunks
 from idhazh.evals.score import band, to_eval_row, verdict
 from idhazh.fetch import FetchResult
 from idhazh.fingerprint import read_ledger, text_digest
+from idhazh.ledger import STATE_DIRNAME
 
 FULL_TEXT = (
     "Example Lab released a smaller model on Friday, claiming a 34 percent lower cost per "
@@ -554,13 +555,31 @@ def test_the_work_stage_scores_against_a_different_text_than_it_showed_the_model
 
 
 def test_the_ledger_writes_its_header_once(tmp_path: Path) -> None:
-    ledger = tmp_path / "state" / "scores.csv"
-    assert writer.append(ledger, [row()]) == 1
-    assert writer.append(ledger, [row(item_id="ai-02", output_digest="b" * 64)]) == 1
-    with ledger.open(encoding="utf-8") as handle:
+    state = tmp_path / "state"
+    assert writer.append(state, [row()]) == 1
+    assert writer.append(state, [row(item_id="ai-02", output_digest="b" * 64)]) == 1
+    shards = writer.ledger_shards(state)
+    assert len(shards) == 1, "both rows are the same month, so they share a shard"
+    with shards[0].open(encoding="utf-8") as handle:
         lines = list(csv.reader(handle))
     assert len(lines) == 3
     assert tuple(lines[0]) == writer.columns()
+
+
+def test_two_months_of_rows_land_in_two_shards(tmp_path: Path) -> None:
+    """A run either side of a month boundary writes both, and neither is wrong.
+
+    The row's own `date` files it, not the day the writer happened to run, so a
+    replay of an older day cannot put September's rows in August's shard.
+    """
+    state = tmp_path / "state"
+    august = row()
+    september = row(date="2026-09-01", run_id="2026-09-01-1", url_key="e" * 64)
+
+    assert writer.append(state, [september, august]) == 2
+
+    assert [shard.stem for shard in writer.ledger_shards(state)] == ["2026-08", "2026-09"]
+    assert [record["date"] for record in writer.records(state)] == [august.date, september.date]
 
 
 def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) -> None:
@@ -570,36 +589,52 @@ def test_a_re_observation_of_the_same_measurement_writes_no_row(tmp_path: Path) 
     summary comes back word for word, the scorer reads it with the same
     instrument, and the second row would only inflate the denominator.
     """
-    ledger = tmp_path / "state" / "scores.csv"
-    assert writer.append(ledger, [row()]) == 1
+    state = tmp_path / "state"
+    assert writer.append(state, [row()]) == 1
     again = row(date="2026-08-22", run_id="2026-08-22-1", item_id="ai-07")
-    assert writer.append(ledger, [again]) == 0
-    with ledger.open(encoding="utf-8") as handle:
+    assert writer.append(state, [again]) == 0
+    with writer.ledger_shards(state)[0].open(encoding="utf-8") as handle:
         assert len(list(csv.reader(handle))) == 2
+
+
+def test_a_re_observation_in_a_later_month_still_writes_no_row(tmp_path: Path) -> None:
+    """Dedupe spans the shards, or sharding would quietly reopen the door.
+
+    The promise is that a count over the ledger is a count of items. A dedupe
+    scoped to the shard being written would let August's measurement come back
+    in September as a second row about the same thing.
+    """
+    state = tmp_path / "state"
+    assert writer.append(state, [row()]) == 1
+
+    later = row(date="2026-09-14", run_id="2026-09-14-1", item_id="ai-07")
+
+    assert writer.append(state, [later]) == 0
+    assert [shard.stem for shard in writer.ledger_shards(state)] == ["2026-08"]
 
 
 def test_one_batch_cannot_carry_the_same_measurement_twice(tmp_path: Path) -> None:
     """The guard reads the batch as well as the file, or a fresh ledger dodges it."""
-    ledger = tmp_path / "state" / "scores.csv"
+    ledger = tmp_path / "state"
     assert writer.append(ledger, [row(), row(item_id="ai-09")]) == 1
 
 
 def test_a_changed_output_is_a_new_measurement(tmp_path: Path) -> None:
     """Identical inputs and different words is the defect the ledger exists to catch."""
-    ledger = tmp_path / "state" / "scores.csv"
+    ledger = tmp_path / "state"
     writer.append(ledger, [row()])
     assert writer.append(ledger, [row(output_digest="c" * 64)]) == 1
 
 
 def test_a_changed_scorer_is_a_new_measurement(tmp_path: Path) -> None:
     """Same words read by a different instrument is a reading worth keeping."""
-    ledger = tmp_path / "state" / "scores.csv"
+    ledger = tmp_path / "state"
     writer.append(ledger, [row()])
     assert writer.append(ledger, [row(scorer_version="hhem-2.2-open@cccccccc")]) == 1
 
 
 def test_writing_nothing_creates_nothing(tmp_path: Path) -> None:
-    ledger = tmp_path / "state" / "scores.csv"
+    ledger = tmp_path / "state"
     assert writer.append(ledger, []) == 0
     assert not ledger.exists()
 
@@ -615,10 +650,11 @@ def test_the_committed_ledger_carries_todays_columns() -> None:
     more cells on tomorrow's row than the header names, and the dashboard reads
     cells by position.
     """
-    ledger = REPO_ROOT / writer.LEDGER_RELPATH
-    if not ledger.exists():
+    shards = writer.ledger_shards(REPO_ROOT / STATE_DIRNAME)
+    if not shards:
         pytest.skip("no ledger committed yet")
-    assert writer.read_header(ledger) == writer.columns()
+    for shard in shards:
+        assert writer.read_header(shard) == writer.columns(), shard.name
 
 
 def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
@@ -629,18 +665,20 @@ def test_the_committed_ledger_still_takes_a_row_today(tmp_path: Path) -> None:
     loading until the file was widened by the same column. This appends to a byte
     copy of what is committed, which is the run a release blocker would fail.
     """
-    committed = REPO_ROOT / writer.LEDGER_RELPATH
-    if not committed.exists():
+    committed = writer.ledger_shards(REPO_ROOT / STATE_DIRNAME)
+    if not committed:
         pytest.skip("no ledger committed yet")
-    ledger = tmp_path / "state" / "scores.csv"
-    ledger.parent.mkdir(parents=True)
-    ledger.write_bytes(committed.read_bytes())
-    before = committed.read_text(encoding="utf-8").count("\n")
+    state = tmp_path / "state"
+    (state / writer.LEDGER_DIRNAME).mkdir(parents=True)
+    for shard in committed:
+        (state / writer.LEDGER_DIRNAME / shard.name).write_bytes(shard.read_bytes())
+    newest = state / writer.LEDGER_DIRNAME / committed[-1].name
+    before = newest.read_text(encoding="utf-8").count("\n")
 
-    assert writer.append(ledger, [row(url_key="d" * 64)]) == 1
+    assert writer.append(state, [row(url_key="d" * 64, date=f"{committed[-1].stem}-01")]) == 1
 
-    assert writer.read_header(ledger) == writer.columns()
-    assert ledger.read_text(encoding="utf-8").count("\n") == before + 1
+    assert writer.read_header(newest) == writer.columns()
+    assert newest.read_text(encoding="utf-8").count("\n") == before + 1
 
 
 def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path) -> None:
@@ -650,11 +688,9 @@ def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path)
     name text nobody read and would make a labeller's disagreement unreadable -
     which is the one thing the column exists to prevent.
     """
-    committed = REPO_ROOT / writer.LEDGER_RELPATH
-    if not committed.exists():
+    if not writer.ledger_shards(REPO_ROOT / STATE_DIRNAME):
         pytest.skip("no ledger committed yet")
-    with committed.open(encoding="utf-8", newline="") as handle:
-        records = list(csv.DictReader(handle))
+    records = list(writer.records(REPO_ROOT / STATE_DIRNAME))
     assert records, "the ledger has rows, or this proves nothing"
 
     for number, record in enumerate(records, start=2):
@@ -674,13 +710,14 @@ def test_a_row_older_than_the_premise_column_records_its_absence(tmp_path: Path)
 
 def test_appending_under_a_stale_header_fails_loudly(tmp_path: Path) -> None:
     """Silent corruption is the alternative, and it is unrecoverable once shipped."""
-    ledger = tmp_path / "state" / "scores.csv"
-    writer.append(ledger, [row()])
-    kept = ledger.read_text(encoding="utf-8").split("\n")
+    state = tmp_path / "state"
+    writer.append(state, [row()])
+    shard = writer.ledger_shards(state)[0]
+    kept = shard.read_text(encoding="utf-8").split("\n")
     kept[0] = ",".join(writer.columns()[:-1])
-    ledger.write_text("\n".join(kept), encoding="utf-8")
+    shard.write_text("\n".join(kept), encoding="utf-8")
     with pytest.raises(ValueError, match="Migrate the ledger"):
-        writer.append(ledger, [row(item_id="ai-02")])
+        writer.append(state, [row(item_id="ai-02")])
 
 
 # --- Chunking ----------------------------------------------------------------
@@ -973,7 +1010,6 @@ def isolate_ledgers(tmp_path: Path, monkeypatch: MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
-    monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
     monkeypatch.setattr(cli, "FINGERPRINTS", tmp_path / "state" / "fingerprints.csv")
 
 
@@ -1034,7 +1070,7 @@ def test_a_run_records_its_stamp_in_the_committed_ledger_exactly_once(
 
     committed = tmp_path / "state" / "fingerprints.csv"
     expansions = read_ledger(committed)
-    with (tmp_path / "state" / "scores.csv").open(encoding="utf-8", newline="") as handle:
+    with (tmp_path / "state" / "scores" / "2026-08.csv").open(encoding="utf-8", newline="") as handle:
         scored = {record["pipeline_fingerprint"] for record in csv.DictReader(handle)}
 
     assert scored == {stamp}
@@ -1396,7 +1432,6 @@ def test_assemble_writes_one_item_health_row_per_planned_item(
     monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
     monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
     monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
-    monkeypatch.setattr(cli, "LEDGER", tmp_path / "state" / "scores.csv")
     items_dir = tmp_path / "run" / run_plan.date / "items"
     items_dir.mkdir(parents=True)
     (items_dir / f"{run_plan.items[0].item_id}.article.json").write_text(
@@ -2353,7 +2388,7 @@ def test_a_run_with_the_scorer_off_writes_no_row_and_names_no_instrument(
 
     assert record.evaluation_enabled is False
     assert record.scorer_version is None
-    assert not (tmp_path / "state" / "scores.csv").exists()
+    assert not writer.ledger_shards(tmp_path / "state")
 
 
 def test_a_scored_run_names_the_instrument_that_wrote_its_rows(

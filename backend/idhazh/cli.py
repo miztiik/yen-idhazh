@@ -135,7 +135,6 @@ CANARY_DIR: Final = config.REPO_ROOT / "tests" / "fixtures" / "canaries"
 PUBLIC_ROOT: Final = config.REPO_ROOT / "frontend" / "public" / "digest"
 CORPUS_ROOT: Final = config.REPO_ROOT / corpus.CORPUS_ROOT_RELPATH
 STATE_ROOT: Final = config.REPO_ROOT / ledger.STATE_DIRNAME
-LEDGER: Final = config.REPO_ROOT / writer.LEDGER_RELPATH
 FINGERPRINTS: Final = config.REPO_ROOT / FINGERPRINT_RELPATH
 #: Where a span tree lands. Under `backend/var/`, so it is gitignored, nothing
 #: downloads it and no page can read it: a trace is evidence and the three
@@ -2157,7 +2156,7 @@ def stage_record(plan: RunPlan, *, shard: int = 0, shards: int = 1) -> tuple[int
         if payload.eval_path.exists():
             rows.append(EvalRow.from_json(payload.eval_path.read_text(encoding="utf-8")))
     recorded = ledger.append_item_health(STATE_ROOT, plan.date, health)
-    scored = writer.append(LEDGER, rows)
+    scored = writer.append(STATE_ROOT, rows)
     LOG.info(
         "recorded shard=%s/%s run=%s settled=%s item_health_rows=%s eval_rows=%s",
         shard,
@@ -2308,7 +2307,7 @@ def stage_prune_stamp(*, corpus_dir: Path, date: str) -> int:
     return 0
 
 
-def stage_dedupe_ledgers(*, state_dir: Path | None = None, ledger_path: Path | None = None) -> int:
+def stage_dedupe_ledgers(*, state_dir: Path | None = None) -> int:
     """Settle every keyed ledger after a merge, and print what it dropped.
 
     The one thing an appending stage cannot do for itself. Each of those stages
@@ -2333,10 +2332,9 @@ def stage_dedupe_ledgers(*, state_dir: Path | None = None, ledger_path: Path | N
     run every ledger row staged beside the one it just fixed.
     """
     state = state_dir if state_dir is not None else STATE_ROOT
-    scores = ledger_path if ledger_path is not None else LEDGER
     targets: list[tuple[Path, tuple[str, ...]]] = [
         *ledger.keyed_paths(state),
-        (scores, writer.OBSERVATION_KEY),
+        *((shard, writer.OBSERVATION_KEY) for shard in writer.ledger_shards(state)),
     ]
     total = 0
     for path, key in targets:
@@ -2568,7 +2566,7 @@ def stage_assemble(
         scorer_version=instruments[0] if len(instruments) == 1 else None,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
-    landed = writer.append(LEDGER, rows)
+    landed = writer.append(STATE_ROOT, rows)
     stamps = append_new(FINGERPRINTS, _stamps(items_dir))
     published = ledger.append_published(STATE_ROOT, _published_rows(day, plan))
     item_health = ledger.append_item_health(STATE_ROOT, plan.date, item_health_rows)

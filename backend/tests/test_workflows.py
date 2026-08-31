@@ -345,7 +345,7 @@ COMMIT_SCRIPT_ENV: Final = {
 }
 COMMIT_STAGED_PATHS: Final = {
     "plan": ["state/seen", "state/feed-health"],
-    "work": ["state/item-health", "state/scores.csv", "state/runtime-counters.csv"],
+    "work": ["state/item-health", "state/scores", "state/runtime-counters.csv"],
     "assemble": [
         "frontend/public/digest",
         "frontend/public/telemetry",
@@ -433,7 +433,7 @@ COMMIT_REFRESH_PATHS: Final = {
         "frontend/public/telemetry",
         "frontend/public/assist/index",
         "state/published.csv",
-        "state/scores.csv",
+        "state/scores",
         "state/item-health",
         "state/runtime-counters.csv",
     ],
@@ -2254,7 +2254,7 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
     # The file each staged path resolves to. A directory is monthly shards.
     written = {
         "state/item-health": f"state/item-health/{SUBSTITUTED_DATE[:7]}.csv",
-        "state/scores.csv": "state/scores.csv",
+        "state/scores": f"state/scores/{SUBSTITUTED_DATE[:7]}.csv",
         "state/runtime-counters.csv": "state/runtime-counters.csv",
     }
     assert set(written) == set(COMMIT_STAGED_PATHS["work"])
@@ -2602,7 +2602,7 @@ def test_the_day_publishes_when_origin_moved_under_it(tmp_path: Path) -> None:
     assert manifest["runs"] == day["runs"]
 
     published = _rows(_git(origin, env, "show", "main:state/published.csv"))
-    scores = _rows(_git(origin, env, "show", "main:state/scores.csv"))
+    scores = _rows(_git(origin, env, "show", f"main:state/scores/{month}.csv"))
     health = _rows(_git(origin, env, "show", f"main:state/item-health/{month}.csv"))
     every_item = ["item-a", "item-b", "item-c", "item-d", "item-e"]
     # Exactly once each. Two of these ledgers append blind, so a rebuild against

@@ -269,7 +269,7 @@ def test_the_committed_score_ledger_never_reads_more_than_the_article_holds() ->
     validator that refuses this shape. The committed rows predate it, so the
     file is what has to prove it.
     """
-    path = REPO_ROOT / "state" / "scores.csv"
+    path = REPO_ROOT / "state" / "scores" / "2026-08.csv"
     with path.open(encoding="utf-8", newline="") as handle:
         impossible = [
             row["item_id"]
@@ -325,7 +325,10 @@ def test_no_committed_ledger_repeats_a_key_it_says_makes_a_row_unique() -> None:
     """
     repeated: list[str] = []
     state = REPO_ROOT / "state"
-    targets = [*ledger.keyed_paths(state), (REPO_ROOT / writer.LEDGER_RELPATH, OBSERVATION_KEY)]
+    targets = [
+        *ledger.keyed_paths(state),
+        *((shard, OBSERVATION_KEY) for shard in writer.ledger_shards(state)),
+    ]
     for path, key in targets:
         for found, count in sorted(ledger.repeated_keys(path, key).items()):
             relpath = path.relative_to(REPO_ROOT).as_posix()
@@ -407,13 +410,12 @@ def test_the_whole_state_tree_settles_in_one_call(tmp_path: Path) -> None:
     row staged beside the one it just fixed.
     """
     state = tmp_path / "state"
-    scores = tmp_path / "state" / "scores.csv"
     ledger.append_runtime_counters(state, [counters_row(0, prompt_tokens_total=100)])
     counters = ledger.runtime_counters_path(state)
     with counters.open("a", encoding="utf-8", newline="") as handle:
         handle.write(counters.read_text(encoding="utf-8").splitlines()[1] + "\n")
 
-    assert cli.stage_dedupe_ledgers(state_dir=state, ledger_path=scores) == 0
+    assert cli.stage_dedupe_ledgers(state_dir=state) == 0
     assert ledger.repeated_keys(counters, ledger.RUNTIME_COUNTERS_KEY) == {}
     assert len(ledger.load_runtime_counters(state, run_id=RUN_ID)) == 1
 

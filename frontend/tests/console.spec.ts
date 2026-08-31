@@ -154,8 +154,7 @@ function runCount(): number {
  * goes stale the day the fixture grows a row, and it goes stale silently.
  */
 function scoredItems(): number {
-	const raw = readFileSync(join(CANARY, 'state', 'scores.csv'), 'utf8');
-	return raw.trim().split('\n').length - 1;
+	return shardRows(join(CANARY, 'state', 'scores')).length;
 }
 
 /** How many days a telemetry viewport window covers, ends included. */
@@ -1283,13 +1282,26 @@ test('a diagram is a visual and is not a published chart', async ({ page }) => {
 });
 
 /** The canary's own score rows and item-health rows for one date. */
+/** Every month shard in a ledger directory, oldest first.
+ *
+ * `state/scores/` shards by month since 2026-08-31. A spec that opened one file
+ * by name reads nothing, which makes every day look unscored - and a test whose
+ * fixture silently empties passes for the wrong reason.
+ */
+function shardRows(dir: string): Record<string, string>[] {
+	return readdirSync(dir)
+		.filter((name) => name.endsWith('.csv'))
+		.sort()
+		.flatMap((name) => readCsv(join(dir, name)).rows);
+}
+
 function ledgers(date: string): {
 	scores: Record<string, string>[];
 	health: Record<string, string>[];
 } {
 	const health = join(CANARY, 'state', 'item-health');
 	return {
-		scores: readCsv(join(CANARY, 'state', 'scores.csv')).rows.filter((row) => row.date === date),
+		scores: shardRows(join(CANARY, 'state', 'scores')).filter((row) => row.date === date),
 		health: readdirSync(health)
 			.filter((name) => name.endsWith('.csv'))
 			.flatMap((name) => readCsv(join(health, name)).rows)
@@ -1306,7 +1318,7 @@ function middle(values: number[]): number {
 /** Every day the fixture gave the model work on, newest first. */
 function modelDays(): string[] {
 	const health = join(CANARY, 'state', 'item-health');
-	const scored = readCsv(join(CANARY, 'state', 'scores.csv')).rows.map((row) => row.date);
+	const scored = shardRows(join(CANARY, 'state', 'scores')).map((row) => row.date);
 	const ran = readdirSync(health)
 		.filter((name) => name.endsWith('.csv'))
 		.flatMap((name) => readCsv(join(health, name)).rows)
@@ -1460,7 +1472,7 @@ test('nothing under the heading is a score or an internal column name', async ({
 	expect(section).not.toMatch(/\b[01]\.\d/);
 
 	// A ledger column name on screen makes a reader open the schema to read the
-	// page. Every one of these is a real column of `state/scores.csv` or
+	// page. Every one of these is a real column of `state/scores/<YYYY-MM>.csv` or
 	// `state/item-health/`.
 	for (const name of [
 		'hhem',
