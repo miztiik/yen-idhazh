@@ -84,6 +84,10 @@
     "display_face_enabled": true,
     "elevation_enabled": true,
     "gradient_enabled": true,
+    "movement_bad_dark": "#e3a396",
+    "movement_bad_light": "#96453a",
+    "movement_good_dark": "#7fc9ae",
+    "movement_good_light": "#2f6f5e",
     "surface_tint_alpha": 0.07
   },
   "version": "2026-08-29"

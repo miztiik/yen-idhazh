@@ -656,18 +656,47 @@ and says so.
 
 The window control sits **inside** the band rather than under it, because a
 control below the thing it governs is read second. Each route hands its own
-control in: Pipelines prices the month files a wider window would fetch, Model
-fetches nothing and prices nothing, and Machine draws no control at all and
-prints a sentence saying where the control is. That last one is a deliberate
-departure from "the band carries the window control on all three routes": every
-figure on Machine reads one fixed span, `console.default_window_days`, and a
-control that answers a click by changing nothing is worse than an absent one.
-What the sentence in its place prints is the span itself, with both dates - a
-figure whose span a reader cannot SEE is worse than one he cannot change, and
-the bound is also what stops the cache chart growing a column a day forever.
-The choice is still shared - all three routes read the same
-`idhazh:console-window` key - so setting it on Pipelines and clicking Model
-keeps the span.
+control in: Pipelines prices the month files a wider window would fetch, and
+Model and Machine fetch nothing and price nothing. All three read the same
+`idhazh:console-window` key, so a span picked on Pipelines is the span Hardware
+opens on and the other way round -
+[../../../frontend/tests/console-window.spec.ts](../../../frontend/tests/console-window.spec.ts)
+drives it both ways in one browser session, because a route that writes the key
+and never reads it passes a one-way check.
+
+**Machine joined the window on 2026-08-31, and until then it was the one route
+without a control.** It printed a sentence naming the fixed span instead, on the
+argument that a control which answers a click by changing nothing is worse than
+an absent one. What that cost is the question the console exists for: an
+operator who narrowed Pipelines to 7 days to look at a bad afternoon lost the
+span the moment he asked what the machine had been doing, and two charts on two
+spans cannot be compared. The route is also the one whose numbers move most
+between runs, so it is the one where "over how long" matters most.
+Authority: owner, 2026-08-31; Fowler concurs.
+
+**Every span the control offers is answered on the server, one small object per
+preset.** The browser holds no ledger - a token total, a cache share and a
+recording note all read rows this page never receives - so it cannot
+re-aggregate a window the way the Pipelines viewport can. Four small objects is
+the price, and it is bounded: the widest preset is the widest anything on the
+route can reach, so a run older than 90 days is carried at no span at all and
+the page does not grow with the ledger. That is the same rule Model's per-preset
+distributions follow, and the alternative was inlining every counter row so the
+browser could re-bin it. Authority: Carmack, 2026-08-31.
+
+**A panel about one run does not follow the window.** The shard board, the
+reading-against-writing split, the clock check and the latency curves read the
+newest run or the newest day the ledger holds, at every preset. A window is a
+span and a snapshot is not something a span can narrow - a board that emptied at
+7 days would say the run had stopped existing. The page states this once, above
+the four, and names the run they are about. Authority: Jony, 2026-08-31.
+
+Six surfaces on Machine declare `data-windowed`, and each one prints the day
+count in its own words: the run count at the top, the prompt cache, context
+headroom, the host panel's three spans, tokens per run and the cost panel. The
+refused-run list follows the window without declaring it, because a clean span
+renders nothing at all and a surface that comes and goes cannot report a day
+count.
 
 ### What the Machine route draws
 
@@ -1125,8 +1154,11 @@ its band on the same day - 260 words where the rung asks for 50 to 90 - because
 every other row it writes lands inside or short, and a third state the fixture
 cannot reach is a state an implementation can pass by never entering.
 
-**Two charts carry a pointer readout, and it is not an SVG `<title>`.** The
-stage-timing and throughput trends each get a strip below their plot.
+**Every chart with a shared column carries a pointer readout, and it is not an
+SVG `<title>`.** It was two charts when the strip was written and seven of
+twenty-four by 2026-08-30; it is the default on all three console routes from
+2026-08-31, and a chart with no shared column now says so in
+`data-readout-none` rather than by saying nothing.
 Both are **never pinned to the pointer** - a readout under a thumb is a
 readout nobody reads. One
 Svelte action beside `observeWidth` drives it
@@ -1150,11 +1182,11 @@ rather than a box over it.** A floating box was measured on 2026-08-29 at 88 to
 121px over a 220px plot - 40 to 55 percent of the chart it was explaining - so
 this one is laid out under the plot where it cannot cover a mark at any width,
 and `chart.readout_max_share` bounds it at a third of the plot so it cannot
-become a paragraph beside a chart being glanced at. `FailurePanels` and the
-run-health strip still get none. The run-health strip has no per-day point to
-land on. The failure chart has one per stage per day, but it prints every
-stage's rate and its denominator in type under the plot at all times, so a
-readout there would only repeat a sentence that is never hidden.
+become a paragraph beside a chart being glanced at. The run-health strip still
+gets none - it has no per-day point to land on, and it says so where it is
+drawn. `FailurePanels` gained one: it does print every stage's rate and its
+denominator in type under the plot, but not per day, and the day is the column
+the strip prints.
 
 **That strip is the legend as well.** The legend already printed the newest day's
 four numbers and a sentence under it said which day they were, which is the
@@ -1443,7 +1475,9 @@ registered. The six figures added since brought bar, line, pie, grid, legend and
 mark-line with them and nobody re-measured, so the record sat 38,685 B - 25
 percent - under the truth. The number is corrected there in this commit, and the
 lesson is the one `core.ts` already states: the registration list is a file
-somebody has to edit, and re-measuring it is the reason it is.
+somebody has to edit, and re-measuring it is the reason it is. (The legend came
+back out on 2026-08-31, when the readout strip became every chart's key: 5,532 B
+gzipped, re-measured in the same commit.)
 
 Authority: the shape, Jony, 2026-08-30; the chunk, Carmack, 2026-08-30.
 
@@ -2209,7 +2243,8 @@ window. Authority: Carmack on the fetch cost, Jony on the sentence, 2026-08-27.
 | An SVG `<title>` as the chart tooltip | It does not fire on touch, carries a delay nobody chose, cannot be styled, is not keyboard-reachable, and does not survive a screenshot pasted into an issue. It stays as the accessible name. | Jony |
 | A readout pinned to the pointer | A readout under a thumb is a readout nobody reads. | Jony |
 | A tab stop on every data point | The committed ledger draws 2,541 of them. A 2,541-stop tab order is a trap, not access. | Jony |
-| A readout on `FailurePanels` or the run-health strip | The run-health strip has no per-day point to land on, and the failure chart already prints every stage's rate and its denominator in type under the plot at all times. | Jony |
+| A readout on the run-health strip | It has no per-day point to land on. | Jony |
+| A readout on `FailurePanels` - reversed 2026-08-31 | It was refused because the chart prints every stage's rate and its denominator in type under the plot. It prints them for the window, not for a day, and the day is the column the strip prints. | Susan |
 | A readout on `StageTimings` - reversed 2026-08-30 | It was refused because the chart "already prints its headline in type", and the headline it printed was the newest day. The chart had no per-day label and no mark, so the other twenty-nine days could not be read at all. The strip replaces the legend rather than joining it, so the count of things that move on the card is still one. | Susan, over Jony's 2026-08-25 ruling |
 | A floating readout box over the stage-timing plot | Measured 2026-08-29 at 88 to 121px over a 220px plot: 40 to 55 percent of the chart it explains. A strip below the plot cannot occlude at any width, so there is nothing left for a dodge rule to solve. | Jony |
 | Re-sorting the readout rows to the hovered day | The rows are the legend. A legend that re-orders under the eye as the pointer moves cannot be read, and the colour swatch already matches the line. | Jony |

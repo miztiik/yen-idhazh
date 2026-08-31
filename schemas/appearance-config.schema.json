@@ -393,6 +393,34 @@
           "title": "Gradient Enabled",
           "type": "boolean"
         },
+        "movement_bad_dark": {
+          "default": "#e3a396",
+          "description": "`--movement-bad` on the dark theme. 8.344:1 on the dark surface, measured 2026-08-31.",
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Movement Bad Dark",
+          "type": "string"
+        },
+        "movement_bad_light": {
+          "default": "#96453a",
+          "description": "`--movement-bad` on the light theme. Quieter than `--band-low` on purpose: measured 2026-08-31 the default is 44.2 percent saturation against the confidence ramp's 70.6, so a movement reads as a direction beside a status chip rather than as a second status. 6.544:1 on the surface.",
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Movement Bad Light",
+          "type": "string"
+        },
+        "movement_good_dark": {
+          "default": "#7fc9ae",
+          "description": "`--movement-good` on the dark theme. Designed rather than derived: the light value over a dark ground is ink, not a colour. 9.118:1 on the dark surface, measured 2026-08-31.",
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Movement Good Dark",
+          "type": "string"
+        },
+        "movement_good_light": {
+          "default": "#2f6f5e",
+          "description": "`--movement-good` on the light theme: a figure went the way we wanted. Not the confidence ramp and never equal to it - health says a thing is broken, movement says a number moved the right way, and a summary that got 3 percent slower is not broken. Text weight, so it clears 4.5:1 on the surface; measured 2026-08-31 the default reads 5.905:1.",
+          "pattern": "^#[0-9a-f]{6}$",
+          "title": "Movement Good Light",
+          "type": "string"
+        },
         "surface_tint_alpha": {
           "default": 0.07,
           "description": "How strongly a panel takes the hue of what it means. Capped at 0.15 because past that a tint stops being a surface and starts being a fill, and a fill competes with the text on it. The reference surfaces measured 2026-08-29 sit between 0.055 and 0.086.",
@@ -525,6 +553,11 @@
       "change": "digest.topic_pills_max added, defaulting to 8. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
       "version": "2026-08-31T23:59",
       "why": "The topic row was a horizontal scroll container, which is a control that hides its own contents; the owner ruled on 2026-08-31 that no reader-facing surface carries one. The row wraps now, and the topics past this number sit inside a `+N more` disclosure so a day with many topics does not turn the row into the page. A cap a component spells is a cap an operator cannot move (Rule #6)."
+    },
+    {
+      "change": "theme.movement_good_light, theme.movement_bad_light, theme.movement_good_dark and theme.movement_bad_dark added, defaulting to #2f6f5e, #96453a, #7fc9ae and #e3a396. They are the values of the `--movement-good` and `--movement-bad` CSS tokens, one per theme, and a validator refuses any of them that equals a confidence-ramp value.",
+      "version": "2026-08-31T23:56",
+      "why": "Movement colour on the console read the sign of the number instead of the polarity of the measure, so a fall in time per summary - an improvement - painted the same as a fall in summaries published. The fix needs a colour pair that means `went the right way`, and the confidence ramp cannot be it: green there means `it worked`, and a summary that got 3 percent slower is not broken. Painting it in `--band-low` teaches an operator to ignore `--band-low`. The pair is quieter than the ramp on purpose - measured 2026-08-31 at 40.5 and 44.2 percent saturation against 66 and 70.6 in light - and both clear 4.5:1 as text on their own surface. Additive with defaults, so an appearance file written before today still validates (section 11)."
     },
     {
       "change": "ThemeChoice lost its `system` member and digest.theme_default now defaults to `dark`; the committed file repeats it. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Breaking: the enum is narrower. The read-side migration is a before-validator on `UiConfig.theme_default` that reads `system` as `dark`, so an appearance file written before today still loads.",

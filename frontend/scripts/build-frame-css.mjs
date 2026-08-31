@@ -1,11 +1,12 @@
-/** Write the frame tokens from `config/appearance.json` into a CSS file.
+/** Write the tokens `config/appearance.json` owns into a CSS file.
  *
  * The frame has to be right on the FIRST painted frame, so it cannot be
  * fetched. The obvious alternative - inject a style block from the layout -
  * was measured on 2026-08-29 and costs 397 to 700 gzipped bytes of JavaScript
  * on every route, including `/404` and `/evals/`, which render nothing. That is
  * head-management machinery shipped to seven routes so that one config value
- * can reach CSS.
+ * can reach CSS. The motion durations and the movement pair ride the same file
+ * for the same reason.
  *
  * At build time it costs nothing. The output is committed so a fresh clone and
  * `npm run dev` both work without running this first, and the build regenerates
@@ -21,9 +22,10 @@ const FRONTEND = join(dirname(fileURLToPath(import.meta.url)), '..');
 const REPO = join(FRONTEND, '..');
 const OUT = join(FRONTEND, 'src', 'styles', 'frame.generated.css');
 
-/** Mirrors FRAME_DEFAULTS and MOTION_DEFAULTS in src/lib/server/config.ts, and
- * the same names in tokens.css. A knob missing from the config resolves here,
- * so the generated file is always complete rather than partial. */
+/** Mirrors FRAME_DEFAULTS, THEME_DEFAULTS and MOTION_DEFAULTS in
+ * src/lib/server/config.ts, and the same names in tokens.css. A knob missing
+ * from the config resolves here, so the generated file is always complete
+ * rather than partial. */
 const DEFAULTS = {
 	reading_max_px: 1280,
 	console_max_px: 1600,
@@ -31,7 +33,11 @@ const DEFAULTS = {
 	gutter_min_px: 16,
 	gutter_max_px: 32,
 	duration_fast_ms: 120,
-	duration_base_ms: 200
+	duration_base_ms: 200,
+	movement_good_light: '#2f6f5e',
+	movement_bad_light: '#96453a',
+	movement_good_dark: '#7fc9ae',
+	movement_bad_dark: '#e3a396'
 };
 
 function config() {
@@ -43,6 +49,7 @@ function config() {
 const raw = config();
 const frame = { ...DEFAULTS, ...(raw.frame ?? {}) };
 const motion = { enabled: true, ...(raw.motion ?? {}) };
+const theme = { ...DEFAULTS, ...(raw.theme ?? {}) };
 const fast = motion.enabled ? (motion.duration_fast_ms ?? DEFAULTS.duration_fast_ms) : 0;
 const base = motion.enabled ? (motion.duration_base_ms ?? DEFAULTS.duration_base_ms) : 0;
 
@@ -56,6 +63,21 @@ const css = `/* Generated from config/appearance.json by scripts/build-frame-css
 	--gutter-max: ${frame.gutter_max_px}px;
 	--dur-fast: ${fast}ms;
 	--dur-base: ${base}ms;
+}
+
+/* The movement pair, one value per theme, in the order tokens.css declares
+   them: dark is the base, light is the override, and source order is what makes
+   a chosen light theme win. Imported after tokens.css, so these beat the
+   committed defaults there at the same specificity. */
+:root,
+[data-theme='dark'] {
+	--movement-good: ${theme.movement_good_dark};
+	--movement-bad: ${theme.movement_bad_dark};
+}
+
+[data-theme='light'] {
+	--movement-good: ${theme.movement_good_light};
+	--movement-bad: ${theme.movement_bad_light};
 }
 `;
 

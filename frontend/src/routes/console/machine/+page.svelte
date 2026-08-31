@@ -10,12 +10,15 @@
 	 * shard is the unit on this page and every run figure carries how many shards
 	 * it was made from.
 	 *
-	 * **Every figure here reads one fixed span**, `console.default_window_days`.
-	 * This route has no days control yet - the choice on Pipelines and Model
-	 * governs nothing here - so the span is stated in words instead of offered as
-	 * a control. A figure whose span a reader cannot see is worse than one he
-	 * cannot change, and the bound is what stops a chart growing a column per run
-	 * forever.
+	 * **Every figure over a span reads the control above it**, the same 7/14/30/90
+	 * the other two routes carry and the same `idhazh:console-window` key, so a
+	 * span picked on Pipelines is the span this route opens on. Each span is
+	 * answered on the server, because the browser holds no ledger to re-aggregate.
+	 *
+	 * **A panel about one run does not follow it.** The shard board, the
+	 * reading-against-writing split, the clock check and the latency curves are
+	 * snapshots of one run or one day, and narrowing a span cannot narrow a
+	 * single run. Each names what it is about instead.
 	 *
 	 * **Absence is drawn as absence.** `job_seconds` and `cpu_model` are empty on
 	 * 24 of the 54 committed rows and the three host cells on 34 of them, because
@@ -23,6 +26,7 @@
 	 * dash or a sentence, never a zero: a server that read no tokens and a scrape
 	 * that never happened are different facts.
 	 */
+	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import Chart from '$lib/charts/Chart.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
@@ -32,6 +36,7 @@
 	import ShapeSwitch from '$lib/components/ShapeSwitch.svelte';
 	import ShardBoard from '$lib/components/ShardBoard.svelte';
 	import TargetBar from '$lib/components/TargetBar.svelte';
+	import WindowControl from '$lib/components/WindowControl.svelte';
 	import {
 		cacheChart,
 		cacheColumns,
@@ -46,10 +51,49 @@
 		RUNNER_MEMORY_BYTES
 	} from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
+	import { columnStrip } from '$lib/charts/frame';
 	import { targetMarks } from '$lib/charts/targetbar';
 	import type { StackShape } from '$lib/charts/stacked';
 
 	let { data } = $props();
+
+	/** The same key the other two routes read, so the operator's choice of span
+	 * follows him between them rather than resetting on every click. */
+	const WINDOW_KEY = 'idhazh:console-window';
+
+	const presets = $derived(data.console.window_presets);
+
+	// svelte-ignore state_referenced_locally
+	let windowDays = $state(data.console.default_window_days);
+	/** False until a browser has run this page. */
+	let ready = $state(false);
+
+	onMount(() => {
+		ready = true;
+		if (typeof localStorage === 'undefined') return;
+		const stored = Number(localStorage.getItem(WINDOW_KEY));
+		if (presets.includes(stored) && stored !== windowDays) show(stored);
+	});
+
+	function show(days: number, remember = true) {
+		windowDays = days;
+		if (remember && typeof localStorage !== 'undefined') {
+			localStorage.setItem(WINDOW_KEY, String(days));
+		}
+	}
+
+	/** Nothing on this route is fetched. Every span it can draw is already
+	 * inlined, so no preset costs a month file and none of them is priced. */
+	function monthsFor(): number {
+		return 0;
+	}
+
+	/** Every figure the open span answers, decided on the server for each span
+	 * the control offers. The fallback is the span the document was drawn at, so
+	 * a stored preset the config no longer offers cannot blank the page. */
+	const view = $derived(
+		data.windows[String(windowDays)] ?? data.windows[String(data.console.default_window_days)]
+	);
 
 	// The option a live chart hydrates from is rebuilt here rather than handed
 	// over by `load`. Everything a load returns is serialised into the prerendered
@@ -62,25 +106,62 @@
 	// the first paint matches the prerendered document; picking `Lines` redraws
 	// the identical values with no transform between them.
 	let cacheShape = $state<StackShape>('bars');
-	const cacheOption = $derived(cacheChart(data.cacheDays, cacheShape).option);
+	const cacheOption = $derived(cacheChart(view.cacheDays, cacheShape).option);
 	const clocksOption = $derived(clocksChart(data.clocks.pairs).option);
 	const percentileOption = $derived(percentileChart(data.percentiles.curves).option);
 	const inputOption = $derived(
-		tokenChart(data.tokens, (run) => run.input, 'prompt tokens', '--chart-1').option
+		tokenChart(view.tokens, (run) => run.input, 'prompt tokens', '--chart-1').option
 	);
 	const outputOption = $derived(
-		tokenChart(data.tokens, (run) => run.output, 'written tokens', '--chart-4').option
+		tokenChart(view.tokens, (run) => run.output, 'written tokens', '--chart-4').option
 	);
 
-	// The strips under the three charts that draw more than one series. Built
-	// here from the same arrays the options are, so a column the strip prints and
-	// a column the chart drew can never be two different columns.
-	const cacheStrip = $derived(cacheColumns(data.cacheDays));
+	// The strips under every chart that has a column to land on. Built here from
+	// the same arrays the options are, so a column the strip prints and a column
+	// the chart drew can never be two different columns - which is why the two
+	// that follow the span read `view` and the two that describe one run read
+	// `data`.
+	const cacheStrip = $derived(cacheColumns(view.cacheDays));
 	const clockStrip = $derived(clockColumns(data.clocks.pairs));
 	const percentileStrip = $derived(percentileColumns(data.percentiles.curves));
 	/** The insets `percentileChart` draws its grid at. The strip's column centres
 	 * are computed from them, so a pointer and the strip agree. */
 	const PERCENTILE_GRID = { left: 60, right: 44 };
+	/** The same, for the two token charts. */
+	const TOKEN_GRID = { left: 62, right: 12 };
+	/** One series each, and each still earns a strip: a run id is turned 45
+		* degrees on the axis and thinned when the runs crowd, so the bar a pointer
+		* is on is the one place its run and its count can be read together. These
+		* read the open span, because the bars do. */
+	const tokenRuns = $derived(view.tokens.map((run) => run.runId));
+	const inputStrip = $derived(
+		columnStrip(tokenRuns, [
+			{
+				label: 'Prompt tokens',
+				colour: 'var(--chart-1)',
+				value: (index) => grouped(view.tokens[index]?.input ?? 0)
+			},
+			{
+				label: 'Items that reported both counts',
+				colour: '',
+				value: (index) => grouped(view.tokens[index]?.items ?? 0)
+			}
+		])
+	);
+	const outputStrip = $derived(
+		columnStrip(tokenRuns, [
+			{
+				label: 'Written tokens',
+				colour: 'var(--chart-4)',
+				value: (index) => grouped(view.tokens[index]?.output ?? 0)
+			},
+			{
+				label: 'Items that reported both counts',
+				colour: '',
+				value: (index) => grouped(view.tokens[index]?.items ?? 0)
+			}
+		])
+	);
 
 	// One shared rate for every cost figure below. It starts at the configured
 	// pair so the first paint matches the prerendered document, and `RateControl`
@@ -97,11 +178,11 @@
 		inputPerMillion: inputRate,
 		outputPerMillion: outputRate
 	});
-	const inputCost = $derived(costOf({ input: data.tokenTotals.input, output: 0 }, rate));
-	const outputCost = $derived(costOf({ input: 0, output: data.tokenTotals.output }, rate));
+	const inputCost = $derived(costOf({ input: view.tokenTotals.input, output: 0 }, rate));
+	const outputCost = $derived(costOf({ input: 0, output: view.tokenTotals.output }, rate));
 	const totalCost = $derived(inputCost + outputCost);
 	const perArticle = $derived(
-		data.tokenTotals.items === 0 ? null : totalCost / data.tokenTotals.items
+		view.tokenTotals.items === 0 ? null : totalCost / view.tokenTotals.items
 	);
 	const memory = $derived(
 		targetMarks(data.host.peakRss?.value ?? null, RUNNER_MEMORY_BYTES, 'lower-is-better')
@@ -121,18 +202,7 @@
 
 	<ConsoleBand band={data.band}>
 		{#snippet window()}
-			<!-- No control, and the sentence says what governs the figures instead.
-			     A control that governs nothing is worse than an absent one: it
-			     answers a click by changing nothing and leaves the operator to work
-			     out why. -->
-			<p class="mt-5 text-[0.8125rem] text-text-tertiary" data-band-window="none">
-				Every figure on this route reads a fixed {data.window.days} days, {data.window.start} to
-				{data.window.end}. There is no days control here yet; the one on
-				<a class="text-accent hover:underline" href="{base}/console/">Pipelines</a>
-				and
-				<a class="text-accent hover:underline" href="{base}/console/model/">Model</a>
-				governs those two and is remembered between them.
-			</p>
+			<WindowControl days={windowDays} {presets} {monthsFor} {ready} onChange={show} />
 		{/snippet}
 	</ConsoleBand>
 	<ConsoleNav routes={data.routes} active="machine" />
@@ -144,11 +214,17 @@
 		<a class="carry-link" href="{base}/console/">Pipelines &rarr;</a>
 	</p>
 
-	<p class="mt-4 text-[0.9375rem] text-text-secondary" data-machine="intro">
-		{data.runsRead === 0
-			? `No run in these ${data.window.days} days committed a counters row.`
-			: `${data.runsRead} ${data.runsRead === 1 ? 'run' : 'runs'} in these ${data.window.days} days committed counters the model server wrote itself.`}
-		Every figure below is the model server's own count, read at build time and published nowhere.
+	<p
+		class="mt-4 text-[0.9375rem] text-text-secondary"
+		data-machine="intro"
+		data-windowed="machine-runs"
+		data-window-days={windowDays}
+	>
+		{view.runsRead === 0
+			? `No run in these ${view.days} days committed a counters row.`
+			: `${view.runsRead} ${view.runsRead === 1 ? 'run' : 'runs'} in these ${view.days} days committed counters the model server wrote itself.`}
+		{view.start} to {view.end}. Every figure below is the model server's own count, read at build
+		time and published nowhere.
 	</p>
 
 	<!-- What the recording was doing, before anything says what it recorded.
@@ -156,38 +232,41 @@
 	     about the instrument, at body size, in the route it governs. A day the
 	     scrape never ran and a day the machine did nothing draw the same gap,
 	     and only a sentence can tell them apart. -->
-	{#if data.recording.off}
+	{#if view.recording.off}
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="off">
-			{data.recording.off}
+			{view.recording.off}
 		</p>
 	{/if}
-	{#if data.recording.sampled}
+	{#if view.recording.sampled}
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="sampled">
-			{data.recording.sampled}
+			{view.recording.sampled}
 		</p>
 	{/if}
-	{#if data.recording.startedMidWindow}
+	{#if view.recording.startedMidWindow}
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="started">
-			{data.recording.startedMidWindow}
+			{view.recording.startedMidWindow}
 		</p>
 	{/if}
-	{#if data.recording.scoresOnly}
+	{#if view.recording.scoresOnly}
 		<p class="mt-3 text-[0.9375rem] text-text-secondary" data-recording="scores-only">
-			{data.recording.scoresOnly}
+			{view.recording.scoresOnly}
 		</p>
 	{/if}
 
-	{#if data.refused.length > 0}
+	{#if view.refused.length > 0}
 		<!-- Named, never dropped. A run count that quietly excludes one is a run
 		     count nobody can check, and the cause is a real defect in how the
-		     ledger is merged rather than a rendering choice. -->
-		<div class="refused" data-machine-refused={data.refused.length}>
+		     ledger is merged rather than a rendering choice. It follows the window
+		     without declaring it: a clean span renders nothing at all, and a
+		     surface that comes and goes cannot report a day count. -->
+		<div class="refused" data-machine-refused={view.refused.length}>
 			<p class="refused-head">
-				{data.refused.length}
-				{data.refused.length === 1 ? 'run is' : 'runs are'} left out of every figure on this page.
+				{view.refused.length}
+				{view.refused.length === 1 ? 'run is' : 'runs are'} left out of every windowed figure on this
+				page.
 			</p>
 			<ul>
-				{#each data.refused as run (run.runId)}
+				{#each view.refused as run (run.runId)}
 					<li data-refused-run={run.runId}>
 						<strong>{run.runId}</strong> holds {run.rows} rows: {run.why}. Summing them would
 						report a machine that never existed, so nothing here reads the run at all.
@@ -196,6 +275,16 @@
 			</ul>
 		</div>
 	{/if}
+
+	<!-- The next four panels are one run or one day, so the control above does
+	     not reach them. A window is a span; a snapshot is not something a span
+	     can narrow, and a board that emptied at 7 days would say the run had
+	     stopped existing. -->
+	<p class="mt-4 text-[0.8125rem] text-text-tertiary" data-window-exempt="newest-run">
+		{data.newestRunId === null
+			? 'The four panels below read the newest run the ledger holds. No run has committed one yet.'
+			: `The four panels below do not follow the window. They read one run or one day - the newest the ledger holds, ${data.newestRunId} - because a span cannot narrow a single run.`}
+	</p>
 
 	<Panel
 		title="Shards of the newest run"
@@ -249,72 +338,81 @@
 		{/if}
 	</Panel>
 
-	<Panel
-		title="Prompt cache"
-		note="Prompt tokens the server read, against the ones it reused instead of reading. Read whether a bigger cache would save wall clock."
-	>
-		{#if data.cacheSvg === null}
-			<p class="empty" data-machine-panel-empty="cache">
-				No run in these {data.window.days} days reported both a read count and a cached count, so there
-				is no split to draw.
-			</p>
-		{:else}
-			<Chart
-				svg={data.cacheSvg}
-				option={cacheOption}
-				width={data.chart.width_px}
-				height={data.chart.height_px}
-				label="Prompt tokens per day, split into the tokens the model server read and the tokens it served from its own cache. One column is one day."
-				columns={cacheStrip}
-				readoutName="cache"
-				readoutMaxShare={data.chart.readout_max_share}
-				restingNote=", the newest day"
-				hint="Point at a day to read both halves. Left and Right step through the days, Escape returns to the newest."
-			/>
-			<!-- Stacked says how many prompt tokens the day needed; lines say whether
-			     the read half fell while the cached half rose. One array, two shapes,
-			     nothing re-shaped between them. -->
-			<ShapeSwitch bind:shape={cacheShape} name="cache" label="How to draw the prompt cache" />
-			<!-- No threshold marker and no tint. Nobody has agreed a floor for this,
-			     and a tint would invent one and publish it. -->
-			<ul class="shares" data-cache-days>
-				{#each data.cacheDays as day (day.date)}
-					<li data-cache-day={day.date} data-cache-pct={day.cachedPct ?? ''}>
-						<strong>{day.date}</strong>: the cache covered {day.cachedPct}% of the
-						{grouped(day.read + day.cached)} prompt tokens
-						{day.runs === 1 ? 'that run' : `those ${day.runs} runs`} needed.
-					</li>
-				{/each}
-			</ul>
-		{/if}
-	</Panel>
+	<div data-windowed="machine-cache" data-window-days={windowDays}>
+		<Panel
+			title="Prompt cache"
+			note="Prompt tokens the server read, against the ones it reused instead of reading, over the last {windowDays} days. Read whether a bigger cache would save wall clock."
+		>
+			{#if view.cacheDays.length === 0}
+				<p class="empty" data-machine-panel-empty="cache">
+					No run in these {view.days} days reported both a read count and a cached count, so there is
+					no split to draw.
+				</p>
+			{:else}
+				<!-- Keyed on the span, so a chart hydrated at one window is torn down
+				     and rebuilt at the next. The engine takes its option once, at
+				     hydration, and never looks at it again. -->
+				{#key windowDays}
+					<Chart
+						svg={data.cacheSvg ?? ''}
+						option={cacheOption}
+						width={data.chart.width_px}
+						height={data.chart.height_px}
+						label="Prompt tokens per day over {view.days} days, split into the tokens the model server read and the tokens it served from its own cache. One column is one day."
+						columns={cacheStrip}
+						readoutName="cache"
+						readoutMaxShare={data.chart.readout_max_share}
+						restingNote=", the newest day"
+						hint="Point at a day to read both halves. Left and Right step through the days, Escape returns to the newest."
+					/>
+				{/key}
+				<!-- Stacked says how many prompt tokens the day needed; lines say whether
+				     the read half fell while the cached half rose. One array, two shapes,
+				     nothing re-shaped between them. -->
+				<ShapeSwitch bind:shape={cacheShape} name="cache" label="How to draw the prompt cache" />
+				<!-- No threshold marker and no tint. Nobody has agreed a floor for this,
+				     and a tint would invent one and publish it. -->
+				<ul class="shares" data-cache-days>
+					{#each view.cacheDays as day (day.date)}
+						<li data-cache-day={day.date} data-cache-pct={day.cachedPct ?? ''}>
+							<strong>{day.date}</strong>: the cache covered {day.cachedPct}% of the
+							{grouped(day.read + day.cached)} prompt tokens
+							{day.runs === 1 ? 'that run' : `those ${day.runs} runs`} needed.
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Panel>
+	</div>
 
-	<Panel
-		title="Context headroom"
-		note="The longest sequence each run saw, prompt and answer together, against the window the server was given. This is the panel that says whether raising the truncation cap is even possible."
-	>
-		{#if data.context.length === 0}
-			<p class="empty" data-machine-panel-empty="context">
-				No run in these {data.window.days} days recorded a longest sequence.
-			</p>
-		{:else}
-			<div class="bars" data-context-window={data.contextWindow}>
-				{#each data.context as bar (bar.runId)}
-					<div data-context-run={bar.runId} data-context-longest={bar.longest ?? ''}>
-						<TargetBar
-							marks={bar.marks}
-							label={bar.runId}
-							valueText="{grouped(bar.longest ?? 0)} tokens"
-							targetText="of the {grouped(data.contextWindow)}-token window - {bar.usedPct}% used, {grouped(
-								bar.spare ?? 0
-							)} spare, over {bar.from} of {bar.outOf} shards"
-							emptyNote="This run recorded no sequence length."
-						/>
-					</div>
-				{/each}
-			</div>
-		{/if}
-	</Panel>
+	<div data-windowed="machine-context" data-window-days={windowDays}>
+		<Panel
+			title="Context headroom"
+			note="The longest sequence each run saw, prompt and answer together, against the window the server was given. One bar a run over the last {windowDays} days. This is the panel that says whether raising the truncation cap is even possible."
+		>
+			{#if view.context.length === 0}
+				<p class="empty" data-machine-panel-empty="context">
+					No run in these {view.days} days recorded a longest sequence.
+				</p>
+			{:else}
+				<div class="bars" data-context-window={data.contextWindow}>
+					{#each view.context as bar (bar.runId)}
+						<div data-context-run={bar.runId} data-context-longest={bar.longest ?? ''}>
+							<TargetBar
+								marks={bar.marks}
+								label={bar.runId}
+								valueText="{grouped(bar.longest ?? 0)} tokens"
+								targetText="of the {grouped(data.contextWindow)}-token window - {bar.usedPct}% used, {grouped(
+									bar.spare ?? 0
+								)} spare, over {bar.from} of {bar.outOf} shards"
+								emptyNote="This run recorded no sequence length."
+							/>
+						</div>
+					{/each}
+				</div>
+			{/if}
+		</Panel>
+	</div>
 
 	<Panel
 		title="Do the two clocks agree"
@@ -367,105 +465,107 @@
 		{/if}
 	</Panel>
 
-	<Panel
-		title="The host under the newest run"
-		note="What the machine and the server did outside the model call. Each figure carries its ceiling: a counter without one is not a measurement."
-	>
-		<dl class="host">
-			<div data-host="processors">
-				<dt>Processors drawn</dt>
-				<dd>
-					{#if data.host.cpuModels === null || data.host.cpuModels.value === null}
-						<span class="absent">Not recorded on this run.</span>
-					{:else}
-						{data.host.cpuModels.value.join('; ')}
-						<span class="unit">
-							over {data.host.cpuModels.from} of {data.host.cpuModels.outOf} shards
-						</span>
-					{/if}
-				</dd>
-			</div>
+	<div data-windowed="machine-host" data-window-days={windowDays}>
+		<Panel
+			title="The host under the newest run"
+			note="What the machine and the server did outside the model call. Each figure carries its ceiling: a counter without one is not a measurement. Each also carries its span over the last {windowDays} days, which is what says whether the newest run was unusual."
+		>
+			<dl class="host">
+				<div data-host="processors">
+					<dt>Processors drawn</dt>
+					<dd>
+						{#if data.host.cpuModels === null || data.host.cpuModels.value === null}
+							<span class="absent">Not recorded on this run.</span>
+						{:else}
+							{data.host.cpuModels.value.join('; ')}
+							<span class="unit">
+								over {data.host.cpuModels.from} of {data.host.cpuModels.outOf} shards
+							</span>
+						{/if}
+					</dd>
+				</div>
 
-			<div data-host="cpu-busy" data-host-value={data.host.cpuBusy?.value ?? ''}>
-				<dt>Least busy shard</dt>
-				<dd>
-					{#if data.host.cpuBusy === null || data.host.cpuBusy.value === null}
-						<span class="absent">Not recorded on this run.</span>
-					{:else}
-						{data.host.cpuBusy.value.toFixed(2)}% of every processor second
-						<span class="unit">
-							Near 100 is the expected reading, so the gap is the share of that shard's job spent
-							waiting rather than computing. Over these {data.window.days} days the lowest reading ran
-							{(data.host.cpuBusySpan.low ?? 0).toFixed(2)}% to
-							{(data.host.cpuBusySpan.high ?? 0).toFixed(2)}%, on
-							{data.host.cpuBusySpan.from} of {data.host.cpuBusySpan.outOf} runs.
-						</span>
-					{/if}
-				</dd>
-			</div>
+				<div data-host="cpu-busy" data-host-value={data.host.cpuBusy?.value ?? ''}>
+					<dt>Least busy shard</dt>
+					<dd>
+						{#if data.host.cpuBusy === null || data.host.cpuBusy.value === null}
+							<span class="absent">Not recorded on this run.</span>
+						{:else}
+							{data.host.cpuBusy.value.toFixed(2)}% of every processor second
+							<span class="unit">
+								Near 100 is the expected reading, so the gap is the share of that shard's job spent
+								waiting rather than computing. Over these {view.days} days the lowest reading ran
+								{(view.cpuBusySpan.low ?? 0).toFixed(2)}% to
+								{(view.cpuBusySpan.high ?? 0).toFixed(2)}%, on
+								{view.cpuBusySpan.from} of {view.cpuBusySpan.outOf} runs.
+							</span>
+						{/if}
+					</dd>
+				</div>
 
-			<div data-host="peak-memory" data-host-value={data.host.peakRss?.value ?? ''}>
-				<dt>Peak memory</dt>
-				<dd>
-					{#if data.host.peakRss === null || data.host.peakRss.value === null}
-						<span class="absent">Not recorded on this run.</span>
-					{:else}
-						<TargetBar
-							marks={memory}
-							label="llama-server high-water mark"
-							valueText={gib(data.host.peakRss.value)}
-							targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {Math.round(
-								(data.host.peakRss.value / RUNNER_MEMORY_BYTES) * 100
-							)}%"
-							emptyNote="This run recorded no memory high-water mark."
-						/>
-						<span class="unit">
-							Highest over these {data.window.days} days: {gib(data.host.peakRssSpan.high)}, on
-							{data.host.peakRssSpan.from} of {data.host.peakRssSpan.outOf} runs.
-						</span>
-					{/if}
-				</dd>
-			</div>
+				<div data-host="peak-memory" data-host-value={data.host.peakRss?.value ?? ''}>
+					<dt>Peak memory</dt>
+					<dd>
+						{#if data.host.peakRss === null || data.host.peakRss.value === null}
+							<span class="absent">Not recorded on this run.</span>
+						{:else}
+							<TargetBar
+								marks={memory}
+								label="llama-server high-water mark"
+								valueText={gib(data.host.peakRss.value)}
+								targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {Math.round(
+									(data.host.peakRss.value / RUNNER_MEMORY_BYTES) * 100
+								)}%"
+								emptyNote="This run recorded no memory high-water mark."
+							/>
+							<span class="unit">
+								Highest over these {view.days} days: {gib(view.peakRssSpan.high)}, on
+								{view.peakRssSpan.from} of {view.peakRssSpan.outOf} runs.
+							</span>
+						{/if}
+					</dd>
+				</div>
 
-			<div data-host="model-load" data-host-value={data.host.modelLoad?.value ?? ''}>
-				<dt>Opening the weights</dt>
-				<dd>
-					{#if data.host.modelLoad === null || data.host.modelLoad.value === null}
-						<span class="absent">Not recorded on this run.</span>
-					{:else}
-						{grouped(Math.round(data.host.modelLoad.value))} ms on its slowest shard
-						<span class="unit">
-							Over these {data.window.days} days: {grouped(
-								Math.round(data.host.modelLoadSpan.low ?? 0)
-							)} to {grouped(Math.round(data.host.modelLoadSpan.high ?? 0))} ms, on
-							{data.host.modelLoadSpan.from} of {data.host.modelLoadSpan.outOf} runs.
-						</span>
-					{/if}
-				</dd>
-			</div>
+				<div data-host="model-load" data-host-value={data.host.modelLoad?.value ?? ''}>
+					<dt>Opening the weights</dt>
+					<dd>
+						{#if data.host.modelLoad === null || data.host.modelLoad.value === null}
+							<span class="absent">Not recorded on this run.</span>
+						{:else}
+							{grouped(Math.round(data.host.modelLoad.value))} ms on its slowest shard
+							<span class="unit">
+								Over these {view.days} days: {grouped(
+									Math.round(view.modelLoadSpan.low ?? 0)
+								)} to {grouped(Math.round(view.modelLoadSpan.high ?? 0))} ms, on
+								{view.modelLoadSpan.from} of {view.modelLoadSpan.outOf} runs.
+							</span>
+						{/if}
+					</dd>
+				</div>
 
-			<!-- One line of text, not a chart. It reads 1.0 on every row the ledger
-			     holds because `models.inference.n_parallel` is 1, and it earns a
-			     chart the day that knob moves. -->
-			<div data-host="batching" data-batching={data.batching.highest ?? ''}>
-				<dt>Batching</dt>
-				<dd>
-					{#if data.batching.highest === null}
-						<span class="absent">No run in this span reported slots per decode.</span>
-					{:else if data.batching.highest <= 1}
-						Off; every decode served one request.
-						<span class="unit">
-							1.0 slot a decode on all {data.batching.from} of {data.batching.outOf} runs that
-							reported it.
-						</span>
-					{:else}
-						Up to {data.batching.highest.toFixed(2)} slots a decode.
-						<span class="unit">Over {data.batching.from} of {data.batching.outOf} runs.</span>
-					{/if}
-				</dd>
-			</div>
-		</dl>
-	</Panel>
+				<!-- One line of text, not a chart. It reads 1.0 on every row the ledger
+				     holds because `models.inference.n_parallel` is 1, and it earns a
+				     chart the day that knob moves. -->
+				<div data-host="batching" data-batching={view.batching.highest ?? ''}>
+					<dt>Batching</dt>
+					<dd>
+						{#if view.batching.highest === null}
+							<span class="absent">No run in this span reported slots per decode.</span>
+						{:else if view.batching.highest <= 1}
+							Off; every decode served one request.
+							<span class="unit">
+								1.0 slot a decode on all {view.batching.from} of {view.batching.outOf} runs that
+								reported it.
+							</span>
+						{:else}
+							Up to {view.batching.highest.toFixed(2)} slots a decode.
+							<span class="unit">Over {view.batching.from} of {view.batching.outOf} runs.</span>
+						{/if}
+					</dd>
+				</div>
+			</dl>
+		</Panel>
+	</div>
 
 	<Panel
 		title="The shape of a run's latency"
@@ -474,7 +574,7 @@
 		{#if data.percentileSvg === null}
 			<p class="empty" data-machine-panel-empty="percentiles">
 				{#if data.percentiles.date === null}
-					No day in these {data.window.days} days recorded an item timing.
+					No day the item ledger holds recorded an item timing.
 				{:else}
 					No run on {data.percentiles.date} timed {data.percentiles.floor} items, which is the floor
 					below which a p99 is just the last item.
@@ -531,87 +631,113 @@
 		{/if}
 	</Panel>
 
-	<Panel
-		title="Tokens per run"
-		note="Prompt tokens and written tokens, one bar per run. They are different quantities with different prices, so each carries its own axis."
-	>
-		{#if data.inputSvg === null || data.outputSvg === null}
-			<p class="empty" data-machine-panel-empty="tokens">
-				No run in these {data.window.days} days recorded both a prompt count and a written count.
-			</p>
-		{:else}
-			<div class="pair">
-				<figure class="pane" data-token-chart="input">
-					<figcaption>Prompt tokens</figcaption>
-					<Chart
-						svg={data.inputSvg}
-						option={inputOption}
-						width={data.chart.width_px}
-						height={data.chart.height_px}
-						label="Prompt tokens each run sent to the model. One bar is one run."
-					/>
-				</figure>
-				<figure class="pane" data-token-chart="output">
-					<figcaption>Written tokens</figcaption>
-					<Chart
-						svg={data.outputSvg}
-						option={outputOption}
-						width={data.chart.width_px}
-						height={data.chart.height_px}
-						label="Tokens each run's answers were made of. One bar is one run."
-					/>
-				</figure>
-			</div>
-			<p class="reads" data-token-totals>
-				{grouped(data.tokenTotals.input)} prompt tokens and {grouped(data.tokenTotals.output)}
-				written, over {data.tokens.length}
-				{data.tokens.length === 1 ? 'run' : 'runs'} and {grouped(data.tokenTotals.items)} items.
-			</p>
-		{/if}
-	</Panel>
+	<div data-windowed="machine-tokens" data-window-days={windowDays}>
+		<Panel
+			title="Tokens per run"
+			note="Prompt tokens and written tokens, one bar per run over the last {windowDays} days. They are different quantities with different prices, so each carries its own axis."
+		>
+			{#if view.tokens.length === 0}
+				<p class="empty" data-machine-panel-empty="tokens">
+					No run in these {view.days} days recorded both a prompt count and a written count.
+				</p>
+			{:else}
+				<div class="pair">
+					<!-- Keyed on the span for the same reason the cache chart is, and the
+					     readouts sit inside the key with the charts: a strip built at one
+					     window and a chart drawn at another would name two different runs. -->
+					{#key windowDays}
+						<figure class="pane" data-token-chart="input">
+							<figcaption>Prompt tokens</figcaption>
+							<Chart
+								svg={data.inputSvg ?? ''}
+								option={inputOption}
+								width={data.chart.width_px}
+								height={data.chart.height_px}
+								label="Prompt tokens each run sent to the model over {view.days} days. One bar is one run."
+								columns={inputStrip}
+								readoutName="tokens-input"
+								readoutMaxShare={data.chart.readout_max_share}
+								grid={TOKEN_GRID}
+								restingNote=", the last run"
+								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
+							/>
+						</figure>
+						<figure class="pane" data-token-chart="output">
+							<figcaption>Written tokens</figcaption>
+							<Chart
+								svg={data.outputSvg ?? ''}
+								option={outputOption}
+								width={data.chart.width_px}
+								height={data.chart.height_px}
+								label="Tokens each run's answers were made of over {view.days} days. One bar is one run."
+								columns={outputStrip}
+								readoutName="tokens-output"
+								readoutMaxShare={data.chart.readout_max_share}
+								grid={TOKEN_GRID}
+								restingNote=", the last run"
+								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
+							/>
+						</figure>
+					{/key}
+				</div>
+				<p class="reads" data-token-totals>
+					{grouped(view.tokenTotals.input)} prompt tokens and {grouped(view.tokenTotals.output)}
+					written, over {view.tokens.length}
+					{view.tokens.length === 1 ? 'run' : 'runs'} and {grouped(view.tokenTotals.items)} items.
+				</p>
+			{/if}
+		</Panel>
+	</div>
 
-	<Panel
-		title="What this would have cost somewhere else"
-		note="A counterfactual, never a bill. Nothing bills us - Actions minutes are free on a public repository - which is why the wall clock alone cannot say whether the runner time was a good trade. Priced at a hosted provider's rate, it can."
-		tone="info"
-	>
-		{#if data.tokens.length === 0}
-			<p class="empty" data-machine-panel-empty="cost">
-				No run in these {data.window.days} days recorded a token count, so there is nothing to price.
-			</p>
-		{:else}
-			<RateControl configured={data.rate} bind:inputRate bind:outputRate bind:source={rateSource} />
+	<div data-windowed="machine-cost" data-window-days={windowDays}>
+		<Panel
+			title="What this would have cost somewhere else"
+			note="A counterfactual, never a bill, over the last {windowDays} days. Nothing bills us - Actions minutes are free on a public repository - which is why the wall clock alone cannot say whether the runner time was a good trade. Priced at a hosted provider's rate, it can."
+			tone="info"
+		>
+			{#if view.tokens.length === 0}
+				<p class="empty" data-machine-panel-empty="cost">
+					No run in these {view.days} days recorded a token count, so there is nothing to price.
+				</p>
+			{:else}
+				<RateControl
+					configured={data.rate}
+					bind:inputRate
+					bind:outputRate
+					bind:source={rateSource}
+				/>
 
-			<dl class="cost" data-cost-figures data-cost-source={rateSource}>
-				<div data-cost="input">
-					<dt>Reading the prompts</dt>
-					<dd class="tabular-nums">{money(inputCost, rate.currency, 2)}</dd>
-				</div>
-				<div data-cost="output">
-					<dt>Writing the answers</dt>
-					<dd class="tabular-nums">{money(outputCost, rate.currency, 2)}</dd>
-				</div>
-				<div data-cost="total">
-					<dt>These {data.window.days} days</dt>
-					<dd class="tabular-nums">{money(totalCost, rate.currency, 2)}</dd>
-				</div>
-				<div data-cost="per-article">
-					<dt>An article</dt>
-					<dd class="tabular-nums">
-						{perArticle === null ? '-' : money(perArticle, rate.currency, 4)}
-					</dd>
-				</div>
-			</dl>
+				<dl class="cost" data-cost-figures data-cost-source={rateSource}>
+					<div data-cost="input">
+						<dt>Reading the prompts</dt>
+						<dd class="tabular-nums">{money(inputCost, rate.currency, 2)}</dd>
+					</div>
+					<div data-cost="output">
+						<dt>Writing the answers</dt>
+						<dd class="tabular-nums">{money(outputCost, rate.currency, 2)}</dd>
+					</div>
+					<div data-cost="total">
+						<dt>These {view.days} days</dt>
+						<dd class="tabular-nums">{money(totalCost, rate.currency, 2)}</dd>
+					</div>
+					<div data-cost="per-article">
+						<dt>An article</dt>
+						<dd class="tabular-nums">
+							{perArticle === null ? '-' : money(perArticle, rate.currency, 4)}
+						</dd>
+					</div>
+				</dl>
 
-			<p class="reads" data-cost-basis>
-				What {data.tokens.length}
-				{data.tokens.length === 1 ? 'run' : 'runs'} would have cost at that rate, if a hosted
-				provider had done the work instead of the runner. It is not an amount owed and no invoice
-				exists. The wall clock is the real budget and the shard board above draws it; this figure is
-				the second unit, and it says whether that clock was worth spending.
-			</p>
-		{/if}
-	</Panel>
+				<p class="reads" data-cost-basis>
+					What {view.tokens.length}
+					{view.tokens.length === 1 ? 'run' : 'runs'} would have cost at that rate, if a hosted
+					provider had done the work instead of the runner. It is not an amount owed and no invoice
+					exists. The wall clock is the real budget and the shard board above draws it; this figure
+					is the second unit, and it says whether that clock was worth spending.
+				</p>
+			{/if}
+		</Panel>
+	</div>
 </section>
 
 <style>
