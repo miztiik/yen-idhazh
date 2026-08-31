@@ -486,7 +486,13 @@
 		     the rule beside it, and one page may not state one figure twice. -->
 	</div>
 
-	<div data-windowed="site-cost-per-item" data-window-days={windowDays}>
+	<div
+		data-windowed="site-cost-per-item"
+		data-window-days={windowDays}
+		data-model-rule="no"
+		data-model-rule-name="site-cost-per-item"
+		data-model-rule-none="bytes an article are what got published, not how it was written"
+	>
 		<Panel
 			title="What one more article costs"
 			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days. {sizeDelta}"
@@ -667,6 +673,7 @@
 		bands={data.summarizeBands}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
+		modelChanges={data.modelChanges}
 		onPan={pan}
 		onStep={(direction) => show(stepPreset(windowDays, presets, direction))}
 	/>
@@ -744,6 +751,9 @@
 			class="console-table mt-3"
 			data-windowed="feed-outcomes"
 			data-window-days={windowDays}
+			data-model-rule="no"
+			data-model-rule-name="feed-outcomes"
+			data-model-rule-none="a feed answered or it did not, before any summary was written"
 		>
 			<p class="feeds-note">
 				Nearest to a rest first, then by how much has gone wrong in total. Each strip is one
@@ -847,11 +857,18 @@
 		width={data.console.chart_width}
 		tickDensity={data.chart.tick_density}
 		readoutMaxShare={data.chart.readout_max_share}
+		modelChanges={data.modelChanges}
 	/>
 
 	{#if data.charts.length > 0}
 		<h2 class="console-h2">Visuals drawn for articles</h2>
-		<div data-windowed="chart-arm" data-window-days={windowDays}>
+		<div
+			data-windowed="chart-arm"
+			data-window-days={windowDays}
+			data-model-rule="no"
+			data-model-rule-name="chart-arm"
+			data-model-rule-none="the chart arm is a different model call, judged on its own rule"
+		>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 				Over {thresholds.ruleDays} days with the chart-only gate on, the arm is retired if the
 				median day spends more than {thresholds.minutesTarget} minutes per published visual, or

@@ -20,6 +20,13 @@
 	 *
 	 * Hand-written SVG, so the chart is complete before any script runs and both
 	 * themes work with none - every colour leaves as a custom property.
+	 *
+	 * It draws no model-change rule, and that is a judgement about the chart and
+	 * not about the measure. A change to the model, the prompt or the truncation
+	 * cap moves every bar here. But the horizontal axis is seconds, so a day has
+	 * no position on it: the window is pooled into one distribution, and a rule
+	 * would have to be drawn somewhere no date exists. The chart says so in
+	 * `data-model-rule-none` rather than being silently absent from the census.
 	 */
 	import {
 		chartWidth,
@@ -198,6 +205,9 @@
 	data-write-times="chart"
 	data-write-times-n={times.n}
 	data-readout-columns={columns.length}
+	data-model-rule="no"
+	data-model-rule-name="write-times"
+	data-model-rule-none="one distribution over the window, with no day axis to place a boundary on"
 >
 	<div use:observeWidth={(next) => (measured = next)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
