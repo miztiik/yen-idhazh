@@ -1291,6 +1291,16 @@ the variable protects the shell you remember to set it in and nothing else.
   every quirk above stops applying. Note a script written to `TEMP` resolves
   modules from `TEMP`, so `require()` Playwright by its absolute path inside the
   worktree's `node_modules` or it fails `MODULE_NOT_FOUND`.
+- **`page.url()` read straight after a click still says the page you left.**
+  Every route here is prerendered and the client router takes the click, so
+  `await locator.click()` then `await page.waitForLoadState('networkidle')` can
+  return before the address has moved - and the smoke reports that a link went
+  nowhere. Observed 2026-08-31 on a footer link that navigates correctly. Wait
+  for the address instead, alongside the click rather than after it:
+
+  ```js
+  await Promise.all([page.waitForURL('**/archive/'), locator.click()]);
+  ```
 
 ## Serving a build to measure it
 
