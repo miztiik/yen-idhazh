@@ -80,7 +80,8 @@ function dirsIn(path: string): string[] {
 		.sort();
 }
 
-/** A day, or null when that date was never published. Null is a designed state, not an error.
+/** A day, or null when that date was never published or its payload cannot be
+ * read. Null is a designed state, not an error.
  *
  * **The vectors are dropped here, and this is the only place they can be.**
  * Whatever this returns is inlined into every prerendered document that renders
@@ -93,7 +94,26 @@ export function loadDay(date: string, root: string = DIGEST_ROOT): DigestDay | n
 	if (!year || !month || !day) return null;
 	const path = join(root, year, month, day, 'digest.json');
 	if (!existsSync(path)) return null;
-	return dropVectors(JSON.parse(readFileSync(path, 'utf8')) as DigestDay);
+	try {
+		const parsed: unknown = JSON.parse(readFileSync(path, 'utf8'));
+		// A parser is not a contract. `null`, a list, and an object with no item
+		// list all parse cleanly and all three reach the page as a white screen,
+		// which `CLAUDE.md` section 12 calls a failure. One condition turns each
+		// of them into the same designed screen a missing payload gets.
+		if (!parsed || typeof parsed !== 'object' || !Array.isArray((parsed as DigestDay).items)) {
+			throw new TypeError('the payload holds no item list');
+		}
+		return dropVectors(parsed as DigestDay);
+	} catch (cause) {
+		// Degrade, do not fail (`CLAUDE.md` section 1a). A payload we cannot read
+		// is one day; throwing here takes the build down for every other day too,
+		// so one corrupt file stops the whole site publishing rather than one
+		// date. The day drops out and the reader meets a designed screen instead.
+		// The build log is where this is answered, not the page: nothing a reader
+		// could do would fix it.
+		console.warn(`[digest] ${date}: payload unreadable, day dropped - ${String(cause)}`);
+		return null;
+	}
 }
 
 export function latestDate(root: string = DIGEST_ROOT): string | null {

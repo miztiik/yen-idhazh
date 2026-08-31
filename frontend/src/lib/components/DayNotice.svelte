@@ -15,6 +15,16 @@
 	 *
 	 * One paragraph, one sentence per fact. Every run used to print its own
 	 * near-identical paragraph stating one thing.
+	 *
+	 * It wears the card an item wears - same surface, same hairline, same radius -
+	 * so the block that opens the day and the blocks that fill it read as one
+	 * site. What it does not take is the item's hover lift: this is a header, not
+	 * something to point at.
+	 *
+	 * Two lines, not one. What the day HELD is the fact a reader came for, and how
+	 * many did not finish belongs beside it because it changes that number's
+	 * meaning. Which run wrote the page is provenance, and it goes quieter and
+	 * last. All four in one paragraph gave the block no order to be read in.
 	 */
 	import { clockUtc, longDate } from '$lib/format';
 	import type { DigestDay } from '$lib/payload/types';
@@ -27,12 +37,12 @@
 	const lastRun = $derived(day.runs.at(-1) ?? null);
 </script>
 
-<section class="border-b border-rule py-5" aria-label="About today">
-	<h1 class="text-sm tracking-wide text-text-tertiary uppercase">
+<section class="notice" aria-label="About today">
+	<h1 class="notice-date">
 		{longDate(day.date)}
 	</h1>
 
-	<p class="mt-1 text-base text-text-secondary">
+	<p class="notice-count">
 		{#if day.items.length === 0}
 			No stories today.
 		{:else}
@@ -43,11 +53,60 @@
 			{day.items_failed} did not finish, because we could not read enough of the page to summarize
 			them fairly.
 		{/if}
-		{#if laterAdded > 0}
-			{laterAdded} arrived after the first run.
-		{/if}
-		{#if lastRun}
-			This page came from run {lastRun.n}, at {clockUtc(lastRun.at)}.
-		{/if}
 	</p>
+
+	{#if laterAdded > 0 || lastRun}
+		<p class="notice-run">
+			{#if laterAdded > 0}
+				{laterAdded} arrived after the first run.
+			{/if}
+			{#if lastRun}
+				This page came from run {lastRun.n}, at {clockUtc(lastRun.at)}.
+			{/if}
+		</p>
+	{/if}
 </section>
+
+<style>
+	.notice {
+		margin-block-end: var(--space-5);
+		padding: var(--space-4);
+		/* The item's card, to the token. The rule underneath it used to be the only
+		   thing separating the day's facts from the day's stories, and a rule is not
+		   a surface: nothing was in front of anything. */
+		border: 1px solid var(--item-edge);
+		border-radius: var(--radius-lg);
+		background: var(--color-surface);
+	}
+
+	/* Quiet on purpose. It is the page's heading because the page is a day, but a
+	   reader came for the stories and not for the date. */
+	.notice-date {
+		margin: 0;
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		letter-spacing: 0.06em;
+		text-transform: uppercase;
+		color: var(--color-text-tertiary);
+	}
+
+	.notice-count {
+		margin: var(--space-1) 0 0;
+		font-size: var(--text-lg);
+		line-height: var(--leading-lg);
+		color: var(--color-text);
+	}
+
+	.notice-run {
+		margin: var(--space-2) 0 0;
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-secondary);
+	}
+
+	@media (min-width: 1024px) {
+		.notice {
+			padding: var(--space-5);
+		}
+	}
+</style>
