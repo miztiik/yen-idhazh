@@ -238,8 +238,21 @@ jobs:
 
       # No weights load here. The plan job is feed reads and arithmetic, and it
       # finishes in seconds - which is what makes fanning out afterwards cheap.
+      #
+      # `--execution` is what every ledger row of this run is filed under. It has
+      # to be a number no second execution can compute, and the count of runs in
+      # the committed manifest was not one: `actions/checkout` pins this job to
+      # the commit the run was triggered at, so a run that starts while another
+      # is still working reads a manifest that has never heard of it. On
+      # 2026-08-29 runs 33270983446 and 33274853468 both derived `2026-08-29-3`.
+      # `github.run_id` is allocated by GitHub, is unique across every run of
+      # every workflow here, and is written once - into plan.json, which every
+      # shard downloads - so all of a run's shards file under one id.
       - name: Plan the day
-        run: python -m idhazh plan --date "${{ steps.decide.outputs.date }}"
+        run: >-
+          python -m idhazh plan
+          --date "${{ steps.decide.outputs.date }}"
+          --execution "${{ github.run_id }}"
       # The day decides the fan-out, so this runs after the plan rather than
       # beside the date. `run.shard_size` is what one worker is sized to carry,
       # so a small day spends fewer jobs and restores the weights fewer times
@@ -650,11 +663,17 @@ jobs:
       #
       # Appending the same row twice is the one thing that would make this worse
       # than the loss it fixes, because `publish_telemetry` copies every row into
-      # the file the console reads. `ledger.append_item_health` keys a row by run
-      # and item, `evals.writer.append` keys one by observation, and
-      # `ledger.append_runtime_counters` keys one by run and shard - so assemble's
-      # copy of these rows, or a re-run of this job, is the same row and lands
-      # once.
+      # the file the console reads. Each of the three ledgers keys a row -
+      # `ledger.append_item_health` by run and item, `evals.writer.append` by
+      # observation, `ledger.append_runtime_counters` by run and shard - so
+      # assemble's copy of these rows lands once.
+      #
+      # Those filters read the checkout, which is frozen at the commit this run
+      # was triggered at, so a SECOND ATTEMPT at this same shard cannot see the
+      # rows the first attempt pushed and appends them again. The union merge
+      # then keeps both. `DROP_REPEATED_ROWS_COMMAND` is the half that runs after
+      # the merge, on the merged file - the only place the two attempts have ever
+      # been together.
       - name: Commit what this shard measured
         if: always()
         continue-on-error: true
@@ -662,6 +681,7 @@ jobs:
           COMMIT_MESSAGE: "work: ${{ needs.plan.outputs.date }} shard ${{ matrix.shard }}"
           NOTHING_STAGED_MESSAGE: "nothing measured to record"
           PUSH_FAILED_MESSAGE: "could not push what this shard measured after three attempts"
+          DROP_REPEATED_ROWS_COMMAND: "python -m idhazh dedupe-ledgers"
         run: >-
           bash .github/scripts/commit-and-push.sh
           state/item-health state/scores.csv state/runtime-counters.csv

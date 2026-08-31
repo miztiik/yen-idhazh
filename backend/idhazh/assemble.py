@@ -486,6 +486,27 @@ def build_day(
     )
 
 
+def run_n_for(previous: RunManifest | None, run_id: str) -> int:
+    """Which run of the day this execution is, from what the day already carries.
+
+    Two different facts used to be one string. `n` is the day's own ordinal -
+    what a page footer would call the morning run - and `run_id` is the identity
+    of the execution that produced it. They were the same number until an id a
+    second execution could not forge was needed, and this is where they meet
+    again: the ordinal is still counted off the day, and an execution that comes
+    back keeps the number it already has rather than claiming the next one.
+
+    That is the same rule `build_day` applies to `DigestRunRef`, so the day and
+    the manifest cannot disagree about how many times the day was built.
+    """
+    if previous is None:
+        return 1
+    for record in previous.runs:
+        if record.run_id == run_id:
+            return record.n
+    return previous.runs[-1].n + 1
+
+
 def build_manifest(
     *,
     plan: RunPlan,
@@ -511,17 +532,17 @@ def build_manifest(
 ) -> RunManifest:
     """What ran, against which model, at which commit - appended, never rewritten.
 
-    This appends where `build_day` replaces, and the difference is not an
-    oversight. `RunManifest` refuses a `runs` list that is not numbered from 1
-    without gaps, so `runs[-1].n` is `len(runs)` and the next number cannot
-    already be taken. A second record for one run is not a duplicate this
-    function has to filter out - it is a payload the contract will not build.
-    A guard here would be a branch nothing can reach.
+    Appended for a new execution and replaced for one that comes back, which is
+    the rule `build_day` already applies to the day's own run list. A record is
+    matched by `run_id`, because that is now the identity of the execution rather
+    than a count of what was committed - so an assemble job re-run reads the same
+    plan, computes the same id, and settles as one run instead of appending a
+    phantom that planned nothing.
 
-    The day is the surface that needs the replace, because its items land on
-    disk one write before this one does.
+    The day is the surface that needs this most, because its items land on disk
+    one write before this one does.
     """
-    run_n = (previous.runs[-1].n + 1) if previous else 1
+    run_n = run_n_for(previous, plan.run_id)
     if item_health_rows is not None:
         succeeded = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.OK)
         failed = sum(1 for row in item_health_rows if row.outcome is ItemOutcome.FAILED)
@@ -538,7 +559,7 @@ def build_manifest(
     timed = [route.route_ms for route in (routes or []) if route.route_ms is not None]
     prefiltered = sum(1 for route in (routes or []) if not route.asked_the_model)
     record = RunRecord(
-        run_id=f"{plan.date}-{run_n}",
+        run_id=plan.run_id,
         n=run_n,
         started_at=started_at,
         completed_at=completed_at,
@@ -579,7 +600,9 @@ def build_manifest(
         config_digests=list(config_digests),
         note=note,
     )
-    runs = [*(previous.runs if previous else []), record]
+    runs = [record if run.n == run_n else run for run in (previous.runs if previous else [])]
+    if all(run.n != run_n for run in (previous.runs if previous else [])):
+        runs.append(record)
     return RunManifest(version=RunManifest.schema_version(), date=plan.date, runs=runs)
 
 

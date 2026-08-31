@@ -234,7 +234,7 @@ def plan(
         settings=settings,
         fetcher=fetcher or fetcher_over(*urls),
         now=lambda: now,
-        run_n=run_n,
+        execution=run_n,
         state_dir=state if state is not None else Path(tempfile.mkdtemp()),
         cap=cap,
     )
