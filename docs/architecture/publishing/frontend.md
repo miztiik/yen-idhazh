@@ -1121,7 +1121,7 @@ of type under it says the window is empty.
 sparse-label arithmetic until 2026-08-30, which printed the whole window as one
 span string and no per-day label at all, so a spike could not be attributed to a
 date. It now prints one date per plotted day through `dayTicks`,
-thinned evenly to `chart.tick_density` with both endpoints always kept, and the
+thinned to what the plot has room for with both endpoints always kept, and the
 span it used to print moved into the `<svg>`'s accessible name. Measured
 2026-08-30 by building the canary console from either side of the change on one
 machine in one session: 6 text nodes carrying 0 date labels before, 7 carrying 2
@@ -1145,16 +1145,22 @@ every column the density allows. The old block was one group of four bars per
 day - about 150 rows at a 30-day window, and no trend - and "is it getting
 slower" is the only question the section is asked.
 
-**The x axis prints a date per column, thinned to `chart.tick_density`.** It used
+**The x axis prints a date per column, thinned to what fits.** It used
 to print one string for the whole span - `24-29 Aug 2026`, measured on the built
 page 2026-08-30 - which is the run strip's sparse-label arithmetic, and that
 arithmetic is right for a strip of 16px squares and wrong for a 760px plot. Six
 labels over thirty days puts every mark within three columns of a date; one
 label over six days put a spike nowhere at all. The first and last day are always
 among them, evenly spaced indices fill the rest, and the year is printed once and
-then only where it changes. `dayTicks` in
+then only where it changes. `chart.tick_density` is the ceiling on how many the
+axis may carry and the measured fit takes more away where the plot is narrow, so
+nothing overlaps at 390px; a column whose date was dropped keeps its tick mark.
+`dayTicks` in
 [frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts)
-owns it, so the throughput candle beside it labels its axis the same way.
+owns it, so the throughput candle beside it labels its axis the same way, and so
+do the band columns, the failure panel, the run lengths and both run strips.
+The rule and what it costs are in
+[../../concepts/design-system.md](../../concepts/design-system.md).
 
 **Every point on it carries a mark.** A filled dot is a measured time and an open
 dot on the baseline is a measured zero; a day a stage was never timed on has
