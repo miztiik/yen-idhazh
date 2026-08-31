@@ -248,18 +248,22 @@ design: when the gate fires on an ordinary day about a year from now, the answer
 is to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
-**The console is three routes and takes three ceilings, re-derived 2026-08-31.**
+**The console is three routes and takes three ceilings, re-derived 2026-08-31
+and then re-derived again the same day when the Model route gained its panels.**
 One key over three surfaces fails without saying which surface failed, so
 `/console/`, `/console/model/` and `/console/machine/` each carry their own.
 Removing one real mature published day from every ledger the console reads and
-rebuilding cost 19,250 gzipped bytes on `/console/` and 730 on `/console/model/`,
-so those two are the heaviest of five builds plus seven of those days plus the
-64-byte noise floor - 250,643 and 18,682. `/console/machine/` was re-derived
-again the same day, from 6,899 to **30,391**, when it went from rendering no
-ledger at all to drawing nine panels off the runtime counters. It is priced in
-RUNS rather than days, at 231 bytes a run over seven days at the observed maximum
-of five runs a day. All three are meant to expire
+rebuilding cost 19,210 gzipped bytes on `/console/` and 1,134 on
+`/console/model/`, so those two are the heaviest of seven builds plus seven of
+those days plus the 64-byte noise floor - 250,096 and 28,394
+([../reference/measurements.md](../reference/measurements.md#the-model-routes-panels-and-the-two-ceilings-they-moved-2026-08-31)).
+`/console/machine/` was re-derived the same day too, from 6,899 to **30,391**,
+when it went from rendering no ledger at all to drawing nine panels off the
+runtime counters. It is priced in RUNS rather than days, at 231 bytes a run over
+seven days at the observed maximum of five runs a day, because a day that ran
+three times and a day that ran five cost it differently
 ([../reference/measurements.md](../reference/measurements.md#the-machine-route-draws-the-counters-and-its-ceiling-is-re-derived-2026-08-31)).
+All three are meant to expire.
 
 **When a console ceiling fires, the panel does not move.** The owner ruled on
 2026-08-31 that no approved feature is removed, deferred or shrunk to stay under

@@ -1781,6 +1781,88 @@ gzipped bytes, byte for byte what it measured before the split, against the
 The one larger lazy chunk in the build is the assist encoder at 901,929 raw and
 234,135 gzipped, which is a different artifact and carries no chart trigger.
 
+#### The Model route's panels, and the two ceilings they moved (2026-08-31)
+
+Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:
+2026-08-31, hours after the section above. Tree:
+`feat/the-model-route-shows-what-one-summary-cost` on `origin/main` at
+`100e2f6` - the same ten published days, 3,544 scored rows and 4,632 item-health
+rows the section above measured, so the two are directly comparable. Same
+method: `npm run build`, then the gate's own
+`gzipSync(readFileSync(page), { level: 9 }).length`.
+
+The change: `/console/model/` gained a log-binned distribution of the time to
+write one summary, the scoring cost that moved off the Pipelines timing chart,
+one three-mark column per run of summary lengths, and a seven-row model-swap
+comparison. `/console/` lost the `score` line from `Time per item, by stage`.
+
+**Seven builds of the same tree, heaviest per route, never a mean:**
+
+| Route | 1 | 2 | 3 | 4 | 5 | 6 | 7 | heaviest | spread |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| `/console/` | 115,548 | 115,555 | 115,557 | 115,551 | 115,552 | 115,562 | 115,557 | **115,562** | 14 |
+| `/console/model/` | 20,378 | 20,386 | 20,392 | 20,380 | 20,384 | 20,390 | 20,385 | **20,392** | 14 |
+| `/console/machine/` | 5,326 | 5,331 | 5,332 | 5,329 | 5,329 | 5,330 | 5,332 | **5,332** | 6 |
+
+Spreads of 14, 14 and 6 bytes, all well inside the 64-byte noise floor. Against
+the same five-build figures taken before the change, `/console/` fell **267
+bytes** and `/console/model/` rose **6,884**.
+
+Builds 6 and 7 were taken after one sentence under the scoring cost gained the
+span it was measured over - the browser suite's own window oracle demanded it -
+and they are in the table rather than replacing the first five because more
+measurements of one tree is more evidence, not less. The sentence is worth
+about 12 bytes on `/console/model/`, which is inside the spread either way.
+
+**A published day was priced by removing the same real one**, 2026-08-25, from
+`state/scores.csv`, `state/item-health/`, `state/feed-health/`,
+`frontend/public/telemetry/` and its own directory under
+`frontend/public/digest/`, reached through `STATE_ROOT`, `TELEMETRY_ROOT` and
+`DIGEST_ROOT`. Identical to the arm above: 724 scored rows, 1,000 item-health
+rows, 828 feed-health rows, 1,000 telemetry rows and 29 files. Paired against
+build 1:
+
+| Route | ten days | without 2026-08-25 | cost of that day | before this change |
+| --- | ---: | ---: | ---: | ---: |
+| `/console/` | 115,548 | 96,338 | **19,210** | 19,250 |
+| `/console/model/` | 20,378 | 19,244 | **1,134** | 730 |
+| `/console/machine/` | 5,326 | 5,330 | **0** (-4, inside the 6-byte spread) | 0 |
+
+**The Model route's per-day cost rose 55 percent, and the reason is the run
+column.** It used to inline one row a day from `modelWork` and one from
+`throughputDays`. It now also inlines one entry per run for the length panel,
+and a day holds up to five runs. Everything else the change added is fixed: the
+histogram is a dozen bins whatever the ledger holds, the scoring cost is two
+numbers, and the swap comparison is seven rows however long each model ran.
+
+`/console/machine/` moved four bytes the wrong way with a fifth of every ledger
+removed, which is the control saying the root redirection is not a variable -
+the same reading the section above took.
+
+```text
+  115,562 + 7 x 19,210 + 64 = 250,096  /console/
+   20,392 + 7 x  1,134 + 64 =  28,394  /console/model/
+    5,332 + 3 x    502 + 64 =   6,899  /console/machine/ (unchanged)
+```
+
+**What the raise bought, stated because the ruling requires it.** 9,712 bytes on
+`/console/model/`: 6,884 of built page for four panels the route did not have,
+and 2,828 of runway so the number does not fire on an ordinary publish for seven
+more days. `/console/` came down 547 in the same commit. `/console/machine/` is
+untouched - a sibling row is building that route, and its figures here (5,332
+heaviest, 6-byte spread) are inside its own recorded 5,329.
+
+**The regression each ceiling exists to catch is still far above its slack.** A
+day payload inlined by a layout measured 313,300 gzipped bytes on 2026-08-26.
+The slack is 134,534 on `/console/`, 8,002 on `/console/model/` and 1,567 on
+`/console/machine/`, so that regression is 2.33x, 39.2x and 199.9x the slack.
+
+**The lazy chart chunk did not move, and the hash is the proof.**
+`_app/immutable/chunks/DIuPWcXJ.js`, 584.86 kB raw, is the same filename - and
+therefore the same content hash - the section above recorded. Every panel this
+change added is hand-written SVG, so no echarts type was registered and the
+route loads no engine at all.
+
 #### The Machine route draws the counters, and its ceiling is re-derived (2026-08-31)
 
 Hardware: 12th Gen Intel Core i7-1265U, Windows 11, node v24.12.0. Date:

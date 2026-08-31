@@ -775,9 +775,18 @@ projection that drops `canonical_url`, `url_key` and `detail`
 Stage timing medians read from `state/item-health/<YYYY-MM>.csv`, not from
 `state/scores.csv`. The item-health ledger has one row per planned item, so it
 can answer "is it getting slower" even when the scorer did not run. The score
-ledger still owns faithfulness and scorer time for the scored subset, and
-`score_ms` is read through the same rule as the other three stages: an empty
-cell is one fewer item timed, never a zero.
+ledger still owns faithfulness and scorer time for the scored subset.
+
+**The timing chart draws three stages, and `score_ms` is not one of them.** It
+was a fourth line until 2026-08-31. The chart is titled `Time per item, by
+stage`, so every line on it is something an item waits on - and the scorer reads
+a summary the model has already finished, so nothing waits on it. A fourth line
+there read as a fourth constraint on the run. It is on the Model route now,
+under `What one summary cost`, beside the cost of writing the summary it checks,
+and it prints its middle and its slowest one in twenty over the summaries it
+timed. An empty cell is one fewer item timed, never a zero; a zero is the value
+the column defaulted to before it was written, and it is counted as untimed for
+the same reason. Authority: owner, 2026-08-31.
 
 The viewport is a 30-day default window, not a retention policy. The window size
 and where today sits are `console.default_window_days` and
@@ -1202,13 +1211,14 @@ stage timed, and how many items there were - and each fact draws as itself:
   about size. A median of zero does not mean the stage took no time - it means
   it finished faster than a 1 ms clock can measure, which is an ordinary state
   for a cheap stage. `state/scores.csv` recorded exactly that for `score_ms` on
-  all ten rows of 2026-08-22.
+  all ten rows of 2026-08-22 - the reading that made the rule necessary, taken
+  on a column that has since moved to the Model route.
 - **A day timed in part** draws the items it timed, and the line under the chart
   says how many that was.
 
 One line of type per stage names whichever of the three happened, because a hole
 in a line is a mystery and three holes that look alike are worse than one: `We
-timed no fetch work on 3 of the 30 days. The line breaks there.`, `score took
+timed no fetch work on 3 of the 30 days. The line breaks there.`, `extract took
 under 1 ms per item on 1 day, which is faster than we can time. The open dot on
 the baseline marks it.`, and `We timed 1,240 of the 1,480 items for extract on 2
 days. The line is the items we timed.` A stage timed in full on every day of the
@@ -1734,27 +1744,36 @@ retypes it.
 ## The console ceiling is a tripwire, and what to do when it fires
 
 **Since 2026-08-31 there are three of them, one per route.** `/console/` is
-capped at 250,643 bytes, `/console/model/` at 18,682 and `/console/machine/` at
+capped at 250,096 bytes, `/console/model/` at 28,394 and `/console/machine/` at
 30,391. One key over three surfaces still fails when any of them grows and then
 cannot say which one did, so the operator raises the shared number and the
 regression lands under it. Sizing them separately is what makes the split worth
-having. **They are meant to expire** - Machine's first number did, on the day it
-was set, when the route gained the panels it had been standing empty for.
+having. **They are meant to expire** - all three of the first numbers did, on
+the day they were set, when Model and Machine gained the panels they had been
+standing empty for.
 
 Each of the first two has the same three terms `/archive/` has, and only the
 middle one differs:
 
 ```text
-  115,829  heaviest of five builds of the tree that ships
-+ 134,750  seven published days, at 19,250 bytes measured by removing a real one
+  115,562  heaviest of seven builds of the tree that ships
++ 134,470  seven published days, at 19,210 bytes measured by removing a real one
 +      64  the build noise floor, derived in measurements.md
-= 250,643  /console/
+= 250,096  /console/
 
-   13,508  heaviest of five builds
-+   5,110  seven published days, at 730 bytes measured the same way
+   20,392  heaviest of seven builds
++   7,938  seven published days, at 1,134 bytes measured the same way
 +      64  the build noise floor
-=  18,682  /console/model/
+=  28,394  /console/model/
 ```
+
+**All three moved on 2026-08-31, and every one of them was re-derived rather
+than nudged.** `/console/` fell 547 bytes because `score_ms` left its timing
+chart. `/console/model/` rose 9,712 because it gained the per-item cost
+distribution, the per-run summary lengths and the model-swap comparison - and
+because a published day now costs it 1,134 bytes instead of 730, since the
+length panel draws a column per run and a day holds up to five. The owner's byte
+ruling of 2026-08-31 is why the numbers moved and the panels did not.
 
 `/console/machine/` was priced at 6,899 while it rendered no ledger - a published
 day moved it minus three bytes against a nine-byte build spread, so its allowance

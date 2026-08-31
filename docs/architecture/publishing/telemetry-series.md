@@ -103,6 +103,10 @@ says only where each figure comes from.
 | Time to write one | median milliseconds the model spent on one article | `summarize_ms` |
 | Model minutes | every millisecond the model spent that day | `summarize_ms` |
 | Failed | rows whose run ended in a failure | `outcome` |
+| What one summary cost | every timed article in the window, binned by doublings of the clock, with the median and the 95th taken over the values | `summarize_ms` |
+| Checking a summary | median and 95th of the scorer's own clock, over the rows it timed | `score_ms` |
+| How long the summaries came out | the lowest, middle and highest summary length of each run, against the band its own articles were asked for | `summary_word_count`, `source_word_count`, `summarize.bands` |
+| Did the model change move anything | seven measures either side of the newest day the model id changed, each as a ratio against its own value before | `model_id` plus the six columns above |
 
 `hhem` still decides the band and it never prints. A faithfulness score is a
 value between zero and one, and no lever moves it - so it earns no column, and
@@ -192,32 +196,53 @@ summarize stage. Everything else prints as absence rather than as zero:
   print a number under `Article read only in part` and every earlier day still
   reads `-`. Nothing was edited to make that happen.
 
-## The compression plot leaves items out and does not say so
+## Every span the control offers is measured at build time
 
-The plot on the same page draws one mark per scored item, source words against
-summary words, and it reads `state/scores.csv` at build time exactly as the
-table above does.
-[frontend/src/routes/console/+page.server.ts](../../../frontend/src/routes/console/+page.server.ts)
-drops any row whose `source_word_count` is not a positive number.
+The two distribution panels on the Model route - `What one summary cost` and the
+scoring cost beside it - cannot answer for a different span by re-reading what
+the page already holds. A percentile is taken over the values, and a percentile
+read out of a drawn bar is a guess at where inside a doubling it fell.
 
-The drop is correct. `extract` discards the pre-cap body, so a truncated row
-written before the ledger recorded a pre-cap length has no full length anywhere,
-and the ledger now says null rather than guessing one. Measured 2026-08-30 over
-all 3,113 committed rows: **142** carry a null and the plot draws the other
-**2,971**. The 142 is not growing - it is the same 142 counted on 2026-08-28,
-when it was 5.3 percent of a 2,683-row ledger and is now 4.6 percent of a
-3,113-row one. Every one of them predates the 2026-08-27T21:00 writer fix, so
-the hole is a fixed set of old rows that a longer ledger keeps diluting.
+So `frontend/src/routes/console/model/+page.server.ts` measures each panel once
+per entry in `console.window_presets`, over the millisecond values themselves,
+and the browser picks the answer for the open window. Four presets is four small
+objects. The alternative was inlining every timing the ledger holds so the page
+could re-bin them, which grows with the ledger and buys nothing exact.
 
-What is wrong is the silence. The plot shrinks by 142 marks and says nothing, so
-a reader counting marks gets a smaller corpus than the page's own "items on
-record" line, with no way to tell why. It needs one caption naming how many
-items it could not place and the reason. That sentence belongs in the component
-rather than in this doc, so it is recorded here as owed, not written here.
+The run-length panel is different and is filtered rather than re-measured: a run
+is already three numbers, so narrowing the window drops columns and recomputes
+nothing.
 
-The same component still marks a point as cut straight from `truncation_flagged`
-with no version stamp read, which is the per-item form of the error the table
-above no longer makes.
+Every span is anchored on the same day list the cards are anchored on, so the
+panels on that page name one window. `DayWindow` in
+[frontend/src/lib/server/model-work.ts](../../../frontend/src/lib/server/model-work.ts)
+is that one answer, passed down rather than re-derived.
+
+## The compression plot was retired, and what replaced it
+
+Until 2026-08-30 the Pipelines route drew one mark per scored item, source words
+against summary words. It had a measured hole it did not admit to: `extract`
+discards the pre-cap body, so a truncated row written before the ledger recorded
+a pre-cap length has no full length anywhere. Measured 2026-08-30 over all 3,113
+committed rows, **142** carried a null and the plot drew the other **2,971**,
+saying nothing about the difference. Every one of the 142 predates the
+2026-08-27T21:00 writer fix, so the hole is a fixed set of old rows that a
+longer ledger keeps diluting.
+
+Two drawings replaced it and neither has that defect:
+
+- **`Summaries a day, split by whether each landed inside its target band`** on
+  the Pipelines route, which counts the rows it could not place and prints that
+  count in a sentence under itself.
+- **`How long the summaries came out`** on the Model route, three marks a run
+  rather than one a summary. The owner ruled on 2026-08-30 that compression is
+  drawn per run as lowest, middle and highest and never per item: thousands of
+  marks in one colour render their dense middle as a solid area, and the marks
+  that area hides are the only ones anybody acts on.
+
+Both read the cut from the two length cells of one row rather than from
+`truncation_flagged`, which is the per-item form of the version-stamp rule
+above.
 
 ## What the machine did - read at build time, never published
 

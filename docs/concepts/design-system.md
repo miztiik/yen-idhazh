@@ -461,6 +461,104 @@ opening it costs no fetch, and the whole section works with no script at all.
 The dash-not-zero rule, the `<1` rule and the version-stamped share are
 unchanged by any of this.
 
+### A distribution answers what a median refuses to
+
+`What one summary cost` is a log-binned histogram of the time to write one
+summary, with a cumulative curve on a second axis and a rule at the median and
+at the 95th, each printing its own value.
+
+A median answers "how long does one take" and refuses "how bad does it get".
+Measured 2026-08-31 over the 3,500 timed summaries in `state/item-health/`, this
+box, those are different questions by a factor of 2.5: the median is **122 s**
+and the 95th is **300 s**, with a slowest of 702 s. The second figure is the one
+that decides whether a shard fits `run.shard_timeout_minutes`, and no single
+number on the page was carrying it.
+
+Three rules hold for it:
+
+- **The bars double.** Writing times run from 0.3 s to 702 s, and on a linear
+  axis every bar but one is a hairline against the left edge. Each bar is one
+  doubling of the clock, so a bar is the same width wherever it sits. The lowest
+  bar has no lower edge worth a label and carries the console's own `<1`.
+- **The two rules are taken over the values, never off a bar.** A percentile read
+  out of a bin is a guess at where inside a doubling it fell, and these are the
+  two figures somebody quotes.
+- **Leading and trailing empty bars are dropped; a gap in the middle stays.** An
+  empty span between two occupied bars is the distribution saying nothing landed
+  there, which over the committed ledger is a real and visible fact: one summary
+  finished in 0.3 s and the next fastest took 16 s.
+
+**`score_ms` lives under the same heading, as two figures and no chart.** It was
+a fourth line on the Pipelines route's `Time per item, by stage` until
+2026-08-31, where a fourth line read as a fourth thing the run is held up by. It
+is not: the scorer reads a summary the model has already finished. Measured
+2026-08-31 over the 3,534 timed rows of `state/scores.csv`, this box, the middle
+is **2,463 ms** and the slowest one in twenty is **14,491 ms** - printed as 2 s
+and 14 s, because the console prints no decimal. Ten committed rows carry the
+zero the column defaulted to before it was written, and they are counted as
+untimed rather than as instant. Owner, 2026-08-31.
+
+### Compression is three marks a run, and the band prints its bounds
+
+`How long the summaries came out` draws one column per run: the shortest summary
+it wrote, the middle one and the longest.
+
+**It was a mark per summary until 2026-08-31, and the block was the defect.**
+Thousands of marks in one colour render their dense middle as a solid area, so
+the only marks anybody acts on - a summary of three words, or one at twice the
+length that was asked for - are the ones the block hides. Three marks a run keep
+both ends and lose the block. Owner, 2026-08-30.
+
+**Per run and never per day.** A day holds up to five runs, and a run is one
+model reading one set of articles under one set of settings, so it is the
+smallest thing on this page that a change can be attributed to.
+
+**The band's bounds print as numbers beside the chart.** A shaded region nobody
+can read a bound off is a decoration, and this one is a setting somebody chose.
+The band drawn behind each column is what that run's own articles were asked
+for, read through each article's own length rather than off `summarize.bands`
+directly - an article's length picks its band, so a run of short pieces is asked
+for less than a run of long ones. Susan, 2026-08-30.
+
+### A swap comparison carries direction in the arrow, never in the hue
+
+`Did the model change move anything` is seven paired dot rows. Each measure is
+drawn against its own value on the older model, so no change is 100 percent on
+every row, and that is the only axis a median in seconds, a length in words and
+a count in a hundred summaries can share.
+
+- **The arrowhead carries the direction.** A red-for-worse ramp would need
+  somebody to have agreed which way is worse for each of the seven, and nobody
+  has: a shorter summary is what a smaller model was picked for, and more
+  copying is not obviously worse than more invention. The chart says how far and
+  which way, and leaves worse to the reader.
+- **The axis is symmetric about no change**, so a fifth off and a fifth on draw
+  the same track length. An axis running 78 to 120 would draw one of them as the
+  bigger move.
+- **Both absolute values print on the row label**, because a ratio with no
+  magnitude behind it can be a rounding error wearing a percentage.
+- **Both article counts print above the chart, and the panel refuses to draw at
+  all where either side holds fewer than `console.min_attempts_for_rate`
+  summaries.** Two models over two article sets is two measurements, not a
+  trend. Andre, 2026-08-30.
+
+Measured 2026-08-31 off the built page, across the one swap the ledger holds -
+`qwen3-8b-q4-k-m` on 2,232 summaries to 26 August, `qwen3-5-9b-q4-k-m` on 1,312
+since 27 August - the seven read:
+
+| Measure | Before | After | Against the old model |
+| --- | --- | --- | --- |
+| Time to write one | 120 s | 124 s | 103% |
+| Summary length | 100 words | 79 words | 79% |
+| Copied, not rewritten | 9% | 11% | 119% |
+| Marked "not sure" | 16 in 100 | 14 in 100 | 86% |
+| Numbers not in the article | 5 in 100 | 3 in 100 | 68% |
+| "Maybe" told as fact | 12 in 100 | 14 in 100 | 116% |
+| Outside the length we asked for | 29 in 100 | 11 in 100 | 38% |
+
+It is a difference and not yet a cause, which is what the two article counts are
+there to say.
+
 ### An axis title and a column header take one form
 
 `Article length, words`. **Sentence case, a comma, the unit in lower case, and

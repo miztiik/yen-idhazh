@@ -113,11 +113,13 @@ test.describe('the readout strip', () => {
 				date: '20 Aug 2026',
 				rows: [
 					{ label: 'fetch', value: '200 ms', colour: 'var(--series-1)' },
-					{ label: 'score', value: 'not timed', colour: 'var(--series-4)' }
+					{ label: 'summarize', value: 'not timed', colour: 'var(--series-3)' }
 				]
 			}
 		]);
-		expect(marks).toEqual([{ x: 12, lines: ['20 Aug 2026', 'fetch 200 ms', 'score not timed'] }]);
+		expect(marks).toEqual([
+			{ x: 12, lines: ['20 Aug 2026', 'fetch 200 ms', 'summarize not timed'] }
+		]);
 	});
 
 	test('the cap is a share of the plot, and it is clamped to one', () => {
