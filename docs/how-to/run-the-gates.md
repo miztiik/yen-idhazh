@@ -248,17 +248,18 @@ design: when the gate fires on an ordinary day about a year from now, the answer
 is to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
-**The console is three routes and takes three ceilings, re-derived 2026-08-31.**
+**The console is three routes and takes three ceilings, re-derived 2026-08-31
+and then re-derived again the same day when the Model route gained its panels.**
 One key over three surfaces fails without saying which surface failed, so
 `/console/`, `/console/model/` and `/console/machine/` each carry their own.
 Removing one real mature published day from every ledger the console reads and
-rebuilding cost 19,250 gzipped bytes on `/console/`, 730 on `/console/model/` and
-nothing at all on `/console/machine/`, which reads no ledger yet. So the numbers
-are the heaviest of five builds plus seven of those days plus the 64-byte noise
-floor - 250,643 and 18,682 - and Machine, which no publish moves, takes three
-publishes' worth of rewriting its 502 characters of ledger-derived text instead,
-at 6,899. All three are meant to expire
-([../reference/measurements.md](../reference/measurements.md#three-console-routes-three-ceilings-and-a-day-priced-on-each-2026-08-31)).
+rebuilding cost 19,210 gzipped bytes on `/console/`, 1,134 on `/console/model/`
+and nothing at all on `/console/machine/`, which reads no ledger yet. So the
+numbers are the heaviest of seven builds plus seven of those days plus the
+64-byte noise floor - 250,096 and 28,394 - and Machine, which no publish moves,
+takes three publishes' worth of rewriting its 502 characters of ledger-derived
+text instead, at 6,899. All three are meant to expire
+([../reference/measurements.md](../reference/measurements.md#the-model-routes-panels-and-the-two-ceilings-they-moved-2026-08-31)).
 
 **When a console ceiling fires, the panel does not move.** The owner ruled on
 2026-08-31 that no approved feature is removed, deferred or shrunk to stay under

@@ -1,11 +1,31 @@
-import { chartConfig, consoleConfig, uiConfig } from '$lib/server/config';
-import { modelByDate, modelWork } from '$lib/server/model-work';
+import { chartConfig, consoleConfig, summarizeConfig, uiConfig } from '$lib/server/config';
+import {
+	modelByDate,
+	modelSwap,
+	modelWork,
+	runLengths,
+	scoreCost,
+	writeTimes,
+	type DayWindow
+} from '$lib/server/model-work';
 import type { RateSpread, ThroughputDay } from '$lib/charts/series';
+import { windowOfDays } from '$lib/charts/viewport';
 import { evalRows, itemHealthRows } from '$lib/server/payload';
 
 export const prerender = true;
 
-export type { CapPoint, ModelDay, ModelRow } from '$lib/server/model-work';
+export type {
+	CapPoint,
+	DayWindow,
+	ModelDay,
+	ModelRow,
+	ModelSwap,
+	RunLength,
+	ScoreCost,
+	SwapMeasure,
+	WriteBin,
+	WriteTimes
+} from '$lib/server/model-work';
 
 function measured(row: Record<string, string>, name: string): number | null {
 	const raw = row[name];
@@ -79,6 +99,31 @@ export async function load() {
 	const itemRows = itemHealthRows().rows;
 	const modelOnDate = modelByDate(rows);
 	const itemHealthByDate = byDate(itemRows);
+	const console = consoleConfig();
+	const bands = summarizeConfig().bands;
+	const today = new Date().toISOString().slice(0, 10);
+
+	// Every span the control offers, worked out once here. The two distribution
+	// panels have to re-read every millisecond to answer for a different span,
+	// and a percentile taken off a drawn bar is a guess at where inside the bar
+	// it fell - so each span is measured over the values themselves, at build
+	// time, and the browser picks the answer rather than recomputing it. Four
+	// presets is four small objects; the alternative was inlining every timing
+	// the ledger holds so the page could re-bin them.
+	//
+	// Anchored on the same day list the cards anchor on, so every panel on the
+	// page names one span.
+	const work = modelWork(rows, itemRows);
+	const dated = work.flatMap((row) => (row.kind === 'day' ? [row.day.date] : []));
+	const windows = new Map<number, DayWindow>(
+		console.window_presets.map((days) => {
+			const span = windowOfDays(dated, today, days, console.today_anchor);
+			return [days, { start: span.start, end: span.end, days }];
+		})
+	);
+	// The widest span the control can reach. Nothing older than this can be drawn
+	// whatever the operator does, so nothing older is inlined.
+	const widest = [...windows.values()].reduce((a, b) => (a.days >= b.days ? a : b));
 
 	// Two different statistics, both kept on purpose. The candle is the spread of
 	// per-item rates, because the worker sorts short articles first and the two
@@ -141,8 +186,28 @@ export async function load() {
 		.sort((a, b) => a.date.localeCompare(b.date));
 
 	return {
-		modelWork: modelWork(rows, itemRows),
+		modelWork: work,
 		throughputDays,
+		// One entry per span the control offers. Null where the span timed
+		// nothing, which the panel prints as a sentence rather than as an empty
+		// chart of zeroes.
+		writeTimes: Object.fromEntries(
+			[...windows].map(([days, window]) => [days, writeTimes(itemRows, window)])
+		),
+		scoreCost: Object.fromEntries(
+			[...windows].map(([days, window]) => [days, scoreCost(rows, window)])
+		),
+		windows: Object.fromEntries(windows),
+		// Every run inside the widest span the control offers. The panel filters it
+		// to the open window, so each entry is already three numbers and narrowing
+		// recomputes nothing - but a run older than the widest preset can never be
+		// drawn, and inlining it would grow this document for as long as the
+		// pipeline runs. Trimming a seed the first paint cannot use is a saving,
+		// not a cut.
+		runLengths: runLengths(rows, bands).filter((run) => run.date >= widest.start),
+		// Not windowed. A swap is a point in time and its two sides are however
+		// many articles ran on each model.
+		modelSwap: modelSwap(rows, itemRows, bands, console.min_attempts_for_rate),
 		// The explanation lives in docs/, which the site does not publish, so the
 		// chart points at the repository rather than restating it in a caption.
 		throughputReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/architecture/summarize/throughput.md`,
@@ -150,8 +215,8 @@ export async function load() {
 		// copied onto this page: two machines and two workloads, so a gap between a
 		// bench number and a run reads as a regression nobody measured.
 		measurementsReference: `${uiConfig().repo_url.replace(/\/+$/, '')}/blob/main/docs/reference/measurements.md`,
-		console: consoleConfig(),
+		console,
 		chart: chartConfig(),
-		today: new Date().toISOString().slice(0, 10)
+		today
 	};
 }
