@@ -14,7 +14,7 @@
 | Chosen strategy | Fix the shared primitive once and let every chart inherit it, before touching a single panel. Rows #1-#4 are the primitives; every later row is cheaper because they landed. Ruled by Jony (what survives) with Susan holding the sufficiency veto on Rows #7, #8, #14, #17, #19 and #23. |
 | Execution | autonomous orchestrator per docs/how-to/execute-a-plan.md. Parallel N = 3. |
 
-Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 3; honor the ESCALATE triggers in section 0. AUTHOR-AND-STOP until the user authorizes.
+Execute per docs/how-to/execute-a-plan.md: orchestrator dispatches one worktree-isolated worker subagent per row; workers consult personas on ambiguity; AUTO-merge on green gates; parallel N = 3; honor the ESCALATE triggers in section 0. The owner authorized execution on 2026-08-31.
 
 ### Measured at 8c0b82c, 2026-08-31, node 24.12.0, 1440x1000 and 390x844
 
