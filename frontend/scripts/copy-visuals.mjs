@@ -25,16 +25,22 @@
  * different again: the console fetches a projected CSV that has already dropped
  * URL keys, canonical URLs and free text.
  *
- * **A day payload is projected on the way across, not copied.** The committed
- * file is the whole day - every field the digest page renders, plus the vector
- * block the backend's index rebuild reads. A search result renders far less
- * than that, and a reader who searches downloads one of these per day a result
- * of theirs sits on. Staging it whole put a second full copy of every day's
- * text and vectors in the bundle. Measured 2026-08-27 on Intel Core i7-1265U /
- * Windows 11 / node 24.12.0, six committed days, 2,237 items: the tree went
- * 6,966,247 -> 3,883,127 bytes, a 44.3 percent cut. The floor is not zero
- * because 1,055,600 bytes of it is 87 rendered images, which this step must not
+ * **A day payload is projected on the way across, not copied, and the shape it
+ * is projected into is a contract.** The committed file is the whole day -
+ * every field the digest page renders, plus the vector block the backend's
+ * index rebuild reads. A page renders less than that, and a reader fetches one
+ * of these per day they open. Staging it whole put a second full copy of every
+ * day's text and vectors in the bundle. Measured 2026-08-31 on Intel Core
+ * i7-1265U / Windows 11 / node 24.12.0, 11 committed days and 3,596 items,
+ * `gzip -9`: the committed day is 792.24 bytes an item and the projection is
+ * 468.38, which is 40.9 percent less. The floor is not zero because 2,259,497
+ * bytes of the staged tree is 178 rendered images, which this step must not
  * touch.
+ *
+ * The shape is `schemas/digest-view.schema.json`, generated from
+ * `backend/idhazh/contracts/digest_view.py`, and every staged file carries its
+ * `version`. It is a contract because a reading route is about to fetch it, so
+ * a browser we cannot upgrade will parse it (Rule #3).
  */
 
 import {
@@ -52,7 +58,7 @@ import { join, resolve } from 'node:path';
 // `src/lib/server/payload.ts`. The `.ts` extension and the full relative path
 // are both required: this script is run by plain `node`, which strips the types
 // but resolves nothing else.
-import { ITEM_FIELDS, projectDay } from '../src/lib/payload/project.ts';
+import { ITEM_FIELDS, VIEW_VERSION, projectDay } from '../src/lib/payload/project.ts';
 
 const IMAGE_SUFFIXES = ['.svg', '.webp', '.png', '.jpg', '.jpeg'];
 
@@ -119,9 +125,9 @@ const walk = (relative) => {
 		if (statSync(join(source, next)).isDirectory()) {
 			walk(next);
 		} else if (name === 'digest.json') {
-			// A search result is rendered from the day it names, fetched when it is
-			// on screen. The archive used to inline every one of these instead, which
-			// charged every browsing visitor the whole corpus.
+			// A page renders the day it names, fetched when it is needed. The archive
+			// used to inline every one of these instead, which charged every browsing
+			// visitor the whole corpus.
 			mkdirSync(join(target, relative), { recursive: true });
 			writeFileSync(join(target, next), projectDay(readFileSync(join(source, next), 'utf8')));
 			payloads += 1;
@@ -135,7 +141,7 @@ const walk = (relative) => {
 walk('');
 console.log(
 	`rendered visuals: staged ${copied} image(s) and projected ${payloads} day payload(s) ` +
-		`into static/digest, ${ITEM_FIELDS.length} field(s) an item.`
+		`into static/digest at digest-view ${VIEW_VERSION}, ${ITEM_FIELDS.length} field(s) an item.`
 );
 
 if (!existsSync(telemetrySource)) {
