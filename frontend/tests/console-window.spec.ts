@@ -171,6 +171,133 @@ test('THE ORACLE: the Model route obeys the same control over its own surfaces',
 	}
 });
 
+test('THE ORACLE: the Machine route obeys the same control over its own surfaces', async ({
+	page
+}) => {
+	// It was the one console route with no control at all, so an operator who
+	// picked 7 days on Pipelines lost it the moment he asked what the machine
+	// was doing. Same oracle, same loop, third route.
+	await page.goto('/console/machine/');
+	await hydrated(page);
+
+	const found = await windowed(page);
+	expect(
+		found.map((surface) => surface.name).sort(),
+		'the machine route publishes no windowed surfaces, so the oracle asserts nothing'
+	).toEqual([
+		'machine-cache',
+		'machine-context',
+		'machine-cost',
+		'machine-host',
+		'machine-runs',
+		'machine-tokens'
+	]);
+
+	for (const preset of PRESETS) {
+		await setWindow(page, preset);
+		const surfaces = await windowed(page);
+		expect(surfaces.length, 'a surface stopped declaring itself windowed').toBe(found.length);
+		for (const surface of surfaces) {
+			expect(surface.days, `${surface.name} is drawing a different window`).toBe(preset);
+			expect(surface.says, `${surface.name} never says how many days it is showing`).toContain(
+				`${preset} days`
+			);
+		}
+	}
+});
+
+/** The first day the Machine route says it is showing, at the open preset. */
+async function machineSpan(page: Page) {
+	const said = (await page.locator('[data-windowed="machine-runs"]').innerText())
+		.replace(/\s+/g, ' ')
+		.trim();
+	const dates = /(\d{4}-\d{2}-\d{2}) to (\d{4}-\d{2}-\d{2})/.exec(said);
+	return {
+		runs: Number(/^(\d+) runs? in these/.exec(said)?.[1] ?? 0),
+		start: dates?.[1] ?? '',
+		end: dates?.[2] ?? '',
+		bars: await page.locator('[data-context-run]').count()
+	};
+}
+
+test('the Machine route draws the narrower span, not only the narrower label', async ({ page }) => {
+	// A route that wired the day count onto its surfaces and drew the same runs
+	// at every preset would pass the oracle above. The canary puts one run forty
+	// days back, so only the widest preset reaches it: the counts are read off
+	// the page rather than typed here, because a number written in a test goes
+	// stale the day the fixture grows a row, and it goes stale silently.
+	await page.goto('/console/machine/');
+	await hydrated(page);
+
+	await setWindow(page, 90);
+	const wide = await machineSpan(page);
+	await setWindow(page, 7);
+	const narrow = await machineSpan(page);
+
+	expect(narrow.end, 'the two spans end on different days').toBe(wide.end);
+	expect(narrow.start > wide.start, 'narrowing did not move the first day').toBe(true);
+	expect(wide.runs, 'the widest span reached no further run').toBeGreaterThan(narrow.runs);
+	expect(wide.bars, 'the context panel drew the same bars at both spans').toBeGreaterThan(
+		narrow.bars
+	);
+});
+
+test('the panels about one run say so, and hold still while the window moves', async ({ page }) => {
+	// Decision #2 of the row: a window is a span, and a span cannot narrow a
+	// single run. The shard board, the split, the clock check and the latency
+	// curves are snapshots, so they name the run they are about rather than
+	// emptying out when an operator picks seven days.
+	await page.goto('/console/machine/');
+	await hydrated(page);
+
+	const exempt = page.locator('[data-window-exempt="newest-run"]');
+	await expect(exempt).toContainText('do not follow the window');
+	await expect(exempt).not.toHaveAttribute('data-window-days', /.*/);
+
+	const board = page.locator('[data-shard-board]');
+	const before = await board.innerText();
+	await setWindow(page, 7);
+	expect(await board.innerText(), 'the shard board followed the window').toBe(before);
+	await setWindow(page, 90);
+	expect(await board.innerText(), 'the shard board followed the window').toBe(before);
+});
+
+test('THE ORACLE: the span picked on one console route is the span the next one opens on', async ({
+	page
+}) => {
+	// The three routes share `idhazh:console-window`, which is the whole reason
+	// the key exists: an operator comparing a slow day across Pipelines and
+	// Hardware cannot do it if the two are on different spans. Bite-proofed both
+	// ways round, because a route that only writes the key and never reads it
+	// passes a one-way check.
+	await page.goto('/console/');
+	await hydrated(page);
+	await setWindow(page, 7);
+	expect(await page.evaluate(() => localStorage.getItem('idhazh:console-window'))).toBe('7');
+
+	await page.goto('/console/machine/');
+	await hydrated(page);
+	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '7');
+	await expect(page.locator('[data-window-preset="7"]')).toHaveAttribute('data-selected', 'true');
+	const carried = await machineSpan(page);
+
+	// And it is the span the route draws, not only the span it prints.
+	await setWindow(page, 90);
+	const widened = await machineSpan(page);
+	expect(widened.runs, 'the carried span drew everything the widest one did').toBeGreaterThan(
+		carried.runs
+	);
+
+	// Back the other way: Hardware writes the key and Pipelines reads it.
+	await setWindow(page, 14);
+	await page.goto('/console/');
+	await hydrated(page);
+	await expect(page.locator('[data-window-control]')).toHaveAttribute('data-window-days', '14');
+	for (const surface of await windowed(page)) {
+		expect(surface.days, `${surface.name} ignored the span carried from Hardware`).toBe(14);
+	}
+});
+
 /** The three numbers the source section prints about its own window. */
 async function cutFacts(page: Page) {
 	// Named, not positional. The cost sentence sits above this one now, and a

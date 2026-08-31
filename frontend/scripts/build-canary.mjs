@@ -300,15 +300,26 @@ function writeItemHealthCanary() {
  *    committed rows do, because each of those columns landed after the ledger
  *    started. The board prints a dash and ranks that shard last rather than
  *    treating a blank clock as a fast one.
+ *  - **A run only the widest span can reach.** One run sits 40 days back, so it
+ *    is drawn at 90 days and at no other preset. Without it every preset draws
+ *    the same runs on this fixture, and a route that wired the day count onto
+ *    its surfaces while ignoring the window entirely would pass the window
+ *    oracle - which is the one bug that oracle exists to catch.
  */
 function writeRuntimeCountersCanary() {
 	const year = newestDirectory(ROOT);
 	const month = newestDirectory(join(ROOT, year));
 	const day = newestDirectory(join(ROOT, year, month));
 	const date = `${year}-${month}-${day}`;
-	const earlier = new Date(`${date}T00:00:00Z`);
-	earlier.setUTCDate(earlier.getUTCDate() - 1);
-	const before = earlier.toISOString().slice(0, 10);
+	const back = (days) => {
+		const at = new Date(`${date}T00:00:00Z`);
+		at.setUTCDate(at.getUTCDate() - days);
+		return at.toISOString().slice(0, 10);
+	};
+	const before = back(1);
+	// Outside 7, 14 and 30 days, inside 90. The default window is 30, so nothing
+	// already pinned to this fixture moves.
+	const longAgo = back(40);
 
 	// Named cells for the same reason the item-health canary uses them: a column
 	// added to the row must not shift every number one place to the left.
@@ -378,6 +389,24 @@ function writeRuntimeCountersCanary() {
 			n_tokens_max: 1995, job_seconds: 780,
 			cpu_model: 'INTEL(R) XEON(R) PLATINUM 8573C',
 			cpu_busy_pct: 92.8, peak_rss_bytes: 12990730240, model_load_ms: 2470.828
+		})),
+		// Forty days back, so only the widest preset reaches it. Its readings sit
+		// outside the span of every other run - the lowest processor share, the
+		// highest memory and the slowest load - so widening the window moves the
+		// three host spans as well as adding a bar and a cache column.
+		row(shard(longAgo, 1, 0, {
+			prompt_tokens_total: 1210, prompt_tokens_cached_total: 300, prompt_seconds_total: 96.4,
+			tokens_predicted_total: 188, tokens_predicted_seconds_total: 35.5, n_decode_total: 190,
+			n_tokens_max: 3210, job_seconds: 1020,
+			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cpu_busy_pct: 61.7, peak_rss_bytes: 14495514624, model_load_ms: 6120.5
+		})),
+		row(shard(longAgo, 1, 1, {
+			prompt_tokens_total: 640, prompt_tokens_cached_total: 120, prompt_seconds_total: 51.2,
+			tokens_predicted_total: 96, tokens_predicted_seconds_total: 18.9, n_decode_total: 98,
+			n_tokens_max: 2740, job_seconds: 940,
+			cpu_model: 'AMD EPYC 7763 64-Core Processor',
+			cpu_busy_pct: 64.3, peak_rss_bytes: 13958643712, model_load_ms: 5880.25
 		}))
 	].join('\n') + '\n');
 }
