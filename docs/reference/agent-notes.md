@@ -897,6 +897,14 @@ dependency nothing in the change touched.
   reads like a bug in the one case the arithmetic cannot get wrong. Observed
   2026-08-30 on the console's ranked bars. Compare the number:
   `parseFloat(node.style.inlineSize)` against `Number(expected.toFixed(4))`.
+- **`getComputedStyle(document.body).backgroundColor` answers
+  `rgba(0, 0, 0, 0)` on a page whose background is plainly there.** `app.css`
+  puts `background-color` on `html`, and the browser propagates the root
+  element's background to the canvas - so the body genuinely has none, and a
+  theme assertion written against it fails on every route at once. Observed
+  2026-08-31 while writing the first-frame theme oracle; it reads exactly like
+  the stylesheet not loading. Read `document.documentElement` instead, which is
+  the element that actually paints.
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
   `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
   then shows progress dots and an exit code and nothing else, which reads like
