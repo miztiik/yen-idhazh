@@ -39,6 +39,7 @@
 	data-shard-board-shards={board.shards}
 	data-shard-board-reported={board.rows.length}
 	data-shard-board-timeout-seconds={board.timeoutSeconds ?? ''}
+	data-readout-none="one row per shard, and every figure on a row is printed beside its bar"
 >
 	{#if board.empty}
 		<p class="board-note" data-shard-board-empty>

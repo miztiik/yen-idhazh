@@ -581,7 +581,10 @@ function pair(
 }
 
 /** Two bars side by side, never stacked: they are two readings of one quantity,
- * and stacking would add a number to itself. */
+ * and stacking would add a number to itself.
+ *
+ * No legend: the strip under the plot names both instruments in the colours
+ * they are drawn in, at the column the reader is on. */
 export function clocksChart(pairs: readonly ClockPair[]): {
 	option: EChartsOption;
 	empty: boolean;
@@ -599,14 +602,8 @@ export function clocksChart(pairs: readonly ClockPair[]): {
 		empty: false,
 		option: {
 			animation: false,
-			grid: { left: 48, right: 12, top: 30, bottom: 26, containLabel: false },
+			grid: { left: 48, right: 12, top: 8, bottom: 26, containLabel: false },
 			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
-			legend: {
-				data: ['Item ledger', 'Model server'],
-				top: 0,
-				itemGap: 16,
-				textStyle: { color: paint('--color-text-secondary'), fontSize: 12 }
-			},
 			xAxis: {
 				type: 'category',
 				data: drawn.map((entry) => entry.label),
@@ -744,7 +741,11 @@ export function percentileCurves(
 }
 
 /** Every point labelled with its value. A curve with unlabelled points is a
- * shape nobody can quote. */
+ * shape nobody can quote.
+ *
+ * No legend: the strip under the plot names every run in the colour its curve
+ * is drawn in. The top inset is the room a point's own label needs, not the
+ * room a legend took. */
 export function percentileChart(curves: readonly PercentileCurve[]): {
 	option: EChartsOption;
 	empty: boolean;
@@ -755,14 +756,8 @@ export function percentileChart(curves: readonly PercentileCurve[]): {
 		empty: false,
 		option: {
 			animation: false,
-			grid: { left: 60, right: 44, top: 30, bottom: 26, containLabel: false },
+			grid: { left: 60, right: 44, top: 20, bottom: 26, containLabel: false },
 			tooltip: { trigger: 'axis' },
-			legend: {
-				data: curves.map((curve) => curve.runId),
-				top: 0,
-				itemGap: 14,
-				textStyle: { color: paint('--color-text-secondary'), fontSize: 11 }
-			},
 			xAxis: {
 				type: 'category',
 				data: PERCENTILES.map((percentile) => `p${percentile}`),

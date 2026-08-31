@@ -38,7 +38,13 @@
 	} = $props();
 </script>
 
-<div class="target" data-target-bar={label} data-target-band={marks.band} data-target-tone={tone}>
+<div
+	class="target"
+	data-target-bar={label}
+	data-target-band={marks.band}
+	data-target-tone={tone}
+	data-readout-none="one value against one threshold, and both are already in words"
+>
 	<p class="target-head">
 		<span class="target-label">{label}</span>
 		<span class="target-value tabular-nums" data-target-cell="value">

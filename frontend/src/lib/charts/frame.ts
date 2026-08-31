@@ -389,6 +389,20 @@ export interface DayReadout {
 	rows: ReadoutRow[];
 }
 
+/** Every chart on the console says whether it has a column to hover, in markup.
+ *
+ * A chart that shares a column between its marks carries `data-readout-columns`
+ * on the element holding both the plot and the strip, and the strip is the only
+ * key it draws. A chart with no shared column - a ranked list, one target bar,
+ * a flow, a share of one total - carries `data-readout-none` with the reason in
+ * words instead.
+ *
+ * The second attribute is the point of the pair. "This chart has no hover" is a
+ * decision somebody took, and an undeclared chart is indistinguishable from one
+ * where the readout was forgotten. `console-readout.spec.ts` enumerates every
+ * chart on the three routes and fails on any that declares neither.
+ */
+
 /** The action's marks, built from the strip's own rows.
  *
  * The strip draws the rows and the action announces the sentences, so both come
@@ -398,6 +412,39 @@ export function readoutMarks(columns: readonly DayReadout[]): ReadoutMark[] {
 	return columns.map((column) => ({
 		x: column.x,
 		lines: [column.date, ...column.rows.map((row) => `${row.label} ${row.value}`)]
+	}));
+}
+
+/** One series of a strip: what it is, what colour it is drawn in, what it read.
+ *
+ * `value` is asked per column rather than handed as an array, so a strip cannot
+ * be built from a list that is a different length from the labels. */
+export interface StripSeries {
+	label: string;
+	/** The colour the chart draws this series in, so the strip is the key. */
+	colour: string;
+	value: (index: number) => string;
+}
+
+/** A strip for an engine-drawn chart, from its category labels and its series.
+ *
+ * `x` is left at zero: an engine keeps its plot insets in pixels and the
+ * element is fluid, so `Chart.svelte` recomputes every column's share of the
+ * measured width through `bandShares`. A pixel written here would be the pixel
+ * the server drew at and wrong at every other width.
+ */
+export function columnStrip(
+	labels: readonly string[],
+	series: readonly StripSeries[]
+): DayReadout[] {
+	return labels.map((date, index) => ({
+		x: 0,
+		date,
+		rows: series.map((one) => ({
+			label: one.label,
+			value: one.value(index),
+			colour: one.colour
+		}))
 	}));
 }
 
