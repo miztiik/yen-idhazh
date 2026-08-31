@@ -1,4 +1,5 @@
-/** Where items go between the router looking at one and a chart being published.
+/** Where items go between the visuals planner looking at one and a visual being
+ * published.
  *
  * This was a funnel until 2026-08-30. A funnel draws a monotonic sequence as a
  * taper, so it says how much is left at each step and nothing about where the
@@ -39,7 +40,7 @@ const STAGES = [
 
 /** What each drop actually was. Three causes, three sentences - the whole
  * reason this stopped being a funnel. */
-const LOSSES = ['Answered without a chart', 'The model drew nothing', 'Did not survive the checks'];
+const LOSSES = ['Answered without a visual', 'The model drew nothing', 'Did not survive the checks'];
 
 /** Fixed here so the server that draws the SVG and the page that hydrates it
  * cannot disagree about it. */
@@ -86,19 +87,20 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 		value: days.reduce((sum, day) => sum + day[stage.key], 0)
 	}));
 	const reached = total[0].value;
-	// Nothing reached means nothing committed says what the router did. A flow of
-	// four zeros draws nothing and reads as a chart that failed to load.
+	// Nothing reached means nothing committed says what the visuals planner did. A
+	// flow of four zeros draws nothing and reads as a chart that failed to load.
 	if (reached === 0) {
 		return {
 			option: {},
 			empty: true,
 			reason:
-				'Nothing committed says what the router did over this window, so there is no flow to draw.'
+				'Nothing committed says what the visuals planner did over this window, so there is ' +
+				'no flow to draw.'
 		};
 	}
 
 	// A stage counting more than the one before it is not a flow, and drawing it
-	// as one needs a branch of negative width. It happens: a chart published
+	// as one needs a branch of negative width. It happens: a visual published
 	// inside the window can have been drafted before the window opened. Say that
 	// and leave the table to hold the numbers, rather than draw a picture the
 	// counts do not support.
@@ -109,7 +111,7 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 			empty: true,
 			reason:
 				`This window counts more items at ${total[gained].label.toLowerCase()} than at ` +
-				`${total[gained - 1].label.toLowerCase()}, so the counts are not one flow. A chart ` +
+				`${total[gained - 1].label.toLowerCase()}, so the counts are not one flow. A visual ` +
 				'published inside the window can have been drafted before it opened. The table ' +
 				'below holds the numbers.'
 		};

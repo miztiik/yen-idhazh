@@ -1,6 +1,6 @@
 # UI Shell
 
-**Last Updated**: 2026-08-24
+**Last Updated**: 2026-08-31
 
 The chrome around the content: what the published site is made of, what each surface owns, and the states every page must handle. The visual vocabulary lives in [design-system.md](design-system.md); the item itself lives in [digest.md](digest.md). This page is the *structure*.
 
@@ -22,6 +22,8 @@ That means the shell's job is small and worth stating plainly: **load a payload,
 Four surfaces is the whole site, and only two of them are for a reader. A fifth needs an argument.
 
 The two operator surfaces are held to a different standard on purpose. They sit off the reading path, so they spend no reader attention and take no ornament: no display face, no gradient, no illustration. What they owe instead is **legibility** - a figure the operator can read at a glance, a table that fits the screen it is on, and a page that can be scanned in one pass. Correctness is the floor, not the ceiling. An instrument that is right and unreadable has not done its job ([vision.md](vision.md)).
+
+**An operator is a reader, so an operator surface names things in plain words too** (`CLAUDE.md` section 0b). A stage name is a term the pipeline uses on itself; it is not a term for the person reading the page, and no operator surface earns an exemption for being technical. The console renamed its chart-arm section on 2026-08-31 for exactly this: `router` is what the code calls the stage, so the page calls it **the visuals planner** where it names the actor, and drops the word entirely where it was only modifying a number. The identifiers - route ids, `data-` attributes, config keys, ledger columns - keep the old names, because those are addresses and a label may change where an address may not. Which strings moved, and what the rename costs while every visual is still a chart, is in [../architecture/publishing/frontend.md](../architecture/publishing/frontend.md).
 
 ## What the shell provides, once
 

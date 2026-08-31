@@ -4,7 +4,7 @@
 	 * It answers one question and refuses the others: did the pipeline work. Did
 	 * the runs finish, which feeds are broken, how long each stage took, what the
 	 * truncation cap is costing and to which sources, and whether the chart arm
-	 * earns its router minutes. What the model wrote is on `/console/model/` and
+	 * earns its minutes. What the model wrote is on `/console/model/` and
 	 * the hardware under it is on `/console/machine/`.
 	 *
 	 * Every count is read from the committed ledger. The only arithmetic is one
@@ -359,8 +359,9 @@
 	/** A minute count, or a dash where there is no number to print.
 	 *
 	 * Null means nothing was measured. Printing that as `0.0` would say the
-	 * router was free, and printing a per-chart cost of infinity on a day with no
-	 * chart would say it was ruinous. Both are answers to a question nobody asked.
+	 * visuals planner was free, and printing a per-visual cost of infinity on a day
+	 * with no visual would say it was ruinous. Both are answers to a question
+	 * nobody asked.
 	 */
 	function minutes(value: number | null): string {
 		return value === null ? '-' : value.toFixed(1);
@@ -480,7 +481,7 @@
 				/>
 			</figure>
 		{/if}
-		<!-- No router-minutes card here. `Charts drawn for articles` prints the
+		<!-- No minutes card here. `Visuals drawn for articles` prints the
 		     same window median against the same target, with the coverage half of
 		     the rule beside it, and one page may not state one figure twice. -->
 	</div>
@@ -860,7 +861,7 @@
 	/>
 
 	{#if data.charts.length > 0}
-		<h2 class="console-h2">Charts drawn for articles</h2>
+		<h2 class="console-h2">Visuals drawn for articles</h2>
 		<div
 			data-windowed="chart-arm"
 			data-window-days={windowDays}
@@ -870,8 +871,8 @@
 		>
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 				Over {thresholds.ruleDays} days with the chart-only gate on, the arm is retired if the
-				median day spends more than {thresholds.minutesTarget} router minutes per published chart,
-				or puts a chart on fewer than {thresholds.coveragePct}% of the items it published. Over
+				median day spends more than {thresholds.minutesTarget} minutes per published visual, or
+				puts a visual on fewer than {thresholds.coveragePct}% of the items it published. Over
 				{windowDays} days.
 			</p>
 			<div class="console-panel mt-3" data-charts="arm">
@@ -887,32 +888,32 @@
 						<div class="arm-figure" data-arm-figure="minutes">
 							<TargetBar
 								marks={arm.minutesMarks}
-								label="Router minutes per chart"
+								label="Minutes per visual"
 								valueText={arm.minutes === null ? '-' : arm.minutes.toFixed(1)}
 								targetText="Retired above {thresholds.minutesTarget}, on the median day."
-								emptyNote="No router time is on record for these {windowDays} days."
+								emptyNote="No minutes are on record for these {windowDays} days."
 							/>
 							<Sparkline
 								marks={arm.minutesTrend}
 								width={220}
 								height={30}
-								label="Router minutes per chart, day by day, over {arm.minutesDays} measured days"
+								label="Minutes per visual, day by day, over {arm.minutesDays} measured days"
 							/>
 							{@render armMove(arm.minutesTrend.movement, arm.minutesMarks.sense, 'minutes')}
 						</div>
 						<div class="arm-figure" data-arm-figure="coverage">
 							<TargetBar
 								marks={arm.coverageMarks}
-								label="Published items with a chart"
+								label="Published articles with a visual"
 								valueText={arm.coverage === null ? '-' : `${Math.round(arm.coverage)}%`}
 								targetText="Retired below {thresholds.coveragePct}%, on the median day."
-								emptyNote="No day in these {windowDays} days published anything to put a chart on."
+								emptyNote="No day in these {windowDays} days published anything to put a visual on."
 							/>
 							<Sparkline
 								marks={arm.coverageTrend}
 								width={220}
 								height={30}
-								label="Share of published items carrying a chart, day by day, over {arm.coverageDays} measured days"
+								label="Share of published articles carrying a visual, day by day, over {arm.coverageDays} measured days"
 							/>
 							{@render armMove(arm.coverageTrend.movement, arm.coverageMarks.sense, 'coverage')}
 						</div>
@@ -927,7 +928,7 @@
 					option={chartFlow(data.charts).option}
 					width={data.console.chart_width}
 					height={FLOW_HEIGHT}
-					label="Where items go between the router reaching one and a chart being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
+					label="Where items go between the visuals planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 					noReadout="a flow between stages, so there is no column two branches share"
 				/>
 			</div>
@@ -940,11 +941,11 @@
 		<details class="console-disclosure mt-4" data-charts="daily">
 			<summary class="console-summary" data-charts-toggle>Show the daily figures</summary>
 			<p class="mt-3 text-[0.8125rem] text-text-tertiary">
-				One row per day, newest first. Reached is every item the router looked at, asked the model
-				is the part it sent a request for, charts drafted is what the model returned, and charts
-				published is what survived the checks after it. A dash means no router time is on record,
-				so there is no rate to divide. Zero reached means nothing committed says what the router
-				did: it never ran, or its manifest is older than these counts.
+				One row per day, newest first. Reached is every item the visuals planner looked at, asked
+				the model is the part it sent a request for, visuals drafted is what the model returned,
+				and visuals published is what survived the checks after it. A dash means no minutes are on
+				record, so there is no rate to divide. Zero reached means nothing committed says what the
+				visuals planner did: it never ran, or its manifest is older than these counts.
 			</p>
 			<div class="console-table mt-3" data-charts="table">
 				<table class="w-full text-[0.8125rem]">
@@ -953,11 +954,11 @@
 							<th class="py-2 text-start font-normal">Day</th>
 							<th class="py-2 text-end font-normal">Reached</th>
 							<th class="py-2 text-end font-normal">Asked the model</th>
-							<th class="py-2 text-end font-normal">Charts drafted</th>
-							<th class="py-2 text-end font-normal">Charts published</th>
+							<th class="py-2 text-end font-normal">Visuals drafted</th>
+							<th class="py-2 text-end font-normal">Visuals published</th>
 							<th class="py-2 text-end font-normal">Items published</th>
-							<th class="py-2 text-end font-normal">Router minutes</th>
-							<th class="py-2 text-end font-normal">Minutes per chart</th>
+							<th class="py-2 text-end font-normal">Minutes spent</th>
+							<th class="py-2 text-end font-normal">Minutes per visual</th>
 						</tr>
 					</thead>
 					<tbody>

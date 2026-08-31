@@ -1226,8 +1226,8 @@ test('every chart cell equals what the day committed', async ({ page }) => {
 	const dates = await page
 		.locator('[data-chart-day]')
 		.evaluateAll((rows) => rows.map((row) => row.getAttribute('data-chart-day') ?? ''));
-	// Newest first, and every day the manifest covers, so a day the router never
-	// reached still counts towards the arm's fourteen-day window.
+	// Newest first, and every day the manifest covers, so a day the visuals
+	// planner never reached still counts towards the arm's fourteen-day window.
 	expect(dates).toEqual(
 		manifestDays()
 			.map((day) => day.date)
@@ -1242,13 +1242,13 @@ test('every chart cell equals what the day committed', async ({ page }) => {
 	}
 });
 
-test('the measured day prints rates, and the day with no router prints dashes', async ({
+test('the measured day prints rates, and the day with no minutes prints dashes', async ({
 	page
 }) => {
 	await page.goto('/console/');
 	await openDailyCharts(page);
 
-	// The attack day is the one the fixture gives router counts to. Asserting it
+	// The attack day is the one the fixture gives planner counts to. Asserting it
 	// is not all zeros is what stops the oracle above passing on an empty table.
 	const measured = page.locator(`[data-chart-day="${DAY}"]`);
 	const cells = chartCells(DAY);
@@ -1258,9 +1258,9 @@ test('the measured day prints rates, and the day with no router prints dashes', 
 	await expect(measured.locator('[data-charts-cell="minutes"]')).not.toHaveText('-');
 	await expect(measured.locator('[data-charts-cell="per-chart"]')).not.toHaveText('-');
 
-	// A quiet day ran and published nothing, so its router never started. Zero
-	// items reached is a measurement; zero minutes would be an invention, and a
-	// per-chart cost over no charts is not a number at all.
+	// A quiet day ran and published nothing, so its visuals planner never
+	// started. Zero items reached is a measurement; zero minutes would be an
+	// invention, and a per-visual cost over no visuals is not a number at all.
 	const quiet = page.locator(`[data-chart-day="${manifestDays()[0].date}"]`);
 	await expect(quiet.locator('[data-charts-cell="reached"]')).toHaveText('0');
 	await expect(quiet.locator('[data-charts-cell="published"]')).toHaveText('0');
@@ -1283,13 +1283,59 @@ test('a diagram is a visual and is not a published chart', async ({ page }) => {
 		(item) => item.visual?.kind === 'chart' && item.visual.state === 'rendered'
 	).length;
 
-	// The fixture publishes a chart and a diagram. A count that read "visuals"
-	// would put the diagram in the chart arm's bill, and the arm would look twice
-	// as productive as it is.
+	// The fixture publishes a chart and a diagram. The column is headed `Visuals
+	// published` since 2026-08-31 but still counts only rendered charts, because
+	// counting every visual would put the diagram in the chart arm's bill and the
+	// arm would look twice as productive as it is. Every visual on the eleven
+	// committed days is a chart, so the two numbers agree today; the day a
+	// diagram publishes for real, the count or the heading has to move.
 	expect(visuals).toBeGreaterThan(charts);
 	await expect(
 		page.locator(`[data-chart-day="${DAY}"] [data-charts-cell="published"]`)
 	).toHaveText(String(charts));
+});
+
+test('no console route reads the word router to an operator', async ({ page }) => {
+	// `router` names a pipeline stage, and CLAUDE.md section 0b bars a subsystem
+	// word from a string a person reads. Script text is exempt because nobody
+	// reads it: the serialized payload still carries `routerMinutes`, which is a
+	// key and not a sentence.
+	for (const route of ['/console/', '/console/model/', '/console/machine/']) {
+		await page.goto(route);
+		const leaks = await page.evaluate(() => {
+			const found: string[] = [];
+			const skip = new Set(['SCRIPT', 'STYLE', 'TEMPLATE']);
+			const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+			for (let node = walk.nextNode(); node; node = walk.nextNode()) {
+				const text = (node.textContent ?? '').trim();
+				if (skip.has(node.parentElement?.tagName ?? '')) continue;
+				if (/router/i.test(text)) found.push(text);
+			}
+			// An accessible name is read aloud, so it is a reader string too.
+			for (const el of document.querySelectorAll('[aria-label], [title]')) {
+				for (const name of ['aria-label', 'title']) {
+					const value = el.getAttribute(name);
+					if (value && /router/i.test(value)) found.push(value);
+				}
+			}
+			return found;
+		});
+		expect(leaks, `${route} reads a subsystem word to an operator`).toEqual([]);
+	}
+});
+
+test('the renamed section draws what it drew before, figure for figure', async ({ page }) => {
+	// The other half of the oracle: a rename that quietly dropped a bar would
+	// pass the grep above. The counts are `origin/main` at bb7fd4a, counted in
+	// its own source: two figures, each a target bar over a sparkline, and one
+	// flow diagram beside them.
+	await page.goto('/console/');
+	const section = page.locator('[data-windowed="chart-arm"]');
+	await expect(section.locator('[data-arm-figure]')).toHaveCount(2);
+	await expect(section.locator('[data-target-bar]')).toHaveCount(2);
+	await expect(section.locator('[data-sparkline]')).toHaveCount(2);
+	await expect(page.locator('[data-flow]')).toHaveCount(1);
+	await expect(page.locator('[data-charts="table"] thead th')).toHaveCount(8);
 });
 
 /** The canary's own score rows and item-health rows for one date. */
