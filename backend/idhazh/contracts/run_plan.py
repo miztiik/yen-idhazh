@@ -11,6 +11,7 @@ whole day can see that.
 
 from __future__ import annotations
 
+from enum import StrEnum
 from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
@@ -33,13 +34,36 @@ from idhazh.contracts.sources import SourceForm
 from idhazh.contracts.taxonomy import SourceTier
 
 
+class TimeSource(StrEnum):
+    """Which clock the time on an item came from.
+
+    `rank.appeared_at` prefers the feed's own date and falls back to when we
+    first saw the address. Both answers used to land in one field, so nothing
+    downstream could tell them apart - and the fallback is the one a reader
+    would want flagged, because it is our clock and not the publisher's.
+    """
+
+    #: The feed's own publish date.
+    FEED = "feed"
+    #: When this project first saw the address. The feed gave no usable date.
+    FIRST_SEEN = "first_seen"
+    #: Neither clock gave a time, so the item carries none.
+    UNKNOWN = "unknown"
+
+    @property
+    def names_a_clock(self) -> bool:
+        """`unknown` is the one member that goes with no time at all."""
+        return self is not TimeSource.UNKNOWN
+
+
 class PlannedItem(Model):
     """One URL that survived deduplication and was chosen for the day.
 
     `item_id` is derived from `url_key`, so the same article carries the same
     id on every run of every day. `published_at` is the time the run believes -
     the feed's own date, unless it claimed a future too far ahead to be true,
-    in which case it is when we first saw the address.
+    in which case it is when we first saw the address. `time_source` says which
+    of the two it is.
     """
 
     item_id: ItemId
@@ -55,6 +79,13 @@ class PlannedItem(Model):
     vertical: Slug
     title: UntrustedLine | None = None
     published_at: Timestamp | None = None
+    time_source: TimeSource | None = Field(
+        default=None,
+        description=(
+            "Which clock published_at came from. Null on a plan written before the "
+            "field existed - unknown, and never a claim about a clock."
+        ),
+    )
 
     carried_by: int = Field(
         default=1, ge=1, description="Independent feeds that carried this story today."
@@ -71,6 +102,14 @@ class PlannedItem(Model):
             raise ValueError("url_key must be the sha256 of canonical_url, recomputed on read")
         if not self.item_id.startswith(f"{self.vertical}-"):
             raise ValueError("item_id must be addressed <vertical>-<NN>")
+        return self
+
+    @model_validator(mode="after")
+    def _the_clock_and_the_time_agree(self) -> Self:
+        if self.time_source is not None and self.time_source.names_a_clock != (
+            self.published_at is not None
+        ):
+            raise ValueError("time_source names a clock exactly when published_at carries a time")
         return self
 
 
@@ -110,6 +149,23 @@ class RunPlan(Contract):
 
     __schema_stem__: ClassVar[str] = "run-plan"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-08-31T10:30",
+            change="Added time_source to each planned item.",
+            why=(
+                "published_at holds the feed's own date, or our first sight of the "
+                "address when the feed gave no usable one, and the field could not say "
+                "which. The choice is made in rank.appeared_at and was thrown away one "
+                "line later, so a page printing the time could not vouch for it. "
+                "Measured 2026-08-31 on the committed 2026-08-30 payload - the newest "
+                "day that had finished publishing - 431 items: 305 distinct HH:mm "
+                "values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. "
+                "That last figure is an upper bound on the fallback rather than a "
+                "count of it, because nothing committed records the choice yet - which "
+                "is the defect. Additive with a default, so a plan an earlier run wrote "
+                "still validates, and a null reads as unknown (section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-30",
             change="Added too_old to each vertical's plan summary.",
