@@ -1,6 +1,6 @@
 # Telemetry
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-08-31
 
 The structured-event vocabulary: the envelope every event carries, the event names that are emitted, the span tree a developer can switch on, and the rule that there is no network sink. "Telemetry" here means a **local, structured log**; it is not a runtime analytics SDK, which is a project non-goal ([principles.md](principles.md), [../../CLAUDE.md](../../CLAUDE.md) section 0a).
 
@@ -114,6 +114,13 @@ already committed is the same row and lands once. That filter is what makes a
 second writer safe: `merge=union` keeps the lines from both sides rather than
 collapsing them, the published projection copies every row into the file the
 console reads, and an append-only ledger cannot correct a row afterwards.
+
+The filter reads the file the job checked out, and a checkout is pinned to the
+commit its run was triggered at - so it cannot see a row a second attempt at the
+same work pushed after that commit. The commit step settles the file again after
+the merge, which is the only moment both attempts are in one place. Both halves
+are needed: on 2026-08-31 the committed month held 44 keys twice, from one day
+when only the first existed.
 
 A worker records only items that have settled. An item whose summary payload is
 simply not written yet was interrupted, not failed, and assemble classifies it

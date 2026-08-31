@@ -334,7 +334,11 @@ COMMIT_BASE_ENV: Final = frozenset(
 # commits rendered assets, so only assemble drops a raced one.
 COMMIT_SCRIPT_ENV: Final = {
     "plan": COMMIT_BASE_ENV,
-    "work": COMMIT_BASE_ENV,
+    # The one recording step whose ledgers declare a key. Its filters read a
+    # checkout frozen at the commit this run was triggered at, so a second
+    # attempt cannot see the first attempt's pushed rows and the union keeps
+    # both - which is what the post-merge pass is for.
+    "work": COMMIT_BASE_ENV | {"DROP_REPEATED_ROWS_COMMAND"},
     "assemble": COMMIT_BASE_ENV
     | {"REFRESH_PATHS", "REGENERATE_COMMAND", "DROP_RACED_ASSETS_COMMAND"},
     "fold": COMMIT_BASE_ENV,
@@ -437,6 +441,11 @@ COMMIT_REFRESH_PATHS: Final = {
 # The producer the harness drives through the loop. See its own docstring for
 # why the pipeline's `assemble` cannot be the one under a temporary clone.
 REBUILD_STAND_IN: Final = Path(__file__).with_name("rebuild_day.py")
+# The post-merge pass, for the same reason: the shipped stage resolves `state/`
+# off the installed package, so under a test it would settle the developer's own
+# repository rather than the temporary clone. The stand-in calls the shipped
+# function with a path relative to the runner's working directory.
+SETTLE_STAND_IN: Final = Path(__file__).with_name("settle_ledger.py")
 # The drop, by contrast, IS the shipped one: it anchors on the working
 # directory, so it runs inside a temporary clone unchanged.
 DROP_ENTRY_POINT: Final = REPO_ROOT / "backend" / "utilities" / "drop_raced_assets.py"
@@ -895,6 +904,7 @@ requires_bash: Final = pytest.mark.skipif(
 requires_space_free_paths: Final = pytest.mark.skipif(
     " " in sys.executable
     or " " in str(REBUILD_STAND_IN)
+    or " " in str(SETTLE_STAND_IN)
     or " " in str(DROP_ENTRY_POINT),
     reason="REGENERATE_COMMAND is word-split on spaces",
 )
@@ -1041,6 +1051,26 @@ def _rebuild_command(date: str) -> str:
 def _drop_command(date: str) -> str:
     """The shipped raced-asset drop, as the loop word-splits it."""
     return f"{Path(sys.executable).as_posix()} {DROP_ENTRY_POINT.as_posix()} --date {date}"
+
+
+def _settle_command(relative: str, key: str) -> str:
+    """The post-merge pass the harness puts through the loop, as it word-splits it."""
+    return (
+        f"{Path(sys.executable).as_posix()} {SETTLE_STAND_IN.as_posix()} "
+        f"--path {relative} --key {key}"
+    )
+
+
+def _settled_in_the_clone(settings: dict[str, str], relative: str, key: str) -> dict[str, str]:
+    """The step's own settings, with the one command that would reach this repository.
+
+    `python -m idhazh dedupe-ledgers` resolves `state/` off the installed
+    package, so running it unchanged from a temporary clone would settle the
+    working repository's committed ledgers.
+    """
+    if "DROP_REPEATED_ROWS_COMMAND" not in settings:
+        return settings
+    return {**settings, "DROP_REPEATED_ROWS_COMMAND": _settle_command(relative, key)}
 
 
 def _chart(repo: Path, date: str, item_id: str, relpath: str, body: str | None = None) -> None:
@@ -2241,19 +2271,22 @@ def test_every_path_the_work_shard_stages_is_union_merged() -> None:
 
 
 @requires_bash
+@requires_space_free_paths
 def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     """Eight workers, one branch, one row each.
 
     They run in turn from clones taken before any of them pushed, so every one
     after the first finds a base that has already moved - which is the state a
     real fan-out puts them in. What this proves is that the rebase resolves it
-    and no row is lost. It does not prove the three-attempt budget: eight truly
-    concurrent pushes cannot be made deterministic in a test.
+    and no row is lost, and that the post-merge pass leaves eight different rows
+    alone: they share a file, not a key. It does not prove the three-attempt
+    budget: eight truly concurrent pushes cannot be made deterministic in a test.
     """
     staged_paths, settings = _commit_call("work")
     env = _isolated_env(tmp_path)
     origin, _ = _scripted_origin(tmp_path, env, staged_paths)
     relative = _seed_ledger(staged_paths[0])
+    settings = _settled_in_the_clone(settings, relative, "header")
     shards = range(8)
     runners = []
     for shard in shards:
@@ -2269,6 +2302,75 @@ def test_every_shard_of_a_full_fan_out_lands_its_rows(tmp_path: Path) -> None:
     assert landed[0] == "header"
     assert sorted(landed[1:]) == ["row-0", *(f"shard-{shard}" for shard in shards)]
     assert not any(_mid_rebase(runner) for runner in runners)
+
+
+def _keyed_origin(tmp_path: Path, env: dict[str, str], relative: str) -> tuple[Path, Path]:
+    """An origin holding one keyed ledger, and a clone taken before anything raced it.
+
+    Built here rather than through `_scripted_origin`, which seeds a one-word
+    ledger: two rows that share a key and disagree about everything else need
+    two columns, and that shape is what this file is about.
+    """
+    origin = tmp_path / "origin.git"
+    tmp_path.mkdir(parents=True, exist_ok=True)
+    _git(tmp_path, env, "init", "--bare", "-b", "main", str(origin))
+    seed = tmp_path / "seed"
+    _git(tmp_path, env, "clone", str(origin), str(seed))
+    _write(seed / ".gitattributes", read_text(REPO_ROOT / ".gitattributes"))
+    _write(seed / relative, "key,cells\n")
+    _git(seed, env, "add", ".gitattributes", relative)
+    _git(seed, env, "commit", "-m", "seed")
+    _git(seed, env, "push", "-u", "origin", "main")
+    runner = tmp_path / "runner"
+    _git(tmp_path, env, "clone", str(origin), str(runner))
+    return origin, runner
+
+
+@requires_bash
+@requires_space_free_paths
+def test_a_second_attempt_at_one_shard_leaves_the_row_the_first_one_pushed(
+    tmp_path: Path,
+) -> None:
+    """The defect this step exists for, reproduced and then closed, on real git.
+
+    A shard's append filters against the checkout, and `actions/checkout` pins a
+    job to the commit its run was triggered at. So a second attempt at the same
+    work cannot see the row the first attempt pushed afterwards: it appends its
+    own, `merge=union` keeps both lines, and the ledger ends up with a key twice.
+    That is how run `2026-08-29-3` came to hold six counter rows for four shards.
+
+    Both arms run the shipped script over the same repository. The one without
+    the setting is the defect; the one with it is the fix. The row that survives
+    is the one origin already published, so the commit adds nothing and deletes
+    nothing the tip holds - which is the property that makes settling after a
+    merge safe rather than a rewrite of somebody else's history.
+    """
+    relative = "state/runtime-counters.csv"
+    _, settings = _commit_call("work")
+
+    def attempt(root: Path, drop: bool) -> list[str]:
+        root.mkdir(parents=True, exist_ok=True)
+        env = _isolated_env(root)
+        origin, runner = _keyed_origin(root, env, relative)
+        _race(root, env, relative, "key,cells\nk1,attempt-one\n")
+        _write(runner / relative, "key,cells\nk1,attempt-two\n")
+        settled = (
+            _settled_in_the_clone(settings, relative, "key")
+            if drop
+            else {name: value for name, value in settings.items() if "REPEATED" not in name}
+        )
+        result = _run_commit_script(runner, env, [relative], settled)
+        assert result.returncode == 0, result.stderr
+        assert "rebasing" in result.stdout, "the push has to lose, or nothing merged"
+        return _git(origin, env, "show", f"main:{relative}").splitlines()
+
+    assert attempt(tmp_path / "unsettled", drop=False) == [
+        "key,cells",
+        "k1,attempt-one",
+        "k1,attempt-two",
+    ], "without the pass the union keeps both attempts, which is the defect"
+
+    assert attempt(tmp_path / "settled", drop=True) == ["key,cells", "k1,attempt-one"]
 
 
 def test_assemble_hands_back_every_ledger_a_worker_committed() -> None:
@@ -2310,12 +2412,14 @@ def test_every_committing_job_configures_the_same_identity() -> None:
 
 
 @requires_bash
+@requires_space_free_paths
 @pytest.mark.parametrize("job_name", sorted(COMMIT_STEPS))
 def test_the_commit_step_pushes_what_it_staged(tmp_path: Path, job_name: str) -> None:
     staged_paths, settings = _commit_call(job_name)
     env = _isolated_env(tmp_path)
     origin, runner = _scripted_origin(tmp_path, env, staged_paths)
     _write(runner / _seed_ledger(staged_paths[0]), "header\nrow-0\nfresh\n")
+    settings = _settled_in_the_clone(settings, _seed_ledger(staged_paths[0]), "header")
     if "REGENERATE_COMMAND" in settings:
         # The push wins here, so the producer never runs. Point it at the
         # harness one anyway: the pipeline's own `assemble` anchors its paths on

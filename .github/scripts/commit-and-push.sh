@@ -16,6 +16,13 @@
 # line-independent, so the union of both sides is the right answer, and
 # `.gitattributes` says so.
 #
+# The union is the right answer for two runs writing different rows and the
+# wrong one for two attempts writing the same row, and an appending stage cannot
+# tell them apart: it filters against the file it checked out, and that checkout
+# is pinned to the commit its run was triggered at. So a recording job whose
+# ledgers declare a key names `DROP_REPEATED_ROWS_COMMAND`, which runs after the
+# rebase - on the merged file, the only place both sides have ever been at once.
+#
 # A job that REBUILDS its output rebuilds. A digest day is derived from origin's
 # tip plus this run's artifacts, so the answer to a stale base is a current
 # base - not a text merge of two derived files, which produces a payload no
@@ -32,8 +39,9 @@
 #   REGENERATE_COMMAND      optional: the producer that rebuilds them
 #   DROP_RACED_ASSETS_COMMAND optional: deletes this attempt's rendered assets
 #                           from the paths the tip already publishes
+#   DROP_REPEATED_ROWS_COMMAND optional: settles the keyed ledgers after a merge
 #
-# The last three are word-split on spaces, so no path and no argument may carry
+# The last four are word-split on spaces, so no path and no argument may carry
 # one. The first two are given together or not at all.
 set -euo pipefail
 
@@ -43,6 +51,7 @@ set -euo pipefail
 REFRESH_PATHS="${REFRESH_PATHS:-}"
 REGENERATE_COMMAND="${REGENERATE_COMMAND:-}"
 DROP_RACED_ASSETS_COMMAND="${DROP_RACED_ASSETS_COMMAND:-}"
+DROP_REPEATED_ROWS_COMMAND="${DROP_REPEATED_ROWS_COMMAND:-}"
 
 if [ "$#" -eq 0 ]; then
   echo "commit-and-push.sh needs at least one path to stage" >&2
@@ -70,12 +79,16 @@ fi
 REFRESH=()
 REGENERATE=()
 DROP_RACED=()
+DROP_REPEATED=()
 if [ -n "$REFRESH_PATHS" ]; then
   IFS=' ' read -r -a REFRESH <<< "$REFRESH_PATHS"
   IFS=' ' read -r -a REGENERATE <<< "$REGENERATE_COMMAND"
 fi
 if [ -n "$DROP_RACED_ASSETS_COMMAND" ]; then
   IFS=' ' read -r -a DROP_RACED <<< "$DROP_RACED_ASSETS_COMMAND"
+fi
+if [ -n "$DROP_REPEATED_ROWS_COMMAND" ]; then
+  IFS=' ' read -r -a DROP_REPEATED <<< "$DROP_REPEATED_ROWS_COMMAND"
 fi
 
 # The work is in a commit by the time the loop runs, so anything still in the
@@ -186,6 +199,24 @@ for attempt in 1 2 3; do
     echo "the rebase did not apply cleanly" >&2
     git rebase --abort || echo "the rebase could not be aborted" >&2
     break
+  fi
+  # The merge has just happened, and this is the only moment both sides of it
+  # exist in one file. A row this attempt appended because its checkout could
+  # not see the tip's copy is now sitting next to that copy, so it goes here or
+  # it never goes at all.
+  if [ "${#DROP_REPEATED[@]}" -gt 0 ]; then
+    if ! "${DROP_REPEATED[@]}"; then
+      echo "could not settle the ledgers after the merge" >&2
+      break
+    fi
+    if ! git add "$@"; then
+      echo "could not stage the settled ledgers" >&2
+      break
+    fi
+    if ! git commit --amend --no-edit --allow-empty; then
+      echo "could not fold the settled ledgers into the commit" >&2
+      break
+    fi
   fi
   [ "${#REFRESH[@]}" -gt 0 ] || continue
   # Keep the content, drop the commit: the producer is about to rewrite most of

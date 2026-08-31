@@ -168,12 +168,19 @@ test.describe('the failure ledger, over the committed projection', () => {
 			expect(keys.size).toBe(list.length);
 		}
 
-		// And the reason the index is needed rather than assumed: run and item
-		// together do repeat in this ledger.
-		const pairs = failedRows(rows, window, null).map((row) => `${row.run_id}-${row.item_id}`);
-		expect(new Set(pairs).size, 'run and item are unique here, so read this test again').toBeLessThan(
-			pairs.length
-		);
+		// And the reason the index is needed rather than assumed. Run and item
+		// together used to repeat in this projection, because two workflow runs
+		// computed one run id and the union merge kept both appends. That is
+		// fixed at the writer and the committed file was settled with it, so the
+		// pair no longer repeats here - which is exactly why the claim is proved
+		// against two rows built to collide rather than against today's data. A
+		// browser reads whatever is served, including a shard written before the
+		// fix.
+		const colliding = failedRows(rows, window, null).slice(0, 1);
+		expect(colliding.length, 'the projection holds no failed row to build on').toBe(1);
+		const twice = [colliding[0], { ...colliding[0] }];
+		expect(new Set(twice.map((row) => `${row.run_id}-${row.item_id}`)).size).toBe(1);
+		expect(new Set(twice.map((row, index) => failureRowKey(row, index))).size).toBe(2);
 	});
 
 	test('a window with no row at all is not a window with no failure', () => {
