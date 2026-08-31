@@ -479,9 +479,15 @@ test('stage medians come from item health, not the score ledger', async ({ page 
 	await expect(page.getByText('Time per item, by stage')).toBeVisible();
 	// The legend, not the axis: the largest median is printed in both places, so
 	// an unscoped match is ambiguous the moment one stage is the slowest.
-	await expect(page.locator('[data-stage="fetch"]')).toContainText('200 ms');
-	await expect(page.locator('[data-stage="extract"]')).toContainText('30 ms');
-	await expect(page.locator('[data-stage="summarize"]')).toContainText('700 ms');
+	await expect(page.locator('[data-readout="timings"] [data-readout-row="fetch"]')).toContainText(
+		'200 ms'
+	);
+	await expect(page.locator('[data-readout="timings"] [data-readout-row="extract"]')).toContainText(
+		'30 ms'
+	);
+	await expect(
+		page.locator('[data-readout="timings"] [data-readout-row="summarize"]')
+	).toContainText('700 ms');
 });
 
 test('the timing y axis is decades, and it crosses milliseconds to seconds', async ({ page }) => {
@@ -520,10 +526,10 @@ test('the timing legend is sorted by the newest day, tallest first', async ({ pa
 	// Colour is one signal and never the only one. Matching the legend order to
 	// the plot's vertical order makes position the second signal, for free.
 	const entries = await page
-		.locator('[data-timing="chart"] [data-stage]')
+		.locator('[data-timing="chart"] [data-readout-row]')
 		.evaluateAll((nodes) =>
 			nodes.map((node) => ({
-				stage: node.getAttribute('data-stage') ?? '',
+				stage: node.getAttribute('data-readout-row') ?? '',
 				text: node.textContent?.trim() ?? ''
 			}))
 		);
@@ -962,13 +968,13 @@ test('the candle reads out its day and every series at that column', async ({ pa
 
 	// One row per series drawn, read against write off one hover rather than two.
 	const rows = await readout
-		.locator('[data-series-readout]')
+		.locator('[data-readout-row]')
 		.evaluateAll((nodes) =>
-			nodes.map((node) => (node.getAttribute('data-series-readout') ?? '').trim())
+			nodes.map((node) => (node.getAttribute('data-readout-row') ?? '').trim())
 		);
 	expect(rows).toEqual(['read', 'write']);
 	for (const series of rows) {
-		await expect(readout.locator(`[data-series-readout="${series}"] dd`).last()).toHaveText(
+		await expect(readout.locator(`[data-readout-row="${series}"] dd`).last()).toHaveText(
 			/^[\d.]+ \([\d.]+-[\d.]+\)$/
 		);
 	}

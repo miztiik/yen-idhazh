@@ -270,6 +270,32 @@ export function readoutMarks(columns: readonly DayReadout[]): ReadoutMark[] {
 	}));
 }
 
+/** The plot insets an engine-drawn chart leaves around its categories. */
+export interface PlotGrid {
+	left: number;
+	right: number;
+}
+
+/** Where each category column sits, as a share of the whole element.
+ *
+ * A hand-written chart knows its own pixels, so its readout marks carry them.
+ * An engine-drawn one does not: the engine keeps its grid insets in pixels and
+ * the element is fluid, so the same column sits at a different share at every
+ * width. Recomputing the shares from the measured width is what keeps the
+ * column a pointer lands on and the column the strip prints the same one.
+ *
+ * A share rather than a pixel because `pointerReadout` scales a client x by the
+ * width it was given: hand it 1 and every mark is already a share.
+ */
+export function bandShares(count: number, width: number, grid: PlotGrid): number[] {
+	if (count <= 0 || width <= 0) return [];
+	const inner = Math.max(1, width - grid.left - grid.right);
+	return Array.from(
+		{ length: count },
+		(_, index) => (grid.left + ((index + 0.5) * inner) / count) / width
+	);
+}
+
 export interface ReadoutOptions {
 	marks: ReadoutMark[];
 	/** The width the chart drew at, so a client x can be scaled into chart
@@ -288,10 +314,13 @@ export interface ReadoutOptions {
  * accessible name, and nothing this action reports is needed to read the chart.
  *
  * The `<svg>` itself takes the focus, not its marks. A tab stop per point is a
- * trap on a plot that draws two and a half thousand of them.
+ * trap on a plot that draws two and a half thousand of them. An engine-drawn
+ * chart hands its wrapping element instead: the engine owns everything inside
+ * it and swaps the prerendered SVG out on hydration, so an action bound to the
+ * SVG would come away with the markup it was attached to.
  */
 export function pointerReadout(
-	node: SVGSVGElement,
+	node: SVGSVGElement | HTMLElement,
 	options: ReadoutOptions
 ): { update: (next: ReadoutOptions) => void; destroy: () => void } {
 	let current = options;
@@ -356,12 +385,21 @@ export function pointerReadout(
 		event.stopPropagation();
 	};
 
-	node.addEventListener('pointermove', track);
-	node.addEventListener('pointerdown', track);
-	node.addEventListener('pointerleave', leave);
-	node.addEventListener('focusin', enter);
-	node.addEventListener('focusout', away);
-	node.addEventListener('keydown', step);
+	// One list, attached and removed from the same entries, so the two halves
+	// cannot drift. The node is an `<svg>` on a hand-written chart and a `<div>`
+	// on an engine-drawn one; a union of two element types has two incompatible
+	// `addEventListener` overload sets, so the listeners go on the base
+	// interface both of them implement.
+	const events: EventTarget = node;
+	const bound: [string, EventListener][] = [
+		['pointermove', track as EventListener],
+		['pointerdown', track as EventListener],
+		['pointerleave', leave as EventListener],
+		['focusin', enter],
+		['focusout', away],
+		['keydown', step as EventListener]
+	];
+	for (const [type, handler] of bound) events.addEventListener(type, handler);
 
 	return {
 		update(next: ReadoutOptions) {
@@ -371,13 +409,7 @@ export function pointerReadout(
 			if (at !== null && at > next.marks.length - 1) select(null);
 		},
 		destroy() {
-			node.removeEventListener('pointermove', track);
-			node.removeEventListener('pointerdown', track);
-			node.removeEventListener('pointerleave', leave);
-			node.removeEventListener('focusin', enter);
-			node.removeEventListener('focusout', away);
-			node.removeEventListener('keydown', step);
+			for (const [type, handler] of bound) events.removeEventListener(type, handler);
 		}
 	};
 }
-

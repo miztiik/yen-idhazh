@@ -15,6 +15,7 @@ import {
 	type CostRate
 } from '$lib/charts/machine';
 import { defaultWindow } from '$lib/charts/viewport';
+import { recordingNotes } from '$lib/console/recording';
 import {
 	chartConfig,
 	consoleConfig,
@@ -117,6 +118,22 @@ export async function load() {
 	const inputPlot = tokenChart(tokens, (run) => run.input, 'prompt tokens', '--chart-1');
 	const outputPlot = tokenChart(tokens, (run) => run.output, 'written tokens', '--chart-4');
 
+	// What the recording itself was doing. Every panel below reads the model
+	// server's own counters, so a day the scrape never ran is a gap in the
+	// recording rather than a machine that did nothing - and the two states look
+	// identical on a chart unless the page says which one it is. The item ledger
+	// is the other instrument: a day it covers and the counters do not is the
+	// state most committed days are in.
+	const recording = recordingNotes({
+		enabled: observability.runtime_counters_scrape,
+		rate: observability.sample_rate,
+		recorded: [...new Set(runs.map((run) => run.date))].sort(),
+		window: [...new Set(inWindow(dates.map((date) => ({ date }))).map((row) => row.date))].sort(),
+		coveredElsewhere: [...new Set(healthRows.map((row) => row.date ?? ''))]
+			.filter((date) => date !== '')
+			.sort()
+	});
+
 	// Batching is one line of text and not a chart. It reads 1.0 on every row the
 	// ledger holds, because `models.inference.n_parallel` is 1, and it earns a
 	// chart the day that knob moves.
@@ -166,6 +183,7 @@ export async function load() {
 		// excludes one is a run count nobody can check.
 		refused: inWindow(counters.refused),
 		runsRead: runs.length,
+		recording,
 		split,
 		cacheDays,
 		cacheSvg: await draw(cache, chart.height_px),

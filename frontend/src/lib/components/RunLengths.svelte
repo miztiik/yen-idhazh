@@ -19,7 +19,17 @@
 	 *
 	 * Hand-written SVG, so the chart is complete before any script runs.
 	 */
-	import { chartWidth, frame, linearAxis, observeWidth, type Margin } from '$lib/charts/frame';
+	import {
+		chartWidth,
+		frame,
+		linearAxis,
+		observeWidth,
+		pointerReadout,
+		readoutMarks,
+		type DayReadout,
+		type Margin
+	} from '$lib/charts/frame';
+	import ChartReadout from './ChartReadout.svelte';
 	import { dayMonth } from '$lib/format';
 	import type { RunLength } from '../../routes/console/model/+page.server';
 
@@ -27,13 +37,16 @@
 		runs,
 		width,
 		height,
-		tickDensity
+		tickDensity,
+		readoutMaxShare = 0.33
 	}: {
 		/** Oldest first. The chart reads left to right. */
 		runs: RunLength[];
 		width: number;
 		height: number;
 		tickDensity: number;
+		/** `chart.readout_max_share`. */
+		readoutMaxShare?: number;
 	} = $props();
 
 	const MARGIN: Margin = { top: 12, right: 12, bottom: 40, left: 38 };
@@ -151,17 +164,56 @@
 			(ask === null ? '' : `The shaded band is the ${ask.low} to ${ask.high} words the articles were asked for. `) +
 			placed.map(({ run }) => sentence(run)).join(' ')
 	);
+
+	/** The column a pointer or an arrow key has picked. */
+	let selected = $state<number | null>(null);
+
+	/** Three marks a run, printed together. The whole point of the shape is that
+	 * the ends move while the middle does not, and reading three marks off one
+	 * column by eye against a shared y axis is what the strip removes. */
+	const columns = $derived<DayReadout[]>(
+		placed.map(({ run, x: at }) => ({
+			x: at,
+			date: `${run.runId} - ${run.items} ${run.items === 1 ? 'summary' : 'summaries'}`,
+			rows: [
+				{ label: 'Shortest', value: `${run.low} words`, colour: 'var(--chart-8)' },
+				{ label: 'Middle', value: `${run.median} words`, colour: 'var(--chart-8)' },
+				{ label: 'Longest', value: `${run.high} words`, colour: 'var(--chart-8)' },
+				{
+					label: 'Asked for',
+					value:
+						run.askLow === null || run.askHigh === null
+							? 'not recorded'
+							: `${run.askLow} to ${run.askHigh} words`,
+					colour: ''
+				}
+			]
+		}))
+	);
+	const marks = $derived(readoutMarks(columns));
+	/** The newest run, which is the one an operator came for. */
+	const resting = $derived(columns.length === 0 ? null : columns.length - 1);
+	const at = $derived(selected ?? resting);
+	const readout = $derived(at === null ? null : (columns[at] ?? null));
+	const guide = $derived(selected === null ? null : (columns[selected]?.x ?? null));
 </script>
 
 <div class="plot" data-run-lengths="chart" data-run-lengths-runs={runs.length}>
 	<div use:observeWidth={(next) => (measured = next)}>
+		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
 		<svg
-			class="block max-w-full"
+			class="block max-w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
 			width={box.width}
 			height={box.height}
 			viewBox={`0 0 ${box.width} ${box.height}`}
 			role="img"
+			tabindex="0"
 			aria-label={description}
+			use:pointerReadout={{
+				marks,
+				width: box.width,
+				onSelect: (index) => (selected = index)
+			}}
 		>
 			{#each yAxis.ticks as tick (tick)}
 				<line
@@ -212,6 +264,18 @@
 					<title>The model changed to {swap.model} on {swap.date}.</title>
 				</line>
 			{/each}
+
+			{#if guide !== null}
+				<line
+					x1={round(guide)}
+					x2={round(guide)}
+					y1={box.top}
+					y2={box.bottom}
+					stroke="var(--color-text-tertiary)"
+					stroke-opacity="0.5"
+					data-run-lengths="guide"
+				/>
+			{/if}
 
 			{#each placed as column (column.run.runId)}
 				<g
@@ -270,10 +334,20 @@
 		</svg>
 	</div>
 
+	<!-- Below the plot, never over it, and the same strip every chart on this
+	     console prints - see `ChartReadout.svelte` for the rules it holds. -->
+	<ChartReadout
+		{readout}
+		name="run-lengths"
+		maxShare={readoutMaxShare}
+		resting={selected === null}
+		restingNote=", the newest run"
+		hint="Point at a run to read all three marks. Left and Right step through the runs, Escape returns to the newest."
+	/>
+
 	<!-- The band's own numbers. A shaded region nobody can read a bound off is a
 	     decoration, and this one is a setting somebody chose. -->
-	{#if ask}
-		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-run-ask>
+	{#if ask}		<p class="mt-2 text-[0.75rem] text-text-tertiary" data-run-ask>
 			<span class="band-key" aria-hidden="true"></span>
 			We ask for between <span data-run-ask-low>{ask.low}</span> and
 			<span data-run-ask-high>{ask.high}</span> words. Which end depends on how long the article

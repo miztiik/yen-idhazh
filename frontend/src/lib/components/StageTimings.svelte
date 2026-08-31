@@ -54,10 +54,10 @@
 		MARGIN,
 		observeWidth,
 		pointerReadout,
-		readoutCapStyle,
 		readoutMarks,
 		type DayReadout
 	} from '$lib/charts/frame';
+	import ChartReadout from './ChartReadout.svelte';
 	import { shortDate } from '$lib/format';
 	import type { StageTiming, StageTimingDay } from '$lib/charts/series';
 	import { daysInWindow, type TimeWindow } from '$lib/charts/viewport';
@@ -439,32 +439,16 @@
 			</svg>
 		</div>
 
-		{#if readout}
-			<!-- Below the plot, never over it. A strip here cannot cover a mark at
-			     any width, and it is the legend as well, so the four numbers a
-			     reader compares are printed once. -->
-			<dl
-				class="mt-3 text-[0.75rem] text-text-tertiary"
-				style={readoutCapStyle(readoutMaxShare)}
-				data-readout="timings"
-				aria-live="polite"
-			>
-				<dt class="font-semibold text-text-secondary" data-readout-day>
-					{readout.date}{selected === null ? ', the newest day we timed' : ''}
-				</dt>
-				{#each readout.rows as row (row.label)}
-					<div class="mt-1 flex items-center gap-2" data-stage={row.label}>
-						<span class="size-3 shrink-0 rounded-sm" style="background: {row.colour}"></span>
-						<dd class="grow">{row.label}</dd>
-						<dd class="tabular-nums text-text-secondary">{row.value}</dd>
-					</div>
-				{/each}
-			</dl>
-			<p class="mt-2 text-[0.75rem] text-text-tertiary" data-readout-hint="timings">
-				Point at a day to read it. Left and Right step through the days, Escape returns to the
-				newest.
-			</p>
-		{/if}
+		<!-- Below the plot, never over it, and the same strip every chart on this
+		     console prints - see `ChartReadout.svelte` for the rules it holds. -->
+		<ChartReadout
+			{readout}
+			name="timings"
+			maxShare={readoutMaxShare}
+			resting={selected === null}
+			restingNote=", the newest day we timed"
+			hint="Point at a day to read it. Left and Right step through the days, Escape returns to the newest."
+		/>
 		{#each notes as note (note.stage.key)}
 			<p class="mt-1 text-[0.75rem] text-text-tertiary" data-timing-note={note.stage.label}>
 				{#if note.blank > 0}
