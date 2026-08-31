@@ -82,7 +82,7 @@ test.describe('the icon set', () => {
 		const offenders = sourceFiles()
 			.filter((path) => !path.includes(join('lib', 'icons')))
 			.filter((path) => !path.includes(join('lib', 'charts')))
-			.filter((path) => !/Scatter|Timings|Trend|Panels|Viewport/.test(path))
+			.filter((path) => !/Scatter|Timings|Trend|Panels|Viewport|Histogram/.test(path))
 			.filter((path) => /<path\s/.test(readFileSync(path, 'utf8')));
 		expect(offenders).toEqual([]);
 	});

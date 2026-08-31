@@ -19,8 +19,11 @@
  *
  * Imports nothing at runtime: the browser suite loads this module in plain
  * Node, where no Vite alias resolves, and it reads the same ledgers the page
- * reads.
+ * reads. The one import below is a type, which the compiler erases, and it is
+ * written relative for the same reason.
  */
+
+import type { SummaryBand } from './config';
 
 /** The ledger stamp from which `truncation_flagged` means extract cut the body.
  *
@@ -536,4 +539,393 @@ function windowStart(end: string, days: number): string {
 	const at = new Date(`${end}T00:00:00Z`);
 	at.setUTCDate(at.getUTCDate() - (days - 1));
 	return at.toISOString().slice(0, 10);
+}
+
+/** A span of days, named once and passed to every panel that draws it.
+ *
+ * The page decides where a window starts and ends - one control, one answer -
+ * and a panel is handed the answer rather than working it out again. Two
+ * panels on one screen deriving the same span two ways is how they start
+ * disagreeing about which days they drew.
+ */
+export interface DayWindow {
+	start: string;
+	end: string;
+	days: number;
+}
+
+function within(rows: Record<string, string>[], window: DayWindow): Record<string, string>[] {
+	return rows.filter((row) => {
+		const date = row.date ?? '';
+		return date >= window.start && date <= window.end;
+	});
+}
+
+function quantile(sorted: number[], fraction: number): number {
+	if (sorted.length === 1) return sorted[0];
+	const position = (sorted.length - 1) * fraction;
+	const low = Math.floor(position);
+	const high = Math.ceil(position);
+	return sorted[low] + (sorted[high] - sorted[low]) * (position - low);
+}
+
+/** One bar of the write-time histogram.
+ *
+ * `from` and `to` are whole seconds and `from` is zero on the first bar, which
+ * is the one holding everything under a second. The edges double, so a bar is
+ * one doubling wide wherever it sits on the axis - which is what lets a
+ * distribution running from a third of a second to twelve minutes be read at
+ * all.
+ */
+export interface WriteBin {
+	/** Lower edge, whole seconds. Zero means "under one second". */
+	from: number;
+	/** Upper edge, whole seconds. The bar holds `from <= t < to`. */
+	to: number;
+	n: number;
+	/** Every article written in `to` seconds or less, as whole percent. */
+	throughPct: number;
+}
+
+/** How long one summary took, over every article the runtime timed in a window.
+ *
+ * The median and the 95th are taken over the values themselves and never off
+ * the bars: a percentile read out of a bin is a guess at where inside the bin
+ * it fell, and the two rules on this chart are the figures somebody quotes.
+ *
+ * One entry per timed attempt, not per article - the same rows the `Time to
+ * write one` card takes its median over. A re-run really did spend the time
+ * again, and a chart of what the machine spent that counts a second attempt
+ * once would not add up to the model minutes printed beside it.
+ */
+export interface WriteTimes {
+	bins: WriteBin[];
+	/** Articles behind the chart. The denominator for every bar. */
+	n: number;
+	/** Milliseconds. */
+	median: number;
+	p95: number;
+	slowest: number;
+	fastest: number;
+	/** The days the window covers, and the days in it that timed anything. */
+	days: number;
+	timedDays: number;
+	start: string;
+	end: string;
+}
+
+/** The bars, the two rules and the counts behind them, or null for a window the
+ * runtime timed nothing in.
+ *
+ * Null is the empty state and it is not a chart of zeroes. A window with no
+ * timing did not run fast; nothing measured it.
+ */
+export function writeTimes(
+	health: Record<string, string>[],
+	window: DayWindow
+): WriteTimes | null {
+	const rows = within(health, window);
+	const values = summarizeMs(rows).sort((a, b) => a - b);
+	if (values.length === 0) return null;
+
+	// The first edge is one second, so every label on the axis is a whole
+	// number. Everything below it shares one bar, labelled the way the console
+	// spells a measurement that rounds away.
+	const top = Math.max(1, values[values.length - 1] / 1000);
+	const edges = [0, 1];
+	while (edges[edges.length - 1] <= top) edges.push(edges[edges.length - 1] * 2);
+
+	const bins: WriteBin[] = [];
+	let through = 0;
+	for (let index = 0; index < edges.length - 1; index += 1) {
+		const from = edges[index];
+		const to = edges[index + 1];
+		const n = values.filter((ms) => ms / 1000 >= from && ms / 1000 < to).length;
+		through += n;
+		bins.push({ from, to, n, throughPct: Math.round((through / values.length) * 100) });
+	}
+
+	// Leading and trailing empty bars are axis, not data. A gap between two
+	// occupied bars stays: it is the distribution saying nothing landed there.
+	const first = bins.findIndex((bin) => bin.n > 0);
+	const last = bins.length - 1 - [...bins].reverse().findIndex((bin) => bin.n > 0);
+
+	return {
+		bins: bins.slice(first, last + 1),
+		n: values.length,
+		median: quantile(values, 0.5),
+		p95: quantile(values, 0.95),
+		slowest: values[values.length - 1],
+		fastest: values[0],
+		days: window.days,
+		timedDays: new Set(
+			rows.filter((row) => (measured(row.summarize_ms) ?? 0) > 0).map((row) => row.date ?? '')
+		).size,
+		start: window.start,
+		end: window.end
+	};
+}
+
+/** What scoring one summary cost, after the summary was written.
+ *
+ * It is not a stage of the run. The scorer reads a summary the model has
+ * already finished, so nothing waits on it - which is why it is here and not
+ * beside fetch, extract and summarize, where a fourth bar read as a fourth
+ * constraint.
+ */
+export interface ScoreCost {
+	/** Summaries the scorer timed. */
+	n: number;
+	/** Milliseconds. */
+	median: number;
+	p95: number;
+	/** Rows carrying the zero the column defaulted to before it was written.
+	 *
+	 * Not a measurement of no time: they are rows the scorer never timed, and
+	 * they are left out of the figures rather than counted as instant.
+	 */
+	untimed: number;
+	days: number;
+	start: string;
+	end: string;
+}
+
+export function scoreCost(
+	scores: Record<string, string>[],
+	window: DayWindow
+): ScoreCost | null {
+	const cells = within(scores, window).map((row) => measured(row.score_ms));
+	const values = cells.filter((ms): ms is number => ms !== null && ms > 0).sort((a, b) => a - b);
+	if (values.length === 0) return null;
+	return {
+		n: values.length,
+		median: quantile(values, 0.5),
+		p95: quantile(values, 0.95),
+		untimed: cells.length - values.length,
+		days: window.days,
+		start: window.start,
+		end: window.end
+	};
+}
+
+/** The band the summarizer was asked to write to, for an article of this length.
+ *
+ * The highest band the article clears, which is how `backend/idhazh/summarize.py`
+ * picks it. A length nothing covers has no ask, and null says so.
+ */
+function askFor(bands: readonly SummaryBand[], sourceWords: number): SummaryBand | null {
+	let found: SummaryBand | null = null;
+	for (const band of [...bands].sort((a, b) => a.min_source_words - b.min_source_words)) {
+		if (sourceWords >= band.min_source_words) found = band;
+	}
+	return found;
+}
+
+/** How long one run's summaries came out, in three numbers and never in one
+ * mark per article.
+ *
+ * A mark per article draws its dense middle as a solid block, and the marks
+ * that block hides are the only ones anybody acts on - a summary of three
+ * words, or one twice the length that was asked for. Three marks a run keep
+ * both ends and lose the block.
+ */
+export interface RunLength {
+	runId: string;
+	date: string;
+	/** What wrote the run, where the ledger names one. */
+	model: string | null;
+	/** Summaries behind the three marks. */
+	items: number;
+	/** Summary length, words. */
+	low: number;
+	median: number;
+	high: number;
+	/** The narrowest and widest the run's own articles were asked for, read
+	 * through each article's own length. Null where no article in the run
+	 * recorded one. */
+	askLow: number | null;
+	askHigh: number | null;
+}
+
+/** One entry per run the score ledger holds a summary for, oldest first. */
+export function runLengths(
+	scores: Record<string, string>[],
+	bands: readonly SummaryBand[]
+): RunLength[] {
+	const byRun = new Map<string, Record<string, string>[]>();
+	for (const row of scores) {
+		const runId = row.run_id ?? '';
+		if (runId === '') continue;
+		byRun.set(runId, [...(byRun.get(runId) ?? []), row]);
+	}
+
+	const found: RunLength[] = [];
+	for (const [runId, rows] of byRun) {
+		const words = rows
+			.map((row) => measured(row.summary_word_count))
+			.filter((count): count is number => count !== null)
+			.sort((a, b) => a - b);
+		if (words.length === 0) continue;
+		const asks = rows
+			.map((row) => measured(row.source_word_count) ?? measured(row.source_seen_word_count))
+			.filter((count): count is number => count !== null)
+			.map((count) => askFor(bands, count))
+			.filter((band): band is SummaryBand => band !== null);
+		const models = [...new Set(rows.map((row) => row.model_id ?? '').filter((id) => id !== ''))];
+		found.push({
+			runId,
+			date: rows[0].date ?? '',
+			model: models.length === 0 ? null : models.sort().join(', '),
+			items: words.length,
+			low: words[0],
+			median: Math.round(quantile(words, 0.5)),
+			high: words[words.length - 1],
+			askLow: asks.length === 0 ? null : Math.min(...asks.map((band) => band.target_words_min)),
+			askHigh: asks.length === 0 ? null : Math.max(...asks.map((band) => band.target_words_max))
+		});
+	}
+	return found.sort((a, b) => a.runId.localeCompare(b.runId));
+}
+
+/** One measure, on each side of the day the model changed.
+ *
+ * `ratio` is the after over the before, so 1 is no change. It is the only thing
+ * the seven rows can share an axis on: a median in seconds, a length in words
+ * and a count in a hundred summaries have no common scale, and the question is
+ * the same for all seven - did it move, and which way.
+ */
+export interface SwapMeasure {
+	label: string;
+	unit: 'seconds' | 'words' | 'percent' | 'per-hundred';
+	before: number;
+	after: number;
+	/** After over before. Null where the before side is zero, because a move
+	 * away from nothing has no size. */
+	ratio: number | null;
+}
+
+/** The newest day the model changed, and what each side measured.
+ *
+ * Two models over two article sets is two measurements and not a trend, so both
+ * article counts print and the panel refuses to draw at all where either side
+ * is thin. The days on each side are the days the ledger holds, not a window:
+ * a swap is a point in time and its two sides are however much ran on each
+ * model.
+ */
+export interface ModelSwap {
+	/** The first day the newer model ran. */
+	at: string;
+	before: { model: string; articles: number; from: string; to: string };
+	after: { model: string; articles: number; from: string; to: string };
+	measures: SwapMeasure[];
+	/** False where either side holds fewer articles than the floor. The panel
+	 * then prints both counts and draws nothing. */
+	enough: boolean;
+}
+
+function share(rows: Record<string, string>[], of: (row: Record<string, string>) => boolean): number {
+	return rows.length === 0 ? 0 : (rows.filter(of).length / rows.length) * 100;
+}
+
+function sideMeasures(
+	scores: Record<string, string>[],
+	health: Record<string, string>[],
+	bands: readonly SummaryBand[]
+): { label: string; unit: SwapMeasure['unit']; value: number }[] {
+	const times = summarizeMs(health).sort((a, b) => a - b);
+	const words = scores
+		.map((row) => measured(row.summary_word_count))
+		.filter((count): count is number => count !== null)
+		.sort((a, b) => a - b);
+	const copies = scores.map(copied).sort((a, b) => a - b);
+	const outside = scores.filter((row) => {
+		const wrote = measured(row.summary_word_count);
+		const read = measured(row.source_word_count) ?? measured(row.source_seen_word_count);
+		if (wrote === null || read === null) return false;
+		const ask = askFor(bands, read);
+		return ask !== null && (wrote < ask.target_words_min || wrote > ask.target_words_max);
+	});
+	return [
+		{
+			label: 'Time to write one',
+			unit: 'seconds',
+			value: times.length === 0 ? 0 : quantile(times, 0.5) / 1000
+		},
+		{
+			label: 'Summary length',
+			unit: 'words',
+			value: words.length === 0 ? 0 : quantile(words, 0.5)
+		},
+		{
+			label: 'Copied, not rewritten',
+			unit: 'percent',
+			value: copies.length === 0 ? 0 : quantile(copies, 0.5) * 100
+		},
+		{ label: 'Marked "not sure"', unit: 'per-hundred', value: share(scores, (row) => row.band === 'low') },
+		{
+			label: 'Numbers not in the article',
+			unit: 'per-hundred',
+			value: share(scores, (row) => (measured(row.unsupported_numbers) ?? 0) > 0)
+		},
+		{
+			label: '"Maybe" told as fact',
+			unit: 'per-hundred',
+			value: share(scores, (row) => flag(row.hedge_dropped))
+		},
+		{
+			label: 'Outside the length we asked for',
+			unit: 'per-hundred',
+			value: scores.length === 0 ? 0 : (outside.length / scores.length) * 100
+		}
+	];
+}
+
+export function modelSwap(
+	scores: Record<string, string>[],
+	health: Record<string, string>[],
+	bands: readonly SummaryBand[],
+	minArticles: number
+): ModelSwap | null {
+	const onDate = modelByDate(scores);
+	const dates = [...onDate.keys()].sort();
+	let at = '';
+	for (let index = 1; index < dates.length; index += 1) {
+		if (onDate.get(dates[index]) !== onDate.get(dates[index - 1])) at = dates[index];
+	}
+	if (at === '') return null;
+
+	const older = dates.filter((date) => date < at);
+	const newer = dates.filter((date) => date >= at);
+	const beforeDates = new Set(older);
+	const afterDates = new Set(newer);
+	const beforeScores = scores.filter((row) => beforeDates.has(row.date ?? ''));
+	const afterScores = scores.filter((row) => afterDates.has(row.date ?? ''));
+	const beforeHealth = health.filter((row) => beforeDates.has(row.date ?? ''));
+	const afterHealth = health.filter((row) => afterDates.has(row.date ?? ''));
+
+	const left = sideMeasures(beforeScores, beforeHealth, bands);
+	const right = sideMeasures(afterScores, afterHealth, bands);
+	return {
+		at,
+		before: {
+			model: onDate.get(older[older.length - 1]) ?? '',
+			articles: beforeScores.length,
+			from: older[0],
+			to: older[older.length - 1]
+		},
+		after: {
+			model: onDate.get(newer[newer.length - 1]) ?? '',
+			articles: afterScores.length,
+			from: newer[0],
+			to: newer[newer.length - 1]
+		},
+		measures: left.map((measure, index) => ({
+			label: measure.label,
+			unit: measure.unit,
+			before: measure.value,
+			after: right[index].value,
+			ratio: measure.value === 0 ? null : right[index].value / measure.value
+		})),
+		enough: beforeScores.length >= minArticles && afterScores.length >= minArticles
+	};
 }

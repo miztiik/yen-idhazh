@@ -12,13 +12,17 @@
 	 */
 	import { onMount } from 'svelte';
 	import { windowOfDays } from '$lib/charts/viewport';
+	import { grouped } from '$lib/charts/series';
 	import { sparklineMarks, type SparklineMarks } from '$lib/charts/sparkline';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
+	import RunLengths from '$lib/components/RunLengths.svelte';
 	import Sparkline from '$lib/components/Sparkline.svelte';
+	import SwapDots from '$lib/components/SwapDots.svelte';
 	import ThroughputTrend from '$lib/components/ThroughputTrend.svelte';
 	import WindowControl from '$lib/components/WindowControl.svelte';
+	import WriteTimeHistogram from '$lib/components/WriteTimeHistogram.svelte';
 	import { base } from '$app/paths';
 	import type { ModelDay } from './+page.server';
 
@@ -258,6 +262,29 @@
 			trend: trendFor(cell.key)
 		}));
 	});
+
+	/** The span every panel below the cards draws, decided once on the server for
+	 * each span the control offers. A percentile has to be taken over the values
+	 * themselves, so the browser picks the answer for the open window rather than
+	 * recomputing one off the bars. */
+	const span = $derived(data.windows[String(windowDays)] ?? null);
+	const writeTimes = $derived(data.writeTimes[String(windowDays)] ?? null);
+	const scoreCost = $derived(data.scoreCost[String(windowDays)] ?? null);
+
+	/** The runs inside the open window, oldest first. Each is already three
+	 * numbers, so the window is a filter and never a re-aggregation. */
+	const runsInWindow = $derived(
+		span === null
+			? []
+			: data.runLengths.filter((run) => run.date >= span.start && run.date <= span.end)
+	);
+
+	/** Whole seconds off a millisecond clock, and `<1 s` where a real
+	 * measurement rounds away. */
+	function asSeconds(ms: number): string {
+		const value = Math.round(ms / 1000);
+		return value === 0 && ms > 0 ? '<1 s' : `${value} s`;
+	}
 </script>
 
 <svelte:head>
@@ -403,5 +430,101 @@
 				</details>
 			{/if}
 		</div>
+
+		<!-- What one item cost, as a distribution. A median answers "how long does
+		     one take" and refuses "how bad does it get", and the second decides
+		     whether a shard fits its timeout. -->
+		<div data-model-cost>
+			<h2 class="console-h2">What one summary cost</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-cost-intro>
+				Each bar is a doubling of the clock. Read the tall bars for where the work sits, and the
+				curve for how much of the day is finished by a given time.
+			</p>
+
+			{#if writeTimes === null}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-write-times="empty">
+					Nothing was timed in these {windowDays} days.
+				</p>
+			{:else}
+				<WriteTimeHistogram
+					times={writeTimes}
+					width={data.console.chart_width}
+					height={data.console.chart_height}
+				/>
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-write-times="readout">
+					Over {grouped(writeTimes.n)} summaries on {writeTimes.timedDays} of these {windowDays} days.
+					The fastest took {asSeconds(writeTimes.fastest)} and the slowest {asSeconds(
+						writeTimes.slowest
+					)}.
+				</p>
+			{/if}
+
+			<!-- Scoring runs after the summary is written, so nothing waits on it.
+			     It sat beside fetch, extract and summarize until 2026-08-31, where a
+			     fourth bar on a critical-path chart read as a fourth constraint. -->
+			{#if scoreCost === null}
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="empty">
+					Nothing scored a summary in these {windowDays} days.
+				</p>
+			{:else}
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-score-cost="readout">
+					Checking a summary afterwards took a middle of
+					<span data-score-cost="median">{asSeconds(scoreCost.median)}</span>, and
+					<span data-score-cost="p95">{asSeconds(scoreCost.p95)}</span> at the slowest one in
+					twenty, over {grouped(scoreCost.n)} summaries in these {windowDays} days. It runs after
+					the model has finished, so the run never waits on it.
+				</p>
+			{/if}
+		</div>
+
+		<!-- Three marks a run, never one a summary. -->
+		<div data-model-lengths>
+			<h2 class="console-h2">How long the summaries came out</h2>
+			<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-lengths-intro>
+				One column is one run: its shortest summary, its middle one and its longest. Read the
+				ends against the shaded band - the middle of a run is rarely the problem.
+			</p>
+
+			{#if runsInWindow.length === 0}
+				<p class="mt-2 text-[0.9375rem] text-text-secondary" data-run-lengths="empty">
+					No run wrote a summary in these {windowDays} days.
+				</p>
+			{:else}
+				<RunLengths
+					runs={runsInWindow}
+					width={data.console.chart_width}
+					height={data.console.chart_height}
+					tickDensity={data.chart.tick_density}
+				/>
+			{/if}
+		</div>
+
+		<!-- Two models over two article sets is two measurements, not a trend. Both
+		     counts print and the panel refuses to draw where either side is thin. -->
+		{#if data.modelSwap !== null}
+			<div data-model-swap-section>
+				<h2 class="console-h2">Did the model change move anything</h2>
+				<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-model-swap-intro>
+					Every measure is drawn against its own value on the old model, so the dot on the rule
+					is the old model and the arrow points to where the new one landed. Different articles
+					ran on each, so a move is a difference and not yet a cause.
+				</p>
+				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-model-swap-counts>
+					{data.modelSwap.before.model} wrote {grouped(data.modelSwap.before.articles)} summaries to
+					{data.modelSwap.before.to}. {data.modelSwap.after.model} has written {grouped(
+						data.modelSwap.after.articles
+					)} since {data.modelSwap.at}.
+				</p>
+
+				{#if data.modelSwap.enough}
+					<SwapDots swap={data.modelSwap} width={data.console.chart_width} />
+				{:else}
+					<p class="mt-2 text-[0.9375rem] text-text-secondary" data-model-swap="thin">
+						One side of the change holds fewer than {data.console.min_attempts_for_rate}
+						summaries, so nothing is drawn. The two counts above are the whole answer.
+					</p>
+				{/if}
+			</div>
+		{/if}
 	{/if}
 </section>
