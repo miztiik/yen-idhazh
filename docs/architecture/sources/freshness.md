@@ -187,7 +187,7 @@ A collision - two addresses landing on the same ten digits - is rare and is a co
 
 ## What sizes a run
 
-There is no daily item cap and no per-vertical cap. What a day publishes is what survives the score and `max_per_source` (2), which stops one prolific outlet filling a vertical.
+There is no daily item cap and no per-vertical cap. What a day publishes is what survives the score, `max_per_source` (2), which stops one prolific outlet filling a vertical in one run, and `max_source_share_per_day` (0.05), which stops one filling the day.
 
 **`run.safety_ceiling_per_run` (160) is what sizes a run, and saying otherwise
 was wrong.** This page used to call it a crash guard that a normal day was
@@ -210,6 +210,51 @@ What still bounds the number from above is the worst case the `work` and `route`
 jobs both have to finish ([../../concepts/config.md](../../concepts/config.md)).
 What it is *for* has changed, and this paragraph is the record of that change
 rather than a quiet re-derivation.
+
+## How much of a day one publication may be
+
+`max_per_source` counts a desk in a run. A feed is configured against exactly
+one vertical, so a feed's ceiling for a whole day is that count times the runs
+the day had - two per run, five runs, ten items - and until 2026-08-31 nothing
+counted it and nothing turned it into a share.
+
+**A fixed count is a moving share, and that is the whole reason for the second
+knob.** Measured 2026-08-31 over the eleven committed days:
+
+| Day | Items | Heaviest feed | Its share |
+| --- | --- | --- | --- |
+| 2026-08-30 | 431 | 10 (21 feeds tied) | 2.32 percent |
+| 2026-08-29 | 366 | 8 (7 feeds tied) | 2.19 percent |
+| 2026-08-24 | 731 | 10 | 1.37 percent |
+| 2026-08-22 | 10 | 2 | 20.0 percent |
+| 2026-08-21 | 4 | 1 | 25.0 percent |
+
+The count is the same rule on every row: it is the days that move. Ten items is
+a rounding error on a 431-item day and a quarter of a four-item one, so the
+number that needs bounding is the share.
+
+`collect.max_source_share_per_day` is that bound. The plan job turns it into a
+count once per run - the items today's earlier runs published, plus the items
+this run's own first pass planned, times the share - and then re-plans against
+it. It never goes below `max_per_source`: a day ceiling under that would tighten
+what one desk may take in one run, which is a decision about a desk rather than
+about a day, and it was refused because it starves a desk where one publication
+is genuinely the best source while still not bounding the day.
+
+**A capped story is displaced, never deleted.** The slot goes to the best
+candidate `max_per_source` was already holding down on the same desk. Where the
+desk has nothing held down, the story comes back and the feed keeps its place -
+a shorter day is the one thing this may not buy, because a reader can see a
+summary that is wrong and cannot see a story that never ran.
+
+**The shipped value of 0.05 displaces nothing that has ever been published**,
+and that is deliberate. It is above the largest full-day share ever measured by
+a factor of 2.2, so it is a bound on the thin day rather than a change to the
+busy one. Any value tight enough to bind on 2026-08-30 would have displaced 126
+of its 431 items, and the runs of that day planned 106, 99, 93, 88 and 79 items
+against a 160 ceiling - so there was no reserve to repay them with. Setting the
+number lower is the owner's call and needs a run measured at it first
+(Rule #10).
 
 ## Design rationale
 
