@@ -9,8 +9,8 @@ import type { DigestItem } from '../src/lib/payload/types';
  *
  * The reading routes load a day in two halves - the facts that do not grow with
  * the number of stories, and the stories themselves split at
- * `ui.shell_seed_items`. The day route still puts them back together; the topic
- * routes keep the head and fetch the rest. So the seam owes two things.
+ * `ui.shell_seed_items`. The home page still puts them back together; the dated
+ * routes keep a seed and fetch the rest. So the seam owes two things.
  *
  * Put back together it must change nothing: the day a route renders is the day
  * the loader read, key order and all. Key order is asserted rather than deep

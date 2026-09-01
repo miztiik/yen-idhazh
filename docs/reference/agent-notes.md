@@ -1473,6 +1473,31 @@ the variable protects the shell you remember to set it in and nothing else.
   await Promise.all([page.waitForURL('**/archive/'), locator.click()]);
   ```
 
+- **The page opens with a viewport of zero height, so every "is it on screen"
+  check answers no.** `window.innerHeight` is 0 on a freshly opened page, which
+  makes `rect.top < window.innerHeight` false for an element sitting exactly
+  where it should - and makes the maximum scroll position equal the whole
+  document height, so `window.scrollY` reads like the page ran to the bottom.
+  Measured 2026-09-01 while proving a deep link: the story was found and
+  focused, `scrollY` read 281,307 of a 281,306 px document, and every story
+  measured between 10,000 and 31,000 px tall. All three are the same zero. Set a
+  viewport before measuring anything geometric, and print `window.innerHeight`
+  beside the assertion so a repeat is obvious:
+
+  ```js
+  await page.setViewportSize({ width: 1280, height: 900 });
+  ```
+
+- **A `page.route()` written as a glob can intercept nothing and say nothing.**
+  On 2026-09-01 `page.route('**/digest/**/digest.json', ...)` counted zero
+  aborts against `http://127.0.0.1:4361/digest/2026/08/24/digest.json` while the
+  page sat in its loading state - so the arm neither blocked the request nor let
+  it through, and the count was the only thing that said so. The same handler
+  written as `page.route(/digest\/\d{4}\/\d{2}\/\d{2}\/digest\.json/, ...)`
+  counted one on the same page and the same URL. Prefer a RegExp for an abort
+  arm, and print the count: an arm that intercepted zero requests is a null
+  result, not a pass.
+
 ## Serving a build to measure it
 
 - **`python -m http.server` serves `.js` with the Windows registry MIME type**,
