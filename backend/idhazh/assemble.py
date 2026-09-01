@@ -17,18 +17,21 @@ import logging
 import math
 import tempfile
 from array import array
-from collections.abc import Sequence
-from datetime import UTC, datetime
+from collections.abc import Mapping, Sequence
+from dataclasses import dataclass
+from datetime import UTC, datetime, timedelta
+from datetime import date as date_type
 from operator import mul
 from pathlib import Path
 from typing import Final, Literal
 
-from idhazh.contracts.app_config import AssembleConfig
+from idhazh.contracts.app_config import AssembleConfig, UiConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import (
     DigestDay,
     DigestEmbeddings,
     DigestItem,
+    DigestLead,
     DigestRunRef,
     DigestVerticalRef,
     DigestVisual,
@@ -44,11 +47,12 @@ from idhazh.contracts.run_manifest import (
     RunStatus,
     VerticalCount,
 )
-from idhazh.contracts.run_plan import PlannedItem, RunPlan
+from idhazh.contracts.run_plan import PlannedItem, RunPlan, TimeSource
 from idhazh.contracts.search_index import SearchIndex, SearchIndexEntry
 from idhazh.contracts.sources import SourceForm, Sources
 from idhazh.contracts.summary import Summary, SummaryStatus
-from idhazh.contracts.taxonomy import SourceKind, Taxonomy
+from idhazh.contracts.taxonomy import LifecycleStatus, SourceKind, Taxonomy
+from idhazh.contracts.watchlist import Watchlist
 from idhazh.embed import (
     DIMENSIONS,
     DTYPE,
@@ -58,6 +62,7 @@ from idhazh.embed import (
     text_for,
     to_base64,
 )
+from idhazh.tag import tags
 
 LOG: Final = logging.getLogger("idhazh")
 
@@ -462,6 +467,394 @@ def month_of(date: str) -> str:
     return date[:7]
 
 
+# --- the day's leading stories ----------------------------------------------
+#
+# Five stories at the top of the day, chosen across the whole day rather than
+# off the head of the published order - that head is the top of whichever desk
+# sorted first in run 1, which is an accident and not an edit.
+#
+# Nothing here removes, hides or re-ranks a story. Every lead is still in
+# `items` in the published order, and every story a cap excluded still
+# publishes in the stream. The block is a way in, and the arithmetic behind it
+# is in docs/architecture/sources/discovery.md.
+
+#: Small counts read as words in a sentence a person reads. Past this the
+#: numeral is plainer, which is what ASD-STE100 asks for.
+_COUNT_WORDS: Final = (
+    "",
+    "one",
+    "two",
+    "three",
+    "four",
+    "five",
+    "six",
+    "seven",
+    "eight",
+    "nine",
+    "ten",
+    "eleven",
+    "twelve",
+)
+
+_SUBJECT_LINE: Final = "{count} of today's stories are about {subject}."
+_WATCHLIST_LINE: Final = "{subject} is on our watchlist."
+_CARRIED_LINE: Final = "The same report reached us through {count} of our feeds."
+_DESK_LINE: Final = "The lead story on our {desk} desk."
+
+#: The band a lead may hold, best first. `low` never leads.
+_LEAD_BANDS: Final = (ConfidenceBand.HIGH, ConfidenceBand.MEDIUM)
+
+
+def _spelled(count: int) -> str:
+    return _COUNT_WORDS[count] if 1 <= count < len(_COUNT_WORDS) else str(count)
+
+
+@dataclass(frozen=True, slots=True)
+class SubjectCluster:
+    """Every story of one day whose published title names one registry entity.
+
+    `sources` counts one story per source per entity, so a publication that
+    filed four pieces on a subject is one source and not four.
+    """
+
+    entity: str
+    display_name: str
+    item_ids: tuple[str, ...]
+    sources: frozenset[str]
+    holds_reporting: bool
+
+    def qualifies(self, floor: int) -> bool:
+        """Whether this cluster is evidence rather than a coincidence.
+
+        Two rules, and the second is the one that matters. Below the floor the
+        sources are too few to say a subject is running. And a cluster with no
+        reporting in it is a set of announcements about one company, which is a
+        press schedule and not a story.
+        """
+        return len(self.sources) >= floor and self.holds_reporting
+
+
+def subject_clusters(items: Sequence[DigestItem], watchlist: Watchlist) -> list[SubjectCluster]:
+    """The day's shared subjects, matched on our own published titles.
+
+    The title, never the body and never fetched text: the matcher reads words
+    we wrote and may only emit a slug the committed registry already holds, so
+    a hostile page can win a tag we already publish and can never mint one
+    (Rule #11).
+
+    The title alone, and not the summary, because a lead is a claim about what
+    the story is about rather than about what our paragraph happened to
+    mention. It costs coverage and the number is recorded in the row's own
+    measurements.
+    """
+    terms = watchlist.entity_terms()
+    names = {
+        entity.id: entity.display_name
+        for entity in watchlist.entities
+        if entity.status is not LifecycleStatus.RETIRED
+    }
+    members: dict[str, list[DigestItem]] = {}
+    for item in items:
+        for entity in tags(terms, item.title):
+            members.setdefault(entity, []).append(item)
+    return [
+        SubjectCluster(
+            entity=entity,
+            display_name=names.get(entity, entity),
+            item_ids=tuple(item.item_id for item in found),
+            sources=frozenset(item.source_id for item in found),
+            holds_reporting=any(item.source_kind is SourceKind.REPORTING for item in found),
+        )
+        for entity, found in sorted(members.items())
+    ]
+
+
+@dataclass(frozen=True, slots=True)
+class LeadCandidate:
+    """One story after the eligibility rules, before any cap has spoken."""
+
+    item: DigestItem
+    subjects: tuple[str, ...]
+    term: float
+    reason: str
+    from_desk_fallback: bool
+
+    @property
+    def score(self) -> float:
+        return (self.item.rank_score or 0.0) + self.term
+
+
+def _ordered(candidates: Sequence[LeadCandidate]) -> list[LeadCandidate]:
+    """Score, then the tie-breakers, in the order Editor set them.
+
+    Higher `carried_by`, then `high` before `medium`, then the newer story,
+    then the item id ascending. The id is derived from the address, so it
+    cannot be gamed and two builds of one day cannot disagree.
+
+    Sorts are stable, so these compose least-significant first - the same shape
+    `rank._ordered` uses on the published order itself.
+    """
+    ordered = sorted(candidates, key=lambda entry: entry.item.item_id)
+    ordered.sort(key=lambda entry: entry.item.published_at or "", reverse=True)
+    ordered.sort(key=lambda entry: _LEAD_BANDS.index(entry.item.band))
+    ordered.sort(key=lambda entry: entry.item.carried_by or 0, reverse=True)
+    ordered.sort(key=lambda entry: entry.score, reverse=True)
+    return ordered
+
+
+def _notable(item: DigestItem, clusters: Sequence[SubjectCluster], floor: int) -> bool:
+    """Whether a story's absence from the block has to be explained.
+
+    The two facts a reader could see for themselves: a subject several of our
+    sources are writing about, and an address more than two feeds carried.
+    """
+    if (item.carried_by or 0) >= 3:
+        return True
+    return any(
+        cluster.qualifies(floor) and item.item_id in cluster.item_ids for cluster in clusters
+    )
+
+
+def _reason_for(
+    item: DigestItem,
+    *,
+    clusters_by_item: Mapping[str, tuple[SubjectCluster, ...]],
+    floor: int,
+    desk_names: Mapping[str, str],
+    desk_leads: Mapping[str, str],
+) -> tuple[str | None, bool]:
+    """The strongest true sentence about this story, and whether it is the fallback.
+
+    Order of preference, and every one of them is checkable against the story
+    the reader is looking at. A lead that cannot say anything true is not a
+    lead: it stays in the stream like everything else, because a block that
+    invents its reasons is worse than no block.
+
+    Two sentences are deliberately absent. Recency gets none, because the rail
+    already prints the time. A weighted lens gets none, because it is an
+    editorial subsidy for an under-carried theme, and "this is here because it
+    mentions tariffs" tells the reader about our config rather than about the
+    news.
+    """
+    named = clusters_by_item.get(item.item_id, ())
+    running = [cluster for cluster in named if cluster.qualifies(floor)]
+    if running:
+        best = max(running, key=lambda cluster: (len(cluster.sources), cluster.entity))
+        return (
+            _SUBJECT_LINE.format(
+                count=_spelled(len(best.item_ids)).capitalize(), subject=best.display_name
+            ),
+            False,
+        )
+    if named:
+        best = max(named, key=lambda cluster: (len(cluster.sources), cluster.entity))
+        return _WATCHLIST_LINE.format(subject=best.display_name), False
+    if (item.carried_by or 0) >= 2:
+        return _CARRIED_LINE.format(count=_spelled(item.carried_by or 0)), False
+    if desk_leads.get(item.vertical) == item.item_id:
+        return _DESK_LINE.format(desk=desk_names.get(item.vertical, item.vertical)), True
+    return None, False
+
+
+def _eligible(
+    item: DigestItem, *, clusters_by_item: Mapping[str, tuple[SubjectCluster, ...]]
+) -> str | None:
+    """Why this story may not lead, or None when it may.
+
+    Four rules, applied before any score, and each one excludes whatever the
+    story ranked. A story excluded here still publishes, in the stream, marked
+    the way every other story is.
+    """
+    if item.band not in _LEAD_BANDS:
+        return "band-low"
+    if item.truncated:
+        return "truncated"
+    if item.time_source is not TimeSource.FEED:
+        # A time we inferred is our clock, not the story's. A lead states when
+        # something happened, so it may only lead on the feed's own answer.
+        return "clock-not-the-feed"
+    if item.source_kind is SourceKind.ANNOUNCEMENT and not any(
+        cluster.holds_reporting for cluster in clusters_by_item.get(item.item_id, ())
+    ):
+        # A company announcing itself leads only where somebody reported the
+        # same subject. On its own it is a press release at the top of the day.
+        return "announcement-uncorroborated"
+    return None
+
+
+def leading_stories(
+    items: Sequence[DigestItem],
+    *,
+    date: str,
+    watchlist: Watchlist,
+    ui: UiConfig,
+    desk_names: Mapping[str, str] | None = None,
+) -> list[DigestLead]:
+    """The day's leading stories, strongest first, or nothing at all.
+
+    Selection is `rank_score` plus a shared-subject term, across the whole day.
+    Not the head of the published order: that head is grouped by run and then
+    by desk, so it opens on whichever desk sorted first in run 1.
+
+    Four caps bound the block and each answers a different question. A desk may
+    hold `leading_per_desk`. A source may hold one. A subject may hold one - a
+    running story crosses desks and sources, so the first three caps do not
+    bound it, and two of five about one subject means the day had fewer than
+    five distinct stories worth leading. And stories the feed dated to
+    yesterday may hold `lead_max_yesterday`.
+
+    Below `leading_min` the block does not render at all. Four real leads beat
+    five with one filler, and a day with too few is a day that goes straight to
+    the stream.
+    """
+    clusters = subject_clusters(items, watchlist)
+    floor = ui.lead_cluster_floor
+    clusters_by_item: dict[str, tuple[SubjectCluster, ...]] = {}
+    for cluster in clusters:
+        for item_id in cluster.item_ids:
+            clusters_by_item[item_id] = (*clusters_by_item.get(item_id, ()), cluster)
+
+    desk_leads = _desk_leads(items)
+    omitted: dict[str, str] = {}
+    candidates: list[LeadCandidate] = []
+    for item in items:
+        refusal = _eligible(item, clusters_by_item=clusters_by_item)
+        if refusal is None:
+            named = clusters_by_item.get(item.item_id, ())
+            reason, fallback = _reason_for(
+                item,
+                clusters_by_item=clusters_by_item,
+                floor=floor,
+                desk_names=desk_names or {},
+                desk_leads=desk_leads,
+            )
+            if reason is None:
+                refusal = "no-true-reason"
+            else:
+                # The largest weight a story earned, never the sum. Two subjects
+                # in one title is not twice the story, and summing would let the
+                # registry outweigh the fact that two independent feeds carried
+                # an address - the rule the lens bonus already follows.
+                candidates.append(
+                    LeadCandidate(
+                        item=item,
+                        subjects=tuple(cluster.entity for cluster in named),
+                        term=(
+                            ui.lead_shared_subject_weight
+                            if any(cluster.qualifies(floor) for cluster in named)
+                            else 0.0
+                        ),
+                        reason=reason,
+                        from_desk_fallback=fallback,
+                    )
+                )
+        if refusal is not None and _notable(item, clusters, floor):
+            omitted[item.item_id] = refusal
+
+    chosen, capped = _take_leads(_ordered(candidates), date=date, ui=ui)
+    for item_id, refusal in capped.items():
+        omitted.setdefault(item_id, refusal)
+
+    if len(chosen) < ui.leading_min:
+        for candidate in chosen:
+            omitted[candidate.item.item_id] = "block-under-leading-min"
+        _log_leads(date, [], omitted)
+        return []
+
+    _log_leads(date, chosen, omitted)
+    return [DigestLead(item_id=entry.item.item_id, reason=entry.reason) for entry in chosen]
+
+
+def _desk_leads(items: Sequence[DigestItem]) -> dict[str, str]:
+    """The highest-scoring story of each desk, by item id.
+
+    It is what makes "The lead story on our Energy desk." a sentence a reader
+    can check rather than a phrase every story on that desk could carry.
+    """
+    def strength(item: DigestItem) -> tuple[float, str]:
+        return (-(item.rank_score or 0.0), item.item_id)
+
+    best: dict[str, DigestItem] = {}
+    for item in items:
+        held = best.get(item.vertical)
+        if held is None or strength(item) < strength(held):
+            best[item.vertical] = item
+    return {vertical: item.item_id for vertical, item in best.items()}
+
+
+def _take_leads(
+    ordered: Sequence[LeadCandidate], *, date: str, ui: UiConfig
+) -> tuple[list[LeadCandidate], dict[str, str]]:
+    """Walk the order once, take what every cap allows, and say what each cap cost.
+
+    The refusals come back with the block because a cap that turns a story away
+    silently is a cap nobody can audit. Only the notable ones are logged, and
+    that filter is the caller's.
+    """
+    yesterday = (date_type.fromisoformat(date) - timedelta(days=1)).isoformat()
+    taken: list[LeadCandidate] = []
+    refused: dict[str, str] = {}
+    per_desk: dict[str, int] = {}
+    used_sources: set[str] = set()
+    used_subjects: set[str] = set()
+    from_yesterday = 0
+    for candidate in ordered:
+        item = candidate.item
+        if len(taken) >= ui.leading_stories:
+            refused[item.item_id] = "block-full"
+            continue
+        if per_desk.get(item.vertical, 0) >= ui.leading_per_desk:
+            refused[item.item_id] = f"desk-full:{item.vertical}"
+            continue
+        if item.source_id in used_sources:
+            refused[item.item_id] = f"source-already-leading:{item.source_id}"
+            continue
+        # Every subject the title names, not only the one that scored. A story
+        # about a subject already leading is the same story twice to a reader,
+        # whether or not the cluster cleared the floor.
+        clashing = [subject for subject in candidate.subjects if subject in used_subjects]
+        if clashing:
+            refused[item.item_id] = f"subject-already-leading:{clashing[0]}"
+            continue
+        dated_yesterday = (item.published_at or "").startswith(yesterday)
+        if dated_yesterday and from_yesterday >= ui.lead_max_yesterday:
+            refused[item.item_id] = "yesterday-full"
+            continue
+        taken.append(candidate)
+        per_desk[item.vertical] = per_desk.get(item.vertical, 0) + 1
+        used_sources.add(item.source_id)
+        used_subjects.update(candidate.subjects)
+        from_yesterday += int(dated_yesterday)
+    return taken, refused
+
+
+def _log_leads(
+    date: str, chosen: Sequence[LeadCandidate], omitted: Mapping[str, str]
+) -> None:
+    """The two counters this block ships with (section 1b).
+
+    Line coverage is the share of leads carrying a real reason rather than the
+    desk fallback, and it is a live risk rather than a formality: the matcher
+    reads the title alone, and entities fire on 22.1 percent of items on a
+    title-plus-body match.
+
+    The omission log is the other half. No story a reader could see the case
+    for - a subject several sources are writing about, or an address more than
+    two feeds carried - is absent from the block without this line naming which
+    rule excluded it.
+    """
+    real = sum(1 for entry in chosen if not entry.from_desk_fallback)
+    LOG.info(
+        "leading stories date=%s block=%s real_reasons=%s coverage=%s",
+        date,
+        len(chosen),
+        real,
+        f"{real / len(chosen):.2f}" if chosen else "n/a",
+    )
+    for item_id, refusal in sorted(omitted.items()):
+        LOG.info("leading stories date=%s omitted item=%s because=%s", date, item_id, refusal)
+
+
 def days_in_month(digest_root: Path, month: str) -> list[DigestDay]:
     """Every committed day of one month, oldest first. A month with none gives none."""
     year, month_number = month.split("-")
@@ -594,6 +987,8 @@ def build_day(
     retention_window_months: int,
     embeddings: DigestEmbeddings | None = None,
     item_health_rows: Sequence[ItemHealthRow] | None = None,
+    watchlist: Watchlist | None = None,
+    ui: UiConfig | None = None,
     duplicate_similarity_min: float = DUPLICATE_SIMILARITY_MIN,
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
@@ -610,15 +1005,25 @@ def build_day(
     it is every item the number introduced rather than what this attempt added,
     because that is what `DigestDay` validates it against.
 
-    The duplicate pass runs over the whole day and not over this run's items,
-    because a later run can publish the same story an earlier one already did.
-    It is a pure function of the items, their vectors and the threshold, so the
-    same day rebuilt reaches the same groups.
+    Two passes read the finished day here, and the order between them is fixed
+    rather than incidental. The duplicate pass runs first, then the leading
+    block is chosen over what that pass produced. Both run over the whole day
+    and not over this run's items, because a later run can publish the same
+    story an earlier one already did and can add a story the first run could
+    not weigh. Neither moves anything: `items` is still the published order,
+    appended to and never re-sorted.
+
+    The duplicate pass is a pure function of the items, their vectors and the
+    threshold, so the same day rebuilt reaches the same groups.
     """
     already = {item.item_id for item in (previous.items if previous else [])}
     fresh = [item for item in items if item.item_id not in already]
     combined = [*(previous.items if previous else []), *fresh]
     merged = merge_embeddings(previous.embeddings if previous else None, embeddings)
+    # Group first, lead second. The block is a claim about the day as the reader
+    # will see it, and grouping is what decides which item of a group the default
+    # view draws. Leading first would choose against a day that no longer exists
+    # by the time it renders. See docs/architecture/publishing/layout.md.
     combined = collapse_same_story(combined, merged, similarity_min=duplicate_similarity_min)
 
     runs = list(previous.runs) if previous else []
@@ -664,6 +1069,13 @@ def build_day(
             for vertical_id in present
         ],
         items=combined,
+        leads=leading_stories(
+            combined,
+            date=plan.date,
+            watchlist=watchlist or Watchlist(version=Watchlist.schema_version(), entities=[]),
+            ui=ui or UiConfig(),
+            desk_names=names,
+        ),
         embeddings=merged,
     )
 
@@ -711,6 +1123,7 @@ def build_manifest(
     evaluation_sample_rate: float | None = None,
     evaluation_sampled: bool | None = None,
     scorer_version: str | None = None,
+    rank_version: str | None = None,
 ) -> RunManifest:
     """What ran, against which model, at which commit - appended, never rewritten.
 
@@ -779,6 +1192,7 @@ def build_manifest(
         evaluation_sample_rate=evaluation_sample_rate,
         evaluation_sampled=evaluation_sampled,
         scorer_version=scorer_version,
+        rank_version=rank_version,
         config_digests=list(config_digests),
         note=note,
     )
