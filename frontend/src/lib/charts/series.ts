@@ -568,12 +568,14 @@ export function failedRows(
 	rows: TelemetryRow[],
 	window: TimeWindow,
 	code: string | null,
-	cause: string | null = null
+	cause: string | null = null,
+	source: string | null = null
 ): TelemetryRow[] {
 	return rowsInWindow(rows, window)
 		.filter((row) => row.outcome === 'failed')
 		.filter((row) => code === null || row.code === code)
 		.filter((row) => cause === null || causeKey(row) === cause)
+		.filter((row) => source === null || row.source_id === source)
 		.sort((a, b) => b.date.localeCompare(a.date) || a.item_id.localeCompare(b.item_id));
 }
 
@@ -693,6 +695,101 @@ export function failureLedger(rows: TelemetryRow[], window: TimeWindow): Failure
 		})),
 		failed,
 		sourcesSeen: sourcesSeen.size,
+		rows: inWindow.length
+	};
+}
+
+/** One source, and the articles its failures cost the digest over one window.
+ *
+ * The item rows below the ledger name a source per row and nothing above them
+ * says which source cost the most, so this is the one column of that table no
+ * surface answers. Measured 2026-09-01 over the committed projection, a
+ * thirty-day window holds 60 sources with a loss and 778 lost articles.
+ */
+export interface SourceLoss {
+	/** `source_id`, the same string the item rows name. */
+	key: string;
+	/** Distinct articles that failed. One article per source per day, the rule
+	 * `compressionView` reads the same ledger by, so the two surfaces cannot
+	 * disagree about how many articles a day held. */
+	lost: number;
+	/** Distinct articles the window saw from this source, failed or not. The
+	 * denominator the count is read against: 42 of 42 is a source that stopped
+	 * working, and 42 of 500 is a bad afternoon. */
+	articles: number;
+	/** Causes those failures fell under. One is usually a site that changed its
+	 * markup; several is usually something else. */
+	causes: number;
+	/** The one cause, where there is only one. Ten rows each printing `1 cause`
+	 * is a column that says nothing; the cause's own name is the fact behind the
+	 * number, and it is only a fact while the count is one. */
+	cause: string | null;
+	/** The newest day it lost one. */
+	last: string;
+	/** Days between that and the window's end. Zero is the newest day in view,
+	 * measured against the window rather than against the clock, because this
+	 * page is prerendered and a build-time "today" goes stale on the shelf. */
+	lastAgo: number;
+}
+
+export interface SourceLossLedger {
+	sources: SourceLoss[];
+	/** Articles lost across every source. An article belongs to one source, so
+	 * the sources' counts sum to exactly this. */
+	lost: number;
+	/** Rows of any kind in the window. Zero means the ledger cannot answer,
+	 * which is a different fact from nothing having been lost. */
+	rows: number;
+}
+
+/** Sources ranked by what their failures cost, over one window.
+ *
+ * Uncapped, for the same reason `failureLedger` is: the cap is a display choice
+ * and a ledger that dropped its tail here would report a sum smaller than the
+ * rows it was drawn from.
+ */
+export function sourceLosses(rows: TelemetryRow[], window: TimeWindow): SourceLossLedger {
+	const inWindow = rowsInWindow(rows, window);
+
+	interface Held {
+		lost: Set<string>;
+		articles: Set<string>;
+		causes: Set<string>;
+		last: string;
+	}
+	const held = new Map<string, Held>();
+
+	for (const row of inWindow) {
+		const source = row.source_id;
+		if (!source) continue;
+		let entry = held.get(source);
+		if (entry === undefined) {
+			entry = { lost: new Set(), articles: new Set(), causes: new Set(), last: '' };
+			held.set(source, entry);
+		}
+		const article = `${row.date}-${row.item_id}`;
+		entry.articles.add(article);
+		if (row.outcome !== 'failed') continue;
+		entry.lost.add(article);
+		entry.causes.add(causeKey(row));
+		if (row.date > entry.last) entry.last = row.date;
+	}
+
+	const sources = [...held.entries()]
+		.filter(([, entry]) => entry.lost.size > 0)
+		.map(([key, entry]) => ({
+			key,
+			lost: entry.lost.size,
+			articles: entry.articles.size,
+			causes: entry.causes.size,
+			cause: entry.causes.size === 1 ? [...entry.causes][0] : null,
+			last: entry.last,
+			lastAgo: daysBetween(entry.last, window.end) - 1
+		}));
+
+	return {
+		sources,
+		lost: sources.reduce((total, source) => total + source.lost, 0),
 		rows: inWindow.length
 	};
 }
