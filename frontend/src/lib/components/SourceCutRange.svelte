@@ -18,8 +18,12 @@
 	import {
 		chartWidth,
 		frame,
+		labelGutter,
+		labelWidth,
 		logAxis,
 		observeWidth,
+		ROW_PITCH_MIN,
+		rowPitch,
 		tickAnchor,
 		type Margin
 	} from '$lib/charts/frame';
@@ -37,12 +41,20 @@
 		width: number;
 	} = $props();
 
-	/** One source: the name, the count under it, and the track between them. */
-	const ROW = 34;
-	/** The longest source id in the committed ledger is 23 characters, measured
-	 * 2026-08-30 over 143 distinct sources, and the count sits on its own line
-	 * below - so the margin holds a name and never a name plus a sentence. */
-	const LABEL_ROOM = 168;
+	/** The row label, and the count on the line under it. */
+	const NAME_PX = 11;
+	const COUNT_PX = 10;
+	/** Clear pixels between the name column and the plot. */
+	const GUTTER_GAP = 10;
+	/** A row carries two lines of type and a 10px bar. The floor is that ink plus
+	 * a line of air; below it the rows touch and the plot reads as a list. */
+	const PITCH_MIN = ROW_PITCH_MIN;
+	/** Where the name sits above the track instead of beside it, the row is one
+	 * line of type, then the track, then the air that separates two rows. */
+	const PITCH_MIN_STACKED = ROW_PITCH_MIN + 12;
+	/** Past this a row is spaced rather than tall, and six of them stop reading
+	 * as one set. */
+	const PITCH_MAX = 56;
 	/** Enough that two cap labels stack instead of sharing pixels at 10px. */
 	const LABEL_STEP = 12;
 	/** The decade labels, then the axis title under them. */
@@ -50,21 +62,59 @@
 	/** Whole decades read; the eight steps between them are what says the axis is
 	 * a log one rather than a linear one with odd labels. */
 	const MINOR_STEPS = [2, 3, 4, 5, 6, 7, 8, 9];
-	/** Past this the cap label would run off the right edge, so it flips inward. */
-	const LABEL_ROOM_RIGHT = 130;
+	/** The right-most decade label anchors `end`, so it needs no room outside the
+	 * plot. This is the stroke of the track's round cap and nothing more. */
+	const RIGHT_ROOM = 12;
+	/** Where the name column has to go when it cannot sit beside the plot. */
+	const STACK_NAME_Y = 11;
+	const STACK_TRACK_Y = 30;
 
 	let measured = $state<number | null>(null);
+
+	const chartBox = $derived(chartWidth(measured, width));
+
+	function countText(source: SourceCut): string {
+		return `${source.cut} of ${source.articles} cut`;
+	}
+
+	/** The room the two label lines need, or null where the frame cannot spare
+	 * it.
+	 *
+	 * A fixed 168px gutter was 12 percent of a 1,342px frame and 52 percent of a
+	 * 324px one, measured 2026-09-01 - so on a phone the labels took more of the
+	 * chart than the plot did, and the six tracks drew inside 91px. A source id is
+	 * the ledger's own spelling of a name, so there is no shorter true form of it:
+	 * where it will not fit beside the plot it goes above it.
+	 */
+	const gutter = $derived.by(() => {
+		const names = labelGutter(
+			rows.map((source) => source.sourceId),
+			NAME_PX,
+			GUTTER_GAP,
+			chartBox
+		);
+		const counts = labelGutter(rows.map(countText), COUNT_PX, GUTTER_GAP, chartBox);
+		return names === null || counts === null ? null : Math.max(names, counts);
+	});
+	const stacked = $derived(gutter === null);
+	/** The value axis anchors its first decade `start`, so a stacked plot needs
+	 * no left margin beyond the track's own round cap. */
+	const leftRoom = $derived(gutter ?? RIGHT_ROOM);
+	const innerRoom = $derived(Math.max(1, chartBox - leftRoom - RIGHT_ROOM));
+	const pitch = $derived(
+		rowPitch(innerRoom, stacked ? PITCH_MIN_STACKED : PITCH_MIN, PITCH_MAX)
+	);
 
 	/** The labels sit above the first row rather than beside their rules, where
 	 * they would cross a track, so the room they need is the room they take. */
 	const top = $derived(10 + Math.max(1, caps.length) * LABEL_STEP);
 
 	const box = $derived(
-		frame(chartWidth(measured, width), top + rows.length * ROW + AXIS_ROOM, {
+		frame(chartBox, top + rows.length * pitch + AXIS_ROOM, {
 			top,
-			right: 12,
+			right: RIGHT_ROOM,
 			bottom: AXIS_ROOM,
-			left: LABEL_ROOM
+			left: leftRoom
 		} satisfies Margin)
 	);
 
@@ -97,17 +147,27 @@
 	const placed = $derived(
 		rows.map((source, index) => ({
 			source,
-			top: box.top + index * ROW,
+			top: box.top + index * pitch,
 			marks: rangeMarks(source.lengths, widest, (words) => xAxis.scale(words))
 		}))
 	);
+
+	/** Where the track sits inside a row, and where the two label lines sit
+	 * against it. Beside the plot the pair is centred on the track; above it the
+	 * name leads and the track follows. */
+	function trackY(rowTop: number): number {
+		return stacked ? rowTop + STACK_TRACK_Y : rowTop + pitch / 2;
+	}
 
 	function px(value: number): number {
 		return Math.round(value * 10) / 10;
 	}
 
-	function flips(x: number): boolean {
-		return x > box.right - LABEL_ROOM_RIGHT;
+	/** Whether a cap label would run past the right edge if it read left to
+	 * right, from the room the label itself needs rather than from a constant.
+	 * A constant is what stopped being big enough the last time. */
+	function flips(x: number, index: number): boolean {
+		return x + 4 + labelWidth(capLabel(caps, index), 10) > box.right;
 	}
 
 	function sentence(source: SourceCut): string {
@@ -128,6 +188,10 @@
 			viewBox={`0 0 ${box.width} ${box.height}`}
 			role="img"
 			aria-label="Article length by source, against the cut point"
+			data-source-cuts-layout={stacked ? 'stacked' : 'beside'}
+			data-source-cuts-pitch={pitch}
+			data-source-cuts-plot={px(box.innerWidth)}
+			data-source-cuts-frame={box.width}
 		>
 			<line
 				x1={box.left}
@@ -196,9 +260,9 @@
 					data-cap-line={cap.words}
 				/>
 				<text
-					x={flips(x) ? px(x) - 4 : px(x) + 4}
+					x={flips(x, index) ? px(x) - 4 : px(x) + 4}
 					y={box.top - 10 - (caps.length - 1 - index) * LABEL_STEP}
-					text-anchor={flips(x) ? 'end' : 'start'}
+					text-anchor={flips(x, index) ? 'end' : 'start'}
 					fill="var(--color-text-tertiary)"
 					font-size="10"
 					data-cap-label={cap.words}
@@ -208,6 +272,7 @@
 			{/each}
 
 			{#each placed as row (row.source.sourceId)}
+				{@const y = trackY(row.top)}
 				<g
 					data-source-cut={row.source.sourceId}
 					data-range-min={row.source.lengths.min}
@@ -216,32 +281,35 @@
 					data-range-past={row.marks.past ? 'yes' : 'no'}
 				>
 					<title>{sentence(row.source)}</title>
+					<!-- Beside the plot where the frame can hold the widest name, above it
+					     where it cannot. A name is a source id and there is no shorter true
+					     form of it, so the gutter moves rather than the word. -->
 					<text
-						x={box.left - 10}
-						y={row.top + 15}
-						text-anchor="end"
+						x={stacked ? box.left : box.left - GUTTER_GAP}
+						y={stacked ? row.top + STACK_NAME_Y : y - 2}
+						text-anchor={stacked ? 'start' : 'end'}
 						fill="var(--color-text)"
-						font-size="11"
+						font-size={NAME_PX}
 						data-source-cell="name"
 					>
 						{row.source.sourceId}
 					</text>
 					<text
-						x={box.left - 10}
-						y={row.top + 27}
+						x={stacked ? box.right : box.left - GUTTER_GAP}
+						y={stacked ? row.top + STACK_NAME_Y : y + 10}
 						text-anchor="end"
 						fill="var(--color-text-tertiary)"
-						font-size="10"
+						font-size={COUNT_PX}
 						data-source-cell="count"
 					>
-						{row.source.cut} of {row.source.articles} cut
+						{countText(row.source)}
 					</text>
 
 					<line
 						x1={px(row.marks.x0)}
 						x2={px(row.marks.x1)}
-						y1={row.top + 17}
-						y2={row.top + 17}
+						y1={y}
+						y2={y}
 						stroke="var(--chart-8)"
 						stroke-width="4"
 						stroke-linecap="round"
@@ -251,8 +319,8 @@
 						<line
 							x1={px(row.marks.xCut)}
 							x2={px(row.marks.x1)}
-							y1={row.top + 17}
-							y2={row.top + 17}
+							y1={y}
+							y2={y}
 							stroke="var(--chart-1)"
 							stroke-width="10"
 							stroke-linecap="round"
@@ -261,7 +329,7 @@
 					{/if}
 					<circle
 						cx={px(row.marks.xMid)}
-						cy={row.top + 17}
+						cy={y}
 						r="3.5"
 						fill="var(--color-text)"
 						stroke="var(--color-surface)"
