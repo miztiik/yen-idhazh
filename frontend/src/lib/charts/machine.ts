@@ -2,10 +2,11 @@
  *
  * `$lib/server/runtime-counters.ts` reads `state/runtime-counters.csv` and hands
  * back one figure per shard and per run. This module turns those figures into
- * the six things an operator can act on: which shard was slow and why, whether
- * the seconds went on reading or on writing, whether the prompt cache is
- * earning its keep, how much of the context window a run actually used, whether
- * the two clocks agree, and what a run's tokens would have cost somewhere else.
+ * the eight things an operator can act on: which shard was slow and why,
+ * whether the seconds went on reading or on writing, whether the prompt cache
+ * is earning its keep, how much of the context window a run actually used, how
+ * near the runner's 16 GB a run got, whether the two clocks agree, whether the
+ * tail is growing, and what a run's tokens would have cost somewhere else.
  *
  * Every function here is pure and every one takes its ceiling as an argument,
  * so a test drives it from a fixture ledger and Rule #6 keeps the knobs in
@@ -19,12 +20,12 @@
 import type { EChartsOption } from 'echarts';
 import type { RunCounters, ShardCounters } from '$lib/server/runtime-counters';
 import { dayMonth } from '../format';
-import type { DayReadout } from './frame';
+import { AXIS_LABEL_GAP_PX, LABEL_ADVANCE_EM, labelWidth, type DayReadout } from './frame';
 import { percentOf } from './rank';
 import { grouped } from './series';
 import { stacked, type StackShape } from './stacked';
 import { targetMarks, type TargetMarks } from './targetbar';
-import { paint, type ChartToken } from './theme';
+import { paint, type ChartToken, type Polarity } from './theme';
 
 /** The runner's memory, from CLAUDE.md Rule #2: 4 vCPU, 16 GB RAM, no GPU.
  *
@@ -34,6 +35,29 @@ import { paint, type ChartToken } from './theme';
  * longer fits be made to look as though it did.
  */
 export const RUNNER_MEMORY_BYTES = 16 * 1024 * 1024 * 1024;
+
+/** Which way is better for a memory high-water mark, said once, here.
+ *
+ * At the measure and never at the paint site: a bar and a delta drawn from the
+ * same figure on two different panels cannot then disagree about which
+ * direction is good. Less is better because the ceiling is the runner's and we
+ * cannot raise it - a mark that climbs is a run getting nearer to not fitting.
+ */
+export const MEMORY_POLARITY: Polarity = 'lower-is-better';
+
+/** The room an engine-drawn value axis needs for its own widest label.
+ *
+ * `stacked` and `tokenChart` both took a fixed 48px, which is a gutter sized
+ * for a four-digit count. Measured 2026-09-01 at 1440, 768 and 390 on the built
+ * console, that clipped `200,000` by 1.35px and `1,200,000` by 10.44px on the
+ * prompt-cache chart - six labels cut on every width. The engine picks its own
+ * top tick, so the widest label it can draw is the largest value grouped plus
+ * at most one more character; that character is the slack added here.
+ */
+function valueGutter(highest: number, fontSize = 11): number {
+	const widest = labelWidth(grouped(Math.round(highest)), fontSize) + fontSize * LABEL_ADVANCE_EM;
+	return Math.ceil(widest) + AXIS_LABEL_GAP_PX;
+}
 
 /** The five points a latency curve is quoted at.
  *
@@ -370,7 +394,7 @@ export function cacheByDay(runs: readonly RunCounters[]): CacheDay[] {
  * read half fell while the cached half rose. Nothing is re-shaped between them.
  */
 export function cacheChart(days: readonly CacheDay[], shape: StackShape = 'bars') {
-	return stacked(
+	const plot = stacked(
 		// The same date grammar the hand-written axes print. `2026-08-25` is how
 		// the ledger spells a day, and a ledger spelling is not a label.
 		days.map((day) => dayMonth(day.date)),
@@ -380,6 +404,13 @@ export function cacheChart(days: readonly CacheDay[], shape: StackShape = 'bars'
 		],
 		shape
 	);
+	// A day here reaches seven digits, which is two more than the shared inset
+	// was drawn for. The gutter is returned as well as applied, so the readout
+	// strip's column centres are computed from the same number the engine laid
+	// the plot out with rather than from a copy that can drift.
+	const grid = { left: valueGutter(Math.max(0, ...plot.totals)), right: 12 };
+	if (!plot.empty) plot.option.grid = { ...plot.option.grid, ...grid };
+	return { ...plot, grid };
 }
 
 /** Both halves of one day's prompt tokens, for the strip under the chart. */
@@ -405,7 +436,6 @@ export interface ContextBar {
 	longest: number | null;
 	usedPct: number | null;
 	spare: number | null;
-	marks: TargetMarks;
 	from: number;
 	outOf: number;
 }
@@ -414,7 +444,9 @@ export interface ContextBar {
  *
  * A counter without its ceiling is not a measurement: 4,925 says nothing until
  * 8,192 sits beside it. This is also the one panel that says whether raising
- * the truncation cap is even possible.
+ * the truncation cap is even possible - which is a question about the worst run
+ * in the window rather than about the newest, so every run in the span is here
+ * and the chart draws all of them.
  */
 export function contextHeadroom(
 	runs: readonly RunCounters[],
@@ -436,10 +468,110 @@ export function contextHeadroom(
 			run.longestSequence.value === null || contextWindow === null
 				? null
 				: contextWindow - run.longestSequence.value,
-		marks: targetMarks(run.longestSequence.value, contextWindow ?? 0, 'lower-is-better'),
 		from: run.longestSequence.from,
 		outOf: run.longestSequence.outOf
 	}));
+}
+
+/** Everything one run's context bar prints, for the strip under the chart. */
+export function contextColumns(
+	bars: readonly ContextBar[],
+	contextWindow: number | null
+): DayReadout[] {
+	return bars.map((bar) => ({
+		x: 0,
+		date: bar.runId,
+		rows: [
+			{
+				label: 'Longest sequence',
+				value: bar.longest === null ? '-' : `${grouped(bar.longest)} tokens`,
+				colour: 'var(--chart-1)'
+			},
+			{
+				label: 'Spare',
+				value: bar.spare === null ? '-' : `${grouped(bar.spare)} tokens`,
+				colour: 'var(--chart-3)'
+			},
+			{
+				label: 'Of the window',
+				value:
+					bar.usedPct === null || contextWindow === null
+						? '-'
+						: `${bar.usedPct}% of ${grouped(contextWindow)}`,
+				colour: ''
+			}
+		]
+	}));
+}
+
+// ---------------------------------------------------------------------------
+// Peak memory, per shard and in one number
+// ---------------------------------------------------------------------------
+
+/** One shard's own memory high-water mark, against the runner's. */
+export interface ShardMemory {
+	shard: number;
+	bytes: number;
+	marks: TargetMarks;
+}
+
+/** What one run did to the runner's 16 GB.
+ *
+ * The aggregate is a MAXIMUM and never a sum. Shards are separate jobs on
+ * separate hosts, so adding four of them reports a machine that never existed -
+ * and it would read as 50 GB on a box that has 16.
+ */
+export interface MemoryView {
+	runId: string;
+	date: string;
+	/** Ascending by shard index. Only shards that reported the cell. */
+	shards: ShardMemory[];
+	/** The largest of those. Null where no shard reported one. */
+	highWater: number | null;
+	/** That figure against `RUNNER_MEMORY_BYTES`, whole percent. */
+	pctOfRunner: number | null;
+	marks: TargetMarks;
+	/** Shards that reported the cell, and shards the run split into. */
+	from: number;
+	outOf: number;
+	empty: boolean;
+}
+
+/** The run's own memory high-water mark, and every shard behind it.
+ *
+ * `peak_rss_bytes` landed on 2026-08-30, so most committed rows are blank in
+ * it. A blank is drawn as absence: this returns only the shards that reported,
+ * and carries the run's shard count beside them so the page can say how much of
+ * the run the figure covers rather than treating an unmeasured shard as a shard
+ * that used no memory.
+ */
+export function peakMemory(run: RunCounters | null): MemoryView {
+	const reported =
+		run === null
+			? []
+			: run.reported
+					.filter((shard): shard is ShardCounters & { peakRssBytes: number } =>
+						shard.peakRssBytes !== null
+					)
+					.sort((a, b) => a.shard - b.shard);
+	const highWater = reported.length === 0 ? null : Math.max(...reported.map((s) => s.peakRssBytes));
+	return {
+		runId: run?.runId ?? '',
+		date: run?.date ?? '',
+		shards: reported.map((shard) => ({
+			shard: shard.shard,
+			bytes: shard.peakRssBytes,
+			// Every bar is read against the same ceiling, so the four of them are
+			// one picture rather than four differently scaled ones.
+			marks: targetMarks(shard.peakRssBytes, RUNNER_MEMORY_BYTES, MEMORY_POLARITY)
+		})),
+		highWater,
+		pctOfRunner: highWater === null ? null : Math.round((highWater / RUNNER_MEMORY_BYTES) * 100),
+		marks: targetMarks(highWater, RUNNER_MEMORY_BYTES, MEMORY_POLARITY),
+		from: reported.length,
+		outOf: run?.shards ?? 0,
+		empty: highWater === null
+	};
 }
 
 // ---------------------------------------------------------------------------
@@ -666,78 +798,119 @@ export interface PercentileCurve {
 	points: PercentilePoint[];
 }
 
-export interface PercentileView {
-	/** The day the curves came off. Null where the ledger held none. */
-	date: string | null;
-	curves: PercentileCurve[];
-	/** Runs with too few items to quote a p99, and how few. Printed, never drawn:
-	 * a p99 over four items is the fourth item. */
-	tooFew: { runId: string; items: number }[];
-	floor: number;
-	/** Item rows of that day carrying a shard, and item rows of that day. */
-	shardRows: number;
-	itemRows: number;
-	empty: boolean;
+/** One run's whole distribution, as the small multiples draw it.
+ *
+ * `ms` is one entry per `PERCENTILES`, in that order. An array rather than an
+ * object because five charts read it by position and the page carries one of
+ * these per run in the widest window.
+ */
+export interface LatencyRun {
+	runId: string;
+	date: string;
+	items: number;
+	ms: number[];
 }
 
-/** One curve a run, across the percentiles, never pooled between runs.
+export interface LatencyHistory {
+	/** Oldest first, so the newest run is the last mark on every multiple. */
+	runs: LatencyRun[];
+	/** Runs with too few items to quote a p99, and how few. Printed, never
+	 * drawn: a p99 over four items is the fourth item. */
+	tooFew: { runId: string; date: string; items: number }[];
+	floor: number;
+	/** Item rows carrying a shard, and item rows in the set. */
+	shardRows: number;
+	itemRows: number;
+}
+
+/** Every run's distribution, across every day the ledger holds.
  *
- * Pooling would average a host lottery: two runs of one day draw different
- * processors, and the whole reason to plot a distribution rather than quote a
- * p95 is that a tail can change shape while every headline number holds still.
- * The value is `summarize_ms`, which is the whole model call for one item.
+ * Never pooled between runs: two runs of one day draw different processors, and
+ * the whole reason to plot a distribution rather than quote a p95 is that a tail
+ * can change shape while every headline number holds still. The value is
+ * `summarize_ms`, which is the whole model call for one item.
+ *
+ * This is the one derivation behind both halves of the panel. The small
+ * multiples draw every run in the window and the aggregate draws the newest,
+ * so a figure that differed between them would be two readings of one run.
  */
-export function percentileCurves(
+export function percentileHistory(
 	health: readonly Record<string, string>[],
-	date: string | null,
 	floor: number
-): PercentileView {
-	if (date === null) {
-		return {
-			date: null,
-			curves: [],
-			tooFew: [],
-			floor,
-			shardRows: 0,
-			itemRows: 0,
-			empty: true
-		};
-	}
-	const day = health.filter((row) => row.date === date);
-	const byRun = new Map<string, number[]>();
-	for (const row of day) {
+): LatencyHistory {
+	const byRun = new Map<string, { date: string; ms: number[] }>();
+	for (const row of health) {
 		const ms = Number(row.summarize_ms);
 		if (row.summarize_ms === '' || !Number.isFinite(ms) || ms <= 0) continue;
-		byRun.set(row.run_id ?? '', [...(byRun.get(row.run_id ?? '') ?? []), ms]);
+		const runId = row.run_id ?? '';
+		const bucket = byRun.get(runId) ?? { date: row.date ?? '', ms: [] };
+		bucket.ms.push(ms);
+		byRun.set(runId, bucket);
 	}
 
-	const curves: PercentileCurve[] = [];
-	const tooFew: { runId: string; items: number }[] = [];
+	const runs: LatencyRun[] = [];
+	const tooFew: { runId: string; date: string; items: number }[] = [];
+	// Run ids are `<date>-<n>`, so a plain string sort orders a day's runs and
+	// orders the days too.
 	for (const runId of [...byRun.keys()].sort()) {
-		const values = [...(byRun.get(runId) ?? [])].sort((a, b) => a - b);
+		const bucket = byRun.get(runId) as { date: string; ms: number[] };
+		const values = [...bucket.ms].sort((a, b) => a - b);
 		if (values.length < floor) {
-			tooFew.push({ runId, items: values.length });
+			tooFew.push({ runId, date: bucket.date, items: values.length });
 			continue;
 		}
-		curves.push({
+		runs.push({
 			runId,
+			date: bucket.date,
 			items: values.length,
-			points: PERCENTILES.map((percentile) => ({
-				percentile,
-				ms: quantile(values, percentile / 100)
-			}))
+			// Whole milliseconds. The interpolation gives a fraction of one, and a
+			// fraction of a millisecond is finer than anything this is printed at -
+			// it would only be seventeen digits carried into the document.
+			ms: PERCENTILES.map((percentile) => Math.round(quantile(values, percentile / 100)))
 		});
 	}
 
 	return {
-		date,
-		curves,
+		runs,
 		tooFew,
 		floor,
-		shardRows: day.filter((row) => (row.shard ?? '') !== '').length,
-		itemRows: day.length,
-		empty: curves.length === 0
+		shardRows: health.filter((row) => (row.shard ?? '') !== '').length,
+		itemRows: health.length
 	};
+}
+
+/** One run's distribution as the curve the aggregate chart draws.
+ *
+ * The aggregate and the small multiples read one array, so "the tail today" and
+ * "the newest mark on the p99 chart" cannot be two different numbers.
+ */
+export function curveOf(run: LatencyRun): PercentileCurve {
+	return {
+		runId: run.runId,
+		items: run.items,
+		points: PERCENTILES.map((percentile, at) => ({ percentile, ms: run.ms[at] ?? 0 }))
+	};
+}
+
+/** Every percentile of one run, for the strip under the small multiples.
+ *
+ * No colour on any row. The five multiples are one measure at five quantiles
+ * and are drawn in one colour, so a swatch would name a distinction that is not
+ * on the plot.
+ */
+export function latencyColumns(runs: readonly LatencyRun[]): DayReadout[] {
+	return runs.map((run) => ({
+		x: 0,
+		date: run.runId,
+		rows: [
+			...PERCENTILES.map((percentile, at) => ({
+				label: `p${percentile}`,
+				value: seconds((run.ms[at] ?? 0) / 1000),
+				colour: ''
+			})),
+			{ label: 'Items timed', value: grouped(run.items), colour: '' }
+		]
+	}));
 }
 
 /** Every point labelled with its value. A curve with unlabelled points is a
@@ -756,7 +929,10 @@ export function percentileChart(curves: readonly PercentileCurve[]): {
 		empty: false,
 		option: {
 			animation: false,
-			grid: { left: 60, right: 44, top: 20, bottom: 26, containLabel: false },
+			// 30 at the top, not 20: the axis name sits above the plot and the
+			// point labels sit above the marks, and measured 2026-09-01 at 1440 the
+			// word `seconds` was drawn 7.7px outside the chart's own box.
+			grid: { left: 60, right: 44, top: 30, bottom: 26, containLabel: false },
 			tooltip: { trigger: 'axis' },
 			xAxis: {
 				type: 'category',
@@ -848,30 +1024,49 @@ export function tokensByRun(health: readonly Record<string, string>[]): RunToken
 
 /** One bar a run. Input and output are separate charts because they are
  * separate quantities with separate prices, and a shared axis would flatten
- * whichever of them is smaller into nothing. */
+ * whichever of them is smaller into nothing.
+ *
+ * The axis carries the run's DAY and not its run id. A run id is now
+ * `<date>-<workflow run>`, and turned 45 degrees, measured 2026-09-01 on the
+ * built console, seventeen of them made fourteen overlapping pairs at 1440 -
+ * the worst two sat 67.9px on top of each other - and every one of them hung
+ * 60.6px below the chart's own box. `hideOverlap` kept them all, because the
+ * engine measures a turned label along the axis and not across the box it
+ * actually draws. Horizontal short dates cost nothing a reader wanted: the run
+ * id is in the strip below at the bar the pointer is on, in full.
+ *
+ * The engine's own `hideOverlap` does the thinning here rather than `dayTicks`,
+ * and that is the difference between the two kinds of axis. `dayTicks` measures
+ * against pixels we own; an engine relays out its own axis at every width, so a
+ * label set computed at the authored width would be the wrong set at all the
+ * others.
+ */
 export function tokenChart(
 	runs: readonly RunTokens[],
 	pick: (run: RunTokens) => number,
 	label: string,
 	token: ChartToken
-): { option: EChartsOption; empty: boolean } {
-	if (runs.length === 0) return { option: {}, empty: true };
+): { option: EChartsOption; empty: boolean; grid: { left: number; right: number } } {
+	const grid = { left: valueGutter(Math.max(0, ...runs.map(pick))), right: 12 };
+	if (runs.length === 0) return { option: {}, empty: true, grid };
 	return {
 		empty: false,
+		grid,
 		option: {
 			animation: false,
-			grid: { left: 62, right: 12, top: 16, bottom: 40, containLabel: false },
+			// 30 at the top for the axis name, 26 at the bottom now that no label is
+			// turned. The 14px that buys goes back to the plot.
+			grid: { ...grid, top: 30, bottom: 26, containLabel: false },
 			tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
 			xAxis: {
 				type: 'category',
-				data: runs.map((run) => run.runId),
+				data: runs.map((run) => dayMonth(run.date)),
 				axisLine: { lineStyle: { color: paint('--chart-axis') } },
 				axisTick: { show: false },
 				axisLabel: {
 					color: paint('--color-text-tertiary'),
 					fontSize: 10,
-					hideOverlap: true,
-					rotate: 45
+					hideOverlap: true
 				}
 			},
 			yAxis: {
