@@ -763,9 +763,15 @@
 					>
 						{#each windowGrid as day, index (day.date)}
 							<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
-							     upward, while the DOM keeps reading run 1 first. -->
+							     upward, while the DOM keeps reading run 1 first.
+
+							     Stretched to the row rather than sized by its squares. A day with
+							     no run has no squares, so a column sized by its content is a
+							     zero-height box: nothing to point at, and no room for the tint
+							     that says which day the readout is on - which is the column a
+							     reader most needs to see selected. -->
 							<div
-								class="flex flex-col-reverse justify-start"
+								class="flex flex-col-reverse justify-start self-stretch"
 								style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
 								data-day={day.date}
 								data-day-selected={runAt === index ? 'true' : null}
