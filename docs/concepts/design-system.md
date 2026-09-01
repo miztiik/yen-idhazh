@@ -402,6 +402,12 @@ A surface that fails one of these ships only with a `## Design rationale` entry 
 
 **And a veto costs something.** A ruling that removes must name what the reader loses. "Remove before adding" is a good instinct and a bad rule when it is free: a removal that states only what was removed is not a ruling and does not bind ([../agents/guardrails.md](../agents/guardrails.md)).
 
+### Height is not the target; the page somebody lands on is
+
+The console chart-craft plan opened by complaining that `/console/` was too tall on a phone - 16,385 px, with the band taking 63 percent of the first viewport and the first chart a screen and a half down. Twenty-six rows later it is **15,131 px, 7.7 percent shorter**, and the other two console routes are **32 to 37 percent taller** because they gained a doubt list, a cost distribution, a context chart, peak memory and three latency plots. Across all three the console grew 13.2 percent on a phone.
+
+That is the sufficiency gate and the veto working together rather than one beating the other. **A surface is not judged by its total height.** It is judged by what the first viewport says, what a reader has to scroll past to reach a figure, and whether the figure is there at all. Cutting the band and capping the failure list bought the first two; the panels behind the other two routes are the third, and shrinking them to hold a height number would have been the failure the sufficiency checks exist to catch. Numbers and method: [../reference/measurements.md](../reference/measurements.md).
+
 ## Motion vocabulary
 
 There is almost no motion here, and that is the correct amount. This is a page a reader skims, not a thing they operate.
@@ -514,6 +520,17 @@ readout strip is the key. That is **5,532 B, 2.8 percent**, and it takes the
 room left under the 200,000 B line this plan drew from 2,439 B to 7,971 B. Both
 arms were built back to back on one tree, and the arm holding the old list read
 197,561 B to the byte.
+
+**It has not moved since, across twenty-six rows of chart work.** Re-measured
+2026-09-01 on five builds of `origin/main` at `8d658de`: 192,029 B gzipped,
+567,839 B raw, on every one of the five. Twenty-six rows added panels, charts and
+a shared readout to three routes and not one of them registered a new echarts
+type, which is what the registration file is for. **Identify the chunk by
+content, never by size** - `text.includes('sankey')` finds it, and the encoder
+chunk beside it is bigger (901,929 B raw, 234,135 B gzipped) so "the largest
+chunk" finds the wrong file. Read the gzip level-9 byte rather than the
+bundler's own log line, which uses a different compressor and reads about 2 KB
+high.
 
 **That record went 25 percent stale in one day, and the way it happened is the
 warning.** It read 153,204 B (451,227 B raw) from 2026-08-29, when the
