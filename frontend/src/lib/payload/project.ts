@@ -44,11 +44,11 @@ type Json = Record<string, unknown>;
 export const VIEW_VERSION = '2026-09-01T09:00';
 
 // The fields a page renders, and no others. Traced along the render path rather
-// than guessed: `DigestList` scopes, filters and divides the list, and
-// `DigestItem` with `ItemMeta`, `ItemVisual`, `LensChips`, `ConfidenceChip`,
-// `ReadAloud` and `SourceLink` draws one item. `source_url` is on it because it
-// is the reader's way out to the source, which is the most important thing on
-// an item after the summary itself.
+// than guessed: `DigestList` scopes and filters the list, and `DigestItem` with
+// `ItemMeta`, `ItemVisual`, `LensChips`, `ConfidenceChip`, `ReadAloud` and
+// `SourceLink` draws one item. `source_url` is on it because it is the reader's
+// way out to the source, which is the most important thing on an item after the
+// summary itself.
 //
 // Nine names joined the original thirteen on 2026-08-31, each with a named
 // renderer and each priced. Measured over 11 committed days and 3,733 items,
@@ -81,6 +81,13 @@ export const VIEW_VERSION = '2026-09-01T09:00';
 // days and 3,978 items, `gzip -9` on the compact projection, added to the
 // twenty-two-field arm: 467.49 bytes an item before and 468.24 after, which is
 // 0.75 an item.
+//
+// `introduced_by_run` is the one name here with no renderer. It paid for the
+// `Added later today` divider, which was deleted on 2026-09-01 for naming a run
+// boundary a reader cannot use. It stays because taking a name OFF this list is
+// a change to `DigestView` - the contract, its schema, its version stamp, and
+// the read side of every shell already in a browser - and that is a different
+// decision from deleting a divider. It costs 1.16 gzipped bytes an item.
 //
 // Its sibling on the committed item, `same_story_as`, is deliberately NOT here.
 // No page draws a group as one item yet, and a field without a reader does not
