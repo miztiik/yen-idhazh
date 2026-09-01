@@ -1,6 +1,6 @@
 # Config
 
-**Last Updated**: 2026-08-30
+**Last Updated**: 2026-09-01
 
 Where tunable behaviour lives, and the rule that separates a knob from an identifier. Config-driven with sane defaults is a project principle ([principles.md](principles.md), Rule #6): a fresh clone runs on the defaults, and no threshold, cap or source list is hardcoded in code.
 
@@ -470,6 +470,18 @@ and the reader came to read it; the archive holds thousands and the reader came
 to find one, so it opens on the same twenty-five the console's failure list
 does. It hides nothing - every story is one more click away, and the order is
 the published one.
+
+`ui.filter_min_chars` (2) is how many characters a reader types before an
+in-place filter narrows a list. It binds both surfaces, because the day page and
+the archive share one panel since 2026-09-01, and it is a knob rather than a
+literal for that reason - the same rule cannot be spelled in two components
+(Rule #6). Two rather than one because one letter narrows nothing: measured
+2026-09-01 over the 12 committed days and 4,203 story titles - arithmetic over
+committed text, so the spread is zero by construction - the median single letter
+matches 80.2 percent of them and `e` matches 99.8 percent, against a median 0.8
+percent for a two-letter pair. A first keystroke that redraws the page and
+removes almost nothing is work the reader watches for no answer. The ceiling of
+8 is where a field stops narrowing anything a reader would think to type.
 
 `ui.shell_seed_items` (15) is how many of a day's stories a prerendered document
 carries. It is the one knob in this block a browser is never told: the root

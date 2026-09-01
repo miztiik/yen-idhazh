@@ -155,6 +155,8 @@ Reader named one thing an item did not carry that they wanted before they would 
 
 Pills rather than tabs. Tabs assert a fixed exhaustive set of panels; the vertical set is data-driven and varies daily. Pills read as filters over one list, which is what a topic is here.
 
+Since 2026-09-01 they share a panel with the field that narrows the list - one control, described under [The filter bar](#the-filter-bar-topics-and-a-field-in-one-panel).
+
 **Only verticals present in the payload get a pill, with counts.** That is 1-6 controls on a real day, not 18 - and it makes Reader's objection structurally impossible: an empty tab, which reads as broken software, cannot occur because it is never rendered.
 
 Each pill is a link to a prerendered route, so middle-click, share and back all work. Lenses and events are not on the pill row: thirteen mostly-zero controls above seventeen items is a control bar longer than some days.
@@ -243,13 +245,46 @@ Jony refused a top-level search bar and Reader called it "clutter, and a lie abo
 
 The owner asked for it. What ships is the narrow defensible version, which is a filter, not a search:
 
-- It lives **inside the topic row**, not as a top-level bar above the first headline.
+- It lives **inside the filter bar**, beside the topic pills, not as a top-level bar above the first headline.
 - It filters **in place** over what is already on the page. It never navigates and never touches the URL.
 - It states its own scope - "6 of 17" - so it cannot imply an archive.
+- **It waits for `digest.filter_min_chars` characters before it narrows anything.** One letter narrows nothing: measured 2026-09-01 over the 12 committed days and 4,203 story titles, the median single letter is in 80.2 percent of them and `e` is in 99.8 percent, against a median 0.8 percent for a two-letter pair. A list that redraws on the first keystroke and removes almost nothing is work the reader watches for no answer.
 - No results says so plainly, naming the day rather than the corpus.
 - The query is untrusted reader input matched against untrusted payload text: compared with a lowercased substring test, and never interpolated into a selector, a class, a URL or markup.
 
+**It reads the list the page is holding, never one it captured.** A reading route prerenders the head of its day and fetches the rest, so a filter that took a copy of the items at mount would narrow a fifteen-story seed for ever, with nothing on screen saying so. `matchItems` in `frontend/src/lib/day-shape.ts` takes the list as an argument for that reason, and `frontend/tests/filter-bar.spec.ts` drives it with a seed and then with the whole day.
+
 Real cross-day search belongs on the archive, later, where the question "where was that thing about the reactor?" is genuinely unanswerable by scrolling.
+
+## The filter bar: topics and a field in one panel
+
+One panel carries the topic pills and the field, on the day page and on the archive. It replaced `TopicPills.svelte` on 2026-09-01, and the reason is vertical space: a field and a pill row each claiming their own band is why the top of a reading page was tall, and on the archive the search box was the last thing on the page - under every story it might have replaced.
+
+Six decisions, all Susan's:
+
+- **The pills are visible at rest.** Never behind the field, never collapsed as a set. The only thing a disclosure holds is the topics past `digest.topic_pills_max`, and its summary says how many.
+- **Typing never fetches.** On the day page it narrows the day already on the page - no navigation, no URL change, no request. On the archive it narrows the stories already fetched, by title, and only the `Search` button starts the on-device encoder download, so the 43 MB is named before it is paid for. `frontend/tests/filter-bar.spec.ts` counts the requests under the model directory and prints both counts: zero while typing, and exactly one encoder file after the click, which is what proves the counter was watching.
+- **Pressing `Search` turns the box from a filter into a question, and a question is not a substring.** So the list under it stops being narrowed by the words in it until the next keystroke. Without that rule a search which found nothing would leave an empty page instead of the browse list it is supposed to fall back to: a sentence like "medieval basket weaving techniques" is in no title, so the substring filter would empty the one list the page has. `Show all stories` empties the box as well as dropping the answer, for the same reason - it means all of them.
+- **Sticky at 1024px and up, and nowhere below it.** That is `frame.breakpoints_px[1]`, where the pills and the field share one band. Below it the panel can run to several wrapped lines, and a control holding a third of a phone screen for the whole scroll is screen the reader paid for.
+- **With no script the field is not rendered as a dead box.** A `<noscript>` rule hides it and one sentence takes its place, because an input that swallows typing is worse than no input. The day page's pills are prerendered links and keep working; the archive's pills are buttons over a list a script fetched, so they go with the field.
+- **The archive's pills carry whole-archive totals**, one integer a vertical, computed in `+page.server.ts` which already loads every day. That number is also the honest denominator of a topic-filtered list while months are still unread. The pill count and the list count are different numbers and never share a sentence.
+- **The archive's model-state and scope sentences moved up**, under the panel. They used to sit below the story list, which put the control behind the answer.
+
+Two shapes were refused. **A search field that expands to reveal filters** hides the filter set behind a control, which is the failure this replaced. **Keeping two separate blocks** was the owner's rejection: the two bands of vertical space are the cost the row exists to remove.
+
+**The panel is a surface, not a rule.** It takes `--color-surface`, a hairline and `--radius-lg`, the same low-chrome card language the item took in row #8 - the sticky band needs a ground of its own to sit in front of, and a bordered panel is what says the pills and the field are one control rather than two things that happen to be adjacent.
+
+**What it costs in vertical space, measured rather than asserted.** Chromium on the built site, the real 2026-09-01 digest of 117 stories over five desks, an 800px-tall CSS viewport, Intel Core i7-1265U / Windows 11 / node 24.12.0, 2026-09-01. Geometry is deterministic for a given pill count, so the spread is zero across repeats and the numbers move with the number of desks that published, not with the day's story count.
+
+| CSS viewport width | Panel height | Share of the screen | Position |
+| --- | --- | --- | --- |
+| 360 | 281 px | 35.1 percent | static |
+| 801 | 177 px | 22.1 percent | static |
+| 1024 | 121 px | 15.1 percent | sticky |
+| 1280 | 69 px | 8.6 percent | sticky, one row |
+| 1536 | 69 px | 8.6 percent | sticky, one row |
+
+That table is the argument for decision 3 rather than an illustration of it. At 360 the panel is a third of the screen, which is exactly why it scrolls away there; the pills and the field only share a single 69px row from 1280 up, and between 1024 and 1280 the pills take two lines inside the same band. A day with more desks pushes the two middle rows up and does not touch the last two.
 
 ## The archive lists stories, and fetches them a month at a time
 
@@ -258,6 +293,7 @@ Real cross-day search belongs on the archive, later, where the question "where w
 What it renders now, top to bottom:
 
 - The counts and the retention promise: "6 days, 2237 stories. Nothing here is deleted."
+- **The filter bar** - every topic the archive holds with its whole-archive count, and the search field beside them. Under it, the two sentences about the on-device model: what it would cost, and how far back a search would reach.
 - **The days as one compact row** of short dates. "The whole of Tuesday" is still a real request, and the row grows about 60 bytes a day, but a full date per line is an index rather than reading.
 - **The stories**, newest day first, each a link to its own anchor on the day that published it, with the date and the topic beneath.
 - **`Show 25 more`** - the same explicit control the day list and the console's failure list already use, sized by `ui.archive_page_size`.
@@ -278,7 +314,8 @@ The degraded states, and each one is designed rather than discovered:
 | State | What ships |
 | --- | --- |
 | No index, or a month that will not load | The day row, and one line: "The story list could not be loaded. Open a day above to read it." |
-| JavaScript off | The day row, and a `<noscript>` line saying the list needs it. The day links are prerendered, so navigation still works |
+| A filter or a topic that matches nothing read so far | The day row, and one line: "No story on this page matches that. Press Search to look through the whole archive." The field narrows what the browser has fetched, so the sentence names that scope and points at the control that reaches past it |
+| JavaScript off | The day row, and two `<noscript>` lines - one saying the list needs it, one saying the search and the topic filters do. The day links are prerendered, so navigation still works |
 | Nothing published at all | "Nothing has been published yet.", as before |
 
 ## Search reads the same month index, and says how far back it read
