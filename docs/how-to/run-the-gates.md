@@ -243,9 +243,10 @@ one day on 2026-08-26 to silence a gate that fired on ordinary publishes, and
 then uncapped, because a page that inlined every committed day could not hold a
 fixed number. It is capped again since 2026-08-27 at 7,553 bytes, which is the
 heaviest of five builds plus a measured year of publishing plus the 64-byte
-noise floor. That headroom shrinks 12 to 18 bytes on every publish and expires by
-design: when the gate fires on an ordinary day about a year from now, the answer
-is to re-measure and re-derive the number, not to add a digit
+noise floor. That headroom shrinks about 8 bytes on every publish since the day
+list folded into month disclosures on 2026-09-01, down from 12 to 18 before it,
+and it expires by design: when the gate fires on an ordinary day, the answer is
+to re-measure and re-derive the number, not to add a digit
 ([../reference/measurements.md](../reference/measurements.md#the-ceiling-that-holds-the-saving-and-where-its-headroom-comes-from)).
 
 **The console is three routes and takes three ceilings, all re-derived on

@@ -508,6 +508,25 @@ document instead and does not race:
 await expect(page.locator('html')).toHaveAttribute('data-theme', theme);
 ```
 
+**The integrated browser's page can be hidden, and then every Playwright click
+times out on an element that is plainly there.** Observed 2026-09-01: `click`,
+`scrollIntoViewIfNeeded` and `screenshot(ref)` all failed with
+`Timeout exceeded ... waiting for element to be stable`, on a `<summary>` that
+`getBoundingClientRect` reported as 578 by 44 and `getComputedStyle` reported as
+visible. Playwright decides "stable" by comparing the box across two animation
+frames, and a hidden tab fires none - so the check can never pass. The tell is
+one line, and a `requestAnimationFrame` loop that never resolves is the same
+signal:
+
+```javascript
+await page.evaluate(() => ({ hidden: document.hidden, state: document.visibilityState }));
+```
+
+Read the state with `page.evaluate` and set it too - `details.open = true` does
+what the click would have - and take the whole-page `page.screenshot()` rather
+than an element one. Then let the real browser suite hold the interaction,
+because that runs its own foreground context.
+
 **A new pipeline CLI flag may not be named after a llama-server flag.**
 `test_every_job_that_starts_a_server_reaches_the_one_argv_builder` reads every
 `run:` body in every workflow and fails on any whole-token match against

@@ -373,7 +373,7 @@ Every page here is prerendered and complete before a script runs, so a control t
 
 Two details make it work rather than look like it works. The rule inside `<noscript>` is unscoped, and a Svelte scoped class rule outranks it - `.field.svelte-<hash>` is specificity (0,2,0) against (0,1,0) - so the element carrying the attribute must not take a `display` of its own; the layout goes on a child. And the fallback sentence uses `hidden`, which the author rule beats without an `!important`. The trap and its symptom are in [../reference/agent-notes.md](../reference/agent-notes.md).
 
-What survives without a script is the part that was never scripted. On a day page the topic pills are links to prerendered routes, so a reader with no script still reaches every desk; on the archive they are buttons over a list a script fetched, so they go with the field and the page keeps its prerendered day row.
+What survives without a script is the part that was never scripted. On a day page the topic pills are links to prerendered routes, so a reader with no script still reaches every desk; on the archive they are buttons over a list a script fetched, so they go with the field and the page keeps its prerendered day list - the recent days as rows, and every older day inside a native month disclosure that opens with no script at all.
 
 `frontend/tests/layout-overflow.spec.ts` is the memory: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, on every reader-facing route, at 360, 801 and 1536 CSS px, in both themes. Measured before the rule landed, `/archive/` reported 368px of document in a 360px viewport in both themes, from an `--auto-grid-min` of `22rem` inside the 328px a 360px screen leaves after its gutters.
 

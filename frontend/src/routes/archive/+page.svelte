@@ -2,7 +2,7 @@
 	/** The archive: one list of stories, newest first, over a compact row of days.
 	 *
 	 * The stories are fetched a month at a time rather than inlined. Everything
-	 * this page renders from its own data - the day row, the counts, the topic
+	 * this page renders from its own data - the day list, the counts, the topic
 	 * names - grows per day or per month; nothing grows per story.
 	 *
 	 * **There is one list, and a search replaces what is in it.** The heading
@@ -20,11 +20,19 @@
 	 * the last thing on the page, under every story it might have replaced, and
 	 * the topic names were nowhere. One panel now carries the topics and the
 	 * field, and the two sentences about the on-device model follow it.
+	 *
+	 * **The day list stopped growing one link a published day.** It is the newest
+	 * `archive_recent_days` days as rows, then one disclosure a month and one a
+	 * year before this one. At 700 days that is about twenty rows instead of a
+	 * wall of dates. The links themselves are kept rather than dropped: they are
+	 * the only part of this page that works with no script, which is what the
+	 * `<noscript>` line below says out loud.
 	 */
 	import { base } from '$app/paths';
 	import { longDate, plural, shortDate } from '$lib/format';
 	import ArchiveSearch from '$lib/components/ArchiveSearch.svelte';
 	import DigestItem from '$lib/components/DigestItem.svelte';
+	import { dayDate, type ArchiveMonth } from '$lib/archive-calendar';
 	import { itemOf, loadDay } from '$lib/assist/day';
 	import { loadMonth } from '$lib/assist/index';
 	import { filterNeedle } from '$lib/day-shape';
@@ -154,7 +162,7 @@
 	}
 
 	onMount(() => {
-		if (data.days.length > 0) void showMore();
+		if (data.dayCount > 0) void showMore();
 	});
 </script>
 
@@ -162,14 +170,40 @@
 	<title>Archive &mdash; {data.ui.site_title}</title>
 </svelte:head>
 
+<!-- One month, as a disclosure. Rendered once here and used by the current
+     year's rows and by the rows inside a prior year, so a month cannot end up
+     reading two different ways depending on how old it is. -->
+{#snippet monthFold(month: ArchiveMonth)}
+	<details class="fold" data-archive-month={month.month}>
+		<summary class="fold-summary">
+			<span class="fold-name">{month.label}</span>
+			<span class="fold-facts">
+				{month.days.length} of {plural(month.length, 'day', 'days')}, {plural(
+					month.stories,
+					'story',
+					'stories'
+				)}
+			</span>
+		</summary>
+		<ul class="fold-body day-grid">
+			{#each month.days as day (day)}
+				{@const date = dayDate(month.month, day)}
+				<li>
+					<a href="{base}/{date}/" aria-label={longDate(date)}>{day}</a>
+				</li>
+			{/each}
+		</ul>
+	</details>
+{/snippet}
+
 <section class="py-6">
 	<h1 class="text-xl font-semibold text-text">Archive</h1>
 	<p class="mt-1 text-base text-text-secondary" data-archive-scope>
-		{plural(data.days.length, 'day', 'days')}, {plural(data.stories, 'story', 'stories')}.
+		{plural(data.dayCount, 'day', 'days')}, {plural(data.stories, 'story', 'stories')}.
 		{retention}
 	</p>
 
-	{#if data.days.length === 0}
+	{#if data.dayCount === 0}
 		<p class="mt-8 text-base text-text-secondary">Nothing has been published yet.</p>
 	{:else}
 		<ArchiveSearch
@@ -189,15 +223,41 @@
 			}}
 		/>
 
-		<nav class="mt-6 flex flex-wrap gap-x-4 gap-y-2" aria-label="Published days" data-day-row>
-			{#each data.days as entry (entry.date)}
-				<a
-					href="{base}/{entry.date}/"
-					class="text-sm text-accent hover:underline"
-					title={longDate(entry.date)}
-				>
-					{shortDate(entry.date)}
-				</a>
+		<nav class="days" aria-label="Published days" data-day-row>
+			<ul class="recent" data-day-recent>
+				{#each data.recent as entry (entry.date)}
+					<li class="recent-row">
+						<a href="{base}/{entry.date}/" class="recent-date">{longDate(entry.date)}</a>
+						<span class="recent-count">{plural(entry.items, 'story', 'stories')}</span>
+						{#if entry.partial}
+							<span class="recent-partial">Some stories did not finish</span>
+						{/if}
+					</li>
+				{/each}
+			</ul>
+
+			{#each data.calendar.months as month (month.month)}
+				{@render monthFold(month)}
+			{/each}
+
+			{#each data.calendar.years as year (year.year)}
+				<details class="fold" data-archive-year={year.year}>
+					<summary class="fold-summary">
+						<span class="fold-name">{year.year}</span>
+						<span class="fold-facts">
+							{year.days} of {plural(year.length, 'day', 'days')}, {plural(
+								year.stories,
+								'story',
+								'stories'
+							)}
+						</span>
+					</summary>
+					<div class="fold-body">
+						{#each year.months as month (month.month)}
+							{@render monthFold(month)}
+						{/each}
+					</div>
+				</details>
 			{/each}
 		</nav>
 
@@ -310,3 +370,144 @@
 		{/if}
 	{/if}
 </section>
+
+<style>
+	.days {
+		margin-block: var(--space-5);
+	}
+
+	.recent-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-1) var(--space-3);
+		padding-block: var(--space-2);
+		border-block-end: 1px solid var(--color-rule);
+	}
+
+	.recent-date {
+		flex: 1 1 auto;
+		min-inline-size: 0;
+		font-size: var(--text-base);
+		color: var(--color-accent);
+	}
+
+	.recent-date:hover {
+		text-decoration: underline;
+	}
+
+	.recent-count {
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-tertiary);
+	}
+
+	/* A tinted fill, because it tells the reader something and cannot be tapped
+	   (docs/concepts/design-system.md). The day link beside it is the outline. */
+	.recent-partial {
+		padding: var(--space-1) var(--space-2);
+		border-radius: var(--radius-full);
+		background: var(--tint-warn);
+		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
+		color: var(--color-text-secondary);
+		white-space: nowrap;
+	}
+
+	/* A native disclosure, so a month opens with no script and is reachable from
+	   the keyboard without a second label. */
+	.fold {
+		border-block-end: 1px solid var(--color-rule);
+	}
+
+	.fold-summary {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-1) var(--space-3);
+		min-block-size: 2.75rem;
+		padding-block: var(--space-2);
+		cursor: pointer;
+		color: var(--color-text-secondary);
+		list-style: none;
+	}
+
+	.fold-summary:hover {
+		color: var(--color-text);
+	}
+
+	/* The native triangle is dropped by `display: flex` in Chrome and Safari and
+	   kept in Firefox, so the mark is drawn here and the native one is turned off
+	   in both. Without it a month is a line of text that gives no sign it opens. */
+	.fold-summary::-webkit-details-marker {
+		display: none;
+	}
+
+	.fold-summary::before {
+		content: '';
+		flex: none;
+		inline-size: 0;
+		block-size: 0;
+		border-block: 0.3rem solid transparent;
+		border-inline-start: 0.4rem solid currentColor;
+		transition: transform var(--dur-fast) ease;
+	}
+
+	.fold[open] > .fold-summary::before {
+		transform: rotate(90deg);
+	}
+
+	.fold-name {
+		flex: 1 1 auto;
+		min-inline-size: 0;
+		font-size: var(--text-base);
+	}
+
+	.fold-facts {
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-text-tertiary);
+	}
+
+	.fold-body {
+		padding-block-end: var(--space-3);
+	}
+
+	/* Wraps rather than scrolls: no reader-facing surface here scrolls sideways.
+	   Every cell is a tap target, and the number is the whole label because the
+	   summary above it already names the month - the link's accessible name
+	   carries the full date for a reader who meets it out of that order. */
+	.day-grid {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-1);
+	}
+
+	.day-grid a {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-inline-size: 2.75rem;
+		min-block-size: 2.75rem;
+		border: 1px solid var(--color-rule);
+		border-radius: var(--radius-md);
+		font-size: var(--text-sm);
+		line-height: var(--leading-sm);
+		color: var(--color-accent);
+		transition: border-color var(--dur-fast) ease;
+	}
+
+	.day-grid a:hover {
+		border-color: var(--color-accent);
+	}
+
+	/* A year holds months, and a month holds days. One step of indent says which
+	   is inside which; the hairline says where each row ends. */
+	.fold .fold {
+		margin-inline-start: var(--space-3);
+	}
+
+	.fold .fold:last-child {
+		border-block-end: none;
+	}
+</style>
