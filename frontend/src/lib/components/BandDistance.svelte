@@ -14,6 +14,10 @@
 	 */
 	import {
 		chartWidth,
+		coverage,
+		coverageRegions,
+		coverageRegionTitle,
+		coverageSentence,
 		dayColumnX,
 		dayColumns,
 		dayTicks,
@@ -24,6 +28,7 @@
 		modelRules,
 		modelRuleTitle,
 		noModelRuleNote,
+		notMeasuredRow,
 		observeWidth,
 		pointerReadout,
 		readoutMarks,
@@ -152,6 +157,23 @@
 	);
 	const changedOn = $derived(new Set(rules.map((rule) => rule.date)));
 
+	/** Which columns carry a summary at all. A day nothing summarised drew three
+	 * zero-height segments, and a zero on this chart is a claim - it says every
+	 * summary that day landed nowhere. */
+	const summarised = $derived(split.map((day) => day.items > 0));
+	const covered = $derived(coverage(summarised));
+	/** The spans nothing summarised, drawn under the columns so a tint never
+	 * covers a bar. */
+	const emptySpans = $derived(
+		coverageRegions(
+			covered,
+			split.map((day) => day.date),
+			columnsX,
+			box
+		)
+	);
+	const coverageNote = $derived(coverageSentence(covered, 'We wrote summaries on'));
+
 	const ranked = $derived(
 		rank<RankedDisplay>(
 			outliers.map(
@@ -213,17 +235,25 @@
 		split.map((day, index) => ({
 			x: centre(index),
 			date: dayMonth(day.date),
-			rows: [
-				...PARTS.map((part) => ({
-					label: part.text,
-					value: String(day[part.place]),
-					colour: part.colour
-				})),
-				{ label: 'Summaries that day', value: String(day.items), colour: '' },
-				// The rule is a mark on the plot and a line in the strip, so a reader
-				// stepping the days with an arrow key meets it without a pointer.
-				...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
-			]
+			rows:
+				day.items > 0
+					? [
+							...PARTS.map((part) => ({
+								label: part.text,
+								value: String(day[part.place]),
+								colour: part.colour
+							})),
+							{ label: 'Summaries that day', value: String(day.items), colour: '' },
+							// The rule is a mark on the plot and a line in the strip, so a reader
+							// stepping the days with an arrow key meets it without a pointer.
+							...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
+						]
+					: [
+							// Four zeros here would say every summary of the day landed
+							// nowhere, and no summary was written at all.
+							notMeasuredRow('Nothing was summarised on this day'),
+							...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
+						]
 		}))
 	);
 	const marks = $derived(readoutMarks(columns));
@@ -248,6 +278,16 @@
 			<span data-band-note="not-plotted"
 				>{notPlaced} articles in this window recorded no length, so no band can be read for them and
 				they are not counted here.</span
+			>
+		{/if}
+		{#if coverageNote}
+			<!-- The window is not narrowed to the days that carry summaries: the empty
+			     span is a true fact about the record, and a chart that hides it reports
+			     a fuller record than exists. -->
+			<span
+				data-coverage-note="band-distance"
+				data-coverage-days={covered.days}
+				data-coverage-measured={covered.measured}>{coverageNote}</span
 			>
 		{/if}
 		{#if rules.length === 0}
@@ -282,6 +322,21 @@
 					onSelect: (index) => (selected = index)
 				}}
 			>
+				<!-- The span nothing summarised, drawn before the guide and the columns so
+				     the tint sits under every mark. -->
+				{#each emptySpans as span (span.from)}
+					<rect
+						x={px(span.x)}
+						y={box.top}
+						width={px(span.width)}
+						height={box.innerHeight}
+						fill="var(--color-surface-sunken)"
+						data-coverage-empty={span.from}
+						data-coverage-empty-to={span.to}
+					>
+						<title>{coverageRegionTitle(span)}</title>
+					</rect>
+				{/each}
 				{#if guide !== null}
 					<line
 						x1={guide}

@@ -20,6 +20,7 @@ import { extent } from 'd3-array';
 import { scaleLinear, scaleLog } from 'd3-scale';
 
 import { dayMonth, shortDate } from '../format';
+import { grouped } from './series';
 
 export interface Margin {
 	top: number;
@@ -188,6 +189,56 @@ export const LABEL_ADVANCE_EM = 0.58;
 export function labelWidth(text: string, fontSize: number = AXIS_LABEL_PX): number {
 	return text.length * fontSize * LABEL_ADVANCE_EM;
 }
+
+/** The most of a frame a column of row labels may take before the plot stops
+ * being the chart.
+ *
+ * Measured 2026-09-01 at 390 on the built console: `What the cap cost, by
+ * source` gave its source names a fixed 168px of a 324px frame, so the plot
+ * itself got 144px - 44 percent - and the six tracks drew inside 91px of it. A
+ * gutter wider than the plot is a list with a chart in the margin.
+ */
+export const MAX_GUTTER_SHARE = 0.3;
+
+/** The room a column of labels needs, or null where the frame cannot spare it.
+ *
+ * Null is the caller's cue to put the labels somewhere else - above the mark
+ * they name, usually - and never to clip them or to shrink the plot behind
+ * them. A source id is the ledger's own spelling of a name and there is no
+ * shorter true form of it.
+ */
+export function labelGutter(
+	texts: readonly string[],
+	fontSize: number,
+	gap: number,
+	width: number
+): number | null {
+	const widest = texts.reduce((most, text) => Math.max(most, labelWidth(text, fontSize)), 0);
+	const room = Math.ceil(widest) + gap;
+	return room > width * MAX_GUTTER_SHARE ? null : room;
+}
+
+/** The least a chart row may be and still carry two lines of type with air
+ * between one row and the next. `rowPitch` clamps to it and never below. */
+export const ROW_PITCH_MIN = 40;
+
+/** How tall one row of a horizontal chart is, in the frame it was given.
+ *
+ * `cellFor` in `run-history.ts` grows a run-strip cell the same way, and for
+ * the same reason: a pitch that is right for a phone leaves a page-wide chart
+ * as a stack of rules with air nowhere. Solve for the frame, then clamp - the
+ * floor is the type the row carries and the ceiling is where rows stop reading
+ * as one set.
+ */
+export function rowPitch(innerWidth: number, min: number, max: number): number {
+	if (!Number.isFinite(innerWidth) || innerWidth <= 0) return min;
+	return Math.max(min, Math.min(max, Math.round(innerWidth * ROW_PITCH_OF_WIDTH)));
+}
+
+/** How tall a row is against the plot it sits in. A track a fortieth of the
+ * plot's width reads as a rule rather than as a length. */
+const ROW_PITCH_OF_WIDTH = 1 / 24;
+
 
 /** Where a label anchored this way starts and ends, around its own x. */
 function labelExtent(
@@ -405,6 +456,180 @@ export const MODEL_RULE_ROW: ReadoutRow = {
 export function noModelRuleNote(days: number): string {
 	return `Nothing changed about how the summaries are written inside these ${days} ${days === 1 ? 'day' : 'days'}.`;
 }
+
+/** Below this share of a window's days, a chart states the span nothing
+ * measured instead of letting its marks pile against one edge.
+ *
+ * Half, because half is where the empty part becomes the larger part of the
+ * picture. Measured 2026-09-01 at 1440 on the built console: `Time per item, by
+ * stage` drew a 1,292px plot with every mark between x=1,030 and x=1,342 - 312px,
+ * 24 percent of the plot, all on the right - because the window was 30 days and
+ * 8 carried a timing. `Failure rate against volume` and `Summary length against
+ * the length asked for` drew columns on the same 8 of 30.
+ *
+ * A drawing rule and not a knob in `config/`: it decides what a chart says
+ * about itself, the way `LABEL_ADVANCE_EM` and `CELL_MAX` decide what an axis
+ * and a strip look like. Nothing an operator would tune sits behind it.
+ */
+export const SPARSE_COVERAGE = 0.5;
+
+/** How much of the span a chart drew its own measure actually covered. */
+export interface Coverage {
+	/** Columns drawn - the window the control set, never the data's own extent. */
+	days: number;
+	/** Columns carrying a measurement. */
+	measured: number;
+	/** True where the note and the tinted span are drawn. */
+	sparse: boolean;
+	/** Each unbroken run of columns nothing measured, as first and last index. */
+	gaps: [number, number][];
+}
+
+/** What a chart covered, from one flag per column.
+ *
+ * The caller decides what "measured" means for its own series, because the
+ * three charts that draw this window disagree about it: a day the pipeline
+ * planned no item and a day it planned items and timed none are the same blank
+ * column and are not the same fact.
+ */
+export function coverage(
+	measured: readonly boolean[],
+	threshold: number = SPARSE_COVERAGE
+): Coverage {
+	const days = measured.length;
+	const count = measured.filter(Boolean).length;
+	const gaps: [number, number][] = [];
+	let open: number | null = null;
+	measured.forEach((seen, index) => {
+		if (!seen && open === null) open = index;
+		if (seen && open !== null) {
+			gaps.push([open, index - 1]);
+			open = null;
+		}
+	});
+	if (open !== null) gaps.push([open, days - 1]);
+	return {
+		days,
+		measured: count,
+		sparse: days > 0 && count > 0 && count / days < threshold,
+		gaps
+	};
+}
+
+/** One tinted region: where it starts, how wide it is, and what it covers. */
+export interface CoverageRegion {
+	x: number;
+	width: number;
+	from: string;
+	to: string;
+}
+
+/** The empty spans of a chart, in the chart's own pixels.
+ *
+ * Nothing at all above the threshold. A window missing a day or two draws that
+ * day as a break in a line and a reader can see it; the tint is for the case
+ * where the empty part is the larger part of the picture and the marks read as
+ * a chart squashed into one corner.
+ *
+ * A region runs from halfway between the gap's first column and the one before
+ * it to halfway past its last, so the tint stops between two columns rather
+ * than through the marks on either side. It is clipped to the plot, because a
+ * gap at either end of the window has no neighbour to meet.
+ *
+ * Tinted rather than hatched: a hatch is a pattern a reader stops to decode,
+ * and this one has nothing to say beyond "no measurement reached here".
+ */
+export function coverageRegions(
+	found: Coverage,
+	dates: readonly string[],
+	columns: readonly number[],
+	box: Frame
+): CoverageRegion[] {
+	if (!found.sparse) return [];
+	const regions: CoverageRegion[] = [];
+	for (const [from, to] of found.gaps) {
+		const at = columns[from];
+		const end = columns[to];
+		if (at === undefined || end === undefined) continue;
+		const before = columns[from - 1];
+		const after = columns[to + 1];
+		const left = Math.max(box.left, before === undefined ? box.left : (before + at) / 2);
+		const right = Math.min(box.right, after === undefined ? box.right : (end + after) / 2);
+		// A sliver narrower than a hairline is a smudge on the plot rather than a
+		// span a reader can point at.
+		if (right - left < 1) continue;
+		regions.push({
+			x: left,
+			width: right - left,
+			from: dates[from] ?? '',
+			to: dates[to] ?? ''
+		});
+	}
+	return regions;
+}
+
+/** What one tinted span says to anybody who points at it. */
+export function coverageRegionTitle(region: CoverageRegion): string {
+	const span =
+		region.from === region.to
+			? shortDate(region.from)
+			: `${shortDate(region.from)} to ${shortDate(region.to)}`;
+	return `Nothing was measured over ${span}. The span is drawn because it happened, not because it was quiet.`;
+}
+
+/** The item clause of a coverage sentence, where the chart counts items too.
+ *
+ * `low` and `high` differ only where the chart's series disagree about how much
+ * of a day they reached, and then the numerator is a range. Summing across the
+ * series would count one item once per series, and picking one of them would be
+ * arbitrary.
+ */
+export interface CoverageItems {
+	low: number;
+	high: number;
+	total: number;
+}
+
+/** One sentence for the whole chart: how much of its window it measured.
+ *
+ * Null above the threshold, and null where the chart measured every column. A
+ * sentence that only ever says "all of it" is noise, and one printed under a
+ * chart with two days missing of thirty is a caveat nobody reads. Both numbers
+ * are named rather than a share, so a reader can check the claim against the
+ * columns he can see (CLAUDE.md Rule #10).
+ *
+ * `lead` is the subject and the verb, because the three charts that draw this
+ * window measure three different things and no one verb is true of all of them:
+ * one timed a day, one wrote summaries on it, and one planned items for it.
+ */
+export function coverageSentence(
+	found: Coverage,
+	lead: string,
+	items: CoverageItems | null = null
+): string | null {
+	if (!found.sparse) return null;
+	const days = `${lead} ${found.measured} of these ${found.days} days`;
+	const count =
+		items === null
+			? ''
+			: `, and ${
+					items.low === items.high
+						? grouped(items.low)
+						: `${grouped(items.low)} to ${grouped(items.high)}`
+				} of the ${grouped(items.total)} items on them`;
+	return `${days}${count}. The tinted span is days nothing recorded, not quiet days.`;
+}
+
+/** The readout row a chart prints on a column nothing measured.
+ *
+ * Measured, a pointer on one of those columns selected it and printed a set of
+ * blanks or a set of zeros, which is what reads as a broken hover rather than
+ * as an empty day. No colour: nothing on the plot is this row's mark.
+ */
+export function notMeasuredRow(sentence: string): ReadoutRow {
+	return { label: sentence, value: '', colour: '' };
+}
+
 
 /** How wide the readout strip under a plot may be, as an inline style.
  *
