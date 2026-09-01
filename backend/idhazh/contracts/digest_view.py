@@ -144,6 +144,15 @@ class DigestViewItem(Model):
         ge=0.0,
         description="What the planning step scored the story at. Null is unknown, never 0.",
     )
+    also_covered_by: int | None = Field(
+        default=None,
+        ge=0,
+        description=(
+            "How many other sources carried the same story today. 0 is the sentence "
+            "'Only one of our sources carried this.' Null is unknown, and prints "
+            "nothing at all."
+        ),
+    )
     introduced_by_run: int = Field(
         ge=1, description="A global fact, true for every reader, asserted without any storage."
     )
@@ -170,6 +179,24 @@ class DigestView(Contract):
 
     __schema_stem__: ClassVar[str] = "digest-view"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-01T09:00",
+            change="Added also_covered_by to a served item.",
+            why=(
+                "It has a named renderer, which is the bar every field here answers "
+                "to: `ItemMeta` prints the sentence that says how many other sources "
+                "carried the story, or that only one of ours did. Measured 2026-09-01 "
+                "on Intel Core i7-1265U / Windows 11 over 11 committed days and 3,978 "
+                "items, gzip -9 over the compact projection, the name added to the "
+                "twenty-two-field arm: 467.49 bytes an item before and 468.24 after, "
+                "which is 0.75 an item and 0.16 percent. Its sibling on the committed "
+                "item, same_story_as, is NOT here: no page draws a group as one item "
+                "yet, and a field without a reader does not earn the wire. It arrives "
+                "when a reading route can also say where the items it stopped drawing "
+                "went. Additive, so an older shell ignores the key and draws the page "
+                "it drew yesterday."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-31T12:00",
             change=(
