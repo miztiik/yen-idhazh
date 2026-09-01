@@ -77,6 +77,16 @@ function writeItemHealthCanary() {
 	const earliest = back(2);
 	const sourceDay = back(3);
 	const outsideWindow = back(10);
+	/** The same day the counters fixture puts its widest-preset run on.
+	 *
+	 * Outside 7, 14 and 30 days, inside 90. Two runs sit here and each times six
+	 * items, which is the only place on this fixture that clears
+	 * `console.min_attempts_for_rate` - so the latency plots draw a line at the
+	 * widest preset and nowhere else. Without it every run here times two or
+	 * three items, a p99 over three items is the third item, and the panel is a
+	 * state no test could reach.
+	 */
+	const longAgo = back(40);
 	const dir = join(STATE, 'item-health');
 	mkdirSync(dir, { recursive: true });
 
@@ -270,6 +280,22 @@ function writeItemHealthCanary() {
 		return rows;
 	}
 
+	/** One run's worth of timed items, for the latency plots.
+	 *
+	 * Six of them, because `console.min_attempts_for_rate` is the floor below
+	 * which a p99 is just the slowest item. The stage clock is all these rows
+	 * carry: no `prefill_ms`, no `decode_ms` and no token count, which is the
+	 * state every run before token capture is in and is also what keeps these
+	 * rows out of the throughput candles, the token totals and the cost figures.
+	 * A row that carries a stage clock and no model clock is evidence about the
+	 * stage and about nothing else.
+	 */
+	function tailRows(rowDate, run, model) {
+		return model.map((summarizeMs, index) =>
+			published(rowDate, run, `tail-${run}-${index}`, [120, 20, summarizeMs], ['', '', '', '', ''])
+		);
+	}
+
 	writeFileSync(
 		join(dir, `${year}-${month}.csv`),
 		[
@@ -304,6 +330,16 @@ function writeItemHealthCanary() {
 			// fetch and extract are that day's own medians, so neither median moves
 			// and the fifth item only widens the denominator.
 			dropped(date, 2, 'ai-05', 'boilerplate', 1180, 174, 200, 30),
+			// Forty days back, on the day the counters fixture already uses for its
+			// widest-preset run. Two runs of six timed items each - the only rows
+			// here that clear `console.min_attempts_for_rate`, so the latency plots
+			// have a line to draw at 90 days and an empty state at every narrower
+			// preset. The six values a run climb steeply on purpose: the p99 is
+			// about eight times the p50, which is what the shared scale across the
+			// five plots exists to show, and two plots on two scales would draw the
+			// same shape twice.
+			...tailRows(longAgo, 1, [520, 640, 700, 810, 1100, 4300]),
+			...tailRows(longAgo, 2, [560, 690, 760, 880, 1250, 4900]),
 			...sourceCutRows()
 		].join('\n') + '\n'
 	);

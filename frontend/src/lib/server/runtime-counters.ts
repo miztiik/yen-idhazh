@@ -4,9 +4,9 @@
  * this module nothing read a cell of it. Over that time every throughput figure
  * this project quoted came off one instrument - the timings the summarize stage
  * copied out of each model reply - and the second instrument that could check
- * them sat unread. Measured 2026-08-30 by this module over the 10 committed runs
- * it can read: the read rate inside a single run varies 1.01x to 4.35x, and the
- * worst run ran one shard at 9.80 prompt tokens a second against another at
+ * them sat unread. Measured 2026-09-01 by this module over the 18 committed runs
+ * it can read: the read rate inside a single run varies 1.007x to 4.345x, and
+ * the worst run ran one shard at 9.80 prompt tokens a second against another at
  * 42.58. A per-run average hides all of that, which is why the shard is the unit
  * here and the run figure always carries how many shards it was made from.
  *
@@ -178,8 +178,8 @@ export interface RunCounters {
 	writeTokensPerSecond: Reading<number>;
 	/** The fastest shard's read rate over the slowest.
 	 *
-	 * The figure this module exists for. Measured 2026-08-30 over the 10 runs
-	 * the committed ledger can be read for, it runs 1.01x to 4.35x, and a
+	 * The figure this module exists for. Measured 2026-09-01 over the 18 runs
+	 * the committed ledger can be read for, it runs 1.007x to 4.345x, and a
 	 * per-run average reports neither end of it.
 	 */
 	readSpread: Reading<number>;
@@ -195,7 +195,11 @@ export interface RunCounters {
 	 * it says that shard spent its job waiting rather than computing. */
 	lowestCpuBusyPct: Reading<number>;
 	/** The highest any shard reached. What decides whether a model can be served
-	 * on the runner's 16 GB with headroom left. */
+	 * on the runner's 16 GB with headroom left. A maximum and never a sum: shards
+	 * are separate jobs on separate hosts, so adding four of them would report a
+	 * machine that never existed. Measured 2026-09-01 over the 11 committed runs
+	 * that carry the cell, the high-water mark is 14,155,517,952 B - 13.18 GiB,
+	 * 82 percent of the runner. */
 	peakRssBytes: Reading<number>;
 	/** The slowest shard's load. Read against the same wall clock the job clock
 	 * is read against, so the two are the same shard's worst case. */
