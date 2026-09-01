@@ -1562,20 +1562,33 @@
       "url": "https://www.zdnet.com/topic/artificial-intelligence/rss.xml",
       "vertical": "ai",
       "weight": 1.0
-    }
-  ],
-  "retired": [
+    },
+
     {
-      "id": "anthropic-news",
+      "id": "anthropic-research",
       "kind": "announcement",
-      "retired_on": "2026-08-29",
-      "status": "retired",
+      "retired_on": null,
+      "status": "active",
       "tier": 1,
       "title": "Anthropic",
-      "url": "https://www.anthropic.com/news",
+      "url": "https://openrss.org/feed/www.anthropic.com/research",
       "vertical": "ai",
       "weight": 1.0
     },
+    {
+      "id": "anthropic-engineering",
+      "kind": "announcement",
+      "retired_on": null,
+      "status": "active",
+      "tier": 1,
+      "title": "Anthropic",
+      "url": "https://openrss.org/feed/www.anthropic.com/engineering",
+      "vertical": "ai",
+      "weight": 1.0
+    }
+  ],
+
+  "retired": [
     {
       "id": "axios-business",
       "kind": "reporting",
