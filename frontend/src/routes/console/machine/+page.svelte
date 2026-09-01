@@ -29,6 +29,7 @@
 	import { onMount } from 'svelte';
 	import { base } from '$app/paths';
 	import Chart from '$lib/charts/Chart.svelte';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import Panel from '$lib/components/Panel.svelte';
@@ -42,17 +43,38 @@
 		cacheColumns,
 		clockColumns,
 		clocksChart,
+		contextColumns,
 		costOf,
+		curveOf,
 		gib,
+		latencyColumns,
 		money,
 		percentileChart,
 		percentileColumns,
+		seconds,
 		tokenChart,
+		PERCENTILES,
 		RUNNER_MEMORY_BYTES
 	} from '$lib/charts/machine';
 	import { grouped } from '$lib/charts/series';
-	import { columnStrip } from '$lib/charts/frame';
-	import { targetMarks } from '$lib/charts/targetbar';
+	import {
+		chartWidth,
+		columnStrip,
+		dayColumnX,
+		dayColumns,
+		dayTicks,
+		frame,
+		linearAxis,
+		modelRuleTitle,
+		modelRules,
+		noModelRuleNote,
+		observeWidth,
+		pointerReadout,
+		readoutMarks,
+		MODEL_RULE_ROW,
+		type Frame
+	} from '$lib/charts/frame';
+	import { shortDate } from '$lib/format';
 	import type { StackShape } from '$lib/charts/stacked';
 
 	let { data } = $props();
@@ -108,7 +130,8 @@
 	let cacheShape = $state<StackShape>('bars');
 	const cacheOption = $derived(cacheChart(view.cacheDays, cacheShape).option);
 	const clocksOption = $derived(clocksChart(data.clocks.pairs).option);
-	const percentileOption = $derived(percentileChart(data.percentiles.curves).option);
+	const newestCurve = $derived(data.newestTail === null ? [] : [curveOf(data.newestTail)]);
+	const percentileOption = $derived(percentileChart(newestCurve).option);
 	const inputOption = $derived(
 		tokenChart(view.tokens, (run) => run.input, 'prompt tokens', '--chart-1').option
 	);
@@ -123,16 +146,14 @@
 	// `data`.
 	const cacheStrip = $derived(cacheColumns(view.cacheDays));
 	const clockStrip = $derived(clockColumns(data.clocks.pairs));
-	const percentileStrip = $derived(percentileColumns(data.percentiles.curves));
+	const percentileStrip = $derived(percentileColumns(newestCurve));
 	/** The insets `percentileChart` draws its grid at. The strip's column centres
 	 * are computed from them, so a pointer and the strip agree. */
 	const PERCENTILE_GRID = { left: 60, right: 44 };
-	/** The same, for the two token charts. */
-	const TOKEN_GRID = { left: 62, right: 12 };
-	/** One series each, and each still earns a strip: a run id is turned 45
-		* degrees on the axis and thinned when the runs crowd, so the bar a pointer
-		* is on is the one place its run and its count can be read together. These
-		* read the open span, because the bars do. */
+	/** One series each, and each still earns a strip: the axis carries the run's
+		* day and the strip carries the run itself, so the bar a pointer is on is
+		* the one place a run id and its count can be read together. These read the
+		* open span, because the bars do. */
 	const tokenRuns = $derived(view.tokens.map((run) => run.runId));
 	const inputStrip = $derived(
 		columnStrip(tokenRuns, [
@@ -163,6 +184,194 @@
 		])
 	);
 
+	// ---------------------------------------------------------------------
+	// The two run-by-run charts
+	//
+	// Both draw one mark a RUN rather than one a day, so the span decides which
+	// rows to keep and nothing else. The rows are carried once, bounded to the
+	// widest preset, and filtered here - the server filters the same pair of
+	// dates the same way, so the chart it drew and the chart a browser redraws
+	// are built from one set.
+	// ---------------------------------------------------------------------
+
+	const inSpan = <T extends { date: string }>(rows: readonly T[]): T[] =>
+		rows.filter((row) => row.date >= view.start && row.date <= view.end);
+
+	/** One date a run, with a repeat blanked.
+	 *
+	 * `modelRules` draws a rule where a drawn column's date is a boundary. A day
+	 * with three runs is three columns carrying one date, and drawing three rules
+	 * for one change would say the pipeline changed three times. The first run of
+	 * the day keeps the date, so the rule falls on the leading edge of the day -
+	 * which is where the shared helper puts it on a calendar axis too.
+	 */
+	function firstOfDay(rows: readonly { date: string }[]): string[] {
+		return rows.map((row, index) => (rows[index - 1]?.date === row.date ? '' : row.date));
+	}
+
+	/** A date axis whose columns are runs: a repeated day is labelled once.
+	 *
+	 * `dayTicks` owns the measured thinning and the anchoring. What it cannot
+	 * know is that two neighbouring columns can be the same day, and two identical
+	 * dates side by side read as a chart that lost its order. Read backwards, so
+	 * the NEWER of two runs on one day keeps the label: it is the end of the axis
+	 * and the column an operator reads first. The tick mark stays either way - a
+	 * reader counting columns needs the grid.
+	 */
+	function runTicks(dates: readonly string[], columns: readonly number[]) {
+		const ticks = dayTicks(dates, { density: data.chart.tick_density, columns });
+		let carried = '';
+		for (let at = ticks.length - 1; at >= 0; at -= 1) {
+			if (ticks[at].text === '') continue;
+			if (ticks[at].text === carried) ticks[at] = { ...ticks[at], text: '' };
+			else carried = ticks[at].text;
+		}
+		return ticks;
+	}
+
+	// --- Context headroom ------------------------------------------------
+
+	/** How much room the oldest and newest marks need inside the plot. */
+	const MARK_PAD = 6;
+
+	let contextWidth = $state<number | null>(null);
+	let contextAt = $state<number | null>(null);
+
+	const contextRuns = $derived(inSpan(data.series.context));
+	const contextBox = $derived(
+		frame(chartWidth(contextWidth, data.chart.width_px), data.chart.height_px, {
+			top: 14,
+			right: 12,
+			bottom: 22,
+			left: 52
+		})
+	);
+	const contextX = $derived(
+		// Rounded where they are made rather than at every use. `dayColumnX` divides
+		// a plot by its column count, so a raw value carries seventeen digits into
+		// the document for a tenth of a pixel nobody can see.
+		dayColumns(contextRuns.length, contextBox, MARK_PAD).map((x) => Math.round(x * 10) / 10)
+	);
+	/** The window is in the domain, so the limit is a line on the plot rather
+	 * than a number off the top of it. Zero-anchored: the height of a mark is
+	 * the size of the sequence. */
+	const contextY = $derived(
+		linearAxis(
+			[
+				0,
+				data.contextWindow,
+				...contextRuns.flatMap((run) => [run.longest ?? 0, run.spare ?? 0])
+			],
+			[contextBox.bottom, contextBox.top]
+		)
+	);
+	const contextAxis = $derived(
+		runTicks(
+			contextRuns.map((run) => run.date),
+			contextX
+		)
+	);
+	const contextRules = $derived(
+		modelRules(data.modelChanges, firstOfDay(contextRuns), contextX)
+	);
+	const contextStrip = $derived(
+		contextColumns(contextRuns, data.contextWindow).map((column, index) => ({
+			...column,
+			x: contextX[index] ?? 0,
+			rows: contextRules.some((rule) => rule.date === contextRuns[index]?.date)
+				? [...column.rows, MODEL_RULE_ROW]
+				: column.rows
+		}))
+	);
+	const contextMarks = $derived(readoutMarks(contextStrip));
+	const contextResting = $derived(contextStrip.at(-1) ?? null);
+	const contextReadout = $derived(
+		contextAt === null ? contextResting : (contextStrip[contextAt] ?? contextResting)
+	);
+	/** Two polylines, built once each rather than per mark. */
+	function line(values: readonly (number | null)[]): string {
+		return values
+			.map((value, index) =>
+				value === null ? '' : `${contextX[index]},${contextAtY(value)}`
+			)
+			.filter((point) => point !== '')
+			.join(' ');
+	}
+	function contextAtY(value: number): number {
+		return Math.round(contextY.scale(value) * 10) / 10;
+	}
+
+	// --- Run latency, one plot per percentile ----------------------------
+
+	/** One sub-plot, and the air between two of them. Five stacked rather than
+	 * five side by side: they share the day axis at the foot, so a reader
+	 * comparing p50 with p99 on one run reads straight down one column. */
+	const TAIL_CELL_PX = 96;
+	const TAIL_GAP_PX = 12;
+	const TAIL_MARGIN = { top: 16, right: 12, bottom: 8, left: 52 };
+	/** The shared date axis under the last cell. */
+	const TAIL_AXIS_PX = 22;
+
+	let tailWidth = $state<number | null>(null);
+	let tailAt = $state<number | null>(null);
+
+	const tailRuns = $derived(inSpan(data.series.latency));
+	const tailW = $derived(chartWidth(tailWidth, data.chart.width_px));
+	const tailH = $derived(
+		PERCENTILES.length * TAIL_CELL_PX + (PERCENTILES.length - 1) * TAIL_GAP_PX + TAIL_AXIS_PX
+	);
+	/** Where one percentile's own plot sits inside the shared drawing. */
+	function tailBox(at: number): Frame {
+		const box = frame(tailW, TAIL_CELL_PX, TAIL_MARGIN);
+		const down = at * (TAIL_CELL_PX + TAIL_GAP_PX);
+		return { ...box, top: box.top + down, bottom: box.bottom + down };
+	}
+	/** ONE domain across all five, which is the whole check: five plots on five
+	 * domains are five pictures of the same shape, and a reader cannot tell from
+	 * them that the p99 is twenty times the p50. The scale is built in the first
+	 * cell's pixels and every other cell is the same box moved down. */
+	const tailY = $derived(
+		linearAxis(
+			tailRuns.flatMap((run) => run.ms.map((ms) => ms / 1000)),
+			[TAIL_CELL_PX - TAIL_MARGIN.bottom, TAIL_MARGIN.top]
+		)
+	);
+	function tailAtY(at: number, value: number): number {
+		return Math.round((tailY.scale(value) + at * (TAIL_CELL_PX + TAIL_GAP_PX)) * 10) / 10;
+	}
+	const tailX = $derived(
+		dayColumns(tailRuns.length, tailBox(0), MARK_PAD).map((x) => Math.round(x * 10) / 10)
+	);
+	const tailAxis = $derived(
+		runTicks(
+			tailRuns.map((run) => run.date),
+			tailX
+		)
+	);
+	const tailRules = $derived(modelRules(data.modelChanges, firstOfDay(tailRuns), tailX));
+	const tailStrip = $derived(
+		latencyColumns(tailRuns).map((column, index) => ({
+			...column,
+			x: tailX[index] ?? 0,
+			rows: tailRules.some((rule) => rule.date === tailRuns[index]?.date)
+				? [...column.rows, MODEL_RULE_ROW]
+				: column.rows
+		}))
+	);
+	const tailMarks = $derived(readoutMarks(tailStrip));
+	const tailResting = $derived(tailStrip.at(-1) ?? null);
+	const tailReadout = $derived(tailAt === null ? tailResting : (tailStrip[tailAt] ?? tailResting));
+	function tailLine(at: number): string {
+		return tailRuns
+			.map((run, index) => `${tailX[index]},${tailAtY(at, (run.ms[at] ?? 0) / 1000)}`)
+			.join(' ');
+	}
+	const tailSpan = $derived(
+		tailRuns.length === 0
+			? ''
+			: `${shortDate(tailRuns[0].date)} to ${shortDate(tailRuns[tailRuns.length - 1].date)}`
+	);
+
 	// One shared rate for every cost figure below. It starts at the configured
 	// pair so the first paint matches the prerendered document, and `RateControl`
 	// replaces it on mount if the operator has typed one before. Deliberately not
@@ -183,9 +392,6 @@
 	const totalCost = $derived(inputCost + outputCost);
 	const perArticle = $derived(
 		view.tokenTotals.items === 0 ? null : totalCost / view.tokenTotals.items
-	);
-	const memory = $derived(
-		targetMarks(data.host.peakRss?.value ?? null, RUNNER_MEMORY_BYTES, 'lower-is-better')
 	);
 </script>
 
@@ -282,8 +488,8 @@
 	     stopped existing. -->
 	<p class="mt-4 text-[0.8125rem] text-text-tertiary" data-window-exempt="newest-run">
 		{data.newestRunId === null
-			? 'The four panels below read the newest run the ledger holds. No run has committed one yet.'
-			: `The four panels below do not follow the window. They read one run or one day - the newest the ledger holds, ${data.newestRunId} - because a span cannot narrow a single run.`}
+			? 'The five panels below read the newest run the ledger holds. No run has committed one yet.'
+			: `The five panels below do not follow the window. They read one run or one day - the newest the ledger holds, ${data.newestRunId} - because a span cannot narrow a single run.`}
 	</p>
 
 	<Panel
@@ -292,6 +498,57 @@
 		wide
 	>
 		<ShardBoard board={data.board} timeoutMinutes={data.shardTimeoutMinutes} />
+	</Panel>
+
+	<Panel
+		title="Peak memory, and how near the runner's ceiling it got"
+		note="What llama-server's own high-water mark reached on each shard of the newest run. The run's figure is the LARGEST of these and never their total: shards are separate jobs on separate hosts, so adding them would report a machine that never existed. Every bar runs to the same 16 GB the runner has, so their lengths compare."
+	>
+		{#if data.memory.empty}
+			<p class="empty" data-machine-panel-empty="memory">
+				No shard of the newest run recorded a memory high-water mark. The cell landed on
+				2026-08-30, so a run older than that reports nothing here - which is a missing reading and
+				not a run that used no memory.
+			</p>
+		{:else}
+			<div class="memory" data-peak-memory={data.memory.runId}>
+				<div data-memory="run" data-memory-high-water={data.memory.highWater ?? ''}>
+					<TargetBar
+						marks={data.memory.marks}
+						label="The run's high-water mark"
+						valueText={gib(data.memory.highWater)}
+						targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {data.memory
+							.pctOfRunner}%, the largest of the {data.memory.from} shards below and never their
+						total"
+						emptyNote="This run recorded no memory high-water mark."
+					/>
+				</div>
+				{#each data.memory.shards as shard (shard.shard)}
+					<div data-memory-shard={shard.shard} data-memory-bytes={shard.bytes}>
+						<TargetBar
+							marks={shard.marks}
+							label="Shard {shard.shard}"
+							valueText={gib(shard.bytes)}
+							targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {Math.round(
+								(shard.bytes / RUNNER_MEMORY_BYTES) * 100
+							)}%"
+							emptyNote="This shard recorded no memory high-water mark."
+						/>
+					</div>
+				{/each}
+			</div>
+			<!-- No tint and no band. Nobody has agreed how near 16 GB is too near,
+			     and a colour would publish a threshold that does not exist. -->
+			<p class="reads" data-memory-basis>
+				Over {data.memory.from} of the run's {data.memory.outOf} shards.
+				{#if data.memory.from < data.memory.outOf}
+					The other {data.memory.outOf - data.memory.from} recorded nothing, and are left out rather
+					than drawn as shards that used no memory.
+				{/if}
+				A run the reader refuses is in none of this: its rows cannot be made into one run, so it has
+				no shards to take a maximum over.
+			</p>
+		{/if}
 	</Panel>
 
 	<Panel
@@ -394,34 +651,206 @@
 	<div
 		data-windowed="machine-context"
 		data-window-days={windowDays}
-		data-model-rule="no"
+		data-model-rule={contextRuns.length > 1 ? 'yes' : 'no'}
 		data-model-rule-name="machine-context"
-		data-model-rule-none="one bar a run, so there is no day edge to draw between"
+		data-model-rule-none={contextRuns.length > 1
+			? undefined
+			: 'one run drawn, so there is no edge between two of them to draw between'}
+		data-model-rule-from={contextRuns[0]?.date ?? ''}
+		data-model-rule-to={contextRuns.at(-1)?.date ?? ''}
 	>
 		<Panel
 			title="Context headroom"
-			note="The longest sequence each run saw, prompt and answer together, against the window the server was given. One bar a run over the last {windowDays} days. This is the panel that says whether raising the truncation cap is even possible."
+			note="The longest sequence each run saw, prompt and answer together, against the window the server was given. One mark a run over the last {windowDays} days, oldest on the left. This is the panel that says whether raising the truncation cap is even possible - which is a question about the worst run in the span, not the newest."
 		>
-			{#if view.context.length === 0}
+			{#if contextRuns.length === 0}
 				<p class="empty" data-machine-panel-empty="context">
 					No run in these {view.days} days recorded a longest sequence.
 				</p>
 			{:else}
-				<div class="bars" data-context-window={data.contextWindow}>
-					{#each view.context as bar (bar.runId)}
-						<div data-context-run={bar.runId} data-context-longest={bar.longest ?? ''}>
-							<TargetBar
-								marks={bar.marks}
-								label={bar.runId}
-								valueText="{grouped(bar.longest ?? 0)} tokens"
-								targetText="of the {grouped(data.contextWindow)}-token window - {bar.usedPct}% used, {grouped(
-									bar.spare ?? 0
-								)} spare, over {bar.from} of {bar.outOf} shards"
-								emptyNote="This run recorded no sequence length."
+				<div
+					class="plot"
+					data-context-window={data.contextWindow}
+					data-readout-columns={contextStrip.length}
+				>
+					<div use:observeWidth={(px) => (contextWidth = px)}>
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<svg
+							class="w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+							height={contextBox.height}
+							viewBox={`0 0 ${contextBox.width} ${contextBox.height}`}
+							role="img"
+							tabindex="0"
+							aria-label="The longest sequence each of {contextRuns.length} runs saw, against the {grouped(
+								data.contextWindow
+							)}-token context window, over {view.days} days. One mark is one run, oldest on the left."
+							use:pointerReadout={{
+								marks: contextMarks,
+								width: contextBox.width,
+								onSelect: (index) => (contextAt = index)
+							}}
+						>
+							<line
+								x1={contextBox.left}
+								x2={contextBox.right}
+								y1={contextBox.bottom}
+								y2={contextBox.bottom}
+								stroke="var(--color-rule)"
 							/>
-						</div>
-					{/each}
+							{#each contextY.ticks as tick (tick)}
+								<text
+									x={contextBox.left - 6}
+									y={contextAtY(tick) + 3}
+									text-anchor="end"
+									fill="var(--color-text-tertiary)"
+									font-size="10"
+								>
+									{grouped(tick)}
+								</text>
+							{/each}
+
+							<!-- The window is a rule and never a bar. A limit is a line a
+							     series approaches; a bar beside a bar invites the reader to
+							     compare two lengths and forget which one is the ceiling. -->
+							<line
+								x1={contextBox.left}
+								x2={contextBox.right}
+								y1={contextAtY(data.contextWindow)}
+								y2={contextAtY(data.contextWindow)}
+								stroke="var(--chart-marker)"
+								stroke-width="1.5"
+								data-context-limit={data.contextWindow}
+							>
+								<title>
+									{`The server was given a ${grouped(data.contextWindow)}-token context window. A run cannot cross this line.`}
+								</title>
+							</line>
+							<text
+								x={contextBox.right}
+								y={contextAtY(data.contextWindow) - 4}
+								text-anchor="end"
+								fill="var(--color-text-tertiary)"
+								font-size="10"
+								data-context-limit-label
+							>
+								{grouped(data.contextWindow)}-token window
+							</text>
+
+							{#each contextRules as rule (rule.date)}
+								<line
+									x1={rule.x}
+									x2={rule.x}
+									y1={contextBox.top}
+									y2={contextBox.bottom}
+									stroke="var(--color-text-tertiary)"
+									stroke-dasharray="3 3"
+									data-model-rule-line={rule.date}
+								>
+									<title>{modelRuleTitle(rule.date)}</title>
+								</line>
+							{/each}
+
+							{#if contextAt !== null && contextX[contextAt] !== undefined}
+								<line
+									x1={contextX[contextAt]}
+									x2={contextX[contextAt]}
+									y1={contextBox.top}
+									y2={contextBox.bottom}
+									stroke="var(--color-text-tertiary)"
+									stroke-opacity="0.5"
+									data-context-guide
+								/>
+							{/if}
+
+							<!-- Spare capacity is derived - it is the window minus the
+							     measurement - so it is drawn dotted to say it is not an
+							     independent reading of anything. -->
+							<polyline
+								points={line(contextRuns.map((run) => run.spare))}
+								fill="none"
+								stroke="var(--chart-3)"
+								stroke-width="1.5"
+								stroke-dasharray="2 3"
+								data-context-series="spare"
+							/>
+							<g data-context-series="longest">
+								<polyline
+									points={line(contextRuns.map((run) => run.longest))}
+									fill="none"
+									stroke="var(--chart-1)"
+									stroke-width="2"
+								/>
+								{#each contextRuns as run, index (run.runId)}
+									{#if run.longest !== null}
+										<circle
+											cx={contextX[index]}
+											cy={contextAtY(run.longest)}
+											r="2.5"
+											fill="var(--chart-1)"
+										/>
+									{/if}
+								{/each}
+							</g>
+
+							{#each contextAxis as label (label.index)}
+								<line
+									x1={contextX[label.index]}
+									x2={contextX[label.index]}
+									y1={contextBox.bottom}
+									y2={contextBox.bottom + 4}
+									stroke="var(--color-text-tertiary)"
+									data-day-tick={label.date}
+								/>
+								{#if label.text}
+									<text
+										x={contextX[label.index]}
+										y={contextBox.bottom + 16}
+										text-anchor={label.anchor}
+										fill="var(--color-text-tertiary)"
+										font-size="10"
+										data-day-axis
+									>
+										{label.text}
+									</text>
+								{/if}
+							{/each}
+						</svg>
+					</div>
+					<ChartReadout
+						readout={contextReadout}
+						name="context"
+						maxShare={data.chart.readout_max_share}
+						resting={contextAt === null}
+						restingNote=", the last run"
+						hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
+					/>
 				</div>
+
+				{#if contextRules.length === 0 && contextRuns.length > 1}
+					<p class="reads">
+						<span data-model-rule-empty="machine-context">{noModelRuleNote(view.days)}</span>
+					</p>
+				{/if}
+
+				<p class="reads" data-context-basis>
+					{contextRuns.length}
+					{contextRuns.length === 1 ? 'run' : 'runs'} of these {view.days} days recorded a longest
+					sequence, out of {view.runsRead} the ledger could read. The worst of them reached
+					<strong>{grouped(Math.max(0, ...contextRuns.map((run) => run.longest ?? 0)))}</strong>
+					tokens of the {grouped(data.contextWindow)} the server was given.
+				</p>
+
+				<!-- Every run's own three numbers, for a reader who cannot see the
+				     plot. The chart is the shape of the question; this is the table
+				     it was made from, and nothing is only in the picture. -->
+				<ul class="sr-only" data-context-runs>
+					{#each contextRuns as run (run.runId)}
+						<li data-context-run={run.runId} data-context-longest={run.longest ?? ''}>
+							{run.runId}: {grouped(run.longest ?? 0)} of {grouped(data.contextWindow)} tokens,
+							{run.usedPct}% used, {grouped(run.spare ?? 0)} spare, over {run.from} of {run.outOf} shards.
+						</li>
+					{/each}
+				</ul>
 			{/if}
 		</Panel>
 	</div>
@@ -515,24 +944,21 @@
 					</dd>
 				</div>
 
-				<div data-host="peak-memory" data-host-value={data.host.peakRss?.value ?? ''}>
-					<dt>Peak memory</dt>
+				<!-- The newest run's own high-water mark and its shards are a panel of
+				     their own above. What belongs here is the other half of the
+				     question - whether that run was unusual over the span - and
+				     printing the bar again would be one fact drawn twice. -->
+				<div data-host="peak-memory" data-host-value={view.peakRssSpan.high ?? ''}>
+					<dt>Peak memory over the span</dt>
 					<dd>
-						{#if data.host.peakRss === null || data.host.peakRss.value === null}
-							<span class="absent">Not recorded on this run.</span>
+						{#if view.peakRssSpan.high === null}
+							<span class="absent">No run in this span recorded a memory high-water mark.</span>
 						{:else}
-							<TargetBar
-								marks={memory}
-								label="llama-server high-water mark"
-								valueText={gib(data.host.peakRss.value)}
-								targetText="of the runner's {gib(RUNNER_MEMORY_BYTES)} - {Math.round(
-									(data.host.peakRss.value / RUNNER_MEMORY_BYTES) * 100
-								)}%"
-								emptyNote="This run recorded no memory high-water mark."
-							/>
+							{gib(view.peakRssSpan.high)} at the highest
 							<span class="unit">
-								Highest over these {view.days} days: {gib(view.peakRssSpan.high)}, on
-								{view.peakRssSpan.from} of {view.peakRssSpan.outOf} runs.
+								{gib(view.peakRssSpan.low)} at the lowest, over these {view.days} days, on
+								{view.peakRssSpan.from} of {view.peakRssSpan.outOf} runs. Each of those is itself
+								the largest of a run's shards. The newest run's own shards are drawn above.
 							</span>
 						{/if}
 					</dd>
@@ -579,67 +1005,251 @@
 		</Panel>
 	</div>
 
-	<Panel
-		title="The shape of a run's latency"
-		note="One curve per run, never pooled between them - two runs of one day draw different processors. Read two curves that cross: a tail changing shape is what no single figure says."
+	<div
+		data-windowed="machine-latency"
+		data-window-days={windowDays}
+		data-model-rule={tailRuns.length > 1 ? 'yes' : 'no'}
+		data-model-rule-name="machine-latency"
+		data-model-rule-none={tailRuns.length > 1
+			? undefined
+			: 'one run drawn, so there is no edge between two of them to draw between'}
+		data-model-rule-from={tailRuns[0]?.date ?? ''}
+		data-model-rule-to={tailRuns.at(-1)?.date ?? ''}
 	>
-		{#if data.percentileSvg === null}
-			<p class="empty" data-machine-panel-empty="percentiles">
-				{#if data.percentiles.date === null}
-					No day the item ledger holds recorded an item timing.
-				{:else}
-					No run on {data.percentiles.date} timed {data.percentiles.floor} items, which is the floor
+		<Panel
+			title="Is the tail growing"
+			note="One plot a percentile, one mark a run, over the last {windowDays} days. Five lines on one chart is a bundle a reader has to untangle by colour; separated, each is a trend read in one look. All five share one scale, which is the point of the arrangement - a p99 twenty times its own p50 has to look twenty times taller, and five plots on five scales would draw the same shape five times."
+		>
+			{#if tailRuns.length === 0}
+				<p class="empty" data-machine-panel-empty="latency">
+					No run in these {view.days} days timed {data.latency.floor} items, which is the floor
 					below which a p99 is just the last item.
+				</p>
+			{:else}
+				<div class="plot" data-readout-columns={tailStrip.length}>
+					<div use:observeWidth={(px) => (tailWidth = px)}>
+						<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
+						<svg
+							class="w-full focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-focus"
+							height={tailH}
+							viewBox={`0 0 ${tailW} ${tailH}`}
+							role="img"
+							tabindex="0"
+							aria-label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one plot each and one mark per run, {tailSpan}, over {view.days} days. All five plots share one scale."
+							data-latency-runs={tailRuns.length}
+							use:pointerReadout={{
+								marks: tailMarks,
+								width: tailW,
+								onSelect: (index) => (tailAt = index)
+							}}
+						>
+							{#each PERCENTILES as percentile, at (percentile)}
+								{@const box = tailBox(at)}
+								<line
+									x1={box.left}
+									x2={box.right}
+									y1={box.bottom}
+									y2={box.bottom}
+									stroke="var(--color-rule)"
+								/>
+								<text
+									x={box.left - 6}
+									y={box.bottom + 3}
+									text-anchor="end"
+									fill="var(--color-text-tertiary)"
+									font-size="10"
+								>
+									0
+								</text>
+								<text
+									x={box.left - 6}
+									y={box.top + 8}
+									text-anchor="end"
+									fill="var(--color-text-tertiary)"
+									font-size="10"
+									data-latency-top={tailY.domain[1]}
+								>
+									{tailY.domain[1].toFixed(0)}s
+								</text>
+								<text
+									x={box.left}
+									y={box.top - 4}
+									fill="var(--color-text-secondary)"
+									font-size="11"
+									data-latency-plot={`p${percentile}`}
+								>
+									p{percentile}
+								</text>
+								<!-- One colour for all five. They are one measure at five
+								     quantiles, so a second colour would name a distinction that
+								     is not in the data. -->
+								<g data-latency-series={`p${percentile}`}>
+									<polyline
+										points={tailLine(at)}
+										fill="none"
+										stroke="var(--chart-1)"
+										stroke-width="2"
+									/>
+									{#each tailRuns as run, index (run.runId)}
+										<circle
+											cx={tailX[index]}
+											cy={tailAtY(at, (run.ms[at] ?? 0) / 1000)}
+											r="2.5"
+											fill="var(--chart-1)"
+										/>
+									{/each}
+								</g>
+							{/each}
+
+							<!-- One line a boundary, down every plot at once. The change
+							     applies to the whole distribution, so a rule per plot would
+							     be one event drawn five times. -->
+							{#each tailRules as rule (rule.date)}
+								<line
+									x1={rule.x}
+									x2={rule.x}
+									y1={tailBox(0).top}
+									y2={tailBox(PERCENTILES.length - 1).bottom}
+									stroke="var(--color-text-tertiary)"
+									stroke-dasharray="3 3"
+									data-model-rule-line={rule.date}
+								>
+									<title>{modelRuleTitle(rule.date)}</title>
+								</line>
+							{/each}
+
+							{#if tailAt !== null && tailX[tailAt] !== undefined}
+								<line
+									x1={tailX[tailAt]}
+									x2={tailX[tailAt]}
+									y1={tailBox(0).top}
+									y2={tailBox(PERCENTILES.length - 1).bottom}
+									stroke="var(--color-text-tertiary)"
+									stroke-opacity="0.5"
+									data-latency-guide
+								/>
+							{/if}
+
+							{#each tailAxis as label (label.index)}
+								{@const foot = tailBox(PERCENTILES.length - 1).bottom}
+								<line
+									x1={tailX[label.index]}
+									x2={tailX[label.index]}
+									y1={foot}
+									y2={foot + 4}
+									stroke="var(--color-text-tertiary)"
+									data-day-tick={label.date}
+								/>
+								{#if label.text}
+									<text
+										x={tailX[label.index]}
+										y={foot + 16}
+										text-anchor={label.anchor}
+										fill="var(--color-text-tertiary)"
+										font-size="10"
+										data-day-axis
+									>
+										{label.text}
+									</text>
+								{/if}
+							{/each}
+						</svg>
+					</div>
+					<ChartReadout
+						readout={tailReadout}
+						name="latency"
+						maxShare={data.chart.readout_max_share}
+						resting={tailAt === null}
+						restingNote=", the last run"
+						hint="Point at a run to read every percentile of it at once. Left and Right step through the runs, Escape returns to the last."
+					/>
+				</div>
+
+				{#if tailRules.length === 0 && tailRuns.length > 1}
+					<p class="reads">
+						<span data-model-rule-empty="machine-latency">{noModelRuleNote(view.days)}</span>
+					</p>
 				{/if}
+
+				<p class="reads" data-latency-note>
+					{tailRuns.length}
+					{tailRuns.length === 1 ? 'run' : 'runs'} of these {view.days} days. The value is
+					<code>summarize_ms</code>, the whole model call for one item, and a percentile is
+					interpolated linearly between the two nearest ranks - at about a hundred items the
+					nearest-rank rule and this one disagree by more than the difference between two runs, so
+					the rule is named rather than assumed. Runs are never pooled: two runs of one day draw
+					different processors.
+					{#if data.latency.tooFew.length > 0}
+						{data.latency.tooFew.length}
+						{data.latency.tooFew.length === 1 ? 'run' : 'runs'} timed fewer than
+						{data.latency.floor} items and {data.latency.tooFew.length === 1 ? 'is' : 'are'} printed
+						rather than drawn:
+						{data.latency.tooFew.map((run) => `${run.runId} (${run.items})`).join(', ')}.
+					{/if}
+				</p>
+
+				<ul class="sr-only" data-latency-values>
+					{#each tailRuns as run (run.runId)}
+						<li data-latency-run={run.runId}>
+							{run.runId}, {run.items} items:
+							{PERCENTILES.map(
+								(percentile, at) => `p${percentile} ${((run.ms[at] ?? 0) / 1000).toFixed(1)}s`
+							).join(', ')}.
+						</li>
+					{/each}
+				</ul>
+			{/if}
+		</Panel>
+	</div>
+
+	<Panel
+		title="How long the newest run's tail was"
+		note="The whole distribution of one run at once, which is a different question from whether the tail is growing. It reads the newest run the item ledger timed, so it holds still while the window moves."
+	>
+		{#if data.percentileSvg === null || data.newestTail === null}
+			<p class="empty" data-machine-panel-empty="percentiles">
+				No run the item ledger holds timed {data.latency.floor} items, which is the floor below
+				which a p99 is just the last item.
 			</p>
 		{:else}
-			<Chart
-				svg={data.percentileSvg}
-				option={percentileOption}
-				width={data.chart.width_px}
-				height={data.chart.height_px}
-				label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile, one line per run of {data
-					.percentiles.date}."
-				columns={percentileStrip}
-				readoutName="percentiles"
-				readoutMaxShare={data.chart.readout_max_share}
-				grid={PERCENTILE_GRID}
-				restingNote=", the slowest one in a hundred"
-				hint="Point at a percentile to read every run at it. Left and Right step through them, Escape returns to p99."
-			/>
+			<div
+				data-window-exempt="newest-run-tail"
+				data-model-rule="no"
+				data-model-rule-name="machine-tail"
+				data-model-rule-none="one run's own distribution, so no day edge falls inside it"
+			>
+				<p class="mt-1 text-[0.8125rem] text-text-tertiary">
+					{data.newestTail.runId}, on {data.newestTail.date}. This panel does not follow the window.
+				</p>
+				<Chart
+					svg={data.percentileSvg}
+					option={percentileOption}
+					width={data.chart.width_px}
+					height={data.chart.height_px}
+					label="Per-item model time at the 50th, 75th, 90th, 95th and 99th percentile for run {data
+						.newestTail.runId}."
+					columns={percentileStrip}
+					readoutName="percentiles"
+					readoutMaxShare={data.chart.readout_max_share}
+					grid={PERCENTILE_GRID}
+					restingNote=", the slowest one in a hundred"
+					hint="Point at a percentile to read it. Left and Right step through them, Escape returns to p99."
+				/>
+			</div>
 			<p class="reads" data-percentile-note>
-				{data.percentiles.curves.length}
-				{data.percentiles.curves.length === 1 ? 'run' : 'runs'} of
-				<strong>{data.percentiles.date}</strong>. The value is <code>summarize_ms</code>, the whole
-				model call for one item, and a percentile is interpolated linearly between the two nearest
-				ranks - at about a hundred items the nearest-rank rule and this one disagree by more than
-				the difference between two runs, so the rule is named rather than assumed.
-				{#if data.percentiles.tooFew.length > 0}
-					{data.percentiles.tooFew.length}
-					{data.percentiles.tooFew.length === 1 ? 'run' : 'runs'} timed fewer than
-					{data.percentiles.floor} items and {data.percentiles.tooFew.length === 1 ? 'is' : 'are'}
-					printed rather than drawn:
-					{data.percentiles.tooFew.map((run) => `${run.runId} (${run.items})`).join(', ')}.
-				{/if}
-				{#if data.percentiles.shardRows === data.percentiles.itemRows && data.percentiles.itemRows > 0}
-					Every item row of this day carries a shard, so a curve per shard is possible; twenty
+				<strong>{data.newestTail.runId}</strong> timed {grouped(data.newestTail.items)} items. Its
+				slowest one in a hundred took
+				<strong>{seconds((data.newestTail.ms.at(-1) ?? 0) / 1000)}</strong>
+				against {seconds((data.newestTail.ms[0] ?? 0) / 1000)} for a normal one.
+				{#if data.latency.shardRows === data.latency.itemRows && data.latency.itemRows > 0}
+					Every item row the ledger holds carries a shard, so a curve per shard is possible; twenty
 					overlaid curves is not a chart, so the shard is the unit of the board above and of the
 					clock check.
 				{:else}
-					{data.percentiles.shardRows} of {data.percentiles.itemRows} item rows of this day carry a
+					{grouped(data.latency.shardRows)} of {grouped(data.latency.itemRows)} item rows carry a
 					shard, so the curve is per run.
 				{/if}
 			</p>
-			<ul class="sr-only" data-percentile-values>
-				{#each data.percentiles.curves as curve (curve.runId)}
-					<li data-percentile-run={curve.runId}>
-						{curve.runId}, {curve.items} items:
-						{curve.points
-							.map((point) => `p${point.percentile} ${(point.ms / 1000).toFixed(1)}s`)
-							.join(', ')}.
-					</li>
-				{/each}
-			</ul>
 		{/if}
 	</Panel>
 
@@ -675,7 +1285,7 @@
 								columns={inputStrip}
 								readoutName="tokens-input"
 								readoutMaxShare={data.chart.readout_max_share}
-								grid={TOKEN_GRID}
+								grid={data.inputGrid}
 								restingNote=", the last run"
 								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 							/>
@@ -691,7 +1301,7 @@
 								columns={outputStrip}
 								readoutName="tokens-output"
 								readoutMaxShare={data.chart.readout_max_share}
-								grid={TOKEN_GRID}
+								grid={data.outputGrid}
 								restingNote=", the last run"
 								hint="Point at a run to read it. Left and Right step through them, Escape returns to the last."
 							/>
@@ -864,9 +1474,27 @@
 		color: var(--color-text-secondary);
 	}
 
-	.bars {
+	/* A hand-drawn plot and the strip under it. Positioned, because the
+	   selected-column guide is drawn inside the SVG and the strip below it. */
+	.plot {
+		position: relative;
+		margin-top: var(--space-2);
+	}
+
+	/* The run's own mark first, then a bar a shard. Every bar runs to the same
+	   16 GB ceiling, so their lengths compare. */
+	.memory {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(16rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+		gap: var(--space-4) var(--space-5);
+	}
+
+	/* The run's own mark first, then a bar a shard. One column below the
+	   breakpoint, because a memory bar squeezed into half a phone is a bar
+	   nobody can compare with the one beside it. */
+	.memory {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
 		gap: var(--space-4) var(--space-5);
 	}
 

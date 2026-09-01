@@ -31,15 +31,18 @@ const WIDTHS = [1440, 768, 390];
 
 /** Which routes draw a date axis of their own.
  *
- * The Machine route draws none: every chart on it is engine-drawn, and the one
- * that carries days hands its labels to the engine's own overlap rule. That is
+ * Every route does since 2026-09-01. The Machine route drew none until then -
+ * every chart on it was engine-drawn and handed its labels to the engine's own
+ * overlap rule - and it now draws two of its own, for context headroom and for
+ * the latency plots. Both label a column that is a RUN rather than a day, so a
+ * day carrying several runs is labelled once and the tick mark stays. That is
  * stated here rather than discovered, so a route that stops declaring one fails
  * this file instead of passing it with an empty scan.
  */
 const DECLARES: Record<string, boolean> = {
 	'/console/': true,
 	'/console/model/': true,
-	'/console/machine/': false
+	'/console/machine/': true
 };
 
 /** A label's box, and the box of the `svg` that may clip it. */
