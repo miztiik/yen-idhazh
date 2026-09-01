@@ -1,6 +1,6 @@
 # Feed Health and Quarantine
 
-**Last Updated**: 2026-08-23
+**Last Updated**: 2026-09-01
 
 What every feed did on every run, where that record lives, and how a run decides on its own to stop asking a dead source. Nothing on this page ever edits `config/sources.json`: a person owns the source list, and a run owns the evidence about it.
 
@@ -71,6 +71,49 @@ Keeping those separate is what makes a bad afternoon survivable. A run that coul
 - **The console** reads the same rows to show which sources are broken. It names only feeds that failed at least once; a list that names all seventy sources hides the four that matter. See [../publishing/frontend.md](../publishing/frontend.md).
 
 They read the same file so they can never disagree about what a feed did.
+
+## The broken list needs its denominator
+
+Naming only the broken feeds is the right list and half an answer. Four broken
+feeds out of eight is a collapse; four out of two hundred is a Tuesday; and the
+page drew both identically. So the console states the other half in one
+sentence above the list - **how many feeds have never failed, out of how many
+were asked, over how many runs** - and names the clean ones behind a
+disclosure.
+
+`reliability()` in `frontend/src/lib/feed-health.ts` is that rule, and it reads
+the same `failing()` the quarantine reads, so the two halves of the section
+cannot disagree about what a failure is. Three facts it settles:
+
+- **A feed nobody has asked is in neither count.** A record of nothing but
+  `skipped` rows is a rest, not a clean run of reads, and counting it as clean
+  is how a dead feed joins the reliable list.
+- **A polite refusal is not a failure**, here as everywhere else. A source
+  honouring its own `robots.txt` has not broken.
+- **The span is the whole record, not the page's window.** The streak beside
+  each feed is already read that way, because the pipeline rests on the whole
+  count. Two spans in one section is the defect the shared window exists to
+  remove.
+
+**A shallow record says so instead of printing a claim.** Two runs deep, "has
+never failed" means "did not fail twice". Under `console.min_attempts_for_rate`
+runs the sentence prints the same counts and says the record is too shallow to
+read as reliability - the same knob, and the same question, as the stage rates
+one section above.
+
+Measured 2026-09-01 over the committed ledger: 5,291 rows, 182 feeds asked, 34
+runs, **156 of 182 have never failed**, and 26 have. The 26 are why the list
+also gained `console.feed_rows`, a cap of ten with the remainder stated in one
+sentence: a ranking is read from the top and its tail is a number, never
+another page of rows.
+
+### Rejected alternatives
+
+| Option | Why rejected |
+| --- | --- |
+| A ranked "ten most reliable feeds" | Every key it could rank on ties. A feed is read once a run, so a feed that never failed has answered on every run it was asked, and the record is about 34 runs deep. `collect.max_per_source` is 2, so what a feed may carry is capped as well. A top ten of a hundred-and-fifty-way tie is charting a constant. |
+| Rank by items yielded | It counts entries in a feed, so it ranks the firehose rather than the reliable. |
+| A share instead of a count | The number an operator acts on is how many feeds are named below, not a percentage. `156 of 182` carries both. |
 
 ## Design rationale
 

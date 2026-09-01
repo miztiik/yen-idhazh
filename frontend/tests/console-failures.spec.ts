@@ -8,9 +8,10 @@ import {
 	failureLedger,
 	failureRowKey,
 	parseTelemetryCsv,
+	sourceLosses,
 	type TelemetryRow
 } from '../src/lib/charts/series';
-import { rank, type Rankable, type RankedDisplay } from '../src/lib/charts/rank';
+import { rank, tailSentence, type Rankable, type RankedDisplay } from '../src/lib/charts/rank';
 import type { TimeWindow } from '../src/lib/charts/viewport';
 
 /**
@@ -25,17 +26,33 @@ import type { TimeWindow } from '../src/lib/charts/viewport';
  * rather than over invented rows, because a made-up ledger has whatever shape
  * the test wanted and the real one has eleven causes with a 529-to-1 spread.
  *
+ * The same shape is proved of the source ranking beside it, and there the
+ * dedupe is the thing that can be plausibly wrong: a source's losses are
+ * ARTICLES, one per source per day, while the rows under them are one per stage
+ * per run. Counting rows would leave every bar in proportion, every name in the
+ * right order, and every number too big.
+ *
  * The interaction is proved twice over, in two places, because the canary
  * fixture deliberately records no failure at all: `build-canary.mjs` writes
  * dropped items as `ok`, since throwing away a page that is not an article is
- * the job. So the browser half here asserts the shapes and the two empty
- * states, and the click-through against real failures is the section-12 smoke
- * against the production build.
+ * the job. So the browser half here asserts the shapes and the empty states,
+ * and the click-through against real failures is the section-12 smoke against
+ * the production build.
  */
 
 const frontend = process.cwd();
 const PUBLIC_TELEMETRY = resolve(frontend, 'public', 'telemetry');
 const CANARY_TELEMETRY = resolve(frontend, '..', 'backend', 'var', 'canary', 'state', 'telemetry');
+
+/** The cap the source ranking draws with, from the file the page reads it
+ * from. Not a copy: a number typed here would pass while the section drew a
+ * different one. */
+const SOURCE_ROWS =
+	(
+		JSON.parse(
+			readFileSync(resolve(frontend, '..', 'config', 'appearance.json'), 'utf8')
+		) as { console?: { source_rows?: number } }
+	).console?.source_rows ?? 10;
 
 function shardRows(root: string): TelemetryRow[] {
 	if (!existsSync(root)) return [];
@@ -191,18 +208,291 @@ test.describe('the failure ledger, over the committed projection', () => {
 	});
 });
 
+/** One source's articles lost, computed here and owing nothing to the module.
+ *
+ * Dedupe is `date` plus `item_id`, the rule `compressionView` reads the same
+ * ledger by, so an article a second run failed again on the same day is one
+ * article and not two.
+ */
+interface HandLoss {
+	key: string;
+	lost: number;
+	articles: number;
+}
+
+function lossesByHand(rows: TelemetryRow[], window: TimeWindow): HandLoss[] {
+	const lost = new Map<string, Set<string>>();
+	const seen = new Map<string, Set<string>>();
+	for (const row of rows) {
+		if (row.date < window.start || row.date > window.end) continue;
+		if (!row.source_id) continue;
+		// A separator no id can hold, so `a-1` + `b` and `a` + `1-b` stay apart.
+		const article = `${row.date}\u0000${row.item_id}`;
+		seen.set(row.source_id, (seen.get(row.source_id) ?? new Set<string>()).add(article));
+		if (row.outcome !== 'failed') continue;
+		lost.set(row.source_id, (lost.get(row.source_id) ?? new Set<string>()).add(article));
+	}
+	return [...lost].map(([key, articles]) => ({
+		key,
+		lost: articles.size,
+		articles: (seen.get(key) as Set<string>).size
+	}));
+}
+
+/** What the component builds the ranking from, restated once. */
+function sourceEntries(rows: TelemetryRow[], window: TimeWindow): Rankable<RankedDisplay>[] {
+	return sourceLosses(rows, window).sources.map((source) => ({
+		key: source.key,
+		value: source.lost,
+		tiebreak: -source.lastAgo,
+		row: { label: source.key, value: `${source.lost} of ${source.articles} articles` }
+	}));
+}
+
+test.describe('THE ORACLE: sources ranked by the articles their failures cost', () => {
+	const rows = shardRows(PUBLIC_TELEMETRY);
+
+	test('the fixture holds more sources than the cap draws', () => {
+		// Everything below passes trivially on a ledger the cap never bites. This
+		// is the guard that says the corpus can still answer the question.
+		const window = wholeSpan(rows);
+		const byHand = lossesByHand(rows, window);
+		expect(byHand.length, 'the projection records no source with a loss').toBeGreaterThan(
+			SOURCE_ROWS
+		);
+		expect(
+			byHand.reduce((total, source) => total + source.lost, 0),
+			'no article was lost, so a ranking of losses says nothing'
+		).toBeGreaterThan(0);
+	});
+
+	test('the ledger names the same sources and the same losses as a hand count', () => {
+		const window = wholeSpan(rows);
+		const measured = sourceLosses(rows, window);
+		const byHand = new Map(lossesByHand(rows, window).map((source) => [source.key, source]));
+
+		expect(new Set(measured.sources.map((source) => source.key))).toEqual(
+			new Set(byHand.keys())
+		);
+		for (const source of measured.sources) {
+			const hand = byHand.get(source.key) as HandLoss;
+			expect(source.lost, `${source.key} lost a different number of articles`).toBe(hand.lost);
+			expect(source.articles, `${source.key} saw a different number of articles`).toBe(
+				hand.articles
+			);
+			// The denominator is the point of the second number: a source cannot
+			// lose more articles than the window saw from it.
+			expect(source.lost).toBeLessThanOrEqual(source.articles);
+			expect(source.causes).toBeGreaterThan(0);
+			// The cause is named only while naming it is a fact. Ten rows each
+			// printing `1 cause` is a column that says nothing.
+			expect(source.cause === null, `${source.key} names a cause it does not have`).toBe(
+				source.causes !== 1
+			);
+			if (source.cause !== null) {
+				const seen = new Set(
+					failedRows(rows, window, null, null, source.key).map((row) => causeKey(row))
+				);
+				expect(seen).toEqual(new Set([source.cause]));
+			}
+		}
+		expect(measured.lost).toBe(
+			[...byHand.values()].reduce((total, source) => total + source.lost, 0)
+		);
+	});
+
+	test('an article a second run failed again on the same day is one article', () => {
+		// The dedupe rule, proved on two rows built to collide rather than on
+		// whatever the committed ledger happens to hold today.
+		const window = { start: '2026-08-01', end: '2026-08-01' };
+		const row: TelemetryRow = {
+			date: '2026-08-01',
+			run_id: '2026-08-01-1',
+			item_id: 'ai-1234567890',
+			vertical: 'ai',
+			source_id: 'a-wire',
+			stage: 'fetch',
+			outcome: 'failed',
+			code: 'http_client_error',
+			source_words: null,
+			summary_words: null,
+			source_words_before_cap: null
+		};
+		const twice = [row, { ...row, run_id: '2026-08-01-2' }];
+		expect(failedRows(twice, window, null)).toHaveLength(2);
+		expect(sourceLosses(twice, window).sources[0].lost).toBe(1);
+		expect(sourceLosses(twice, window).lost).toBe(1);
+	});
+
+	test('the drawn rows are the top of the ranking, in that order', () => {
+		const window = wholeSpan(rows);
+		const drawn = rank(sourceEntries(rows, window), SOURCE_ROWS);
+		const byHand = [...lossesByHand(rows, window)].sort(
+			(a, b) => b.lost - a.lost || a.key.localeCompare(b.key)
+		);
+
+		expect(drawn.rows).toHaveLength(SOURCE_ROWS);
+		// Order first, then the magnitudes: a list that holds the right names in
+		// the wrong order draws a plausible and wrong picture.
+		for (const [index, row] of drawn.rows.entries()) {
+			expect(row.value, `row ${index} is not the ${index + 1}th largest loss`).toBe(
+				byHand[index].lost
+			);
+		}
+		expect(drawn.rows.map((row) => row.value)).toEqual(
+			[...drawn.rows.map((row) => row.value)].sort((a, b) => b - a)
+		);
+		expect(drawn.max).toBe(byHand[0].lost);
+	});
+
+	test('the tail sentence counts and sums exactly what the cap left out', () => {
+		const window = wholeSpan(rows);
+		const drawn = rank(sourceEntries(rows, window), SOURCE_ROWS);
+		const byHand = [...lossesByHand(rows, window)].sort(
+			(a, b) => b.lost - a.lost || a.key.localeCompare(b.key)
+		);
+		const rest = byHand.slice(SOURCE_ROWS);
+
+		expect(drawn.hidden).toBe(rest.length);
+		expect(drawn.hiddenValue).toBe(rest.reduce((total, source) => total + source.lost, 0));
+		// Nothing falls between the drawn rows and the tail.
+		expect(drawn.rows.length + drawn.hidden).toBe(byHand.length);
+
+		const sentence = tailSentence(drawn, {
+			one: 'source',
+			many: 'sources',
+			unitOne: 'lost article',
+			unitMany: 'lost articles'
+		});
+		expect(sentence).toBe(
+			`${drawn.hidden} more sources had ${drawn.hiddenValue} lost articles between them.`
+		);
+	});
+
+	test('selecting a source narrows the rows to exactly the matching set', () => {
+		const window = wholeSpan(rows);
+		const measured = sourceLosses(rows, window);
+		const failed = failedRows(rows, window, null);
+
+		// Object identity, not a composed key: two runs write byte-identical rows
+		// for one item, and a string key would call that pair an overlap.
+		const covered = new Set<TelemetryRow>();
+		for (const source of measured.sources) {
+			const slice = failedRows(rows, window, null, null, source.key);
+			expect(slice.length, `${source.key} draws no row for a loss it claims`).toBeGreaterThan(0);
+			// The rows are per stage per run; the ranking counts articles, so the
+			// row count is never smaller than the article count.
+			expect(new Set(slice.map((row) => `${row.date}\u0000${row.item_id}`)).size).toBe(
+				source.lost
+			);
+			for (const row of slice) {
+				expect(row.source_id, `a foreign source is in ${source.key}'s rows`).toBe(source.key);
+				expect(covered.has(row), `a row falls under two sources at ${source.key}`).toBe(false);
+				covered.add(row);
+			}
+		}
+
+		// Every failed row with a source is under exactly one of them.
+		const named = failed.filter((row) => row.source_id);
+		expect(covered.size, 'the sources cover fewer rows than the list holds').toBe(named.length);
+	});
+
+	test('a code chip and a source narrow together, not instead of each other', () => {
+		const window = wholeSpan(rows);
+		const measured = sourceLosses(rows, window);
+		const source = measured.sources[0].key;
+		const code = failedRows(rows, window, null, null, source)[0].code;
+
+		const both = failedRows(rows, window, code, null, source);
+		expect(both.length).toBeGreaterThan(0);
+		for (const row of both) {
+			expect(row.source_id).toBe(source);
+			expect(row.code).toBe(code);
+		}
+		expect(both.length).toBeLessThanOrEqual(
+			failedRows(rows, window, null, null, source).length
+		);
+	});
+
+	test('a window with no row at all is not a window with no loss', () => {
+		const empty = sourceLosses(rows, { start: '1999-01-01', end: '1999-01-31' });
+		expect(empty.rows).toBe(0);
+		expect(empty.sources).toEqual([]);
+		expect(empty.lost).toBe(0);
+	});
+});
+
 test.describe('the failure section on the page', () => {
-	test('the ledger sits above the rows it explains', async ({ page }) => {
+	test('the two rankings sit above the rows they explain', async ({ page }) => {
 		await page.goto('/console/');
 
 		const order = await page.evaluate(() => {
-			const ledger = document.querySelector('[data-failure-ledger]');
-			const rows = document.querySelector('[data-failure-list]');
-			if (!ledger || !rows) return null;
-			// 4 is DOCUMENT_POSITION_FOLLOWING: the rows come after the ledger.
-			return ledger.compareDocumentPosition(rows) & 4 ? 'ledger-first' : 'rows-first';
+			const seen = ['[data-failure-ledger]', '[data-source-losses]', '[data-failure-list]'].map(
+				(selector) => document.querySelector(selector)
+			);
+			if (seen.some((node) => node === null)) return null;
+			const nodes = seen as Element[];
+			// 4 is DOCUMENT_POSITION_FOLLOWING: each one comes after the last.
+			return nodes.every(
+				(node, index) => index === 0 || (nodes[index - 1].compareDocumentPosition(node) & 4) > 0
+			)
+				? 'ranked-first'
+				: 'out-of-order';
 		});
-		expect(order, 'the failure section is missing one of its two halves').toBe('ledger-first');
+		expect(order, 'the failure section is missing one of its three parts').toBe('ranked-first');
+	});
+
+	test('the item rows start shut, and the summary says how many are behind it', async ({
+		page
+	}) => {
+		await page.goto('/console/');
+
+		// The rows are the only child of this page that can outgrow the screen.
+		// Uncapped and open they measured 7,824px against 800 rows and put the
+		// chart above them at document y=9,105.
+		const rows = page.locator('details[data-failure-rows]');
+		await expect(rows, 'the item rows are not behind a disclosure').toHaveCount(1);
+		expect(await rows.evaluate((node) => (node as HTMLDetailsElement).open)).toBe(false);
+		await expect(page.locator('[data-failure-toggle]')).toContainText('failed item');
+	});
+
+	test('the three empty states say different things', async ({ page }) => {
+		await page.goto('/console/');
+
+		const ledger = page.locator('[data-failure-ledger]');
+		const sources = page.locator('[data-source-losses]');
+		await expect(ledger, 'the ledger must be on the page in every state').toHaveCount(1);
+		await expect(sources, 'the source ranking must be on the page in every state').toHaveCount(1);
+
+		// The canary fixture records no failure, so this is both rankings
+		// answering no. A renamed attribute fails here rather than switching the
+		// test off.
+		const canary = shardRows(CANARY_TELEMETRY);
+		const start = await page.locator('[data-viewport-control]').getAttribute('data-window-start');
+		const end = await page.locator('[data-viewport-control]').getAttribute('data-window-end');
+		expect(start, 'the viewport publishes no window').not.toBeNull();
+		const window = { start: start as string, end: end as string };
+		const failed = failedRows(canary, window, null).length;
+
+		if (failed === 0) {
+			await expect(sources.locator('[data-ranked="none"]')).toHaveText(
+				'No source lost an article in this window.'
+			);
+		} else {
+			await expect(sources.locator('[data-ranked="rows"]')).toHaveCount(1);
+		}
+
+		// Pan back past every row the fixture holds. Now neither ranking can
+		// answer, and that is a different sentence from answering no.
+		const viewport = page.locator('[data-viewport-control]');
+		await viewport.focus();
+		for (let index = 0; index < 8; index += 1) {
+			await page.keyboard.press('ArrowLeft');
+		}
+		await expect(viewport).toContainText('0 rows in view');
+		await expect(sources.locator('[data-ranked="unmeasured"]')).toHaveText(
+			'Nothing was recorded in this window.'
+		);
 	});
 
 	test('the two empty states say different things', async ({ page }) => {
