@@ -1,6 +1,7 @@
 import { expect, test } from '@playwright/test';
 import { readdirSync, readFileSync, statSync } from 'node:fs';
 import { join, relative, resolve, sep } from 'node:path';
+import { shellSeedItems } from '../src/lib/server/config';
 
 /**
  * No page carries a day it does not render.
@@ -42,6 +43,8 @@ const BUILD = resolve(process.cwd(), 'build');
 const MARKER = 'key_points';
 
 const DATED = /^\/\d{4}-\d{2}-\d{2}(\/|$)/;
+/** A topic route: a date and one desk under it. */
+const TOPIC = /^\/\d{4}-\d{2}-\d{2}\/[^/]+\/$/;
 
 interface Page {
 	route: string;
@@ -120,4 +123,33 @@ test('the archive carries no day payload at all', () => {
 		archive?.markers ?? 0,
 		'/archive/ is inlining day payloads again - search reads the month index'
 	).toBe(0);
+});
+
+/**
+ * A topic document carries a seed, not a day.
+ *
+ * Five of the six documents a day are topic routes and every one of them used
+ * to inline the whole day so a client-side filter could throw most of it away.
+ * Since 2026-09-01 the document keeps `ui.shell_seed_items` stories of its own
+ * desk and the rest arrive from the served day.
+ *
+ * The count is not capped on the day route or on the home page: both render the
+ * whole day on purpose, and a ceiling there would cap the news.
+ */
+test('a topic document carries no more stories than the seed', () => {
+	const seed = shellSeedItems();
+	const topics = pages().filter((page) => TOPIC.test(page.route));
+
+	expect(topics.length, 'the build has no topic route, so this proves nothing').toBeGreaterThan(0);
+	const over = topics
+		.filter((page) => page.markers > seed)
+		.map((page) => `${page.route} carries ${page.markers} stories`);
+	expect(
+		over,
+		`a topic document is inlining more than the ${seed}-story seed:\n` + over.join('\n')
+	).toEqual([]);
+	expect(
+		topics.filter((page) => page.markers > 0).length,
+		'no topic document carries a story at all - the seed is empty, not small'
+	).toBeGreaterThan(0);
 });

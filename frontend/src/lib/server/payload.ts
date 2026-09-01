@@ -124,8 +124,8 @@ export function latestDate(root: string = DIGEST_ROOT): string | null {
  *
  * `facts` is everything the day says that does not grow with the number of
  * stories - the date, the run list, the topic counts, the retention window.
- * `seed` is the head of the published order and `rest` is the remainder, so
- * `[...seed, ...rest]` is the day's item list unchanged.
+ * `seed` is what the prerendered document carries and `rest` is what a browser
+ * fetches.
  *
  * `facts.items` is empty and keeps its slot on purpose. A prerendered document
  * serialises an object in its own key order and the committed payload writes
@@ -138,6 +138,35 @@ export interface DayShell {
 	rest: DigestItem[];
 }
 
+/** Which stories a reading route splits, and which of them the document keeps. */
+export interface DayShellSplit {
+	/** One topic's stories only, in the day's own published order.
+	 *
+	 * A topic page's seed has to be the head of the list that page renders. The
+	 * published order is desk-blocked rather than globally ranked, so the head of
+	 * the whole day is one desk - and every other topic route would open on a
+	 * screen holding none of its own stories.
+	 */
+	vertical?: string | null;
+	/** Item ids the seed keeps whatever their position in the order.
+	 *
+	 * The head is a prefix and a leading story is not inside one. Row 15 of the
+	 * reading-page plan measured its five leads at positions 249, 285, 337, 344
+	 * and 493 of 601, so a seed built as a plain head ships lead links that land
+	 * on nothing until the fetch arrives, and on nothing at all when it fails.
+	 * The seed is therefore the head UNION whatever the page must be able to
+	 * anchor before the rest of the day is in hand.
+	 *
+	 * A shell built with this is not one to put back together: a kept story moves
+	 * forward into the seed, so `[...seed, ...rest]` is the same set in a
+	 * different order. `wholeDay` is for the routes that still inline everything,
+	 * and none of them keeps anything.
+	 */
+	keep?: Iterable<string>;
+	/** Where the committed days are read from. */
+	root?: string;
+}
+
 /** The day, in the two halves a reading route loads.
  *
  * Null for the same reason `loadDay` is null: the date was never published, or
@@ -146,14 +175,20 @@ export interface DayShell {
 export function dayShell(
 	date: string,
 	seedItems: number,
-	root: string = DIGEST_ROOT
+	split: DayShellSplit = {}
 ): DayShell | null {
-	const day = loadDay(date, root);
+	const day = loadDay(date, split.root ?? DIGEST_ROOT);
 	if (!day) return null;
+	const items = split.vertical
+		? day.items.filter((item) => item.vertical === split.vertical)
+		: day.items;
+	const kept = new Set(split.keep ?? []);
+	const head = new Set(items.slice(0, seedItems).map((item) => item.item_id));
+	const seeded = (item: DigestItem): boolean => head.has(item.item_id) || kept.has(item.item_id);
 	return {
 		facts: { ...day, items: [] },
-		seed: day.items.slice(0, seedItems),
-		rest: day.items.slice(seedItems)
+		seed: items.filter(seeded),
+		rest: items.filter((item) => !seeded(item))
 	};
 }
 
@@ -162,6 +197,8 @@ export function dayShell(
  * Every reading route still renders the whole day, so this is what its `load`
  * returns and the prerendered output does not move. The rows that follow stop
  * calling it on the routes that fetch their remainder instead.
+ *
+ * Only for a shell split with nothing kept out of order (see `DayShellSplit`).
  */
 export function wholeDay(shell: DayShell): DigestDay {
 	return { ...shell.facts, items: [...shell.seed, ...shell.rest] };
