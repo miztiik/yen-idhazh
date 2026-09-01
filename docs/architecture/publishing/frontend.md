@@ -803,11 +803,28 @@ what is missing once at the top and once per named panel. A route that hid
 itself until it had data would be a route nobody knew to check - which is
 exactly how a ledger goes four days unread.
 
-**The run strip is a time axis: one column per day, oldest on the left.** Days
-advance left to right the way every other time series does, so "it broke on
-Tuesday and has been amber since" is a shape rather than a sentence. Each day is
-a fixed 16px track with a 4px gap, and a label may never widen a track - two
-days apart must measure twice one day apart, whatever the date under it says.
+**The run strip is a time axis: one column per day of the window, oldest on the
+left.** Days advance left to right the way every other time series does, so "it
+broke on Tuesday and has been amber since" is a shape rather than a sentence.
+Each day is a track that grows with the room the strip has, floored at 16px with
+a 4px gap, and a label may never widen a track - two days apart must measure
+twice one day apart, whatever the date under it says.
+
+**A column with no square is a day nothing ran, and it is drawn.** Until
+2026-09-01 the strip drew one column per day a manifest exists for, so at the
+default thirty-day window over the committed ledger it drew eleven columns:
+measured 2026-09-01 at 1440 on Intel Core i7-1265U, Windows 11, node 24.12.0,
+**464px of a 1,326px frame - 35.0 percent**, with the other 862px empty on the
+right. That reads as a chart that failed to load. The window's own calendar
+draws thirty columns at 1,290px, **97.3 percent**, and the gaps in it are the
+fact this panel is the only place to see: a day the schedule dropped.
+
+**`CELL_MAX` was not what left the margin, and the plan row that ordered this
+said it was.** The ceiling is 34px and the frame offers 35.4px a column at thirty
+days, so the cap costs 30px of 1,326 - two percent, not sixty-five. The column
+count was the whole of it. The ceiling stays at 34, which is the size a fortnight
+wants; a narrower preset still cannot fill a page-wide frame at any cell size a
+run square should have, and that is what the centring rule below is for.
 
 **Within a day, runs rise from a shared baseline.** Run 1 sits on the ground and
 later runs stack upward, so every column starts from the same line and a busy
@@ -823,28 +840,39 @@ nothing about what should have.
 
 **Dates are a separate, sparse row.** One day gets one full date. Two to six
 days get one compact span (`18-20 Aug 2026`). Seven or more get a full date at
-each end and a label every seventh column between them, dropping any
-intermediate that lands within six columns of the newest end, where the two
-texts would share pixels. The year is printed on the first label that changes
-it and not again. The arithmetic lives in
+each end and as many between them as `dayTicks` measures room for. The year is
+printed on the first label that changes it and not again. The arithmetic lives in
 [frontend/src/lib/charts/run-history.ts](../../../frontend/src/lib/charts/run-history.ts)
-so it can be tested without a browser.
+so it can be tested without a browser. Eleven narrow columns had room for four
+labels; thirty have room for the cadence the axis was written for.
 
-**The strip starts on the left, and the spare room is on the right.** Until
-2026-08-30 a history shorter than its frame was pushed to the right edge, on the
-argument that the newest run should sit in one place whatever the day count.
-Re-measured on 2026-08-30 after merging `origin/main`, at 1440px over the
-committed ledger, on this tree with the one alignment declaration flipped back:
-its ten days draw 421px inside a 1326px frame, so right-anchored they leave
-905px of empty page on the left - the strip uses 32 percent of its own row,
-which reads as one that failed to draw rather than as one with room to spare.
-Left-anchored the same ten days start at the frame's own left edge, 0px in, and
-the 905px of room falls on the right. The argument for the right edge is the
-thing that broke it: the ledger went from nine days to ten while this change was
-being merged, so a right-anchored strip slid every column one place left and a
-run the operator had looked at yesterday was somewhere else today. Left-anchored,
-a day keeps its place and the empty room is on the side the days that have not
-happened yet belong to.
+**A day is read through the shared readout strip, not through a `title`.** The
+only way to read a square was a native tooltip until 2026-09-01, and a native
+tooltip needs a hover - so on a phone the run's verdict did not exist - takes no
+styling, and prints one square where a reader wants the day. The strip below the
+plot prints every run of the hovered day, each with the swatch it is drawn in
+and the word for what it did, and the arrow keys step through the days. The
+`title` and the `aria-label` stay on each square, because nothing the readout
+reports may be needed to read the chart
+([../../concepts/design-system.md](../../concepts/design-system.md)).
+
+**The standing key went with it.** The readout prints the swatch and the verdict
+for the run it is on, so a key beside it drew the same pair a second time - and
+one fact drawn twice is how two of them drift. The rule the key's red entry
+carried, `failed, or under N% published`, is a rule and not a legend, so it is
+in the panel's note where the rest of the reading instructions are.
+
+**A strip that cannot fill its frame is centred in it.** Until 2026-09-01 it
+started at the left edge and the spare room piled up on the right - and the
+right of a time axis whose last column is today is where a reader looks for the
+days that just happened, so the room read as a run that had stopped. That was
+the right answer while the strip drew only the days that carried a run, because
+then the right-hand room really was "days not yet published"; with the window's
+calendar drawn, the last column is today and there is nothing to the right of it.
+`centreOffset` returns zero once the strip overflows, because a scrolling strip
+has no spare room to divide and an offset would push its first column out of
+reach. At the default window the strip fills, so the rule is only visible at the
+7- and 14-day presets.
 
 **Where an overflowing strip OPENS is a different question, and it is the one
 `console.today_anchor` answers.** The two were one line of layout for a while

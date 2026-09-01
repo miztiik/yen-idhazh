@@ -16,7 +16,14 @@
 	 */
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { axisLabels, cellFor, denseCellFor, ROW_STRIP_PX, type LabelAlign } from '$lib/charts/run-history';
+	import {
+		axisLabels,
+		cellFor,
+		centreOffset,
+		denseCellFor,
+		ROW_STRIP_PX,
+		type LabelAlign
+	} from '$lib/charts/run-history';
 	import {
 		datesIn,
 		failureSeries,
@@ -25,6 +32,7 @@
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import {
+		daysInWindow,
 		defaultWindow,
 		monthsToFetch,
 		panWindow,
@@ -33,6 +41,7 @@
 		type TimeWindow
 	} from '$lib/charts/viewport';
 	import StageTimings from '$lib/components/StageTimings.svelte';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -42,7 +51,13 @@
 	import { movementVerdict } from '$lib/charts/theme';
 	import type { TargetSense } from '$lib/charts/targetbar';
 	import Chart from '$lib/charts/Chart.svelte';
-	import { columnStrip } from '$lib/charts/frame';
+	import {
+		columnStrip,
+		notMeasuredRow,
+		readoutMarks,
+		pointerReadout,
+		type DayReadout
+	} from '$lib/charts/frame';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
 		chartArm,
@@ -293,14 +308,26 @@
 		red: 'var(--fill-low)'
 	};
 
-	const KEY = $derived([
-		{ health: 'green' as Health, text: 'ran clean' },
-		{ health: 'amber' as Health, text: 'worth a look' },
-		{ health: 'red' as Health, text: `failed, or under ${data.floorPct}% published` }
-	]);
-
-	/** The strip reads the page's window, like every other windowed section. */
-	const windowGrid = $derived(data.grid.filter((day) => inWindow(day.date)));
+	/** What a square means, in words. Colour is one signal and never the only
+	 * one: the readout under the strip prints this word beside the swatch for
+	 * the run the pointer is on, and the panel note states the rule once. A
+	 * standing key would print the same pair a second time. */
+	const VERDICT: Record<Health, string> = {
+		green: 'ran clean',
+		amber: 'worth a look',
+		red: 'failed'
+	};
+	/** One column per day of the window, whether or not a run happened on it.
+	 *
+	 * The strip drew only the days a manifest exists for until 2026-09-01, so a
+	 * thirty-day window drew eleven columns and a third of a page-wide frame.
+	 * The other two thirds read as a chart that failed to load. An empty column
+	 * is the fact this strip exists to show: nothing ran that day.
+	 */
+	const windowGrid = $derived.by(() => {
+		const byDate = new Map(data.grid.map((day) => [day.date, day.squares]));
+		return daysInWindow(viewport).map((date) => ({ date, squares: byDate.get(date) ?? [] }));
+	});
 	const windowRuns = $derived(windowGrid.reduce((count, day) => count + day.squares.length, 0));
 
 	/** A label is placed inside its column, not laid out by it, so the widest
@@ -327,7 +354,14 @@
 	 * is what keeps the prerendered strip drawing at the fixed pair rather than
 	 * at zero. */
 	let stripWidth = $state<number | null>(null);
+	/** The strip grows into the room it has, and centres when it cannot fill it.
+	 *
+	 * Thirty columns fill a page-wide frame; seven cannot, whatever the cell
+	 * size, and a seven-day strip drawn hard left leaves its spare room where a
+	 * reader looks for the days that just happened.
+	 */
 	const strip_ = $derived(cellFor(stripWidth, windowGrid.length));
+	const stripPad = $derived(centreOffset(stripWidth, strip_.width));
 
 	/** Which columns of the run strip carry a date. The cell here grows from 16px
 	 * to 34px with the room the strip has, so the number of labels that fit is a
@@ -337,6 +371,37 @@
 			windowGrid.map((day) => day.date),
 			{ density: data.chart.tick_density, pitch: strip_.cell + strip_.gap }
 		)
+	);
+
+	/** One column of the run strip, as the readout under it prints it.
+	 *
+	 * A `title` attribute was the whole hover here until 2026-09-01, and a
+	 * native tooltip is not keyboard-reachable, takes no styling and prints one
+	 * square rather than the day's whole column. The strip prints every run of
+	 * the day at once, each with the swatch it is drawn in - so the readout is
+	 * the key as well, and no standing legend is drawn.
+	 */
+	const runColumns: DayReadout[] = $derived(
+		windowGrid.map((day, index) => ({
+			x: index * (strip_.cell + strip_.gap) + strip_.cell / 2,
+			date: shortDate(day.date),
+			rows:
+				day.squares.length === 0
+					? [notMeasuredRow('No run recorded a manifest')]
+					: day.squares.map((square) => ({
+							label: `Run ${square.n}`,
+							value: VERDICT[square.health],
+							colour: COLOUR[square.health]
+						}))
+		}))
+	);
+	/** The column a pointer or an arrow key has picked, or null for none. */
+	let runAt = $state<number | null>(null);
+	/** The newest day, which is the one an operator came for. It is what the
+	 * strip prints before anything is pointed at, so it is never blank and the
+	 * panel does not change height as it fills. */
+	const runReadout = $derived(
+		runAt === null ? (runColumns.at(-1) ?? null) : (runColumns[runAt] ?? null)
 	);
 
 	$effect(() => {
@@ -617,7 +682,7 @@
 	<div data-windowed="run-health" data-window-days={windowDays}>
 		<Panel
 			title="Run health"
-			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. A skipped item does not count against a run - an article we already published is skipped by design."
+			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. A column with no square is a day nothing ran. A run is green when it published what it planned, amber when it found nothing new, and red when it failed or published under {data.floorPct}%. A skipped item does not count against a run - an article we already published is skipped by design."
 		>
 			{#if data.grid.length === 0}
 				<p class="text-[0.9375rem] text-text-secondary" data-grid="empty">
@@ -640,15 +705,25 @@
 					bind:this={strip}
 					data-run-history
 				>
-					<!-- Left-anchored, and that is not the same question as where an
-					     overflowing strip opens. `today_anchor` governs the scroll
-					     position; a strip with room to spare simply starts where every
-					     other axis on the page starts, so a day keeps the place the
-					     operator last saw it in as the window fills. -->
+					<!-- Left-anchored while it overflows, centred while it does not, and
+					     that is not the same question as where an overflowing strip
+					     opens. `today_anchor` governs the scroll position; a strip with
+					     room to spare puts its spare room on both sides, because the
+					     right of a time axis ending today is where a reader looks for
+					     the days that just happened. -->
 					<div
-						class="grid w-max min-w-full items-end justify-start"
-						style="grid-template-columns: repeat({windowGrid.length}, {strip_.cell}px); gap: {strip_.gap}px"
+						class="grid w-max items-end justify-start"
+						style="grid-template-columns: repeat({windowGrid.length}, {strip_.cell}px); gap: {strip_.gap}px; margin-inline-start: {stripPad}px"
 						data-grid="days"
+						data-strip-pad={stripPad}
+						tabindex="0"
+						role="group"
+						aria-label="Run health, one column a day. Left and Right read a day, Escape returns to the newest."
+						use:pointerReadout={{
+							marks: readoutMarks(runColumns),
+							width: strip_.width,
+							onSelect: (index) => (runAt = index)
+						}}
 					>
 						{#each windowGrid as day, index (day.date)}
 							<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
@@ -657,6 +732,7 @@
 								class="flex flex-col-reverse justify-start"
 								style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
 								data-day={day.date}
+								data-day-selected={runAt === index ? 'true' : null}
 							>
 								{#each day.squares as square (square.runId)}
 									<span
@@ -688,15 +764,14 @@
 					</div>
 				</div>
 
-				<ul class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-					{#each KEY as entry (entry.health)}
-						<li class="flex items-center gap-2">
-							<span class="size-3 shrink-0 rounded-sm" style="background: {COLOUR[entry.health]}"
-							></span>
-							{entry.text}
-						</li>
-					{/each}
-				</ul>
+				<ChartReadout
+					readout={runReadout}
+					name="run-health"
+					maxShare={data.chart.readout_max_share}
+					resting={runAt === null}
+					restingNote=", the newest day"
+					hint="Point at a day to read every run on it. Left and Right step through the days, Escape returns to the newest."
+				/>
 			{/if}
 		</Panel>
 	</div>
@@ -1206,6 +1281,15 @@ min-inline-size: 0;
 .feed-strip,
 .feed-axis {
 display: grid;
+}
+
+/* The column the readout is printing. A tint behind the day rather than a rule
+   through it: an empty column has no square for a rule to land on, and an empty
+   column is exactly the one a reader most needs to see selected. */
+[data-day-selected] {
+background: var(--color-surface-sunken);
+box-shadow: 0 0 0 2px var(--color-surface-sunken);
+border-radius: 2px;
 }
 
 .feed-strip {

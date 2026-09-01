@@ -73,6 +73,22 @@ export function cellFor(available: number | null, days: number): StripMetrics {
 /** The room a strip gets when it sits inside a row rather than across a page. */
 export const ROW_STRIP_PX = 240;
 
+/** How far in from the left a strip that cannot fill its frame should start.
+ *
+ * A strip drawn to the left of a page-wide frame leaves its spare room on the
+ * right, and the right of a time axis whose last column is today is where a
+ * reader looks for the days that have just happened - so empty room there reads
+ * as a run that stopped rather than as a window wider than the strip needs.
+ * Centred, the spare room is on both sides and belongs to neither end.
+ *
+ * Zero once the strip overflows, because a scrolling strip has no spare room to
+ * divide and an offset there would push its first column out of reach.
+ */
+export function centreOffset(available: number | null, width: number): number {
+	if (available === null || available <= 0 || width <= 0) return 0;
+	return Math.max(0, Math.round((available - width) / 2));
+}
+
 /** Small enough to fit ninety days in a list row, big enough to still be a
  * square rather than a tick. */
 const DENSE_MIN = 3;
