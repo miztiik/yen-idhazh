@@ -14,12 +14,16 @@ from __future__ import annotations
 import base64
 import binascii
 import logging
+import math
 import tempfile
+from array import array
 from collections.abc import Sequence
 from datetime import UTC, datetime
+from operator import mul
 from pathlib import Path
 from typing import Final, Literal
 
+from idhazh.contracts.app_config import AssembleConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.digest_day import (
     DigestDay,
@@ -59,6 +63,9 @@ LOG: Final = logging.getLogger("idhazh")
 
 PUBLIC_ROOT: Final = Path("frontend/public/digest")
 INDEX_ROOT: Final = Path("frontend/public/assist/index")
+#: The threshold a run uses when nobody configured one, read off the contract so
+#: the number exists once. The knob is `assemble.duplicate_similarity_min`.
+DUPLICATE_SIMILARITY_MIN: Final = AssembleConfig().duplicate_similarity_min
 _UNTITLED: Final = "Untitled item"
 _ABSTRACT_NOTE: Final = "This is a summary of the paper's abstract. The full paper is a PDF."
 _SHARE_NOTE: Final = "We could only read the first {share} percent of this page."
@@ -297,6 +304,159 @@ def merge_embeddings(
     return current.model_copy(update={"vectors": {**previous.vectors, **current.vectors}})
 
 
+def _norm(vector: array[int]) -> float:
+    return math.sqrt(sum(value * value for value in vector)) or 1.0
+
+
+def cosine_int8(
+    left: array[int], right: array[int], *, left_norm: float, right_norm: float
+) -> float:
+    """Cosine between two stored vectors, without decoding either of them.
+
+    `embed.dequantise` divides by the quantisation scale and then normalises, so
+    the scale cancels: the angle between two int8 vectors is the angle between
+    the unit vectors they decode to. A test asserts the two agree rather than
+    leaving that as a claim.
+    """
+    dot: int = sum(map(mul, left, right))
+    return dot / (left_norm * right_norm)
+
+
+def _strength_order(item: DigestItem) -> tuple[float, float, int, str]:
+    """Strongest first, and settled where nothing separates two items.
+
+    A scored item outranks an unscored one, because `rank_score` is the only
+    comparable measure of a story the day carries and an item published before
+    it existed has none. Where two items tie, the earlier run wins: a returning
+    reader keeps the item they already saw rather than watching the day swap it
+    for a copy.
+    """
+    return (
+        0.0 if item.rank_score is not None else 1.0,
+        -(item.rank_score or 0.0),
+        item.introduced_by_run,
+        item.item_id,
+    )
+
+
+def _weakest_link(
+    cluster: Sequence[str],
+    item_id: str,
+    vectors: dict[str, array[int]],
+    norms: dict[str, float],
+    floor: float,
+) -> float | None:
+    """How well this item fits the whole group, or nothing if it does not.
+
+    Every pair inside a group clears the threshold, not only each item against
+    the one it joined. Single-link grouping chains - A is the same story as B
+    and B as C, while A and C are two different stories - and a chained group is
+    exactly the false merge this pass may not make.
+    """
+    weakest = 1.0
+    for member in cluster:
+        score = cosine_int8(
+            vectors[item_id],
+            vectors[member],
+            left_norm=norms[item_id],
+            right_norm=norms[member],
+        )
+        if score < floor:
+            return None
+        weakest = min(weakest, score)
+    return weakest
+
+
+def collapse_same_story(
+    items: Sequence[DigestItem],
+    embeddings: DigestEmbeddings | None,
+    *,
+    similarity_min: float = DUPLICATE_SIMILARITY_MIN,
+) -> list[DigestItem]:
+    """Group the day on the vectors it already carries, and keep the strongest.
+
+    Nothing is removed. Every item stays in the published order it was in, with
+    its anchor and its archive entry; a grouped item names the one the default
+    view draws instead, and every item in a group carries the count of other
+    sources so the sentence on it is true whichever one is on screen.
+
+    Runs at build time over the block the payload already holds (Rule #1): the
+    browser never computes this, and no encoder is loaded to do it. A day with
+    no vectors, and an item without one, come back untouched - both fields stay
+    null, which reads as unknown rather than as "only one source carried this".
+
+    **A group is always across sources**, so `also_covered_by` is 1 or more on
+    every grouped item and 0 on every other item that carries a vector. One
+    outlet publishing twice is a different problem with a different control
+    (`collect.max_source_share_per_day`), and grouping it would buy the reader
+    nothing - the sentence on the survivor is the one it already had - while
+    still costing a story. It is also where the encoder is least trustworthy:
+    two press releases from one desk share their boilerplate, so the Federal
+    Reserve's June minutes and its July minutes score 0.9867 against each other
+    and are two different documents.
+    """
+    if embeddings is None or not embeddings.vectors:
+        return list(items)
+
+    by_id = {item.item_id: item for item in items}
+    vectors: dict[str, array[int]] = {}
+    norms: dict[str, float] = {}
+    for item_id, encoded in embeddings.vectors.items():
+        if item_id not in by_id:
+            continue
+        raw = _vector_bytes(encoded, embeddings.dimensions)
+        if raw is None:
+            LOG.warning(
+                "item %s stores a vector that is not %s bytes wide, so it is not "
+                "grouped with anything",
+                item_id,
+                embeddings.dimensions,
+            )
+            continue
+        vectors[item_id] = array("b", raw)
+        norms[item_id] = _norm(vectors[item_id])
+
+    clusters: list[list[str]] = []
+    for item in sorted((one for one in items if one.item_id in vectors), key=_strength_order):
+        joined: list[str] | None = None
+        best = similarity_min
+        for cluster in clusters:
+            # A group is across sources, so one outlet's second piece never
+            # forms a group on its own and never joins a group it is alone in.
+            if all(by_id[member].source_id == item.source_id for member in cluster):
+                continue
+            fit = _weakest_link(cluster, item.item_id, vectors, norms, similarity_min)
+            # `>` after the first candidate, so a tie goes to the group that
+            # formed first - which is the one built round the stronger story,
+            # because the walk is in strength order.
+            if fit is not None and (joined is None or fit > best):
+                joined, best = cluster, fit
+        if joined is None:
+            clusters.append([item.item_id])
+        else:
+            joined.append(item.item_id)
+
+    keeper: dict[str, str | None] = {}
+    covered: dict[str, int] = {}
+    for cluster in clusters:
+        sources = {by_id[member].source_id for member in cluster}
+        for position, member in enumerate(cluster):
+            keeper[member] = None if position == 0 else cluster[0]
+            covered[member] = len(sources - {by_id[member].source_id})
+
+    return [
+        item
+        if item.item_id not in covered
+        else item.model_copy(
+            update={
+                "also_covered_by": covered[item.item_id],
+                "same_story_as": keeper[item.item_id],
+            }
+        )
+        for item in items
+    ]
+
+
 def month_of(date: str) -> str:
     """`<YYYY-MM>` - the shard a published date belongs to."""
     return date[:7]
@@ -434,6 +594,7 @@ def build_day(
     retention_window_months: int,
     embeddings: DigestEmbeddings | None = None,
     item_health_rows: Sequence[ItemHealthRow] | None = None,
+    duplicate_similarity_min: float = DUPLICATE_SIMILARITY_MIN,
 ) -> DigestDay:
     """Append this run's items to whatever the day already carried.
 
@@ -448,10 +609,17 @@ def build_day(
     than adding a second one is what makes that replay one run, and the count on
     it is every item the number introduced rather than what this attempt added,
     because that is what `DigestDay` validates it against.
+
+    The duplicate pass runs over the whole day and not over this run's items,
+    because a later run can publish the same story an earlier one already did.
+    It is a pure function of the items, their vectors and the threshold, so the
+    same day rebuilt reaches the same groups.
     """
     already = {item.item_id for item in (previous.items if previous else [])}
     fresh = [item for item in items if item.item_id not in already]
     combined = [*(previous.items if previous else []), *fresh]
+    merged = merge_embeddings(previous.embeddings if previous else None, embeddings)
+    combined = collapse_same_story(combined, merged, similarity_min=duplicate_similarity_min)
 
     runs = list(previous.runs) if previous else []
     runs = [run for run in runs if run.n != run_n]
@@ -496,7 +664,7 @@ def build_day(
             for vertical_id in present
         ],
         items=combined,
-        embeddings=merge_embeddings(previous.embeddings if previous else None, embeddings),
+        embeddings=merged,
     )
 
 

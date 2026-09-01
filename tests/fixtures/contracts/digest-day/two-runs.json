@@ -4,6 +4,7 @@
   "generated_at": "2026-08-21T18:22:05Z",
   "items": [
     {
+      "also_covered_by": null,
       "band": "high",
       "band_reason": null,
       "carried_by": null,
@@ -27,6 +28,7 @@
       "published_at": "2026-08-21T05:30:00Z",
       "rank_score": null,
       "reader_note": null,
+      "same_story_as": null,
       "source_form": "article",
       "source_id": "example-lab-blog",
       "source_kind": "reporting",
@@ -48,6 +50,7 @@
       "watchlist_hit": null
     },
     {
+      "also_covered_by": null,
       "band": "medium",
       "band_reason": null,
       "carried_by": null,
@@ -70,6 +73,7 @@
       "published_at": "2026-08-20T22:10:00Z",
       "rank_score": null,
       "reader_note": null,
+      "same_story_as": null,
       "source_form": "article",
       "source_id": "example-grid-newsroom",
       "source_kind": "reporting",
@@ -86,6 +90,7 @@
       "watchlist_hit": null
     },
     {
+      "also_covered_by": null,
       "band": "high",
       "band_reason": null,
       "carried_by": null,
@@ -106,6 +111,7 @@
       "published_at": "2026-08-21T16:40:00Z",
       "rank_score": null,
       "reader_note": null,
+      "same_story_as": null,
       "source_form": "article",
       "source_id": "example-lab-research",
       "source_kind": "reporting",

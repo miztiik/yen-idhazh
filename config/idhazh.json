@@ -1,4 +1,7 @@
 {
+  "assemble": {
+    "duplicate_similarity_min": 0.94
+  },
   "assist": {
     "max_tokens": 256,
     "min_readable_letter_share": 0.5,
