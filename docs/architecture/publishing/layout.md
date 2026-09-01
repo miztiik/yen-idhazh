@@ -1,6 +1,6 @@
 # Published Layout
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 Where the pipeline writes what a reader reads, what a reader's URL looks like, and what may later be deleted. Assemble is the stage that produces all of it ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape it writes into and the promises that shape makes.
 
@@ -89,6 +89,60 @@ The planning step scores every story before a single model loads ([../sources/di
 **All five are optional, and an absent one reads as unknown.** Every day published before the fields existed omits all five - 11 days and 3,596 items when they landed, counted 2026-08-31 - and not one of them was rewritten (`CLAUDE.md` section 11). A reader of the payload - our own page included - must not fill an absent field with a default, because every plausible default is a false claim: `0` for `carried_by` says no feed carried the story, `false` for `on_front_page` denies a vote that was never counted, and `0.0` for `rank_score` puts the story at the bottom of its desk. `null` is the only honest answer and the contract test over every committed day asserts it.
 
 `time_source` earns its place because the fallback it names is silent. `published_at` is the feed's own date where the feed gave a usable one, and our first sight of the address where it did not ([../sources/freshness.md](../sources/freshness.md)). Both are the same kind of string, so a page printing the time cannot say whose it is without this field. Measured 2026-08-31 on the committed 2026-08-30 payload - the newest day that had finished publishing - 431 items: 305 distinct `HH:mm` values, and 5 stamps, 1.2 percent, within two minutes of a run stamp. **That last figure is an upper bound on the fallback and not a count of it**, because until this field shipped nothing committed recorded the choice, and a feed's own stamp can land near a run by chance. The fallback is rare either way, which is exactly why it needs naming: a reader has no way to spot the 1 percent.
+
+## The same story from several sources says so
+
+A day runs the same story from more than one of our feeds, and until 2026-09-01 nothing on the page said so. The published item now carries two more fields, and both are computed at build time from the vector block the payload already holds - the browser never computes this and no encoder is loaded to do it.
+
+| Field | What it says | What it is not |
+| --- | --- | --- |
+| `also_covered_by` | How many **other sources** carried the same story today. | Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. |
+| `same_story_as` | The item a reading surface would draw for this story. | Not a deletion, and not something any page acts on today. |
+
+**`also_covered_by` is what a reader sees.** The meta line under an item reads `Also covered by N other sources today.`, or `Only one of our sources carried this.` where nothing grouped with it. Both are facts about our feed set and never claims about the world - we know who we read, not who else covered a story. Null prints nothing at all, which is what every day published before 2026-09-01 does.
+
+**`same_story_as` is recorded and not yet drawn**, and that is deliberate. Collapsing a group in `DigestList` was built and then taken out again on the evidence of its own smoke: the reading routes reach an item by paging a topic, so an item filtered out of the list is not merely undrawn on the first screen - it becomes unreachable through every reading route while its address still exists. That is the reachability problem row 24 of the reading-page plan owns, and drawing the collapse before it is answered would take five stories off the 2026-08-30 page with nowhere for a reader to find them. The field is on the committed day so the decision is recorded and auditable; it is **not** on the served projection, because a field with no renderer does not earn the wire.
+
+**Nothing is unpublished.** A grouped item keeps its place in the published order, its address, and its entry in the month search index. Measured on the committed 2026-08-30 day, 2026-09-01: **431 items in, 431 items out**, 5 of them marked as the same story as another.
+
+**A group is always across sources**, and that is a rule rather than an observation. The sentence a reader gets is about sources, so a group of one source has nothing to say - the survivor's line is the one it already had, and forming it would still cost a story. It is also where the encoder is least trustworthy: two press releases off one desk share their boilerplate and differ only in a date, so the Federal Reserve's June minutes and its July minutes score **0.9867** against each other on the committed 2026-08-25 day and are two different documents. One outlet publishing twice is bounded by `collect.max_source_share_per_day` instead.
+
+**Every pair inside a group clears the threshold**, not only each item against the one it joined. Single-link grouping chains: A is the same story as B and B as C while A and C are two different stories, and the chain quietly loses one of them.
+
+**The keeper is the strongest by `rank_score`**, and where two items tie the earlier run wins - a returning reader keeps the item they already saw rather than watching the day swap it for a copy. An item published before `rank_score` existed has none, so it ranks below any scored item.
+
+### What chose 0.94
+
+`assemble.duplicate_similarity_min` is set by hand labels, not by taste. Every group the pass forms over the eleven committed days was read from the published titles and summaries and marked same-story or not. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2, 3,978 items:
+
+| Threshold | Groups | Items grouped | Largest group | False merges |
+| ---: | ---: | ---: | ---: | ---: |
+| 0.93 | 30 | 37, 0.93 percent | 4 | **1** |
+| 0.94 | 22 | 24, 0.60 percent | 3 | **0** |
+| 0.95 | 14 | 14, 0.35 percent | 2 | 0 |
+| 0.96 | 11 | 11, 0.28 percent | 2 | 0 |
+
+The one false merge at 0.93 is on 2026-08-30: Ontario's pushback against the lake renaming, folded into Google carrying the renaming out, at a cosine of **0.9317**. Those are two stories, and merging them means the pushback never ran.
+
+**The rule is the first round hundredth above the highest-scoring pair a person marked as two stories.** That leaves a margin of 0.0083, which is thin and is stated rather than dressed up. The way to widen it is more labels, not a higher number: 0.95 buys 0.017 of margin and loses ten groups a person read as one story each.
+
+**The two errors are not equal, which is why the number leans high.** A missed group costs a reader the same story twice, on a page they can see. A false merge costs them a story that never ran, and they cannot see what is not there ([../../../.github/agents/editor.agent.md](../../../.github/agents/editor.agent.md)).
+
+**`assemble.duplicate_similarity_min` is not comparable to `assist.similarity_floor`.** That one scores a reader's query against an item and this one scores two items against each other; the two distributions are different shapes, and reading one number against the other is how a threshold gets set from the wrong evidence.
+
+### What it costs the runner
+
+The pass is one pass over the day's vectors and it is quadratic in the day's item count. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / Python 3.14.2, over each committed day at 0.94: **10.5 s on the largest day ever published** (2026-08-24, 731 items), 3.6 s on 2026-08-30 (431 items) and 0.5 s on 2026-08-23 (147). The assemble job's timeout is 20 minutes and the month index rebuild beside it takes 88 to 122 milliseconds, so this is now the stage's largest single cost and still under one percent of its budget.
+
+It compares int8 vectors directly rather than decoding them. `embed.dequantise` divides by the quantisation scale and then normalises, so the scale cancels and the angle between two stored vectors is the angle between the unit vectors they decode to - a test asserts that rather than leaving it as a claim.
+
+### The grouping runs before the lead block, and that order is fixed
+
+Two passes read the finished day inside `assemble.build_day`, and both were written in the same week by different rows. The grouping runs first; the leading stories ([../sources/discovery.md](../sources/discovery.md#a-second-order-over-the-same-day-the-leading-stories)) are chosen over what it produced. The reason is that the grouping decides which item of a group a reading surface would draw, so the block is picked over the day as the reader will see it rather than over one that is annotated a line later.
+
+**The order changes nothing today, and that is measured rather than assumed.** The two passes touch different fields: the grouping writes `also_covered_by` and `same_story_as` and nothing else, and lead selection reads neither. Rebuilding both passes in each order over the eleven committed days - 4,086 items, 2026-09-01, Intel Core i7-1265U / Windows 11 / Python 3.14.2 - gives the identical block on every day. Ten of the eleven produce no block at all, because a lead may only run on the feed's own clock and `time_source` landed on 2026-08-31; the one day that does produce a block holds five leads over eight groups, and **none of the five is a collapsed item and no group holds two of them**.
+
+**What is not yet a rule.** Nothing forbids a lead being an item the grouping collapsed, or two members of one group both leading - the source cap does not catch that, because a group is always across sources. Neither costs a reader anything while `same_story_as` is recorded and not drawn. Both become rules to write on the day the collapse is drawn, which is row 24's reachability question above.
 
 ## The month search index
 

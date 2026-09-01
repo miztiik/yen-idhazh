@@ -62,6 +62,20 @@
       "additionalProperties": false,
       "description": "One item as a reader consumes it. The link is a first-class element, not a footnote.",
       "properties": {
+        "also_covered_by": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many OTHER sources carried the same story today, counted over the day's own items. Not `carried_by`, which counts syndication of one address and reads 1 when two outlets write their own piece. 0 says only one of our sources carried it. Null says the pass could not tell - the day carries no vectors, or this item has none - and is never read as 0.",
+          "title": "Also Covered By"
+        },
         "band": {
           "$ref": "#/$defs/ConfidenceBand"
         },
@@ -184,6 +198,20 @@
           "default": null,
           "description": "Our sentence explaining a source limitation, never a badge.",
           "title": "Reader Note"
+        },
+        "same_story_as": {
+          "anyOf": [
+            {
+              "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The item the default view keeps for this story. Null on the item that is kept and on an item nothing grouped with. Nothing is unpublished: a collapsed item keeps its place in this list, its anchor and its archive entry.",
+          "title": "Same Story As"
         },
         "source_form": {
           "$ref": "#/$defs/SourceForm",
@@ -526,6 +554,11 @@
       "change": "Added leads: the day's leading stories, each with the reason it leads.",
       "version": "2026-09-01T12:30",
       "why": "The page had no first screen. Its opening stories were whichever desk sorted first in run 1, which is an accident rather than an edit, and the reader could not see why any story was there. The block is chosen across the whole day from the ranking signal the item already publishes plus a shared-subject term computed here, and it removes nothing: every lead is still in items, in the published order, and every excluded story still publishes. Additive with an empty default, so every day published before today - 11 days and 4,086 items when this landed, 2026-09-01 - still validates and still renders, with no block (section 11)."
+    },
+    {
+      "change": "Added also_covered_by and same_story_as to published items.",
+      "version": "2026-09-01T09:00",
+      "why": "A day ran the same story from up to four of our sources and drew every copy. Nothing on the item said so, and the field that looks like it would - carried_by - counts syndication of one address and reads 1 when two outlets write their own piece. The pass groups the day on the vectors this payload already carries, keeps the strongest of each group, and names the keeper on the rest. Nothing is unpublished: a collapsed item keeps its place in items, its anchor and its archive entry, and only what the default view draws changes. Measured 2026-09-01 over the eleven committed days and 3,978 items: 22 groups and 24 collapsed items, 0.60 percent, and every group read by hand as one story. Both fields are optional and null on every day published before this, and a null reads as unknown, never as 0, which would claim no other source carried the story (section 11)."
     },
     {
       "change": "Added carried_by, watchlist_hit, on_front_page, rank_score and time_source to published items.",

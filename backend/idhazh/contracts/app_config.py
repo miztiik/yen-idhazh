@@ -1133,6 +1133,42 @@ class VisualsConfig(Model):
         return self
 
 
+class AssembleConfig(Model):
+    """What the published day does with the items a run finished.
+
+    Its own group rather than a knob under `assist`, because `AppearanceConfig`
+    imports `AssistConfig` whole: a threshold the pipeline applies once at build
+    time would then also land in `config/appearance.json`, where it has no
+    reader and no meaning.
+    """
+
+    duplicate_similarity_min: float = Field(
+        default=0.94,
+        ge=0.0,
+        le=1.0,
+        description=(
+            "How alike two of a day's items have to be before they are one story. "
+            "Cosine over the vectors the day already carries, and EVERY pair inside a "
+            "group has to clear it - not only each item against the one it joined. "
+            "NOT comparable to assist.similarity_floor: that one scores a reader's "
+            "query against an item and this one scores two items against each other, "
+            "so the two distributions are different shapes. Set by hand labels rather "
+            "than by taste. Every group the pass forms over the eleven committed days "
+            "was read and marked same-story or not, measured 2026-09-01 on Intel Core "
+            "i7-1265U / Windows 11 / Python 3.14.2 over 3,978 items: at 0.93 one group "
+            "of thirty is two different stories - Ontario's pushback against the lake "
+            "renaming, merged into Google doing the renaming, at 0.9317 - and at 0.94 "
+            "all twenty-two groups are one story each. The rule is the first round "
+            "hundredth above the highest-scoring pair a person marked as two stories, "
+            "which leaves a margin of 0.0083. That margin is thin, and the way to widen "
+            "it is more labels rather than a higher number. Raising this costs missed "
+            "duplicates, which a reader sees as the same story twice; lowering it costs "
+            "a false merge, which is a story that never ran, so the two errors are not "
+            "equal and this number leans high."
+        ),
+    )
+
+
 class ThemeChoice(StrEnum):
     """The two themes. There is no third member for "follow the device".
 
@@ -1728,6 +1764,19 @@ class AppConfig(Contract):
                 "refused; nothing reads it and the committed file no longer sets it "
                 "(section 11). Every addition carries a default, so a file written "
                 "before today still validates either way."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-01T09:00",
+            change="Added the assemble group and its duplicate_similarity_min knob.",
+            why=(
+                "The published day now groups its own items on the vectors it already "
+                "carries, so a reader is not shown the same story eight times, and the "
+                "cosine that decides it is a tuning knob rather than a literal (Rule "
+                "#6). Its own group because `AppearanceConfig` imports `AssistConfig` "
+                "whole: filing a build-time threshold there would publish it to a "
+                "config the browser reads, where nothing can act on it. Additive with "
+                "a default, so a config written before today still loads (section 11)."
             ),
         ),
         ChangelogEntry(
@@ -2791,6 +2840,7 @@ class AppConfig(Contract):
     drift: DriftConfig = Field(default_factory=DriftConfig)
     retention: RetentionConfig = Field(default_factory=RetentionConfig)
     visuals: VisualsConfig = Field(default_factory=VisualsConfig)
+    assemble: AssembleConfig = Field(default_factory=AssembleConfig)
     ui: UiConfig = Field(default_factory=UiConfig)
     assist: AssistConfig = Field(default_factory=AssistConfig)
     console: ConsoleConfig = Field(default_factory=ConsoleConfig)

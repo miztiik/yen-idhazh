@@ -37,6 +37,7 @@ const COMMITTED = resolve(process.cwd(), 'public', 'digest');
  * divides the list, and `DigestItem` with `ItemMeta`, `ItemVisual`,
  * `LensChips`, `ConfidenceChip`, `ReadAloud` and `SourceLink` draws one item. */
 const RENDERED_FIELDS = [
+	'also_covered_by',
 	'band',
 	'band_reason',
 	'carried_by',
@@ -94,7 +95,7 @@ function items(day: Day): Record<string, unknown>[] {
 	return day.payload.items as Record<string, unknown>[];
 }
 
-test('the allow-list is the twenty-two fields this file promises', () => {
+test('the allow-list is the twenty-three fields this file promises', () => {
 	// The staging step and the build-time reader share one module now, so a
 	// widening is one edit in one place. This is the test that makes that edit
 	// visible: it names the field that arrived, where the shape checks below
@@ -121,7 +122,7 @@ test('a staged day carries its items and the stamp that says what shape they are
 	}
 });
 
-test('a staged item carries the twenty-two fields a page renders, and no twenty-third', () => {
+test('a staged item carries the twenty-three fields a page renders, and no twenty-fourth', () => {
 	const wrong: string[] = [];
 	let counted = 0;
 	for (const day of staged()) {

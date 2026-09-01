@@ -26,6 +26,20 @@
       "additionalProperties": false,
       "description": "One item, narrowed to what a page renders from it.\n\nEvery field here has a named renderer. The list is not \"the published item\nminus the big bits\" - it is traced along the render path, and a field\nwithout a reader does not earn the wire.",
       "properties": {
+        "also_covered_by": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "How many other sources carried the same story today. 0 is the sentence 'Only one of our sources carried this.' Null is unknown, and prints nothing at all.",
+          "title": "Also Covered By"
+        },
         "band": {
           "$ref": "#/$defs/ConfidenceBand"
         },
@@ -324,6 +338,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added also_covered_by to a served item.",
+      "version": "2026-09-01T09:00",
+      "why": "It has a named renderer, which is the bar every field here answers to: `ItemMeta` prints the sentence that says how many other sources carried the story, or that only one of ours did. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 over 11 committed days and 3,978 items, gzip -9 over the compact projection, the name added to the twenty-two-field arm: 467.49 bytes an item before and 468.24 after, which is 0.75 an item and 0.16 percent. Its sibling on the committed item, same_story_as, is NOT here: no page draws a group as one item yet, and a field without a reader does not earn the wire. It arrives when a reading route can also say where the items it stopped drawing went. Additive, so an older shell ignores the key and draws the page it drew yesterday."
+    },
+    {
       "change": "Initial shape: the day's items narrowed to what a page renders, carrying a version of their own.",
       "version": "2026-08-31T12:00",
       "why": "The staged day payload was a thirteen-name array in a build script, which was enough while the only reader was our own archive page. A reading route is about to fetch this file, so a browser we cannot upgrade will parse it and its address stops being movable - which is a persisted shape and therefore a contract before logic reads it (Rule #3). The version is here from the first byte so that an older shell reading a newer payload has something to branch on. Nine names join the thirteen in the same commit, each with a named renderer: carried_by, watchlist_hit, on_front_page and rank_score for the lead block, published_at and time_source for the time rail, introduced_by_run for the run divider, lenses for the topic chips, and key_points for the in-page filter that reads them today. Measured 2026-08-31 over 11 committed days and 3,733 items, gzip -9: 361.10 bytes an item before and 468.58 after, against 792.65 for the committed day."
@@ -339,7 +358,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-31T12:00",
+      "default": "2026-09-01T09:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -350,5 +369,5 @@
   ],
   "title": "DigestView",
   "type": "object",
-  "version": "2026-08-31T12:00"
+  "version": "2026-09-01T09:00"
 }

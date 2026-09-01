@@ -2629,6 +2629,7 @@ def stage_assemble(
         item_health_rows=item_health_rows,
         watchlist=settings.watchlist,
         ui=settings.app.ui,
+        duplicate_similarity_min=settings.app.assemble.duplicate_similarity_min,
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
 

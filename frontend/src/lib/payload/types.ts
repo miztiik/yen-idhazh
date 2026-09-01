@@ -62,6 +62,14 @@ export interface DigestItem {
 	on_front_page?: boolean | null;
 	rank_score?: number | null;
 	time_source?: TimeSource | null;
+	// The duplicate pass, absent on every day published before 2026-09-01. 0 means
+	// only one of our sources carried the story; null means the pass could not tell,
+	// and prints nothing rather than a claim.
+	also_covered_by?: number | null;
+	/** The item the default view draws for this story. Null on the one that is drawn.
+	 * A collapsed item is still in the payload, still has its anchor and still has
+	 * its archive entry - it is not drawn, not removed. */
+	same_story_as?: string | null;
 }
 
 export interface DigestRunRef {
@@ -116,7 +124,7 @@ export interface DigestDay {
  * committed tree and never reaches a browser. */
 export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
 
-/** One item as the served day carries it - twenty-two of the published item's
+/** One item as the served day carries it - twenty-three of the published item's
  * fields, every one with a renderer.
  *
  * Derived from `DigestItem` rather than restated, so a field cannot mean one
@@ -124,6 +132,9 @@ export type DigestViewVisual = Pick<DigestVisual, 'state' | 'path' | 'alt'>;
  * decides which names are here lives in `project.ts`, and the shape is a
  * contract: `schemas/digest-view.schema.json`, from
  * `backend/idhazh/contracts/digest_view.py`.
+ *
+ * `same_story_as` is on `DigestItem` and not here: no page draws a group as one
+ * item yet.
  *
  * Every optional field is optional for the same reason it is on `DigestItem`:
  * a day published before it existed has no value for it, and **absent and null
@@ -149,6 +160,7 @@ export type DigestViewItem = Pick<
 	| 'watchlist_hit'
 	| 'on_front_page'
 	| 'rank_score'
+	| 'also_covered_by'
 	| 'introduced_by_run'
 	| 'lenses'
 	| 'key_points'
