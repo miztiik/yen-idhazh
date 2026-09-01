@@ -40,6 +40,16 @@ const QUARANTINE_AFTER = (
 	}
 ).collect.quarantine_after_failures;
 
+/** How many failing feeds the section draws before its tail sentence. Read
+ * from the file the page reads it from, so a cap that starts biting this
+ * fixture does not turn the oracle below into a false red. */
+const FEED_ROWS =
+	(
+		JSON.parse(readFileSync(join(repo, 'config', 'appearance.json'), 'utf8')) as {
+			console?: { feed_rows?: number };
+		}
+	).console?.feed_rows ?? 10;
+
 /** The most date labels an axis may carry, from the file the page reads it
  * from. Not a copy. */
 function tickDensity(): number {
@@ -223,7 +233,7 @@ test('THE ORACLE: the printed count is the run the pipeline rests on', async ({ 
 		'the ledger holds no failing feed, so this oracle asserts nothing'
 	).toBeGreaterThan(0);
 	await expect(page.locator('[data-feed]'), 'the section drew no feed').toHaveCount(
-		troubled.length
+		Math.min(troubled.length, FEED_ROWS)
 	);
 
 	for (const row of rows) {

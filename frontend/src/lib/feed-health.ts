@@ -155,3 +155,63 @@ export function resultLabel(row: FeedRead): string {
 	if (row.outcome === 'ok' && row.items === 0) return 'answered with nothing';
 	return row.outcome;
 }
+
+/** One read, and which feed made it. */
+export interface FeedRecord extends FeedRead {
+	feedId: string;
+}
+
+/** How many feeds have never failed, out of how many were asked, over how many
+ * runs.
+ *
+ * The console lists only the feeds that broke, which is the right list and half
+ * an answer: four broken feeds out of eight is a collapse and four out of two
+ * hundred is a Tuesday, and the page drew both identically. This is the
+ * denominator, and it is a count rather than a share - the number an operator
+ * acts on is how many are named below, not a percentage.
+ */
+export interface Reliability {
+	/** Feed ids with at least one read and no failing one, alphabetically.
+	 * Alphabetical because there is no order: a feed is read once a run, so
+	 * every clean feed has the same record. */
+	clean: string[];
+	/** Feeds the pipeline has actually asked. A feed the ledger has only ever
+	 * rested was never asked, so it can be neither clean nor broken and belongs
+	 * in neither number. */
+	checked: number;
+	/** Feeds with at least one failing read. `clean.length + failed` is
+	 * `checked`, always. */
+	failed: number;
+	/** Runs the ledger holds. This is the span "never failed" is read over, and
+	 * a shallow record is why the page has a third sentence: two runs deep,
+	 * "never failed" means "did not fail twice". */
+	runs: number;
+}
+
+/** The whole record, not a window.
+ *
+ * The same span the streak beside each feed is read over, because the pipeline
+ * rests on the whole count and not on a windowed one. Two spans in one section
+ * is the defect the shared window exists to remove.
+ */
+export function reliability(rows: readonly FeedRecord[]): Reliability {
+	const asked = new Map<string, FeedRecord[]>();
+	for (const row of rows) {
+		if (skipped(row)) continue;
+		asked.set(row.feedId, [...(asked.get(row.feedId) ?? []), row]);
+	}
+
+	const clean: string[] = [];
+	let failed = 0;
+	for (const [feedId, reads] of asked) {
+		if (reads.some(failing)) failed += 1;
+		else clean.push(feedId);
+	}
+
+	return {
+		clean: clean.sort((a, b) => a.localeCompare(b)),
+		checked: asked.size,
+		failed,
+		runs: new Set(rows.map((row) => row.runId)).size
+	};
+}

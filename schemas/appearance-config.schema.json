@@ -199,6 +199,13 @@
           "title": "Failure List Max",
           "type": "integer"
         },
+        "feed_rows": {
+          "default": 10,
+          "description": "How many failing feeds the console lists before it states the tail in one sentence. Measured 2026-09-01 over the committed ledger, 26 of 182 checked feeds have failed at least once. Ten, matching `console.source_rows`.",
+          "minimum": 1,
+          "title": "Feed Rows",
+          "type": "integer"
+        },
         "max_window_days": {
           "default": 366,
           "minimum": 1,
@@ -223,6 +230,13 @@
           "description": "Days moved by one arrow-key pan.",
           "minimum": 1,
           "title": "Pan Days",
+          "type": "integer"
+        },
+        "source_rows": {
+          "default": 10,
+          "description": "How many sources the console ranks by the articles their failures cost, before it states the tail in one sentence. Measured 2026-09-01 over the committed projection, a thirty-day window holds 60 sources with a loss, which is a list nobody reads to the end. Ten, matching the source-cut list above it.",
+          "minimum": 1,
+          "title": "Source Rows",
           "type": "integer"
         },
         "today_anchor": {
@@ -557,6 +571,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.source_rows and console.feed_rows added, both defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together.",
+      "version": "2026-09-01T02:00",
+      "why": "Two console lists gained a cap on the same day, and a cap a component hardcodes is one an operator cannot move (Rule #6). The failure section now ranks sources by the articles their failures cost the digest; measured 2026-09-01 over the committed projection, a thirty-day window holds 60 sources with a loss, so an uncapped ranking is a list nobody reads to the end. The feed list had no cap at all and draws 26 of 182 checked feeds. Additive with defaults, so an appearance file written before today still validates (section 11)."
+    },
+    {
       "change": "digest.shell_seed_items added, defaulting to 15. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
       "version": "2026-09-01",
       "why": "A reading route's build-time load now splits a day into the facts that do not grow with the story count, the head of the published order, and the remainder. This number is where the head ends. Nothing fetches yet - the two halves are put straight back together, and the prerendered output is byte-identical - so the knob decides nothing today and everything once the item list moves to a browser fetch. It is also the one knob in this block the layout does not hand a browser, because no page reads it."
@@ -642,7 +661,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-01",
+      "default": "2026-09-01T02:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -650,5 +669,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-01"
+  "version": "2026-09-01T02:00"
 }

@@ -301,10 +301,16 @@ The console knobs are:
 - `console.min_attempts_for_rate`
 - `console.chart_height`
 - `console.failure_list_max`
+- `console.source_rows`
+- `console.feed_rows`
 
 The 30-day setting is a viewport. It never deletes rows. `failure_list_max` is
 the same idea one level down: the failed-item list shows a page at a time and
-offers the rest, so the charts above it stay reachable.
+offers the rest, so the charts above it stay reachable. `source_rows` and
+`feed_rows` are caps on two ranked lists beside it - the sources a window's
+failures cost the most articles, and the feeds that failed at least once. Both
+state their tail in one sentence rather than offering more rows, because a
+ranking is read from the top and a tail is a number, not a page.
 
 `window_presets` is the list of spans the console's window control offers, and
 one control sets the span for every section that follows it. Four presets rather

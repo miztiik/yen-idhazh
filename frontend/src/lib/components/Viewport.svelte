@@ -35,6 +35,7 @@
 			chart_width: number;
 			min_attempts_for_rate: number;
 			failure_list_max: number;
+			source_rows: number;
 			band_outlier_rows: number;
 		};
 		bands: SummaryBand[];
@@ -155,6 +156,7 @@
 				window={viewport}
 				{selectedCode}
 				max={config.failure_list_max}
+				sourceMax={config.source_rows}
 			/>
 		</div>
 	</div>
