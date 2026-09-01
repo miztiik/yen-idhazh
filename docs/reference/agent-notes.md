@@ -983,6 +983,44 @@ dependency nothing in the change touched.
   2026-08-31 while writing the first-frame theme oracle; it reads exactly like
   the stylesheet not loading. Read `document.documentElement` instead, which is
   the element that actually paints.
+- **`page.goto` to the same path with a different fragment never re-mounts the
+  shell.** It is a same-document navigation, so `afterNavigate` does not fire
+  and anything the root layout does on arrival does not run. A spec that reads
+  the item ids off `/<date>/` and then goes to `/<date>/#<id>` therefore reports
+  the restore as broken when it only measured the wrong journey - observed
+  2026-09-01, with the locator resolving 33 times and the attribute never
+  appearing. Navigate somewhere else first, the way a reader arriving from the
+  archive does, and the arm passes in under a second.
+- **A route pattern one segment too wide counts the page's own assets.**
+  `**/digest/**` catches an item's picture as well as `digest.json`, so an arm
+  asserting "this reached the network for nothing" failed at 2 on a fetch nobody
+  made. Route the exact shape the code under test builds, and nothing wider.
+- **A client module that imports `$app/paths` as a value cannot be imported by a
+  Playwright spec**, and that is what stands between a browser-side module with
+  no route call site and a real test. Bundling it in the spec is the way through,
+  and every step of it is load-bearing:
+
+  ```ts
+  const built = await build({
+  	configFile: false,
+  	logLevel: 'silent',
+  	resolve: { alias: { '$app/paths': stubFile, $lib: resolve('src/lib') } },
+  	build: { write: false, minify: false, lib: { entry, formats: ['umd'], name: 'x' } }
+  });
+  await page.addInitScript({ content: code });
+  await page.goto('/');
+  ```
+
+  `umd` rather than `iife`, because a UMD wrapper assigns the global itself
+  instead of relying on how an injected script scopes a `var`. `addInitScript`
+  rather than `addScriptTag`, because it is a debugger injection and the site's
+  own `script-src 'self'` does not have to be relaxed to let it in. And the stub
+  holds a PROJECT path rather than the empty string the preview server uses, so
+  a URL built without `base` cannot match the route pattern and the interception
+  count falls to zero - which is the assertion that would otherwise pass by
+  meaning nothing. Every navigation re-runs the init script, so module state
+  starts fresh on each `goto`, which is what lets one test drive a cold fetch
+  twice. Verified 2026-09-01 on `frontend/src/lib/assist/day.ts`.
 - **`pyproject.toml` already sets `addopts = "-q"`, so your own `-q` gives
   `-qq`** - and `-qq` removes the `N passed` summary line entirely. The run
   then shows progress dots and an exit code and nothing else, which reads like

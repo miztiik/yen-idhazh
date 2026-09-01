@@ -467,6 +467,24 @@ class AppearanceConfig(Contract):
             ),
         ),
         ChangelogEntry(
+            version="2026-09-01T10:00",
+            change=(
+                "digest.payload_slow_ms added, defaulting to 1200. The shape is "
+                "`UiConfig`, which this document and `AppConfig` share, so both "
+                "schemas moved together. Additive with a default, so an appearance "
+                "file written before today still validates."
+            ),
+            why=(
+                "The rest of a day is about to arrive by fetch, so for the first "
+                "time a reading page can be waiting on something. What it shows "
+                "meanwhile is one sentence past this number - never a spinner and "
+                "never a bar, because the first frame is already readable and a "
+                "compressed response cannot report a byte count worth printing. "
+                "This is the one knob in the block only a browser reads, which is "
+                "the exact opposite of `shell_seed_items` beside it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01T02:00",
             change=(
                 "console.source_rows and console.feed_rows added, both defaulting to "

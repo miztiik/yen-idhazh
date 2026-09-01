@@ -489,6 +489,31 @@ it is not inside any prefix: measured 2026-09-01 on the 601-story day of
 2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. The document
 has to carry those five as well as the seed, or their anchors land on nothing.
 
+`ui.payload_slow_ms` (1200) is the exact opposite knob, and the pair is worth
+reading together. It is how long a reader may wait for the rest of a day before
+the page says one sentence about it, and it is the one knob in this block **only
+a browser reads** - the wait happens in the reader's browser, and a prerendered
+document is the only channel a static site has to tell a browser anything. So
+this one rides in every document on purpose, where `shell_seed_items` is kept
+out of them on purpose.
+
+What appears past it is a sentence and never a dot: no spinner, no skeleton and
+no progress bar. The frame a reader already has is readable, so there is nothing
+to fill, and a byte readout would be worse than nothing - a compressed response
+reports its compressed length, so a bar drawn on it prints precision the number
+does not carry, which
+[design-system.md](design-system.md) already calls a bar making it up.
+
+The bounds are 250 ms and 30 s. Under 250 the sentence fires on a fetch that was
+never slow, which teaches a reader to ignore it; over 30 s they have already
+decided the page is broken. Measured 2026-09-01 on Intel Core i7-1265U /
+Windows 11 / node 24.12.0, Chromium against a local preview server: a
+9,731-byte served day answered in 10.2 to 22.3 ms over 12 probes, median 13 - so
+the default sits about 90 times above that median and cannot fire on a healthy
+fetch here. That is a server on the same machine, not a reader's connection, and
+what a reader's connection costs is not something anyone here can measure. That
+is exactly why the number is a knob and not a constant.
+
 The `assist` block is on-device search. The runner embeds the day and commits
 the vectors; a reader's tab embeds only the query. The first two knobs say how
 much of an item the encoder is allowed to read, and the last two say how much of

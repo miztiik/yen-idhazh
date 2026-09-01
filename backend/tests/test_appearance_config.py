@@ -237,8 +237,12 @@ def test_a_theme_that_never_existed_is_still_refused() -> None:
 def test_the_schema_is_generated_and_stamped() -> None:
     schema = AppearanceConfig.json_schema()
     assert schema["$id"] == "appearance-config.schema.json"
-    assert schema["version"] == "2026-09-01T12:30"
-    assert schema["changelog"][0]["version"] == "2026-09-01T12:30"
+    # The relation section 11 promises, not the stamp of the day this was
+    # written. A literal date here is a line every later knob has to edit, and
+    # two branches that both edit it to the same value merge clean and fail on
+    # the full suite - which is a failure that says nothing about the change.
+    assert schema["version"] == schema["changelog"][0]["version"]
+    assert schema["version"] >= "2026-08-29", "the stamp went backwards"
     for block in ("digest", "console", "assist", "frame", "theme", "chart", "icons", "motion"):
         assert block in schema["properties"], f"{block} missing from the generated schema"
 

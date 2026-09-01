@@ -51,6 +51,7 @@
     "leading_min": 3,
     "leading_per_desk": 2,
     "leading_stories": 5,
+    "payload_slow_ms": 1200,
     "read_mark_days": 7,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [

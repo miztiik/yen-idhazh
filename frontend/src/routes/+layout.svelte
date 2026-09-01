@@ -1,9 +1,24 @@
 <script lang="ts">
 	import '../styles/app.css';
+	import { afterNavigate } from '$app/navigation';
+	import { restoreAnchor } from '$lib/assist/day';
 	import SiteFooter from '$lib/components/SiteFooter.svelte';
 	import SiteHeader from '$lib/components/SiteHeader.svelte';
 
 	let { data, children } = $props();
+
+	// A browser honours a fragment once, at load, and a client-side navigation
+	// is not a load. Doing it here rather than per page is what makes a deep
+	// link behave the same on every route, and it adds the half a browser never
+	// does: the story is focused, so a reader arriving by keyboard lands on what
+	// the link sent them to read instead of at the top of the document.
+	//
+	// This is the half that works while every story is still in the document. A
+	// page that fetches its stories calls the same function again once they have
+	// rendered, because the element does not exist yet when this runs.
+	afterNavigate(() => {
+		restoreAnchor();
+	});
 </script>
 
 <div class="frame">
