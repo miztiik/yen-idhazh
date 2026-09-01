@@ -217,8 +217,8 @@ test.describe('the item names the speaker only where the speaker has a stake', (
 
 	test('the label stays a minority mark on the committed days', () => {
 		// The bound rather than the count, so an ordinary publish does not fail
-		// this. Measured 2026-09-01 over 12 committed days and 4,468 items: 687
-		// labelled, 15.4 percent, up from 347 and 7.8 percent. The label is a
+		// this. Measured 2026-09-01 over 12 committed days and 4,598 items: 696
+		// labelled, 15.1 percent, up from 356 and 7.7 percent. The label is a
 		// warning, and a warning on most of the page is wallpaper - which is the
 		// argument that keeps `reporting` and `analysis` out, and it stops being
 		// true silently if a later widening is taken without re-reading it.

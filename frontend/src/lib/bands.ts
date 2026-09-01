@@ -53,13 +53,16 @@ export const SOURCE_KINDS: Record<SourceKind, string> = {
  * Four, since 2026-09-01. `government` and `research` joined the first two
  * because a ministry's press release and a paper nobody has reviewed are both
  * a speaker with something to gain, and both were arriving in the same typeface
- * as a reporter who checked. Measured over the 12 committed days and 4,468
- * items on 2026-09-01: 340 more items carry a label, 687 in all, which is 15.4
- * percent of them.
+ * as a reporter who checked.
+ *
+ * What it costs the page, over the 12 committed days and 4,598 items on
+ * 2026-09-01: 340 more items carry a label - 241 `research` and 99 `government` -
+ * so 696 in all, 15.1 percent of them, up from 356 and 7.7 percent. The 340 is
+ * the part that holds still; the shares move with every publish.
  *
  * `reporting` and `analysis` stay out, and the share above is why. The label is
  * a warning, so it only works while most items do not carry one - `reporting`
- * alone is 79.0 percent of the tree, and labelling it would turn the mark into
+ * alone is 79.2 percent of the tree, and labelling it would turn the mark into
  * wallpaper. `analysis` is a publication's own reading of a story it does not
  * stand to gain from, which is the line the other four are on the wrong side of.
  */
