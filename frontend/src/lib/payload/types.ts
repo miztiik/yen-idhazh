@@ -84,6 +84,16 @@ export interface DigestVerticalRef {
 	count: number;
 }
 
+/** One of the day's leading stories, and the sentence saying why it leads.
+ *
+ * The story itself is in `items` like every other one, so the block adds a way
+ * in and removes nothing. There is no position field: a number beside a story
+ * implies a score we would then owe the reader an explanation for. */
+export interface DigestLead {
+	item_id: string;
+	reason: string;
+}
+
 export interface DigestEmbeddings {
 	model_id: string;
 	dimensions: number;
@@ -102,6 +112,10 @@ export interface DigestDay {
 	runs: DigestRunRef[];
 	verticals: DigestVerticalRef[];
 	items: DigestItem[];
+	/** Optional because every day published before 2026-09-01 omits the key.
+	 * Absent and empty both mean the block does not render, which is the
+	 * ordinary state of a day with too few stories worth leading. */
+	leads?: DigestLead[];
 	embeddings: DigestEmbeddings | null;
 }
 
