@@ -47,6 +47,10 @@
 	 */
 	import {
 		chartWidth,
+		coverage,
+		coverageRegions,
+		coverageRegionTitle,
+		coverageSentence,
 		dayColumns,
 		dayColumnX,
 		dayTicks,
@@ -57,6 +61,7 @@
 		modelRules,
 		modelRuleTitle,
 		noModelRuleNote,
+		notMeasuredRow,
 		observeWidth,
 		pointerReadout,
 		readoutMarks,
@@ -166,45 +171,69 @@
 	 * is when the operator wants to notice. A stage with no number on the newest
 	 * day has nothing to sort on and sits last. */
 	const legend = $derived([...STAGES].sort((a, b) => (newestOf(b) ?? -1) - (newestOf(a) ?? -1)));
-	/** Every day a stage did not draw a plain point, counted by which of the
-	 * three reasons it was. A stage the window never timed says so in the legend
-	 * instead, once, rather than here and there. */
-	const notes = $derived(
-		drawn
-			.map((stage) => {
-				const part = calendar
-					.map((date) => timingOn(date, stage.key))
-					.filter(
-						(day): day is StageTiming => day !== null && day.timed > 0 && day.timed < day.total
-					);
-				return {
-					stage,
-					blank: calendar.filter((date) => timedOn(date, stage.key) === 0).length,
-					zero: calendar.filter((date) => at(date, stage.key) === 0).length,
-					partDays: part.length,
-					timed: part.reduce((total, day) => total + day.timed, 0),
-					items: part.reduce((total, day) => total + day.total, 0)
-				};
-			})
-			.filter((note) => note.blank > 0 || note.zero > 0 || note.partDays > 0)
+
+	/** Which columns carry a timing at all. A day the window covered and nothing
+	 * timed is the fact this chart used to draw as a hole in three lines. */
+	const timed = $derived(
+		calendar.map((date) => STAGES.some((stage) => timedOn(date, stage.key) > 0))
 	);
+	const covered = $derived(coverage(timed));
+	/** The spans nothing timed, drawn under everything else so a tint never
+	 * covers a mark. */
+	const emptySpans = $derived(coverageRegions(covered, calendar, columnsX, box));
+	/** The days this chart drew a timing on, and the items behind them.
+	 *
+	 * The denominator is the day's own item count, never the sum of the three
+	 * stages' totals - one item waits on all three, so summing counts it three
+	 * times. Where the stages reached different amounts of the same days the
+	 * numerator is a range, because picking one of them would be arbitrary. */
+	const timedItems = $derived.by(() => {
+		const withTiming = calendar
+			.filter((_, index) => timed[index])
+			.map((date) => byDate.get(date));
+		const total = withTiming.reduce((sum, day) => sum + (day?.items ?? 0), 0);
+		const perStage = drawn.map((stage) =>
+			withTiming.reduce((sum, day) => sum + (day?.[stage.key].timed ?? 0), 0)
+		);
+		if (perStage.length === 0 || total === 0) return null;
+		return { low: Math.min(...perStage), high: Math.max(...perStage), total };
+	});
+	/** One sentence for the whole chart, whatever the series count.
+	 *
+	 * It was one note per stage, and the three said the same window-level fact
+	 * three times in near-identical words - so a fourth stage would have made it
+	 * four. Null where every day was timed in full: a sentence that only ever
+	 * says "all of it" is noise. */
+	const coverageNote = $derived(coverageSentence(covered, 'We timed', timedItems));
+	/** Whether any stage drew an open dot, so the sentence that explains one is
+	 * printed where there is one and nowhere else. */
+	const anyZero = $derived(drawn.some((stage) => zeros(stage.key).length > 0));
 
 	/** One column per day, whether or not the day timed anything. A column the
-	 * strip skipped would be a day an arrow key steps over without saying so. */
+	 * strip skipped would be a day an arrow key steps over without saying so.
+	 *
+	 * A day nothing timed prints one sentence rather than three `not timed`
+	 * rows. Measured, the hover worked on those columns and still read as broken,
+	 * because four columns in five carried a date and no values. */
 	const columns = $derived<DayReadout[]>(
 		calendar.map((date, index) => ({
 			x: x(index),
 			date: shortDate(date),
-			rows: [
-				...legend.map((stage) => ({
-					label: stage.label,
-					value: reading(at(date, stage.key)),
-					colour: stage.colour
-				})),
-				// The rule is a mark on the plot and a line in the strip, so a reader
-				// stepping the days with an arrow key meets it without a pointer.
-				...(changedOn.has(date) ? [MODEL_RULE_ROW] : [])
-			]
+			rows: timed[index]
+				? [
+						...legend.map((stage) => ({
+							label: stage.label,
+							value: reading(at(date, stage.key)),
+							colour: stage.colour
+						})),
+						// The rule is a mark on the plot and a line in the strip, so a reader
+						// stepping the days with an arrow key meets it without a pointer.
+						...(changedOn.has(date) ? [MODEL_RULE_ROW] : [])
+					]
+				: [
+						notMeasuredRow('Nothing was timed on this day'),
+						...(changedOn.has(date) ? [MODEL_RULE_ROW] : [])
+					]
 		}))
 	);
 	const marks = $derived(readoutMarks(columns));
@@ -309,12 +338,6 @@
 		return count === 1 ? 'day' : 'days';
 	}
 
-	/** Thousands grouped. A window of a month counts items in the thousands,
-	 * and 1240 and 1,240 are not read at the same speed. */
-	function group(count: number): string {
-		return count.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
-	}
-
 	/** A decade label crosses from milliseconds to seconds at 1000 ms. Every
 	 * decade is a whole number in one unit or the other, so neither end of the
 	 * axis needs a decimal place to be read. */
@@ -334,6 +357,25 @@
 	<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 		Median per item, each day. Each gridline is ten times the one below, so the same slowdown looks
 		the same at 40 ms and at 100 s.
+		{#if coverageNote}
+			<!-- One sentence for the whole chart, above the plot. It was one note per
+			     stage under it, and the three said one window-level fact three times -
+			     so a fourth stage would have made it four. A reader meets a broken
+			     line before he meets the sentence that explains it. -->
+			<span data-coverage-note="timings" data-timing-coverage
+				data-coverage-days={covered.days}
+				data-coverage-measured={covered.measured}
+				data-coverage-items={timedItems?.total ?? 0}
+				data-coverage-timed-low={timedItems?.low ?? 0}
+				data-coverage-timed-high={timedItems?.high ?? 0}>{coverageNote}</span
+			>
+		{/if}
+		{#if anyZero}
+			<span data-timing-zero-key
+				>An open dot on the baseline is a day a stage took under 1 ms an item, which is faster than
+				we can time.</span
+			>
+		{/if}
 		{#if rules.length === 0}
 			<!-- Stated, not omitted. A chart that draws no rule and says nothing about
 			     it is indistinguishable from one where the rule was forgotten. -->
@@ -370,6 +412,23 @@
 					onSelect: (index) => (selected = index)
 				}}
 			>
+				<!-- The span nothing timed, drawn before everything else so the tint sits
+				     under the grid and never over a mark. A tint rather than a hatch: a
+				     hatch is a pattern a reader stops to decode, and this one only says
+				     that no measurement reached here. -->
+				{#each emptySpans as span (span.from)}
+					<rect
+						x={span.x}
+						y={box.top}
+						width={span.width}
+						height={box.innerHeight}
+						fill="var(--color-surface-sunken)"
+						data-coverage-empty={span.from}
+						data-coverage-empty-to={span.to}
+					>
+						<title>{coverageRegionTitle(span)}</title>
+					</rect>
+				{/each}
 				{#each scale.ticks as tick (tick)}
 					<line
 						x1={box.left}
@@ -516,22 +575,5 @@
 			restingNote=", the newest day we timed"
 			hint="Point at a day to read it. Left and Right step through the days, Escape returns to the newest."
 		/>
-		{#each notes as note (note.stage.key)}
-			<p class="mt-1 text-[0.75rem] text-text-tertiary" data-timing-note={note.stage.label}>
-				{#if note.blank > 0}
-					We timed no {note.stage.label} work on {note.blank} of the {calendar.length}
-					{plural(calendar.length)}. The line breaks there.
-				{/if}
-				{#if note.zero > 0}
-					{note.stage.label} took under 1 ms per item on {note.zero}
-					{plural(note.zero)}, which is faster than we can time. The open dot on the baseline marks
-					it.
-				{/if}
-				{#if note.partDays > 0}
-					We timed {group(note.timed)} of the {group(note.items)} items for {note.stage.label} on {note.partDays}
-					{plural(note.partDays)}. The line is the items we timed.
-				{/if}
-			</p>
-		{/each}
 	</div>
 {/if}

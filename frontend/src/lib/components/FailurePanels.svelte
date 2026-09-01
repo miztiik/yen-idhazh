@@ -27,9 +27,14 @@
 	 */
 	import {
 		chartWidth,
+		coverage,
+		coverageRegions,
+		coverageRegionTitle,
+		coverageSentence,
 		dayTicks,
 		frame,
 		linearAxis,
+		notMeasuredRow,
 		observeWidth,
 		pointerReadout,
 		readoutMarks,
@@ -114,6 +119,20 @@
 	function centre(index: number): number {
 		return box.left + index * slot + slot / 2;
 	}
+
+	/** Which columns carry a planned item at all. A column at zero and a column
+	 * the pipeline never ran on look alike, and only one of them is a rate. */
+	const planned = $derived(load.columns.map((column) => column.planned > 0));
+	const covered = $derived(coverage(planned));
+	const emptySpans = $derived(
+		coverageRegions(
+			covered,
+			load.columns.map((column) => column.date),
+			load.columns.map((_, index) => centre(index)),
+			box
+		)
+	);
+	const coverageNote = $derived(coverageSentence(covered, 'The pipeline planned items on'));
 
 	/** Which columns carry a date. The columns are evenly spaced but the slot is
 	 * not the plot, so the centres go to the helper rather than a width. */
@@ -220,19 +239,24 @@
 		load.columns.map((column, index) => ({
 			x: centre(index),
 			date: column.date,
-			rows: [
-				...column.bands.map((band) => ({
-					label: band.key === 'finished' ? 'Finished' : band.label,
-					value: grouped(band.value),
-					colour: `var(${band.token})`
-				})),
-				...load.stages.map((stage) => ({
-					label: `${stage.label} rate`,
-					value:
-						stage.points[index]?.rate == null ? 'too few' : percent(stage.points[index].rate ?? 0),
-					colour: `var(${stage.token})`
-				}))
-			]
+			rows:
+				column.planned > 0
+					? [
+							...column.bands.map((band) => ({
+								label: band.key === 'finished' ? 'Finished' : band.label,
+								value: grouped(band.value),
+								colour: `var(${band.token})`
+							})),
+							...load.stages.map((stage) => ({
+								label: `${stage.label} rate`,
+								value:
+									stage.points[index]?.rate == null
+										? 'too few'
+										: percent(stage.points[index].rate ?? 0),
+								colour: `var(${stage.token})`
+							}))
+						]
+					: [notMeasuredRow('No item was planned on this day')]
 		}))
 	);
 	const marks = $derived(readoutMarks(columns));
@@ -253,6 +277,16 @@
 			<p class="mt-1 text-[0.8125rem] text-text-tertiary">
 				Columns are the day's items, split by where each one stopped. Lines are each stage's failure
 				share on the right axis, so a high rate on a short column reads as the thin sample it is.
+				{#if coverageNote}
+					<!-- The window is not narrowed to the days that ran: a day nothing was
+					     planned on is a fact about the record, and hiding it would report a
+					     fuller one than exists. -->
+					<span
+						data-coverage-note="failure-rate"
+						data-coverage-days={covered.days}
+						data-coverage-measured={covered.measured}>{coverageNote}</span
+					>
+				{/if}
 			</p>
 		</div>
 		{#if selectedCode}
@@ -297,6 +331,21 @@
 					onSelect: (index) => (selected = index)
 				}}
 			>
+				<!-- The span nothing was planned on, drawn before the grid so the tint sits
+				     under every mark rather than over one. -->
+				{#each emptySpans as span (span.from)}
+					<rect
+						x={span.x}
+						y={box.top}
+						width={span.width}
+						height={box.innerHeight}
+						fill="var(--color-surface-sunken)"
+						data-coverage-empty={span.from}
+						data-coverage-empty-to={span.to}
+					>
+						<title>{coverageRegionTitle(span)}</title>
+					</rect>
+				{/each}
 				{#if guide !== null}
 					<line
 						x1={guide}

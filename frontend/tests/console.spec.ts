@@ -559,13 +559,13 @@ test('the timing legend is sorted by the newest day, tallest first', async ({ pa
 
 /** What the timing chart drew for one stage, read off the chart itself.
  *
- * The notes under the plot count days, and the chart draws the window the page
- * is set to rather than the days that happen to carry a row. So a count typed
- * into a test here would have to be re-typed every time a preset moved or the
- * fixture grew, and it would go stale silently. The plot publishes the span it
- * drew, and it draws one mark for every day it has a number for - a filled dot
- * for a measured time, an open dot for a measured zero - so the days it timed
- * nothing on are the difference between the two.
+ * The chart draws the window the page is set to rather than the days that
+ * happen to carry a row. So a count typed into a test here would have to be
+ * re-typed every time a preset moved or the fixture grew, and it would go stale
+ * silently. The plot publishes the span it drew, and it draws one mark for every
+ * day it has a number for - a filled dot for a measured time, an open dot for a
+ * measured zero - so the days it timed nothing on are the difference between
+ * the two.
  */
 async function drewFor(
 	page: Page,
@@ -594,13 +594,13 @@ test('a stage with no number draws a gap, never a plunge to the axis floor', asy
 	// line falling to the bottom of the plot, which says the stage got a thousand
 	// times faster. The chart breaks the line and names the loss.
 	await expect(page.locator('[data-stage-mark="fetch"]')).not.toHaveCount(0);
-	const note = page.locator('[data-timing-note="fetch"]');
-	await expect(note, 'fetch is not timed on every day, so it owes a note').toHaveCount(1);
 	const fetched = await drewFor(page, 'fetch');
 	expect(fetched.blank, 'the fixture leaves fetch no gap to name').toBeGreaterThan(0);
-	await expect(note).toContainText(
-		`We timed no fetch work on ${fetched.blank} of the ${fetched.days} days. The line breaks there.`
-	);
+	// One sentence for the whole chart, not one per stage. It was three notes
+	// saying one window-level fact three times until 2026-09-01.
+	const note = page.locator('[data-timing-coverage]');
+	await expect(note, 'the window is part-timed, so it owes one sentence').toHaveCount(1);
+	await expect(note).toContainText(`of these ${fetched.days} days`);
 
 	const geometry = await page.locator('[data-timing="plot"]').evaluate((svg) => {
 		const floor = Math.max(
@@ -654,36 +654,32 @@ test('a timing nobody took, a timing of zero and a partly timed day read apart',
 	});
 	expect(offBaseline).toBeLessThanOrEqual(1);
 
-	const extract = page.locator('[data-timing-note="extract"]');
-	await expect(extract, 'the measured zero is named in type').toHaveCount(1);
+	// The measured zero is named in type, once for the chart rather than once for
+	// the stage that happened to have one.
 	const drewExtract = await drewFor(page, 'extract');
-	await expect(extract).toHaveText(
-		`We timed no extract work on ${drewExtract.blank} of the ${drewExtract.days} days. ` +
-			'The line breaks there. ' +
-			`extract took under 1 ms per item on ${drewExtract.zeros} ` +
-			`${drewExtract.zeros === 1 ? 'day' : 'days'}, which is faster than we can time. ` +
-			'The open dot on the baseline marks it.'
+	expect(drewExtract.zeros, 'the fixture has no measured zero to name').toBeGreaterThan(0);
+	await expect(page.locator('[data-timing-zero-key]')).toHaveText(
+		'An open dot on the baseline is a day a stage took under 1 ms an item, which is faster than we can time.'
 	);
 
-	// Both facts about summarize, one paragraph, absence first.
-	const summarize = page.locator('[data-timing-note="summarize"]');
-	await expect(summarize, 'summarize has a blank day and a part-timed day').toHaveCount(1);
-	const drewSummarize = await drewFor(page, 'summarize');
-	await expect(summarize).toHaveText(
-		`We timed no summarize work on ${drewSummarize.blank} of the ${drewSummarize.days} days. ` +
-			'The line breaks there. ' +
-			'We timed 4 of the 5 items for summarize on 1 day. The line is the items we timed.'
+	// The partly timed day is in the one coverage sentence, as the items it
+	// reached against the items the days held. The denominator is the day's own
+	// item count and never the sum of the stages' totals.
+	const note = page.locator('[data-timing-coverage]');
+	const low = Number(await note.getAttribute('data-coverage-timed-low'));
+	const high = Number(await note.getAttribute('data-coverage-timed-high'));
+	const items = Number(await note.getAttribute('data-coverage-items'));
+	expect(items, 'the chart publishes no item denominator').toBeGreaterThan(0);
+	expect(low, 'the fixture times every item, so the numerator says nothing').toBeLessThan(items);
+	// The stages reached different amounts of the same days here, so the
+	// numerator is a range rather than one stage's count passed off as the whole.
+	expect(high, 'the fixture leaves the stages agreeing, so the range is untested').toBeGreaterThan(
+		low
 	);
+	await expect(note).toContainText(`${low} to ${high} of the ${items} items on them`);
 
-	// A note says only what happened. fetch was timed in full on every day it ran,
-	// so its note names the days it did not run and stops - no measured zero it
-	// never had, no partly timed day it never had.
-	const drewFetch = await drewFor(page, 'fetch');
-	expect(drewFetch.zeros, 'fetch has no measured zero to name').toBe(0);
-	await expect(page.locator('[data-timing-note="fetch"]')).toHaveText(
-		`We timed no fetch work on ${drewFetch.blank} of the ${drewFetch.days} days. ` +
-			'The line breaks there.'
-	);
+	// One note for the chart, and the count no longer scales with the series.
+	await expect(page.locator('[data-timing-note]')).toHaveCount(0);
 
 	// One place, not two. The legend used to print `no data` for the same
 	// absence a paragraph under it also named.
