@@ -575,7 +575,7 @@ export function peakMemory(run: RunCounters | null): MemoryView {
 }
 
 // ---------------------------------------------------------------------------
-// Do the two clocks agree
+// The two clocks, compared
 // ---------------------------------------------------------------------------
 
 export interface ClockPair {

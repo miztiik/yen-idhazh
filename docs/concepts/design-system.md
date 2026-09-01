@@ -863,12 +863,17 @@ and publish it. The health ramp is lent to a threshold somebody agreed to, and
 to nothing else - and the same reasoning is why that card's movement percentage
 paints neutral rather than green or red.
 
-**The daily table stays, below, behind a `Show the daily figures` control.**
+**The daily table stays, below, behind a `Show these figures day by day` control.**
 Nothing is deleted: after a card moves, the rows are what say which day. It is a
 native disclosure, so the rows are in the prerendered document either way,
 opening it costs no fetch, and the whole section works with no script at all.
-The dash-not-zero rule, the `<1` rule and the version-stamped share are
-unchanged by any of this.
+Since 2026-08-31 the rows follow the window control above them and the line that
+opens them names the span, because a table that ignored the preset above it was
+two windows on one page. Shut, it drops its border, its background and its
+shadow: closed it holds one line of link text, and a card around a footnote is
+what made it read as something hanging off the bottom of the page. The
+dash-not-zero rule, the `<1` rule and the version-stamped share are unchanged by
+any of this.
 
 ### A distribution answers what a median refuses to
 
@@ -931,7 +936,7 @@ for less than a run of long ones. Susan, 2026-08-30.
 
 ### A swap comparison carries direction in the arrow, and a verdict only where the measure has one
 
-`Did the model change move anything` is seven paired dot rows. Each measure is
+`What the model change moved` is seven paired dot rows. Each measure is
 drawn against its own value on the older model, so no change is 100 percent on
 every row, and that is the only axis a median in seconds, a length in words and
 a count in a hundred summaries can share.
