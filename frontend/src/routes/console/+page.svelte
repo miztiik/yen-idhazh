@@ -187,13 +187,12 @@
 		minutesTarget: data.console.chart_arm_minutes_target,
 		coveragePct: data.console.chart_arm_coverage_pct
 	});
-	const arm = $derived(
-		chartArm(
-			data.charts.filter((day) => inWindow(day.date)),
-			thresholds,
-			windowDays
-		)
-	);
+	/** The chart-arm days inside the open window. The rule reads them and so do
+	 * the rows behind the disclosure: a table under a control that ignored it
+	 * would answer a question the reader did not ask, at a span nothing on the
+	 * page states. */
+	const chartsInWindow = $derived(data.charts.filter((day) => inWindow(day.date)));
+	const arm = $derived(chartArm(chartsInWindow, thresholds, windowDays));
 	/** Articles per published day, as a map, so the cost arithmetic reads it the
 	 * same way the server did. */
 	const articles = $derived(new Map(Object.entries(data.publishedItems)));
@@ -478,26 +477,15 @@
 
 <section class="py-6" data-surface="operator" data-console-route="pipelines">
 	<h1 class="text-[1.375rem] font-semibold tracking-[-0.011em] text-text">Console</h1>
-	<p class="mt-1 text-[0.9375rem] text-text-secondary">
-		What the pipeline cost and how well it did, per day, from the committed ledger.
-	</p>
 
-	<!-- The band stands on all three routes and carries the window control, so
-	     the control is above everything it governs rather than under the first
-	     chart that obeys it. -->
-	<ConsoleBand band={data.band}>
-		{#snippet window()}
-			<WindowControl
-				days={windowDays}
-				{presets}
-				{monthsFor}
-				busy={fetching}
-				{ready}
-				onChange={show}
-			/>
-		{/snippet}
-	</ConsoleBand>
+	<!-- Strip, band, control, in that order. Chrome above content is the one
+	     ordering a reader never has to learn, and the band's worst fact links
+	     into the strip. The control is last of the three because a control read
+	     before any fact asks the operator to configure a page he has been told
+	     nothing about - and it governs everything below it and nothing above. -->
 	<ConsoleNav routes={data.routes} active="pipelines" />
+	<ConsoleBand band={data.band} />
+	<WindowControl days={windowDays} {presets} {monthsFor} busy={fetching} {ready} onChange={show} />
 
 	<!-- One sentence, no chart. It is what stops this route hiding the panel on
 	     another route that explains its own numbers. -->
@@ -591,7 +579,7 @@
 		     windowed per-article cost, which is the rate under that runway. -->
 		{#if data.glance.healthSvg}
 			<figure class="panel" data-glance-chart="runs">
-				<figcaption class="text-[0.75rem] text-text-tertiary">Did the runs finish?</figcaption>
+				<figcaption class="text-[0.75rem] text-text-tertiary">Runs that finished</figcaption>
 				<Chart
 					svg={data.glance.healthSvg}
 					option={runHealth(data.manifests).option}
@@ -1123,98 +1111,107 @@
 					</div>
 				{/if}
 			</div>
-		</div>
-		{#if data.flowSvg}
-			{@const flow = chartFlow(data.charts)}
-			<!-- Two shapes, one flow. The diagram needs 700px of viewport before its
-			     labels stop overlapping (measured 2026-09-01), and a phone column
-			     cannot give it that at any font size - so below the page's own
-			     stacking breakpoint the same numbers are a stepped list, which is a
-			     shape a 360px column can hold. Both are built from one `chartFlow`
-			     call, so they cannot report two different flows. -->
-			<div class="panel mt-4" data-flow="chart">
-				<Chart
-					svg={data.flowSvg}
-					option={flow.option}
-					width={data.console.chart_width}
-					height={FLOW_HEIGHT}
-					label="Where items go between the visuals planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
-					noReadout="a flow between stages, so there is no column two branches share"
-				/>
-			</div>
-			<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>
-				{#each flow.steps as step (step.label)}
-					<li class="flow-step" data-flow-step={step.label}>
-						<p class="flow-step-head">
-							<span class="flow-step-swatch" style="background: var({step.token})"></span>
-							<span class="grow">{step.label}</span>
-							<span class="tabular-nums" data-flow-step-value={step.value}
-								>{grouped(step.value)} ({step.share}%)</span
-							>
-						</p>
-						{#if step.lost}
-							<p class="flow-step-lost" data-flow-lost={step.lost.label}>
-								<span class="grow">{step.lost.label}</span>
-								<span class="tabular-nums" data-flow-lost-value={step.lost.value}
-									>{grouped(step.lost.value)} ({step.lost.share}%)</span
+			{#if data.flowSvg}
+				{@const flow = chartFlow(data.charts)}
+				<!-- Two shapes, one flow. The diagram needs 700px of viewport before its
+				     labels stop overlapping (measured 2026-09-01), and a phone column
+				     cannot give it that at any font size - so below the page's own
+				     stacking breakpoint the same numbers are a stepped list, which is a
+				     shape a 360px column can hold. Both are built from one `chartFlow`
+				     call, so they cannot report two different flows. -->
+				<div class="panel mt-4" data-flow="chart">
+					<Chart
+						svg={data.flowSvg}
+						option={flow.option}
+						width={data.console.chart_width}
+						height={FLOW_HEIGHT}
+						label="Where items go between the visuals planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
+						noReadout="a flow between stages, so there is no column two branches share"
+					/>
+				</div>
+				<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>
+					{#each flow.steps as step (step.label)}
+						<li class="flow-step" data-flow-step={step.label}>
+							<p class="flow-step-head">
+								<span class="flow-step-swatch" style="background: var({step.token})"></span>
+								<span class="grow">{step.label}</span>
+								<span class="tabular-nums" data-flow-step-value={step.value}
+									>{grouped(step.value)} ({step.share}%)</span
 								>
 							</p>
-						{/if}
-					</li>
-				{/each}
-			</ol>
-		{:else if data.flowNote}
-			<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
-		{/if}
-		<!-- A native disclosure, not a button and a block: the console is complete
-		     before any script runs, and a button would leave the rows unreachable
-		     with JavaScript off. -->
-		<details class="console-disclosure mt-4" data-charts="daily">
-			<summary class="console-summary" data-charts-toggle>Show the daily figures</summary>
-			<p class="mt-3 text-[0.8125rem] text-text-tertiary">
-				One row per day, newest first. Reached is every item the visuals planner looked at, asked
-				the model is the part it sent a request for, visuals drafted is what the model returned,
-				and visuals published is what survived the checks after it. A dash means no minutes are on
-				record, so there is no rate to divide. Zero reached means nothing committed says what the
-				visuals planner did: it never ran, or its manifest is older than these counts.
-			</p>
-			<div class="console-table mt-3" data-charts="table">
-				<table class="w-full text-[0.8125rem]">
-					<thead class="text-text-tertiary">
-						<tr class="border-b border-rule">
-							<th class="py-2 text-start font-normal">Day</th>
-							<th class="py-2 text-end font-normal">Reached</th>
-							<th class="py-2 text-end font-normal">Asked the model</th>
-							<th class="py-2 text-end font-normal">Visuals drafted</th>
-							<th class="py-2 text-end font-normal">Visuals published</th>
-							<th class="py-2 text-end font-normal">Items published</th>
-							<th class="py-2 text-end font-normal">Minutes spent</th>
-							<th class="py-2 text-end font-normal">Minutes per visual</th>
-						</tr>
-					</thead>
-					<tbody>
-						{#each data.charts as day (day.date)}
-							<tr class="border-b border-rule" data-chart-day={day.date}>
-								<td class="py-2">{day.date}</td>
-								<td class="py-2 text-end tabular-nums" data-charts-cell="reached">{day.reached}</td>
-								<td class="py-2 text-end tabular-nums" data-charts-cell="asked">{day.asked}</td>
-								<td class="py-2 text-end tabular-nums" data-charts-cell="drafted">{day.drafted}</td>
-								<td class="py-2 text-end tabular-nums" data-charts-cell="published"
-									>{day.published}</td
-								>
-								<td class="py-2 text-end tabular-nums" data-charts-cell="items">{day.items}</td>
-								<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
-									>{minutes(day.routerMinutes)}</td
-								>
-								<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
-									>{minutes(day.minutesPerChart)}</td
-								>
+							{#if step.lost}
+								<p class="flow-step-lost" data-flow-lost={step.lost.label}>
+									<span class="grow">{step.lost.label}</span>
+									<span class="tabular-nums" data-flow-lost-value={step.lost.value}
+										>{grouped(step.lost.value)} ({step.lost.share}%)</span
+									>
+								</p>
+							{/if}
+						</li>
+					{/each}
+				</ol>
+			{:else if data.flowNote}
+				<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
+			{/if}
+			<!-- A native disclosure, not a button and a block: the console is complete
+			     before any script runs, and a button would leave the rows unreachable
+			     with JavaScript off. It ends the section it answers rather than hanging
+			     below it, and it follows the control above it like everything else in
+			     here. -->
+			<details
+				class="console-disclosure mt-4"
+				data-charts="daily"
+				data-daily-figures="pipelines"
+				data-daily-rows={chartsInWindow.length}
+			>
+				<summary class="console-summary" data-charts-toggle
+					>Show these figures day by day, over these {windowDays} days</summary
+				>
+				<p class="mt-3 text-[0.8125rem] text-text-tertiary">
+					One row per day in the open window, newest first. Reached is every item the visuals planner
+					looked at, asked the model is the part it sent a request for, visuals drafted is what the
+					model returned, and visuals published is what survived the checks after it. A dash means no
+					minutes are on record, so there is no rate to divide. Zero reached means nothing committed
+					says what the visuals planner did: it never ran, or its manifest is older than these counts.
+				</p>
+				<div class="console-table mt-3" data-charts="table">
+					<table class="w-full text-[0.8125rem]">
+						<thead class="text-text-tertiary">
+							<tr class="border-b border-rule">
+								<th class="py-2 text-start font-normal">Day</th>
+								<th class="py-2 text-end font-normal">Reached</th>
+								<th class="py-2 text-end font-normal">Asked the model</th>
+								<th class="py-2 text-end font-normal">Visuals drafted</th>
+								<th class="py-2 text-end font-normal">Visuals published</th>
+								<th class="py-2 text-end font-normal">Items published</th>
+								<th class="py-2 text-end font-normal">Minutes spent</th>
+								<th class="py-2 text-end font-normal">Minutes per visual</th>
 							</tr>
-						{/each}
-					</tbody>
-				</table>
-			</div>
-		</details>
+						</thead>
+						<tbody>
+							{#each chartsInWindow as day (day.date)}
+								<tr class="border-b border-rule" data-chart-day={day.date}>
+									<td class="py-2">{day.date}</td>
+									<td class="py-2 text-end tabular-nums" data-charts-cell="reached">{day.reached}</td>
+									<td class="py-2 text-end tabular-nums" data-charts-cell="asked">{day.asked}</td>
+									<td class="py-2 text-end tabular-nums" data-charts-cell="drafted">{day.drafted}</td>
+									<td class="py-2 text-end tabular-nums" data-charts-cell="published"
+										>{day.published}</td
+									>
+									<td class="py-2 text-end tabular-nums" data-charts-cell="items">{day.items}</td>
+									<td class="py-2 text-end tabular-nums" data-charts-cell="minutes"
+										>{minutes(day.routerMinutes)}</td
+									>
+									<td class="py-2 text-end tabular-nums" data-charts-cell="per-chart"
+										>{minutes(day.minutesPerChart)}</td
+									>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+			</details>
+		</div>
 	{/if}
 </section>
 
