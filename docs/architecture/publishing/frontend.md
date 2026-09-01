@@ -1,6 +1,6 @@
 # Published Frontend
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 The reader's surface: what is built, what deliberately is not, and the rulings behind both. This page is the living record for the digest page, the archive and the console.
 
@@ -1752,6 +1752,45 @@ them, 1,923 words and 3,846, because the cap moved on 29 August. Past the widest
 of them an article lost text whichever cut was in force, so the emphasised span
 starts there and says the strong thing; the narrower rule is drawn with its own
 dates, so the move is visible rather than averaged away.
+
+**Every margin on this plot is measured, and the label column moves rather than
+the plot.** Three constants sized it until 2026-09-01: a 168px gutter for the
+source names, a 34px row pitch, and a 130px threshold past which a cap label
+flips to read right to left. Measured 2026-09-01 on the built console, the
+gutter was 12 percent of a 1,342px frame at 1440 and **52 percent of a 324px one
+at 390** - so on a phone the names took more of the chart than the plot did, and
+the six tracks drew inside 91px of it.
+
+- **`labelGutter` sizes the name column from the widest name's own advance**,
+  and returns null where that would take more than `MAX_GUTTER_SHARE` of the
+  frame. Null is the cue to put the names above their tracks instead. A source
+  id is the ledger's own spelling of a name and there is no shorter true form of
+  it, so the gutter moves and the word does not - nothing is abbreviated at any
+  width.
+- **`rowPitch` grows a row with the plot, between a floor and a ceiling**, the
+  way `cellFor` grows a run-strip cell. The floor is `ROW_PITCH_MIN`: two lines
+  of type and a 10px bar leave a 34px row with no air at all between one source
+  and the next. The ceiling is where six rows stop reading as one set.
+- **The cap label's flip is decided by the label's own advance.** `cut at 3,846
+  words (from 25 Aug)` needs 186px at `font-size="10"`; the constant it replaced
+  was 130. Nothing was clipped by it on the committed tree, and a constant that
+  is 56px under the string it guards is the same defect waiting for one more
+  word.
+- **The right-most decade label is Row #1's rule, not a second one.**
+  `tickAnchor` anchors the end labels inwards, so `10,000` needs no room outside
+  the plot and the 12px right margin is the track's own round cap. The
+  `10,00` clip measured on 2026-08-31 was fixed there;
+  [../../../frontend/tests/console-source-cuts.spec.ts](../../../frontend/tests/console-source-cuts.spec.ts)
+  asserts it stays fixed rather than fixing it again.
+
+**The log domain still snaps to decades, and the dead space is the price.** The
+plot fills its frame; the tracks do not fill the plot, and that is a different
+thing. Over the committed ledger the shortest article on the board is 361 words
+and the longest 6,670, inside a domain of 100 to 10,000 - so 27.9 percent of the
+plot sits left of the shortest track and 8.8 percent right of the longest,
+measured 2026-09-01 at 1440. Starting the domain at the shortest article would
+recover it and lose the landmark: the two cut rules are the reason the chart
+exists, and a floating domain gives a reader nothing to place a mark against.
 
 **The rule is read off the rows and never off the setting.** Every cut point
 comes off the `source_words` cell a run wrote after its own cap fired. Two
