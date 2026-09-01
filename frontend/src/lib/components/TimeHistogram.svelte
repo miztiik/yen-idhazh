@@ -1,11 +1,17 @@
 <script lang="ts">
-	/** What one summary cost, drawn as a distribution rather than as a median.
+	/** How long one thing took, drawn as a distribution rather than as a median.
 	 *
 	 * A median answers "how long does one take" and refuses "how bad does it
 	 * get". Over the committed ledger those are different questions by a factor
 	 * of six, and the second is the one that decides whether a shard fits its
 	 * timeout - so the whole shape is drawn and the two figures anybody quotes
 	 * are ruled on it.
+	 *
+	 * Two panels on the Summaries route draw it: the model writing a summary,
+	 * and the checker reading one afterwards. Same question, same shape, one
+	 * component - the alternative was a second implementation of a log binning
+	 * and a second pair of rules that could drift from the first. What differs
+	 * between the two is four strings and a name, and they arrive as props.
 	 *
 	 * The bars are log-binned: each is one doubling wide. Writing times here run
 	 * from a third of a second to twelve minutes, and on a linear axis every bar
@@ -18,6 +24,11 @@
 	 * by here. They share the horizontal axis and nothing else, so the line
 	 * carries its own axis on the right and its own label.
 	 *
+	 * The edge labels are thinned by measurement, not by a count: a label is
+	 * kept only where it clears the last kept one, so the axis cannot overprint
+	 * itself at any width. Measured 2026-09-01 at 390, the writing chart carries
+	 * eleven edges in 306px of plot and four of them have to go.
+	 *
 	 * Hand-written SVG, so the chart is complete before any script runs and both
 	 * themes work with none - every colour leaves as a custom property.
 	 *
@@ -29,8 +40,11 @@
 	 * `data-model-rule-none` rather than being silently absent from the census.
 	 */
 	import {
+		AXIS_LABEL_GAP_PX,
+		AXIS_LABEL_PX,
 		chartWidth,
 		frame,
+		labelWidth,
 		linearAxis,
 		observeWidth,
 		pointerReadout,
@@ -40,15 +54,28 @@
 	} from '$lib/charts/frame';
 	import ChartReadout from './ChartReadout.svelte';
 	import { plural } from '$lib/format';
-	import type { WriteTimes } from '../../routes/console/model/+page.server';
+	import type { Distribution } from '../../routes/console/model/+page.server';
 
 	let {
 		times,
+		name,
+		subject,
+		verb,
+		noRuleReason,
 		width,
 		height,
 		readoutMaxShare = 0.33
 	}: {
-		times: WriteTimes;
+		times: Distribution;
+		/** What this instance is of, so a page with two can tell them apart. */
+		name: string;
+		/** What the horizontal axis measures, in words - it becomes the axis
+		 * title and opens the description a screen reader is given. */
+		subject: string;
+		/** What happened to a summary in that time: `written`, `checked`. */
+		verb: string;
+		/** Why no model-change rule is drawn here, in the chart's own words. */
+		noRuleReason: string;
 		width: number;
 		height: number;
 		/** `chart.readout_max_share`. */
@@ -85,7 +112,7 @@
 		return box.left + at * box.innerWidth;
 	}
 
-	function lowOf(bin: WriteTimes['bins'][number]): number {
+	function lowOf(bin: Distribution['bins'][number]): number {
 		return bin.from === 0 ? lowEdge : bin.from;
 	}
 
@@ -147,18 +174,57 @@
 		return value === 0 && ms > 0 ? '<1 s' : `${value} s`;
 	}
 
-	function edgeLabel(bin: WriteTimes['bins'][number]): string {
+	function edgeLabel(bin: Distribution['bins'][number]): string {
 		return bin.from === 0 ? '<1' : String(bin.from);
 	}
 
-	function barTitle(bin: WriteTimes['bins'][number]): string {
+	/** Every edge label, and where it would be drawn.
+	 *
+	 * The last entry is the axis's own end - the upper edge of the last bar,
+	 * which no bar owns because every other label is a boundary two bars share.
+	 */
+	const edges = $derived([
+		...bars.map((bar) => ({ key: String(bar.bin.from), text: edgeLabel(bar.bin), x: bar.x })),
+		{ key: 'end', text: String(highEdge), x: box.right }
+	]);
+
+	/** The labels that fit, left to right.
+	 *
+	 * Measured rather than counted, the rule Row #1 settled for every date axis
+	 * on this console: a label is kept only where its left edge clears the last
+	 * kept label's right edge by a readable gap. Two numbers that touch read as
+	 * one longer number, which on a doubling axis is a wrong reading and not
+	 * merely an ugly one. The first and the last are always kept - they are the
+	 * two ends the whole axis is read against - and a dropped label leaves its
+	 * bar, so nothing about the distribution goes with it.
+	 */
+	const shownEdges = $derived.by(() => {
+		if (edges.length <= 2) return edges;
+		const half = (text: string) => labelWidth(text, AXIS_LABEL_PX) / 2;
+		const last = edges[edges.length - 1];
+		const kept = [edges[0]];
+		let right = edges[0].x + half(edges[0].text);
+		const lastLeft = last.x - half(last.text);
+		for (const edge of edges.slice(1, -1)) {
+			const left = edge.x - half(edge.text);
+			if (left < right + AXIS_LABEL_GAP_PX) continue;
+			// It also has to clear the end label, which is always drawn.
+			if (edge.x + half(edge.text) + AXIS_LABEL_GAP_PX > lastLeft) continue;
+			kept.push(edge);
+			right = edge.x + half(edge.text);
+		}
+		kept.push(last);
+		return kept;
+	});
+
+	function barTitle(bin: Distribution['bins'][number]): string {
 		const span = bin.from === 0 ? 'under 1 second' : `${bin.from} to ${bin.to} seconds`;
-		return `${plural(bin.n, 'summary', 'summaries')} written in ${span}. ${bin.throughPct}% of the ${times.n} were done by ${bin.to} seconds.`;
+		return `${plural(bin.n, 'summary', 'summaries')} ${verb} in ${span}. ${bin.throughPct}% of the ${times.n} were done by ${bin.to} seconds.`;
 	}
 
 	const description = $derived(
-		`Time to write one summary over ${plural(times.n, 'summary', 'summaries')}, on a doubling scale. ` +
-			`Half were written inside ${seconds(times.median)} and one in twenty took longer than ${seconds(times.p95)}. ` +
+		`${subject} over ${plural(times.n, 'summary', 'summaries')}, on a doubling scale. ` +
+			`Half were ${verb} inside ${seconds(times.median)} and one in twenty took longer than ${seconds(times.p95)}. ` +
 			`The fastest took ${seconds(times.fastest)} and the slowest ${seconds(times.slowest)}. ` +
 			bars
 				.filter((bar) => bar.bin.n > 0)
@@ -180,7 +246,7 @@
 			date: bar.bin.from === 0 ? 'Under 1 second' : `${bar.bin.from} to ${bar.bin.to} seconds`,
 			rows: [
 				{
-					label: 'Written in this band',
+					label: `${verb.charAt(0).toUpperCase()}${verb.slice(1)} in this band`,
 					value: String(bar.bin.n),
 					colour: 'var(--chart-1)'
 				},
@@ -202,12 +268,12 @@
 
 <div
 	class="plot"
-	data-write-times="chart"
-	data-write-times-n={times.n}
+	data-histogram={name}
+	data-histogram-n={times.n}
 	data-readout-columns={columns.length}
 	data-model-rule="no"
-	data-model-rule-name="write-times"
-	data-model-rule-none="one distribution over the window, with no day axis to place a boundary on"
+	data-model-rule-name={name}
+	data-model-rule-none={noRuleReason}
 >
 	<div use:observeWidth={(next) => (measured = next)}>
 		<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -263,7 +329,7 @@
 			{/each}
 
 			{#each bars as bar (bar.bin.from)}
-				<g data-write-bin={bar.bin.from} data-write-bin-n={bar.bin.n}>
+				<g data-hist-bin={bar.bin.from} data-hist-bin-n={bar.bin.n}>
 					<title>{barTitle(bar.bin)}</title>
 					<rect
 						x={round(bar.x + 1)}
@@ -272,17 +338,23 @@
 						height={round(bar.height)}
 						fill="var(--chart-1)"
 					/>
-					<text
-						x={round(bar.x)}
-						y={box.bottom + 14}
-						text-anchor="middle"
-						fill="var(--color-text-tertiary)"
-						font-size="10"
-						data-tick="x"
-					>
-						{edgeLabel(bar.bin)}
-					</text>
 				</g>
+			{/each}
+
+			<!-- The edges that fit, first and last always. A dropped label leaves
+			     its bar: a reader counting bars needs them all, and it is the type
+			     that cannot overprint, not the data. -->
+			{#each shownEdges as edge (edge.key)}
+				<text
+					x={round(edge.x)}
+					y={box.bottom + 14}
+					text-anchor="middle"
+					fill="var(--color-text-tertiary)"
+					font-size="10"
+					data-tick="x"
+				>
+					{edge.text}
+				</text>
 			{/each}
 
 			<path
@@ -291,7 +363,7 @@
 				stroke="var(--chart-3)"
 				stroke-width="1.5"
 				stroke-linejoin="round"
-				data-write-times="cumulative"
+				data-histogram="cumulative"
 			/>
 
 			{#if guide !== null}
@@ -302,22 +374,9 @@
 					y2={box.bottom}
 					stroke="var(--color-text-tertiary)"
 					stroke-opacity="0.5"
-					data-write-times="guide"
+					data-histogram="guide"
 				/>
 			{/if}
-
-			<!-- The last bar's upper edge. Every other label is a boundary two bars
-			     share, and this one is the boundary the axis ends on. -->
-			<text
-				x={round(box.right)}
-				y={box.bottom + 14}
-				text-anchor="middle"
-				fill="var(--color-text-tertiary)"
-				font-size="10"
-				data-tick="x"
-			>
-				{highEdge}
-			</text>
 
 			<!-- Dashed and in the tertiary ink, never on the confidence ramp. A
 			     median is where the work sits, not a fault. -->
@@ -329,8 +388,8 @@
 					y2={box.bottom}
 					stroke="var(--color-text-secondary)"
 					stroke-dasharray="3 3"
-					data-write-rule={rule.key}
-					data-write-rule-seconds={rule.seconds}
+					data-hist-rule={rule.key}
+					data-hist-rule-seconds={rule.seconds}
 				/>
 				<text
 					x={round(x(rule.seconds))}
@@ -338,7 +397,7 @@
 					text-anchor={x(rule.seconds) > box.right - 90 ? 'end' : 'middle'}
 					fill="var(--color-text-secondary)"
 					font-size="10"
-					data-write-rule-label={rule.key}
+					data-hist-rule-label={rule.key}
 				>
 					{rule.label}
 				</text>
@@ -353,7 +412,7 @@
 				font-size="10"
 				data-axis-title
 			>
-				Time to write one summary, seconds
+				{subject}, seconds
 			</text>
 			<text
 				x={box.right}
@@ -372,11 +431,11 @@
 	     console prints - see `ChartReadout.svelte` for the rules it holds. -->
 	<ChartReadout
 		{readout}
-		name="write-times"
+		{name}
 		maxShare={readoutMaxShare}
 		resting={selected === null}
 		restingNote=", the slowest band"
-		hint="Point at a band to read its count and how much of the day is done by then. Left and Right step through the bands, Escape returns to the slowest."
+		hint="Point at a band to read its count and how much of the window is done by then. Left and Right step through the bands, Escape returns to the slowest."
 	/>
 </div>
 

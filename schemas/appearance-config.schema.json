@@ -192,6 +192,13 @@
           "title": "Default Window Days",
           "type": "integer"
         },
+        "doubt_rows": {
+          "default": 10,
+          "description": "How many sources the Summaries route ranks by the summaries its faithfulness checker doubted, before it states the tail in one sentence. Measured 2026-09-01 over the committed score ledger, a thirty-day window holds 112 sources carrying at least one doubted summary and the worst ten hold 266 of the 1,047 doubts - so the tail is sources with a single doubt in a month, which nobody acts on. Ten, matching `console.source_rows` and `console.feed_rows`.",
+          "minimum": 1,
+          "title": "Doubt Rows",
+          "type": "integer"
+        },
         "failure_list_max": {
           "default": 25,
           "description": "How many failed items the console lists before it offers more. The shape comes first and the rows come on demand: an uncapped list put the compression chart 9000 pixels down the page.",
@@ -579,6 +586,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "console.doubt_rows added, defaulting to 10. The shape is `ConsoleConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
+      "version": "2026-09-01T11:00",
+      "why": "The Summaries route now ranks sources by how often the faithfulness checker doubted their summaries, and an uncapped ranking is a page nobody reads to the end: measured 2026-09-01 over the committed score ledger, a thirty-day window holds 112 sources with a doubted summary. It takes the default `source_rows` and `feed_rows` already carry, so three ranked lists on one console do not each end at a different depth."
+    },
+    {
       "change": "digest.payload_slow_ms added, defaulting to 1200. The shape is `UiConfig`, which this document and `AppConfig` share, so both schemas moved together. Additive with a default, so an appearance file written before today still validates.",
       "version": "2026-09-01T10:00",
       "why": "The rest of a day is about to arrive by fetch, so for the first time a reading page can be waiting on something. What it shows meanwhile is one sentence past this number - never a spinner and never a bar, because the first frame is already readable and a compressed response cannot report a byte count worth printing. This is the one knob in the block only a browser reads, which is the exact opposite of `shell_seed_items` beside it."
@@ -674,7 +686,7 @@
       "$ref": "#/$defs/ThemeConfig"
     },
     "version": {
-      "default": "2026-09-01T10:00",
+      "default": "2026-09-01T11:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -682,5 +694,5 @@
   },
   "title": "AppearanceConfig",
   "type": "object",
-  "version": "2026-09-01T10:00"
+  "version": "2026-09-01T11:00"
 }

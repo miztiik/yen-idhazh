@@ -1,11 +1,13 @@
 import { chartConfig, consoleConfig, observabilityConfig, summarizeConfig, uiConfig } from '$lib/server/config';
 import { countersWithoutScores, recordingNotes } from '$lib/console/recording';
 import {
+	itemRates,
 	modelByDate,
 	modelSwap,
 	modelWork,
 	runLengths,
 	scoreCost,
+	sourceDoubts,
 	writeTimes,
 	type DayWindow
 } from '$lib/server/model-work';
@@ -18,11 +20,14 @@ export const prerender = true;
 export type {
 	CapPoint,
 	DayWindow,
+	Distribution,
 	ModelDay,
 	ModelRow,
 	ModelSwap,
 	RunLength,
 	ScoreCost,
+	SourceDoubt,
+	SourceDoubts,
 	SwapMeasure,
 	WriteBin,
 	WriteTimes
@@ -62,29 +67,6 @@ function spread(values: number[]): RateSpread | null {
 		median: quantile(sorted, 0.5),
 		p75: quantile(sorted, 0.75),
 		max: sorted[sorted.length - 1]
-	};
-}
-
-/** One item's two rates, or null where the runtime reported no timing.
- *
- * Cached prompt tokens are taken out of the read count. Leaving them in reports
- * a rate the machine never ran at: it did not read them.
- */
-function itemRates(row: Record<string, string>): { read: number | null; write: number | null } {
-	const prefillMs = measured(row, 'prefill_ms');
-	const decodeMs = measured(row, 'decode_ms');
-	const prompt = measured(row, 'input_tokens');
-	const written = measured(row, 'output_tokens');
-	const evaluated = prompt === null ? null : prompt - (measured(row, 'cached_tokens') ?? 0);
-	return {
-		read:
-			prefillMs !== null && prefillMs > 0 && evaluated !== null && evaluated > 0
-				? evaluated / (prefillMs / 1000)
-				: null,
-		write:
-			decodeMs !== null && decodeMs > 0 && written !== null && written > 0
-				? written / (decodeMs / 1000)
-				: null
 	};
 }
 
@@ -221,6 +203,19 @@ export async function load() {
 		),
 		scoreCost: Object.fromEntries(
 			[...windows].map(([days, window]) => [days, scoreCost(rows, window)])
+		),
+		// Which sources the checker doubts, once per span the control offers. The
+		// list is capped on the server: an uncapped one inlines a row for every
+		// source the window scored, and the tail of it is a source with a single
+		// doubt in a month.
+		sourceDoubts: Object.fromEntries(
+			[...windows].map(([days, window]) => [
+				days,
+				sourceDoubts(rows, itemRows, window, {
+					limit: console.doubt_rows,
+					minForShare: console.min_attempts_for_rate
+				})
+			])
 		),
 		windows: Object.fromEntries(windows),
 		// Every run inside the widest span the control offers. The panel filters it

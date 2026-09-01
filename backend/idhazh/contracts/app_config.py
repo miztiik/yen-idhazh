@@ -1287,6 +1287,19 @@ class ConsoleConfig(Model):
             "chases. Ten, matching the source-cut table beside it."
         ),
     )
+    doubt_rows: int = Field(
+        default=10,
+        ge=1,
+        description=(
+            "How many sources the Summaries route ranks by the summaries its "
+            "faithfulness checker doubted, before it states the tail in one sentence. "
+            "Measured 2026-09-01 over the committed score ledger, a thirty-day window "
+            "holds 112 sources carrying at least one doubted summary and the worst ten "
+            "hold 266 of the 1,047 doubts - so the tail is sources with a single doubt "
+            "in a month, which nobody acts on. Ten, matching `console.source_rows` and "
+            "`console.feed_rows`."
+        ),
+    )
     chart_arm_rule_days: int = Field(
         default=14,
         ge=1,
@@ -1683,6 +1696,25 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-01T11:00",
+            change=(
+                "console.doubt_rows added, defaulting to 10. The shape is "
+                "`ConsoleConfig`, which this document and `AppearanceConfig` share, "
+                "so both schemas moved together. Additive with a default, so a "
+                "config written before today still validates."
+            ),
+            why=(
+                "The Summaries route now ranks sources by how often the faithfulness "
+                "checker doubted their summaries, and an uncapped ranking is a page "
+                "nobody reads to the end: measured 2026-09-01 over the committed "
+                "score ledger, a thirty-day window holds 112 sources with a doubted "
+                "summary. The cap is a knob rather than a literal for the same reason "
+                "`source_rows` and `feed_rows` are (Rule #6), and it takes their "
+                "default so three ranked lists on one console do not each end at a "
+                "different depth."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01T10:00",
             change=(

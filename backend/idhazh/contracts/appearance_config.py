@@ -444,6 +444,24 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-01T11:00",
+            change=(
+                "console.doubt_rows added, defaulting to 10. The shape is "
+                "`ConsoleConfig`, which this document and `AppConfig` share, so both "
+                "schemas moved together. Additive with a default, so an appearance "
+                "file written before today still validates."
+            ),
+            why=(
+                "The Summaries route now ranks sources by how often the faithfulness "
+                "checker doubted their summaries, and an uncapped ranking is a page "
+                "nobody reads to the end: measured 2026-09-01 over the committed "
+                "score ledger, a thirty-day window holds 112 sources with a doubted "
+                "summary. It takes the default `source_rows` and `feed_rows` already "
+                "carry, so three ranked lists on one console do not each end at a "
+                "different depth."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01T10:00",
             change=(
                 "digest.payload_slow_ms added, defaulting to 1200. The shape is "
