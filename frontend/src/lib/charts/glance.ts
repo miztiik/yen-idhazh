@@ -374,6 +374,50 @@ export function siteRunway(
 	};
 }
 
+/** A year, for turning articles into a date. Averaged over the leap cycle. */
+const DAYS_A_YEAR = 365.25;
+
+/** How long the project can keep publishing, at two measured rates.
+ *
+ * The band prints articles of room, because articles need no daily rate and the
+ * one number that was standing in for a rate bounded a run rather than a day.
+ * A reader still wants a date, and the only honest way to one is to measure the
+ * articles a published day really carries - which the same days the cost was
+ * measured over already say.
+ *
+ * Both rates are medians over the SAME published days, so the horizon and the
+ * chart above it cannot be read off two different windows. The cost is a median
+ * because one pathological day would otherwise set a figure the operator reads
+ * as typical, and the daily rate is a median for the same reason: the eleven
+ * committed published days run 4 articles to 731.
+ *
+ * Null wherever a rate is missing. A tree that never grew over an article it
+ * published has no horizon, and printing one anyway is the defect this replaced.
+ */
+export interface PublishingHorizon {
+	/** Articles of room left in the payload tree, at the measured cost. */
+	articles: number;
+	/** Median articles a published day, over the days the cost came from. */
+	articlesPerDay: number;
+	/** Years of publishing, at both measured rates. */
+	years: number;
+}
+
+export function publishingHorizon(
+	bytesUsed: number | null,
+	cost: SiteCost,
+	items: ReadonlyMap<string, number>,
+	capBytes: number = PAGES_CAP_BYTES
+): PublishingHorizon | null {
+	if (bytesUsed === null || cost.median === null || cost.median <= 0) return null;
+	const perDay = middleOf(
+		cost.days.map((day) => items.get(day.date) ?? 0).filter((count) => count > 0)
+	);
+	if (perDay === null || perDay <= 0) return null;
+	const articles = (capBytes - bytesUsed) / cost.median;
+	return { articles, articlesPerDay: perDay, years: articles / perDay / DAYS_A_YEAR };
+}
+
 /** What is failing, and is the mix changing?
  *
  * Stacked rather than grouped: the total per day is half the question, and
@@ -578,6 +622,7 @@ export function failureLoad(
  */
 export interface SkylineBar {
 	date: string;
+	/** What the day published, in whichever measure the strip was asked for. */
 	published: number;
 	/** Left edge and width, as a share of the box. */
 	x: number;
@@ -603,9 +648,23 @@ export interface Skyline {
  * share rather than a pixel, so ninety columns separate as cleanly as seven. */
 const BAR_SHARE = 0.8;
 
-export function publishedSkyline(days: readonly GlanceDay[], span: TimeWindow): Skyline {
+/** Which count a skyline draws.
+ *
+ * Both are things the day published: `items` is every article, `published` is
+ * the visuals drawn for some of them. So one function draws both, and the two
+ * strips cannot drift in the one property that makes the pair readable - that
+ * both are one bar a day, over the same window, at the same pitch. Two copies
+ * would agree on the day they were written and on no day after it.
+ */
+export type PublishedMeasure = 'items' | 'published';
+
+export function publishedSkyline(
+	days: readonly GlanceDay[],
+	span: TimeWindow,
+	measure: PublishedMeasure = 'published'
+): Skyline {
 	const calendar = daysInWindow(span);
-	const onDate = new Map(days.map((day) => [day.date, day.published]));
+	const onDate = new Map(days.map((day) => [day.date, day[measure]]));
 	const counts = calendar.map((date) => onDate.get(date) ?? 0);
 	const busiest = counts.reduce((high, count) => Math.max(high, count), 0);
 	const pitch = 1 / calendar.length;
