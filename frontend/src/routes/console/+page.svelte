@@ -255,6 +255,17 @@
 		)
 	);
 
+	/** Is the record deep enough for "never failed" to mean anything?
+	 *
+	 * Two runs deep it means "did not fail twice". The bar is the same knob the
+	 * failure chart above prints a stage rate on, because there is one question
+	 * here - how thin is too thin a denominator - and a second number would be a
+	 * second answer to it.
+	 */
+	const feedRecordReadable = $derived(
+		data.feedRecord.runs >= data.console.min_attempts_for_rate
+	);
+
 	/** What a square means, in words. Colour is one signal and never the only
 	 * one, and the two that are not a verdict take no band colour at all. */
 	const FEED_KEY: { outcome: FeedDayOutcome; text: string }[] = [
@@ -728,39 +739,80 @@
 	</div>
 
 	<h2 class="console-h2">Feeds that failed</h2>
-	<p class="mt-1 text-[0.8125rem] text-text-tertiary" data-window-exempt="feeds">
+
+	{#if data.feedRecord.runs === 0}
+		<p class="mt-2 text-[0.9375rem] text-text-secondary" data-feeds="empty">
+			No feed result has been recorded yet. The ledger fills as runs collect.
+		</p>
+	{:else}
+		<p
+			class="mt-2 text-[0.9375rem] text-text"
+			data-feed-reliability={feedRecordReadable ? 'measured' : 'shallow'}
+			data-feed-clean={data.feedRecord.clean.length}
+			data-feed-checked={data.feedRecord.checked}
+			data-feed-runs={data.feedRecord.runs}
+		>
+			{#if feedRecordReadable}
+				{data.feedRecord.clean.length} of {data.feedRecord.checked} feeds have never failed a read,
+				across {data.feedRecord.runs}
+				{data.feedRecord.runs === 1 ? 'run' : 'runs'}.
+			{:else}
+				{data.feedRecord.clean.length} of {data.feedRecord.checked} feeds have not failed a read.
+				The record is {data.feedRecord.runs}
+				{data.feedRecord.runs === 1 ? 'run' : 'runs'} deep, under the {data.console
+					.min_attempts_for_rate} this page prints a rate on, so it is too early to read that as reliability.
+			{/if}
+		</p>
+
+		{#if data.feedRecord.clean.length > 0}
+			<details class="console-disclosure mt-2" data-feed-clean-list>
+				<summary class="console-summary" data-feed-clean-toggle>
+					Name the {data.feedRecord.clean.length} that never failed
+				</summary>
+				<p class="mt-2 text-[0.8125rem] text-text-tertiary" data-feed-clean-note>
+					Alphabetical, because there is no order here: a feed is read once a run, so every clean
+					feed has the same record. A source whose <code>robots.txt</code> says no has not failed
+					either.
+				</p>
+				<ul class="feed-clean-names" data-feed-clean-names>
+					{#each data.feedRecord.clean as feedId (feedId)}
+						<li data-feed-clean-name={feedId}>{feedId}</li>
+					{/each}
+				</ul>
+			</details>
+		{/if}
+	{/if}
+
+	<p class="mt-3 text-[0.8125rem] text-text-tertiary" data-window-exempt="feeds">
 		The pipeline rests a feed after {data.quarantineAfter} failures in a row. The count beside
 		each feed is that run of failures, read over every run on record - it does not follow the
 		window above, because the pipeline rested on the whole count and not on a windowed one. The
-		strip of days beside it does follow the window. A feed that answered with nothing counts as a
+		count above it is read over the same whole record, for the same reason. The strip of days
+		beside each feed does follow the window. A feed that answered with nothing counts as a
 		failure: an empty answer costs the digest the same articles a refusal does. A source whose
-		<code>robots.txt</code> says no does not.
+		<code>robots.txt</code> says no does not, and a feed nobody has asked is in neither count.
 	</p>
 
-	{#if data.feedRuns === 0}
-		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-feeds="empty">
-			No feed result has been recorded yet. The ledger fills as runs collect.
-		</p>
-	{:else if data.feeds.length === 0}
+	{#if data.feedRecord.runs > 0 && data.feeds.length === 0}
 		<p class="mt-4 text-[0.9375rem] text-text-secondary" data-feeds="clean">
-			All {data.feedsChecked} feeds answered across {data.feedRuns}
-			{data.feedRuns === 1 ? 'run' : 'runs'}.
+			No feed has failed in these {data.feedRecord.runs}
+			{data.feedRecord.runs === 1 ? 'run' : 'runs'}, so there is nothing to list.
 		</p>
-	{:else}
+	{:else if data.feeds.length > 0}
 		<div
 			class="console-table mt-3"
-			data-windowed="feed-outcomes"
-			data-window-days={windowDays}
-			data-model-rule="no"
-			data-model-rule-name="feed-outcomes"
-			data-model-rule-none="a feed answered or it did not, before any summary was written"
-		>
+				data-windowed="feed-outcomes"
+				data-window-days={windowDays}
+				data-model-rule="no"
+				data-model-rule-name="feed-outcomes"
+				data-model-rule-none="a feed answered or it did not, before any summary was written"
+			>
 			<p class="feeds-note">
 				Nearest to a rest first, then by how much has gone wrong in total. Each strip is one
 				square a day, oldest to newest, over these {windowDays} days.
 			</p>
 
-			<ol class="feed-rows" data-feeds="table">
+			<ol class="feed-rows" data-feeds="table" data-feeds-drawn={data.feeds.length} data-feeds-hidden={data.feedsHidden}>
 				{#each data.feeds as feed (feed.feedId)}
 					<!-- The streak and the track length are published because they are what
 					     the marker is drawn from. A check that re-reads the bar's own
@@ -822,6 +874,16 @@
 					</li>
 				{/each}
 			</ol>
+
+			{#if data.feedsHidden > 0}
+				<p class="feeds-note" data-feeds-more>
+					{data.feedsHidden} more {data.feedsHidden === 1 ? 'feed' : 'feeds'} had {grouped(
+						data.feedsHiddenFailures
+					)}
+					{data.feedsHiddenFailures === 1 ? 'failure' : 'failures'} between them, none closer to a
+					rest than the last row here.
+				</p>
+			{/if}
 
 			{#if stripDates.length > 0}
 				<div
@@ -1035,6 +1097,21 @@ margin: 0 0 var(--space-3);
 font-size: var(--text-xs);
 line-height: var(--leading-xs);
 color: var(--color-text-tertiary);
+}
+
+/* Names, not rows. There is nothing to rank and nothing to draw, so the list
+   packs into as many columns as the room allows rather than running a hundred
+   and fifty-six lines down the page. */
+.feed-clean-names {
+display: grid;
+grid-template-columns: repeat(auto-fill, minmax(12rem, 1fr));
+gap: var(--space-1) var(--space-4);
+margin: var(--space-2) 0 0;
+padding: 0;
+list-style: none;
+font-size: var(--text-sm);
+line-height: var(--leading-sm);
+color: var(--color-text-secondary);
 }
 
 /* One column set for the whole list, borrowed by every row, so a feed with a

@@ -49,10 +49,12 @@
     "chart_width": 520,
     "default_window_days": 21,
     "failure_list_max": 10,
+    "feed_rows": 6,
     "max_window_days": 180,
     "min_attempts_for_rate": 3,
     "min_window_days": 7,
     "pan_days": 3,
+    "source_rows": 4,
     "today_anchor": "centre",
     "window_presets": [
       7,
