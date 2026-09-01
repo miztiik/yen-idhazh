@@ -5,8 +5,10 @@ import {
 	clockAgreement,
 	clocksChart,
 	contextHeadroom,
+	curveOf,
+	peakMemory,
 	percentileChart,
-	percentileCurves,
+	percentileHistory,
 	readingAgainstWriting,
 	shardBoard,
 	tokenChart,
@@ -14,6 +16,7 @@ import {
 	type CacheDay,
 	type ContextBar,
 	type CostRate,
+	type LatencyRun,
 	type RunTokens
 } from '$lib/charts/machine';
 import { windowOfDays } from '$lib/charts/viewport';
@@ -25,7 +28,8 @@ import {
 	observabilityConfig,
 	runConfig
 } from '$lib/server/config';
-import { itemHealthRows } from '$lib/server/payload';
+import { itemHealthRows, evalRows } from '$lib/server/payload';
+import { pipelineChanges } from '$lib/server/model-work';
 import {
 	CLOCKS_AGREE_WITHIN_PCT,
 	loadMachineCounters,
@@ -74,13 +78,29 @@ export interface MachineWindow {
 	refused: RefusedRun[];
 	recording: RecordingNotes;
 	cacheDays: CacheDay[];
-	context: ContextBar[];
 	batching: { highest: number | null; from: number; outOf: number };
 	cpuBusySpan: FigureSpan;
 	peakRssSpan: FigureSpan;
 	modelLoadSpan: FigureSpan;
 	tokens: RunTokens[];
 	tokenTotals: { input: number; output: number; items: number };
+}
+
+/** Everything a run-by-run chart draws, carried once rather than once a span.
+ *
+ * The two run-by-run charts - context headroom and the latency multiples - draw
+ * a mark per run rather than per day, so a span only ever decides which of
+ * these rows to keep. Carrying four copies of the same eighteen rows, one per
+ * preset, would put the identical numbers in the document four times; a date
+ * compare in the browser gives the same set for a fraction of the bytes,
+ * because a span is a pair of dates and every row carries its own.
+ *
+ * Bounded to the WIDEST preset, so a run older than the widest span is never in
+ * the document at any span. Without that bound the page grows for ever.
+ */
+export interface RunSeries {
+	context: ContextBar[];
+	latency: LatencyRun[];
 }
 
 /** What the model server counted, read once at build time.
@@ -97,9 +117,9 @@ export interface MachineWindow {
  * slow day across Pipelines and Hardware sees both on one span.
  *
  * **A panel about one run does not follow the window.** The shard board, the
- * reading/writing split, the clock check and the latency curves are snapshots:
- * a window is a span, and a span cannot narrow a single run. Each names the run
- * or the day it is about instead.
+ * reading/writing split, the peak-memory bars, the clock check and the newest
+ * run's own latency curve are snapshots: a window is a span, and a span cannot
+ * narrow a single run. Each names the run or the day it is about instead.
  */
 export async function load() {
 	const console_ = consoleConfig();
@@ -155,7 +175,6 @@ export async function load() {
 					.sort()
 			}),
 			cacheDays: cacheByDay(runs),
-			context: contextHeadroom(runs, limits.contextWindow),
 			batching: {
 				highest: slots.length === 0 ? null : Math.max(...slots.map((reading) => reading.value ?? 0)),
 				from: slots.length,
@@ -187,23 +206,43 @@ export async function load() {
 	// control, so widening costs a repaint rather than four more SVGs.
 	const opening = windows.get(console_.default_window_days) as MachineWindow;
 
-	// Newest first, as the reader hands them over. The four panels below read one
+	// Every run-by-run row the widest preset can reach, carried once. A narrower
+	// span keeps a subset of these by date, in the browser and here, through the
+	// one filter below - so the chart the server drew and the chart a browser
+	// redraws cannot be built from two different sets.
+	const widest = Math.max(...spans);
+	const bound = windows.get(widest) as MachineWindow;
+	const latency = percentileHistory(health, console_.min_attempts_for_rate);
+	const series: RunSeries = {
+		context: contextHeadroom(
+			counters.runs.filter((run) => run.date >= bound.start && run.date <= bound.end),
+			limits.contextWindow
+		)
+			// Oldest first: a chart reads left to right, and the reader hands runs
+			// over newest first.
+			.reverse(),
+		latency: latency.runs.filter((run) => run.date >= bound.start && run.date <= bound.end)
+	};
+	const inWindow = <T extends { date: string }>(rows: readonly T[], span: MachineWindow): T[] =>
+		rows.filter((row) => row.date >= span.start && row.date <= span.end);
+
+	// Newest first, as the reader hands them over. The panels below read one
 	// run or one day, so they read the newest the ledger holds whatever the
 	// control says - a window is a span, and narrowing a span cannot narrow a
 	// single run into something smaller.
 	const newest: RunCounters | null = counters.runs[0] ?? null;
 	const board = shardBoard(newest, limits.jobTimeoutSeconds);
+	const memory = peakMemory(newest);
 	const split = readingAgainstWriting(newest);
 	const clocks = clockAgreement(newest, health, CLOCKS_AGREE_WITHIN_PCT);
 	const clocksPlot = clocksChart(clocks.pairs);
 
-	// The newest day the item ledger reached, which is not always the newest day
-	// the counters reached: a run can publish before its shards scrape.
-	const percentileDate =
-		[...new Set(health.map((row) => row.date ?? ''))].filter((date) => date !== '').sort().at(-1) ??
-		null;
-	const percentiles = percentileCurves(health, percentileDate, console_.min_attempts_for_rate);
-	const percentilePlot = percentileChart(percentiles.curves);
+	// The newest run the item ledger timed enough items on, which is not always
+	// the newest run the counters reached: a run can publish before its shards
+	// scrape. It is the last entry of the same array the multiples draw, so
+	// "the tail today" and "the newest mark on the p99 chart" are one number.
+	const newestTail = series.latency.at(-1) ?? null;
+	const percentilePlot = percentileChart(newestTail === null ? [] : [curveOf(newestTail)]);
 
 	const rate: CostRate = {
 		currency: observability.cost_currency,
@@ -244,17 +283,38 @@ export async function load() {
 		// One entry per span the control offers, keyed by its day count. The page
 		// picks the open one; nothing is recomputed in a browser.
 		windows: Object.fromEntries(windows),
+		// One copy of every run-by-run row, bounded to the widest preset. The page
+		// keeps the rows inside the open span.
+		series,
+		// Every day the pipeline that writes the summaries changed, derived once
+		// here over the whole ledger and handed to the two charts a change can
+		// move: a longest sequence is prompt plus answer, and an item's model time
+		// is the model call itself. Derived per chart it would be derived twice off
+		// two different day lists, and the two would eventually disagree.
+		modelChanges: pipelineChanges(evalRows().rows),
 		board,
+		memory,
 		newestRunId: newest?.runId ?? null,
 		split,
 		cacheSvg: await draw(cache, chart.height_px),
+		cacheGrid: cache.grid,
 		clocks,
 		clocksSvg: await draw(clocksPlot, chart.height_px),
 		host,
-		percentiles,
+		latency: {
+			floor: latency.floor,
+			// Runs the item ledger timed too few items on to quote a p99. Bounded to
+			// the widest preset for the same reason the series above is.
+			tooFew: inWindow(latency.tooFew, bound),
+			shardRows: latency.shardRows,
+			itemRows: latency.itemRows
+		},
+		newestTail,
 		percentileSvg: await draw(percentilePlot, chart.height_px),
 		inputSvg: await draw(inputPlot, chart.height_px),
+		inputGrid: inputPlot.grid,
 		outputSvg: await draw(outputPlot, chart.height_px),
+		outputGrid: outputPlot.grid,
 		rate,
 		limits,
 		shardTimeoutMinutes: runConfig().shard_timeout_minutes,

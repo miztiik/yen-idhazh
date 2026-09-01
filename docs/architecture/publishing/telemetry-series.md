@@ -300,7 +300,9 @@ ledger had been committed for four days with no page reading a cell of it.
 | Context headroom | `n_tokens_max` against `models.inference.n_ctx` | the longest sequence any shard saw. A maximum, not a sum |
 | Job clock | `job_seconds` against `run.shard_timeout_minutes` | the slowest shard. A run's wall clock is its slowest shard |
 | The processor | `cpu_model` | text, per shard, and never averaged |
-| Busy, memory, load | `cpu_busy_pct`, `peak_rss_bytes`, `model_load_ms` | lowest, highest, slowest |
+| Busy and load | `cpu_busy_pct`, `model_load_ms` | lowest, slowest |
+| Peak memory | `peak_rss_bytes` against the runner's 16 GB | the LARGEST shard, never their sum - shards are separate jobs on separate hosts |
+| The shape of a run | the item ledger's `summarize_ms` | one ladder a run at the five configured percentiles, interpolated between the two nearest ranks, never pooled between runs |
 | Do the two clocks agree | the item ledger's `prefill_ms` and `input_tokens - cached_tokens` against the server's own totals | the same pooling and the same 5 percent bound `backend/utilities/reconcile_prefill.py` gates on |
 
 Both ceilings come from `config/idhazh.json` through
@@ -363,6 +365,46 @@ settled in the same commit that fixed the writer: 54 rows to 52, 7,871 bytes to
 7,577. All 12 runs now read. The refusal is still printed on `/console/machine/`
 with the run id and the reason, so the run count on that page can be checked
 against the ledger.
+
+### The latency ladder is one derivation, drawn twice
+
+`percentileHistory` in
+[frontend/src/lib/charts/machine.ts](../../../frontend/src/lib/charts/machine.ts)
+reads `summarize_ms` off the item ledger and returns one ladder per run: one
+value per configured percentile, in whole milliseconds, over every run the ledger
+holds. Two panels read that one array, which is what stops "how long is the tail
+today" and "is the tail growing" from being two different numbers about one run.
+
+**Five plots, one a percentile, on ONE shared scale.** Five lines on one chart at
+five percentiles of one measure is a bundle a reader untangles by colour;
+separated, each is a trend read in one look. Independent scales would make five
+different shapes look alike, so the domain is computed once across every value
+and every plot is the same box moved down. That shared domain is what the oracle
+checks, because it is the property the arrangement exists for: a p99 twenty times
+its own p50 has to look twenty times taller. Authority: Susan and Jony,
+2026-08-31.
+
+**The plots are stacked, not side by side.** They share the day axis at the foot,
+so comparing p50 with p99 on one run is reading straight down one column, and one
+pointer position prints all five in the strip below rather than costing five
+hovers. Five plots side by side would also map one pointer x to five different
+column sets.
+
+**One rule a boundary, down all five at once.** A model or prompt change moves
+the whole distribution, so a rule per plot would be one event drawn five times.
+
+**The aggregate stays, for the newest run only.** "How long is the tail today" is
+a different question from "is the tail growing", and the aggregate is the only
+place one run's whole distribution is visible at once. It is the last entry of
+the same array the plots draw. Authority: Andre.
+
+**A run under `console.min_attempts_for_rate` is printed, never drawn.** A p99
+over four items is the fourth item. Runs below the floor are named with their
+counts under the plots.
+
+**No new chart type.** The small multiples are hand-written SVG, which needs no
+registration at all, and the aggregate is the line chart already registered in
+`frontend/src/lib/charts/core.ts`.
 
 ## Degrade rules
 

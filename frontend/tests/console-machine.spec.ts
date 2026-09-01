@@ -22,7 +22,7 @@ import {
 	costOf,
 	itemRead,
 	money,
-	percentileCurves,
+	percentileHistory,
 	pooledReadRate,
 	quantile,
 	readingAgainstWriting,
@@ -273,11 +273,13 @@ test.describe('context headroom', () => {
 		expect(bar.from).toBe(2);
 	});
 
-	test('no window means no share, and the bar draws empty rather than full', () => {
+	test('no window means no share, and the sequence still prints', () => {
 		const [bar] = contextHeadroom([onlyRun(TWO_SHARDS)], null);
 		expect(bar.usedPct).toBeNull();
 		expect(bar.spare).toBeNull();
-		expect(bar.marks.empty).toBe(true);
+		// The counter survives its missing ceiling. A share is what cannot be
+		// computed, and inventing one would be inventing the ceiling.
+		expect(bar.longest).toBe(4096);
 	});
 });
 
@@ -358,28 +360,29 @@ test.describe('the percentile curve', () => {
 		expect(quantile([7], 0.99)).toBe(7);
 	});
 
-	test('one curve a run, and every point is the hand-computed quantile', () => {
+	test('one row a run, and every point is the hand-computed quantile', () => {
 		const ms = [10, 20, 30, 40, 50, 60];
 		const health = ms.map((value, index) =>
 			healthRow({ item_id: `a${index}`, summarize_ms: value })
 		);
-		const view = percentileCurves(health, '2026-09-04', 5);
-		expect(view.curves).toHaveLength(1);
-		expect(view.curves[0].items).toBe(6);
-		expect(view.curves[0].points.map((point) => point.percentile)).toEqual([...PERCENTILES]);
-		for (const point of view.curves[0].points) {
-			expect(point.ms).toBeCloseTo(quantile(ms, point.percentile / 100), 9);
-		}
+		const view = percentileHistory(health, 5);
+		expect(view.runs).toHaveLength(1);
+		expect(view.runs[0].items).toBe(6);
+		expect(view.runs[0].ms).toHaveLength(PERCENTILES.length);
+		PERCENTILES.forEach((percentile, at) => {
+			// Whole milliseconds, and the interpolation rule is still the stated
+			// one: the rounding happens after it, not instead of it.
+			expect(view.runs[0].ms[at]).toBe(Math.round(quantile(ms, percentile / 100)));
+		});
 	});
 
-	test('a run under the floor prints its count and draws no curve', () => {
+	test('a run under the floor prints its count and draws no mark', () => {
 		const health = [10, 20, 30].map((value, index) =>
 			healthRow({ item_id: `b${index}`, summarize_ms: value })
 		);
-		const view = percentileCurves(health, '2026-09-04', 5);
-		expect(view.curves).toEqual([]);
-		expect(view.tooFew).toEqual([{ runId: '2026-09-04-1', items: 3 }]);
-		expect(view.empty).toBe(true);
+		const view = percentileHistory(health, 5);
+		expect(view.runs).toEqual([]);
+		expect(view.tooFew).toEqual([{ runId: '2026-09-04-1', date: '2026-09-04', items: 3 }]);
 	});
 
 	test('runs are never pooled together, because they drew different processors', () => {
@@ -391,11 +394,11 @@ test.describe('the percentile curve', () => {
 				healthRow({ item_id: `d${index}`, run_id: '2026-09-04-2', summarize_ms: value })
 			)
 		];
-		const view = percentileCurves(health, '2026-09-04', 5);
-		expect(view.curves.map((curve) => curve.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
-		// A pooled p50 over all ten would be 75. Neither curve says that.
-		expect(view.curves[0].points[0].ms).toBe(30);
-		expect(view.curves[1].points[0].ms).toBe(300);
+		const view = percentileHistory(health, 5);
+		expect(view.runs.map((run) => run.runId)).toEqual(['2026-09-04-1', '2026-09-04-2']);
+		// A pooled p50 over all ten would be 75. Neither run says that.
+		expect(view.runs[0].ms[0]).toBe(30);
+		expect(view.runs[1].ms[0]).toBe(300);
 	});
 });
 
