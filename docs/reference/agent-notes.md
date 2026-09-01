@@ -41,7 +41,10 @@ DELETED a paragraph `main` holds, which is exactly what a bad merge looks like.
 It was not one; the twelfth commit simply arrived afterwards. Re-run
 `git rev-parse origin/main` before you diff against it, and re-`fetch` and
 re-`merge` immediately before you push rather than assuming the tree you tested
-is the tree you are merging into.
+is the tree you are merging into. **Diff against the sha you merged, never
+against the moving ref** - a scheduled `digest:` push lands between the two, and
+the diff then shows your tree deleting a freshly published day while
+`git status` is clean.
 
 **Neither `git status` nor the commit output reveals that contamination**, because
 it is in the branch's parent, not in the index. `git status --porcelain` showed
@@ -601,6 +604,12 @@ pre-fix run so the fix can be shown to have done something:
 gh api repos/<owner>/<repo>/check-runs/<jobId>/annotations
 ```
 
+**`gh run list` intermittently answers `error connecting to api.github.com`
+under parallel load**, on a box with several agents making calls at once. It is
+the local network stack rather than anything about the run, so retry the command
+before you go and read CI. Two failures in a row on different subcommands is a
+different signal from one.
+
 **`gh api repos/<owner>/<repo>/actions/jobs/<id>/logs` exits 1 and prints
 nothing.** It reads like the job kept no log. The job did; the endpoint answers
 with a redirect `gh api` does not follow. Ask through the run instead:
@@ -958,6 +967,20 @@ reading exactly like a code fault. A second `npm ci` fixed it. Suspect the
 install before the source whenever a missing module belongs to a transitive
 dependency nothing in the change touched.
 
+**From a detached hidden `pwsh`, `& npm ci` and `& npm run <script>` resolve
+nothing and leave `$LASTEXITCODE` UNSET.** The sentinel then reads `NPMCI=`
+with an empty value - "ran and returned blank" - which is the tell, and it looks
+exactly like a broken lockfile. `npm` is a `.CMD` shim and a fresh process does
+not get it (see [PowerShell](#powershell)). Call the CLI's own entry point and
+redirect the two streams separately:
+
+```powershell
+& node "C:\Program Files\nodejs\node_modules\npm\bin\npm-cli.js" ci 1> $out 2> $err
+"EXIT=$LASTEXITCODE" | Set-Content -LiteralPath $done
+```
+
+An empty exit code is a shell fault. A non-zero one is your gate.
+
 ## Svelte
 
 **A `<style>` inside `<noscript>` compiles, and it is the only way to write a
@@ -1169,6 +1192,41 @@ child, or the fix becomes an `!important`.
   Resolve the token through a throwaway element - set `style.boxShadow` to the
   custom property's value, read the computed string back, remove it - so the
   comparison is against the token rather than against a string somebody typed.
+- **A chart below the fold cannot be pointed at, and the failure is silent.**
+  `boundingBox()` returns PAGE coordinates, so `page.mouse.move` at y=8,000 in a
+  1,000 px viewport lands nowhere, the chart's own pointer handler never fires,
+  and the readout prints its resting string - which is indistinguishable from an
+  action that is wired up wrong. `await plot.scrollIntoViewIfNeeded()` before
+  every hover on a long page.
+- **Playwright prints the code frame from the file on DISK and runs the version
+  loaded at collection.** Editing a spec while its run is in flight therefore
+  produces a failure whose expected value is the old assertion and whose source
+  lines are your fix, side by side. It reads as a contradiction and is one only
+  in the report. Re-run rather than re-reading.
+- **An option a chart component takes once, at hydration, does not follow a
+  reactive change.** `frontend/src/lib/charts/Chart.svelte` builds its engine
+  option on mount, so a spec that flips the window preset and asserts the plot
+  moved measures the first option forever. The component is remounted with
+  `{#key windowDays}`; a spec that needs the new option has to wait for that
+  remount rather than for a tick.
+- **Two fixtures that both fit inside the narrowest preset make a window oracle
+  pass on a route that ignores the window entirely.** Every preset then selects
+  every row, so the assertion is true for the wrong reason. The fix is a fixture
+  with a row only the widest preset can reach, not a stronger assertion.
+- **One arm of a two-arm test failing is a race, not a regression.**
+  `layout-overflow.spec.ts` runs the same routes at the same widths in the dark
+  theme and then the light one. On 2026-09-01 the dark arm failed in 5.3 s -
+  `/evals/` at 360 px reporting a `scrollWidth` of 789 off a `w-max` grid - and
+  the light arm passed the identical assertions in the same run, 1.1 min later.
+  A theme changes colour and not text metrics, so both arms measure one layout
+  and they cannot honestly disagree. Alone the spec passed 6 of 6 in 31 s.
+  Before you read a width failure as a layout bug, check whether its sibling arm
+  passed; if it did, the fast arm measured a page that had not settled.
+- **A per-day figure and a per-article figure need different degraded arms.**
+  Emptying every ledger reaches only the whole-surface empty state, which proves
+  the page renders and nothing about either figure. Drop one real day for the
+  per-day arm and one real item for the per-article arm, and read the figure
+  rather than the page.
 - **`locator.hover()` scrolls the element into view, so a viewport-relative rect
   taken before it and after it says the element moved.** A card asserting "no
   lift on hover" failed with `top` 332 before and 18 after, which reads as a 314px
@@ -1334,7 +1392,10 @@ the variable protects the shell you remember to set it in and nothing else.
 - **A sync terminal call can return "Command produced no output" without having
   run.** Parallel agents share one shell, so a sibling's interrupt or an
   unfinished input line swallows yours. Re-issue the identical command before
-  believing the result. An empty result is not a failed gate.
+  believing the result. An empty result is not a failed gate. Measured about one
+  call in four under load for `Get-ChildItem` and `Get-NetTCPConnection` piped
+  inline, which both exit 1 with nothing printed - write the answer to a file and
+  read the file rather than reading a pipe.
 - **It can also return another worktree's output, and that is worse than an
   empty one.** An empty result announces itself; a plausible one does not.
   Observed repeatedly on 2026-08-28 and 2026-08-29 with several agents running
@@ -1589,13 +1650,39 @@ the variable protects the shell you remember to set it in and nothing else.
   the content hash in every chunk filename the document preloads. So a
   before-and-after page-weight comparison reports a difference on routes the
   change never touched, and normalising the timestamp out of the text does not
-  help - the moved bytes are filenames, not the stamp. Patch
-  `frontend/svelte.config.js` for the measurement, run both arms with one
-  constant, and revert the patch before committing:
+  help - the moved bytes are filenames, not the stamp. Since 2026-09-01
+  `frontend/svelte.config.js` reads `BUILD_VERSION` for it, so set the variable
+  rather than editing the file:
 
-  ```js
-  version: { name: process.env.BUILD_VERSION ?? Date.now().toString() },
+  ```powershell
+  $env:BUILD_VERSION = '1788285804815'
   ```
+
+  Use a 13-character value. `Date.now().toString()` is 13 digits, so a shorter
+  or longer one moves the bytes it was set to hold still, and a ceiling measured
+  under it is not the number CI produces. Leave it unset for any measurement
+  that has to match a CI build, which is every page ceiling.
+
+  **The key is absent when the variable is, and writing a `Date.now()` fallback
+  there instead breaks every published page.** SvelteKit's own default is one
+  `Date.now()` taken when its options module loads, so it is the same string for
+  every pass of a build. `svelte.config.js` is evaluated once per pass, so a
+  `Date.now()` written in that file is not: measured 2026-09-01, the client chunk
+  named `__sveltekit_1kal9sg` and every prerendered document named
+  `__sveltekit_184943e`, and all five routes threw `TypeError: Cannot read
+  properties of undefined (reading 'data')` on hydration. Nothing else says so -
+  the build is clean, the pages render from their prerendered markup, and the
+  canary build does not split its chunks so the browser suite stays green. The
+  tell is `/archive/` collapsing to the viewport height while `/` does not.
+  The one-line probe:
+
+  ```powershell
+  Get-ChildItem build -Recurse -Include *.html,*.js |
+    Select-String -Pattern '__sveltekit_[a-z0-9]+' -AllMatches |
+    ForEach-Object { $_.Matches.Value } | Sort-Object -Unique
+  ```
+
+  More than one line is the defect.
 
   Measured 2026-08-31: with it pinned, two builds of each arm came out
   byte-identical on `/`, `/404`, `/archive/` and `/evals/`, so the spread was 0
@@ -1603,6 +1690,23 @@ the variable protects the shell you remember to set it in and nothing else.
   changed source files to `TEMP`, `git checkout HEAD -- <those paths>`,
   building, then copying them back - `HEAD` never moves, so `__BUILD_COMMIT__`
   and `__BUILD_DATE__` stay constant across both arms too.
+- **`git checkout HEAD -- <paths>` restores the pre-change file, so commit
+  before you prove a bite.** The control arm above wants the old source and a
+  bite proof wants the new one, and they use the same command. On an uncommitted
+  branch the "this must FAIL without my fix" arm and the "this must PASS with
+  it" arm both build the old file, so the second one fails and reads as a fix
+  that does not work. Commit first; `HEAD` is then your change.
+- **`git diff --numstat <file>` is not a restore check for a file your own
+  change modified.** It compares against `HEAD`, so it is non-empty by design
+  and says nothing about whether the temporary patch came back out. Take a
+  SHA-256 of each file before you patch it and compare against that.
+- **A restore written with `[System.IO.File]::WriteAllBytes` inside a long
+  `.ps1` did not show up in a `Select-String` later in the same script.** The
+  file on disk was correct; the read was not. Verify a restore from a separate
+  process, or ask `git diff` rather than reading the bytes yourself. Match a
+  token the patch introduced, too: a substring check written loosely matches the
+  component's own drawing loop and reports the patch still present when it is
+  gone.
 - **`vite build --outDir <other>` does NOT move the site. `adapter-static`
   writes `build/` whatever vite is told**, so a second arm built "somewhere
   else" silently overwrites the arm you were about to measure. On 2026-08-31 an
@@ -1759,7 +1863,32 @@ the variable protects the shell you remember to set it in and nothing else.
   count before and `not in` after.
 - The cheap early warning: after any merge into a long-lived feature branch,
   `git grep` the names that branch deleted. `git diff --name-only main...HEAD`
-  tells you which files to look in.
+  tells you which files to look in. `git grep` has no `-CaseSensitive` flag -
+  that is `Select-String` - and it exits 1 when it finds nothing, which is an
+  answer and not an error.
+- **The dangerous half is often the part git calls clean, and it need not be a
+  name at all.** Two rows both auto-merged one route page on 2026-09-01: one had
+  narrowed the bars to a window, the other had added a strip above them, and the
+  merged file drew windowed bars over a strip that still read the whole ledger.
+  Every symbol resolved, the suite passed, and the page said two different things
+  about the same days. After resolving anything, derive each import block from
+  the symbols the merged file actually calls, and check that two components
+  reading one ledger still read the same slice of it.
+- **A whitespace-sensitive "did I lose a line" check reports false losses.** A
+  resolution that re-nests a block changes the leading spaces on every line in
+  it, so a set difference over raw lines lists the whole block as dropped.
+  Compare on the stripped text, then look at indentation separately.
+- **After any base/override inversion in a token file, grep every OTHER file
+  that emits the same custom property and check its SELECTOR.** A sweep that
+  made `:root` carry dark and `[data-theme='light']` the override left a
+  generated stylesheet still emitting `:root, [data-theme='light'] { ... }` with
+  the light value, so a document with no `data-theme` - the new default - got the
+  light colour on the dark surface at 2.99:1 against a 4.5:1 bound. Git reported
+  no conflict, because neither side touched that file. Nothing failed either: the
+  token existed, the element used it, and every theme test names a theme
+  explicitly. A test that splits a stylesheet at a selector inverts with it, and
+  its failure message then names the wrong file - split at the OVERRIDE selector,
+  which is the boundary whichever way round the file is.
 - **GitHub can do this to you when nobody ran a merge at all.** Seen 2026-08-27
   on `main` itself: #186 deleted `assets_in_day` from `render/write.py`,
   correctly, because it had no remaining caller. #166 then landed
@@ -1773,6 +1902,18 @@ the variable protects the shell you remember to set it in and nothing else.
   result you are reading describes a base that may no longer exist. That gap is
   the whole hazard: #186 landed in it, between the run that passed on #166 and
   the press that merged #166.
+- **A migration test that asserts the producer has not run yet is a time bomb,
+  and its fuse is one pipeline run.**
+  `test_a_committed_day_reads_an_absent_ranking_field_as_unknown` held that no
+  committed day carried any of five new ranking fields. The scheduled publish of
+  2026-08-31 then wrote a day with the new writer and the assertion was simply
+  false. Two things hid it: a pipeline push carries the job's own token and
+  starts no workflow, so nothing went red at the moment it broke, and when the
+  next human pull request did start a run, **every open pull request went red at
+  once** - which reads as an infrastructure fault rather than as one stale
+  assertion. Write the test against what a payload OMITS, not against what no
+  payload has yet. Whenever a whole branch set goes red together, check
+  `origin/main` before reading a single diff.
 - The check that closes the gap, before merging anything into a base that has
   moved: merge `origin/main` into the branch locally and run the suite on the
   merged tree. It is the only thing that tests the tree the merge will actually
@@ -1818,6 +1959,13 @@ the variable protects the shell you remember to set it in and nothing else.
   caller started, so a caller that had queued five minutes for the lock was
   reported to the next waiter as having held it for five minutes - one worktree
   read another's one-second-old lock as "held for 324 s".
+- **Chain every heavy gate into ONE locked script, so you queue once rather
+  than five times.** With siblings running, a single wait for this lock was
+  measured at 25 to 50 minutes across 2026-08-31 and 2026-09-01, against a
+  default `--timeout` of 3,600 s. Five separately-wrapped gates - build,
+  bundle-gate, canary day, canary build, browser suite - pay that wait five
+  times and can spend longer queueing than working. Wrap a `.ps1` that runs all
+  of them in order and writes one sentinel per step.
 - **It cannot fail your gate, by design.** A lock whose pid is gone is
   reclaimed and the reclaim is logged; a lock past `--stale-after` (7,200 s,
   which is 6.6x the longest gate measured here) is reclaimed whatever its pid

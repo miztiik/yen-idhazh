@@ -1795,6 +1795,30 @@ class AppConfig(Contract):
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-01T18:00",
+            change=(
+                "page_weight.ceilings_bytes moved /console/ from 251,324 to 276,828, "
+                "/console/model/ from 29,273 to 37,979 and /console/machine/ from "
+                "31,714 to 39,743, in config/idhazh.json. No field moved and no "
+                "default changed, so a config written before today still validates."
+            ),
+            why=(
+                "The console chart-craft plan closed and all three numbers were "
+                "derived on a tree twenty-six rows older. Nothing had crossed: the "
+                "pages measured 142,623, 27,744 and 29,599 against ceilings of "
+                "251,324, 29,273 and 31,714. What expired is the runway. A ceiling "
+                "here is the heaviest of five builds plus seven published days at the "
+                "measured per-day rate plus the 64-byte build noise floor, and "
+                "/console/model/ had 1,529 bytes of slack left - 1.05 publishes - "
+                "with /console/machine/ at 1.47. The raise decomposes into a page "
+                "term and a rate term that sum to it exactly: +26,470 and -966 for "
+                "/console/, +6,788 and +1,918 for /console/model/, +6,489 and +1,540 "
+                "for /console/machine/. Measured 2026-09-01 on i7-1265U, Windows 11, "
+                "node v24.12.0, twelve published days; see "
+                "docs/reference/measurements.md."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01T14:00",
             change=(
                 "ui.filter_min_chars added, defaulting to 2. The shape is `UiConfig`, "
