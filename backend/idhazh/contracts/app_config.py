@@ -1396,6 +1396,23 @@ class UiConfig(Model):
             "page this short it would promise an archive it cannot reach."
         ),
     )
+    filter_min_chars: int = Field(
+        default=2,
+        ge=1,
+        le=8,
+        description=(
+            "How many characters a reader types before an in-place filter narrows a "
+            "list. It binds the day page and the archive, which share one panel since "
+            "2026-09-01. Two rather than one because one letter narrows nothing: "
+            "measured 2026-09-01 over the 12 committed days and 4,203 story titles - "
+            "arithmetic over committed text, so the spread is zero by construction - "
+            "the median single letter matches 80.2 percent of them and `e` matches 99.8 "
+            "percent, against a median 0.8 percent for a two-letter pair. A first "
+            "keystroke that redraws the page and removes almost nothing is work the "
+            "reader watches for no answer. Over 8 the field stops narrowing anything a "
+            "reader would think to type."
+        ),
+    )
     items_per_topic: int = Field(
         default=3,
         ge=1,
@@ -1799,6 +1816,25 @@ class AppConfig(Contract):
                 "for /console/machine/. Measured 2026-09-01 on i7-1265U, Windows 11, "
                 "node v24.12.0, twelve published days; see "
                 "docs/reference/measurements.md."
+            ),
+        ),
+        ChangelogEntry(
+            version="2026-09-01T14:00",
+            change=(
+                "ui.filter_min_chars added, defaulting to 2. The shape is `UiConfig`, "
+                "which this document and `AppearanceConfig` share, so both schemas "
+                "moved together. Additive with a default, so a config written before "
+                "today still validates."
+            ),
+            why=(
+                "The day page's filter and the archive's topic pills became one panel, "
+                "and the archive's field now narrows the loaded list as a reader types "
+                "- so the same rule governs two surfaces and may not be spelled in "
+                "either of them (Rule #6). Two rather than one because one letter "
+                "narrows nothing: measured 2026-09-01 over the 12 committed days and "
+                "4,203 story titles, the median single letter matches 80.2 percent of "
+                "them and `e` matches 99.8 percent, against a median 0.8 percent for a "
+                "two-letter pair."
             ),
         ),
         ChangelogEntry(

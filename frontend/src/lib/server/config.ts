@@ -29,6 +29,9 @@ export interface UiConfig {
 	visual_side: 'above' | 'leading' | 'trailing';
 	source_mark: boolean;
 	show_filter: boolean;
+	/** How many characters a reader types before an in-place filter narrows a
+	 * list. The day page and the archive share one panel, so they share this. */
+	filter_min_chars: number;
 	/** How many topic pills stay on the row before the rest go in a disclosure. */
 	topic_pills_max: number;
 	/** How long a reader may wait for the rest of a day before the page says one
@@ -222,6 +225,7 @@ const DEFAULTS: UiConfig = {
 	visual_side: 'above',
 	source_mark: true,
 	show_filter: true,
+	filter_min_chars: 2,
 	topic_pills_max: 8,
 	payload_slow_ms: 1200,
 	repo_url: 'https://github.com/miztiik/yen-idhazh',

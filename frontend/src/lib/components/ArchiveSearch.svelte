@@ -28,11 +28,18 @@
 	 * search's empty state as well. Two lists would leave a reader working out
 	 * which one answered them.
 	 *
+	 * **The box and the list below always describe each other.** Typing narrows
+	 * the stories already fetched, by title, and costs nothing. Pressing the
+	 * button turns what is in the box into a question, and a question is not a
+	 * substring - so the page is told, and it stops narrowing the list by the
+	 * words in it until the next keystroke. Only the button spends the 43 MB, so
+	 * the cost is named before it is paid.
+	 *
 	 * Everything here is secondary by construction. Delete the model directory
 	 * and this control reports itself unavailable; the archive above it is
 	 * unchanged, and so is every digest assertion on the page.
 	 */
-	import Icon from '$lib/icons/Icon.svelte';
+	import FilterBar from '$lib/components/FilterBar.svelte';
 	import { onMount } from 'svelte';
 	import {
 		cachedEncoder,
@@ -53,6 +60,7 @@
 		type SearchableMonth,
 		type SearchOutcome
 	} from '$lib/assist/search';
+	import type { DigestVerticalRef } from '$lib/payload/types';
 	import { plural } from '$lib/format';
 
 	// Every knob comes from `config/idhazh.json` through the route's load, so
@@ -61,7 +69,15 @@
 	let {
 		months,
 		assist: settings,
-		onResults
+		verticals,
+		activeTopic,
+		total,
+		pillsMax,
+		query = $bindable(''),
+		onResults,
+		onTopic,
+		onAsk,
+		onType
 	}: {
 		months: string[];
 		assist: {
@@ -70,8 +86,21 @@
 			search_months: number;
 			search_min_days: number;
 		};
+		/** Every topic the archive holds, with its whole-archive count. */
+		verticals: DigestVerticalRef[];
+		activeTopic: string | null;
+		/** Stories in the whole archive, for the `All` pill. */
+		total: number;
+		pillsMax: number;
+		/** What the field holds. The page reads it to narrow its browse list. */
+		query?: string;
 		/** Hand the page one search, or null to give it its story list back. */
 		onResults: (outcome: SearchOutcome | null) => void;
+		onTopic: (id: string | null) => void;
+		/** The reader pressed the button, so the box now holds a question. */
+		onAsk: () => void;
+		/** The reader typed, so it is a filter again. */
+		onType: () => void;
 	} = $props();
 
 	const ranking: RankOptions = $derived({
@@ -91,7 +120,6 @@
 	let phase = $state<Phase>({ name: 'offer' });
 	let cached = $state<CachedEncoder>('unknown');
 	let held = $state(false);
-	let query = $state('');
 	let indexes = $state<MonthIndex[]>([]);
 	// Not reactive: nothing on screen is a function of the raw vectors.
 	let scope: SearchableMonth[] = [];
@@ -188,6 +216,7 @@
 		const text = query.trim();
 		if (!text || phase.name === 'working' || phase.name === 'blocked') return;
 
+		onAsk();
 		const mine = ++attempt;
 		phase = { name: 'working', progress: { loaded: 0, landed: false } };
 		try {
@@ -234,36 +263,30 @@
 		attempt += 1;
 		phase = { name: 'offer' };
 	}
-
-	function submit(event: SubmitEvent) {
-		event.preventDefault();
-		void run();
-	}
 </script>
 
-{#if months.length > 0}
-	<section class="mt-10 border-t border-rule pt-4 text-sm" data-archive-search>
-		{#if phase.name !== 'blocked'}
-			<form onsubmit={submit} class="flex gap-2">
-				<label class="sr-only" for="archive-query">Search this archive</label>
-				<input
-					id="archive-query"
-					bind:value={query}
-					type="search"
-					placeholder="What are you looking for?"
-					class="flex-1 rounded-md border border-rule bg-surface px-3 py-2"
-				/>
-				<button
-					type="submit"
-					class="inline-flex items-center gap-1.5 rounded-md border border-rule px-3 py-2 hover:text-ink"
-				>
-					<Icon id="search" size={14} />
-					Search
-				</button>
-			</form>
-		{/if}
+<FilterBar
+	label="Topics and search"
+	{verticals}
+	active={activeTopic}
+	{total}
+	{pillsMax}
+	linked={false}
+	{onTopic}
+	bind:query
+	fieldId="archive-query"
+	fieldLabel="Search this archive"
+	placeholder="What are you looking for?"
+	showField={months.length > 0 && phase.name !== 'blocked'}
+	submitLabel="Search"
+	onSubmit={() => void run()}
+	onType={() => onType()}
+	noscriptNote="Search and the topic filters need JavaScript."
+/>
 
-		<p class="mt-2 text-sm text-text-tertiary" data-search-state>
+{#if months.length > 0}
+	<section class="mt-2 text-sm" data-archive-search>
+		<p class="text-sm text-text-tertiary" data-search-state>
 			{stateSentence}
 			{#if phase.name === 'working'}
 				<button

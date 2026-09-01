@@ -981,6 +981,26 @@ redirect the two streams separately:
 
 An empty exit code is a shell fault. A non-zero one is your gate.
 
+## Svelte
+
+**A `<style>` inside `<noscript>` compiles, and it is the only way to write a
+no-script rule.** Svelte treats the root `<style>` element as the component's
+CSS block and every nested one as an ordinary element, so a `<style>` inside
+`<noscript>` is emitted verbatim into the prerendered document and never
+scoped. Verified 2026-09-01 with `compile(source, { generate: 'server' })` on
+svelte 5: the rule text is in the output and the component's own CSS block is
+unaffected. `style-src` already allows `unsafe-inline`, so nothing about the
+CSP moves.
+
+**But the rule it writes is unscoped, and a scoped class rule outranks it.**
+Svelte compiles `.field { display: flex }` to `.field.svelte-<hash>`, which is
+specificity (0,2,0), against (0,1,0) for the `data-` attribute selector a
+`<noscript>` block has to use - so the no-script rule silently loses and the
+control it was meant to hide stays on the page. The symptom is a page that looks
+correct in every ordinary run, because the arm only fires with scripting off.
+Keep `display` off the element the attribute is on and put the layout on a
+child, or the fix becomes an `!important`.
+
 ## Running the gates
 
 - **A `page.route` answering 500 does not simulate a failed download here.**
@@ -1473,6 +1493,35 @@ the variable protects the shell you remember to set it in and nothing else.
   Read the error before rewriting the selector: `outside of the viewport` and
   `waiting for element to be visible, enabled and stable` on an element the
   snapshot shows are this quirk, not a broken locator.
+- **`page.fill()` and `locator.screenshot()` hang the same way**, and the second
+  one is the surprise: `page.screenshot()` on the whole viewport works, while an
+  element screenshot waits for that element to be stable and never gets there.
+  Observed 2026-09-01. `fill()` is worse than a timeout because the box keeps
+  the value it had, so the page reads as though the control ignored the input.
+  Set the value through the DOM and dispatch the event the framework listens
+  for:
+
+  ```js
+  await page.evaluate(() => {
+    const input = document.querySelector('#archive-query');
+    const setter = Object.getOwnPropertyDescriptor(
+      Object.getPrototypeOf(input), 'value'
+    ).set;
+    setter.call(input, 'reactor');
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  ```
+
+- **This browser runs at a device scale of 1.25, so `setViewportSize` does not
+  give you the CSS width you asked for.** `{ width: 1024 }` produced
+  `window.innerWidth` 819 on 2026-09-01, and a `@media (min-width: 1024px)` rule
+  therefore did not match - which reads exactly like a breakpoint that was never
+  written. Multiply the width you mean by 1.25, and always confirm with
+  `document.documentElement.clientWidth` before believing a breakpoint result.
+  Remember the media query itself measures the viewport INCLUDING the scrollbar,
+  so `clientWidth` reads about 12px under the number the query compares against.
+  The Playwright suite has no scale factor, so it is the arm that settles a
+  breakpoint question.
 - **`getBoundingClientRect()` returns zero width for every element on the
   console.** Layout is not being driven in a hidden page, so a bar that draws
   perfectly still measures 0. The `style` attribute is still correct and still

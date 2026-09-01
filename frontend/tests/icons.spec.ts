@@ -115,7 +115,7 @@ test.describe('icons on the page', () => {
 	test('a topic pill carries its mark, in both themes', async ({ page }) => {
 		await page.goto('/');
 		const marks = await page.evaluate(() => {
-			const pills = [...document.querySelectorAll('nav[aria-label="Topics"] a')];
+			const pills = [...document.querySelectorAll('[data-topic-row] a')];
 			return pills.map((p) => ({
 				text: (p.textContent ?? '').trim().slice(0, 24),
 				hasIcon: p.querySelector('svg.icon') !== null
