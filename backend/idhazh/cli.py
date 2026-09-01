@@ -2627,6 +2627,8 @@ def stage_assemble(
             digest_items, Embedder(config.REPO_ROOT, settings.app.assist)
         ),
         item_health_rows=item_health_rows,
+        watchlist=settings.watchlist,
+        ui=settings.app.ui,
         duplicate_similarity_min=settings.app.assemble.duplicate_similarity_min,
     )
     assemble.write_atomic(target / "digest.json", day.to_json())
@@ -2668,6 +2670,7 @@ def stage_assemble(
         evaluation_sample_rate=observability.sample_rate,
         evaluation_sampled=sampling.run_is_sampled(run_id, observability.sample_rate),
         scorer_version=instruments[0] if len(instruments) == 1 else None,
+        rank_version=rank.RANK_VERSION,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(STATE_ROOT, rows)

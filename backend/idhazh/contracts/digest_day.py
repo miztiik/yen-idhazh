@@ -26,6 +26,13 @@ groups the items on the vectors this payload already carries and keeps the
 strongest of each group. Nothing is unpublished by it: a collapsed item keeps
 its place in `items`, its anchor and its archive entry, and only what the
 default view draws changes.
+
+`leads` is the day's leading stories, chosen across the whole day rather than
+off the head of `items`. It is a second order over the same list and never a
+second list: a lead names a story `items` already holds, and an empty `leads`
+is the ordinary state of a day with too few stories worth leading. It is
+chosen after the duplicate pass has run, so the block reads the day the way
+the reader will see it.
 """
 
 from __future__ import annotations
@@ -78,6 +85,26 @@ class DigestVerticalRef(Model):
     id: Slug
     display_name: str = Field(min_length=1)
     count: int = Field(ge=0)
+
+
+class DigestLead(Model):
+    """One of the day's leading stories, and the one sentence saying why it leads.
+
+    The story itself stays in `items` in the published order, so the block adds
+    a way in and removes nothing. Nothing here carries a position: a number
+    beside a story implies a score we would then owe the reader an explanation
+    for.
+    """
+
+    item_id: ItemId
+    reason: str = Field(
+        min_length=1,
+        description=(
+            "One sentence a reader can check against the story, built from our own "
+            "published title and our own closed registry and never from fetched text "
+            "(Rule #11). A lead that cannot say something true is not a lead."
+        ),
+    )
 
 
 class DigestItem(Model):
@@ -264,6 +291,22 @@ class DigestDay(Contract):
     __schema_stem__: ClassVar[str] = "digest-day"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-01T12:30",
+            change="Added leads: the day's leading stories, each with the reason it leads.",
+            why=(
+                "The page had no first screen. Its opening stories were whichever "
+                "desk sorted first in run 1, which is an accident rather than an "
+                "edit, and the reader could not see why any story was there. The "
+                "block is chosen across the whole day from the ranking signal the "
+                "item already publishes plus a shared-subject term computed here, "
+                "and it removes nothing: every lead is still in items, in the "
+                "published order, and every excluded story still publishes. "
+                "Additive with an empty default, so every day published before "
+                "today - 11 days and 4,086 items when this landed, 2026-09-01 - "
+                "still validates and still renders, with no block (section 11)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01T09:00",
             change="Added also_covered_by and same_story_as to published items.",
             why=(
@@ -382,6 +425,16 @@ class DigestDay(Contract):
     runs: list[DigestRunRef] = Field(min_length=1)
     verticals: list[DigestVerticalRef]
     items: list[DigestItem]
+    leads: list[DigestLead] = Field(
+        default_factory=list,
+        description=(
+            "The day's leading stories, strongest first, chosen across the whole day "
+            "rather than off the head of the published order. Empty is the normal "
+            "state and it means the block does not render: a day with too few stories "
+            "worth leading goes straight to the stream rather than padding. Every "
+            "entry names an item this same day holds."
+        ),
+    )
     embeddings: DigestEmbeddings | None = None
 
     @model_validator(mode="after")
@@ -423,6 +476,22 @@ class DigestDay(Contract):
             raise ValueError("partial is exactly whether anything failed")
         if len(self.items) + self.items_failed > self.items_planned:
             raise ValueError("published plus failed cannot exceed planned")
+        return self
+
+    @model_validator(mode="after")
+    def _a_lead_names_a_story_this_day_holds(self) -> Self:
+        """The block is a way into the day, so it can only point at the day.
+
+        A lead naming an item the payload does not carry is a link to nothing,
+        and it fails here rather than on the page.
+        """
+        led = [lead.item_id for lead in self.leads]
+        if len(set(led)) != len(led):
+            raise ValueError("one story may lead only once")
+        held = {item.item_id for item in self.items}
+        for item_id in led:
+            if item_id not in held:
+                raise ValueError(f"lead {item_id} names a story this day does not hold")
         return self
 
     @model_validator(mode="after")

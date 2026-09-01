@@ -194,6 +194,17 @@ class RunRecord(Model):
             "too on a manifest written before this was recorded."
         ),
     )
+    rank_version: str | None = Field(
+        default=None,
+        min_length=1,
+        description=(
+            "The scoring shape this run published under, as `idhazh.rank.RANK_VERSION` "
+            "spells it. A published order that moved for a reason nobody recorded is a "
+            "published order nobody can defend, and until this field existed the "
+            "constant was read by nothing. Null on a manifest written before this was "
+            "recorded, which is unknown rather than a claim about which shape ran."
+        ),
+    )
 
     config_digests: list[ConfigDigest] = Field(default_factory=list)
     note: str | None = None
@@ -213,6 +224,22 @@ class RunManifest(Contract):
 
     __schema_stem__: ClassVar[str] = "run-manifest"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-01T12:00",
+            change="Added optional rank_version to a run.",
+            why=(
+                "`idhazh.rank.RANK_VERSION` says which scoring shape decided the "
+                "published order, and its own comment says an order that moved for "
+                "a reason nobody recorded is an order nobody can defend. Nothing "
+                "read the constant, so no run had ever recorded it and a bump would "
+                "have recorded nothing. This is the wiring on its own: no scoring "
+                "behaviour changes in this commit and the value written is the "
+                "constant already in the tree. Null on every manifest written "
+                "before today - 11 days when this landed, 2026-09-01 - and null "
+                "reads as unknown, never as a claim that some particular shape ran "
+                "(section 11)."
+            ),
+        ),
         ChangelogEntry(
             version="2026-08-31",
             change=(

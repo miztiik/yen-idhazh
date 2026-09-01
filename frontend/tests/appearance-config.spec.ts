@@ -17,14 +17,14 @@ const REPO = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 interface Knobs {
 	sections: string[];
-	items_per_topic: number;
+	archive_page_size: number;
 	show_filter: boolean;
 	tagline: string;
 }
 
 const DEFAULTS: Knobs = {
-	sections: ['notice', 'topics', 'items'],
-	items_per_topic: 3,
+	sections: ['notice', 'leads', 'topics', 'items'],
+	archive_page_size: 25,
 	show_filter: true,
 	tagline: 'A daily digest that checks its own work.'
 };
@@ -32,7 +32,7 @@ const DEFAULTS: Knobs = {
 /** Nothing here equals a default. That is what stops a stub from passing. */
 const CHOSEN: Knobs = {
 	sections: ['items', 'topics'],
-	items_per_topic: 9,
+	archive_page_size: 9,
 	show_filter: false,
 	tagline: 'Chosen, not defaulted.'
 };
@@ -51,18 +51,18 @@ test.describe('the appearance config migration', () => {
 	});
 
 	test('the new file wins a field the legacy block also sets', () => {
-		const resolved = mergeLayers(DEFAULTS, { items_per_topic: 4 }, { items_per_topic: 7 });
-		expect(resolved.items_per_topic).toBe(7);
+		const resolved = mergeLayers(DEFAULTS, { archive_page_size: 4 }, { archive_page_size: 7 });
+		expect(resolved.archive_page_size).toBe(7);
 	});
 
 	test('a legacy value survives a new file that does not mention it', () => {
 		// The reason the legacy block is a middle layer and not a discarded one:
 		// a partly migrated file must not snap a knob back to a default nobody
 		// chose.
-		const resolved = mergeLayers(DEFAULTS, CHOSEN, { items_per_topic: 7 });
+		const resolved = mergeLayers(DEFAULTS, CHOSEN, { archive_page_size: 7 });
 		expect(resolved.tagline).toBe(CHOSEN.tagline);
 		expect(resolved.show_filter).toBe(false);
-		expect(resolved.items_per_topic).toBe(7);
+		expect(resolved.archive_page_size).toBe(7);
 	});
 
 	test('a fresh clone with neither file runs on the defaults', () => {

@@ -1360,7 +1360,7 @@ class UiConfig(Model):
     """
 
     sections: list[str] = Field(
-        default_factory=lambda: ["notice", "topics", "items"],
+        default_factory=lambda: ["notice", "leads", "topics", "items"],
         min_length=1,
         description="Render order of the day page's sections, by registry id.",
     )
@@ -1386,11 +1386,77 @@ class UiConfig(Model):
     items_per_topic: int = Field(
         default=3,
         ge=1,
+        deprecated=True,
         description=(
-            "How many of a topic's stories the all-topics page shows before it links to "
-            "the rest. One long queue has no usable first screen: its opening items are "
-            "whichever topic sorts first. Nothing is removed or re-ranked - every item "
-            "stays one click away on its own topic page."
+            "Retired 2026-09-01 and read by nothing. The all-topics page drew this many "
+            "of each topic under a heading and put the rest behind a link, which on the "
+            "431-story day of 2026-08-30 published 15 stories and hid 416. The leading "
+            "block replaced the headings and the flat stream carries the whole day. "
+            "Kept as a field, and dropped from the committed config, so a file written "
+            "before today still validates - an unknown key is refused (section 11)."
+        ),
+    )
+    leading_stories: int = Field(
+        default=5,
+        ge=1,
+        description=(
+            "The most stories the leading block may hold. They are chosen across the "
+            "whole day, so the block is the page's first screen and the stream below it "
+            "still carries every story in the published order."
+        ),
+    )
+    leading_per_desk: int = Field(
+        default=2,
+        ge=1,
+        description=(
+            "The most leads one desk may hold. It matters more than it looks: 25 of the "
+            "30 committed watchlist entries are technology companies, so the "
+            "shared-subject term is structurally biased toward the AI and business "
+            "desks, and this is the only thing holding it."
+        ),
+    )
+    leading_min: int = Field(
+        default=3,
+        ge=1,
+        description=(
+            "The fewest leads worth drawing a block for. Under it nothing renders and "
+            "the day goes straight to the stream, because four real leads beat five "
+            "with one filler."
+        ),
+    )
+    lead_cluster_floor: int = Field(
+        default=3,
+        ge=2,
+        description=(
+            "How many distinct sources must name one entity in their published titles "
+            "before that shared subject counts for anything. Under it the term is zero. "
+            "Measured 2026-09-01 over the 11 committed days and 4,086 items: at two "
+            "sources 14.64 percent of stories sit in a cluster and at three it is 12.85 "
+            "percent, so the stronger claim costs 73 stories in 11 days."
+        ),
+    )
+    lead_shared_subject_weight: float = Field(
+        default=0.2,
+        ge=0.0,
+        description=(
+            "What a qualifying shared subject adds to a story's rank inside the leading "
+            "block. It is a step and not a ramp: no measurement supports a shape, and a "
+            "shape nobody measured may not justify a design (Rule #10). It must stay "
+            "below what one more trade-press carrier is worth, which is "
+            "collect.tier_weights.trade_press times collect.repetition_weight - 0.6 on "
+            "the committed config - so a recurring subject cannot outrank a story two "
+            "independent feeds carried today. Measured 2026-09-01: a second carrier "
+            "fires on 4.49 percent of the stories that record it and a shared subject "
+            "on 12.85 percent, 2.9 times as often, and 0.6 divided by 2.9 is 0.21."
+        ),
+    )
+    lead_max_yesterday: int = Field(
+        default=1,
+        ge=0,
+        description=(
+            "The most leads the block may give to stories the feed dated to the "
+            "previous calendar day. A day's leading stories are today's; one late "
+            "arrival is a catch-up and three are yesterday's page."
         ),
     )
     topic_pills_max: int = Field(
@@ -1412,16 +1478,18 @@ class UiConfig(Model):
             "How many of a day's stories a prerendered document carries. It is the "
             "one knob in this block a browser is never told, because the root "
             "layout inlines the rest of them into every document and a number no "
-            "page reads would ride to every reader for ever. Fifteen is the most "
-            "items any reading surface draws before the reader acts: the five "
-            "desks config/taxonomy.json declares times items_per_topic, which is "
-            "above the twelve a flat list pages at. Re-derive it from those two "
-            "when either moves - do not raise it to cover a busy day, because the "
-            "stories past the seed arrive by fetch. Measured 2026-09-01 on the "
-            "431-story day of 2026-08-30, gzip -9, Intel Core i7-1265U / Windows "
-            "11 / node 24.12.0: the first fifteen stories cost a dated route "
-            "20,302 bytes across the two documents it emits, against 420,074 for "
-            "all 431."
+            "page reads would ride to every reader for ever. Fifteen covers the "
+            "twelve a flat list pages at and the five the leading block draws. It "
+            "is a floor rather than the whole answer: a lead is chosen across the "
+            "whole day and is not inside any prefix, so the document has to carry "
+            "those as well - measured 2026-09-01 on the 601-story day of "
+            "2026-08-31, the five sat at positions 249, 285, 337, 344 and 493. "
+            "Re-derive it when the block or the page size moves; do not raise it "
+            "to cover a busy day, because the stories past the seed arrive by "
+            "fetch. Measured 2026-09-01 on the 431-story day of 2026-08-30, gzip "
+            "-9, Intel Core i7-1265U / Windows 11 / node 24.12.0: the first "
+            "fifteen stories cost a dated route 20,302 bytes across the two "
+            "documents it emits, against 420,074 for all 431."
         ),
     )
     payload_slow_ms: int = Field(
@@ -1482,6 +1550,19 @@ class UiConfig(Model):
         the only honest reading of an older file is the base theme.
         """
         return ThemeChoice.DARK if value == "system" else value
+
+    @model_validator(mode="after")
+    def _the_leading_block_can_reach_its_own_floor(self) -> Self:
+        """A floor above the ceiling is a block that can never draw.
+
+        Both numbers read as reasonable on their own, and the failure is silent:
+        the block simply never appears and nothing says why.
+        """
+        if self.leading_min > self.leading_stories:
+            raise ValueError("leading_min cannot exceed leading_stories")
+        if self.leading_per_desk > self.leading_stories:
+            raise ValueError("leading_per_desk cannot exceed leading_stories")
+        return self
 
 
 class PageWeightConfig(Model):
@@ -1683,6 +1764,29 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-01T12:30",
+            change=(
+                "ui.leading_stories, ui.leading_per_desk, ui.leading_min, "
+                "ui.lead_cluster_floor, ui.lead_shared_subject_weight and "
+                "ui.lead_max_yesterday added, defaulting to 5, 2, 3, 3, 0.2 and 1. "
+                "ui.items_per_topic is deprecated, read by nothing, and dropped "
+                "from the committed file. The shape is `UiConfig`, which this "
+                "document and `AppearanceConfig` share, so both schemas moved "
+                "together."
+            ),
+            why=(
+                "The day gets a leading block, and every number that decides it is "
+                "a knob rather than a literal in a stage (Rule #6). The block "
+                "replaces the three-per-topic headings, which on the 431-story day "
+                "of 2026-08-30 drew 15 stories and put 416 behind five links - so "
+                "items_per_topic lost its only reader. The field stays so a config "
+                "written before today still validates, because an unknown key is "
+                "refused; nothing reads it and the committed file no longer sets it "
+                "(section 11). Every addition carries a default, so a file written "
+                "before today still validates either way."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01T10:00",
             change=(

@@ -1,6 +1,6 @@
 # Digest
 
-**Last Updated**: 2026-08-29
+**Last Updated**: 2026-09-01
 
 What a reader actually gets: the published surface, the item, and the rule that decides whether an item gets a picture. This page fixes the vocabulary and the invariants; the concrete layout and typography are Jony's territory and live in [ui-shell.md](ui-shell.md) and [design-system.md](design-system.md).
 
@@ -57,13 +57,58 @@ The system knows things about its own output that a reader cannot see: that a so
 
 Surfacing this without turning every item into a disclaimer is a typography and hierarchy problem, and it is a real one.
 
+## The day's leading stories
+
+The day opens on at most five stories, chosen across the whole day, each
+carrying **one sentence saying why it is there**. Below three it does not
+render at all and the day goes straight to the stream: four real leads beat
+five with one filler.
+
+The block is a **way into the day and never a version of it**. Every lead is
+still in the stream below, in the published order, and every story a rule kept
+out still publishes there too, marked exactly as it was. The block holds ids and
+sentences; the day holds the stories.
+
+It replaced the topic sections on 2026-09-01. Those drew three stories under
+each desk heading and put the rest behind five links, which on the 431-story day
+of 2026-08-30 meant 15 stories shown and 416 one click away. The stream now
+carries the whole day and the topic pill row is the way to a desk, where every
+topic is already its own route.
+
+**Why-lines are true or they are absent.** There are four, and a lead carries
+the strongest one that is true of it:
+
+| Sentence | When it is true |
+| --- | --- |
+| `Four of today's stories are about Nvidia.` | Enough of our sources named that subject in their own headlines today. |
+| `Nvidia is on our watchlist.` | The story's title names an entry in our registry. |
+| `The same report reached us through three of our feeds.` | Several feeds carried the same address. Never "three sources covered this": that is a different claim and the number does not support it. |
+| `The lead story on our Energy desk.` | It is the strongest story on that desk today. |
+
+A story with nothing true to say does not lead. That is the whole of the rule
+and it is why there is no fifth, vaguer sentence: a block that invents its
+reasons is worse than no block, and it would spend the same trust the summary
+marks are protecting.
+
+**No numerals.** A number beside a story implies a score we would then owe the
+reader an explanation for, and the sentence already gives the reason in words.
+
+Two sentences are deliberately missing. **Recency gets none** - the item's own
+line already prints the time. **A weighted theme gets none** - a weight on a
+lens is an editorial subsidy for a theme we think is under-carried, and "this is
+here because it mentions tariffs" tells the reader about our config rather than
+about the news.
+
+How a lead is chosen, what a cap costs and where the weight came from is
+[../architecture/sources/discovery.md](../architecture/sources/discovery.md#a-second-order-over-the-same-day-the-leading-stories).
+
 ## The reader's budget
 
 About two minutes. Ten items a reader can skim beats forty they cannot.
 
 That is a design target for the page, not a cap on the pipeline. What a day carries is decided by supply, the score and `run.safety_ceiling_per_run` ([../architecture/sources/freshness.md](../architecture/sources/freshness.md)). The reader's budget is protected by ordering and by hierarchy: the best items are first, and a day that runs long is a scroll rather than a truncation.
 
-**A long day gets its hierarchy from its topics.** 586 items in one queue had no usable first screen - its opening items were whichever vertical id sorted first, which is an accident rather than an edit. The all-topics page now shows each topic's first few and links to the rest ([../architecture/publishing/frontend.md](../architecture/publishing/frontend.md)). Nothing is removed, hidden or re-ranked; the published order survives inside every section. That is hierarchy doing the work the reader's budget always asked of it, and it is why truncating a long day was refused.
+**A long day gets its hierarchy from its leading stories.** 586 items in one queue had no usable first screen - its opening items were whichever vertical id sorted first, which is an accident rather than an edit. The day now opens on at most five stories chosen across the whole day, and the stream below them carries every story in the published order. Nothing is removed, hidden or re-ranked. Until 2026-09-01 that hierarchy came from topic sections instead, and they bought it by hiding: three stories a desk on the page and 416 of 431 behind five links.
 
 The page must also render when its data file is absent or empty. That is a normal state, designed on purpose, not an error discovered as a white screen ([../../CLAUDE.md](../../CLAUDE.md) section 12).
 

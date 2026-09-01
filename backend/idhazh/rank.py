@@ -31,8 +31,12 @@ from idhazh.contracts.taxonomy import SourceTier, VerticalDef
 from idhazh.discover import Candidate
 
 #: Bumped when the scoring shape changes. A published order that moved for a
-#: reason nobody recorded is a published order nobody can defend.
-RANK_VERSION: Final = "idhazh-rank-2"
+#: reason nobody recorded is a published order nobody can defend, and since
+#: 2026-09-01 the run manifest records this string. `-3` adds the shared-subject
+#: term: the plan-time score below is untouched, and the day's item order with
+#: it, but the day now also publishes a second order over the same stories -
+#: `assemble.leading_stories`, which reads `rank_score` and adds to it.
+RANK_VERSION: Final = "idhazh-rank-3"
 
 #: Decimal digits of the address hash that make up an item id. Ten is short
 #: enough to read in a link and wide enough that two addresses in one vertical

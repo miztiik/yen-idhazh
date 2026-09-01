@@ -193,7 +193,7 @@ def test_the_legacy_blocks_still_validate_so_an_unmigrated_config_still_reads() 
     """
     legacy = json.loads((REPO_ROOT / "config" / "idhazh.json").read_text(encoding="utf-8"))
     resolved = AppConfig.model_validate(legacy)
-    assert resolved.ui.items_per_topic >= 1
+    assert resolved.ui.archive_page_size >= 1
     assert resolved.console.chart_width >= 240
 
 

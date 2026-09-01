@@ -341,6 +341,29 @@
       "title": "DigestItem",
       "type": "object"
     },
+    "DigestLead": {
+      "additionalProperties": false,
+      "description": "One of the day's leading stories, and the one sentence saying why it leads.\n\nThe story itself stays in `items` in the published order, so the block adds\na way in and removes nothing. Nothing here carries a position: a number\nbeside a story implies a score we would then owe the reader an explanation\nfor.",
+      "properties": {
+        "item_id": {
+          "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*-[0-9]{2,}$",
+          "title": "Item Id",
+          "type": "string"
+        },
+        "reason": {
+          "description": "One sentence a reader can check against the story, built from our own published title and our own closed registry and never from fetched text (Rule #11). A lead that cannot say something true is not a lead.",
+          "minLength": 1,
+          "title": "Reason",
+          "type": "string"
+        }
+      },
+      "required": [
+        "item_id",
+        "reason"
+      ],
+      "title": "DigestLead",
+      "type": "object"
+    },
     "DigestRunRef": {
       "additionalProperties": false,
       "description": "A run of this date, as the page footer and the new-arrivals block need it.",
@@ -528,6 +551,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added leads: the day's leading stories, each with the reason it leads.",
+      "version": "2026-09-01T12:30",
+      "why": "The page had no first screen. Its opening stories were whichever desk sorted first in run 1, which is an accident rather than an edit, and the reader could not see why any story was there. The block is chosen across the whole day from the ranking signal the item already publishes plus a shared-subject term computed here, and it removes nothing: every lead is still in items, in the published order, and every excluded story still publishes. Additive with an empty default, so every day published before today - 11 days and 4,086 items when this landed, 2026-09-01 - still validates and still renders, with no block (section 11)."
+    },
+    {
       "change": "Added also_covered_by and same_story_as to published items.",
       "version": "2026-09-01T09:00",
       "why": "A day ran the same story from up to four of our sources and drew every copy. Nothing on the item said so, and the field that looks like it would - carried_by - counts syndication of one address and reads 1 when two outlets write their own piece. The pass groups the day on the vectors this payload already carries, keeps the strongest of each group, and names the keeper on the rest. Nothing is unpublished: a collapsed item keeps its place in items, its anchor and its archive entry, and only what the default view draws changes. Measured 2026-09-01 over the eleven committed days and 3,978 items: 22 groups and 24 collapsed items, 0.60 percent, and every group read by hand as one story. Both fields are optional and null on every day published before this, and a null reads as unknown, never as 0, which would claim no other source carried the story (section 11)."
@@ -613,6 +641,14 @@
       "title": "Items Planned",
       "type": "integer"
     },
+    "leads": {
+      "description": "The day's leading stories, strongest first, chosen across the whole day rather than off the head of the published order. Empty is the normal state and it means the block does not render: a day with too few stories worth leading goes straight to the stream rather than padding. Every entry names an item this same day holds.",
+      "items": {
+        "$ref": "#/$defs/DigestLead"
+      },
+      "title": "Leads",
+      "type": "array"
+    },
     "partial": {
       "description": "A run with failures publishes, and says it was partial.",
       "title": "Partial",
@@ -634,7 +670,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-09-01T09:00",
+      "default": "2026-09-01T12:30",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -659,5 +695,5 @@
   ],
   "title": "DigestDay",
   "type": "object",
-  "version": "2026-09-01T09:00"
+  "version": "2026-09-01T12:30"
 }
