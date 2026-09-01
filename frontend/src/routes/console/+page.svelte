@@ -1083,16 +1083,44 @@
 			</div>
 		</div>
 		{#if data.flowSvg}
+			{@const flow = chartFlow(data.charts)}
+			<!-- Two shapes, one flow. The diagram needs 700px of viewport before its
+			     labels stop overlapping (measured 2026-09-01), and a phone column
+			     cannot give it that at any font size - so below the page's own
+			     stacking breakpoint the same numbers are a stepped list, which is a
+			     shape a 360px column can hold. Both are built from one `chartFlow`
+			     call, so they cannot report two different flows. -->
 			<div class="panel mt-4" data-flow="chart">
 				<Chart
 					svg={data.flowSvg}
-					option={chartFlow(data.charts).option}
+					option={flow.option}
 					width={data.console.chart_width}
 					height={FLOW_HEIGHT}
 					label="Where items go between the visuals planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 					noReadout="a flow between stages, so there is no column two branches share"
 				/>
 			</div>
+			<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>
+				{#each flow.steps as step (step.label)}
+					<li class="flow-step" data-flow-step={step.label}>
+						<p class="flow-step-head">
+							<span class="flow-step-swatch" style="background: var({step.token})"></span>
+							<span class="grow">{step.label}</span>
+							<span class="tabular-nums" data-flow-step-value={step.value}
+								>{grouped(step.value)} ({step.share}%)</span
+							>
+						</p>
+						{#if step.lost}
+							<p class="flow-step-lost" data-flow-lost={step.lost.label}>
+								<span class="grow">{step.lost.label}</span>
+								<span class="tabular-nums" data-flow-lost-value={step.lost.value}
+									>{grouped(step.lost.value)} ({step.lost.share}%)</span
+								>
+							</p>
+						{/if}
+					</li>
+				{/each}
+			</ol>
 		{:else if data.flowNote}
 			<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
 		{/if}
@@ -1278,6 +1306,51 @@ grid-area: bar;
 min-inline-size: 0;
 }
 
+/* The chart-arm flow, as a stepped list. It replaces the diagram below the
+   page's own stacking breakpoint and never sits beside it: two shapes of one
+   flow on one screen is two answers to one question. */
+.flow-steps {
+display: none;
+margin-block-start: var(--space-4);
+padding: var(--space-4);
+list-style: none;
+}
+
+.flow-step + .flow-step {
+margin-block-start: var(--space-3);
+padding-block-start: var(--space-3);
+border-block-start: 1px solid var(--color-rule);
+}
+
+.flow-step-head,
+.flow-step-lost {
+display: flex;
+align-items: baseline;
+gap: var(--space-2);
+margin: 0;
+}
+
+.flow-step-head {
+font-size: var(--text-sm);
+color: var(--color-text);
+}
+
+/* Indented under the stage it left, so a branch reads as leaving that stage
+   rather than as a fifth one. */
+.flow-step-lost {
+margin-block-start: var(--space-1);
+padding-inline-start: calc(10px + var(--space-2));
+font-size: var(--text-xs);
+color: var(--color-text-tertiary);
+}
+
+.flow-step-swatch {
+inline-size: 10px;
+block-size: 10px;
+flex-shrink: 0;
+border-radius: 2px;
+}
+
 .feed-strip,
 .feed-axis {
 display: grid;
@@ -1384,6 +1457,19 @@ row-gap: var(--space-2);
 
 .feed-axis {
 margin-inline-start: 0;
+}
+
+/* Measured 2026-09-01 in Chromium on the built console: the flow's labels stop
+   colliding at 700px of viewport and collide at every width below it - three
+   pairs at 390, worst 56.2px. The list carries the same numbers in a shape a
+   360px column can hold. 48rem is the breakpoint the rest of this page already
+   stacks at, and it clears the measurement by 68px. */
+[data-flow='chart'] {
+display: none;
+}
+
+.flow-steps {
+display: block;
 }
 }
 </style>
