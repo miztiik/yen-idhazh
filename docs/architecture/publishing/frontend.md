@@ -8,20 +8,22 @@ Concept-level *why* lives in [../../concepts/digest.md](../../concepts/digest.md
 
 ## Everything is prerendered
 
-Every route is generated at build time with its items inlined in the HTML. SvelteKit with `adapter-static`, `prerender = true`, and `entries()` enumerating the committed date directories.
+Every route is generated at build time. SvelteKit with `adapter-static`, `prerender = true`, and `entries()` enumerating the committed date directories. Most routes inline their items in the HTML; a topic route inlines the head of its own desk and fetches the served day for the rest. **The document is prerendered either way** - what moved on 2026-09-01 is the item list, not the page.
 
 Three consequences, and each one removes a whole class of problem:
 
-- **The reading path makes zero runtime requests.** One document and it is done - well inside the two-request budget, and the page works with JavaScript off.
-- **There is no loading state to design**, and therefore no spinner to be tempted by. The payload loader still exists as exactly one module; it runs in Node instead of in a browser.
+- **The reading path makes at most one request, and usually none.** A day page and the home page are one document and it is done. A topic page carries the head of its own desk and fetches the served day for the rest, which is one request for a file the site already publishes - well inside the two-request budget. Every one of them renders with JavaScript off; a topic page then shows its seed.
+- **There is one loading state and it is a sentence**, not a spinner and not a skeleton. The first frame is already readable, so there is nothing to fill: past `ui.payload_slow_ms` a topic page says that the rest of the desk is still coming, and a fetch that fails says so and offers a retry ([../../../frontend/src/lib/components/PayloadState.svelte](../../../frontend/src/lib/components/PayloadState.svelte)). The build-time payload loader is still exactly one module under `frontend/src/lib/server/`; the browser's is a second one under `$lib/assist/`, and it reads the served projection rather than the committed day.
 - **A payload that fails its contract fails the build.** What would have been a runtime error a reader discovers becomes a build error nobody ships.
 
-**Three files are fetched, and none of them is on the reading path.** The
+**Four files are fetched, and one of them is on the reading path.** The
 console reads older telemetry shards when an operator pans back. The archive
 reads the month index behind its story list, that month's sibling vector file
 when a reader asks to search, and the day payload behind a result it is showing.
-A day page, a topic page and the home page still make no request at all. The
-rule is about what a reader waits for to read the news, and it is unchanged.
+Since 2026-09-01 a topic page reads that same day payload for the stories past
+its seed. A day page and the home page still make no request at all. The rule
+was that a reader waits for nothing to read the news, and it is now that they
+wait for nothing to read the first screen of it.
 
 The loader lives under `frontend/src/lib/server/`, which is the framework's own guarantee that it can never be bundled into anything a browser receives.
 
