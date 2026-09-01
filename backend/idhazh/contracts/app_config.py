@@ -1367,6 +1367,27 @@ class UiConfig(Model):
             "all 431."
         ),
     )
+    payload_slow_ms: int = Field(
+        default=1200,
+        ge=250,
+        le=30_000,
+        description=(
+            "How long a reader may wait for the rest of a day before the page says "
+            "one sentence about it. The opposite of `shell_seed_items`: this is the "
+            "one knob in this block only a browser reads, because the wait happens "
+            "in the browser and a prerendered document is the only way to tell it "
+            "anything. No spinner and no bar - a sentence, which is what a state a "
+            "reader has to act on gets (docs/concepts/design-system.md). Under 250 "
+            "ms the sentence fires on a fetch that was never slow, which teaches a "
+            "reader to ignore it; over 30 s they have already decided the page is "
+            "broken. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node "
+            "24.12.0, Chromium against a local preview server: a 9,731-byte served "
+            "day answered in 10.2 to 22.3 ms over 12 probes, median 13, so the "
+            "default is about 90 times that median and cannot fire on a healthy "
+            "fetch here. That is a server on the same machine and not a reader's "
+            "connection, which is exactly why this is a knob and not a constant."
+        ),
+    )
     repo_url: str = Field(default="https://github.com/miztiik/yen-idhazh", min_length=1)
     site_title: str = Field(default="yen-idhazh", min_length=1)
     tagline: str = Field(
@@ -1605,6 +1626,26 @@ class AppConfig(Contract):
 
     __schema_stem__: ClassVar[str] = "app-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
+        ChangelogEntry(
+            version="2026-09-01T10:00",
+            change=(
+                "ui.payload_slow_ms added, defaulting to 1200. The shape is "
+                "`UiConfig`, which this document and `AppearanceConfig` share, so "
+                "both schemas moved together. Additive with a default, so a config "
+                "written before today still validates."
+            ),
+            why=(
+                "The rest of a day is about to arrive by fetch, so for the first "
+                "time a reading page can be waiting on something. What it shows "
+                "meanwhile is one sentence past this number - never a spinner and "
+                "never a bar, because the first frame is already readable and a "
+                "compressed response cannot report a byte count worth printing. "
+                "This is the one knob in the block only a browser reads: "
+                "`shell_seed_items` is decided at build time and never told to a "
+                "reader, and this one is the exact opposite, because the wait it "
+                "bounds happens in the reader's browser."
+            ),
+        ),
         ChangelogEntry(
             version="2026-09-01",
             change=(

@@ -43,6 +43,7 @@
   "digest": {
     "archive_page_size": 25,
     "items_per_topic": 3,
+    "payload_slow_ms": 1200,
     "read_mark_days": 7,
     "repo_url": "https://github.com/miztiik/yen-idhazh",
     "sections": [

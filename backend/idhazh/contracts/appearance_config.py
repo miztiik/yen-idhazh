@@ -444,6 +444,24 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-01T10:00",
+            change=(
+                "digest.payload_slow_ms added, defaulting to 1200. The shape is "
+                "`UiConfig`, which this document and `AppConfig` share, so both "
+                "schemas moved together. Additive with a default, so an appearance "
+                "file written before today still validates."
+            ),
+            why=(
+                "The rest of a day is about to arrive by fetch, so for the first "
+                "time a reading page can be waiting on something. What it shows "
+                "meanwhile is one sentence past this number - never a spinner and "
+                "never a bar, because the first frame is already readable and a "
+                "compressed response cannot report a byte count worth printing. "
+                "This is the one knob in the block only a browser reads, which is "
+                "the exact opposite of `shell_seed_items` beside it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01",
             change=(
                 "digest.shell_seed_items added, defaulting to 15. The shape is "
