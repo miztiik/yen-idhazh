@@ -11,6 +11,7 @@ import json
 import logging
 import re
 from pathlib import Path
+from typing import NamedTuple
 
 import pytest
 from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, REPO_ROOT, read_text
@@ -443,6 +444,40 @@ def committed_shards() -> list[Path]:
     return sorted((REPO_ROOT / "state" / ledger.ITEM_HEALTH_DIRNAME).glob("*.csv"))
 
 
+class CommittedRow(NamedTuple):
+    """One committed row, and the file and line it sits on so a failure can name it."""
+
+    relpath: str
+    line: int
+    cells: dict[str, str]
+
+
+def committed_rows() -> list[CommittedRow]:
+    """Every committed row, oldest month first. The ledger is a directory of shards."""
+    found: list[CommittedRow] = []
+    for shard in committed_shards():
+        relpath = shard.relative_to(REPO_ROOT).as_posix()
+        rows = records(shard)
+        assert rows, f"{relpath} has a header and no rows"
+        found.extend(
+            CommittedRow(relpath, number, record) for number, record in enumerate(rows, start=2)
+        )
+    return found
+
+
+def written_before(version: str) -> list[CommittedRow]:
+    """The rows a column's migration is about: the ones a run wrote before it existed.
+
+    Read across the whole ledger, never one shard at a time. The migration
+    rewrote the shards that existed on the day it ran, so a shard opened after
+    that day holds no migrated row at all - and the pipeline opens one on the
+    first of every month. A shard with nothing to check is outside the
+    population rather than a counter-example, so the guard that stops these
+    checks passing on an empty list belongs on the ledger, where it still bites.
+    """
+    return [row for row in committed_rows() if row.cells["version"] < version]
+
+
 def test_a_cut_item_carries_both_counts_and_the_cut_is_the_difference() -> None:
     """The comparison is the test for a cut, so both counters ride the same row.
 
@@ -528,21 +563,23 @@ def test_every_migrated_item_health_row_records_its_absence() -> None:
     test for a cut - answer on evidence nobody gathered. The row's own `version`
     cell says which side of the change wrote it.
     """
-    shards = committed_shards()
-    assert shards, "no item-health shard is committed, so this proves nothing"
+    rows = committed_rows()
+    assert rows, "no item-health row is committed, so this proves nothing"
 
-    for shard in shards:
-        relpath = shard.relative_to(REPO_ROOT).as_posix()
-        rows = records(shard)
-        assert rows, f"{relpath} has a header and no rows"
-        for number, record in enumerate(rows, start=2):
-            assert None not in record, f"{relpath}:{number} has more cells than the header names"
-            assert all(value is not None for value in record.values()), (
-                f"{relpath}:{number} has fewer cells than the header names"
-            )
-        predates = [record for record in rows if record["version"] < "2026-08-28"]
-        assert predates, f"{relpath} holds no row older than the column, so nothing was migrated"
-        assert {record["source_words_before_cap"] for record in predates} == {""}
+    for row in rows:
+        assert None not in row.cells, (
+            f"{row.relpath}:{row.line} has more cells than the header names"
+        )
+        assert all(value is not None for value in row.cells.values()), (
+            f"{row.relpath}:{row.line} has fewer cells than the header names"
+        )
+
+    migrated = written_before("2026-08-28")
+    assert migrated, "no committed row is older than the column, so nothing was migrated"
+    for row in migrated:
+        assert row.cells["source_words_before_cap"] == "", (
+            f"{row.relpath}:{row.line} predates the column and carries a length nobody measured"
+        )
 
 
 def test_the_committed_item_health_shard_still_takes_a_row_today(tmp_path: Path) -> None:
@@ -698,16 +735,12 @@ def test_every_migrated_item_health_row_leaves_the_shard_empty() -> None:
     day, and a per-shard rate would then be quoted over items that machine never
     touched.
     """
-    shards = committed_shards()
-    assert shards, "no item-health shard is committed, so this proves nothing"
-
-    for shard in shards:
-        relpath = shard.relative_to(REPO_ROOT).as_posix()
-        rows = records(shard)
-        assert rows, f"{relpath} has a header and no rows"
-        predates = [record for record in rows if record["version"] < "2026-08-30"]
-        assert predates, f"{relpath} holds no row older than the column, so nothing was migrated"
-        assert {record["shard"] for record in predates} == {""}
+    migrated = written_before("2026-08-30")
+    assert migrated, "no committed row is older than the column, so nothing was migrated"
+    for row in migrated:
+        assert row.cells["shard"] == "", (
+            f"{row.relpath}:{row.line} predates the column and names a worker"
+        )
 
 
 # --- The event envelope ------------------------------------------------------
