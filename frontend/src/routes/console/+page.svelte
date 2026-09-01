@@ -16,7 +16,14 @@
 	 */
 	import { base } from '$app/paths';
 	import { onMount } from 'svelte';
-	import { axisLabels, cellFor, denseCellFor, ROW_STRIP_PX, type LabelAlign } from '$lib/charts/run-history';
+	import {
+		axisLabels,
+		cellFor,
+		centreOffset,
+		denseCellFor,
+		ROW_STRIP_PX,
+		type LabelAlign
+	} from '$lib/charts/run-history';
 	import {
 		datesIn,
 		failureSeries,
@@ -25,6 +32,7 @@
 		type TelemetryRow
 	} from '$lib/charts/series';
 	import {
+		daysInWindow,
 		defaultWindow,
 		monthsToFetch,
 		panWindow,
@@ -33,6 +41,7 @@
 		type TimeWindow
 	} from '$lib/charts/viewport';
 	import StageTimings from '$lib/components/StageTimings.svelte';
+	import ChartReadout from '$lib/components/ChartReadout.svelte';
 	import ConsoleBand from '$lib/components/ConsoleBand.svelte';
 	import ConsoleNav from '$lib/components/ConsoleNav.svelte';
 	import KpiCard from '$lib/components/KpiCard.svelte';
@@ -42,16 +51,24 @@
 	import { movementVerdict } from '$lib/charts/theme';
 	import type { TargetSense } from '$lib/charts/targetbar';
 	import Chart from '$lib/charts/Chart.svelte';
-	import { columnStrip } from '$lib/charts/frame';
+	import {
+		columnStrip,
+		notMeasuredRow,
+		readoutMarks,
+		pointerReadout,
+		type DayReadout
+	} from '$lib/charts/frame';
 	import { chartFlow, FLOW_HEIGHT } from '$lib/charts/chart-flow';
 	import {
 		chartArm,
 		failureMix,
 		failureMixColumns,
 		publishedSkyline,
+		publishingHorizon,
 		runHealth,
 		siteCost,
 		sizeGain,
+		type Skyline,
 		type SkylineBar
 	} from '$lib/charts/glance';
 	import type { StackShape } from '$lib/charts/stacked';
@@ -181,6 +198,15 @@
 	 * same way the server did. */
 	const articles = $derived(new Map(Object.entries(data.publishedItems)));
 	const perArticle = $derived(siteCost(data.manifests, articles, viewport));
+	/** How long the cap lasts at this window's two measured rates.
+	 *
+	 * The panel exists to answer this and had never said so. Both rates come off
+	 * the same published days the chart above is drawn from, so the sentence and
+	 * the picture cannot be read off two different windows.
+	 */
+	const horizon = $derived(
+		publishingHorizon(data.band.size.bytes, perArticle, articles)
+	);
 	/** `siteCost`'s own plot insets, so a column the pointer lands on is the
 	 * column the strip prints at every width. */
 	const COST_GRID = { left: 56, right: 14 };
@@ -220,10 +246,15 @@
 			? `No second measurement in these ${windowDays} days.`
 			: `${windowedSize >= 0 ? 'Up' : 'Down'} ${(Math.abs(windowedSize) / 1024 / 1024).toFixed(1)} MB over ${windowDays} days.`
 	);
-	/** One bar a day, over the window the control set. The card's own count is
+	/** One bar a day, over the window the control set. Each card's own count is
 	 * the same window summed, so a reader can check the number against the
-	 * picture - which an all-time total under a thirty-day strip could not do. */
-	const skyline = $derived(publishedSkyline(data.charts, viewport));
+	 * picture - which an all-time total under a thirty-day strip could not do.
+	 *
+	 * Two measures, one geometry. Visuals published is a fraction of articles
+	 * published, and the fraction only reads as one when the denominator is
+	 * drawn beside it on the same window at the same pitch. */
+	const articleSkyline = $derived(publishedSkyline(data.charts, viewport, 'items'));
+	const visualSkyline = $derived(publishedSkyline(data.charts, viewport, 'published'));
 
 	/** The card's trend slot, in CSS pixels. */
 	const SKYLINE = { width: 220, height: 34 };
@@ -287,14 +318,26 @@
 		red: 'var(--fill-low)'
 	};
 
-	const KEY = $derived([
-		{ health: 'green' as Health, text: 'ran clean' },
-		{ health: 'amber' as Health, text: 'worth a look' },
-		{ health: 'red' as Health, text: `failed, or under ${data.floorPct}% published` }
-	]);
-
-	/** The strip reads the page's window, like every other windowed section. */
-	const windowGrid = $derived(data.grid.filter((day) => inWindow(day.date)));
+	/** What a square means, in words. Colour is one signal and never the only
+	 * one: the readout under the strip prints this word beside the swatch for
+	 * the run the pointer is on, and the panel note states the rule once. A
+	 * standing key would print the same pair a second time. */
+	const VERDICT: Record<Health, string> = {
+		green: 'ran clean',
+		amber: 'worth a look',
+		red: 'failed'
+	};
+	/** One column per day of the window, whether or not a run happened on it.
+	 *
+	 * The strip drew only the days a manifest exists for until 2026-09-01, so a
+	 * thirty-day window drew eleven columns and a third of a page-wide frame.
+	 * The other two thirds read as a chart that failed to load. An empty column
+	 * is the fact this strip exists to show: nothing ran that day.
+	 */
+	const windowGrid = $derived.by(() => {
+		const byDate = new Map(data.grid.map((day) => [day.date, day.squares]));
+		return daysInWindow(viewport).map((date) => ({ date, squares: byDate.get(date) ?? [] }));
+	});
 	const windowRuns = $derived(windowGrid.reduce((count, day) => count + day.squares.length, 0));
 
 	/** A label is placed inside its column, not laid out by it, so the widest
@@ -321,7 +364,14 @@
 	 * is what keeps the prerendered strip drawing at the fixed pair rather than
 	 * at zero. */
 	let stripWidth = $state<number | null>(null);
+	/** The strip grows into the room it has, and centres when it cannot fill it.
+	 *
+	 * Thirty columns fill a page-wide frame; seven cannot, whatever the cell
+	 * size, and a seven-day strip drawn hard left leaves its spare room where a
+	 * reader looks for the days that just happened.
+	 */
 	const strip_ = $derived(cellFor(stripWidth, windowGrid.length));
+	const stripPad = $derived(centreOffset(stripWidth, strip_.width));
 
 	/** Which columns of the run strip carry a date. The cell here grows from 16px
 	 * to 34px with the room the strip has, so the number of labels that fit is a
@@ -331,6 +381,37 @@
 			windowGrid.map((day) => day.date),
 			{ density: data.chart.tick_density, pitch: strip_.cell + strip_.gap }
 		)
+	);
+
+	/** One column of the run strip, as the readout under it prints it.
+	 *
+	 * A `title` attribute was the whole hover here until 2026-09-01, and a
+	 * native tooltip is not keyboard-reachable, takes no styling and prints one
+	 * square rather than the day's whole column. The strip prints every run of
+	 * the day at once, each with the swatch it is drawn in - so the readout is
+	 * the key as well, and no standing legend is drawn.
+	 */
+	const runColumns: DayReadout[] = $derived(
+		windowGrid.map((day, index) => ({
+			x: index * (strip_.cell + strip_.gap) + strip_.cell / 2,
+			date: shortDate(day.date),
+			rows:
+				day.squares.length === 0
+					? [notMeasuredRow('No run recorded a manifest')]
+					: day.squares.map((square) => ({
+							label: `Run ${square.n}`,
+							value: VERDICT[square.health],
+							colour: COLOUR[square.health]
+						}))
+		}))
+	);
+	/** The column a pointer or an arrow key has picked, or null for none. */
+	let runAt = $state<number | null>(null);
+	/** The newest day, which is the one an operator came for. It is what the
+	 * strip prints before anything is pointed at, so it is never blank and the
+	 * panel does not change height as it fills. */
+	const runReadout = $derived(
+		runAt === null ? (runColumns.at(-1) ?? null) : (runColumns[runAt] ?? null)
 	);
 
 	$effect(() => {
@@ -348,6 +429,17 @@
 	 * chart is drawn over. */
 	function bytes(value: number): string {
 		return `${Math.round(value).toLocaleString('en-GB')} B`;
+	}
+
+	/** Three significant figures, the rule the band's own headroom prints by.
+	 *
+	 * The rate under this is a median whose spread is near a fifth of itself, so
+	 * the trailing digits of a six-figure answer are noise and printing them
+	 * claims an accuracy nothing measured (Rule #10). */
+	function roughly(value: number): string {
+		if (value <= 0) return '0';
+		const scale = 10 ** Math.max(0, Math.floor(Math.log10(value)) - 2);
+		return (Math.round(value / scale) * scale).toLocaleString('en-GB');
 	}
 
 	/** The same window the server drew with. Both sides derive it from the rows
@@ -420,19 +512,26 @@
 	<!-- Bars, not a line: a count per day is a discrete quantity, and a line
 	     between two days claims a value for the hours in between that nobody
 	     counted. Drawn as markup rather than by the engine, so it is complete
-	     before any script runs and follows the window with one drawing. -->
-	{#snippet publishedBars()}
+	     before any script runs and follows the window with one drawing.
+
+	     One snippet draws both strips. Two copies would agree on the day they
+	     were written and drift on the first day either was tuned, and the pair
+	     is only readable while both are one bar a day at the same pitch. -->
+	{#snippet skylineBars(strip: Skyline, measure: string, noun: string)}
 		<svg
 			class="block"
 			width={SKYLINE.width}
 			height={SKYLINE.height}
 			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
 			role="img"
-			aria-label="Charts published each day over {windowDays} days, {skyline.total} in all, {skyline.busiest} on the busiest day"
-			data-published-days={skyline.bars.length}
-			data-published-total={skyline.total}
+			aria-label="{noun} each day over {windowDays} days, {grouped(strip.total)} in all, {grouped(
+				strip.busiest
+			)} on the busiest day"
+			data-published-measure={measure}
+			data-published-days={strip.bars.length}
+			data-published-total={strip.total}
 		>
-			{#each skyline.bars as bar (bar.date)}
+			{#each strip.bars as bar (bar.date)}
 				<rect
 					x={(bar.x * SKYLINE.width).toFixed(2)}
 					width={(bar.width * SKYLINE.width).toFixed(2)}
@@ -445,6 +544,8 @@
 			{/each}
 		</svg>
 	{/snippet}
+	{#snippet articleBars()}{@render skylineBars(articleSkyline, 'articles', 'Articles published')}{/snippet}
+	{#snippet visualBars()}{@render skylineBars(visualSkyline, 'visuals', 'Visuals published')}{/snippet}
 
 	<!-- Which way a chart-arm figure has moved across the window it draws.
 
@@ -468,12 +569,21 @@
 		{/if}
 	{/snippet}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
+		<!-- Articles first. Visuals published is a fraction of it, and a fraction
+		     reads as one only when the denominator is beside it. -->
 		<KpiCard
-			label="Charts published"
-			value={String(skyline.total)}
+			label="Articles published"
+			value={grouped(articleSkyline.total)}
 			note="in these {windowDays} days"
 			tone="info"
-			trend={skyline.empty ? null : publishedBars}
+			trend={articleSkyline.empty ? null : articleBars}
+		/>
+		<KpiCard
+			label="Visuals published"
+			value={grouped(visualSkyline.total)}
+			note="in these {windowDays} days"
+			tone="info"
+			trend={visualSkyline.empty ? null : visualBars}
 		/>
 		<!-- No site-size card here. The band above states the level, the share of
 		     the 1 GB cap and the runway, and it states them on all three routes;
@@ -506,7 +616,7 @@
 	>
 		<Panel
 			title="What one more article costs"
-			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days. {sizeDelta}"
+			note="How long we can keep publishing. The 1 GB Pages cap is fixed, so what one more article costs is what sets the date we reach it. Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days. {sizeDelta}"
 		>
 			{#if perArticle.empty}
 				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
@@ -526,12 +636,27 @@
 						that.
 					{/if}
 				</p>
+				{#if horizon}
+					<!-- The horizon, and the one thing it cannot say about itself. The
+					     cap is measured on the built site and this rate is measured on
+					     the payload tree behind it, so the room is the most we have and
+					     never the least. Both rates come off the same published days the
+					     chart below is drawn from. -->
+					<p class="mt-1 text-[0.8125rem] text-text-secondary" data-cost-horizon>
+						At {bytes(perArticle.median ?? 0)} an article, the 1 GB cap has room for about {roughly(
+							horizon.articles
+						)} more. At a median of {grouped(Math.round(horizon.articlesPerDay))} articles a published
+						day, that is about {horizon.years.toFixed(1)} years. The cap is measured on the built site,
+						which is larger than the payload tree this rate came from, so that is the most room we have
+						and not the least.
+					</p>
+				{/if}
 				{#if data.glance.perArticleSvg}
 					{#key windowDays}
 						<Chart
 							svg={data.glance.perArticleSvg}
 							option={perArticle.option}
-							width={760}
+							width={data.console.chart_width}
 							height={220}
 							label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
 							columns={costColumns}
@@ -593,7 +718,7 @@
 	<div data-windowed="run-health" data-window-days={windowDays}>
 		<Panel
 			title="Run health"
-			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. A skipped item does not count against a run - an article we already published is skipped by design."
+			note="The last {windowDays} days, one column per day, oldest on the left, one square per recorded run with run 1 at the bottom. A column with no square is a day nothing ran. A run is green when it published what it planned, amber when it found nothing new, and red when it failed or published under {data.floorPct}%. A skipped item does not count against a run - an article we already published is skipped by design."
 		>
 			{#if data.grid.length === 0}
 				<p class="text-[0.9375rem] text-text-secondary" data-grid="empty">
@@ -616,23 +741,40 @@
 					bind:this={strip}
 					data-run-history
 				>
-					<!-- Left-anchored, and that is not the same question as where an
-					     overflowing strip opens. `today_anchor` governs the scroll
-					     position; a strip with room to spare simply starts where every
-					     other axis on the page starts, so a day keeps the place the
-					     operator last saw it in as the window fills. -->
+					<!-- Left-anchored while it overflows, centred while it does not, and
+					     that is not the same question as where an overflowing strip
+					     opens. `today_anchor` governs the scroll position; a strip with
+					     room to spare puts its spare room on both sides, because the
+					     right of a time axis ending today is where a reader looks for
+					     the days that just happened. -->
 					<div
-						class="grid w-max min-w-full items-end justify-start"
-						style="grid-template-columns: repeat({windowGrid.length}, {strip_.cell}px); gap: {strip_.gap}px"
+						class="grid w-max items-end justify-start"
+						style="grid-template-columns: repeat({windowGrid.length}, {strip_.cell}px); gap: {strip_.gap}px; margin-inline-start: {stripPad}px"
 						data-grid="days"
+						data-strip-pad={stripPad}
+						tabindex="0"
+						role="group"
+						aria-label="Run health, one column a day. Left and Right read a day, Escape returns to the newest."
+						use:pointerReadout={{
+							marks: readoutMarks(runColumns),
+							width: strip_.width,
+							onSelect: (index) => (runAt = index)
+						}}
 					>
 						{#each windowGrid as day, index (day.date)}
 							<!-- Column-reverse, so run 1 sits on the baseline and later runs stack
-							     upward, while the DOM keeps reading run 1 first. -->
+							     upward, while the DOM keeps reading run 1 first.
+
+							     Stretched to the row rather than sized by its squares. A day with
+							     no run has no squares, so a column sized by its content is a
+							     zero-height box: nothing to point at, and no room for the tint
+							     that says which day the readout is on - which is the column a
+							     reader most needs to see selected. -->
 							<div
-								class="flex flex-col-reverse justify-start"
+								class="flex flex-col-reverse justify-start self-stretch"
 								style="grid-row: 1; grid-column: {index + 1}; gap: {strip_.gap}px"
 								data-day={day.date}
+								data-day-selected={runAt === index ? 'true' : null}
 							>
 								{#each day.squares as square (square.runId)}
 									<span
@@ -664,15 +806,14 @@
 					</div>
 				</div>
 
-				<ul class="mt-4 flex flex-wrap gap-x-5 gap-y-2 text-[0.75rem] text-text-tertiary">
-					{#each KEY as entry (entry.health)}
-						<li class="flex items-center gap-2">
-							<span class="size-3 shrink-0 rounded-sm" style="background: {COLOUR[entry.health]}"
-							></span>
-							{entry.text}
-						</li>
-					{/each}
-				</ul>
+				<ChartReadout
+					readout={runReadout}
+					name="run-health"
+					maxShare={data.chart.readout_max_share}
+					resting={runAt === null}
+					restingNote=", the newest day"
+					hint="Point at a day to read every run on it. Left and Right step through the days, Escape returns to the newest."
+				/>
 			{/if}
 		</Panel>
 	</div>
@@ -984,16 +1125,44 @@
 			</div>
 		</div>
 		{#if data.flowSvg}
+			{@const flow = chartFlow(data.charts)}
+			<!-- Two shapes, one flow. The diagram needs 700px of viewport before its
+			     labels stop overlapping (measured 2026-09-01), and a phone column
+			     cannot give it that at any font size - so below the page's own
+			     stacking breakpoint the same numbers are a stepped list, which is a
+			     shape a 360px column can hold. Both are built from one `chartFlow`
+			     call, so they cannot report two different flows. -->
 			<div class="panel mt-4" data-flow="chart">
 				<Chart
 					svg={data.flowSvg}
-					option={chartFlow(data.charts).option}
+					option={flow.option}
 					width={data.console.chart_width}
 					height={FLOW_HEIGHT}
 					label="Where items go between the visuals planner reaching one and a visual being published, across the window. Every drop leaves the flow as its own branch, and a branch is as wide as the number of items in it."
 					noReadout="a flow between stages, so there is no column two branches share"
 				/>
 			</div>
+			<ol class="panel flow-steps mt-4" data-flow-steps={flow.steps.length}>
+				{#each flow.steps as step (step.label)}
+					<li class="flow-step" data-flow-step={step.label}>
+						<p class="flow-step-head">
+							<span class="flow-step-swatch" style="background: var({step.token})"></span>
+							<span class="grow">{step.label}</span>
+							<span class="tabular-nums" data-flow-step-value={step.value}
+								>{grouped(step.value)} ({step.share}%)</span
+							>
+						</p>
+						{#if step.lost}
+							<p class="flow-step-lost" data-flow-lost={step.lost.label}>
+								<span class="grow">{step.lost.label}</span>
+								<span class="tabular-nums" data-flow-lost-value={step.lost.value}
+									>{grouped(step.lost.value)} ({step.lost.share}%)</span
+								>
+							</p>
+						{/if}
+					</li>
+				{/each}
+			</ol>
 		{:else if data.flowNote}
 			<p class="panel mt-4 text-[0.8125rem] text-text-tertiary" data-flow="none">{data.flowNote}</p>
 		{/if}
@@ -1179,9 +1348,63 @@ grid-area: bar;
 min-inline-size: 0;
 }
 
+/* The chart-arm flow, as a stepped list. It replaces the diagram below the
+   page's own stacking breakpoint and never sits beside it: two shapes of one
+   flow on one screen is two answers to one question. */
+.flow-steps {
+display: none;
+margin-block-start: var(--space-4);
+padding: var(--space-4);
+list-style: none;
+}
+
+.flow-step + .flow-step {
+margin-block-start: var(--space-3);
+padding-block-start: var(--space-3);
+border-block-start: 1px solid var(--color-rule);
+}
+
+.flow-step-head,
+.flow-step-lost {
+display: flex;
+align-items: baseline;
+gap: var(--space-2);
+margin: 0;
+}
+
+.flow-step-head {
+font-size: var(--text-sm);
+color: var(--color-text);
+}
+
+/* Indented under the stage it left, so a branch reads as leaving that stage
+   rather than as a fifth one. */
+.flow-step-lost {
+margin-block-start: var(--space-1);
+padding-inline-start: calc(10px + var(--space-2));
+font-size: var(--text-xs);
+color: var(--color-text-tertiary);
+}
+
+.flow-step-swatch {
+inline-size: 10px;
+block-size: 10px;
+flex-shrink: 0;
+border-radius: 2px;
+}
+
 .feed-strip,
 .feed-axis {
 display: grid;
+}
+
+/* The column the readout is printing. A tint behind the day rather than a rule
+   through it: an empty column has no square for a rule to land on, and an empty
+   column is exactly the one a reader most needs to see selected. */
+[data-day-selected] {
+background: var(--color-surface-sunken);
+box-shadow: 0 0 0 2px var(--color-surface-sunken);
+border-radius: 2px;
 }
 
 .feed-strip {
@@ -1276,6 +1499,19 @@ row-gap: var(--space-2);
 
 .feed-axis {
 margin-inline-start: 0;
+}
+
+/* Measured 2026-09-01 in Chromium on the built console: the flow's labels stop
+   colliding at 700px of viewport and collide at every width below it - three
+   pairs at 390, worst 56.2px. The list carries the same numbers in a shape a
+   360px column can hold. 48rem is the breakpoint the rest of this page already
+   stacks at, and it clears the measurement by 68px. */
+[data-flow='chart'] {
+display: none;
+}
+
+.flow-steps {
+display: block;
 }
 }
 </style>

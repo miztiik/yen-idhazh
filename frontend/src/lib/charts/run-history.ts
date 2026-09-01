@@ -47,8 +47,11 @@ export interface StripMetrics {
 	cell: number;
 	gap: number;
 	/** What the strip will actually occupy, so a caller can tell an underfull
-	 * strip from a full one. Not an offset: the strip anchors left and the spare
-	 * room is on the right, so nothing has to be computed to place it. */
+	 * strip from a full one and can centre it in the room left over.
+	 *
+	 * Every column but the last carries a gap after it. Counting a trailing one
+	 * overstates the strip by a gap, and a caller dividing the spare room either
+	 * side of that number puts one gap more on the right than on the left. */
 	width: number;
 }
 
@@ -59,7 +62,7 @@ export interface StripMetrics {
  */
 export function cellFor(available: number | null, days: number): StripMetrics {
 	if (available === null || available <= 0 || days <= 0) {
-		return { cell: CELL_PX, gap: GAP_PX, width: days * (CELL_PX + GAP_PX) };
+		return { cell: CELL_PX, gap: GAP_PX, width: drawnWidth(days, CELL_PX, GAP_PX) };
 	}
 	// Solve for the cell that fills the room, then clamp. Growing past CELL_MAX
 	// would make a fortnight of runs look like a row of tiles rather than a
@@ -67,11 +70,33 @@ export function cellFor(available: number | null, days: number): StripMetrics {
 	const raw = available / (days * (1 + GAP_SHARE));
 	const cell = Math.max(CELL_MIN, Math.min(CELL_MAX, Math.floor(raw)));
 	const gap = Math.max(2, Math.round(cell * GAP_SHARE));
-	return { cell, gap, width: days * (cell + gap) };
+	return { cell, gap, width: drawnWidth(days, cell, gap) };
+}
+
+/** The pixels between the left edge of the first column and the right edge of
+ * the last. The gap after the last column is not drawn, so it is not counted. */
+function drawnWidth(days: number, cell: number, gap: number): number {
+	return days * cell + Math.max(0, days - 1) * gap;
 }
 
 /** The room a strip gets when it sits inside a row rather than across a page. */
 export const ROW_STRIP_PX = 240;
+
+/** How far in from the left a strip that cannot fill its frame should start.
+ *
+ * A strip drawn to the left of a page-wide frame leaves its spare room on the
+ * right, and the right of a time axis whose last column is today is where a
+ * reader looks for the days that have just happened - so empty room there reads
+ * as a run that stopped rather than as a window wider than the strip needs.
+ * Centred, the spare room is on both sides and belongs to neither end.
+ *
+ * Zero once the strip overflows, because a scrolling strip has no spare room to
+ * divide and an offset there would push its first column out of reach.
+ */
+export function centreOffset(available: number | null, width: number): number {
+	if (available === null || available <= 0 || width <= 0) return 0;
+	return Math.max(0, Math.round((available - width) / 2));
+}
 
 /** Small enough to fit ninety days in a list row, big enough to still be a
  * square rather than a tick. */

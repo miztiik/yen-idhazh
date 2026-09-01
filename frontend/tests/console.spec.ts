@@ -7,7 +7,7 @@ import {
 	placeRow,
 	type TelemetryRow
 } from '../src/lib/charts/series';
-import { axisLabels, spanLabel } from '../src/lib/charts/run-history';
+import { axisLabels, centreOffset, spanLabel } from '../src/lib/charts/run-history';
 import { dayKey, monthsInWindow, panWindow, toDay } from '../src/lib/charts/viewport';
 import { CUT_FLAG_MEANS_A_CUT_FROM, modelWork } from '../src/lib/server/model-work';
 import { readCsv, telemetryMonths, telemetryRows } from '../src/lib/server/payload';
@@ -69,6 +69,30 @@ const DEFAULT_WINDOW_DAYS = (
 		readFileSync(resolve(process.cwd(), '..', 'config', 'idhazh.json'), 'utf8')
 	) as { console?: { default_window_days?: number } }
 ).console?.default_window_days ?? 30;
+
+/** Every span the control offers, from the same knob the control reads. */
+const WINDOW_PRESETS = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+	) as { console?: { window_presets?: number[] } }
+).console?.window_presets ?? [7, 14, 30, 90];
+
+/** Every window control is disabled in the prerendered document and enabled on
+ * mount, so a click before this just times out. */
+async function hydrated(page: Page) {
+	await expect(
+		page.locator(`[data-window-preset="${DEFAULT_WINDOW_DAYS}"] input`)
+	).toBeEnabled();
+}
+
+/** Click the label, never the input: a span inside it takes the pointer. */
+async function setWindow(page: Page, days: number) {
+	await page.locator(`label[data-window-preset="${days}"]`).click();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		String(days)
+	);
+}
 
 /** A telemetry corpus deliberately longer than the window, for the seed tests.
  *
@@ -225,6 +249,23 @@ test('the year is stated on the first label that changes it, and not again', () 
 	]);
 });
 
+test('a strip shares its spare room, and a strip with none keeps its first column', () => {
+	// Half the difference, rounded, so the two margins differ by at most a pixel.
+	expect(centreOffset(1326, 300)).toBe(513);
+	expect(centreOffset(1326, 1290)).toBe(18);
+
+	// An overflowing strip has no spare room to divide, and an offset there
+	// would push its first column out of reach of the scroll.
+	expect(centreOffset(360, 1290)).toBe(0);
+	expect(centreOffset(300, 300)).toBe(0);
+
+	// Nothing has measured the frame yet - the server, or the first frame - so
+	// there is no room to share and the strip starts where it always did.
+	expect(centreOffset(null, 300)).toBe(0);
+	expect(centreOffset(0, 300)).toBe(0);
+	expect(centreOffset(1326, 0)).toBe(0);
+});
+
 test('the strip reads oldest to newest, left to right', async ({ page }) => {
 	await page.goto('/console/');
 
@@ -232,7 +273,12 @@ test('the strip reads oldest to newest, left to right', async ({ page }) => {
 	const dates = await columns.evaluateAll((nodes) =>
 		nodes.map((node) => node.getAttribute('data-day') ?? '')
 	);
-	expect(dates).toEqual(manifestDays().map((day) => day.date));
+	// The window's own calendar, one column a day, consecutive and oldest first.
+	// The days that carried a run are a subset of it in the same order.
+	expect(dates.length).toBe(DEFAULT_WINDOW_DAYS);
+	expect(dates).toEqual(days(dates[0], dates.length));
+	const ran = manifestDays().map((day) => day.date);
+	expect(dates.filter((date) => ran.includes(date))).toEqual(ran);
 
 	// Chronology a reader can see, not only one the DOM asserts.
 	const boxes = await columns.evaluateAll(TO_BOX);
@@ -245,7 +291,9 @@ test('every recorded run gets a square, and nothing else does', async ({ page })
 	await page.goto('/console/');
 
 	const expected = manifestDays();
-	await expect(page.locator('[data-day]')).toHaveCount(expected.length);
+	// One column a day of the WINDOW, not one a manifest. An empty column is the
+	// fact the strip exists to show, and the days with runs are a subset of it.
+	await expect(page.locator('[data-day]')).toHaveCount(DEFAULT_WINDOW_DAYS);
 	await expect(page.locator('[data-health]')).toHaveCount(
 		expected.reduce((total, day) => total + day.runs, 0)
 	);
@@ -255,6 +303,22 @@ test('every recorded run gets a square, and nothing else does', async ({ page })
 	for (const day of expected) {
 		await expect(page.locator(`[data-day="${day.date}"] [data-health]`)).toHaveCount(day.runs);
 	}
+
+	// And every other column of the window is drawn and empty.
+	const withRuns = new Set(expected.map((day) => day.date));
+	const drawn = await page
+		.locator('[data-day]')
+		.evaluateAll((nodes) =>
+			nodes.map((node) => [
+				node.getAttribute('data-day') ?? '',
+				node.querySelectorAll('[data-health]').length
+			])
+		);
+	const empties = drawn.filter(([date]) => !withRuns.has(date as string));
+	expect(empties.length, 'the window carries no empty day, so the rule is untested').toBeGreaterThan(
+		0
+	);
+	expect(empties.every(([, runs]) => runs === 0)).toBe(true);
 });
 
 test('runs rise from a shared baseline, on a square day track', async ({ page }) => {
@@ -285,12 +349,18 @@ test('runs rise from a shared baseline, on a square day track', async ({ page })
 		expect(Math.abs(measured - stack[0].width / 4)).toBeLessThanOrEqual(1);
 	}
 
-	// Every day's run 1 sits on the same line, or the strip is a scatter.
+	// Every day's run 1 sits on the same line, or the strip is a scatter. Only
+	// the days that carry a run have one; an empty column has no baseline to be
+	// on and is not evidence of a scatter.
 	const baselines = await page
 		.locator('[data-day]')
 		.evaluateAll((nodes) =>
-			nodes.map((node) => node.querySelector('[data-health]')!.getBoundingClientRect().bottom)
+			nodes
+				.map((node) => node.querySelector('[data-health]'))
+				.filter((square): square is Element => square !== null)
+				.map((square) => square.getBoundingClientRect().bottom)
 		);
+	expect(baselines.length).toBeGreaterThan(1);
 	for (const bottom of baselines) expect(bottom).toBeCloseTo(baselines[0], 1);
 
 	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
@@ -314,32 +384,103 @@ test('no two date labels print on top of each other', async ({ page }) => {
 	}
 });
 
-test('a short history starts at the left edge and grows right', async ({ page }) => {
+test('a strip that cannot fill its frame is centred in it', async ({ page }) => {
 	// Where an OVERFLOWING strip opens and where an UNDERFULL one sits are two
-	// questions, and `today_anchor` only answers the first. Anchored right, the
-	// whole strip slid left by a column every time a day was published, so a run
-	// an operator had looked at yesterday was somewhere else today. Anchored
-	// left, a day keeps its place and the empty room is on the side where the
-	// days that have not happened yet belong.
+	// questions, and `today_anchor` only answers the first. Anchored left, the
+	// spare room piled up on the right - and the right of a time axis whose last
+	// column is today is where a reader looks for the days that just happened,
+	// so it read as a run that had stopped. Centred, the spare room is on both
+	// sides and belongs to neither end.
 	//
-	// Wide on purpose. `cellFor` caps a day column, so past a frame width the
-	// strip CANNOT fill its room whatever the ledger holds - which is what makes
-	// the premise below a property of the layout rather than of today's data.
+	// The narrowest preset on purpose. At the default window thirty columns fill
+	// a page-wide frame, so left and right and centred are the same thing there
+	// and the premise below could not hold.
 	await page.setViewportSize(UNDERFULL_VIEWPORT);
 	await page.goto('/console/');
+	await hydrated(page);
+	await setWindow(page, Math.min(...WINDOW_PRESETS));
 
 	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
 	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
 
 	// The premise: fewer days than the strip has room for. Without it the test
-	// passes on a full strip, where left and right alignment are the same thing.
+	// passes on a full strip, where every alignment is the same thing.
 	const drawn = columns[columns.length - 1].right - columns[0].x;
 	expect(drawn, 'the strip is full, so alignment cannot be told apart').toBeLessThan(
 		strip.width - 2
 	);
 
-	expect(Math.abs(columns[0].x - strip.x)).toBeLessThan(2);
-	expect(strip.right - columns[columns.length - 1].right).toBeGreaterThan(1);
+	const before = columns[0].x - strip.x;
+	const after = strip.right - columns[columns.length - 1].right;
+	expect(before, 'the strip is not centred: the room before it').toBeGreaterThan(1);
+	expect(Math.abs(before - after), 'the spare room is not shared evenly').toBeLessThanOrEqual(2);
+});
+
+test('THE ORACLE: the run strip fills its frame, keeps a cadence and reads a day', async ({
+	page
+}) => {
+	// Three defects, one panel. The strip drew only the days that carried a run,
+	// so a thirty-day window drew a third of a page-wide frame and the rest read
+	// as a chart that failed to load; the axis carried two labels because eleven
+	// narrow columns have room for two; and the only way to read a square was a
+	// native tooltip, which no thumb and no keyboard can reach.
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.goto('/console/');
+	await hydrated(page);
+
+	const [strip] = await page.locator('[data-run-history]').evaluateAll(TO_BOX);
+	const columns = await page.locator('[data-day]').evaluateAll(TO_BOX);
+	expect(columns.length).toBe(DEFAULT_WINDOW_DAYS);
+
+	const drawn = columns[columns.length - 1].right - columns[0].x;
+	expect(
+		drawn / strip.width,
+		`the strip drew ${Math.round(drawn)} of ${Math.round(strip.width)} px`
+	).toBeGreaterThanOrEqual(0.7);
+
+	// A cadence needs at least three marks. Two is a pair of endpoints, which
+	// says the span and nothing about where in it a run sits.
+	const labels = await page
+		.locator('[data-axis-label]')
+		.evaluateAll((nodes) => nodes.map((node) => node.textContent?.trim() ?? ''));
+	expect(labels.length, `the axis drew ${labels.join(', ')}`).toBeGreaterThanOrEqual(3);
+
+	// The oldest and the newest column print two different days, each with a
+	// line per run recorded on it. One column that printed both would be a strip
+	// that never moved.
+	const readout = page.locator('[data-readout="run-health"]');
+	const head = readout.locator('[data-readout-day]');
+	await expect(head).toHaveCount(1);
+
+	const read = async (at: number) => {
+		const column = page.locator('[data-day]').nth(at);
+		await column.hover();
+		await expect(page.locator(`[data-day][data-day-selected]`)).toHaveCount(1);
+		return {
+			day: (await head.innerText()).trim(),
+			rows: await readout
+				.locator('[data-readout-row]')
+				.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-readout-row') ?? ''))
+		};
+	};
+
+	const oldest = await read(0);
+	const newest = await read(columns.length - 1);
+	expect(oldest.day, 'the oldest and the newest column print the same day').not.toBe(newest.day);
+
+	// The newest column of the canary is a day that ran, so it prints a line per
+	// run and every line is a run rather than a stage.
+	const runs = await page.locator('[data-day]').last().locator('[data-health]').count();
+	expect(runs, 'the newest column carries no run, so the per-run rule is untested').toBeGreaterThan(
+		0
+	);
+	expect(newest.rows).toEqual(
+		Array.from({ length: runs }, (_, index) => `Run ${index + 1}`)
+	);
+
+	// And the standing key is gone. The readout prints the swatch and the word
+	// for the run it is on, so a key beside it would draw the same pair twice.
+	await expect(page.locator('[data-windowed="run-health"] ul')).toHaveCount(0);
 });
 
 test('on a phone the strip scrolls, and opens on the newest run', async ({ page }) => {
