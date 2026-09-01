@@ -1,8 +1,10 @@
 import { expect, test, type Page } from '@playwright/test';
+import { readFileSync } from 'node:fs';
+import { resolve } from 'node:path';
 
 /**
- * Row #6's oracle: the run strip is painted at fill weight, and it starts where
- * its grid starts.
+ * Row #6's oracle: the run strip is painted at fill weight, and it sits where
+ * its own geometry puts it.
  *
  * Two defects sat side by side on this section and neither is visible in a
  * diff. The squares were painted with `--band-high`, `--band-medium` and
@@ -11,6 +13,13 @@ import { expect, test, type Page } from '@playwright/test';
  * read as olive and brick rather than as a state. And the strip was jammed to
  * the right edge, so a run an operator looked at yesterday moved a column left
  * every time a day published.
+ *
+ * The alignment half was answered twice. Left, in row #6, while the strip drew
+ * only the days that carried a run - the room on the right really was the days
+ * that had not happened yet. Centred, in the chart-craft plan's row #11, once
+ * the strip drew the window's own calendar: its last column is today, so there
+ * is nothing to the right of it and spare room there reads as a run that
+ * stopped.
  *
  * The contrast numbers below are computed here, from the WCAG 2.2 relative
  * luminance formula written out in this file. That is deliberate: `CLAUDE.md`
@@ -46,6 +55,23 @@ const DESKTOP = { width: 1440, height: 900 };
  * cannot fill its room whatever the ledger holds - which is what makes the
  * alignment premise below a property of the layout, not of today's data. */
 const UNDERFULL = { width: 1680, height: 900 };
+
+/** Every span the control offers, from the same knob the control reads. */
+const WINDOW_PRESETS = (
+	JSON.parse(
+		readFileSync(resolve(process.cwd(), '..', 'config', 'appearance.json'), 'utf8')
+	) as { console?: { window_presets?: number[] } }
+).console?.window_presets ?? [7, 14, 30, 90];
+
+/** Click the label, never the input: a span inside it takes the pointer. */
+async function setWindow(page: Page, days: number) {
+	await expect(page.locator(`label[data-window-preset="${days}"] input`)).toBeEnabled();
+	await page.locator(`label[data-window-preset="${days}"]`).click();
+	await expect(page.locator('[data-window-control]')).toHaveAttribute(
+		'data-window-days',
+		String(days)
+	);
+}
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
 
@@ -190,10 +216,14 @@ test('the band ramp is text weight, which is the whole reason the fill ramp exis
 	}
 });
 
-test('THE ORACLE: a strip with room to spare starts at the left edge of its grid', async ({
-	page
-}) => {
+test('THE ORACLE: a strip with room to spare is centred in its grid', async ({ page }) => {
+	// It started at the left edge until 2026-09-01, and that was right while the
+	// strip drew only the days that carried a run: the room on the right really
+	// was the days that had not happened yet. The strip draws the window's own
+	// calendar now, so its last column IS today and there is nothing to the
+	// right of it - spare room there reads as a run that stopped.
 	await openConsole(page, 'light', UNDERFULL);
+	await setWindow(page, Math.min(...WINDOW_PRESETS));
 
 	const geometry = await page.evaluate(() => {
 		const box = (node: Element | null) => {
@@ -214,25 +244,25 @@ test('THE ORACLE: a strip with room to spare starts at the left edge of its grid
 	expect(geometry.count, 'the strip drew no day, so alignment asserts nothing').toBeGreaterThan(1);
 	const drawn = (geometry.last as { right: number }).right - (geometry.first as { x: number }).x;
 	const room = (geometry.strip as { width: number }).width;
-	// The premise. On a full strip left and right alignment are the same picture,
-	// so without this the test passes on a strip that proves nothing.
+	// The premise. On a full strip every alignment is the same picture, so
+	// without this the test passes on a strip that proves nothing. The narrowest
+	// preset, because the default window fills a page-wide frame.
 	expect(drawn, `the strip is full at ${UNDERFULL.width}px, so alignment cannot be told apart`).toBeLessThan(room - 2);
 
+	// The grid still starts where the columns do; what moved is the grid.
 	expect(
 		Math.abs((geometry.first as { x: number }).x - (geometry.grid as { x: number }).x),
 		'the oldest day does not start at the left edge of the grid'
 	).toBeLessThan(2);
+
+	const before = (geometry.first as { x: number }).x - (geometry.strip as { x: number }).x;
+	const after = (geometry.strip as { right: number }).right - (geometry.last as { right: number }).right;
+	expect(before, 'there is no room on the oldest side, so nothing was centred').toBeGreaterThan(1);
+	expect(after, 'there is no room on the newest side, so nothing was centred').toBeGreaterThan(1);
 	expect(
-		Math.abs((geometry.first as { x: number }).x - (geometry.strip as { x: number }).x),
-		'the grid does not start at the left edge of the strip'
-	).toBeLessThan(2);
-	// And the spare room is on the right, where the days that have not happened
-	// yet belong. `today_anchor` still governs where an overflowing strip opens;
-	// that is a scroll position, and this is an alignment.
-	expect(
-		(geometry.strip as { right: number }).right - (geometry.last as { right: number }).right,
-		'there is no room left on the newest side, so nothing was actually anchored'
-	).toBeGreaterThan(1);
+		Math.abs(before - after),
+		`the spare room is ${Math.round(before)}px before and ${Math.round(after)}px after`
+	).toBeLessThanOrEqual(2);
 });
 
 test('the dates label the axis from below the grid', async ({ page }) => {

@@ -69,12 +69,33 @@ const LABEL_MARGIN = 170;
  * two-line label is 31px, and the gap has to carry it. */
 const NODE_GAP = 34;
 
+/** One stage of the flow, and the branch that left it, as words and numbers.
+ *
+ * The same four stages the diagram draws, in the same order, from the same
+ * totals - so the stepped list a narrow column gets and the diagram a wide one
+ * gets cannot report two different flows. `chartFlow` returns both, because two
+ * functions over one ledger is how two pictures of it drift.
+ */
+export interface FlowStep {
+	label: string;
+	value: number;
+	/** Whole percent of everything that reached the arm. */
+	share: number;
+	token: ChartToken;
+	/** What left the flow at this stage, or null at the last one. Null is also
+	 * what a stage that lost nothing gets: a branch of zero is not a branch. */
+	lost: { label: string; value: number; share: number } | null;
+}
+
 export interface ChartFlow {
 	option: EChartsOption;
 	empty: boolean;
 	/** Why there is no diagram, in words the page prints. Null when there is
 	 * one. An empty panel says nothing; this says which nothing it is. */
 	reason: string | null;
+	/** The same flow as a stepped list, for a column too narrow to hold the
+	 * diagram. Empty wherever `empty` is true. */
+	steps: FlowStep[];
 }
 
 function grouped(value: number): string {
@@ -93,6 +114,7 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 		return {
 			option: {},
 			empty: true,
+			steps: [],
 			reason:
 				'Nothing committed says what the visuals planner did over this window, so there is ' +
 				'no flow to draw.'
@@ -109,6 +131,7 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 		return {
 			option: {},
 			empty: true,
+			steps: [],
 			reason:
 				`This window counts more items at ${total[gained].label.toLowerCase()} than at ` +
 				`${total[gained - 1].label.toLowerCase()}, so the counts are not one flow. A visual ` +
@@ -118,6 +141,28 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 	}
 
 	const share = (value: number) => Math.round((value / reached) * 100);
+	// The stepped list a narrow column gets, built from the same totals the
+	// diagram is. Measured 2026-09-01 in Chromium on the built console, the
+	// diagram needs 700px of viewport before its labels stop overlapping: at
+	// 390 three pairs collided, worst 56.2px, and at 360 the widest was 59.1px.
+	// The label column is a fixed 170px, so at 360 it is 52 percent of a 328px
+	// SVG and the four stages share what is left.
+	const steps: FlowStep[] = total.map((stage, i) => {
+		const dropped = i === total.length - 1 ? 0 : stage.value - total[i + 1].value;
+		return {
+			label: stage.label,
+			value: stage.value,
+			share: share(stage.value),
+			token: stage.token,
+			// A branch of zero is not a branch, here for the same reason it draws
+			// none in the diagram: a loss too small to see and no loss at all are
+			// two different facts.
+			lost:
+				dropped > 0
+					? { label: LOSSES[i], value: dropped, share: share(dropped) }
+					: null
+		};
+	});
 	// Two lines: the name, then the count. On one line the four columns cannot
 	// hold them - measured 2026-08-30, `Answered without a chart  696  (33%)` ran
 	// 280px into a 246px column pitch and printed over the next stage's label.
@@ -212,6 +257,7 @@ export function chartFlow(days: readonly FlowDay[]): ChartFlow {
 			]
 		},
 		empty: false,
-		reason: null
+		reason: null,
+		steps
 	};
 }

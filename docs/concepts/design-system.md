@@ -363,6 +363,30 @@ Two shapes replace it. A row of variable-width labels **wraps**, and the overflo
 
 The console is not covered by that spec. It carries live scroll containers of its own and a sibling plan holds those routes; `frontend/tests/console-frame.spec.ts` asserts the same property there, per element.
 
+### A diagram a narrow column cannot hold becomes a list, never a smaller diagram
+
+A chart engine scales its marks with the container and its **type with nothing at all**. The chart-arm flow is the case: its Sankey labels sit outside the nodes, in a fixed 170-pixel column, at a fixed 12-pixel size. Measured 2026-09-01 in Chromium on the built console, that column is 12 percent of a 1,376px SVG at 1440 and **52 percent of a 328px one at 360**, so the four stages divide 158 pixels between them and their labels print over each other.
+
+| Viewport | Flow SVG | Label pairs overlapping | Worst overlap |
+| --- | --- | --- | --- |
+| 360 | 328 px | 3 | 59.1 px |
+| 390 | 358 px | 3 | 56.2 px |
+| 640 | 589 px | 2 | 17.1 px |
+| 690 | 635 px | 1 | 1.8 px |
+| **700** | 644 px | **0** | - |
+| 1440 | 1,376 px | 0 | - |
+
+Two answers were refused before this one. **A horizontal scroll** destroys the diagram's whole value - seeing every branch at once - and hides the small branches off screen. **Smaller type** was already measured and rejected once, when a one-line label ran 280px into a 246px column pitch; the reply then was two lines, and two lines is what the table above measures. Neither is available at 360, because the label column does not shrink with the frame at any font size a reader can use.
+
+So below `48rem` the same numbers are a **stepped list**: one row per stage with its count and its share of everything that reached the arm, and the branch that left it indented under it. The breakpoint is the one the console page already stacks at, and it clears the measured crossing by 68 pixels.
+
+**One call builds both shapes.** `chartFlow` returns the option and the steps together, so the list and the diagram cannot report two different flows - which is the failure a fallback invites and the one nothing on screen would show.
+`frontend/tests/console-flow.spec.ts` reads every count off the diagram at 1440 and off the list at 390 and compares the two sets, and it checks on the page that what leaves a stage is what arrived at it.
+
+**Only one is drawn at a time.** Two shapes of one flow on one screen is two answers to one question, and a reader who finds them has to work out whether they agree.
+
+Authority: Jony, plan row #13. The geometry is measured in a browser and never reasoned about, which is the rule that produced both this table and the two-line labels before it.
+
 ## Sufficiency is a gate, not a taste
 
 A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.
