@@ -1,6 +1,6 @@
 # Telemetry Series
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 The console's interactive charts read a published projection of item health. They
 never read `state/item-health/` directly.
@@ -340,6 +340,63 @@ no data are different facts.
 The default page is also prerendered as SVG from the same projection. If
 JavaScript never runs, the console still shows the current window and honest
 empty states.
+
+## A chart never draws a span nothing measured
+
+The window a chart draws is the window the control set, never the days its own
+data covers. That is right and it is not going to change: narrowing the span
+would make a seven-day record look like a thirty-day one, and the preset a
+reader picked would stop meaning anything. What was wrong until 2026-09-01 was
+that a chart did not say what it had done with the difference.
+
+Measured 2026-09-01 at 1440 on the built console, on the committed ledger:
+`Time per item, by stage` drew a 1,292px plot with every mark between x=1,030
+and x=1,342 - **312px, 24 percent of the plot, all against the right edge** -
+because the window was 30 days and 8 carried a timing. `Failure rate against
+volume` and `Summary length against the length asked for` drew columns on the
+same 8 of 30. Nothing on any of the three said so.
+
+Three charts on `/console/` now state it, out of one rule in
+[frontend/src/lib/charts/frame.ts](../../../frontend/src/lib/charts/frame.ts):
+`coverage` counts the columns that carry a measurement, `coverageRegions` places
+the empty span, and `coverageSentence` writes the one line under the title.
+
+- **`SPARSE_COVERAGE` is the line, and it is half.** Half is where the empty
+  part becomes the larger part of the picture and the marks start reading as a
+  chart squashed into one corner. Above it a chart says nothing: a window
+  missing a day or two draws that day as a break in a line, and a caveat under
+  every chart is one nobody reads. It is a drawing constant beside
+  `LABEL_ADVANCE_EM` and `CELL_MAX` rather than a knob in `config/`, because
+  nothing an operator would tune sits behind it.
+- **The sentence names both numbers.** `We timed 8 of these 30 days` - days
+  drawn and days measured, so a reader can count the columns and check it
+  (`CLAUDE.md` Rule #10). A share would not be checkable against anything on
+  the screen.
+- **Each chart brings its own subject and verb**, because the three measure
+  three different things: one timed a day, one wrote summaries on it, one
+  planned items for it. No one verb is true of all three.
+- **The empty span is tinted at the surface level, never hatched.** It is a
+  `<rect>` filled with `--color-surface-sunken`, drawn before the grid so a tint
+  never sits over a mark. A hatch is a pattern a reader stops to decode, and
+  this one has nothing to say beyond "no measurement reached here".
+- **A pointer on an unmeasured column is told so.** The hover mechanism always
+  worked on those columns and still read as broken, because four columns in five
+  carried a date and a set of blanks - or worse, on the band chart, a set of
+  zeros, which says every summary of that day landed nowhere. The strip prints
+  one row instead: `Nothing was timed on this day`, `Nothing was summarised on
+  this day`, `No item was planned on this day`.
+
+Rejected: fitting the domain to the measured days (Editor - it hides the record
+and breaks the preset); saying nothing and letting the reader see the gap
+(measured, the reader reads it as a right-aligned chart with a broken hover and
+asks why, which happened twice - owner, 2026-08-31); and refusing the hover
+outside the measured span (Susan - it makes the dead region feel dead rather
+than explaining it).
+
+The oracle is over the drawing, not over the rule. It counts the columns
+carrying a mark itself, holds each chart's own sentence to that count, and
+asserts that no mark falls inside a tinted span -
+[../../../frontend/tests/console-coverage.spec.ts](../../../frontend/tests/console-coverage.spec.ts).
 
 ## See also
 
