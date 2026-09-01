@@ -20,6 +20,10 @@
 		frame,
 		linearAxis,
 		MARGIN,
+		MODEL_RULE_ROW,
+		modelRules,
+		modelRuleTitle,
+		noModelRuleNote,
 		observeWidth,
 		pointerReadout,
 		readoutMarks,
@@ -53,7 +57,8 @@
 		width,
 		tickDensity,
 		outlierRows,
-		readoutMaxShare = 0.33
+		readoutMaxShare = 0.33,
+		modelChanges = []
 	}: {
 		points: CompressionPoint[];
 		viewport: TimeWindow;
@@ -67,6 +72,12 @@
 		outlierRows: number;
 		/** `chart.readout_max_share`. */
 		readoutMaxShare?: number;
+		/** Every day the summarizing pipeline changed, derived once on the server.
+		 *
+		 * This chart qualifies for the rule because the length a summary comes out
+		 * at is decided by the prompt and the model, and the stamp digests both. A
+		 * column that suddenly leans long or short beside a rule has a cause. */
+		modelChanges?: string[];
 	} = $props();
 
 	/** One row of dates under the plot, and room for a descender. */
@@ -122,12 +133,24 @@
 	const bar = $derived(
 		Math.max(MIN_BAR, Math.min(MAX_BAR, (box.innerWidth / Math.max(1, split.length)) * 0.7))
 	);
+	/** One array of column pixels, so the ticks, the columns and the model rules
+	 * cannot disagree about where a day sits. */
+	const columnsX = $derived(dayColumns(split.length, box, bar / 2));
 	const ticks = $derived(
 		dayTicks(
 			split.map((day) => day.date),
-			{ density: tickDensity, columns: dayColumns(split.length, box, bar / 2) }
+			{ density: tickDensity, columns: columnsX }
 		)
 	);
+	/** The days the pipeline changed, of the days this chart drew. */
+	const rules = $derived(
+		modelRules(
+			modelChanges,
+			split.map((day) => day.date),
+			columnsX
+		)
+	);
+	const changedOn = $derived(new Set(rules.map((rule) => rule.date)));
 
 	const ranked = $derived(
 		rank<RankedDisplay>(
@@ -196,7 +219,10 @@
 					value: String(day[part.place]),
 					colour: part.colour
 				})),
-				{ label: 'Summaries that day', value: String(day.items), colour: '' }
+				{ label: 'Summaries that day', value: String(day.items), colour: '' },
+				// The rule is a mark on the plot and a line in the strip, so a reader
+				// stepping the days with an arrow key meets it without a pointer.
+				...(changedOn.has(day.date) ? [MODEL_RULE_ROW] : [])
 			]
 		}))
 	);
@@ -224,12 +250,21 @@
 				they are not counted here.</span
 			>
 		{/if}
+		{#if rules.length === 0}
+			<!-- Stated, not omitted. A chart that draws no rule and says nothing about
+			     it is indistinguishable from one where the rule was forgotten. -->
+			<span data-model-rule-empty="band-distance">{noModelRuleNote(split.length)}</span>
+		{/if}
 	</p>
 
 	<div
 		class="mt-4 rounded-md border border-rule bg-surface p-3"
 		data-band-distance
 		data-readout-columns={columns.length}
+		data-model-rule="yes"
+		data-model-rule-name="band-distance"
+		data-model-rule-from={split[0]?.date ?? ''}
+		data-model-rule-to={split[split.length - 1]?.date ?? ''}
 	>
 		<div use:observeWidth={(next) => (measured = next)}>
 			<!-- svelte-ignore a11y_no_noninteractive_tabindex -->
@@ -266,6 +301,23 @@
 					stroke="var(--color-rule)"
 				/>
 				<line x1={box.left} x2={box.left} y1={box.top} y2={box.bottom} stroke="var(--color-rule)" />
+
+				<!-- Dashed and in the neutral rule ink, never on the health ramp: a
+				     pipeline change is an event, not a verdict. Drawn under the columns,
+				     so a dash never hides a day's own bar. -->
+				{#each rules as rule (rule.date)}
+					<line
+						x1={px(rule.x)}
+						x2={px(rule.x)}
+						y1={box.top}
+						y2={box.bottom}
+						stroke="var(--color-text-tertiary)"
+						stroke-dasharray="3 3"
+						data-model-rule-line={rule.date}
+					>
+						<title>{modelRuleTitle(rule.date)}</title>
+					</line>
+				{/each}
 
 				{#each yTicks as tick (tick)}
 					<line
