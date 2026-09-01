@@ -157,6 +157,32 @@ class TestTheStageAssembledTwice:
         assert committed.embeddings is not None
         assert set(committed.embeddings.vectors) == {item.item_id for item in committed.items}
 
+    def test_the_committed_day_carries_the_duplicate_pass(
+        self, tmp_path: Path, monkeypatch: MonkeyPatch
+    ) -> None:
+        """The pass runs inside `build_day`, over the merged block and the whole day.
+
+        Two different stories, so nothing groups - and `also_covered_by` reads 0
+        rather than null, which is what says the pass looked. The rules it
+        applies are held in `test_same_story.py`; this is the wiring.
+        """
+        if not Embedder(REPO_ROOT).available:
+            pytest.skip("the encoder is not committed in this checkout")
+        settings = config.load(CONFIG_DIR)
+        monkeypatch.setattr(cli, "VAR_ROOT", tmp_path / "run")
+        monkeypatch.setattr(cli, "PUBLIC_ROOT", tmp_path / "public" / "digest")
+        monkeypatch.setattr(cli, "STATE_ROOT", tmp_path / "state")
+        items_dir = tmp_path / "run" / full_plan().date / "items"
+        for index in (0, 1):
+            write_payloads(items_dir, full_plan().items[index])
+        cli.stage_assemble(plan_for(0), settings=settings, commit_sha="a" * 40, runner="fixture")
+        day = cli.stage_assemble(
+            plan_for(1, execution=2), settings=settings, commit_sha="a" * 40, runner="fixture"
+        )
+
+        assert [item.also_covered_by for item in day.items] == [0, 0]
+        assert [item.same_story_as for item in day.items] == [None, None]
+
 
 class TestTheMerge:
     def test_the_first_run_of_a_day_carries_its_own_block(self) -> None:
