@@ -210,7 +210,7 @@ The fix is the shape `publish_telemetry` already had: the index root is derived 
 
 **The day payloads are staged because a search result renders from the day it names.** The index carries no summary on purpose, so the result has to come from somewhere, and the alternative is a 6.35-times-larger index that every browsing visitor pays for. `run.json` is not staged; nothing fetches it.
 
-That is a second copy of the day in the published bundle, and it is worth stating plainly rather than discovering later. **From 2026-09-01 a reading route opens one too.** A topic page carries the head of its own desk and fetches the day for the rest, so this file now has two readers: a search result, and every topic page whose desk is longer than `ui.shell_seed_items`. A day page and the home page still make no request at all, and neither does a topic page whose whole desk fits inside the seed.
+That is a second copy of the day in the published bundle, and it is worth stating plainly rather than discovering later. **From 2026-09-01 a reading route opens one too.** A topic page carries the head of its own desk and a dated day page carries the head of the day, and both fetch the served day for the rest - so this file now has three readers: a search result, every topic page whose desk is longer than `ui.shell_seed_items`, and every dated day page whose day is. The home page still makes no request at all, and neither does a reading page whose whole list already fits inside the seed.
 
 **It is not a second copy of the day, though, because it is a projection.** The staged file carries thirteen fields an item - the ones a search result actually renders - and nothing else. That is settled below, with what it cost and what it bought.
 
@@ -304,6 +304,34 @@ Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the
 
 **The day route and the home page did not move**, which is the control: `/<date>/` read 350,435 against 350,427 gzipped bytes and `/` read 285,598 against 285,595, both inside the build noise. `/<date>/<topic>/` read 348,607 against 19,362 for the HTML alone.
 
+### The day routes spend the rest of it (2026-09-01)
+
+`/<date>/` was the last reading route inlining its whole day, and it is the one a shared link actually names. One document per published day, growing with the day it published: the twelve committed days carried 4,203 item payloads across twelve documents, and a reader who opens one day paid for the day they opened. It now carries the head of the day plus every story its leading block points at, and the browser fetches the served day for the rest.
+
+**`/` keeps the whole day inline for ever, and that is a decision rather than an omission.** It is one document per build rather than one per published day, so it contributes nothing to the cap problem - the site could publish for a decade and `/` would still be one document. It is also the address a stranger meets first, and leaving it whole leaves one complete, crawlable, script-free digest on the site. `/404`, `/archive/`, `/evals/` and the console are untouched.
+
+**This is the row that spends `keep`.** A dated page draws the leading block, and every entry in it is an anchor into the stream below. The leads are chosen across the whole day rather than off the top of the published order - on the twelve committed days the newest leads with stories at positions 0, 43, 46, 77 and 86 of 117 - so a document carrying a plain prefix would ship four links out of five that land on nothing until the fetch arrives, and on nothing at all when it fails. The seed is therefore the head UNION the day's leads, which costs the seeded item count and buys a deep link that resolves with no request at all.
+
+**Two days of 117 stories priced the leads.** 2026-08-28 has none and saved 79.8 percent; 2026-09-01 has five, four of them past the head, and saved 73.9 percent. Four extra item payloads in the document is what a working leading block costs.
+
+Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 / node 24.12.0, over the 12 committed days and 4,203 items. Two builds of one worktree back to back; the control arm is this branch's own changed files replaced by `main`'s in place, never a fresh extract, which carries its own byte offset from whatever gitignored state differs between two trees. A route is its two documents, `index.html` and its `__data.json` twin, at `gzip -9`:
+
+| Measured | Before | After | Saved |
+| --- | ---: | ---: | ---: |
+| All 12 dated day routes | 4,217,706 B | 299,117 B | 3,918,589 B, 92.9 percent |
+| The heaviest, `2026-08-25` at 724 stories | 723,497 B | 26,113 B | 96.4 percent |
+| The lightest, `2026-08-21` at 4 stories | 10,164 B | 10,238 B | **74 B more** |
+| Item payloads the 12 documents carry | 4,203 | 168 | - |
+| The whole published site | 101.7 MB | 88.1 MB | 13.6 MB, 13.4 percent |
+| Bytes a published item | 25,371 | 21,972 | 13.4 percent |
+| Published days to the 1024 MB cap | 238 | 279 | +41 |
+
+**The spread is the same shape the topic routes had, and one day again went the wrong way.** Across the twelve the saving runs from **-0.7 percent to 96.8 percent**, median 92.7, mean 74.9, sample standard deviation 36.0. The negative one published four stories: it fetches nothing, because its document already holds every story it has, and it pays 74 bytes for the loader and the waiting region it will never use. The saving is proportional to what the day published, and a day that published almost nothing pays a flat toll instead.
+
+**No story left the first screen.** The stream pages at twelve and the seed is fifteen, so a document still renders exactly what it rendered - what left is the payload behind the pager. The unrendered half is what the numbers above are: 168 item payloads where 4,203 rode along.
+
+**`/` and the topic routes are the control.** `/` read 67,534 gzipped bytes for its HTML on the arm that changed the dated routes, and `/<date>/<topic>/` read 19,371 - both what the previous row left them at.
+
 ### The revisit trigger, with a date on it
 
 **This does not solve the 1 GB cap (Rule #2). It buys about six weeks.**
@@ -314,7 +342,9 @@ Almost all of that is the rate rather than the level: the 18.6 MB taken off the 
 
 **Nothing fires when that date arrives.** No gate measures the whole-site total against the cap - the bundle gate holds single pages, and the marker count holds what a page inlines. So the trigger is a date and not an alarm: **re-measure the site total and the per-day rate by 2026-09-22, one month before the date, and act on the answer.**
 
-**The lever named here has now been pulled, and it moved the date a long way.** The prerendered dated route trees were 50,598,258 bytes and 39.5 percent of the site, and every one was a document a reader who opens some other day never reads. Five of the six a day were topic routes carrying the whole day, and those are now a seed. Measured 2026-09-01 on the same instrument that printed the numbers above, `idhazh site-weight` over 11 days and 4,086 items: **the site went 168.6 MB to 101.9 MB and the runway went 130 published days to 231** (96 to 175 to the 800 MB alarm). Both figures charge `assist/` and `_app/` - 65.6 MB, neither of which grows with a day - to the items, so both are floors, and both are worst-case days at `run.safety_ceiling_per_run`. The date to re-measure by is unchanged: an instrument that says a year is exactly the one nobody checks. The next lever is the day route, and retention (below) is the one after it.
+**The lever named here has now been pulled, and it moved the date a long way.** The prerendered dated route trees were 50,598,258 bytes and 39.5 percent of the site, and every one was a document a reader who opens some other day never reads. Five of the six a day were topic routes carrying the whole day, and those are now a seed. Measured 2026-09-01 on the same instrument that printed the numbers above, `idhazh site-weight` over 11 days and 4,086 items: **the site went 168.6 MB to 101.9 MB and the runway went 130 published days to 231** (96 to 175 to the 800 MB alarm). Both figures charge `assist/` and `_app/` - 65.6 MB, neither of which grows with a day - to the items, so both are floors, and both are worst-case days at `run.safety_ceiling_per_run`. The date to re-measure by is unchanged: an instrument that says a year is exactly the one nobody checks.
+
+**The sixth document a day followed the same day, and the dated trees are done.** `/<date>/` was the last reading route inlining its whole day. Over the 12 committed days and 4,203 items on the same instrument, **the site went 101.7 MB to 88.1 MB and the runway went 238 published days to 279** (180 to 212 to the alarm). Reading the two rows together, the reading routes cost the site 168.6 MB and now cost 88.1, and the runway went 130 published days to 279 - it more than doubled. **Nothing about that removes the cap**, because the two directories that do not shrink are the ones that dominate: `assist/` at 43.2 MB and `_app/` at 22.4 MB are 74.5 percent of what is left, and neither grows with a day, so both are charged to the items and both make the runway a floor. **The next lever is retention (below), and there is no third document trick left to play.**
 
 ## Retention
 
