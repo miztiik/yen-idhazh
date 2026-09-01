@@ -243,6 +243,7 @@
   },
   "ui": {
     "archive_page_size": 40,
+    "filter_min_chars": 3,
     "items_per_topic": 5,
     "lead_cluster_floor": 2,
     "lead_max_yesterday": 0,

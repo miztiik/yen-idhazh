@@ -1,6 +1,6 @@
 import { indexMonths, loadDay, publishedDates } from '$lib/server/payload';
 import { assistConfig } from '$lib/server/config';
-import type { DigestDay } from '$lib/payload/types';
+import type { DigestDay, DigestVerticalRef } from '$lib/payload/types';
 
 export const prerender = true;
 
@@ -13,9 +13,24 @@ export function load() {
 	// bounded fact this page may carry - unlike the stories themselves, which the
 	// browser fetches a month at a time.
 	const verticalNames: Record<string, string> = {};
+	// And how many stories each of them holds across the whole archive. One
+	// integer a topic, so it grows per topic and never per story. It is the pill
+	// count, and it is the honest denominator for a topic-filtered list while
+	// months are still unread - the page has never counted them itself.
+	const verticalCounts: Record<string, number> = {};
 	for (const day of loaded) {
-		for (const ref of day.verticals) verticalNames[ref.id] = ref.display_name;
+		for (const ref of day.verticals) {
+			verticalNames[ref.id] = ref.display_name;
+			verticalCounts[ref.id] = (verticalCounts[ref.id] ?? 0) + ref.count;
+		}
 	}
+	const verticals: DigestVerticalRef[] = Object.keys(verticalCounts)
+		.sort()
+		.map((id) => ({
+			id,
+			display_name: verticalNames[id] as string,
+			count: verticalCounts[id] as number
+		}));
 
 	return {
 		days: loaded.map((day) => ({
@@ -29,6 +44,7 @@ export function load() {
 		months: indexMonths(),
 		stories: loaded.reduce((count, day) => count + day.items.length, 0),
 		verticalNames,
+		verticals,
 		// The newest day states the window, because its run is the one that last
 		// read the knob. `layout.md` requires the archive to say it before
 		// anything is ever deleted.
