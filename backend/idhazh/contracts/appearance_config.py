@@ -444,6 +444,25 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-01",
+            change=(
+                "digest.shell_seed_items added, defaulting to 15. The shape is "
+                "`UiConfig`, which this document and `AppConfig` share, so both "
+                "schemas moved together. Additive with a default, so an appearance "
+                "file written before today still validates."
+            ),
+            why=(
+                "A reading route's build-time load now splits a day into the facts "
+                "that do not grow with the story count, the head of the published "
+                "order, and the remainder. This number is where the head ends. "
+                "Nothing fetches yet - the two halves are put straight back "
+                "together, and the prerendered output is byte-identical - so the "
+                "knob decides nothing today and everything once the item list "
+                "moves to a browser fetch. It is also the one knob in this block "
+                "the layout does not hand a browser, because no page reads it."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-08-31T23:59",
             change=(
                 "digest.topic_pills_max added, defaulting to 8. The shape is "

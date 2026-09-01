@@ -310,7 +310,7 @@ const MOTION_DEFAULTS: MotionConfig = {
 };
 
 interface RawConfig {
-	ui?: Partial<UiConfig>;
+	ui?: DigestBlock;
 	run?: Partial<RunConfig>;
 	retention?: Partial<RetentionConfig>;
 	collect?: Partial<CollectConfig>;
@@ -321,8 +321,12 @@ interface RawConfig {
 	models?: { inference?: Partial<InferenceConfig> };
 }
 
+/** The `digest` block: everything `UiConfig` holds, plus the build-only knobs
+ * `uiConfig()` deliberately leaves out of what it hands a browser. */
+type DigestBlock = Partial<UiConfig> & { shell_seed_items?: number };
+
 interface RawAppearance {
-	digest?: Partial<UiConfig>;
+	digest?: DigestBlock;
 	console?: Partial<ConsoleConfig>;
 	assist?: Partial<AssistConfig>;
 	frame?: Partial<FrameConfig>;
@@ -369,7 +373,26 @@ export function mergeLayers<T extends object>(
 }
 
 export function uiConfig(): UiConfig {
-	return mergeLayers(DEFAULTS, raw().ui, appearance().digest);
+	const ui = mergeLayers(DEFAULTS, raw().ui, appearance().digest);
+	// `shell_seed_items` shares the block and must not ride along - see below.
+	delete (ui as DigestBlock).shell_seed_items;
+	return ui;
+}
+
+/** How many of a day's stories a prerendered document carries.
+ *
+ * Read on its own rather than through `uiConfig()`, because it is the one knob
+ * in the `digest` block no browser reads: whatever `uiConfig()` returns is
+ * inlined into every prerendered document, so a build-only number put there
+ * would ride to every reader on every page for ever.
+ *
+ * The fallback is the same number `UiConfig.shell_seed_items` defaults to, and
+ * `backend/tests/test_contracts.py` fails if the two copies drift.
+ */
+const SHELL_SEED_ITEMS = 15;
+
+export function shellSeedItems(): number {
+	return appearance().digest?.shell_seed_items ?? raw().ui?.shell_seed_items ?? SHELL_SEED_ITEMS;
 }
 
 export function runConfig(): RunConfig {
