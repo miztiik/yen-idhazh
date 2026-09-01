@@ -52,6 +52,7 @@
 		runHealth,
 		siteCost,
 		sizeGain,
+		type Skyline,
 		type SkylineBar
 	} from '$lib/charts/glance';
 	import type { StackShape } from '$lib/charts/stacked';
@@ -220,10 +221,15 @@
 			? `No second measurement in these ${windowDays} days.`
 			: `${windowedSize >= 0 ? 'Up' : 'Down'} ${(Math.abs(windowedSize) / 1024 / 1024).toFixed(1)} MB over ${windowDays} days.`
 	);
-	/** One bar a day, over the window the control set. The card's own count is
+	/** One bar a day, over the window the control set. Each card's own count is
 	 * the same window summed, so a reader can check the number against the
-	 * picture - which an all-time total under a thirty-day strip could not do. */
-	const skyline = $derived(publishedSkyline(data.charts, viewport));
+	 * picture - which an all-time total under a thirty-day strip could not do.
+	 *
+	 * Two measures, one geometry. Visuals published is a fraction of articles
+	 * published, and the fraction only reads as one when the denominator is
+	 * drawn beside it on the same window at the same pitch. */
+	const articleSkyline = $derived(publishedSkyline(data.charts, viewport, 'items'));
+	const visualSkyline = $derived(publishedSkyline(data.charts, viewport, 'published'));
 
 	/** The card's trend slot, in CSS pixels. */
 	const SKYLINE = { width: 220, height: 34 };
@@ -420,19 +426,26 @@
 	<!-- Bars, not a line: a count per day is a discrete quantity, and a line
 	     between two days claims a value for the hours in between that nobody
 	     counted. Drawn as markup rather than by the engine, so it is complete
-	     before any script runs and follows the window with one drawing. -->
-	{#snippet publishedBars()}
+	     before any script runs and follows the window with one drawing.
+
+	     One snippet draws both strips. Two copies would agree on the day they
+	     were written and drift on the first day either was tuned, and the pair
+	     is only readable while both are one bar a day at the same pitch. -->
+	{#snippet skylineBars(strip: Skyline, measure: string, noun: string)}
 		<svg
 			class="block"
 			width={SKYLINE.width}
 			height={SKYLINE.height}
 			viewBox="0 0 {SKYLINE.width} {SKYLINE.height}"
 			role="img"
-			aria-label="Charts published each day over {windowDays} days, {skyline.total} in all, {skyline.busiest} on the busiest day"
-			data-published-days={skyline.bars.length}
-			data-published-total={skyline.total}
+			aria-label="{noun} each day over {windowDays} days, {grouped(strip.total)} in all, {grouped(
+				strip.busiest
+			)} on the busiest day"
+			data-published-measure={measure}
+			data-published-days={strip.bars.length}
+			data-published-total={strip.total}
 		>
-			{#each skyline.bars as bar (bar.date)}
+			{#each strip.bars as bar (bar.date)}
 				<rect
 					x={(bar.x * SKYLINE.width).toFixed(2)}
 					width={(bar.width * SKYLINE.width).toFixed(2)}
@@ -445,6 +458,8 @@
 			{/each}
 		</svg>
 	{/snippet}
+	{#snippet articleBars()}{@render skylineBars(articleSkyline, 'articles', 'Articles published')}{/snippet}
+	{#snippet visualBars()}{@render skylineBars(visualSkyline, 'visuals', 'Visuals published')}{/snippet}
 
 	<!-- Which way a chart-arm figure has moved across the window it draws.
 
@@ -468,12 +483,21 @@
 		{/if}
 	{/snippet}
 	<div class="auto-grid mt-4" style="--auto-grid-min: 17rem" data-glance>
+		<!-- Articles first. Visuals published is a fraction of it, and a fraction
+		     reads as one only when the denominator is beside it. -->
 		<KpiCard
-			label="Charts published"
-			value={String(skyline.total)}
+			label="Articles published"
+			value={grouped(articleSkyline.total)}
 			note="in these {windowDays} days"
 			tone="info"
-			trend={skyline.empty ? null : publishedBars}
+			trend={articleSkyline.empty ? null : articleBars}
+		/>
+		<KpiCard
+			label="Visuals published"
+			value={grouped(visualSkyline.total)}
+			note="in these {windowDays} days"
+			tone="info"
+			trend={visualSkyline.empty ? null : visualBars}
 		/>
 		<!-- No site-size card here. The band above states the level, the share of
 		     the 1 GB cap and the runway, and it states them on all three routes;

@@ -578,6 +578,7 @@ export function failureLoad(
  */
 export interface SkylineBar {
 	date: string;
+	/** What the day published, in whichever measure the strip was asked for. */
 	published: number;
 	/** Left edge and width, as a share of the box. */
 	x: number;
@@ -603,9 +604,23 @@ export interface Skyline {
  * share rather than a pixel, so ninety columns separate as cleanly as seven. */
 const BAR_SHARE = 0.8;
 
-export function publishedSkyline(days: readonly GlanceDay[], span: TimeWindow): Skyline {
+/** Which count a skyline draws.
+ *
+ * Both are things the day published: `items` is every article, `published` is
+ * the visuals drawn for some of them. So one function draws both, and the two
+ * strips cannot drift in the one property that makes the pair readable - that
+ * both are one bar a day, over the same window, at the same pitch. Two copies
+ * would agree on the day they were written and on no day after it.
+ */
+export type PublishedMeasure = 'items' | 'published';
+
+export function publishedSkyline(
+	days: readonly GlanceDay[],
+	span: TimeWindow,
+	measure: PublishedMeasure = 'published'
+): Skyline {
 	const calendar = daysInWindow(span);
-	const onDate = new Map(days.map((day) => [day.date, day.published]));
+	const onDate = new Map(days.map((day) => [day.date, day[measure]]));
 	const counts = calendar.map((date) => onDate.get(date) ?? 0);
 	const busiest = counts.reduce((high, count) => Math.max(high, count), 0);
 	const pitch = 1 / calendar.length;

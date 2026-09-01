@@ -1001,7 +1001,7 @@ working with no script at all. It follows the window's *length* rather than
 where a pan leaves it, and the section says so: the days it reads always end on
 the newest day the ledger holds.
 
-`Charts published` used to draw a smoothed line over a fixed fourteen days,
+`Visuals published` used to draw a smoothed line over a fixed fourteen days,
 under a control reading thirty. It is one bar a day over the control's own
 window now, and the count above the bars is that same window summed, so a
 reader adding up the columns gets the number the card printed. Bars rather than
@@ -1012,6 +1012,34 @@ and it follows the control with one drawing instead of a server-drawn seed and
 a client redraw that can disagree about the span. A window that published
 nothing prints the count and no strip at all, because thirty bars of zero is an
 empty plot area and a card is still a card without one.
+
+**`Articles published` sits beside it, and it is the denominator.** Until
+2026-09-01 the strip printed how many visuals were drawn and nothing said what
+they were drawn for, so a reader could not tell a busy day from a
+well-illustrated one - 185 visuals is most of a quiet fortnight and a rounding
+error on one heavy day. The two cards read left to right as the fraction they
+are, articles first, and each carries its own total for the window on screen.
+
+**One function draws both strips, and each is drawn against its own busiest
+day.** `publishedSkyline` takes the measure as an argument, so the two cannot
+drift in the one property that makes the pair readable: both are one bar a day,
+over the same window, at the same pitch, with the same left edges.
+[frontend/tests/console-published.spec.ts](../../../frontend/tests/console-published.spec.ts)
+asserts the two strips report the same `data-published-days`, which is the whole
+of "they are on one window". Each strip normalises to its own peak rather than
+to the larger series: articles run two orders of magnitude above visuals on the
+committed ledger, so a shared scale would draw every visual bar as a hairline
+and the smaller card would stop saying which of its own days were heavy.
+
+**One chart with both series was refused.** Two axes invite a comparison of
+slopes that means nothing, and one axis flattens the smaller series to nothing.
+Authority: Jony, plan row #10.
+
+The card was labelled `Charts published` until 2026-09-01. It counts visuals in
+state `rendered`, the section above it is `Visuals drawn for articles` and the
+table column is `Visuals published`, so the card was the last reader-facing
+string on the page still calling a drawn thing a chart. Its label is also a test
+selector, and the selector moved in the same commit.
 
 The page intro carried two counts of rows on record until 2026-08-30 - scored
 items, and item-health rows. Both only ever grow, so neither could indicate a
