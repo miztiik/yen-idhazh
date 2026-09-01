@@ -17,32 +17,18 @@
  *    relative-luminance formula over the tokens the live document resolves,
  *    because a hairline that reads 1.36:1 on the dark ground is not an edge.
  *
- * The overflow assertions belong to `layout-overflow.spec.ts`, which row 3
- * creates. They are repeated inline here rather than left to it: this row gives
- * the item a border, a radius and padding on both axes, which is exactly the
- * change that pushes a page sideways, and the gate that would have caught it
- * does not exist yet.
+ * The overflow assertions have moved to `layout-overflow.spec.ts`, which row 3
+ * created. They were repeated inline here while that file did not exist,
+ * because this row gives the item a border, a radius and padding on both axes,
+ * which is exactly the change that pushes a page sideways. The shared file
+ * covers strictly more: every reader-facing route rather than the two this row
+ * reaches, at the same three widths in the same two themes.
  */
 
 import { expect, test, type Page } from '@playwright/test';
 
 const THEMES = ['light', 'dark'] as const;
 type Theme = (typeof THEMES)[number];
-
-/** The reading route this row's two files reach with an item on it. `/archive/`
- * renders one too, but only for a search result, which needs a 43 MB encoder.
- *
- * `/archive/` is also out of the overflow check below for a reason worth
- * writing down: measured 2026-08-31 at 360px in both themes, its own day list
- * pushes the document to 368px through `li.border-b border-rule py-3`, with no
- * item on the page at all. That defect is row 3's and row 13's, not this one's,
- * and asserting it here would fail this row for someone else's file. */
-const ROUTES = ['/'];
-
-/** A phone, the side-rail breakpoint, and a wide desktop. `frame.breakpoints_px`
- * in `config/appearance.json` is [640, 1024, 1400]; 801 sits between two of them,
- * which is where a layout that only ever gets tested at a breakpoint breaks. */
-const WIDTHS = [360, 801, 1536];
 
 /** WCAG 2.2 relative luminance. Written out rather than imported: audit tooling
  * is a project non-goal, and this is one surface's oracle over its own tokens. */
@@ -286,44 +272,6 @@ test.describe('the item is a low-chrome card', () => {
 			);
 		});
 	}
-
-	test('the card never pushes a reading route sideways', async ({ page }) => {
-		// Row 3 owns `layout-overflow.spec.ts` and has not landed. This is the
-		// same property, asserted on the routes this row's files reach: a border,
-		// a radius and padding on both axes is exactly the change that pushes a
-		// page sideways, and the gate that would catch it does not exist yet.
-		await open(page, 'light');
-		// The day route for the day the home page is showing. The previous-day
-		// list points at days the fixture publishes nothing for, so a link taken
-		// from there reaches an empty page and proves nothing about a card.
-		const day = await page.evaluate(() => {
-			const link = document.querySelector<HTMLAnchorElement>('nav[aria-label="Topics"] a[href]');
-			return link ? new URL(link.href).pathname : '';
-		});
-		expect(day, 'no topic-pill link on the home page to take a day route from').toMatch(
-			/\/\d{4}-\d{2}-\d{2}\/$/
-		);
-
-		for (const theme of THEMES) {
-			for (const route of [...ROUTES, day]) {
-				for (const width of WIDTHS) {
-					await open(page, theme, route, width);
-					const scroll = await page.evaluate(() => ({
-						scrollWidth: document.documentElement.scrollWidth,
-						clientWidth: document.documentElement.clientWidth,
-						items: document.querySelectorAll('article.item').length
-					}));
-					expect(scroll.items, `${theme} ${route} at ${width}px renders no item`).toBeGreaterThan(
-						0
-					);
-					expect(
-						scroll.scrollWidth,
-						`${theme} ${route} at ${width}px scrolls sideways: ${scroll.scrollWidth} > ${scroll.clientWidth}`
-					).toBeLessThanOrEqual(scroll.clientWidth);
-				}
-			}
-		}
-	});
 
 	test('the title is the step the eye lands on, and the summary is not', async ({ page }) => {
 		// Decision 4. The contrast is what matters, so both are read off one

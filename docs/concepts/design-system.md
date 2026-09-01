@@ -351,6 +351,18 @@ A section that leads with a shape and keeps its rows behind a control uses a nat
 
 The other shape is different and stays: `Show N more` on the failed-item list and the day list is a button that extends a list already on the page. Nothing behind it is hidden, so nothing is lost when the button is dead.
 
+### No reader-facing surface scrolls sideways
+
+> **A horizontal scrollbar is a control that hides its own contents.** The owner ruled it out everywhere on the reading surface, 2026-08-31.
+
+It says nothing about how much is behind it, it is invisible until a pointer arrives, and on a phone it competes with the gesture that moves between pages. Hiding the bar with `scrollbar-width: none` is strictly worse: the control still hides the contents and the only hint that more exists is gone.
+
+Two shapes replace it. A row of variable-width labels **wraps**, and the overflow past a configured count folds into a `<details>` reading `+N more` - the pill row is the case, with the count in `digest.topic_pills_max`. Which items fold is decided by a count at build time and never by measuring the row: every page here is prerendered, so a row that measures itself is wrong until a script runs. A grid guards its own minimum with `minmax(min(var(--auto-grid-min), 100%), 1fr)`, because a bare minimum is a demand for room the container may not have.
+
+`frontend/tests/layout-overflow.spec.ts` is the memory: `document.documentElement.scrollWidth <= document.documentElement.clientWidth`, on every reader-facing route, at 360, 801 and 1536 CSS px, in both themes. Measured before the rule landed, `/archive/` reported 368px of document in a 360px viewport in both themes, from an `--auto-grid-min` of `22rem` inside the 328px a 360px screen leaves after its gutters.
+
+The console is not covered by that spec. It carries live scroll containers of its own and a sibling plan holds those routes; `frontend/tests/console-frame.spec.ts` asserts the same property there, per element.
+
 ## Sufficiency is a gate, not a taste
 
 A surface fails review for being **insufficient**, exactly as it fails for being over-built. This is stated because the opposite was: every review persona this project had was a veto, so the surface converged on the minimum that passed all of them, and nobody's job was to say it was not enough.
