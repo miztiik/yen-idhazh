@@ -32,6 +32,7 @@ from idhazh.contracts.app_config import (
     EvaluationConfig,
     ObservabilityConfig,
     PageWeightConfig,
+    UiConfig,
 )
 from idhazh.contracts.appearance_config import ChartConfig
 from idhazh.contracts.article import Article
@@ -311,6 +312,40 @@ def test_the_readout_cap_is_a_knob_the_frontend_agrees_with() -> None:
     mirrored = re.search(r"readout_max_share:\s*([\d.]+)", reader)
     assert mirrored is not None, "the frontend chart defaults dropped readout_max_share"
     assert float(mirrored.group(1)) == ChartConfig().readout_max_share
+
+
+def test_the_seed_the_shell_carries_is_a_knob_the_frontend_agrees_with() -> None:
+    """The same two-copies problem, on the one digest knob a browser never sees.
+
+    `shell_seed_items` decides how many of a day's stories a prerendered
+    document carries, so the build reads it on its own rather than through
+    `uiConfig()` - everything that reader returns is inlined into every
+    document, and no page reads this number. Two copies of it drift like any
+    other pair, and a drift here would put a different number of stories in a
+    document than the contract bounds.
+    """
+    reader = read_text(REPO_ROOT / "frontend" / "src" / "lib" / "server" / "config.ts")
+    mirrored = re.search(r"const SHELL_SEED_ITEMS = (\d+);", reader)
+    assert mirrored is not None, "the frontend dropped its shell_seed_items fallback"
+    assert int(mirrored.group(1)) == UiConfig().shell_seed_items
+
+
+def test_the_seed_covers_what_a_reading_surface_draws_before_a_reader_acts() -> None:
+    """The seed is what a document holds once the rest of the day arrives by fetch.
+
+    The all-topics page draws `items_per_topic` stories under every desk the day
+    published, so a seed shorter than every declared desk times that number
+    leaves a section empty until the fetch lands. Read from the two knobs the
+    number was derived from rather than restated, so a sixth desk fails this
+    instead of shipping a short first screen.
+    """
+    ui = AppConfig.from_json(read_text(CONFIG_DIR / "idhazh.json")).ui
+    taxonomy = Taxonomy.from_json(read_text(CONFIG_DIR / "taxonomy.json"))
+    live = [v for v in taxonomy.verticals if v.status is not LifecycleStatus.RETIRED]
+    assert ui.shell_seed_items >= len(live) * ui.items_per_topic, (
+        f"a {ui.shell_seed_items}-story seed cannot fill {len(live)} desks "
+        f"at {ui.items_per_topic} stories each"
+    )
 
 
 def test_a_reject_ceiling_under_the_brief_gate_is_refused() -> None:
