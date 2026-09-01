@@ -66,27 +66,27 @@ The requirement was stated as a decay. Three different features answer to that w
 
 | # | Row title | Depends-on | Parallel-group | Status | Worktree | PR | Subagent |
 | --- | --- | --- | --- | --- | --- | --- | --- |
-| 1 | Retire every hardcoded CSS value | - | A | PENDING | - | - | - |
-| 2 | Dark by default, and one moon button | - | A | PENDING | - | - | - |
-| 3 | No horizontal scrollbar, and the gate that keeps it out | - | A | PENDING | - | - | - |
-| 4 | Publish the ranking signal and name the clock | - | A | PENDING | - | - | - |
-| 5 | The footer becomes three lines | - | A | PENDING | - | - | - |
-| 21 | Extract the payload projector into one module | - | A | PENDING | - | - | - |
-| 29 | Measure the gap between our own mentions | - | A | PENDING | - | - | - |
-| 30 | The registry holds a subject, not only an organisation | - | A | PENDING | - | - | - |
-| 22 | The served day becomes a versioned contract | 21 | B | PENDING | - | - | - |
-| 31 | The entity-heat ledger | 30 | B | PENDING | - | - | - |
-| 6 | The wordmark: Yen Idhazh | 2 | B | PENDING | - | - | - |
+| 1 | Retire every hardcoded CSS value | - | A | DONE | yi-p01 | #320 | worker |
+| 2 | Dark by default, and one moon button | - | A | DONE | yi-p02 | #332 | worker |
+| 3 | No horizontal scrollbar, and the gate that keeps it out | - | A | IN-FLIGHT | yi-p03 | #337 | worker |
+| 4 | Publish the ranking signal and name the clock | - | A | DONE | yi-p04 | #319 | worker |
+| 5 | The footer becomes three lines | - | A | DONE | yi-p05 | #330 | worker |
+| 21 | Extract the payload projector into one module | - | A | DONE | yi-p21 | #318 | worker |
+| 29 | Measure the gap between our own mentions | - | A | DONE | yi-p29 | #324 | worker |
+| 30 | The registry holds a subject, not only an organisation | - | A | DONE | yi-p30 | #317 | worker |
+| 22 | The served day becomes a versioned contract | 21 | B | DONE | yi-p22 | #327 | worker |
+| 31 | The entity-heat ledger | 30 | B | COLLAPSED | - | - | - |
+| 6 | The wordmark: Yen Idhazh | 2 | B | DONE | yi-p06 | #339 | worker |
 | 7 | The filter bar: topics and search in one control | 3 | B | PENDING | - | - | - |
-| 8 | The item becomes a low-chrome card | 1 | B | PENDING | - | - | - |
+| 8 | The item becomes a low-chrome card | 1 | B | DONE | yi-p08 | #329 | worker |
 | 9 | Collapse same-story duplicates onto one item | 4 | B | PENDING | - | - | - |
-| 10 | A per-day ceiling on one source's share | 4 | B | PENDING | - | - | - |
-| 11 | A thin desk says what did not run | 4 | B | PENDING | - | - | - |
+| 10 | A per-day ceiling on one source's share | 4 | B | DONE | yi-p10 | #334 | worker |
+| 11 | A thin desk says what did not run | 4, 7 | B | PENDING | - | - | - |
 | 23 | Split a reading route's load into facts and items | 22 | C | PENDING | - | - | - |
-| 12 | The monogram carries the read state | 2, 8 | C | PENDING | - | - | - |
+| 12 | The monogram carries the read state | 2, 8 | C | DONE | yi-p12 | #335 | worker |
 | 13 | The archive stops adding a link a day | 3, 7 | C | PENDING | - | - | - |
-| 14 | Empty, missing and failed-day screens | 8 | C | PENDING | - | - | - |
-| 32 | Half-lives as config, with a fuse and a lifecycle | 30, 31 | C | PENDING | - | - | - |
+| 14 | Empty, missing and failed-day screens | 8 | C | DONE | yi-p14 | #336 | worker |
+| 32 | Half-lives as config, with a fuse and a lifecycle | 30, 31 | C | COLLAPSED | - | - | - |
 | 24 | The anchor and the unreachable state | 23 | D | PENDING | - | - | - |
 | 25 | The topic routes fetch their day | 23, 24 | D | PENDING | - | - | - |
 | 16 | Split the item's meta line | 12 | D | PENDING | - | - | - |
@@ -96,13 +96,21 @@ The requirement was stated as a decay. Three different features answer to that w
 | 19 | Key points on long items only | 16 | E | PENDING | - | - | - |
 | 17 | The time rail, and copy that stays true tomorrow | 4, 15 | F | PENDING | - | - | - |
 | 27 | Invert the guards and correct every doc | 26 | F | PENDING | - | - | - |
-| 33 | The decayed-heat term, shipping at zero weight | 15, 29, 32 | F | PENDING | - | - | - |
+| 33 | The decayed-heat term, shipping at zero weight | 15, 29, 32 | F | COLLAPSED | - | - | - |
 | 28 | The site becomes a progressive web app | 26, 27 | G | PENDING | - | - | - |
 | 20 | The full-day browser smoke | all | H | PENDING | - | - | - |
 
+**One row ran that this plan never listed.** `test_retrieval_eval.py::test_the_ranking_clears_its_bar` failed on `main` itself and blocked every pull request here. It was not a ranking regression: re-running the 2026-08-26 four-arm decomposition put the re-encode at plus 0.00000 and the whole fall on 111 newly published items competing for the same ten slots against labels pooled when 44.5 percent of the archive carried a vector. `assist.recall_min` was re-derived by its own rule - two standard errors below the measured baseline - and lands on 0.61 from the failing tree and from the passing one alike. Owner authorised, PR #322. The bar now carries an expiry: about six published days of room at the measured slide of 0.01345 a day.
+
+**Rows 31, 32 and 33 are COLLAPSED under ESCALATE trigger (h), owner ruling 2026-08-31.** Row 29 measured the gap between our own mentions of a registry name at a median of **1 day - consecutive days, no silence at all** - with the longest silence anywhere in the record being 3 days, twice in 163 chances. A half-life set inside that range fires on every name every day; one set above it never fires. The credit has nothing to act on, and the ledger's cost would be paid by assemble on every run whether the credit was switched on or not. Row 30's contract widening stays: it is additive and inert. **What would bring these rows back:** a real subject curated into `config/watchlist.json` (which needs the 30-entry cap raised), or entity recognition landing - the missing piece is the registry, not the mechanism, and row 29 is the continuity baseline that initiative needs.
+
 **Row numbers are identifiers, not sequence.** Rows 21 to 33 were appended after the plan was first written and are ordered by the `Depends-on` and `Parallel-group` columns like every other row.
 
-**File contention.** Rows 8, 12, 16, 18 and 19 all edit `frontend/src/lib/components/DigestItem.svelte` and are serialised by their dependencies for that reason. Rows 15 and 17 both edit `DigestList.svelte`; 17 depends on 15. Rows 23, 25 and 26 edit the reading routes' `+page.server.ts` and `+page.svelte` in strict order. Rows 15 and 33 both edit `rank.py`; 33 depends on 15. No two rows in one parallel group open the same file.
+**File contention.** Rows 8, 12, 16, 18 and 19 all edit `frontend/src/lib/components/DigestItem.svelte` and are serialised by their dependencies for that reason. Rows 15 and 17 both edit `DigestList.svelte`; 17 depends on 15. Rows 23, 25 and 26 edit the reading routes' `+page.server.ts` and `+page.svelte` in strict order. Rows 15 and 33 both edit `rank.py`; 33 depends on 15.
+
+**Corrections found in execution, 2026-08-31.** The sentence that followed - "No two rows in one parallel group open the same file" - was false and is struck. Group A alone had rows 1, 3 and 5 sharing `app.css`, `TopicPills.svelte`, `archive/+page.svelte` and `SiteFooter.svelte`, and rows 2 and 3 sharing `config/appearance.json`. The waves were composed by checking the file lists rather than by trusting the claim. Two further couplings the table missed: **row 11 needs `FilterBar.svelte`, which row 7 creates, so its Depends-on is 4 and 7, not 4 alone**; and **`UiConfig` has two exposure points**, `app_config.py` and `appearance_config.py`, so any knob on it moves two models, two schemas, two changelogs and four fixtures.
+
+**ESCALATE trigger (d) cannot fire as written.** It names a route exceeding its committed record in `frontend/bundle-baseline.json`; that file and the first-load byte ratchet were deleted on 2026-08-30. `npm run bundle-gate` now checks the encoder and the page ceilings in `config/idhazh.json`, and **no reading route is capped** - so a reading-page row moves no ceiling and the trigger has no instrument. Rows 5, 8 and 22 measured their own weight instead and recorded it.
 
 **Why the shell migration and the subject credit are in this plan and not their own.** Fowler ruled both separate plan-docs. Overruled here on facts Fowler did not weigh. For the migration: every row of this plan edits a file it moves, and no row has started - two plans against `DigestList.svelte`, `DigestItem.svelte` and three `+page.server.ts` files would conflict on 12 of 20 rows. For the subject credit: the owner asked for one plan, and rows 15 and 33 both change `rank.py` and the published order, so splitting them puts two live ranking changes in two merge windows nobody can attribute between. The seam Fowler asked for survives as three rules, recorded in row 33.
 
