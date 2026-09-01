@@ -1,6 +1,6 @@
 # Agent Notes
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 Environment and tool quirks that make a command lie about its result in this
 repository. Each entry is a trap that cost real time at least once, the symptom
@@ -457,6 +457,17 @@ raw rather than through SvelteKit's preview middleware, so it cannot tell a real
 hydration failure from its own. When a page will not hydrate, re-serve the same
 tree with `npm run preview -- --port <n> --strictPort --host 127.0.0.1`, which is
 what `playwright.config.ts` runs, before concluding anything about the code.
+
+**A scratch directory under `$env:TEMP` outlives the session that made it, and
+the next agent to pick the same name inherits its files.** On 2026-09-01 a
+worker writing to `$env:TEMP\r15\` found a `smoke.cjs` and a `pr-body.md`
+already there, both from an earlier task on a different row, and `create_file`
+refused with "File already exists" rather than overwriting. That refusal is the
+lucky case. The dangerous one is a script that appends, or a reader that opens
+an output file the current run never wrote and reports a stale number as a
+result. Two habits close it: prefix every file with the row tag rather than only
+the directory (`r15-smoke.cjs`, not `smoke.cjs`), and delete the directory's
+contents before the first write rather than trusting the name to be yours.
 
 **A `DONE.txt` sentinel beside a `done.txt` output file is the same file.**
 Windows filenames are case-insensitive, so a gate script that writes

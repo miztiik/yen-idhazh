@@ -1,6 +1,6 @@
 # Source Discovery
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 What the Collect stage consults, how those sources are organised, and how that organisation is changed without breaking a payload an earlier run wrote. Collect is one of the two stages that see the whole day ([../../concepts/pipeline-loop.md](../../concepts/pipeline-loop.md)); this page owns the shape of what it sees.
 
@@ -258,6 +258,113 @@ The consequence worth stating plainly: the planning step loads no weights, finis
 
 **Three of those terms and the score itself now reach the reader.** `carried_by`, `watchlist_hit`, `on_front_page` and `rank_score` were computed here and thrown away at the end of the plan job until 2026-08-31, so the published page could not say why a story is in the digest. They are published unchanged - this stage computes nothing extra for them - and what each one means on the item, and what an absent one means, is [../publishing/layout.md](../publishing/layout.md#an-item-says-why-it-is-here-and-whose-clock-its-time-is).
 
+**And since 2026-09-01 the run manifest records which shape produced the order.** `rank.RANK_VERSION` is bumped whenever the scoring shape changes, and until that date nothing read it - so no run had ever recorded the shape its order came from, and a bump would have recorded nothing. `RunRecord.rank_version` is where it lands. It is null on every manifest written before then, which reads as unknown.
+
+### A second order over the same day: the leading stories
+
+The day's item order is settled above and never moves. From 2026-09-01 the day
+also publishes a **second order over the same stories** - at most
+`ui.leading_stories` of them, in `DigestDay.leads` - so the page has a first
+screen. Nothing is removed, hidden or re-ranked: a lead names a story `items`
+already holds, in the place it already holds it, and every story a rule turns
+away still publishes in the stream. What the block *is* for a reader is
+[../../concepts/digest.md](../../concepts/digest.md#the-days-leading-stories).
+
+It is chosen across the whole day rather than off the head of the published
+order, because that head is not a ranking: `cli.build_plan` extends one list per
+desk, so the first stories on the page are the top of whichever desk sorted
+first in run 1. Measured 2026-08-31 on the 2026-08-30 payload, the first 40
+stories read `ai` x5, `energy` x8, `business-economy` x13, `world` x14.
+
+The arithmetic is one line:
+
+```
+lead_score = rank_score + shared_subject_term
+```
+
+`rank_score` is the published term above, unchanged. The shared-subject term is
+computed at assemble over the finished day, and it obeys the same two rules the
+rest of this page does.
+
+**One fact earns one bonus.** A story takes the largest weight it earned and
+never the sum, which is the rule `lens_bonus` already follows: two of the day's
+running subjects in one title is not twice the story. And **lens overlap is
+refused outright**. Six live lenses fire on 25.6 percent of real articles and
+within a desk the lens that fires is the desk's own theme, so an overlap term
+would restate the per-desk cap - and worse, this page already pays a weight to
+*under-carried* lenses, so paying the over-carried ones a second time in the
+opposite direction would break the rule in the paragraph above. What the reader
+loses is nothing: the cross-desk case it would have caught is already priced by
+those weights.
+
+**The term is a step, not a ramp.** A qualifying subject adds
+`ui.lead_shared_subject_weight` and a subject that does not qualify adds nothing.
+No measurement supports a shape between those two, and a shape nobody measured
+may not justify a design (Rule #10).
+
+A subject qualifies when both hold:
+
+- **`ui.lead_cluster_floor` distinct sources name the same registry entity in
+  their published titles**, counting one story per source per entity, so a
+  newsroom that filed four pieces is one source and not four.
+- **The cluster holds at least one `reporting` story.** A cluster of
+  announcements about one company is a press schedule, not a story.
+
+The title, never the body and never fetched text: the matcher reads words we
+wrote and may only emit a slug the committed registry already holds, so a
+hostile page can win a tag we already publish and can never mint one (Rule #11).
+
+**Four eligibility rules run before any score**, and each excludes whatever the
+story ranked: a `low` band story, a `truncated` one, one whose `time_source` is
+not the feed, and an `announcement` with no reporting in its cluster. A day
+published before `time_source` existed therefore draws no block at all, because
+every story reads null and a null is unknown rather than a claim about a clock.
+
+**Four caps then bound the block**, and each answers a different question: a
+desk may hold `ui.leading_per_desk`, a `source_id` may hold one, a **subject**
+may hold one, and stories the feed dated to the previous day may hold
+`ui.lead_max_yesterday`. The subject cap is the one that is not obvious. A
+running story crosses desks and sources, so the first three do not bound it -
+three of five would clear all of them - and a subject that genuinely deserves
+two of five means the day had fewer than five distinct stories worth leading.
+The per-desk cap matters more than it looks for the same reason: 25 of the 30
+committed registry entries are technology companies, so the shared-subject term
+is structurally biased toward the AI and business desks and this cap is the only
+thing holding it.
+
+Ties break on higher `carried_by`, then `high` before `medium`, then the newer
+story, then `item_id` ascending. The last is derived from the address, so it
+cannot be gamed and two builds of one day are identical.
+
+**Below `ui.leading_min` the block does not render.** Four real leads beat five
+with one filler.
+
+#### Where the weight came from
+
+Measured 2026-09-01 on this checkout, over the 11 committed days under
+`frontend/public/digest/` - 4,086 stories, of which 490 record `carried_by`.
+
+| Signal | How often it fires | What it is worth |
+| --- | --- | --- |
+| A second feed carrying one address | 22 of 490 stories, **4.49 percent** | **0.6** - `tier_weights.trade_press` times `repetition_weight` |
+| A shared subject at a floor of 3 sources | 525 of 4,086 stories, **12.85 percent** | `ui.lead_shared_subject_weight`, **0.2** |
+
+The shared subject is **2.9 times commoner** than a second carrier, so it has to
+be worth less: 0.6 divided by 2.9 is 0.21, rounded to 0.2.
+`backend/tests/test_contracts.py::test_a_shared_subject_is_worth_less_than_a_second_feed_carrying_the_story`
+holds it under 0.6, derived from the two collect knobs rather than spelled, so a
+tier-weight edit moves the bound with it.
+
+What 0.2 buys on a real day: on 2026-08-31, 601 stories, the gap from the day's
+highest `rank_score` to its fifth is 0.31 and to its fifteenth is 0.60. So a
+qualifying subject moves a story about five places at the top of the day, and
+0.6 would have let it leapfrog the whole of it.
+
+The floor of 3 was measured the same way. At two distinct sources 598 of 4,086
+stories (14.64 percent) sit in a cluster and at three it is 525 (12.85 percent),
+so the stronger claim costs 73 stories in 11 days - and "three independent
+sources carried it" is the standard the rest of this page already uses.
+
 ## Changing the source set without breaking history
 
 A vertical will be retired. A feed will die quietly when a site is redesigned. Both are normal, and both are handled in config rather than in code.
@@ -480,6 +587,11 @@ The lifecycle rules exist because the alternative was discovered the expensive w
 | Raising the faithfulness threshold to keep affiliate pages out | They are faithful. Short declarative marketing prose is trivially entailed, so every cut that excludes them excludes real reporting first, and the bar rewards the source it should reject. |
 | Retiring `cnn-world` over the syndicated affiliate pages | It is a working feed carrying real reporting. Retiring a whole source over three items it passed through costs the vertical a desk to fix a link filter. |
 | Blocking `fool.com` entirely | The publisher's editorial arm has not been observed to fail. The measured cut is the affiliate section, and nothing wider has been measured. |
+| Taking the leading block from the first N of the published order | It ships the accident instead of the edit. That head is the top of whichever desk sorted first in run 1, which is a property of `cli.build_plan` and not a judgement about the news. |
+| A heat score for the leading block, computed in the browser | Read-time re-ranking makes a shared link show the recipient a different page from the one the sender saw, and the number behind it would be one nobody measured (Rule #10). Carmack, 2026-08-31. |
+| `Front page at <source>.` as a lead's sentence | False. `on_front_page` says a salience feed voted, and the two active ones are `Hacker News front page` and `Hacker News best` - so naming the front page is wrong whenever the other one voted. Measured 2026-09-01, it is also false on all 490 committed stories that record it and absent on the other 3,596. |
+| `Three sources covered this.` as a lead's sentence | `rank.merge` groups by canonical URL, so `carried_by` counts syndication of one address. Two outlets writing their own pieces produce two addresses and both read 1. The shipped sentence says how the report reached us, which is what the number means. |
+| An `events`-based consequence proxy in the lead score | `events` names the kind of event and never its size - a seed round and a multi-billion acquisition both read `funding`. It would make every acquisition outrank every research paper, which is a rule about grammar rather than about importance. |
 | Asking the summarizer for the lens, event and entity tags | A tag decides what a reader is shown under a filter, so a page that picks its own tags writes its own index entry - fetched text steering a control (Rule #11). It also adds decode tokens to the one stage that already dominates the run. A deterministic matcher costs no model time and returns the same answer on every re-run, which is the property the rest of this page's arithmetic already has. Andre, consulted 2026-08-26. |
 | A per-feed weight only, with no tier | The tier is the reusable half: it is a fact about a kind of source, and a new feed inherits it without anyone inventing a number. |
 | Keeping the flat floor of twenty-five and leaving two verticals unpublished | The floor would then be measuring the borrowed constant, not the health of the desk. Two verticals stay dark for a reason that does not survive being stated. |

@@ -444,6 +444,29 @@ class AppearanceConfig(Contract):
     __schema_stem__: ClassVar[str] = "appearance-config"
     __changelog__: ClassVar[tuple[ChangelogEntry, ...]] = (
         ChangelogEntry(
+            version="2026-09-01T12:30",
+            change=(
+                "digest.leading_stories, digest.leading_per_desk, "
+                "digest.leading_min, digest.lead_cluster_floor, "
+                "digest.lead_shared_subject_weight and digest.lead_max_yesterday "
+                "added, defaulting to 5, 2, 3, 3, 0.2 and 1. "
+                "digest.items_per_topic is deprecated, read by nothing, and dropped "
+                "from the committed file. The shape is `UiConfig`, which this "
+                "document and `AppConfig` share, so both schemas moved together."
+            ),
+            why=(
+                "The day gets a leading block: five stories chosen across the whole "
+                "day, each carrying one sentence saying why it is there. Every "
+                "number that decides it is a knob rather than a literal in a stage "
+                "(Rule #6). The block replaces the three-per-topic headings, which "
+                "on the 431-story day of 2026-08-30 drew 15 stories and put 416 "
+                "behind five links, so items_per_topic lost its only reader. "
+                "Additive with defaults and one deprecation that still validates, "
+                "so an appearance file written before today still reads "
+                "(section 11)."
+            ),
+        ),
+        ChangelogEntry(
             version="2026-09-01T10:00",
             change=(
                 "digest.payload_slow_ms added, defaulting to 1200. The shape is "

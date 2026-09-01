@@ -277,6 +277,20 @@
           "title": "Pipeline Fingerprints",
           "type": "array"
         },
+        "rank_version": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "description": "The scoring shape this run published under, as `idhazh.rank.RANK_VERSION` spells it. A published order that moved for a reason nobody recorded is a published order nobody can defend, and until this field existed the constant was read by nothing. Null on a manifest written before this was recorded, which is unknown rather than a claim about which shape ran.",
+          "title": "Rank Version"
+        },
         "route_ms": {
           "anyOf": [
             {
@@ -417,6 +431,11 @@
   "additionalProperties": false,
   "changelog": [
     {
+      "change": "Added optional rank_version to a run.",
+      "version": "2026-09-01T12:00",
+      "why": "`idhazh.rank.RANK_VERSION` says which scoring shape decided the published order, and its own comment says an order that moved for a reason nobody recorded is an order nobody can defend. Nothing read the constant, so no run had ever recorded it and a bump would have recorded nothing. This is the wiring on its own: no scoring behaviour changes in this commit and the value written is the constant already in the tree. Null on every manifest written before today - 11 days when this landed, 2026-09-01 - and null reads as unknown, never as a claim that some particular shape ran (section 11)."
+    },
+    {
       "change": "run_id is the execution's own identity and no longer restates n. A record is still numbered from 1 without gaps and still addressed by the date, and no two records may share a run_id.",
       "version": "2026-08-31",
       "why": "n was read off the last committed manifest, and actions/checkout pins a job to the commit its run was triggered at - so a run that starts while another is still working reads a manifest that has never heard of it and counts the same number. On 2026-08-29 two runs did: 33270983446 dispatched at 19:29 and 33274853468 scheduled at 20:58 both derived 2026-08-29-3, and the ledgers keyed on that string ended up with six counter rows for four shards and 44 repeated item-health keys. Summed naively that run's reading clock read 19,305.8 seconds against 11,810.3 - 63 percent high. The id now comes from the CI run, which GitHub allocates and no second execution can reproduce, and the day's ordinal stays on n where it was always the thing being asked for. Every committed manifest still validates: <date>-<n> is addressed by the date and unique within a day, so this relaxes the rule rather than breaking it."
@@ -488,7 +507,7 @@
       "type": "array"
     },
     "version": {
-      "default": "2026-08-31",
+      "default": "2026-09-01T12:00",
       "pattern": "^\\d{4}-\\d{2}-\\d{2}(?:T\\d{2}:\\d{2}(?::\\d{2})?)?$",
       "title": "Version",
       "type": "string"
@@ -500,5 +519,5 @@
   ],
   "title": "RunManifest",
   "type": "object",
-  "version": "2026-08-31"
+  "version": "2026-09-01T12:00"
 }

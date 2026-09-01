@@ -469,7 +469,7 @@ After the repair, a re-encode of a repaired day reproduces it byte for byte: cos
 
 **Two days are still short of that promise, and nothing can see it.** 2026-08-21 and 2026-08-22 already carried a vector for every item they earned, so the repair skipped them - which is what makes the command safe to dispatch twice. Their 14 vectors are still the retired arithmetic. `DigestEmbeddings` records the model, the width and the dtype, and nothing records which encoder path wrote a vector, so no detector can tell a stale block from a current one when the counts agree. Fixing that means a field on a persisted contract, which is a `CLAUDE.md` section 6 Level 5 change and belongs to whoever signs it.
 
-## The all-topics page is grouped, and nothing is dropped to do it
+## The all-topics page opens on the day's leading stories, and nothing is dropped to do it
 
 A day of 586 items rendered as one queue had no usable first screen. Items are
 appended in plan order, which is per-vertical, so the payload reads
@@ -477,21 +477,37 @@ appended in plan order, which is per-vertical, so the payload reads
 the page were the top twelve of whichever vertical id sorted first. That is an
 accident, not an edit.
 
-The all-topics view now renders one section per vertical, in the payload's own
-topic order - the same order the pills use - showing each topic's first
-`ui.items_per_topic` items and then a link into the prerendered topic route:
-`All 173 AI stories`. A topic that fits inside the limit carries no link,
-because the link would lead to what is already on screen.
+**From 2026-09-01 the page opens on `DigestDay.leads`** - at most
+`ui.leading_stories` stories, chosen across the whole day by the pipeline, each
+carrying one sentence saying why it leads. Below `ui.leading_min` the block does
+not render and the day goes straight to the stream. What the block is for a
+reader is [../../concepts/digest.md](../../concepts/digest.md#the-days-leading-stories);
+how a lead is chosen is
+[../sources/discovery.md](../sources/discovery.md#a-second-order-over-the-same-day-the-leading-stories).
 
 Three rules make this hierarchy rather than truncation:
 
-- **No item is removed, hidden or re-ranked.** A slice is the head of the published order, and the whole topic is one click away on a route that is prerendered, shareable and works with JavaScript off. [layout.md](layout.md) forbids demoting a published item, and this does not.
-- **A topic route and an active filter stay flat.** Both already have a subject, and filter results cross topics.
-- **A day that ran to a single topic stays flat too.** One heading over the whole page states what the page already says, and it would put items behind a link that leads back to the same list. This is also what keeps every planted item on one page for the injection canaries.
+- **No item is removed, hidden or re-ranked.** A lead names a story the stream
+  already holds, in the place it already holds it, and the block draws what the
+  payload hands it rather than re-ranking anything in the browser.
+- **Every lead's story is rendered, so every anchor resolves.** The stream draws
+  the head of the published order plus every lead, in published order and never
+  twice. That is not a nicety: measured 2026-09-01 on the 601-story day of
+  2026-08-31, the five leads sat at positions 249, 285, 337, 344 and 493, so a
+  page holding only the head is a block whose links land on nothing - and
+  SvelteKit's own `handleMissingId` check fails the build rather than shipping
+  it.
+- **A topic route and an active filter draw no block.** Both already have a
+  subject, and a lead outside what the page is showing is a link that scrolls
+  to nothing.
 
-An emptied section is not rendered. A heading over nothing reads as broken
-software, and it happens for real when a reader hides what they have read - so
-the link is measured against the day's own count, not against the view.
+**What this replaced, and what it cost.** Until 2026-09-01 the view rendered one
+section per vertical showing each topic's first `ui.items_per_topic` stories and
+a link into the topic route. It was hierarchy bought by hiding: on the
+431-story day of 2026-08-30 it drew 15 stories and put 416 behind five links.
+The pill row is the way to a desk now, where every topic is already its own
+prerendered route, and the flat stream below the block carries the whole day.
+`ui.items_per_topic` is retired and read by nothing.
 
 The arithmetic lives in
 [frontend/src/lib/day-shape.ts](../../../frontend/src/lib/day-shape.ts), the way
