@@ -1391,7 +1391,7 @@ extractiveness pair sees it.
 
 ### What the console draws either side of a swap
 
-The alarm above is a gate. The `Did the model change move anything` panel on the
+The alarm above is a gate. The `What the model change moved` panel on the
 Summaries route is the reading a person does when it trips, and it obeys three
 rules the gate does not have to.
 

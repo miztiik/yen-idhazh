@@ -5,6 +5,10 @@
 	 * two charts on different windows cannot be compared - which is the question
 	 * an operator came here to ask.
 	 *
+	 * It sits below the band and above the first panel it governs. Inside the
+	 * band it was a control in a panel it does not govern: the band's three facts
+	 * are the same at every preset and say so twice in their own source.
+	 *
 	 * Radio buttons rather than a menu: four options, all four on the page, so
 	 * the cost of the wide one is readable without opening anything. And a short
 	 * list rather than a slider, because every span is a different number of
@@ -57,37 +61,42 @@
 >
 	<legend class="window-legend">Days shown</legend>
 
-	<div class="segments">
-		{#each presets as preset (preset)}
-			<label class="segment" data-window-preset={preset} data-selected={preset === days}>
-				<input
-					class="segment-input"
-					type="radio"
-					name="console-window"
-					value={preset}
-					checked={preset === days}
-					disabled={!ready}
-					onchange={() => onChange(preset)}
-				/>
-				<span class="segment-days">{preset} days</span>
-				{#if monthsFor(preset) > 0}
-					<!-- The price, before it is paid. A wider window is not free: it
-					     pulls a month file per month it reaches back into. -->
-					<span class="segment-cost" data-window-preset-cost={preset}>
-						+{files(monthsFor(preset))}
-					</span>
-				{/if}
-			</label>
-		{/each}
-	</div>
+	<!-- The four tiles and the sentence about them on one line where there is
+	     room. Stacked, this control cost 125px of the first viewport on a desktop
+	     and 195px on a phone, for four words and a radio group. -->
+	<div class="window-body">
+		<div class="segments">
+			{#each presets as preset (preset)}
+				<label class="segment" data-window-preset={preset} data-selected={preset === days}>
+					<input
+						class="segment-input"
+						type="radio"
+						name="console-window"
+						value={preset}
+						checked={preset === days}
+						disabled={!ready}
+						onchange={() => onChange(preset)}
+					/>
+					<span class="segment-days">{preset} days</span>
+					{#if monthsFor(preset) > 0}
+						<!-- The price, before it is paid. A wider window is not free: it
+						     pulls a month file per month it reaches back into. -->
+						<span class="segment-cost" data-window-preset-cost={preset}>
+							+{files(monthsFor(preset))}
+						</span>
+					{/if}
+				</label>
+			{/each}
+		</div>
 
-	<p id="window-control-status" class="window-status" data-window-status>{status}</p>
+		<p id="window-control-status" class="window-status" data-window-status>{status}</p>
+	</div>
 </fieldset>
 
 <style>
 	.window-control {
-		margin-top: var(--space-5);
-		padding: var(--space-4);
+		margin-top: var(--space-4);
+		padding: var(--space-3) var(--space-4) var(--space-4);
 		border: 1px solid var(--color-rule);
 		border-radius: var(--radius-lg);
 		background: var(--color-surface);
@@ -98,6 +107,16 @@
 		padding-inline: var(--space-2);
 		font-size: var(--text-xs);
 		color: var(--color-text-tertiary);
+	}
+
+	/* One line where there is room, two where there is not. The sentence is what
+	   says which span is in force, so it sits beside the tiles rather than under
+	   them - and a column too narrow for both stacks it back. */
+	.window-body {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-4);
 	}
 
 	.segments {
@@ -160,8 +179,10 @@
 	}
 
 	.window-status {
-		margin: var(--space-3) 0 0;
+		flex: 1 1 15rem;
+		margin: 0;
 		font-size: var(--text-xs);
+		line-height: var(--leading-xs);
 		color: var(--color-text-tertiary);
 	}
 </style>
