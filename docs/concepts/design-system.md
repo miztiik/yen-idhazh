@@ -1,6 +1,6 @@
 # Design System
 
-**Last Updated**: 2026-08-31
+**Last Updated**: 2026-09-01
 
 The visual vocabulary of the published surface: the state-driven styling pattern, design tokens, the restrained motion set, and the icon rule. This is the shared language the [chrome](ui-shell.md) and every [item](digest.md) speak; the concrete token file lands with the design-system code row, and this page fixes the vocabulary that row builds to. The bounds are owned by Jony ([../../.github/agents/jony.agent.md](../../.github/agents/jony.agent.md)).
 
@@ -596,6 +596,43 @@ One control per panel, never one per series and never a preference that follows
 the reader across the site. A Sankey is not a line and a histogram is not a
 stacked bar; forcing the control everywhere would mean massaging data to fit it.
 
+### A chart says how much of its window it measured, once, above the plot
+
+`Time per item, by stage` carried one footnote per series under the plot, and
+the three said one window-level fact three times in near-identical words:
+`We timed no fetch work on 22 of the 30 days`, then the same for `extract`, then
+the same for `summarize`. A fourth stage would have made it four. **The count
+was the defect, not the length**, so shortening each note would have fixed
+nothing.
+
+One sentence now, and five rules hold it. Susan, 2026-08-31.
+
+- **Once per chart, whatever the series count.** The fact is about the window,
+  not about a line.
+- **Above the plot, not below it.** A reader meets a broken line before he meets
+  the sentence that explains it.
+- **The denominator is the day's own item count**, never the sum of the stages'
+  totals: one item waits on all three, so summing counts it three times. Where
+  the stages reached different amounts of the same days the numerator prints as
+  a range - `3,900 to 3,955` - because picking one stage would be arbitrary.
+- **Nothing at all where the window was measured in full.** A sentence that only
+  ever says "all of it" is noise, and `SPARSE_COVERAGE` is the line it has to
+  fall under - see
+  [../architecture/publishing/telemetry-series.md](../architecture/publishing/telemetry-series.md)
+  for the threshold and the tinted span it goes with.
+- **The open-dot legend is a second sentence in the same paragraph**, printed
+  once and only where an open dot is drawn.
+
+Not in the hover strip: `ChartReadout` is one contract capped at
+`chart.readout_max_share` and it prints one column's values, so a window-level
+sentence there would be a second thing that strip means.
+
+The oracle asserts exactly one `[data-timing-coverage]` and holds its two
+numbers to a second, independent reading of the canary ledger. **The series
+count appears in no assertion** - that is what proves the sentence stopped
+scaling with the series
+([../../frontend/tests/console-timings.spec.ts](../../frontend/tests/console-timings.spec.ts)).
+
 ## A console figure says what it counts, in words
 
 The console is read by the developer and the operator, not by a digest reader.
@@ -1083,6 +1120,20 @@ Eight rulings hold it, Jony's of 2026-08-29 unless a later date is given:
   article length yet.` means the ledger cannot answer; `No article was cut short
   in these 7 days.` means it answered no. Reading the first as the second is
   the same mistake as reading a null as a zero.
+
+**A chart row is 40px at the least, and it grows with the plot.** That is the
+readable minimum for this shape and it is stated here so a check can name it:
+the row carries an 11px name, a 10px count and a 10px bar, so a 34px pitch - what
+this plot shipped until 2026-09-01 - leaves no air at all between one source and
+the next. `ROW_PITCH_MIN` in
+[../../frontend/src/lib/charts/frame.ts](../../frontend/src/lib/charts/frame.ts)
+is the floor, `rowPitch` grows the row into a page-wide frame the way `cellFor`
+grows a run-strip cell, and a ceiling stops six rows from reading as six charts.
+Where the name cannot sit beside the plot without taking more than
+`MAX_GUTTER_SHARE` of the frame - which is every phone - it moves above the
+track and the row takes one more line of type. **Nothing is abbreviated at any
+width**: a source id is the ledger's own spelling of a name, so the gutter moves
+and the word does not. Jony, 2026-09-01.
 
 Rejected here: the cut share on the run-health strip (a 16px square has no room
 for a number, and it answers "did it work" rather than "what did it read"); a
