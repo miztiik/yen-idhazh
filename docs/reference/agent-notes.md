@@ -394,6 +394,23 @@ Get-CimInstance Win32_Process | Where-Object { $_.Name -eq 'chrome-headless-shel
 A rising CPU total on a headless shell is work. Killing the run and starting
 again costs another eight minutes and proves nothing.
 
+**And `| Select-Object -Last N | Out-File` can eat that suite's whole output.**
+Written as `npm run test:browser 2>&1 | Select-Object -Last 45 | Out-File $log`,
+the log was created immediately, stayed empty for the nine minutes the suite
+ran, and was still zero bytes after it finished - while the exit code beside it
+read 0. A pass with no evidence is indistinguishable from a null result, and
+this is the gate whose test count you have to report. Redirect the whole stream
+instead and read the tail afterwards, which also lets you watch the run:
+
+```powershell
+npm run test:browser *> "$log"
+Get-Content $log | Select-Object -Last 3
+```
+
+Observed 2026-09-01 on a nine-minute run. The same shape is safe on a command
+that finishes in seconds, which is why it survives in this page's older
+recipes.
+
 **Two builds of the same source disagree on a fifth of `frontend/build/`, and
 the cause is a timestamp.** `kit.version.name` defaults to `Date.now()`. It
 lands in `_app/version.json`, in the `__sveltekit_<id>` global every prerendered

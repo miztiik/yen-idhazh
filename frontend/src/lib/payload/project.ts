@@ -41,7 +41,7 @@ type Json = Record<string, unknown>;
  * file and fails if it and the contract disagree, which is what stops the two
  * halves of one payload drifting across two languages.
  */
-export const VIEW_VERSION = '2026-08-31T12:00';
+export const VIEW_VERSION = '2026-09-01T09:00';
 
 // The fields a page renders, and no others. Traced along the render path rather
 // than guessed: `DigestList` scopes, filters and divides the list, and
@@ -75,6 +75,17 @@ export const VIEW_VERSION = '2026-08-31T12:00';
 // reading-page plan forbids publishing them as reader-facing chips (+1.63 and
 // +1.80 B an item). `source_form` has no reader at all (+1.21).
 //
+// One more joined on 2026-09-01, and it is drawn: `ItemMeta` prints the sentence
+// that says how many other sources carried the story, or that only one of ours
+// did. Measured 2026-09-01 on Intel Core i7-1265U / Windows 11 over 11 committed
+// days and 3,978 items, `gzip -9` on the compact projection, added to the
+// twenty-two-field arm: 467.49 bytes an item before and 468.24 after, which is
+// 0.75 an item.
+//
+// Its sibling on the committed item, `same_story_as`, is deliberately NOT here.
+// No page draws a group as one item yet, and a field without a reader does not
+// earn the wire.
+//
 // The order is the order the staged file writes its keys in, so a name moved
 // here rewrites every staged day.
 export const ITEM_FIELDS: readonly string[] = [
@@ -97,6 +108,7 @@ export const ITEM_FIELDS: readonly string[] = [
 	'watchlist_hit',
 	'on_front_page',
 	'rank_score',
+	'also_covered_by',
 	'introduced_by_run',
 	'lenses',
 	'key_points'
@@ -161,7 +173,7 @@ export function projectDay(text: string): string {
 /** The committed day with its vector block removed.
  *
  * The other half of the same rule, for the caller that keeps the whole day
- * rather than twenty-two fields of it. Whatever the build-time reader returns
+ * rather than twenty-three fields of it. Whatever the build-time reader returns
  * is inlined into every prerendered document that renders the day, and nothing
  * in a browser opens the block: its one production reader is the backend's
  * index rebuild, which reads `frontend/public/` from disk. The committed
