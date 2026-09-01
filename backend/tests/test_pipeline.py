@@ -24,7 +24,7 @@ from conftest import CONFIG_DIR, CONTRACT_FIXTURES_DIR, FIXTURES_DIR, REPO_ROOT,
 from pydantic import ValidationError
 from pytest import MonkeyPatch
 
-from idhazh import assemble, cli, config, extract, ledger, telemetry
+from idhazh import assemble, cli, config, extract, ledger, rank, telemetry
 from idhazh.contracts.app_config import EvaluationConfig, ExtractConfig, ObservabilityConfig
 from idhazh.contracts.article import Article
 from idhazh.contracts.base import SHA256_PATTERN
@@ -2062,6 +2062,75 @@ def test_the_manifest_records_what_ran_against_what() -> None:
     assert manifest.runs[-1].run_id == "2026-08-21-1"
     assert manifest.runs[-1].config_digests
     assert manifest.runs[-1].pipeline_fingerprints
+
+
+def test_the_run_records_the_scoring_shape_that_decided_its_order() -> None:
+    """`RANK_VERSION` was read by nothing, so no run had ever recorded it.
+
+    The stage that publishes the order is the stage that names the shape it was
+    published under, and it names the constant rather than a string of its own -
+    two spellings of one version is the failure this field exists to close.
+    """
+    settings = config.load(CONFIG_DIR)
+    source = read_text(REPO_ROOT / "backend" / "idhazh" / "cli.py")
+    assert "rank_version=rank.RANK_VERSION" in source, (
+        "the assemble stage stopped recording the scoring shape"
+    )
+
+    manifest = assemble.build_manifest(
+        plan=plan(),
+        day=assemble.build_day(
+            plan=plan(),
+            items=[digest_item()],
+            previous=None,
+            taxonomy=settings.taxonomy,
+            run_n=1,
+            generated_at="2026-08-21T07:00:00Z",
+            retention_window_months=-1,
+        ),
+        previous=None,
+        summaries=[summary()],
+        models=[],
+        commit_sha="a" * 40,
+        runner="local",
+        started_at="2026-08-21T06:00:00Z",
+        completed_at="2026-08-21T07:00:00Z",
+        config_digests=settings.digests,
+        site_bytes=1024,
+        site_files=2,
+        rank_version=rank.RANK_VERSION,
+    )
+    assert manifest.runs[-1].rank_version == rank.RANK_VERSION
+
+    # A caller that records nothing writes null, which reads as unknown. It must
+    # never read as "the shape this build happens to carry".
+    silent = assemble.build_manifest(
+        plan=plan(),
+        day=manifest_day(settings),
+        previous=None,
+        summaries=[summary()],
+        models=[],
+        commit_sha="a" * 40,
+        runner="local",
+        started_at="2026-08-21T06:00:00Z",
+        completed_at="2026-08-21T07:00:00Z",
+        config_digests=settings.digests,
+        site_bytes=1024,
+        site_files=2,
+    )
+    assert silent.runs[-1].rank_version is None
+
+
+def manifest_day(settings: config.Settings) -> DigestDay:
+    return assemble.build_day(
+        plan=plan(),
+        items=[digest_item()],
+        previous=None,
+        taxonomy=settings.taxonomy,
+        run_n=1,
+        generated_at="2026-08-21T07:00:00Z",
+        retention_window_months=-1,
+    )
 
 
 def test_the_manifest_cannot_record_one_run_twice() -> None:

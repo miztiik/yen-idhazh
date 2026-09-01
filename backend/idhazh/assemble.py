@@ -543,6 +543,7 @@ def build_manifest(
     evaluation_sample_rate: float | None = None,
     evaluation_sampled: bool | None = None,
     scorer_version: str | None = None,
+    rank_version: str | None = None,
 ) -> RunManifest:
     """What ran, against which model, at which commit - appended, never rewritten.
 
@@ -611,6 +612,7 @@ def build_manifest(
         evaluation_sample_rate=evaluation_sample_rate,
         evaluation_sampled=evaluation_sampled,
         scorer_version=scorer_version,
+        rank_version=rank_version,
         config_digests=list(config_digests),
         note=note,
     )

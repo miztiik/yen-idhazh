@@ -2667,6 +2667,7 @@ def stage_assemble(
         evaluation_sample_rate=observability.sample_rate,
         evaluation_sampled=sampling.run_is_sampled(run_id, observability.sample_rate),
         scorer_version=instruments[0] if len(instruments) == 1 else None,
+        rank_version=rank.RANK_VERSION,
     )
     assemble.write_atomic(target / "run.json", manifest.to_json())
     landed = writer.append(STATE_ROOT, rows)
