@@ -282,7 +282,11 @@ test.describe('the item is a low-chrome card', () => {
 			if (!card) throw new Error('no item');
 			const heading = card.querySelector('h2, h3');
 			const summary = card.querySelector('p.measure');
-			const eyebrow = card.querySelector('p.uppercase');
+			// By the hook rather than by a utility class: the eyebrow's own upper
+			// case moved onto the desk chip when that chip landed, and a selector
+			// reading `p.uppercase` would then have measured nothing and reported
+			// a font size of 0 as a pass.
+			const eyebrow = card.querySelector('[data-item-eyebrow]');
 			const px = (el: Element | null) => (el ? parseFloat(getComputedStyle(el).fontSize) : 0);
 			const root = getComputedStyle(document.documentElement);
 			return {

@@ -33,9 +33,15 @@ import {
 const STAGED = resolve(process.cwd(), 'static', 'digest');
 const COMMITTED = resolve(process.cwd(), 'public', 'digest');
 
-/** Traced along the render path, not guessed: `DigestList` scopes, filters and
- * divides the list, and `DigestItem` with `ItemMeta`, `ItemVisual`,
- * `LensChips`, `ConfidenceChip`, `ReadAloud` and `SourceLink` draws one item. */
+/** Traced along the render path, not guessed: `DigestList` scopes and filters
+ * the list, and `DigestItem` with `ItemMeta`, `ItemVisual`, `LensChips`,
+ * `ConfidenceChip`, `ReadAloud` and `SourceLink` draws one item.
+ *
+ * `introduced_by_run` is the exception and it is deliberate. Nothing has drawn
+ * it since the run divider was deleted on 2026-09-01, and it stays because
+ * taking a name off the allow-list is a change to `DigestView` rather than a
+ * detail. Removing it here would make this promise agree with a contract change
+ * nobody had decided. */
 const RENDERED_FIELDS = [
 	'also_covered_by',
 	'band',

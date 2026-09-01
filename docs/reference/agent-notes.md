@@ -967,6 +967,18 @@ reading exactly like a code fault. A second `npm ci` fixed it. Suspect the
 install before the source whenever a missing module belongs to a transitive
 dependency nothing in the change touched.
 
+**A brand-new worktree has no `frontend/node_modules`, and `npm run build` gets
+most of the way through before it says so.** The first three steps of that
+script are plain `node`, so they need nothing installed: on 2026-09-01 a fresh
+worktree printed `build-icons: 14 icons`, `frame css: unchanged`, `rendered
+visuals: staged 244 image(s) and projected 12 day payload(s)` and
+`telemetry: staged 2 shard(s)` - four lines of success - and then
+`'vite' is not recognized`. Four green lines and one failure reads as a broken
+Vite rather than as an empty `node_modules`, and `npm run check` beside it fails
+on `svelte-kit` for the identical reason. Run `npm ci` in the worktree before
+the first frontend gate, and check the shim above rather than reading the build
+log.
+
 **From a detached hidden `pwsh`, `& npm ci` and `& npm run <script>` resolve
 nothing and leave `$LASTEXITCODE` UNSET.** The sentinel then reads `NPMCI=`
 with an empty value - "ran and returned blank" - which is the tell, and it looks
