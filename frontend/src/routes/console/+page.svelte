@@ -64,6 +64,7 @@
 		failureMix,
 		failureMixColumns,
 		publishedSkyline,
+		publishingHorizon,
 		runHealth,
 		siteCost,
 		sizeGain,
@@ -197,6 +198,15 @@
 	 * same way the server did. */
 	const articles = $derived(new Map(Object.entries(data.publishedItems)));
 	const perArticle = $derived(siteCost(data.manifests, articles, viewport));
+	/** How long the cap lasts at this window's two measured rates.
+	 *
+	 * The panel exists to answer this and had never said so. Both rates come off
+	 * the same published days the chart above is drawn from, so the sentence and
+	 * the picture cannot be read off two different windows.
+	 */
+	const horizon = $derived(
+		publishingHorizon(data.band.size.bytes, perArticle, articles)
+	);
 	/** `siteCost`'s own plot insets, so a column the pointer lands on is the
 	 * column the strip prints at every width. */
 	const COST_GRID = { left: 56, right: 14 };
@@ -421,6 +431,17 @@
 		return `${Math.round(value).toLocaleString('en-GB')} B`;
 	}
 
+	/** Three significant figures, the rule the band's own headroom prints by.
+	 *
+	 * The rate under this is a median whose spread is near a fifth of itself, so
+	 * the trailing digits of a six-figure answer are noise and printing them
+	 * claims an accuracy nothing measured (Rule #10). */
+	function roughly(value: number): string {
+		if (value <= 0) return '0';
+		const scale = 10 ** Math.max(0, Math.floor(Math.log10(value)) - 2);
+		return (Math.round(value / scale) * scale).toLocaleString('en-GB');
+	}
+
 	/** The same window the server drew with. Both sides derive it from the rows
 	 * rather than passing it, so the hydrated chart cannot disagree with the one
 	 * already on the page. */
@@ -595,7 +616,7 @@
 	>
 		<Panel
 			title="What one more article costs"
-			note="Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days. {sizeDelta}"
+			note="How long we can keep publishing. The 1 GB Pages cap is fixed, so what one more article costs is what sets the date we reach it. Bytes the committed payload tree gained on each published day, over the articles that day published. Over {windowDays} days. {sizeDelta}"
 		>
 			{#if perArticle.empty}
 				<p class="mt-2 text-[0.8125rem] text-text-secondary" data-window-empty="site-cost-per-item">
@@ -615,12 +636,27 @@
 						that.
 					{/if}
 				</p>
+				{#if horizon}
+					<!-- The horizon, and the one thing it cannot say about itself. The
+					     cap is measured on the built site and this rate is measured on
+					     the payload tree behind it, so the room is the most we have and
+					     never the least. Both rates come off the same published days the
+					     chart below is drawn from. -->
+					<p class="mt-1 text-[0.8125rem] text-text-secondary" data-cost-horizon>
+						At {bytes(perArticle.median ?? 0)} an article, the 1 GB cap has room for about {roughly(
+							horizon.articles
+						)} more. At a median of {grouped(Math.round(horizon.articlesPerDay))} articles a published
+						day, that is about {horizon.years.toFixed(1)} years. The cap is measured on the built site,
+						which is larger than the payload tree this rate came from, so that is the most room we have
+						and not the least.
+					</p>
+				{/if}
 				{#if data.glance.perArticleSvg}
 					{#key windowDays}
 						<Chart
 							svg={data.glance.perArticleSvg}
 							option={perArticle.option}
-							width={760}
+							width={data.console.chart_width}
 							height={220}
 							label="Payload bytes per article on each published day, over {windowDays} days, against the median and one standard deviation either side of it"
 							columns={costColumns}

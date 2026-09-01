@@ -1,8 +1,9 @@
 import { expect, test, type Page } from '@playwright/test';
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, resolve } from 'node:path';
-import { publishedSkyline } from '../src/lib/charts/glance';
+import { publishedSkyline, publishingHorizon, siteCost } from '../src/lib/charts/glance';
 import type { GlanceDay } from '../src/lib/charts/glance';
+import type { RunSummary } from '../src/lib/server/payload';
 
 /**
  * Two skylines, each one bar a day over the window the control set.
@@ -74,6 +75,11 @@ function day(date: string, published: number, items = published): GlanceDay {
 	// The skyline reads one count off a day and never both, so the two measures
 	// have to be settable apart or a test cannot tell which one it drew.
 	return { date, published, items, minutesPerChart: null };
+}
+
+/** A run manifest with only the fields the cost arithmetic reads. */
+function summary(date: string, siteBytes: number): RunSummary {
+	return { date, runs: 1, planned: 0, failed: 0, siteBytes, siteFiles: 1, models: [], records: [] };
 }
 
 function sourceFiles(): string[] {
@@ -330,8 +336,109 @@ test('one function draws both strips, so their geometry cannot drift', () => {
 	expect(visuals.busiest).toBe(3);
 });
 
-test('the intro carries no count that only ever grows', async ({ page }) => {
+test('THE ORACLE: the cost panel says what it is for, and its chart fills its frame', async ({
+	page
+}) => {
+	// The panel is the marginal cost of one more article, and it is on the page
+	// to answer how long the project can keep publishing under the 1 GB cap. The
+	// note had never said either, so a reader met a chart of bytes per article
+	// with nothing to hold it against.
 	await page.goto('/console/');
+	await page.setViewportSize({ width: 1440, height: 1000 });
+	await page.waitForTimeout(1200);
+
+	const panel = page.locator('[data-windowed="site-cost-per-item"]');
+	await expect(panel).toContainText('How long we can keep publishing');
+	await expect(panel).toContainText('1 GB Pages cap');
+
+	// The horizon names the cap, the rate and the date, in one sentence whose
+	// numbers are the ones the chart beside it was drawn from.
+	const horizon = panel.locator('[data-cost-horizon]');
+	await expect(horizon).toHaveCount(1);
+	const said = (await horizon.innerText()).replace(/\s+/g, ' ');
+
+	const rate = Number(/At ([\d,]+) B an article/.exec(said)?.[1]?.replace(/,/g, ''));
+	const summary = (await panel.locator('[data-cost-summary]').innerText()).replace(/\s+/g, ' ');
+	const median = Number(/([\d,]+) B an article/.exec(summary)?.[1]?.replace(/,/g, ''));
+	expect(Number.isFinite(rate), `no rate in the horizon: ${said}`).toBe(true);
+	expect(rate, 'the horizon and the chart quote two different rates').toBe(median);
+
+	// The daily rate is a median over the days the chart drew, so it is one of
+	// the counts the articles card publishes for those same days.
+	const perDay = Number(
+		/median of ([\d,]+) articles a published day/.exec(said)?.[1]?.replace(/,/g, '')
+	);
+	expect(Number.isFinite(perDay), `no daily rate in the horizon: ${said}`).toBe(true);
+	const drawn = await panel
+		.locator('[data-cost-day]')
+		.evaluateAll((nodes) => nodes.map((node) => node.getAttribute('data-cost-day') ?? ''));
+	const byDate = publishedItemsByDate();
+	const counts = drawn.map((date) => byDate.get(date) ?? 0).sort((a, b) => a - b);
+	const middle = Math.floor(counts.length / 2);
+	const expected =
+		counts.length % 2 ? counts[middle] : (counts[middle - 1] + counts[middle]) / 2;
+	expect(perDay, 'the daily rate is not the median of the days the chart drew').toBe(
+		Math.round(expected)
+	);
+
+	// And the caveat, which is the one thing the figure cannot say about itself.
+	expect(said, 'the horizon does not say which tree it measured').toContain('built site');
+
+	// The chart tracks its container rather than the 760 it was once given. Read
+	// at three widths, because a hardcoded number matches one of them by luck.
+	for (const width of [1440, 768, 390]) {
+		await page.setViewportSize({ width, height: 1000 });
+		await page.waitForTimeout(500);
+		const drawnAt = await panel.evaluate((node) => {
+			const svg = node.querySelector('svg');
+			const host = svg?.parentElement;
+			if (!svg || !host) return null;
+			return {
+				svg: svg.getBoundingClientRect().width,
+				host: host.getBoundingClientRect().width
+			};
+		});
+		expect(drawnAt, `${width}: the cost chart is not drawn`).not.toBeNull();
+		expect(
+			Math.abs((drawnAt?.svg ?? 0) - (drawnAt?.host ?? 0)),
+			`${width}: the chart drew ${drawnAt?.svg} in a ${drawnAt?.host} frame`
+		).toBeLessThanOrEqual(2);
+	}
+});
+
+test('the horizon needs both rates, and prints nothing without either', () => {
+	// A tree that never grew over an article it published has no cost, and a
+	// window whose days published nothing has no daily rate. Neither is a zero,
+	// and printing a date from one is the defect the band already had once.
+	const runs = [
+		summary('2026-08-01', 1_000_000),
+		summary('2026-08-02', 1_300_000),
+		summary('2026-08-03', 1_600_000)
+	];
+	const items = new Map([
+		['2026-08-01', 100],
+		['2026-08-02', 100],
+		['2026-08-03', 100]
+	]);
+	const cost = siteCost(runs, items);
+	// 3,000 bytes an article by construction, and 100 articles a published day.
+	expect(cost.median).toBe(3000);
+
+	const horizon = publishingHorizon(1_600_000, cost, items, 10_000_000);
+	expect(horizon).not.toBeNull();
+	expect(horizon?.articles).toBe((10_000_000 - 1_600_000) / 3000);
+	expect(horizon?.articlesPerDay).toBe(100);
+	// A division a reader can check, at the two rates the sentence quotes.
+	expect(horizon?.years).toBeCloseTo((10_000_000 - 1_600_000) / 3000 / 100 / 365.25, 6);
+
+	expect(publishingHorizon(null, cost, items, 10_000_000)).toBeNull();
+	expect(
+		publishingHorizon(1_600_000, { ...cost, median: null }, items, 10_000_000)
+	).toBeNull();
+	expect(publishingHorizon(1_600_000, cost, new Map(), 10_000_000)).toBeNull();
+});
+
+test('the intro carries no count that only ever grows', async ({ page }) => {	await page.goto('/console/');
 
 	const intro = page.locator('[data-surface="operator"] > p').first();
 	await expect(intro).toContainText('from the committed ledger');

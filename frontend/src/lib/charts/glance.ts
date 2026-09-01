@@ -374,6 +374,50 @@ export function siteRunway(
 	};
 }
 
+/** A year, for turning articles into a date. Averaged over the leap cycle. */
+const DAYS_A_YEAR = 365.25;
+
+/** How long the project can keep publishing, at two measured rates.
+ *
+ * The band prints articles of room, because articles need no daily rate and the
+ * one number that was standing in for a rate bounded a run rather than a day.
+ * A reader still wants a date, and the only honest way to one is to measure the
+ * articles a published day really carries - which the same days the cost was
+ * measured over already say.
+ *
+ * Both rates are medians over the SAME published days, so the horizon and the
+ * chart above it cannot be read off two different windows. The cost is a median
+ * because one pathological day would otherwise set a figure the operator reads
+ * as typical, and the daily rate is a median for the same reason: the eleven
+ * committed published days run 4 articles to 731.
+ *
+ * Null wherever a rate is missing. A tree that never grew over an article it
+ * published has no horizon, and printing one anyway is the defect this replaced.
+ */
+export interface PublishingHorizon {
+	/** Articles of room left in the payload tree, at the measured cost. */
+	articles: number;
+	/** Median articles a published day, over the days the cost came from. */
+	articlesPerDay: number;
+	/** Years of publishing, at both measured rates. */
+	years: number;
+}
+
+export function publishingHorizon(
+	bytesUsed: number | null,
+	cost: SiteCost,
+	items: ReadonlyMap<string, number>,
+	capBytes: number = PAGES_CAP_BYTES
+): PublishingHorizon | null {
+	if (bytesUsed === null || cost.median === null || cost.median <= 0) return null;
+	const perDay = middleOf(
+		cost.days.map((day) => items.get(day.date) ?? 0).filter((count) => count > 0)
+	);
+	if (perDay === null || perDay <= 0) return null;
+	const articles = (capBytes - bytesUsed) / cost.median;
+	return { articles, articlesPerDay: perDay, years: articles / perDay / DAYS_A_YEAR };
+}
+
 /** What is failing, and is the mix changing?
  *
  * Stacked rather than grouped: the total per day is half the question, and

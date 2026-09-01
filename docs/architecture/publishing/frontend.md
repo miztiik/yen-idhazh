@@ -1980,6 +1980,41 @@ that is what a chart owes anybody who cannot see it, and it is also the only way
 the flags can be checked: `frontend/tests/console-site-size.spec.ts` recomputes
 the band from exactly those numbers and fails if the marks disagree.
 
+**The panel says what it is for, and until 2026-09-01 it never had.** Its note
+described its own axes - bytes gained, over articles published - and a reader
+met a chart of four-digit numbers with nothing to hold them against. It is not
+a chart of data growth across days; it is the marginal cost of one more article,
+and it is on the page to answer how long the project can keep publishing under
+the 1 GB Pages cap. The note now opens with that question and the panel closes
+with the answer.
+
+**The horizon is two measured rates over one set of days.** `publishingHorizon`
+divides the headroom by the window's median cost, which gives articles, and then
+by the median articles a published day taken over the same days that cost came
+from - so the sentence and the chart above it cannot be read off two different
+windows. Neither rate is a config knob. The band next door prints the same
+headroom in articles and stops there, for the reason two sections down: articles
+need no daily rate at all, and the one number that used to stand in for a rate
+bounded a run rather than a day. The years figure lives here because this is
+where the spread and the flagged days are drawn, and the spread is the only
+thing that says whether a rate is stable enough to extrapolate from. Null
+wherever either rate is missing: a tree that never grew over an article it
+published has no horizon, and a window whose days published nothing has no daily
+rate.
+
+**The sentence carries the caveat it cannot derive.** The cap is measured on the
+built site and this rate is measured on the committed payload tree behind it, so
+the room is the most we have and never the least - the two trees were 14.63
+times apart on 2026-08-30 and the multiple is not stable. A figure that printed
+a date without that clause would be optimistic by a multiple nobody can see.
+
+**The chart measures its container.** It was handed a literal `760` until
+2026-09-01 while every other chart on the page read `console.chart_width`; the
+drawn width already tracked, because `Chart.svelte` owns it from mount onward
+through a `ResizeObserver`, so what changed is that the seed is no longer a
+number somebody typed. Measured 2026-09-01 at 1440, 768 and 390, the SVG is its
+host's width to within a pixel at all three.
+
 **The window bounds what is drawn and never what is differenced.** A day's cost
 is its own bytes minus the previous manifest's, so the oldest day on screen
 still reads against the day before it. Differenced against zero it would report
