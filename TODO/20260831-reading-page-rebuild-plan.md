@@ -68,7 +68,7 @@ The requirement was stated as a decay. Three different features answer to that w
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Retire every hardcoded CSS value | - | A | DONE | yi-p01 | #320 | worker |
 | 2 | Dark by default, and one moon button | - | A | DONE | yi-p02 | #332 | worker |
-| 3 | No horizontal scrollbar, and the gate that keeps it out | - | A | IN-FLIGHT | yi-p03 | #337 | worker |
+| 3 | No horizontal scrollbar, and the gate that keeps it out | - | A | DONE | yi-p03 | #337 | worker |
 | 4 | Publish the ranking signal and name the clock | - | A | DONE | yi-p04 | #319 | worker |
 | 5 | The footer becomes three lines | - | A | DONE | yi-p05 | #330 | worker |
 | 21 | Extract the payload projector into one module | - | A | DONE | yi-p21 | #318 | worker |
@@ -79,19 +79,19 @@ The requirement was stated as a decay. Three different features answer to that w
 | 6 | The wordmark: Yen Idhazh | 2 | B | DONE | yi-p06 | #339 | worker |
 | 7 | The filter bar: topics and search in one control | 3 | B | PENDING | - | - | - |
 | 8 | The item becomes a low-chrome card | 1 | B | DONE | yi-p08 | #329 | worker |
-| 9 | Collapse same-story duplicates onto one item | 4 | B | PENDING | - | - | - |
+| 9 | Collapse same-story duplicates onto one item | 4 | B | DONE | yi-p09 | #342 | worker |
 | 10 | A per-day ceiling on one source's share | 4 | B | DONE | yi-p10 | #334 | worker |
 | 11 | A thin desk says what did not run | 4, 7 | B | PENDING | - | - | - |
-| 23 | Split a reading route's load into facts and items | 22 | C | PENDING | - | - | - |
+| 23 | Split a reading route's load into facts and items | 22 | C | DONE | yi-p23 | #343 | worker |
 | 12 | The monogram carries the read state | 2, 8 | C | DONE | yi-p12 | #335 | worker |
 | 13 | The archive stops adding a link a day | 3, 7 | C | PENDING | - | - | - |
 | 14 | Empty, missing and failed-day screens | 8 | C | DONE | yi-p14 | #336 | worker |
 | 32 | Half-lives as config, with a fuse and a lifecycle | 30, 31 | C | COLLAPSED | - | - | - |
-| 24 | The anchor and the unreachable state | 23 | D | PENDING | - | - | - |
-| 25 | The topic routes fetch their day | 23, 24 | D | PENDING | - | - | - |
+| 24 | The anchor and the unreachable state | 23 | D | DONE | yi-p24 | #345 | worker |
+| 25 | The topic routes fetch their day | 23, 24 | D | DONE | yi-p25 | #349 | worker |
 | 16 | Split the item's meta line | 12 | D | PENDING | - | - | - |
-| 26 | The day route fetches its day | 25 | E | PENDING | - | - | - |
-| 15 | The day's leading stories | 4, 8 | E | PENDING | - | - | - |
+| 26 | The day route fetches its day | 25 | E | IN-FLIGHT | yi-p26 | #352 | worker |
+| 15 | The day's leading stories | 4, 8 | E | DONE | yi-p15 | #347 | worker |
 | 18 | Spend the width: the four-zone column model | 16 | E | PENDING | - | - | - |
 | 19 | Key points on long items only | 16 | E | PENDING | - | - | - |
 | 17 | The time rail, and copy that stays true tomorrow | 4, 15 | F | PENDING | - | - | - |
@@ -101,6 +101,8 @@ The requirement was stated as a decay. Three different features answer to that w
 | 20 | The full-day browser smoke | all | H | PENDING | - | - | - |
 
 **One row ran that this plan never listed.** `test_retrieval_eval.py::test_the_ranking_clears_its_bar` failed on `main` itself and blocked every pull request here. It was not a ranking regression: re-running the 2026-08-26 four-arm decomposition put the re-encode at plus 0.00000 and the whole fall on 111 newly published items competing for the same ten slots against labels pooled when 44.5 percent of the archive carried a vector. `assist.recall_min` was re-derived by its own rule - two standard errors below the measured baseline - and lands on 0.61 from the failing tree and from the passing one alike. Owner authorised, PR #322. The bar now carries an expiry: about six published days of room at the measured slide of 0.01345 a day.
+
+**A second row ran that this plan never listed.** On 2026-09-01 the pipeline opened `state/item-health/2026-09.csv`, and three tests that had been reading only the newest month's file went red on `main`, blocking every pull request here. The repair scoped each assertion to the whole ledger rather than to one shard, and found two more tests that had already gone blind the same way - reading 4,110 of 4,167 rows, and shrinking every month. PR #350.
 
 **Rows 31, 32 and 33 are COLLAPSED under ESCALATE trigger (h), owner ruling 2026-08-31.** Row 29 measured the gap between our own mentions of a registry name at a median of **1 day - consecutive days, no silence at all** - with the longest silence anywhere in the record being 3 days, twice in 163 chances. A half-life set inside that range fires on every name every day; one set above it never fires. The credit has nothing to act on, and the ledger's cost would be paid by assemble on every run whether the credit was switched on or not. Row 30's contract widening stays: it is additive and inert. **What would bring these rows back:** a real subject curated into `config/watchlist.json` (which needs the 30-entry cap raised), or entity recognition landing - the missing piece is the registry, not the mechanism, and row 29 is the continuity baseline that initiative needs.
 
