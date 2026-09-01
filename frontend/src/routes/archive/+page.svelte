@@ -15,6 +15,11 @@
 	 * Search reads the same months. The page used to carry every committed day
 	 * whole so search could reach the vectors inside them; it now reads the
 	 * sibling vector file and fetches a day only when a result from it is shown.
+	 *
+	 * **The panel sits above the answer.** Until 2026-09-01 the search box was
+	 * the last thing on the page, under every story it might have replaced, and
+	 * the topic names were nowhere. One panel now carries the topics and the
+	 * field, and the two sentences about the on-device model follow it.
 	 */
 	import { base } from '$app/paths';
 	import { longDate, plural, shortDate } from '$lib/format';
@@ -22,6 +27,7 @@
 	import DigestItem from '$lib/components/DigestItem.svelte';
 	import { itemOf, loadDay } from '$lib/assist/day';
 	import { loadMonth } from '$lib/assist/index';
+	import { filterNeedle } from '$lib/day-shape';
 	import type { SearchHit, SearchOutcome } from '$lib/assist/search';
 	import type { DigestDay, SearchIndexEntry } from '$lib/payload/types';
 	import { onMount } from 'svelte';
@@ -35,17 +41,46 @@
 	let results = $state<SearchOutcome | null>(null);
 	// One entry per result day, so a re-render sees a day the moment it lands.
 	let dayPayloads = $state<Record<string, DigestDay | null>>({});
+	/** What the panel's field holds. Typing narrows the stories already fetched
+	 * and fetches nothing; only the Search button spends the encoder download. */
+	let query = $state('');
+	let topic = $state<string | null>(null);
+	/** True from the moment the reader presses Search until they type again. A
+	 * question is not a substring, so the words in the box stop narrowing the
+	 * list under it - otherwise a search that found nothing would leave an empty
+	 * page instead of the browse list it is supposed to fall back to. */
+	let asked = $state(false);
 
 	const page = $derived(data.ui.archive_page_size);
-	const listed = $derived(entries.slice(0, shown));
+	const needle = $derived(asked ? null : filterNeedle(query, data.ui.filter_min_chars));
+	const filtering = $derived(needle !== null);
+	const topicTotals = $derived(
+		Object.fromEntries(data.verticals.map((ref) => [ref.id, ref.count]))
+	);
+	// The browse list, narrowed by whichever of the two controls a reader used.
+	// Both read the months already in hand and neither asks for a byte. Title
+	// only: the index carries no summary, so there is nothing else here to match.
+	const browsable = $derived(
+		entries.filter(
+			(entry) =>
+				(topic === null || entry.vertical === topic) &&
+				(needle === null || entry.title.toLowerCase().includes(needle))
+		)
+	);
+	const listed = $derived(browsable.slice(0, shown));
+	const allLoaded = $derived(loadedMonths.length >= data.months.length);
 	// A search with no answer leaves the browse list showing. That is the whole
 	// empty state, and it is why there is only one list here.
 	const showingResults = $derived(results !== null && results.hits.length > 0);
-	// While months are still unread, the day list is the honest count - it counts
-	// the same stories the months hold. Once every month is in hand, say what
-	// actually arrived.
+	// While months are still unread, a count off the payload is the honest one -
+	// the whole archive, or one topic's share of it, both decided at build time. A
+	// title filter has no such number, so there it can only be what was read.
 	const reachable = $derived(
-		loadedMonths.length >= data.months.length ? entries.length : data.stories
+		allLoaded || filtering
+			? browsable.length
+			: topic === null
+				? data.stories
+				: (topicTotals[topic] ?? browsable.length)
 	);
 	const remaining = $derived(Math.max(reachable - listed.length, 0));
 
@@ -72,13 +107,15 @@
 		if (status === 'loading') return;
 		status = 'loading';
 		const wanted = shown + page;
-		while (entries.length < wanted && loadedMonths.length < data.months.length) {
+		// Counted over what the reader would actually see: with a topic pill on, a
+		// month that holds none of it buys no rows, so the loop reads the next one.
+		while (browsable.length < wanted && loadedMonths.length < data.months.length) {
 			const month = data.months[loadedMonths.length]!;
 			loadedMonths = [...loadedMonths, month];
 			const more = await loadMonth(month);
 			if (more !== null) entries = [...entries, ...more];
 		}
-		shown = Math.min(wanted, entries.length);
+		shown = Math.min(wanted, browsable.length);
 		status = entries.length > 0 ? 'ready' : 'unavailable';
 	}
 
@@ -96,6 +133,24 @@
 	function onResults(outcome: SearchOutcome | null) {
 		results = outcome;
 		if (outcome) void fetchDays(outcome.hits);
+	}
+
+	/** `Show all stories` means all of them, so it empties the box as well as
+	 * dropping the answer. Leaving the question in there would put the reader one
+	 * keystroke away from a list narrowed by a sentence no title contains. */
+	function showAll() {
+		query = '';
+		topic = null;
+		asked = false;
+		results = null;
+	}
+
+	/** A topic pill. It narrows the list already fetched and asks for nothing;
+	 * a search answer was about every topic, so it stops describing the page. */
+	function onTopic(id: string | null) {
+		topic = id;
+		results = null;
+		if (shown === 0) void showMore();
 	}
 
 	onMount(() => {
@@ -117,7 +172,24 @@
 	{#if data.days.length === 0}
 		<p class="mt-8 text-base text-text-secondary">Nothing has been published yet.</p>
 	{:else}
-		<nav class="mt-4 flex flex-wrap gap-x-4 gap-y-2" aria-label="Published days" data-day-row>
+		<ArchiveSearch
+			months={data.months}
+			assist={data.assist}
+			verticals={data.verticals}
+			activeTopic={topic}
+			total={data.stories}
+			pillsMax={data.ui.topic_pills_max}
+			bind:query
+			{onResults}
+			{onTopic}
+			onAsk={() => (asked = true)}
+			onType={() => {
+				asked = false;
+				results = null;
+			}}
+		/>
+
+		<nav class="mt-6 flex flex-wrap gap-x-4 gap-y-2" aria-label="Published days" data-day-row>
 			{#each data.days as entry (entry.date)}
 				<a
 					href="{base}/{entry.date}/"
@@ -136,7 +208,7 @@
 			{#if showingResults}
 				<button
 					type="button"
-					onclick={() => onResults(null)}
+					onclick={showAll}
 					class="text-sm text-accent hover:underline"
 					data-search-clear
 				>
@@ -231,8 +303,10 @@
 			{/if}
 		{:else if status === 'loading'}
 			<p class="mt-1 text-base text-text-secondary">Loading the stories.</p>
+		{:else if status === 'ready' && (filtering || topic !== null)}
+			<p class="mt-1 text-base text-text-secondary" data-story-list="empty">
+				No story on this page matches that. Press Search to look through the whole archive.
+			</p>
 		{/if}
 	{/if}
-
-	<ArchiveSearch months={data.months} assist={data.assist} {onResults} />
 </section>
